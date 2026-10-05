@@ -1,0 +1,19 @@
+; error: 8:16: this value of wrapper 'limited' is worked out where the program starts, before task 'C.get' can run, and it calls 'C.get' through 'probe', whose wrappers read it; give a value that doesn't call it, or work it out inside the wrapper
+; A member wrapper's own value calling the method it wraps, before its wrappers can run.
+shape C
+    n: int
+    limited(next: (C, int) -> int, cap: int, k: int) -> int
+        <- next(.this, k)
+    fi
+    $(.limited(probe()))
+    get(k: int) -> int
+        <- .n + k
+    fi
+fi
+task probe() -> int
+    bind c = C { n: 1 }
+    <- c.get(1)
+fi
+task main()
+    show(probe())
+fi

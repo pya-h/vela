@@ -1,0 +1,42 @@
+; A member wrapper on a method sending a value in the region its value is in,
+; beside wrappers taking a group and a plain one.
+task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    show("audit ", args.len)
+    <- next(args...)
+fi
+task plain(next: (Account@a) -> text@a, x: Account@a) -> text@a
+    show("plain")
+    <- next(x)
+fi
+shape Account
+    owner: text
+    read balance: int
+    $(audited)
+    alters rename(t: text@this)
+        .owner = t
+    fi
+    $(audited)
+    name() -> text@this
+        <- .owner
+    fi
+    $(plain)
+    name2() -> text@this
+        <- .owner
+    fi
+    $(.checked)
+    first() -> text@this
+        <- .owner[0..1]
+    fi
+    checked(next: (Account@this) -> text@this) -> text@this
+        <- next(.this)
+    fi
+fi
+task main()
+    region r
+    bind t = "Ada" + "x" at r
+    hold a = Account { owner: t, balance: 0 }
+    a.rename("Bo" + "b" at r)
+    show(a.name())
+    show(a.name2())
+    show(a.first())
+fi

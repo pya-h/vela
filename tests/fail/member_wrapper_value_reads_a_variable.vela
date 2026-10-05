@@ -1,0 +1,18 @@
+; error: 9:16: unknown variable 'k'; a wrapper's own values are worked out where the program starts, where no variable exists yet
+; A member wrapper's own value is worked out where the program starts, where the method's values don't exist.
+shape C
+    n: int
+    limited(next: (C, int) -> int, cap: int, k: int) -> int
+        show("cap ", cap)
+        <- next(.this, k)
+    fi
+    $(.limited(k + .n))
+    get(k: int) -> int
+        <- .n + k
+    fi
+fi
+task main()
+    bind c = C { n: 1 }
+    show(c.get(3))
+    show(c.get(9))
+fi

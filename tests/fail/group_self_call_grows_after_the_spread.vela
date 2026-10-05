@@ -1,0 +1,11 @@
+; error: 6:24: task 'rec' gives its own group 1 value more than it was given, so its group would grow at each call and never be filled in; give it 'args...' alone
+; A task calling itself with a value added after its group's values.
+task rec<P...: shown>(n: int, args: P..., m: int)
+    show(n, " ", m, " ", args...)
+    when n > 0
+        rec(n - 1, args..., 5, m)
+    fi
+fi
+task main()
+    rec(2, "a", 9)
+fi

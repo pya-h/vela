@@ -1,0 +1,11 @@
+; error: 7:5: task 'framed' expects 1 argument, any number of values for 'args', then 1 argument, got 0 and a group's values
+; A group's values given on, with no value for what the task takes after its group.
+task framed<P...: shown>(open: text, args: P..., close: text)
+    show(open, args..., close)
+fi
+task outer<P...: shown>(args: P...)
+    framed(args...)
+fi
+task main()
+    outer(1)
+fi

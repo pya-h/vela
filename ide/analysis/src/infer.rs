@@ -1038,10 +1038,6 @@ impl<'a> Knowledge<'a> {
         matches!(self.token(p), Some(Token::Text(_))) && self.source.get(self.range(p)).is_some_and(|text| text.starts_with('}'))
     }
 
-    /// The type a call of the task with signature `detail` gives, where its
-    /// parentheses are at positions `open` and `close`. As the checker does, the
-    /// task's regions become the caller's: a region parameter's argument, or the
-    /// region an argument's type shows, and `_` for one no argument shows.
     /// What a call through a value of type `task` sends, between `open` and
     /// `close`, in the regions its arguments are in: a task type names its
     /// regions its own way.
@@ -1053,7 +1049,7 @@ impl<'a> Knowledge<'a> {
             }
             match task.region(i) {
                 Some(name) => {
-                    if let (true, Some(region)) = (first == last, self.ident(first)) {
+                    if let Some(region) = self.region_arg(first, last) {
                         regions.insert(name.to_string(), region.to_string());
                     }
                 }
@@ -1088,6 +1084,17 @@ impl<'a> Knowledge<'a> {
         args
     }
 
+    /// The region a call gives as its argument from `first` to `last`: a
+    /// name alone, which names a region or nothing this file knows.
+    fn region_arg(&self, first: usize, last: usize) -> Option<&'a str> {
+        let named = self.symbol_at(first).and_then(|id| self.symbol(id));
+        self.ident(first).filter(|_| first == last && named.is_none_or(|s| s.kind == SymbolKind::Region))
+    }
+
+    /// The type a call of the task with signature `detail` gives, where its
+    /// parentheses are at positions `open` and `close`. As the checker does, the
+    /// task's regions become the caller's: a region parameter's argument, or the
+    /// region an argument's type shows, and `_` for one no argument shows.
     fn call_type(&self, detail: &str, open: usize, close: usize, depth: usize) -> Type {
         let args = self.call_args(open, close);
         let params = parameters(detail);
@@ -1096,7 +1103,7 @@ impl<'a> Knowledge<'a> {
             match ty {
                 _ if first > last => {}
                 Some(Type::Region) => {
-                    if let (true, Some(region)) = (first == last, self.ident(first)) {
+                    if let Some(region) = self.region_arg(first, last) {
                         regions.insert(name, region.to_string());
                     }
                 }
@@ -1611,7 +1618,16 @@ pub(crate) fn parameters(detail: &str) -> Vec<(String, Option<Type>)> {
     split_list(inside)
         .into_iter()
         // `r: region default` is a region, which the call may leave out.
-        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(ty.trim().strip_suffix(" default").unwrap_or(ty)))))
+        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(without_default(ty)))))
         .filter(|(name, _)| !name.is_empty())
         .collect()
+}
+
+/// A parameter's type as written, `region` for `r: region default`, which the
+/// call may leave out.
+pub(crate) fn without_default(ty: &str) -> &str {
+    match ty.split_whitespace().collect::<Vec<_>>()[..] {
+        ["region", word] if word == vela::ast::DEFAULT => "region",
+        _ => ty.trim(),
+    }
 }

@@ -1715,7 +1715,7 @@ impl<'a> Classifier<'a> {
             let detail = tokens.text_after(p + 1, ends_field);
             // `r: region`, and `r: region default`, which also makes it the
             // default region of the task's body (see `ast::DEFAULT`).
-            let takes_region = detail == "region" || detail == format!("region {}", DEFAULT);
+            let takes_region = crate::infer::without_default(&detail) == "region";
             let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
             let intro = match marked.as_deref() {
                 Some("hold&") => Some("hold&"),
@@ -1866,13 +1866,22 @@ impl<'a> Classifier<'a> {
         for q in (0..p).rev() {
             match tokens.token(q) {
                 Some(Token::RParen | Token::RBracket) => depth += 1,
-                // A header's parentheses before it: it is in what the task
-                // sends, after the task's own arrow.
-                Some(Token::LParen) if depth == 1 && cut.is_none() && header_paren(tokens, q) => return arrows > 1,
+                // A header's parentheses before it, or a lambda's: it is in
+                // what the task sends, after the task's own arrow.
+                Some(Token::LParen) if depth == 1 && cut.is_none() && names_paren(tokens, q) => return arrows > 1,
                 Some(Token::LParen | Token::LBracket) if depth > 0 => depth -= 1,
-                // The parentheses around it: a header's or a task type's.
-                Some(Token::LParen) => return !header_paren(tokens, q) || cut.unwrap_or(arrows) > 0,
-                Some(Token::LBracket) => return cut.unwrap_or(arrows) > 0,
+                // The parentheses around it: a header's, a lambda's, or a task
+                // type's, which a `->` follows.
+                Some(Token::LParen) if names_paren(tokens, q) => return cut.unwrap_or(arrows) > 0,
+                Some(Token::LParen) if closing(tokens, q).is_some_and(|end| tokens.token(end + 1) == Some(&Token::Arrow)) => return true,
+                // A tuple's or a slice's around it, `(text@q, int)`: what is
+                // around them says.
+                Some(Token::LParen | Token::LBracket) => {
+                    if cut.unwrap_or(arrows) > 0 {
+                        return true;
+                    }
+                    (arrows, cut) = (0, None);
+                }
                 Some(Token::Comma) if depth == 0 && cut.is_none() => cut = Some(arrows),
                 Some(Token::Arrow) if depth == 0 && cut.is_none() => arrows += 1,
                 // A variable's type, or what a task sends, after its own arrow.
@@ -2093,4 +2102,28 @@ impl<'a> Classifier<'a> {
 /// it, or the `>` closing the types a task takes.
 fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
     tokens.ident(q.wrapping_sub(1)).is_some() || tokens.before(q) == Some(&Token::Gt)
+}
+
+/// Whether the `(` at `q` opens parameters that name what they take: a
+/// header's, or a lambda's, `(s: region, n: int) -> [int]@s`, which a task
+/// type's never do.
+fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {
+    header_paren(tokens, q)
+        || matches!(tokens.token(q + 1), Some(Token::Hold | Token::Bind))
+        || (tokens.ident(q + 1).is_some() && tokens.token(q + 2) == Some(&Token::Colon))
+}
+
+/// The `)` closing the `(` at `q`, on the same line.
+fn closing(tokens: &Tokens<'_>, q: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for at in q + 1.. {
+        match tokens.token(at) {
+            Some(Token::LParen | Token::LBracket) => depth += 1,
+            Some(Token::RParen) if depth == 0 => return Some(at),
+            Some(Token::RParen | Token::RBracket) => depth = depth.saturating_sub(1),
+            Some(Token::Newline | Token::Eof) | None => return None,
+            _ => {}
+        }
+    }
+    None
 }

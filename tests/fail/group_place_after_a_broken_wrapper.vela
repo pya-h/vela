@@ -1,0 +1,17 @@
+; error: 9:3: wrapper 'bad' takes the next task, 1 value of its own, then the task's values; 0 values given
+; A task value whose wrapper has a mistake: its call says nothing more.
+task bad<P..., R>(next: (P...) -> R, label: text, args: P...) -> R
+    <- next(args...)
+fi
+task use<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+$(bad)
+task mk(hold& c: int) -> int
+    c = c + 1
+    <- c
+fi
+task main()
+    hold c = 1
+    show(use(mk, &c))
+fi

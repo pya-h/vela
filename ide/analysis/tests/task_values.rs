@@ -137,3 +137,48 @@ fi
         assert_eq!(hover(&source, "made ="), "bind made: [int]@q", "{}", when);
     }
 }
+
+#[test]
+fn a_region_in_a_tuple_type_or_a_lambda_header_names_what_is_around_it() {
+    let source = "\
+task named(r: region, line: text@r) -> (text@r, int)
+    <- (line, 1)
+fi
+
+task main()
+    region q
+    hold t: (text@q, int) = named(q, \"a\")
+    show(t.1)
+    bind f = (s: region, n: int) -> [int]@s <- new [int]() at s fi
+    bind made = f(q, 2)
+    show(made.len)
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "r, int)"), "r: region");
+    assert_eq!(hover(source, "q, int)"), "region q");
+    assert_eq!(hover(source, "s <- new"), "s: region");
+}
+
+#[test]
+fn a_value_given_where_a_region_goes_names_no_region() {
+    // A file that doesn't parse, read from the source alone; the spaces
+    // before `default` don't matter.
+    let source = "\
+task pick(r: region  default, xs: [int]@r) -> [int]@r
+    <- xs
+fi
+
+task main()
+    region q
+    bind ys = new [int]() at q
+    bind got = pick(ys)
+    bind kept = pick(q, ys)
+    show(got.len, kept.len)
+fi
+task g(
+";
+    assert_eq!(hover(source, "got ="), "bind got: [int]@_");
+    assert_eq!(hover(source, "kept ="), "bind kept: [int]@q");
+    assert_eq!(hover(source, "r: region"), "r: region");
+}

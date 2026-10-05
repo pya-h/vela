@@ -1,0 +1,84 @@
+  1 | ; A member wrapper on a method sending a value in the region its value is in,
+    | comment:; A member wrapper on a method sending a value in the region its value is in,
+  2 | ; beside wrappers taking a group and a plain one.
+    | comment:; beside wrappers taking a group and a plain one.
+  3 | task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:audited  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  4 |     show("audit ", args.len)
+    | builtin-fn:show  punctuation:(  string:"audit "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:)
+  5 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+  6 | fi
+    | keyword:fi
+  7 | task plain(next: (Account@a) -> text@a, x: Account@a) -> text@a
+    | keyword:task  task:plain  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Account  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  parameter:x  punctuation::  type:Account  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a
+  8 |     show("plain")
+    | builtin-fn:show  punctuation:(  string:"plain"  punctuation:)
+  9 |     <- next(x)
+    | keyword:<-  parameter:next  punctuation:(  parameter:x  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 11 | shape Account
+    | keyword:shape  type:Account
+ 12 |     owner: text
+    | field:owner  punctuation::  type-builtin:text
+ 13 |     read balance: int
+    | keyword:read  field:balance  punctuation::  type-builtin:int
+ 14 |     $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 15 |     alters rename(t: text@this)
+    | keyword:alters  method:rename  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:this  punctuation:)
+ 16 |         .owner = t
+    | punctuation:.  field:owner  operator:=  parameter:t
+ 17 |     fi
+    | keyword:fi
+ 18 |     $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 19 |     name() -> text@this
+    | method:name  punctuation:(  punctuation:)  operator:->  type-builtin:text  operator:@  region:this
+ 20 |         <- .owner
+    | keyword:<-  punctuation:.  field:owner
+ 21 |     fi
+    | keyword:fi
+ 22 |     $(plain)
+    | keyword:$  punctuation:(  task:plain  punctuation:)
+ 23 |     name2() -> text@this
+    | method:name2  punctuation:(  punctuation:)  operator:->  type-builtin:text  operator:@  region:this
+ 24 |         <- .owner
+    | keyword:<-  punctuation:.  field:owner
+ 25 |     fi
+    | keyword:fi
+ 26 |     $(.checked)
+    | keyword:$  punctuation:(  punctuation:.  method:checked  punctuation:)
+ 27 |     first() -> text@this
+    | method:first  punctuation:(  punctuation:)  operator:->  type-builtin:text  operator:@  region:this
+ 28 |         <- .owner[0..1]
+    | keyword:<-  punctuation:.  field:owner  punctuation:[  number:0  operator:..  number:1  punctuation:]
+ 29 |     fi
+    | keyword:fi
+ 30 |     checked(next: (Account@this) -> text@this) -> text@this
+    | method:checked  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Account  operator:@  region:this  punctuation:)  operator:->  type-builtin:text  operator:@  region:this  punctuation:)  operator:->  type-builtin:text  operator:@  region:this
+ 31 |         <- next(.this)
+    | keyword:<-  parameter:next  punctuation:(  punctuation:.  keyword:this  punctuation:)
+ 32 |     fi
+    | keyword:fi
+ 33 | fi
+    | keyword:fi
+ 34 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 35 |     region r
+    | keyword:region  region:r
+ 36 |     bind t = "Ada" + "x" at r
+    | keyword:bind  variable:t  operator:=  string:"Ada"  operator:+  string:"x"  keyword:at  region:r
+ 37 |     hold a = Account { owner: t, balance: 0 }
+    | keyword:hold  variable:a  operator:=  type:Account  punctuation:{  field:owner  punctuation::  variable:t  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
+ 38 |     a.rename("Bo" + "b" at r)
+    | variable:a  punctuation:.  method:rename  punctuation:(  string:"Bo"  operator:+  string:"b"  keyword:at  region:r  punctuation:)
+ 39 |     show(a.name())
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:name  punctuation:(  punctuation:)  punctuation:)
+ 40 |     show(a.name2())
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:name2  punctuation:(  punctuation:)  punctuation:)
+ 41 |     show(a.first())
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:first  punctuation:(  punctuation:)  punctuation:)
+ 42 | fi
+    | keyword:fi

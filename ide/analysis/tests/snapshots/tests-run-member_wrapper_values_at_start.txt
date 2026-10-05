@@ -1,0 +1,64 @@
+  1 | ; Member wrapper values are worked out where the program starts, before startup
+    | comment:; Member wrapper values are worked out where the program starts, before startup
+  2 | ; decorators run, as a plain wrapper's are: the count read is the one before enroll.
+    | comment:; decorators run, as a plain wrapper's are: the count read is the one before enroll.
+  3 | shape Reg
+    | keyword:shape  type:Reg
+  4 |     shared read count: int = 0
+    | keyword:shared  keyword:read  field:count  punctuation::  type-builtin:int  operator:=  number:0
+  5 |     shared enroll(f: (int) -> int, name: text)
+    | keyword:shared  method:enroll  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)
+  6 |         Reg.count = Reg.count + 1
+    | type:Reg  punctuation:.  field:count  operator:=  type:Reg  punctuation:.  field:count  operator:+  number:1
+  7 |         show("enrolled ", name)
+    | builtin-fn:show  punctuation:(  string:"enrolled "  punctuation:,  parameter:name  punctuation:)
+  8 |     fi
+    | keyword:fi
+  9 | fi
+    | keyword:fi
+ 10 | shape C
+    | keyword:shape  type:C
+ 11 |     n: int
+    | field:n  punctuation::  type-builtin:int
+ 12 |     limited(next: (C, int) -> int, cap: int, label: text, k: int) -> int
+    | method:limited  punctuation:(  parameter:next  punctuation::  punctuation:(  type:C  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:cap  punctuation::  type-builtin:int  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:k  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 13 |         show(label, " cap ", cap)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:" cap "  punctuation:,  parameter:cap  punctuation:)
+ 14 |         when k > cap
+    | keyword:when  parameter:k  operator:>  parameter:cap
+ 15 |             <- 0
+    | keyword:<-  number:0
+ 16 |         fi
+    | keyword:fi
+ 17 |         <- next(.this, k)
+    | keyword:<-  parameter:next  punctuation:(  punctuation:.  keyword:this  punctuation:,  parameter:k  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 |     $Reg.enroll("tw")
+    | keyword:$  type:Reg  punctuation:.  method:enroll  punctuation:(  string:"tw"  punctuation:)
+ 20 |     shared tw(k: int) -> int
+    | keyword:shared  method:tw  punctuation:(  parameter:k  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 21 |         <- k * 2
+    | keyword:<-  parameter:k  operator:*  number:2
+ 22 |     fi
+    | keyword:fi
+ 23 |     $(.limited(Reg.count + 4, "lim"))
+    | keyword:$  punctuation:(  punctuation:.  method:limited  punctuation:(  type:Reg  punctuation:.  field:count  operator:+  number:4  punctuation:,  string:"lim"  punctuation:)  punctuation:)
+ 24 |     get(k: int) -> int
+    | method:get  punctuation:(  parameter:k  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 25 |         <- .n + k
+    | keyword:<-  punctuation:.  field:n  operator:+  parameter:k
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 28 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 29 |     bind c = C { n: 1 }
+    | keyword:bind  variable:c  operator:=  type:C  punctuation:{  field:n  punctuation::  number:1  punctuation:}
+ 30 |     show(c.get(3))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:get  punctuation:(  number:3  punctuation:)  punctuation:)
+ 31 |     show(c.get(9))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:get  punctuation:(  number:9  punctuation:)  punctuation:)
+ 32 | fi
+    | keyword:fi

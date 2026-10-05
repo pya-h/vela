@@ -1,0 +1,21 @@
+; error: 9:7: task 'Pad.rows' takes the region 'r', which would be in the group of wrapper 'audited', and a group never holds a region; 'audited' names it as a parameter of its own, and 'next' names it in its type, as in 'next: (Pad, @a, P...) -> R, v: Pad, r: region, args: P...'
+; A method taking a region: the hint names the value it is called on first.
+task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+shape Pad
+    n: int
+    $(audited)
+    rows(r: region, k: int) -> [int]@r
+        hold xs = new [int]() at r
+        xs.add(.n + k)
+        <- xs
+    fi
+fi
+
+task main()
+    region q
+    bind p = Pad { n: 1 }
+    show(p.rows(q, 2).len)
+fi

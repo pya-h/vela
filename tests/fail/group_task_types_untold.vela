@@ -1,0 +1,15 @@
+; error: 13:10: can't tell which type 'T' is for this call of 'lvl', since no argument and nothing this value goes into names one; a call of a task taking a group of types doesn't write its types yet, so give the value a place whose type names it, as in 'bind x: int = lvl(…)'
+; A type no value names, of a task taking a group, whose call can't write its types.
+task lvl<P..., T>(f: (@a, P...) -> text@a, r: region, args: P...) -> text@r
+    <- f(r, args...)
+fi
+task mk(r: region, hold& c: int) -> text@r
+    c = c + 1
+    <- "{c}" at r
+fi
+task main()
+    region kept
+    hold c = 1
+    show(lvl(mk, kept, &c))
+    show(c)
+fi

@@ -1,0 +1,32 @@
+; Member wrapper values are worked out where the program starts, before startup
+; decorators run, as a plain wrapper's are: the count read is the one before enroll.
+shape Reg
+    shared read count: int = 0
+    shared enroll(f: (int) -> int, name: text)
+        Reg.count = Reg.count + 1
+        show("enrolled ", name)
+    fi
+fi
+shape C
+    n: int
+    limited(next: (C, int) -> int, cap: int, label: text, k: int) -> int
+        show(label, " cap ", cap)
+        when k > cap
+            <- 0
+        fi
+        <- next(.this, k)
+    fi
+    $Reg.enroll("tw")
+    shared tw(k: int) -> int
+        <- k * 2
+    fi
+    $(.limited(Reg.count + 4, "lim"))
+    get(k: int) -> int
+        <- .n + k
+    fi
+fi
+task main()
+    bind c = C { n: 1 }
+    show(c.get(3))
+    show(c.get(9))
+fi

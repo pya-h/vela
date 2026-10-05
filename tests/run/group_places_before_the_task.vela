@@ -1,0 +1,15 @@
+; A task value given after the group still says how it takes each value:
+; the group gives it the place it takes.
+task bump(hold& n: int, by: int)
+    n = n + by
+fi
+
+task apply<P...>(args: P..., next: (P...) -> nothing)
+    next(args...)
+fi
+
+task main()
+    hold n = 1
+    apply(&n, 5, bump)
+    show(n)
+fi

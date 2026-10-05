@@ -1,0 +1,12 @@
+; error: 6:3: task 'f' takes 'n: int', and wrapper 'w' takes 'n: text' in its place
+; A wrapper taking types names a value of the task as a type it doesn't take.
+task w<P..., R>(next: (int, P...) -> R, n: text, args: P...) -> R
+    <- next(1, args...)
+fi
+$(w)
+task f(n: int, b: int) -> int
+    <- n + b
+fi
+task main()
+    show(f(1, 2))
+fi

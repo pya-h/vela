@@ -1109,6 +1109,7 @@ impl Parser {
         if lines.0.is_empty() {
             let what_follows = match self.tokens.get(at) {
                 Some(Token::Shared) => "a shared field, which holds a value rather than running".to_string(),
+                Some(Token::Ident(field)) if what == "shape" && self.tokens.get(at + 1) == Some(&Token::Colon) => format!("the field '{}', which holds a value rather than running", field),
                 Some(Token::Ident(_)) if what == "kind" => format!("{}, a variant, which makes a value rather than running", follows),
                 _ => follows,
             };

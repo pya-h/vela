@@ -1,0 +1,27 @@
+; error: 7:3: wrapper 'w' takes 'P' from a task value, where it is (hold& [int]@?, int), in a region that task value takes; which region that is only the body of 'w' says, when it gives the task value one, so 'P' can't be in it; write that type out in the header of 'w', with the region it takes, as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
+; A group holding a place in a region the next task takes: the wrapper may give it another region.
+task w<P..., R>(next: (@a, P...) -> R, q: region, args: P...) -> R
+    region tmp
+    <- next(tmp, args...)
+fi
+$(w)
+task fill(r: region, hold& xs: [int]@r, n: int) -> int
+    each i in 0..n
+        xs.add(i)
+    fi
+    <- xs.len
+fi
+task main()
+    region kept
+    hold xs = new [int]() at kept
+    show(fill(kept, &xs, 1000))
+    hold ys = new [int]() at kept
+    each i in 0..1000
+        ys.add(7)
+    fi
+    hold zs = new [text]() at kept
+    each i in 0..1000
+        zs.add("abcdefgh{i}" at kept)
+    fi
+    show(xs[0], " ", xs[999], " ", xs.len)
+fi

@@ -1,0 +1,13 @@
+; error: 8:5: a wrapper in a shape goes on the lines above a method, as in '$(timed)' above 'area() -> int', and what follows it is the field 'w', which holds a value rather than running
+; A wrapper in a shape goes above a method, never a field.
+task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+shape S
+    n: int
+    $(.get)
+    w: int
+fi
+task main()
+    show(1)
+fi

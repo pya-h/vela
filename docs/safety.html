@@ -567,7 +567,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
         <pre><code><span class="keyword">shape</span> Tally
     n: int
 
-    <span class="keyword">alters</span> grow(m: [text: Tally]@r)
+    <span class="keyword">alters</span> grow(<span class="keyword">hold</span> m: [text: Tally]@r)
         m[<span class="string">"b"</span>] = Tally { n: 0 }          <span class="comment">; may move the table</span>
         .n = 9                         <span class="comment">; written where the value was</span>
     <span class="keyword">fi</span>

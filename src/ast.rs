@@ -156,6 +156,11 @@ pub struct TaskType {
 /// `Type::map_group_items`).
 pub type GroupItems = (Vec<Type>, Vec<Taken>);
 
+/// What the task type holding a group's types sends, where one is a place:
+/// no results, which no task sends (see `check::group_binding`). Its regions
+/// are the group's, unlike a task type's, which are its own.
+pub const GROUP_SENDS: Type = Type::Results(Vec::new());
+
 /// How a parameter of a task type is given at a call: as a value, as the
 /// caller's place, or as a region, which the type names so that what the task
 /// sends can live there: `(hold& int) -> nothing`, `(@r, int) -> [int]@r`.
@@ -615,6 +620,10 @@ impl Type {
                     }
                     ty.write(f, None)?;
                 }
+                // The types given a group holding a place (see `GROUP_SENDS`).
+                if task.ret == GROUP_SENDS {
+                    return write!(f, ")");
+                }
                 write!(f, ") -> ")?;
                 task.ret.write(f, None)
             }
@@ -768,6 +777,11 @@ impl Type {
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
+            // The types given a group holding a place, whose regions are the
+            // caller's (see `GROUP_SENDS`).
+            Type::Task(task) if task.ret == GROUP_SENDS => {
+                Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken: task.taken.clone(), ret: GROUP_SENDS }))
+            }
             other => other.clone(),
         }
     }
@@ -1029,6 +1043,9 @@ impl Type {
                 error.collect_regions(regions);
             }
             Type::Results(types) | Type::Tuple(types) => types.iter().for_each(|ty| ty.collect_regions(regions)),
+            // The types given a group holding a place, whose regions are the
+            // caller's.
+            Type::Task(task) if task.ret == GROUP_SENDS => task.params.iter().for_each(|ty| ty.collect_regions(regions)),
             _ => {}
         }
     }

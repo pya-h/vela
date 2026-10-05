@@ -1,0 +1,17 @@
+; error: 8:7: method 'two' sends several values, so it can't be a value yet; a task value sends one value or nothing
+; A method sending several values can't be a task value, so a wrapper can't wrap it.
+task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+shape C
+    n: int
+    $(audited)
+    two() -> int, int
+        <- .n, .n
+    fi
+fi
+task main()
+    bind c = C { n: 1 }
+    bind a, b = c.two()
+    show(a, b)
+fi

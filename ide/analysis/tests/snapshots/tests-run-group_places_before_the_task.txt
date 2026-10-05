@@ -1,0 +1,26 @@
+  1 | ; A task value given after the group still says how it takes each value:
+    | comment:; A task value given after the group still says how it takes each value:
+  2 | ; the group gives it the place it takes.
+    | comment:; the group gives it the place it takes.
+  3 | task bump(hold& n: int, by: int)
+    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:by  punctuation::  type-builtin:int  punctuation:)
+  4 |     n = n + by
+    | parameter:n  operator:=  parameter:n  operator:+  parameter:by
+  5 | fi
+    | keyword:fi
+  7 | task apply<P...>(args: P..., next: (P...) -> nothing)
+    | keyword:task  task:apply  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:,  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
+  8 |     next(args...)
+    | parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+  9 | fi
+    | keyword:fi
+ 11 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 12 |     hold n = 1
+    | keyword:hold  variable:n  operator:=  number:1
+ 13 |     apply(&n, 5, bump)
+    | task:apply  punctuation:(  operator:&  variable:n  punctuation:,  number:5  punctuation:,  task:bump  punctuation:)
+ 14 |     show(n)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)
+ 15 | fi
+    | keyword:fi

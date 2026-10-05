@@ -324,7 +324,7 @@ block shared type</pre>
         <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task or a shared method: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>$(.checked)</code></td><td>above a method of every value: a method of the same type wrapping it, called on the same value (see <a href="#wrappers-on-methods">Wrappers on methods</a>)</td></tr>
         <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>(@a, P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; one taking a region, then them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
-        <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task or a shared method: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
+        <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task, a shared method, or a method of every value: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
@@ -2588,7 +2588,8 @@ fi</code></pre>
         too, and runs at each call, <code>a.withdraw(3)</code> or <code>.withdraw(3)</code> inside another method. A
         method is a task taking the value it is called on first, so a wrapper is given that value first: as a place,
         <code>hold&amp; a: Account@s</code>, where the method <code>alters</code> it, and the rest of the chain takes it so
-        too. A wrapper taking a group fits any method. A value of a type holding text or pointers may be in any region,
+        too. A wrapper taking a group fits any method; a region the method takes is never in the group but named beside it,
+        after the value, as in <code>next: (Pad, @a, P...) -&gt; R, p: Pad, r: region, args: P...</code>. A value of a type holding text or pointers may be in any region,
         and so may the value a method is called on, so a wrapper written for one method names that region,
         <code>Account@s</code>, as the message for a missing one says.
       </p>
@@ -2598,6 +2599,8 @@ fi</code></pre>
         value first, which it gives on: <code>next(&amp;.this, amount)</code>. A method wrapping one that alters the
         value alters it too, and only such a one does: one that only read the value would see it change under it,
         and one that altered it would change a value the wrapped method may be called on as one that never changes.
+        Its own values, <code>$(.limited(10))</code>, are worked out where the program starts, as any wrapper's are,
+        so they read none of the method's values or fields.
       </p>
       <pre><code>task audited&lt;P...: shown, R&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
     show("audit: ", args.len, " values")
@@ -4099,7 +4102,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           method of every value (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
-        <li>Only a task or a shared method takes decorators, not a method of every value, nor a task that takes types; a startup decorator sends nothing, or
+        <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a
           group's types, a type can't be written <code>(P...)</code>, and a group is given on to a task that calls

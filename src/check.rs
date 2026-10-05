@@ -1886,7 +1886,7 @@ impl Checker {
                 return err(param.span, format!("a task takes one group of values, and '{}: {}...' is a second; name the others one by one", param.name, group));
             }
             if param.passing != Passing::Copy {
-                return err(param.span, format!("a group's values are given as values, so '{}' can't be '{}'", param.name, param.passing.word()));
+                return err(param.span, format!("a group's values are read as copies the task can't change, so '{}' can't be '{}'; a task value given them takes them as places where it takes places, as 'next: (P...) -> R' given a task taking 'hold& n: int'", param.name, param.passing.word()));
             }
         }
         let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
@@ -2317,7 +2317,7 @@ impl Checker {
             Type::Named(name, _) if self.group_turns.contains(name) && self.type_param(name).is_some_and(|param| param.group) => Ok(()),
             Type::Named(name, _) if self.type_param(name).is_some_and(|param| param.group) => err(
                 self.place(span, name),
-                format!("'{0}' is a group of types, so a header writes it '{0}...': a parameter's whole type, as in 'args: {0}...', or all a task's type takes, as in '({0}...) -> R'; '{0}' alone is one value's type, written only inside 'each v in args', as the type 'v' has", name),
+                format!("'{0}' is a group of types, so a header writes it '{0}...': a parameter's whole type, as in 'args: {0}...', or in a task's type, as in '({0}...) -> R' or '(int, {0}...) -> R'; '{0}' alone is one value's type, written only inside 'each v in args', as the type 'v' has", name),
             ),
             // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
@@ -4605,7 +4605,12 @@ impl Checker {
                 (0, _) => format!("any number of values for '{}', then {}", value, count(after, "argument")),
                 _ => format!("{}, any number of values for '{}', then {}", count(at, "argument"), value, count(after, "argument")),
             };
-            return err(span, format!("{} expects {}, got {}", callee, expects, args.len()));
+            // `f(args...)`, the values of the group of the task it is in.
+            let got = match args.iter().filter(|arg| !matches!(arg.kind, ExprKind::Spread(_))).count() {
+                alone if alone < args.len() => format!("{} and a group's values", alone),
+                all => all.to_string(),
+            };
+            return err(span, format!("{} expects {}, got {}", callee, expects, got));
         }
         let names: Vec<String> = (0..args.len() - fixed).map(|i| format!("{}{}{}", group, GROUP_ITEM, i)).collect();
         let items = |ty: &Type| ty.map_groups(&mut |name| (name == group).then(|| names.iter().map(|name| Type::Param(name.clone())).collect()));
@@ -4631,7 +4636,7 @@ impl Checker {
 
     /// Checks that a call of the task `name`, as `info` is for the call, can be
     /// given the group's values `args[spread]`, `args...`: only as values for the
-    /// group the task takes last. Values written before them join that group,
+    /// group the task takes. Values written beside them join that group,
     /// but not in a call of the task by itself, whose group would be one value
     /// longer at each call, and so would never be filled in.
     fn check_spread_given(&self, name: &str, callee: &str, info: &TaskInfo, args: &[Expr], spread: usize) -> Result<()> {
@@ -4652,13 +4657,15 @@ impl Checker {
         if let Some((param, _)) = info.params.get(spread).filter(|_| spread < fixed || spread >= info.params.len() - after) {
             return err(at, format!("a group's values go to the group {} takes, between the values it names one by one, and they would be given as '{}' here", callee, param));
         }
-        if spread > fixed && self.full_name(name) == self.current_task {
+        // The values written beside them in the group, before and after.
+        let grown = (spread - fixed) + (info.params.len() - after - spread - 1);
+        if grown > 0 && self.full_name(name) == self.current_task {
             return err(
                 at,
                 format!(
                     "{} gives its own group {} more than it was given, so its group would grow at each call and never be filled in; give it 'args...' alone",
                     callee,
-                    count(spread - fixed, "value")
+                    count(grown, "value")
                 ),
             );
         }
@@ -4900,6 +4907,15 @@ impl Checker {
                 Some(method) => self.member_wrapper(task, method, call.span)?,
                 None => self.full_name(name),
             };
+            // A wrapper whose header has a mistake, told already, promises
+            // nothing to check the chain against.
+            if self.broken.contains(&full) {
+                self.broken.insert(task.to_string());
+                for k in 1..layers {
+                    self.broken.insert(layer_name(task, k));
+                }
+                return Ok(());
+            }
             let Some(wrapper) = self.tasks.get(&full).cloned() else {
                 // `X.m`, naming no method of `X`.
                 if let Some((owner, field)) = self.shared_field(&full) {
@@ -4924,6 +4940,16 @@ impl Checker {
             // A member wrapper is called on the value, which it takes as its
             // method does; the rest of its parameters are a wrapper's.
             let skip = usize::from(member.is_some());
+            // The values the wrapper takes of the task's: a member wrapper is
+            // called on the value instead.
+            let values = types.len() - skip;
+            let (whose, besides) = match (member, method_parts(task)) {
+                (Some(_), Some((_, method))) => (format!("method '{}'", method), " besides the value it is called on"),
+                _ => (format!("task '{}'", written_task), ""),
+            };
+            // The value a member wrapper is called on, whose region is the one
+            // the wrapped method's value is in.
+            let this = wrapper.params.first().map(|(_, ty)| ty.clone()).filter(|_| member.is_some());
             let wrapper = match member {
                 Some(_) => TaskInfo { params: wrapper.params.iter().skip(1).cloned().collect(), passing: wrapper.passing.iter().skip(1).copied().collect(), ..wrapper },
                 None => wrapper,
@@ -4949,22 +4975,16 @@ impl Checker {
             let tail = match self.wrapper_tail(&wrapper, params.get(skip..).unwrap_or_default(), taken.get(skip..).unwrap_or_default(), written, written_task, call.span)? {
                 Some(tail) => tail,
                 None => {
-                    let message = match wrapper.params.len().checked_sub(1 + types.len()) {
+                    let message = match wrapper.params.len().checked_sub(1 + values) {
                         None => format!(
-                            "wrapper '{}' takes {} after the next task, and task '{}' takes {}, which a wrapper takes after its own values",
+                            "wrapper '{}' takes {} after the next task, and {} takes {}{}, which a wrapper takes after its own values",
                             written,
                             count(wrapper.params.len() - 1, "value"),
-                            written_task,
-                            count(types.len(), "value")
+                            whose,
+                            count(values, "value"),
+                            besides
                         ),
-                        Some(own) => format!(
-                            "wrapper '{}' takes the next task, {} of its own, then the {} of task '{}'; {} given",
-                            written,
-                            count(own, "value"),
-                            count(types.len(), "value"),
-                            written_task,
-                            count(args.len(), "value")
-                        ),
+                        Some(own) => format!("wrapper '{}' takes the next task, {} of its own, then the {} of {}{}; {} given", written, count(own, "value"), count(values, "value"), whose, besides, count(args.len(), "value")),
                     };
                     return err(call.span, message);
                 }
@@ -4974,14 +4994,7 @@ impl Checker {
                 let message = if grouped {
                     format!("wrapper '{}' takes the next task, {} of its own, then the task's values; {} given", written, count(tail.own, "value"), count(args.len(), "value"))
                 } else {
-                    format!(
-                        "wrapper '{}' takes the next task, {} of its own, then the {} of task '{}'; {} given",
-                        written,
-                        count(tail.own, "value"),
-                        count(types.len(), "value"),
-                        written_task,
-                        count(args.len(), "value")
-                    )
+                    format!("wrapper '{}' takes the next task, {} of its own, then the {} of {}{}; {} given", written, count(tail.own, "value"), count(values, "value"), whose, besides, count(args.len(), "value"))
                 };
                 return err(call.span, message);
             }
@@ -5003,8 +5016,14 @@ impl Checker {
                 && *first != next
             {
                 let chain = if k + 1 == layers { format!("task '{}'", written_task) } else { format!("what comes after wrapper '{}'", written) };
+                // A value the wrapper names in no region, where the task's is in
+                // one, as a method's value may be.
+                let unnamed = match (first, &next) {
+                    (Type::Task(mine), Type::Task(theirs)) => mine.params.iter().zip(&theirs.params).any(|(mine, theirs)| mine.regions().is_empty() && !theirs.regions().is_empty()),
+                    _ => false,
+                };
                 let regions = match &next {
-                    Type::Task(task) if strip_all_regions(first) == strip_all_regions(&next) => {
+                    Type::Task(task) if unnamed && strip_all_regions(first) == strip_all_regions(&next) => {
                         let example = task.params.iter().find_map(|ty| match ty {
                             Type::Named(name, Some(_)) => Some(format!("{}@a", unqualified(name))),
                             _ => None,
@@ -5019,7 +5038,7 @@ impl Checker {
                 return err(call.span, format!("{} is a {}, and wrapper '{}' takes a {} first{}", chain, next, written, first, regions));
             }
             // How it takes the task's values is its own to say, types or none;
-            // what they are, only a wrapper taking no types says here.
+            // what they are, where its own type for one names no type it takes.
             if !sends.unknown() {
                 for &(mine, theirs) in &tail.pairs {
                     let theirs = theirs + skip;
@@ -5028,7 +5047,7 @@ impl Checker {
                         (Taken::Region(_), Taken::Region(_)) => true,
                         (mine, theirs) => mine == *theirs,
                     };
-                    let differs = wrapper.types.is_empty() && !ty.unknown() && !given.unknown() && strip_all_regions(ty) != strip_all_regions(given);
+                    let differs = (wrapper.types.is_empty() || ty.params().is_empty()) && !ty.unknown() && !given.unknown() && strip_all_regions(ty) != strip_all_regions(given);
                     if differs || !same_way {
                         let task_param = shown_param(value, given, task_passing(how));
                         let wrapper_param = shown_param(param, ty, *passing);
@@ -5040,6 +5059,7 @@ impl Checker {
             let mut regions = HashMap::new();
             let mut pairs: Vec<(&Type, &Type)> = wrapper.params.first().map(|(_, ty)| (ty, &named_next)).into_iter().collect();
             pairs.extend(tail.pairs.iter().filter_map(|&(mine, theirs)| Some((&wrapper.params.get(mine)?.1, types.get(theirs + skip)?))));
+            pairs.extend(this.as_ref().zip(types.first()));
             for (pattern, actual) in pairs.into_iter().filter(|(_, actual)| !actual.unknown()) {
                 unify_params(pattern, actual, &mut given);
                 unify_regions(pattern, actual, &mut regions);
@@ -5174,12 +5194,18 @@ impl Checker {
             return err(at, format!("task '{}' takes {}, and wrapper '{}' names {} around its group", written_task, count(params.len(), "value"), written, before + after));
         }
         let end = params.len() - after;
-        if let Some((param, Taken::Region(_))) = params.get(before..end).unwrap_or_default().iter().zip(taken.get(before..end).unwrap_or_default()).find(|(_, how)| matches!(how, Taken::Region(_))) {
+        if let Some(k) = (before..end).find(|&k| matches!(taken.get(k), Some(Taken::Region(_))))
+            && let (Some(ahead), Some((region, _))) = (params.get(..k), params.get(k))
+        {
+            // The values the task takes before the region are named before it
+            // too, a method's value first.
+            let types: String = ahead.iter().map(|(_, ty)| format!("{}, ", ty)).collect();
+            let names: String = ahead.iter().map(|(param, ty)| format!("{}: {}, ", if param == THIS { "v" } else { param }, ty)).collect();
             return err(
                 at,
                 format!(
-                    "task '{0}' takes the region '{1}', which would be in the group of wrapper '{2}', and a group never holds a region; '{2}' names it as a parameter of its own, and '{3}' names it in its type, as in '{3}: (@a, {4}...) -> R, {1}: region, args: {4}...'",
-                    written_task, param.0, written, next_name, name
+                    "task '{0}' takes the region '{1}', which would be in the group of wrapper '{2}', and a group never holds a region; '{2}' names it as a parameter of its own, and '{3}' names it in its type, as in '{3}: ({5}@a, {4}...) -> R, {6}{1}: region, args: {4}...'",
+                    written_task, region, written, next_name, name, types, names
                 ),
             );
         }
@@ -5209,11 +5235,23 @@ impl Checker {
                 let Some(&takes) = self.wrapper_layers.get(caller) else { continue };
                 let Some(Item::Task(def)) = places.get(caller).and_then(|&i| items.get_mut(i)) else { continue };
                 let Some(call) = wrapper_call(&mut def.body) else { continue };
-                let ExprKind::Call { name, args, .. } = &mut call.kind else { continue };
-                let wrapper = self.full_name(name);
-                let params: Vec<Type> = self.tasks.get(&wrapper).map(|info| info.params.iter().map(|(_, ty)| ty.clone()).collect()).unwrap_or_default();
-                let passing: Vec<Passing> = self.tasks.get(&wrapper).map(|info| info.passing.clone()).unwrap_or_default();
-                let own = args.len().saturating_sub(1 + takes);
+                // `$(.checked)`: a method of the value, called on it, which the
+                // call's values leave out, as they do the value it takes first.
+                let (wrapper, name, args, skip) = match &mut call.kind {
+                    ExprKind::Call { name, args, .. } => (self.full_name(name), name.clone(), args, 0),
+                    ExprKind::MethodCall { name, args, .. } => match method_parts(task) {
+                        Some((owner, _)) => {
+                            let full = method_name(owner, name);
+                            let shown = codegen::notice_name(&full);
+                            (full, shown, args, 1)
+                        }
+                        None => continue,
+                    },
+                    _ => continue,
+                };
+                let params: Vec<Type> = self.tasks.get(&wrapper).map(|info| info.params.iter().skip(skip).map(|(_, ty)| ty.clone()).collect()).unwrap_or_default();
+                let passing: Vec<Passing> = self.tasks.get(&wrapper).map(|info| info.passing.iter().skip(skip).copied().collect()).unwrap_or_default();
+                let own = args.len().saturating_sub(1 + takes - skip);
                 for (i, arg) in args.iter_mut().enumerate().skip(1).take(own) {
                     // A place the wrapper changes or reads where it is kept: no
                     // value worked out once is one.
@@ -5556,7 +5594,13 @@ impl Checker {
             return err(span, format!("task '{}' takes types, so it can't be a value yet; only a task that takes none can", written));
         }
         if matches!(info.ret, Type::Results(_)) {
-            return err(span, format!("task '{}' sends several values, so it can't be a value yet; a task value sends one value or nothing", written));
+            // A wrapper's next task, a layer, is named as the task it wraps.
+            let base = name.split(LAYER).next().unwrap_or(name);
+            let what = match (method_parts(base), &info.owner) {
+                (Some((_, method)), Some(owner)) if !owner.shared => format!("method '{}'", method),
+                _ => format!("task '{}'", unqualified(base)),
+            };
+            return err(span, format!("{} sends several values, so it can't be a value yet; a task value sends one value or nothing", what));
         }
         let (params, taken) = self.task_params_taken(info);
         Ok(Type::Task(Box::new(TaskType { params, taken, ret: info.ret.clone() }.normalized())))
@@ -8380,7 +8424,7 @@ impl Checker {
         // The types the call gives: written after the name, or worked out from
         // the arguments below (and from the place the value goes, later).
         let given = self.written_types(span, task, written, info)?;
-        let mut found = CallTypes { given, shown: HashMap::new(), regions: HashMap::new(), taken: HashMap::new() };
+        let mut found = CallTypes { given, shown: HashMap::new(), regions: HashMap::new(), taken: HashMap::new(), untold: false };
         // The arguments are checked in a function of their own, and what they
         // show is settled in another: the checker recurses through calls'
         // arguments, so this keeps little on the stack.
@@ -8389,24 +8433,44 @@ impl Checker {
         self.settle_call_args(span, task, written, args, &info, found)
     }
 
-    /// Notes in `found` how `actual`, the task value given for a parameter of
-    /// type `ty`, takes each value of a group the call gives, and makes `ty`
-    /// take them so too: a task value taking a place there is given the
-    /// group's value as a place (see `group_place`).
-    fn note_group_taken(ty: &mut Type, actual: &Type, found: &mut CallTypes) {
-        let (Type::Task(pattern), Type::Task(actual)) = (ty, actual) else { return };
+    /// Notes in `found` how `actual`, the task value given at `at` for a
+    /// parameter of type `ty`, takes each value of a group the call gives,
+    /// and makes `ty` take them so too: a task value taking a place there is
+    /// given the group's value as a place (see `group_place`). Two task values
+    /// taking one value in different ways can't both be given it.
+    fn note_group_taken(ty: &mut Type, actual: &Type, at: Span, found: &mut CallTypes) -> Result<()> {
+        let (Type::Task(pattern), Type::Task(actual)) = (ty, actual) else { return Ok(()) };
         if pattern.params.len() != actual.params.len() {
-            return;
+            return Ok(());
         }
         for (i, param) in pattern.params.iter().enumerate() {
             let (Type::Param(name), Some(how)) = (param, actual.taken.get(i)) else { continue };
-            if name.contains(GROUP_ITEM) && *how != Taken::Value {
-                found.taken.entry(name.clone()).or_insert_with(|| how.clone());
-                if let Some(slot) = pattern.taken.get_mut(i) {
-                    *slot = how.clone();
+            if !name.contains(GROUP_ITEM) {
+                continue;
+            }
+            match found.taken.get(name) {
+                Some(before) if before != how => {
+                    let item = name.rsplit(GROUP_ITEM).next().and_then(|k| k.parse::<usize>().ok()).map_or(0, |k| k + 1);
+                    let way = |how: &Taken| match how {
+                        Taken::Value => "as a value".to_string(),
+                        Taken::Place(passing) => format!("as a place, '{}'", passing.word()),
+                        Taken::Region(_) => "as a region".to_string(),
+                    };
+                    return err(
+                        at,
+                        format!("this task value takes value {} of the group {}, and another task value the call gives takes it {}, so the call can't give it to both; give task values taking it the same way", item, way(how), way(before)),
+                    );
+                }
+                Some(_) => {}
+                None => {
+                    found.taken.insert(name.clone(), how.clone());
                 }
             }
+            if let Some(slot) = pattern.taken.get_mut(i) {
+                *slot = how.clone();
+            }
         }
+        Ok(())
     }
 
     /// How a call gives `arg`, the value `param` of a group it gives, which a
@@ -8423,6 +8487,9 @@ impl Checker {
                     region
                 ),
             ),
+            // A task value of a type not known, which a mistake in it left:
+            // the place may be what it takes.
+            None if found.untold && matches!(arg.kind, ExprKind::Ref(_)) => Ok(Some(Passing::BindRef)),
             _ if matches!(arg.kind, ExprKind::Ref(_)) => err(
                 arg.span,
                 format!("'{}' is a value of a group, which holds a place only where the call gives it to a task value taking one there, as in 'next: (P...) -> R' given a task taking 'hold& n: int'; give the value itself", param),
@@ -8436,10 +8503,23 @@ impl Checker {
     fn check_args_of(&mut self, task: &str, args: &mut [Expr], info: &mut TaskInfo, found: &mut CallTypes) -> Result<()> {
         let what = if info.owner.is_some() { "method" } else { "task" };
         let mut deferred = Vec::new();
-        for ((arg, (param, ty)), passing) in args.iter_mut().zip(info.params.iter_mut()).zip(info.passing.iter_mut()) {
+        // A group's values are checked after a task value given after them,
+        // `apply(&n, 5, bump)`, which says how it takes each (see
+        // `note_group_taken`).
+        let group_item = |ty: &Type| matches!(ty, Type::Param(name) if name.contains(GROUP_ITEM));
+        let first_item = info.params.iter().position(|(_, ty)| group_item(ty));
+        let last_task = info.params.iter().rposition(|(_, ty)| matches!(ty, Type::Task(task) if task.params.iter().any(group_item)));
+        let mut order: Vec<usize> = (0..args.len().min(info.params.len()).min(info.passing.len())).collect();
+        if let (Some(first), Some(last)) = (first_item, last_task)
+            && first < last
+        {
+            order.sort_by_key(|&i| info.params.get(i).is_some_and(|(_, ty)| group_item(ty)));
+        }
+        for i in order {
+            let (Some(arg), Some((param, ty)), Some(passing)) = (args.get_mut(i), info.params.get_mut(i), info.passing.get_mut(i)) else { continue };
             if *ty != Type::Region {
-                // A value of a group, which a task value given before it may
-                // take as a place.
+                // A value of a group, which a task value given with it may take
+                // as a place.
                 if let Type::Param(name) = &*ty
                     && name.contains(GROUP_ITEM)
                     && let Some(place) = self.group_place(task, arg, param, name, found)?
@@ -8451,7 +8531,8 @@ impl Checker {
                 // `match_regions`).
                 let actual = self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?;
                 self.match_regions(ty, &actual, &mut found.regions);
-                Self::note_group_taken(ty, &actual, found);
+                Self::note_group_taken(ty, &actual, arg.span, found)?;
+                found.untold |= matches!(ty, Type::Task(_)) && actual.unknown();
                 // A task value whose type names regions is matched after the
                 // other values, whose types name the caller's regions its own
                 // stand for.
@@ -8494,7 +8575,7 @@ impl Checker {
     /// Settles a call of `task` whose arguments are checked: the types it
     /// gives, what each argument becomes, and the type of what it sends.
     fn settle_call_args(&mut self, span: Span, task: &str, written: &mut Vec<TypeArg>, args: &mut [Expr], info: &TaskInfo, found: CallTypes) -> Result<Type> {
-        let CallTypes { mut given, shown, regions, taken } = found;
+        let CallTypes { mut given, shown, regions, taken, untold } = found;
         let params = &info.params;
         let ret = &info.ret;
         // Where each type the call gives is written: the call itself, for one
@@ -8610,6 +8691,10 @@ impl Checker {
             given.entry(param.name.clone()).or_insert_with(|| Type::Tuple(Vec::new()));
         }
         let missing: Vec<&TypeParam> = info.types.iter().filter(|param| !given.contains_key(&param.name)).collect();
+        // A task value whose mistake is told already may be what names them.
+        if untold && !missing.is_empty() {
+            return Ok(Type::Unknown);
+        }
         let shown = sent.params();
         if let Some(param) = missing.iter().find(|param| !shown.contains(&param.name.as_str())) {
             return err(span, self.untold_type(task, &param.name));
@@ -9335,6 +9420,15 @@ impl Checker {
     /// The error for a type a call neither names nor shows in its arguments or
     /// in the place its value goes.
     fn untold_type(&self, task: &str, param: &str) -> String {
+        // A call doesn't write the types of a task taking a group yet.
+        if self.tasks.get(task).is_some_and(|info| info.types.iter().any(|param| param.group)) {
+            return format!(
+                "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; a call of a task taking a group of types doesn't write its types yet, so give the value a place whose type names it, as in 'bind x: int = {}(…)'",
+                param,
+                unqualified(task),
+                unqualified(task)
+            );
+        }
         let count = self.tasks.get(task).map_or(1, |info| info.types.len().max(1));
         format!(
             "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; write it, as in '{}<{}>(…)'",
@@ -9599,8 +9693,6 @@ fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
     (plain && matches!(given, Type::None | Type::Maybe(_))).then(|| Type::Maybe(Box::new(extracted.clone())))
 }
 
-/// What the arguments of a call show its task's types and regions to be (see
-/// `Checker::check_call_args`).
 /// How a wrapper takes the values of a task it wraps (see
 /// `Checker::wrapper_tail`).
 struct WrapperTail {
@@ -9613,6 +9705,8 @@ struct WrapperTail {
     group: Option<usize>,
 }
 
+/// What the arguments of a call show its task's types and regions to be (see
+/// `Checker::check_call_args`).
 struct CallTypes {
     /// Each type the call gives: written after the task's name, or worked out
     /// from the arguments.
@@ -9624,8 +9718,11 @@ struct CallTypes {
     /// The region each region the header names is.
     regions: HashMap<String, String>,
     /// How a task value the call gives takes each value of a group the call
-    /// gives (`P#0`, …), where it takes one as a place or a region.
+    /// gives (`P#0`, …): as a value, a place, or a region.
     taken: HashMap<String, Taken>,
+    /// Whether a task value the call gives has a type not known, which a
+    /// mistake in it left.
+    untold: bool,
 }
 
 /// The mistake in `arg`, given without `&` to the `hold&` or `bind&` parameter
@@ -12297,10 +12394,6 @@ fn group_items(given: &HashMap<String, Type>, name: &str) -> Option<(Vec<Type>, 
         _ => None,
     }
 }
-
-/// What the task type holding a group's types sends: no results, which no
-/// task sends (see `group_binding`).
-const GROUP_SENDS: Type = Type::Results(Vec::new());
 
 /// The type given for a group of `types`, each taken as `taken` says: a tuple
 /// of them where all are values, and otherwise the parameters of a task type

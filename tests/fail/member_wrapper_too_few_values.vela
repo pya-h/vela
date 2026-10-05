@@ -1,0 +1,16 @@
+; error: 8:7: wrapper 'lim' takes 0 values after the next task, and method 'get' takes 1 value besides the value it is called on, which a wrapper takes after its own values
+; A member wrapper takes the method's values besides the value it is called on.
+shape C
+    n: int
+    lim(next: (C, int) -> int) -> int
+        <- next(.this, 1)
+    fi
+    $(.lim)
+    get(k: int) -> int
+        <- .n + k
+    fi
+fi
+task main()
+    bind c = C { n: 1 }
+    show(c.get(3))
+fi
