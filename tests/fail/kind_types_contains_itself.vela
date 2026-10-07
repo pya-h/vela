@@ -1,0 +1,9 @@
+; error: 3:16: 'Chain' contains itself by value (Chain -> Chain); use a pointer such as 'maybe ^Chain'
+kind Chain<T>
+    Link(next: Chain<T>)
+    End
+fi
+
+task main()
+    show(1)
+fi

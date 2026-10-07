@@ -1,0 +1,9 @@
+; error: 8:32: expected type Option<int>, got Option<text>
+kind Option<T>
+    Some(value: T)
+    None
+fi
+
+task main()
+    bind wanted: Option<int> = Option<text>.None
+fi

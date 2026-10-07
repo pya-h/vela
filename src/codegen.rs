@@ -192,12 +192,13 @@ impl Generator {
                 self.altering.insert(t.name.clone());
             }
             match item {
-                Item::Kind(k) => {
+                // A shape or kind that takes types generates nothing: the one
+                // made for each set of types it is given is generated in its
+                // place (see the checker's `shape_instance` and `kind_instance`).
+                Item::Kind(k) if k.types.is_empty() => {
                     self.kinds.insert(k.name.clone(), k.clone());
                 }
-                // A shape that takes types generates nothing: the shape made
-                // for each set of types it is given is generated in its place
-                // (see the checker's `shape_instance`).
+                Item::Kind(_) => {}
                 Item::Shape(s) if s.types.is_empty() => {
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
@@ -257,7 +258,9 @@ impl Generator {
             self.gen_task_type(ty);
         }
         for item in items {
-            if let Item::Kind(k) = item {
+            if let Item::Kind(k) = item
+                && k.types.is_empty()
+            {
                 self.gen_tag_enum(k);
             }
         }
@@ -1542,7 +1545,11 @@ impl Generator {
     /// The task the method `str` of the shape or kind `owner` is (see
     /// `str_task`).
     fn str_task(&self, owner: &str) -> Option<String> {
-        let given = self.shapes.get(owner).map(|shape| shape.given.as_slice()).unwrap_or_default();
+        let given = match (self.shapes.get(owner), self.kinds.get(owner)) {
+            (Some(shape), _) => shape.given.as_slice(),
+            (None, Some(kind)) => kind.given.as_slice(),
+            (None, None) => &[],
+        };
         str_task(owner, given, |task| self.hidden_params.contains_key(task))
     }
 
@@ -1550,11 +1557,16 @@ impl Generator {
     /// wherever it is read, and a shape made for types written as given them,
     /// `Box<int>` (see `ShapeDef::given`).
     fn written_name(&self, name: &str) -> String {
-        match self.shapes.get(name) {
-            Some(shape) if !shape.given.is_empty() => {
+        let given = match (self.shapes.get(name), self.kinds.get(name)) {
+            (Some(shape), _) => shape.given.as_slice(),
+            (None, Some(kind)) => kind.given.as_slice(),
+            (None, None) => &[],
+        };
+        match given {
+            given if !given.is_empty() => {
                 let base = name.split("__of__").next().unwrap_or(name);
                 let given: Vec<String> =
-                    shape.given.iter().map(|ty| ty.without_regions().map_names(&|inner| self.written_name(inner)).to_string()).collect();
+                    given.iter().map(|ty| ty.without_regions().map_names(&|inner| self.written_name(inner)).to_string()).collect();
                 format!("{}<{}>", unqualified(base), given.join(", "))
             }
             _ => unqualified(name).to_string(),
@@ -3002,7 +3014,15 @@ impl Generator {
             ExprKind::Call { name, types, args } => self.gen_call(e, name, types, args),
             ExprKind::Unary(op, operand) => self.gen_unary(e, *op, operand),
             ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r).map(|binary| parenthesized(&binary)),
-            ExprKind::Construct { kind, tag, args } => self.gen_construct(e, kind, tag, args),
+            // A value of a kind made for its types is of that kind, which its type
+            // names (see `ExprKind::Construct`).
+            ExprKind::Construct { kind, tag, args, .. } => {
+                let kind = match &e.ty {
+                    Some(Type::Named(made, _)) => made.clone(),
+                    _ => kind.clone(),
+                };
+                self.gen_construct(e, &kind, tag, args)
+            }
             ExprKind::New { ty, value, region, .. } => {
                 // The checker settles the region of a `new` that names none
                 // (see `Checker::region_or_default`).
@@ -4386,7 +4406,7 @@ impl UsedTypes {
                 Item::Shape(s) if s.types.is_empty() => {
                     used.fields.insert(s.name.clone(), s.fields.iter().map(|f| f.ty.clone()).collect());
                 }
-                Item::Kind(k) => {
+                Item::Kind(k) if k.types.is_empty() => {
                     used.kinds.insert(k.name.clone());
                     used.fields.insert(k.name.clone(), k.variants.iter().flat_map(|v| v.payload.iter().map(|f| f.ty.clone())).collect());
                 }
@@ -4398,7 +4418,7 @@ impl UsedTypes {
                 Item::Shape(s) if s.types.is_empty() && str_task(&s.name, &s.given, exists).is_none() => {
                     used.parts.insert(s.name.clone(), s.fields.iter().filter(|f| !f.private).map(|f| f.ty.clone()).collect());
                 }
-                Item::Kind(k) if str_task(&k.name, &[], exists).is_none() => {
+                Item::Kind(k) if k.types.is_empty() && str_task(&k.name, &k.given, exists).is_none() => {
                     used.parts.insert(k.name.clone(), k.variants.iter().flat_map(|v| v.payload.iter().map(|f| f.ty.clone())).collect());
                 }
                 _ => {}
@@ -4419,7 +4439,8 @@ impl UsedTypes {
                     }
                 }
                 Item::Shape(_) => {}
-                Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
+                Item::Kind(k) if k.types.is_empty() => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
+                Item::Kind(_) => {}
                 // A generic task's own types hold `T`, which no C type
                 // answers; the tasks made from it hold the types it is given.
                 Item::Task(t) if t.types.is_empty() => {
@@ -4972,6 +4993,7 @@ fn type_name(item: &Item) -> Option<&str> {
         // shared fields of a shape no value of which is ever made.
         Item::Shape(s) if s.name == START_VALUES => None,
         Item::Shape(s) => Some(&s.name),
+        Item::Kind(k) if !k.types.is_empty() => None,
         Item::Kind(k) => Some(&k.name),
         Item::Task(_) | Item::Macro(_) => None,
     }

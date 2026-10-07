@@ -1,0 +1,10 @@
+; error: 3:14: 'Grow' would need more than 24 kinds made for it, one inside the next: a variant of it gives it a type built from its own, which never stops. A variant can name the kind with the types it takes, as in 'maybe ^Grow<T>'
+kind Grow<T>
+    Next(g: ^Grow<Grow<T>>)
+    Stop
+fi
+
+task main()
+    region r
+    bind g: Grow<int> = Grow.Stop
+fi

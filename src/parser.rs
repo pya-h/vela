@@ -1186,7 +1186,7 @@ impl Parser {
         if is_shared && !types.is_empty() {
             return Err(Error::at(
                 span,
-                format!("a shape that takes types can't have shared methods yet ('{}' takes {}): it is a different shape for every set of types", owner, type_param_list(types)),
+                format!("a {0} that takes types can't have shared methods yet ('{1}' takes {2}): it is a different {0} for every set of types", what, owner, type_param_list(types)),
             ));
         }
         reject_member_named_this(&name, span, "a method")?;
@@ -1269,12 +1269,7 @@ impl Parser {
         self.advance(); // kind
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        if self.check(Token::Lt) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!("a kind takes no types yet, so '{}' can't be given any; a task or a shape can, as in 'shape {}<T>'", name, name),
-            ));
-        }
+        let types = self.parse_type_params(false)?;
         self.skip_newlines();
         let mut variants = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
@@ -1294,7 +1289,7 @@ impl Parser {
             // `shared make(…) -> K`: a method of the kind itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance(); // shared
-                let mut method = self.parse_method(&name, "kind", &[], private, true, Above { fields: &[], shared: &[], methods: &methods })?;
+                let mut method = self.parse_method(&name, "kind", &types, private, true, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
@@ -1312,7 +1307,7 @@ impl Parser {
             // A variant carries its values in parentheses, as a method takes its
             // parameters, so `alters` or a `->` after them tells them apart.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                let mut method = self.parse_method(&name, "kind", &[], private, false, Above { fields: &[], shared: &[], methods: &methods })?;
+                let mut method = self.parse_method(&name, "kind", &types, private, false, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
@@ -1349,7 +1344,7 @@ impl Parser {
             }
         }
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(KindDef { name, variants, span, private: false })
+        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false })
     }
 
     /// Whether the `(` after a name inside a kind holds a variant's values rather
@@ -2547,6 +2542,14 @@ impl Parser {
                     self.advance(); // .
                     written.push(self.expect_ident()?);
                 }
+                // `case Option<int>.Some v`: the value matched has its types.
+                if self.at_kind_types() {
+                    let kind = written.join(".");
+                    return Err(Error::at(
+                        self.peek_span(),
+                        format!("a pattern takes the types of '{0}' from the value it matches, so it names none: '{1} {0}.Tag …'", kind, keyword),
+                    ));
+                }
                 let module_first = written.first().is_some_and(|first| self.is_module(first));
                 let tag = written.pop().unwrap_or_default();
                 // A kind after a name that isn't a module this file includes is
@@ -3149,6 +3152,12 @@ impl Parser {
                 }
                 let field = self.expect_member()?;
                 let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
+                // `m.Option<int>.None`: a kind of a module, given its types.
+                if self.at_kind_types()
+                    && let Some((kind, _)) = dotted_name(&expr)
+                {
+                    return self.parse_kind_types_use(kind, span);
+                }
                 // A `<` here opens the types a use gives (a method takes none of
                 // its own, which `dotted_name_use` says), never a comparison:
                 // see `at_type_args`.
@@ -3264,6 +3273,9 @@ impl Parser {
         }
         if name == TEXT_CAST && self.check(Token::LParen) {
             return self.parse_text_cast(span);
+        }
+        if self.at_kind_types() {
+            return self.parse_kind_types_use(name, span);
         }
         // The types a use gives are read only where a call or a shape
         // literal follows them (see `at_type_args`), so one of `(` and
@@ -3671,7 +3683,7 @@ impl Parser {
             return Err(Error::at(
                 self.peek_span(),
                 format!(
-                    "a method takes no types of its own yet, and a variant takes none at all, so '{0}' is given none; call it as '{0}(…)'",
+                    "a method takes no types of its own yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so '{0}' is given none; call it as '{0}(…)'",
                     member
                 ),
             ));
@@ -3707,8 +3719,23 @@ impl Parser {
         if self.check(Token::NotSimilar) {
             return matches!(self.tokens.get(self.pos + 1), Some(Token::LBrace));
         }
+        // A call follows the types a task is given, and a literal the types a
+        // shape is given.
+        self.type_args_close().is_some_and(|close| matches!(self.tokens.get(close + 1), Some(Token::LParen | Token::LBrace)))
+    }
+
+    /// Whether the cursor is at the `<` of the types a kind is given, before
+    /// one of its variants: `Option<int>.None`. A comparison never looks like
+    /// that, as `a < b > .x` would compare a bool with `>`.
+    fn at_kind_types(&self) -> bool {
+        self.type_args_close().is_some_and(|close| self.tokens.get(close + 1) == Some(&Token::Dot) && matches!(self.tokens.get(close + 2), Some(Token::Ident(_))))
+    }
+
+    /// The position of the `>` closing the types a use gives, when the cursor
+    /// is at their `<`, with only what a type is written with in between.
+    fn type_args_close(&self) -> Option<usize> {
         if !self.check(Token::Lt) {
-            return false;
+            return None;
         }
         let mut depth = 0usize;
         // Parentheses in types group one or hold a tuple's, so they pair up
@@ -3717,21 +3744,32 @@ impl Parser {
         let mut grouped = 0usize;
         for p in self.pos + 1.. {
             match self.tokens.get(p) {
-                Some(Token::Gt) if grouped > 0 && depth == 0 => return false,
+                Some(Token::Gt) if grouped > 0 && depth == 0 => return None,
                 // `>` closes the types, or, nested, one type's own.
-                // A call follows the types a task is given, and a literal the
-                // types a shape is given; nothing else can follow a `>`.
-                Some(Token::Gt) if depth == 0 => return matches!(self.tokens.get(p + 1), Some(Token::LParen | Token::LBrace)),
+                Some(Token::Gt) if depth == 0 => return Some(p),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
                 Some(Token::LParen) => grouped += 1,
-                Some(Token::RParen) if grouped == 0 => return false,
+                Some(Token::RParen) if grouped == 0 => return None,
                 Some(Token::RParen) => grouped -= 1,
                 Some(token) if token.writes_type() => {}
-                _ => return false,
+                _ => return None,
             }
         }
-        false
+        None
+    }
+
+    /// `Option<int>.None` or `Option<int>.Some(3)`, with the cursor at `<`
+    /// after `kind`, written at `span`: a variant of a kind given its types.
+    fn parse_kind_types_use(&mut self, kind: String, span: Span) -> Result<Expr> {
+        let types = self.parse_type_args()?;
+        self.expect(Token::Dot)?;
+        let tag = self.expect_ident()?;
+        if self.at_type_args() {
+            return Err(Error::at(self.peek_span(), format!("'{}' already names the types of '{}', and a variant takes none of its own", kind, tag)));
+        }
+        let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+        Ok(Expr::new(ExprKind::Construct { kind, tag, args, types }, span))
     }
 
     /// After the `<` of the types a call gives: the types and `>`.

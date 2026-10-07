@@ -61,7 +61,9 @@ compares where a place is, `x.type` is its type as text, and whole numbers may b
 binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `maybe`, and a condition may join an
 `is` with `and`, as in `when found is {v} and v > 0`. `each v in xs` goes through a slice as it was when the loop
 started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
-pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. `block … fi` runs
+pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. Kinds take types as
+shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
+`Option<int>.None`. `block … fi` runs
 statements in a block of their own.
 
 ```

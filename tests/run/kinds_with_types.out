@@ -1,0 +1,19 @@
+Some(4) None
+Some("hi") None None Left(3) Right("r")
+Option<text> Either<int, text>
+[Some(1), None, Some(3)]
+Some(1) false true
+Some(None) { None }
+5 9
+Some("w") Some(2.5) 3
+7 false
+true false
+Some(5)
+3
+Top(3) Rest
+something nothing
+Count(2, "c")
+Some(4)
+Some("w")
+5
+too big

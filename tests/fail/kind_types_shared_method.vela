@@ -1,0 +1,12 @@
+; error: 6:12: a kind that takes types can't have shared methods yet ('Option' takes '<T>'): it is a different kind for every set of types
+kind Option<T>
+    Some(value: T)
+    None
+
+    shared make() -> int
+        <- 1
+    fi
+fi
+
+task main()
+fi

@@ -1,0 +1,10 @@
+; error: 9:17: cannot infer the type of 'lost', since its value doesn't say every type its kind takes; give it a type, such as 'lost: Option<int>', or write them, as in 'Option<int>.…'
+; A variable takes the types a variant doesn't tell from nothing else.
+kind Option<T>
+    Some(value: T)
+    None
+fi
+
+task main()
+    bind lost = Option.None
+fi

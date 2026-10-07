@@ -1,0 +1,9 @@
+; error: 8:21: kind 'Ranked' takes a type that is 'ordered' as 'T', and [int#2] has no order, so '<' can't compare it
+kind Ranked<T: ordered>
+    Top(value: T)
+    Rest
+fi
+
+task main()
+    show(Ranked.Top([1, 2]))
+fi

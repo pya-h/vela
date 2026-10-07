@@ -1,0 +1,178 @@
+; Kinds that take types, `kind Option<T>`: one kind is made for each set of
+; types the program uses. A variant's types come from its values, or from the
+; place the value goes, or are written after the kind's name.
+
+kind Option<T: shown>
+    Some(value: T)
+    None
+
+    orElse(fallback: T) -> T
+        <- match .this
+        case Some v = v
+        case None = fallback
+        fi
+    fi
+
+    isSome() -> bool
+        <- match .this
+        case Some _ = true
+        case None = false
+        fi
+    fi
+fi
+
+kind Either<A, B>
+    Left(a: A)
+    Right(b: B)
+fi
+
+; A variant may name its kind again behind a pointer.
+kind Tree<T>
+    Leaf(value: T)
+    Node(left: ^Tree<T>, right: ^Tree<T>)
+fi
+
+; The words a kind asks of its types, as a shape's.
+kind Ranked<T: ordered>
+    Top(value: T)
+    Rest
+fi
+
+; Its own `str`, made for each set of types.
+kind Quiet<T>
+    Said(value: T)
+    Silent
+
+    str(r: region) -> text@r
+        <- match .this
+        case Said _ = "something".copy() at r
+        case Silent = "nothing".copy() at r
+        fi
+    fi
+fi
+
+; A method that changes the value it is called on.
+kind Counter<T>
+    Count(n: int, last: T)
+
+    alters bump(v: T)
+        match .this
+        case Count n _
+            .this = Counter.Count(n + 1, v)
+        fi
+    fi
+fi
+
+shape Holder<T: shown>
+    value: Option<T>
+fi
+
+task half(n: int) -> Option<int>
+    when n % 2 == 0
+        <- Option.Some(n / 2)
+    fi
+    <- Option.None
+fi
+
+; A task that takes types, given a kind of them.
+task first<T: shown>(o: Option<T>@r, fallback: T) -> T
+    match o
+    case Some v
+        <- v
+    case None
+        <- fallback
+    fi
+fi
+
+task wrap<T: shown>(r: region, x: T) -> Option<T>@r
+    <- Option.Some(x)
+fi
+
+task empty<T: shown>(r: region) -> Option<T>@r
+    <- Option<T>.None
+fi
+
+task alike<T: similar & shown>(a: Option<T>@r, b: Option<T>@r) -> bool
+    <- a ~= b
+fi
+
+task replace<T: shown>(hold& o: Option<T>@r, v: T)
+    o = Option.Some(v)
+fi
+
+task leaves(t: Tree<int>@r) -> int
+    match t
+    case Leaf v
+        <- v
+    case Node left right
+        <- leaves(left^) + leaves(right^)
+    fi
+fi
+
+; The kind of an error, its types from the error type.
+task checked(n: int) -> int ~ Option<text>
+    when n < 0
+        <- fail Option.None
+    fi
+    when n > 100
+        <- fail Option.Some("too big")
+    fi
+    <- n
+fi
+
+task main()
+    region r
+    show(half(8), " ", half(7))
+
+    ; From the values, the place, or written.
+    bind some = Option.Some("hi")
+    bind empty_text: Option<text> = Option.None
+    bind written = Option<float>.None
+    bind left: Either<int, text> = Either.Left(3)
+    bind right = Either<int, text>.Right("r")
+    show(some, " ", empty_text, " ", written, " ", left, " ", right)
+    show(some.type, " ", right.type)
+
+    ; Beside a value that tells them: in an array, a branch, a comparison.
+    bind many = [Option.Some(1), Option.None, Option.Some(3)]
+    show(many)
+    bind chosen = when some.isSome() Option.Some(1) else Option.None fi
+    show(chosen, " ", chosen == Option.None, " ", Option.Some(1) ~= chosen)
+    bind nested: Option<Option<int>> = Option.Some(Option.None)
+    bind maybe_one: maybe Option<int> = Option.None
+    show(nested, " ", maybe_one)
+
+    ; Methods, and tasks that take types.
+    show(first(Option.Some(5), 0), " ", first(Option<int>.None, 9))
+    show(wrap(r, "w"), " ", wrap(r, 2.5), " ", wrap(r, 3).orElse(1))
+    bind nothing_yet: Option<int> = empty(r)
+    show(nothing_yet.orElse(7), " ", nothing_yet.isSome())
+    show(alike(Option.Some(1), Option.Some(1)), " ", alike(Option.Some("a"), Option<text>.None))
+    hold kept: Option<int> = Option.None
+    replace(&kept, 5)
+    show(kept)
+
+    ; Behind pointers, in a region.
+    bind a = new Tree<int>(Tree.Leaf(1)) at r
+    bind b = new Tree<int>(Tree.Leaf(2)) at r
+    show(leaves(Tree.Node(a, b)))
+
+    show(Ranked.Top(3), " ", Ranked<text>.Rest)
+    show(Quiet.Said(1), " ", Quiet<text>.Silent)
+    hold count = Counter.Count(0, "a")
+    count.bump("b")
+    count.bump("c")
+    show(count)
+    bind held = Holder { value: Option.Some(4) }
+    show(held.value)
+    bind words = Option.Some("w".copy() at r)
+    show(words)
+
+    show(checked(5) { 0 })
+    match checked(500)
+    case {v}
+        show(v)
+    case failure e
+        show(e.orElse("?"))
+    fi
+fi

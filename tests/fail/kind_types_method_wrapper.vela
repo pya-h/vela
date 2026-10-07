@@ -1,0 +1,20 @@
+; error: 10:7: 'isSome' is a method of 'Option', which takes types, so it can't have wrappers yet: each wrapper is given it as a value, and only a task that takes none can be one
+task same<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+kind Option<T>
+    Some(value: T)
+    None
+
+    $(same)
+    isSome() -> bool
+        <- match .this
+        case Some _ = true
+        case None = false
+        fi
+    fi
+fi
+
+task main()
+fi

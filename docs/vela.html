@@ -208,7 +208,8 @@
         no number), <code>generics.vela</code> (tasks that take types, and the words that say what a type allows),
         <code>tuples.vela</code> (tuples made, read, and taken apart), <code>maps.vela</code> (words counted in a map), <code>primes.vela</code> (a slice filled by index
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
-        slice as it is at each pass</a>), <code>seats.vela</code> (a party seated in a hall, with
+        slice as it is at each pass</a>), <code>stock.vela</code> (a stock list searched with <a href="#generic-kinds">kinds that take types</a>),
+        <code>seats.vela</code> (a party seated in a hall, with
         <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>), <code>journal.vela</code> (notes read from input into a region per line,
         with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
         (tasks, shapes, pointers, control flow, and text).
@@ -317,6 +318,7 @@ block shared type</pre>
         <tr><td><code>bind x: T</code>, <code>bind&amp; x: T</code></td><td>a parameter that is always a copy, or the caller's place only read, given as <code>&amp;a</code> (see <a href="#bind-parameters">Parameters that read</a>)</td></tr>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
+        <tr><td><code>kind Option&lt;T&gt;</code>, <code>Option&lt;int&gt;.None</code></td><td>a kind that takes types, and a variant given them where nothing else says them (see <a href="#generic-kinds">Kinds that take types</a>)</td></tr>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
         <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
@@ -2132,6 +2134,78 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           <code>shape Shown&lt;T: shown&gt;</code> may only be given a type that word allows. A task
           passing its own type on must ask for at least as much: a <code>task tell&lt;T&gt;(b: Shown&lt;T&gt;@r)</code>
           is an error that says to require <code>shown</code> too.</li>
+      </ul>
+
+      <h3 id="generic-kinds">Kinds that take types</h3>
+      <p>
+        A kind takes types as a shape does, in the same <code>&lt; &gt;</code> with the same words:
+        <code>kind Option&lt;T&gt;</code>, <code>kind Either&lt;A, B&gt;</code>. Its variants are read once, with
+        <code>T</code> standing for the type each value of it is given, and the compiler makes one kind for each set of
+        types the program uses, so <code>Option&lt;int&gt;</code> costs what a kind carrying an <code>int</code> does.
+      </p>
+      <pre class="program" data-file="generic_kinds.vela"><span class="keyword">kind</span> Option&lt;T&gt;
+    Some(value: T)
+    None
+
+    orElse(fallback: T) -&gt; T
+        <span class="keyword">&lt;-</span> <span class="keyword">match</span> .this
+        <span class="keyword">case</span> Some v = v
+        <span class="keyword">case</span> None = fallback
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> Either&lt;A, B&gt;
+    Left(a: A)
+    Right(b: B)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> half(n: int) -&gt; Option&lt;int&gt;
+    <span class="keyword">when</span> n % <span class="number">2</span> == <span class="number">0</span>
+        <span class="keyword">&lt;-</span> Option.Some(n / <span class="number">2</span>)        <span class="comment">; Option&lt;int&gt;: the value says which type</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> Option.None                     <span class="comment">; the result's type says it</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    show(half(<span class="number">8</span>), <span class="string">" "</span>, half(<span class="number">7</span>))         <span class="comment">; Some(4) None</span>
+    <span class="keyword">bind</span> empty: Option&lt;text&gt; = Option.None <span class="comment">; the variable's type says it</span>
+    <span class="keyword">bind</span> written = Option&lt;float&gt;.None     <span class="comment">; written, since nothing else does</span>
+    <span class="keyword">bind</span> right = Either&lt;int, text&gt;.Right(<span class="string">"r"</span>)
+    <span class="keyword">bind</span> many = [Option.Some(<span class="number">1</span>), Option.None]  <span class="comment">; the value beside it says it</span>
+    show(many, <span class="string">" "</span>, right.type)            <span class="comment">; [Some(1), None] Either&lt;int, text&gt;</span>
+    show(half(<span class="number">7</span>).orElse(<span class="number">0</span>), <span class="string">" "</span>, empty, <span class="string">" "</span>, written)  <span class="comment">; 0 None None</span>
+    <span class="keyword">match</span> half(<span class="number">8</span>)
+    <span class="keyword">case</span> Some v                          <span class="comment">; v: int</span>
+        show(v)
+    <span class="keyword">case</span> None
+        show(<span class="string">"odd"</span>)
+    <span class="keyword">fi</span>
+    <span class="keyword">bind</span> lost = Option.None              <span class="comment">; error: cannot infer the type of 'lost'</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>A variant's types.</strong> <code>Option.Some(1)</code> works out the types from the values it
+          carries, as a shape literal does. Where they don't say every type, as <code>Option.None</code> carries none,
+          the place the value goes says the rest, as it does for a bare <code>none</code>: a typed <code>bind</code>,
+          an assignment, a parameter, what a task sends, a field, an error side (<code>&lt;- fail Option.None</code>
+          in a task sending <code>int ~ Option&lt;text&gt;</code>), and a value of the kind beside it in an array, in
+          the branches of a <code>when</code> or a <code>match</code>, or across <code>==</code>. Where nothing says
+          them, they are written after the kind's name, <code>Option&lt;int&gt;.None</code>,
+          <code>Either&lt;int, text&gt;.Right("r")</code>: all of them or none, and never after the variant. A value
+          whose types nothing says is an error that shows how to write them.</li>
+        <li><strong>Matching.</strong> A <code>case</code> takes the types from the value it matches, so it names
+          none: <code>case Some v</code> or <code>case Option.Some v</code>, and <code>v</code> is of the type the value
+          was given. In a task that takes types, a <code>case</code> on an <code>Option&lt;T&gt;</code> binds a
+          <code>T</code>.</li>
+        <li><strong>The rest, as shapes have it.</strong> A kind given types goes anywhere a type does, and
+          <code>Option</code> alone is an error that says to name them; a type given names no region, and the whole
+          names one exactly when its values hold something there (<code>Option&lt;text&gt;@r</code>,
+          <code>Option&lt;int&gt;</code>); a variant may name the kind again behind a pointer
+          (<code>Node(left: ^Tree&lt;T&gt;, right: ^Tree&lt;T&gt;)</code>), and one giving it a type built from its own
+          is an error after 24 kinds; the four words ask the same of the types given. Its methods see the types too
+          (<code>orElse</code> above sends a <code>T</code>), its own <code>str</code> writes every kind made from it,
+          and <code>==</code> and <code>~=</code> compare by what the kind made carries. As for shapes that take
+          types, it has no shared methods yet, and its methods take no wrappers yet.</li>
       </ul>
 
       <h3 id="macros">Macros</h3>

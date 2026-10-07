@@ -1,0 +1,15 @@
+; error: 10:16: a pattern takes the types of 'Option' from the value it matches, so it names none: 'case Option.Tag …'
+; A case takes the types from the value it matches.
+kind Option<T>
+    Some(value: T)
+    None
+fi
+
+task main()
+    match Option.Some(1)
+    case Option<int>.Some v
+        show(v)
+    case None
+        show(0)
+    fi
+fi

@@ -228,6 +228,12 @@ pub struct Checker {
     /// The names of the tasks in `instances`, and of those taken from it, so
     /// each set of types is noted once.
     noted_instances: HashSet<String>,
+    /// The variants of kinds that take types made in the statement being
+    /// checked whose types neither their values nor anything else has told
+    /// yet: where each is, its kind, its variant, and the first type untold. The place
+    /// the value goes tells them (see `settle_variant`); one still untold at
+    /// the statement's end is a mistake.
+    untold_kinds: Vec<(Span, String, String, String)>,
     /// The shapes being made for their types, innermost last: a field of one may
     /// name a shape given types of its own, which needs that shape made first
     /// (see `shape_instance`).
@@ -555,8 +561,10 @@ impl Checker {
             let made = checker.expand_instances(&mut program.items);
             checker.keep_going(made);
         }
+        // The shapes and kinds made for their types join the program, so a
+        // tool reading a program with a mistake names them as written too.
+        program.items.extend(std::mem::take(&mut checker.made_shapes));
         if checker.errors.is_empty() {
-            program.items.extend(std::mem::take(&mut checker.made_shapes));
             // The values of wrappers worked out where the program starts, after
             // every shared field of the program, which they may read.
             if let Some(values) = checker.shapes.remove(START_VALUES) {
@@ -1104,9 +1112,12 @@ impl Checker {
                 if k.variants.is_empty() {
                     return err(k.span, format!("kind '{}' has no variants", k.name));
                 }
-                for v in &mut k.variants {
-                    self.check_fields(&mut v.payload)?;
-                }
+                // A kind's own types are in scope while its variants are read,
+                // as a shape's are while its fields are.
+                self.enter_type_params(&k.types);
+                let payloads = k.variants.iter_mut().try_for_each(|v| self.check_fields(&mut v.payload));
+                self.type_params.clear();
+                payloads?;
                 if let Some(kind) = self.kinds.get_mut(&k.name) {
                     kind.variants = k.variants.clone();
                 }
@@ -1423,24 +1434,24 @@ impl Checker {
         if self.type_param(name).is_some() {
             return err(at, format!("'{}' is a type this declaration takes, so it takes no types of its own", name));
         }
-        if self.sees(name) && self.kinds.contains_key(name.as_str()) {
-            return err(at, format!("'{}' is a kind, and a kind takes no types yet, so it can't be given any", unqualified(name)));
-        }
-        let Some(def) = self.shapes.get(name.as_str()).filter(|_| self.sees(name)).cloned() else {
+        // A shape or a kind that takes types: what it takes, and what it holds,
+        // which the types given may be.
+        let Some((word, params, parts)) = self.takes_types(name).filter(|_| self.sees(name)) else {
             return Err(self.unknown_shape(at, name));
         };
-        if def.types.is_empty() {
-            return err(at, format!("shape '{}' takes no types, so '< … >' has nothing to name", unqualified(name)));
+        if params.is_empty() {
+            return err(at, format!("{} '{}' takes no types, so '< … >' has nothing to name", word, unqualified(name)));
         }
-        if def.types.len() != applied.types.len() {
-            let names: Vec<&str> = def.types.iter().map(|param| param.name.as_str()).collect();
+        if params.len() != applied.types.len() {
+            let names: Vec<&str> = params.iter().map(|param| param.name.as_str()).collect();
             return err(
                 at,
                 format!(
-                    "shape '{}' takes {}, so name {}, as in '{}<{}>'",
+                    "{} '{}' takes {}, so name {}, as in '{}<{}>'",
+                    word,
                     unqualified(name),
-                    count(def.types.len(), "type"),
-                    if def.types.len() == 1 { "it" } else { "all of them" },
+                    count(params.len(), "type"),
+                    if params.len() == 1 { "it" } else { "all of them" },
                     unqualified(name),
                     names.join(", ")
                 ),
@@ -1454,14 +1465,14 @@ impl Checker {
         for ty in &applied.types {
             types.push(self.resolve_regions(ty, span, place, region)?);
         }
-        for (param, ty) in def.types.iter().zip(&types) {
-            self.check_need("shape", name, param, ty, at)?;
+        for (param, ty) in params.iter().zip(&types) {
+            self.check_need(word, name, param, ty, at)?;
         }
         if types.iter().any(|ty| !ty.params().is_empty()) {
             // A shape given a type this declaration takes: whether its values
             // live in a region depends on the types given, so it names one
             // wherever any of them could.
-            let may_hold = self.takes_region.contains(name.as_str()) || def.fields.iter().any(|field| !field.ty.params().is_empty());
+            let may_hold = self.takes_region.contains(name.as_str()) || parts.iter().any(|ty| !ty.params().is_empty());
             if may_hold && region.is_none() && matches!(place, TypePlace::Header | TypePlace::Body) {
                 return err(
                     at,
@@ -1474,8 +1485,129 @@ impl Checker {
             }
             return Ok(Type::Applied(Box::new(applied.with_types(types))));
         }
-        let key = self.shape_instance(name, &types, at)?;
+        let key = self.instance(name, &types, at)?;
         self.resolve_regions(&Type::Named(key, applied.region.clone()), span, place, inside)
+    }
+
+    /// For a shape or a kind called `name`: which it is, the types it takes,
+    /// and the types of what its values hold (a shape's fields, a kind's
+    /// payloads), which may name them.
+    fn takes_types(&self, name: &str) -> Option<(&'static str, Vec<TypeParam>, Vec<Type>)> {
+        if let Some(shape) = self.shapes.get(name) {
+            return Some(("shape", shape.types.clone(), shape.fields.iter().map(|field| field.ty.clone()).collect()));
+        }
+        let kind = self.kinds.get(name)?;
+        Some(("kind", kind.types.clone(), kind.variants.iter().flat_map(|variant| variant.payload.iter().map(|field| field.ty.clone())).collect()))
+    }
+
+    /// The shape or kind made for the types `types` give the shape or kind
+    /// `name` (see `shape_instance` and `kind_instance`).
+    fn instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
+        if self.kinds.contains_key(name) {
+            return self.kind_instance(name, types, at);
+        }
+        self.shape_instance(name, types, at)
+    }
+
+    /// The kind made for the types `types` give the kind `name`, made on the
+    /// first use, as a shape is (see `shape_instance`): its variants carry
+    /// those types in place of the names it takes, in the region of the value
+    /// holding them, so one kind serves every region.
+    fn kind_instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
+        let types: Vec<Type> = types.iter().map(Type::without_regions).collect();
+        let key = instance_name(name, &types);
+        if self.kinds.contains_key(&key) {
+            return Ok(key);
+        }
+        let Some(source) = self.kinds.get(name).cloned() else {
+            return Err(Error::internal_at(at, format!("no kind '{}' to make for {} types", name, types.len())));
+        };
+        if types.iter().any(|ty| type_depth(ty) > MAX_TYPE_DEPTH || type_size(ty) > MAX_TYPE_SIZE) {
+            return err(
+                at,
+                format!(
+                    "this use of '{}' gives a type built up more than {} types deep; a kind whose variant gives it a type built from its own never stops",
+                    unqualified(name),
+                    MAX_TYPE_DEPTH
+                ),
+            );
+        }
+        if self.made_shapes.len() >= MAX_INSTANCES {
+            return err(
+                at,
+                format!(
+                    "more than {} shapes and kinds are made for the types they are given, which no program needs; a kind whose variant gives it a type built from its own never stops",
+                    MAX_INSTANCES
+                ),
+            );
+        }
+        if self.making_shapes.len() >= MAX_TYPE_DEPTH {
+            let names = source.types.iter().map(|param| param.name.clone()).collect::<Vec<_>>().join(", ");
+            return err(
+                at,
+                format!(
+                    "'{0}' would need more than {1} kinds made for it, one inside the next: a variant of it gives it a type built from its own, which never stops. A variant can name the kind with the types it takes, as in 'maybe ^{0}<{2}>'",
+                    unqualified(name),
+                    MAX_TYPE_DEPTH,
+                    names
+                ),
+            );
+        }
+        // Registered before the variants are read, so one naming the same kind
+        // again (behind a pointer) is this kind.
+        let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
+        self.written_names.insert(key.clone(), written);
+        self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
+        let made = KindDef { name: key.clone(), types: Vec::new(), given: types.clone(), variants: Vec::new(), span: source.span, private: source.private };
+        self.kinds.insert(key.clone(), made);
+        self.making_shapes.push(key.clone());
+        let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
+        let mut variants = Vec::new();
+        let mut found = Ok(());
+        for variant in &source.variants {
+            let mut payload = Vec::new();
+            for field in &variant.payload {
+                let ty = field.ty.map_params(&mut |param| given.get(param).cloned());
+                match self.resolve_type(&ty, field.ty_span, TypePlace::Field) {
+                    Ok(ty) => payload.push(Field { ty, ..field.clone() }),
+                    Err(error) => found = Err(error),
+                }
+            }
+            variants.push(Variant { payload, ..variant.clone() });
+        }
+        self.making_shapes.pop();
+        if let Err(error) = found {
+            self.kinds.remove(&key);
+            self.written_names.remove(&key);
+            self.made_of.remove(&key);
+            return Err(error);
+        }
+        if let Some(kind) = self.kinds.get_mut(&key) {
+            kind.variants = variants.clone();
+        }
+        let payloads: Vec<&Field> = variants.iter().flat_map(|variant| &variant.payload).collect();
+        if payloads.iter().any(|field| holds_pointers(&field.ty, &self.regional)) {
+            self.regional.insert(key.clone());
+        }
+        if self.regional.contains(&key) || payloads.iter().any(|field| holds_text(&field.ty, &self.takes_region)) {
+            self.takes_region.insert(key.clone());
+        }
+        if payloads.iter().any(|field| holds_changeable(&field.ty, &self.changeable)) {
+            self.changeable.insert(key.clone());
+        }
+        let largest = variants.iter().map(|variant| fields_bytes(&variant.payload, &self.sizes)).max().unwrap_or(0);
+        let bytes = largest.saturating_add(8);
+        if bytes > MAX_VALUE_BYTES {
+            return err(at, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", key));
+        }
+        self.sizes.insert(key.clone(), bytes);
+        if let Err((error, _)) = self.check_value_cycle(&key, &mut HashSet::new(), &mut Vec::new()) {
+            return Err(error);
+        }
+        if let Some(kind) = self.kinds.get(&key) {
+            self.made_shapes.push(Item::Kind(kind.clone()));
+        }
+        Ok(key)
     }
 
     /// The shape made for the types `types` give the shape `name`, made on the
@@ -1747,7 +1879,7 @@ impl Checker {
                     return Ok(());
                 }
                 let applied = applied.clone();
-                let key = self.shape_instance(&applied.name, &applied.types, at)?;
+                let key = self.instance(&applied.name, &applied.types, at)?;
                 let region = applied.region.filter(|_| self.takes_region.contains(&key));
                 *ty = Type::Named(key, region);
                 Ok(())
@@ -2200,15 +2332,16 @@ impl Checker {
                 Ok(Type::Param(name.clone()))
             }
             Type::Named(name, region) => {
-                if let Some(shape) = self.shapes.get(name).filter(|shape| !shape.types.is_empty()) {
-                    let names: Vec<&str> = shape.types.iter().map(|param| param.name.as_str()).collect();
+                if let Some((word, params, _)) = self.takes_types(name).filter(|(_, params, _)| !params.is_empty()) {
+                    let names: Vec<&str> = params.iter().map(|param| param.name.as_str()).collect();
                     return err(
                         self.place(span, name),
                         format!(
-                            "shape '{}' takes {}, so name {}, as in '{}<{}>'",
+                            "{} '{}' takes {}, so name {}, as in '{}<{}>'",
+                            word,
                             unqualified(name),
-                            count(shape.types.len(), "type"),
-                            if shape.types.len() == 1 { "it" } else { "all of them" },
+                            count(params.len(), "type"),
+                            if params.len() == 1 { "it" } else { "all of them" },
                             unqualified(name),
                             names.join(", ")
                         ),
@@ -2450,9 +2583,7 @@ impl Checker {
             // A shape given types: what its fields hold, with those types in
             // place of the names it takes.
             Type::Applied(applied) => {
-                let shape = self.shapes.get(&applied.name)?;
-                let given: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
-                let fields: Vec<Type> = shape.fields.iter().map(|field| field.ty.map_params(&mut |name| given.get(name).map(|ty| (*ty).clone()))).collect();
+                let fields = self.applied_parts(applied)?;
                 let found = fields.iter().find_map(|ty| self.changeable_item(ty))?;
                 Some(format!("'{}', which holds {}", ty, found))
             }
@@ -3213,12 +3344,18 @@ impl Checker {
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let before = self.unsettled_copies.len();
         let types_before = self.unsettled_types.len();
+        let kinds_before = self.untold_kinds.len();
         let result = self.check_stmt_kind(stmt);
         let unsettled = self.unsettled_copies.get(before).copied();
         let untold = self.unsettled_types.get(types_before).cloned();
+        let untold_kind = self.untold_kinds.get(kinds_before).cloned();
         self.unsettled_copies.truncate(before);
         self.unsettled_types.truncate(types_before);
+        self.untold_kinds.truncate(kinds_before);
         result?;
+        if let Some((at, kind, tag, param)) = untold_kind {
+            return err(at, self.untold_kind_message(&kind, &tag, &param));
+        }
         if let Some(at) = unsettled {
             return err(at, self.unsettled_copy());
         }
@@ -3882,7 +4019,7 @@ impl Checker {
                 settled = Some(ty.clone());
                 continue;
             };
-            match join_types(sofar, ty) {
+            match self.join(sofar, ty) {
                 Some(joined) => settled = Some(joined),
                 // The branches disagree, which the loop below reports against
                 // what they had settled on until here.
@@ -3908,7 +4045,8 @@ impl Checker {
         // Every branch must fit what they settled on, which the fold above only
         // promises for the ones it read before a widening or a disagreement.
         for (_, ty, span) in given.iter().filter(|(_, ty, _)| !ty.unknown()) {
-            if !fits(ty, &settled) {
+            // A variant whose types it didn't tell is told them by the others.
+            if !fits(ty, &settled) && self.join(ty, &settled).as_ref() != Some(&settled) {
                 return err(
                     *span,
                     format!("this {} gives {}, and another gives {}; every {} of a {} used as a value gives one type", branches.each, ty, settled, branches.each, branches.of),
@@ -4058,8 +4196,10 @@ impl Checker {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
             (PatternKind::Any, _) => Ok(Vec::new()),
             (PatternKind::Variant { kind, tag, binds }, Type::Named(kind_name, region)) if self.kinds.contains_key(kind_name) => {
+                // A kind made for its types is written as the kind it was made from.
+                let from = self.made_of.get(kind_name).map_or(kind_name.as_str(), |made| made.name.as_str());
                 if let Some((written, at)) = kind.as_deref()
-                    && written != kind_name
+                    && written != from
                 {
                     return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, kind_name));
                 }
@@ -4074,6 +4214,31 @@ impl Checker {
                     .iter()
                     .zip(&variant.payload)
                     .map(|(names, field)| self.bound_names(names, &self.field_in(&field.ty, region), false))
+                    .collect::<Result<Vec<_>>>()
+                    .map(|bound| bound.concat())
+            }
+            // A kind given a type this declaration takes: what its variant
+            // carries, with the types given in place of the names it takes.
+            (PatternKind::Variant { kind, tag, binds }, Type::Applied(applied)) if self.kinds.contains_key(&applied.name) => {
+                if let Some((written, at)) = kind.as_deref()
+                    && *written != applied.name
+                {
+                    return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, subject));
+                }
+                let def = self.kinds.get(&applied.name).cloned().unwrap_or_else(|| KindDef { name: String::new(), types: Vec::new(), given: Vec::new(), variants: Vec::new(), span, private: false });
+                let variant = def.variants.iter().find(|v| v.tag == *tag).ok_or_else(|| Error::at(span, format!("kind '{}' has no variant '{}'", applied.name, tag)))?;
+                if binds.len() != variant.payload.len() {
+                    let what = if in_case { format!("case '{}'", tag) } else { format!("'{}'", tag) };
+                    return err(span, format!("{} expects {}, got {}", what, count(variant.payload.len(), "binding"), binds.len()));
+                }
+                let names: HashMap<&str, &Type> = def.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
+                binds
+                    .iter()
+                    .zip(&variant.payload)
+                    .map(|(names_bound, field)| {
+                        let ty = field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone()));
+                        self.bound_names(names_bound, &self.field_in(&ty, &applied.region), false)
+                    })
                     .collect::<Result<Vec<_>>>()
                     .map(|bound| bound.concat())
             }
@@ -4335,6 +4500,10 @@ impl Checker {
                 Some(kind) => kind.variants.iter().map(|v| v.tag.clone()).collect(),
                 None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T ~ E', but '{}' is a shape", name)),
             },
+            // A kind given a type this declaration takes.
+            Type::Applied(applied) if self.kinds.contains_key(&applied.name) => {
+                self.kinds.get(&applied.name).map(|kind| kind.variants.iter().map(|v| v.tag.clone()).collect()).unwrap_or_default()
+            }
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
             Type::Or(..) => vec!["{…}".to_string(), "failure …".to_string()],
             // A tuple has one case, so it is taken apart rather than matched.
@@ -4672,6 +4841,15 @@ impl Checker {
                 format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int ~ {}'", name, name, error),
             ),
             Type::Nothing => err(at, "this expression has no value (its type is 'nothing')"),
+            other if holds_untold(other) => err(
+                at,
+                format!(
+                    "cannot infer the type of '{0}', since its value doesn't say every type its kind takes; give it a type, such as '{0}: {1}', or write them, as in '{2}'",
+                    name,
+                    settled_example(other),
+                    untold_written(other)
+                ),
+            ),
             other if unsettled(other) => err(
                 at,
                 format!("cannot infer the type of '{0}' from none or 'fail …' in its value; give it a type, such as '{0}: {1}'", name, settled_example(other)),
@@ -4721,7 +4899,7 @@ impl Checker {
             _ => None,
         };
         if let Some((kind, tag, args)) = resolved {
-            expr.kind = ExprKind::Construct { kind, tag, args };
+            expr.kind = ExprKind::Construct { kind, tag, args, types: Vec::new() };
         }
     }
 
@@ -6273,13 +6451,13 @@ impl Checker {
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
             ExprKind::Call { name, types, args } => self.check_task_call(span, on_a_value, name, types, args),
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
-            ExprKind::Construct { kind, tag, args } if self.broken.contains(kind.as_str()) => {
+            ExprKind::Construct { kind, args, .. } if self.broken.contains(kind.as_str()) => {
                 // A kind whose own variants have a mistake holds nothing known
                 // (see `broken`).
                 self.check_each(args);
                 Ok(Type::Unknown)
             }
-            ExprKind::Construct { kind, tag, args } => self.check_construct(kind, tag, args, span),
+            ExprKind::Construct { kind, tag, args, types } => self.check_construct(kind, tag, args, types, span),
             ExprKind::New { ty, ty_span, value, region, region_span } => self.check_new(ty, *ty_span, value, region, *region_span),
             // `expand_shortcut` above made it the `New` it stands for.
             ExprKind::Shortcut { .. } | ExprKind::Pairs(_) => Err(Error::internal_at(span, "a shortcut that was not expanded")),
@@ -6513,20 +6691,204 @@ impl Checker {
     }
 
     /// Checks `Kind.Tag(args)`, a variant made with its values.
-    fn check_construct(&mut self, kind: &str, tag: &str, args: &mut [Expr], span: Span) -> Result<Type> {
-        let variant = self.kinds.get(kind)
-            .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
-            .cloned()
-            .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+    fn check_construct(&mut self, kind: &str, tag: &str, args: &mut [Expr], written: &mut [TypeArg], span: Span) -> Result<Type> {
+        let def = self.kinds.get(kind).cloned().ok_or_else(|| Error::internal_at(span, format!("unknown kind '{}'", kind)))?;
+        let variant = def.variants.iter().find(|v| v.tag == *tag).cloned().ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
         if let Some(at) = region_after(args) {
             return err(at, format!("variant '{}' makes a value, not memory, so no region is named after it", tag));
         }
         if args.len() != variant.payload.len() {
             return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
         }
+        if def.types.is_empty() {
+            if let Some((_, at)) = written.first() {
+                return err(*at, format!("kind '{}' takes no types, so '< … >' has nothing to name; write '{}.{}'", unqualified(kind), unqualified(kind), tag));
+            }
+            let mut values: Vec<&mut Expr> = args.iter_mut().collect();
+            let region = self.check_fields_of_value(&mut values, &variant.payload, None)?;
+            return Ok(Type::Named(kind.to_string(), self.region_of_value(kind, region)));
+        }
+        // A kind that takes types: the ones written, or the ones the values
+        // show, and the rest from the place the value goes (see `settle_variant`).
+        let given = self.variant_types(kind, &def, &variant, written, args)?;
+        if def.types.iter().all(|param| given.contains_key(&param.name)) {
+            let types: Vec<Type> = def.types.iter().filter_map(|param| given.get(&param.name).cloned()).collect();
+            return self.made_variant(kind, tag, &types, args, span);
+        }
+        let untold = def.types.iter().find(|param| !given.contains_key(&param.name)).map(|param| param.name.clone()).unwrap_or_default();
+        self.untold_kinds.push((span, kind.to_string(), tag.to_string(), untold));
+        let types = def.types.iter().map(|param| given.get(&param.name).cloned().unwrap_or_else(|| Type::Param(format!("{}{}", UNTOLD, param.name)))).collect();
+        Ok(Type::Applied(Box::new(Applied { name: kind.to_string(), types, region: None })))
+    }
+
+    /// The types the variant `variant` of `kind` (`def`, which takes types) is
+    /// given: all the ones `written` names, which are all of them or none, or
+    /// the ones its values `args` show, which may be fewer.
+    fn variant_types(&mut self, kind: &str, def: &KindDef, variant: &Variant, written: &mut [TypeArg], args: &mut [Expr]) -> Result<HashMap<String, Type>> {
+        let mut given: HashMap<String, Type> = HashMap::new();
+        if let Some((_, at)) = written.first() {
+            if written.len() != def.types.len() {
+                let names: Vec<&str> = def.types.iter().map(|param| param.name.as_str()).collect();
+                return err(
+                    *at,
+                    format!(
+                        "kind '{}' takes {}, so name {}, as in '{}<{}>.{}'",
+                        unqualified(kind),
+                        count(def.types.len(), "type"),
+                        if def.types.len() == 1 { "it" } else { "all of them" },
+                        unqualified(kind),
+                        names.join(", "),
+                        variant.tag
+                    ),
+                );
+            }
+            for ((ty, at), param) in written.iter_mut().zip(&def.types) {
+                // The types a kind is given name no region, as its payloads
+                // don't: the region comes from the values.
+                *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
+                self.check_need("kind", kind, param, ty, *at)?;
+                given.insert(param.name.clone(), ty.clone());
+            }
+            return Ok(given);
+        }
+        // The values say which types they are. They are checked again with the
+        // kind made for them, so what this check left to settle is left to that one.
+        let copies = self.unsettled_copies.len();
+        let untold = self.unsettled_types.len();
+        let kinds = self.untold_kinds.len();
+        let mut found = Ok(());
+        for (arg, field) in args.iter_mut().zip(&variant.payload) {
+            match self.check_expr(arg) {
+                Ok(ty) => self.match_params(&field.ty, &ty, &mut given),
+                Err(error) => {
+                    found = Err(error);
+                    break;
+                }
+            }
+        }
+        self.unsettled_copies.truncate(copies);
+        self.unsettled_types.truncate(untold);
+        self.untold_kinds.truncate(kinds);
+        found?;
+        // A value that is itself a variant with types untold, as in
+        // `Option.Some(Option.None)`, tells nothing either.
+        given.retain(|_, ty| !ty.params().iter().any(|param| param.starts_with(UNTOLD)));
+        for param in &def.types {
+            if let Some(ty) = given.get(&param.name) {
+                self.check_need("kind", kind, param, ty, args.first().map_or(variant.span, |arg| arg.span))?;
+            }
+        }
+        Ok(given)
+    }
+
+    /// The value of the variant `tag` of `kind` given `types`, all known, with
+    /// its values `args`: of the kind made for them, or, where a type this
+    /// declaration takes is among them, of the kind given them, which each use
+    /// makes (see `settle_applications`).
+    fn made_variant(&mut self, kind: &str, tag: &str, types: &[Type], args: &mut [Expr], span: Span) -> Result<Type> {
+        let def = self.kinds.get(kind).cloned().ok_or_else(|| Error::internal_at(span, format!("unknown kind '{}'", kind)))?;
+        let payload = |def: &KindDef| def.variants.iter().find(|v| v.tag == *tag).map(|variant| variant.payload.clone()).unwrap_or_default();
+        if types.iter().any(|ty| !ty.params().is_empty()) {
+            let names: HashMap<&str, &Type> = def.types.iter().map(|param| param.name.as_str()).zip(types).collect();
+            let payload: Vec<Field> = payload(&def).into_iter().map(|field| Field { ty: field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())), ..field }).collect();
+            let mut values: Vec<&mut Expr> = args.iter_mut().collect();
+            let region = self.check_fields_of_value(&mut values, &payload, None)?;
+            let may_hold = self.takes_region.contains(kind) || def.variants.iter().flat_map(|variant| &variant.payload).any(|field| !field.ty.params().is_empty());
+            return Ok(Type::Applied(Box::new(Applied { name: kind.to_string(), types: types.to_vec(), region: may_hold.then_some(region) })));
+        }
+        // The kind made for the types, whose payloads name the kinds and shapes
+        // made for theirs.
+        let key = self.kind_instance(kind, types, span)?;
+        let made = self.kinds.get(&key).cloned().ok_or_else(|| Error::internal_at(span, format!("no kind made for '{}'", kind)))?;
         let mut values: Vec<&mut Expr> = args.iter_mut().collect();
-        let region = self.check_fields_of_value(&mut values, &variant.payload, None)?;
-        Ok(Type::Named(kind.to_string(), self.region_of_value(kind, region)))
+        let region = self.check_fields_of_value(&mut values, &payload(&made), None)?;
+        Ok(Type::Named(key.clone(), self.region_of_value(&key, region)))
+    }
+
+    /// A variant whose types its values didn't tell, `Option.None`, going where
+    /// a value of `expected` is: the types the place names, and the value of
+    /// the kind made for them. One whose place names none of its kind is left
+    /// as it is, which the statement reports (see `untold_kinds`).
+    fn settle_variant(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        // `fail Option.None` where a `T ~ Option<int>` goes: the failure's
+        // value goes where the error does.
+        if let (ExprKind::Fail(inner), Type::Or(_, error)) = (&mut expr.kind, expected)
+            && inner.ty.as_ref().is_some_and(untold_kind)
+        {
+            self.settle_variant(inner, error)?;
+            expr.ty = inner.ty.clone().map(|ty| Type::Fail(Box::new(ty)));
+            return Ok(());
+        }
+        let Some(Type::Applied(sent)) = expr.ty.clone().filter(untold_kind) else { return Ok(()) };
+        let span = expr.span;
+        // The value itself, or what a maybe or a `T ~ E` holds.
+        let mut places = vec![expected.clone()];
+        match expected {
+            Type::Maybe(inner) => places.push((**inner).clone()),
+            Type::Or(value, _) => {
+                places.push((**value).clone());
+                if let Type::Maybe(inner) = value.as_ref() {
+                    places.push((**inner).clone());
+                }
+            }
+            _ => {}
+        }
+        for place in places {
+            let Type::Applied(named) = self.unmade(&place) else { continue };
+            if named.name != sent.name || named.types.len() != sent.types.len() {
+                continue;
+            }
+            let told = sent.types.iter().zip(&named.types).all(|(sent, named)| is_untold(sent) || fits(sent, &named.without_regions()) || fits(&named.without_regions(), sent));
+            if !told {
+                continue;
+            }
+            let types: Vec<Type> = sent.types.iter().zip(&named.types).map(|(sent, named)| if is_untold(sent) { named.without_regions() } else { sent.clone() }).collect();
+            let def = self.kinds.get(&sent.name).cloned().ok_or_else(|| Error::internal_at(span, "a variant of no kind"))?;
+            for (param, ty) in def.types.iter().zip(&types) {
+                self.check_need("kind", &sent.name, param, ty, span)?;
+            }
+            let ExprKind::Construct { tag, args, .. } = &mut expr.kind else { return Ok(()) };
+            let tag = tag.clone();
+            let ty = self.made_variant(&sent.name, &tag, &types, args, span)?;
+            expr.ty = Some(ty);
+            if let Some(at) = self.untold_kinds.iter().rposition(|(at, _, _, _)| *at == span) {
+                self.untold_kinds.remove(at);
+            }
+            return Ok(());
+        }
+        Ok(())
+    }
+
+    /// The type values of types `a` and `b` can both become (see `join_types`),
+    /// where a variant whose types its values didn't tell, `Option.None`, is
+    /// told them by a value of the same kind beside it, as `none` is.
+    fn join(&self, a: &Type, b: &Type) -> Option<Type> {
+        let told = |untold: &Type, other: &Type| {
+            let (Type::Applied(sent), Type::Applied(named)) = (untold, self.unmade(other)) else { return false };
+            sent.name == named.name
+                && sent.types.len() == named.types.len()
+                && sent.types.iter().zip(&named.types).all(|(sent, named)| is_untold(sent) || fits(&sent.without_regions(), &named.without_regions()))
+        };
+        match (untold_kind(a), untold_kind(b)) {
+            (true, false) if told(a, b) => Some(b.clone()),
+            (false, true) if told(b, a) => Some(a.clone()),
+            (true, true) if a == b => Some(a.clone()),
+            _ => join_types(a, b),
+        }
+    }
+
+    /// The message for a variant of `kind` whose type `param` nothing told.
+    fn untold_kind_message(&self, kind: &str, tag: &str, param: &str) -> String {
+        let count = self.kinds.get(kind).map_or(1, |def| def.types.len().max(1));
+        format!(
+            "can't tell which type '{}' is for this '{}', since its values don't say and nothing this value goes into names one; write {}, as in '{}<{}>.{}'",
+            param,
+            unqualified(kind),
+            if count == 1 { "it" } else { "them" },
+            unqualified(kind),
+            vec!["int"; count].join(", "),
+            tag
+        )
     }
 
     /// Checks `new T(value) at r` (see `ExprKind::New`).
@@ -6649,7 +7011,7 @@ impl Checker {
             let ty = self.check_expr(value)?;
             joined = Some(match joined {
                 None => ty,
-                Some(before) => join_types(&before, &ty).ok_or_else(|| {
+                Some(before) => self.join(&before, &ty).ok_or_else(|| {
                     Error::at(value.span, format!("an array's values have one type, but this one is {} and the ones before it are {}", ty, before))
                 })?,
             });
@@ -7382,6 +7744,9 @@ impl Checker {
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
             Type::Param(_) | Type::Group(_) if self.allows(Need::Shown, ty) => None,
             Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
+            // A variant whose types nothing told is the statement's mistake
+            // (see `untold_kinds`), which says so.
+            Type::Applied(_) if untold_kind(ty) => None,
             // Without its own `str`, a shape is written as its fields that any
             // file reads, and a kind as its variant with the values it carries.
             Type::Named(..) | Type::Applied(_) => {
@@ -7425,7 +7790,16 @@ impl Checker {
             );
         }
         let kind = self.kinds.get(name)?;
-        Some(kind.variants.iter().flat_map(|variant| variant.payload.iter().map(|field| field.ty.clone())).collect())
+        let names: HashMap<&str, &Type> = kind.types.iter().map(|param| param.name.as_str()).zip(given).collect();
+        Some(kind.variants.iter().flat_map(|variant| variant.payload.iter().map(|field| field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())))).collect())
+    }
+
+    /// What a value of a shape or kind given types holds, a shape's fields or
+    /// a kind's payloads, with the types given in place of the names it takes.
+    fn applied_parts(&self, applied: &Applied) -> Option<Vec<Type>> {
+        let (_, params, parts) = self.takes_types(&applied.name)?;
+        let names: HashMap<&str, &Type> = params.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
+        Some(parts.iter().map(|ty| ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone()))).collect())
     }
 
     /// Whether values of type `ty` are written by a method `str` of their own.
@@ -7673,7 +8047,8 @@ impl Checker {
                     None => Ok(()),
                 })
             }
-            (ExprKind::Construct { kind, tag, args }, Type::Named(_, Some(region))) => {
+            // The kind the value is of, made for its types where it takes them.
+            (ExprKind::Construct { tag, args, .. }, Type::Named(kind, Some(region))) => {
                 let Some(variant) = self.kinds.get(kind.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).cloned() else { return Ok(()) };
                 args.iter_mut().zip(&variant.payload).try_for_each(|(arg, field)| self.settle_copies(arg, &self.in_region(&field.ty, region)))
             }
@@ -7934,8 +8309,17 @@ impl Checker {
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && [&**l, &**r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
             return self.check_address_compare(l, r, span);
         }
-        let lt = self.check_expr(l)?;
-        let rt = self.check_expr(r)?;
+        let mut lt = self.check_expr(l)?;
+        let mut rt = self.check_expr(r)?;
+        // `Option.None == k`: a variant whose types it didn't tell is told
+        // them by the value beside it.
+        if untold_kind(&lt) && !untold_kind(&rt) {
+            self.settle_variant(l, &rt)?;
+            lt = l.ty.clone().unwrap_or(lt);
+        } else if untold_kind(&rt) && !untold_kind(&lt) {
+            self.settle_variant(r, &lt)?;
+            rt = r.ty.clone().unwrap_or(rt);
+        }
         // With one operand's type unknown, the operation's own type is unknown
         // too: a comparison is still a bool, but what it compares isn't checked
         // (see `Type::Unknown`).
@@ -9906,12 +10290,9 @@ impl Checker {
             Type::Map(key, value, _) => self.unsimilar_in(key, seen).or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
             Type::Param(_) | Type::Group(_) if self.allows(Need::Similar, ty) => None,
-            // A shape given types this declaration takes: its fields with them.
-            Type::Applied(applied) => {
-                let shape = self.shapes.get(&applied.name)?;
-                let names: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
-                shape.fields.iter().find_map(|field| self.unsimilar_in(&field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())), seen))
-            }
+            // A shape or kind given types this declaration takes: its fields or
+            // payloads with them.
+            Type::Applied(applied) => self.applied_parts(applied)?.iter().find_map(|part| self.unsimilar_in(part, seen)),
             Type::Named(name, _) if seen.contains(name) => None,
             Type::Named(name, _) => {
                 let parts: Vec<Type> = if let Some(shape) = self.shapes.get(name) {
@@ -10034,6 +10415,7 @@ impl Checker {
             return Ok(());
         }
         self.settle_types(expr, expected)?;
+        self.settle_variant(expr, expected)?;
         // `hold b: unit = 200`: a number written out becomes a unit where one
         // is expected, alone, in a maybe, or as a success.
         let byte = match expected {
@@ -10198,6 +10580,11 @@ impl Checker {
         }
         if let Some(at) = self.unsettled_types.iter().rposition(|(at, _, _)| *at == expr.span) {
             self.unsettled_types.remove(at);
+        }
+        // Every type known now: a shape or kind given them is the one made
+        // for them, as a call whose arguments told them gets (see `settled_type`).
+        if let Some(ty) = &mut expr.ty {
+            self.settle_applications(ty, expr.span)?;
         }
         if let Some(info) = self.tasks.get(&name).cloned() {
             for (param, (ty, at)) in info.types.iter().zip(&types) {
@@ -11160,7 +11547,7 @@ impl Checker {
 /// type of a value given where `pattern` is expected. A parameter takes the
 /// first type found for it; `none`, which fits any `maybe`, names nothing.
 fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>) {
-    if *actual == Type::None || matches!(actual, Type::Fail(_)) {
+    if *actual == Type::None || matches!(actual, Type::Fail(_)) || is_untold(actual) {
         return;
     }
     match (pattern, actual) {
@@ -11465,6 +11852,7 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
 fn unsettled(ty: &Type) -> bool {
     match ty {
         Type::None | Type::Fail(_) => true,
+        Type::Applied(_) => untold_kind(ty),
         Type::Array(items, _) => unsettled(items),
         Type::Tuple(items) => items.iter().any(unsettled),
         _ => false,
@@ -11477,10 +11865,48 @@ fn settled_example(ty: &Type) -> Type {
     match ty {
         Type::None => Type::Maybe(Box::new(Type::Int)),
         Type::Fail(error) => Type::Or(Box::new(Type::Int), error.clone()),
+        Type::Maybe(inner) if holds_untold(inner) => Type::Maybe(Box::new(settled_example(inner))),
         Type::Array(items, count) => Type::Array(Box::new(settled_example(items)), *count),
         Type::Tuple(items) => Type::Tuple(items.iter().map(settled_example).collect()),
+        Type::Applied(applied) if untold_kind(ty) => {
+            Type::Applied(Box::new(applied.with_types(applied.types.iter().map(|ty| if is_untold(ty) { Type::Int } else { ty.clone() }).collect())))
+        }
         other => other.clone(),
     }
+}
+
+/// What marks a type of a kind's variant that nothing has told yet, before the
+/// name the kind gives it: `Option<?T>` for `Option.None` (see
+/// `Checker::settle_variant`). No type's name starts with it.
+const UNTOLD: char = '?';
+
+/// Whether `ty` is a type of a variant nothing has told yet (see `UNTOLD`).
+fn is_untold(ty: &Type) -> bool {
+    matches!(ty, Type::Param(name) if name.starts_with(UNTOLD))
+}
+
+/// How a variant of the kind `ty` untold is written with its types: `Option<int>.…`.
+fn untold_written(ty: &Type) -> String {
+    match ty {
+        Type::Maybe(inner) | Type::Array(inner, _) => untold_written(inner),
+        Type::Tuple(items) => items.iter().find(|item| holds_untold(item)).map_or_else(String::new, untold_written),
+        Type::Applied(applied) => format!("{}<{}>.…", unqualified(&applied.name), applied.types.iter().map(|ty| if is_untold(ty) { "int".to_string() } else { ty.to_string() }).collect::<Vec<_>>().join(", ")),
+        other => other.to_string(),
+    }
+}
+
+/// Whether `ty` is or holds a kind whose variant didn't tell all of its types.
+fn holds_untold(ty: &Type) -> bool {
+    match ty {
+        Type::Maybe(inner) | Type::Array(inner, _) => holds_untold(inner),
+        Type::Tuple(items) => items.iter().any(holds_untold),
+        other => untold_kind(other),
+    }
+}
+
+/// Whether `ty` is a kind whose variant didn't tell all of its types.
+fn untold_kind(ty: &Type) -> bool {
+    matches!(ty, Type::Applied(applied) if applied.types.iter().any(is_untold))
 }
 
 /// The type the values of types `a` and `b` can both become, where several

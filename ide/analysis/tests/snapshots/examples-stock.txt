@@ -1,0 +1,152 @@
+  1 | ; A small stock list, searched with kinds that take types. `Option<T>` holds a
+    | comment:; A small stock list, searched with kinds that take types. `Option<T>` holds a
+  2 | ; found value or nothing, and `Outcome<T, E>` a value or the reason there is
+    | comment:; found value or nothing, and `Outcome<T, E>` a value or the reason there is
+  3 | ; none; one kind is made for each set of types they are given.
+    | comment:; none; one kind is made for each set of types they are given.
+  5 | kind Option<T: shown>
+    | keyword:kind  type:Option  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+  6 |     Some(value: T)
+    | variant:Some  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+  7 |     None
+    | variant:None
+  9 |     orElse(fallback: T) -> T
+    | method:orElse  punctuation:(  parameter:fallback  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 10 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 11 |         case Some v = v
+    | keyword:case  variant:Some  variable:v  operator:=  variable:v
+ 12 |         case None = fallback
+    | keyword:case  variant:None  operator:=  parameter:fallback
+ 13 |         fi
+    | keyword:fi
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | kind Outcome<T, E>
+    | keyword:kind  type:Outcome  punctuation:<  type:T  punctuation:,  type:E  punctuation:>
+ 18 |     Done(value: T)
+    | variant:Done  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 19 |     Failed(why: E)
+    | variant:Failed  punctuation:(  field:why  punctuation::  type:E  punctuation:)
+ 20 | fi
+    | keyword:fi
+ 22 | kind Problem
+    | keyword:kind  type:Problem
+ 23 |     Unknown(name: text)
+    | variant:Unknown  punctuation:(  field:name  punctuation::  type-builtin:text  punctuation:)
+ 24 |     Short(have: int, want: int)
+    | variant:Short  punctuation:(  field:have  punctuation::  type-builtin:int  punctuation:,  field:want  punctuation::  type-builtin:int  punctuation:)
+ 25 | fi
+    | keyword:fi
+ 27 | shape Item
+    | keyword:shape  type:Item
+ 28 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 29 |     count: int
+    | field:count  punctuation::  type-builtin:int
+ 30 | fi
+    | keyword:fi
+ 32 | ; The place of the item called `name`: its types come from the value, or,
+    | comment:; The place of the item called `name`: its types come from the value, or,
+ 33 | ; for `None`, from what the task sends.
+    | comment:; for `None`, from what the task sends.
+ 34 | task find(items: [Item#4], name: text) -> Option<int>
+    | keyword:task  task:find  punctuation:(  parameter:items  punctuation::  punctuation:[  type:Item  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 35 |     hold place = 0
+    | keyword:hold  variable:place  operator:=  number:0
+ 36 |     each item in items
+    | keyword:each  variable:item  keyword:in  parameter:items
+ 37 |         when item.name == name
+    | keyword:when  variable:item  punctuation:.  field:name  operator:==  parameter:name
+ 38 |             <- Option.Some(place)
+    | keyword:<-  type:Option  punctuation:.  variant:Some  punctuation:(  variable:place  punctuation:)
+ 39 |         fi
+    | keyword:fi
+ 40 |         place++
+    | variable:place  operator:++
+ 41 |     fi
+    | keyword:fi
+ 42 |     <- Option.None
+    | keyword:<-  type:Option  punctuation:.  variant:None
+ 43 | fi
+    | keyword:fi
+ 45 | task take(hold& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
+    | keyword:task  task:take  punctuation:(  keyword:hold  keyword:&  parameter:items  punctuation::  punctuation:[  type:Item  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:want  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Outcome  punctuation:<  type-builtin:int  punctuation:,  type:Problem  punctuation:>
+ 46 |     bind spot = match find(items, name)
+    | keyword:bind  variable:spot  operator:=  keyword:match  task:find  punctuation:(  parameter:items  punctuation:,  parameter:name  punctuation:)
+ 47 |     case Some found = found
+    | keyword:case  variant:Some  variable:found  operator:=  variable:found
+ 48 |     case None
+    | keyword:case  variant:None
+ 49 |         <- Outcome.Failed(Problem.Unknown(name))
+    | keyword:<-  type:Outcome  punctuation:.  variant:Failed  punctuation:(  type:Problem  punctuation:.  variant:Unknown  punctuation:(  parameter:name  punctuation:)  punctuation:)
+ 50 |     fi
+    | keyword:fi
+ 51 |     bind have = items[spot].count
+    | keyword:bind  variable:have  operator:=  parameter:items  punctuation:[  variable:spot  punctuation:]  punctuation:.  field:count
+ 52 |     when have < want
+    | keyword:when  variable:have  operator:<  parameter:want
+ 53 |         <- Outcome.Failed(Problem.Short(have, want))
+    | keyword:<-  type:Outcome  punctuation:.  variant:Failed  punctuation:(  type:Problem  punctuation:.  variant:Short  punctuation:(  variable:have  punctuation:,  parameter:want  punctuation:)  punctuation:)
+ 54 |     fi
+    | keyword:fi
+ 55 |     items[spot].count = have - want
+    | parameter:items  punctuation:[  variable:spot  punctuation:]  punctuation:.  field:count  operator:=  variable:have  operator:-  parameter:want
+ 56 |     <- Outcome.Done(have - want)
+    | keyword:<-  type:Outcome  punctuation:.  variant:Done  punctuation:(  variable:have  operator:-  parameter:want  punctuation:)
+ 57 | fi
+    | keyword:fi
+ 59 | task report(name: text, outcome: Outcome<int, Problem>)
+    | keyword:task  task:report  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:outcome  punctuation::  type:Outcome  punctuation:<  type-builtin:int  punctuation:,  type:Problem  punctuation:>  punctuation:)
+ 60 |     match outcome
+    | keyword:match  parameter:outcome
+ 61 |     case Done left
+    | keyword:case  variant:Done  variable:left
+ 62 |         show(name, ": taken, ", left, " left")
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": taken, "  punctuation:,  variable:left  punctuation:,  string:" left"  punctuation:)
+ 63 |     case Failed why
+    | keyword:case  variant:Failed  variable:why
+ 64 |         match why
+    | keyword:match  variable:why
+ 65 |         case Unknown missing
+    | keyword:case  variant:Unknown  variable:missing
+ 66 |             show(name, ": no item called ", missing)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": no item called "  punctuation:,  variable:missing  punctuation:)
+ 67 |         case Short have want
+    | keyword:case  variant:Short  variable:have  variable:want
+ 68 |             show(name, ": only ", have, " of ", want)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": only "  punctuation:,  variable:have  punctuation:,  string:" of "  punctuation:,  variable:want  punctuation:)
+ 69 |         fi
+    | keyword:fi
+ 70 |     fi
+    | keyword:fi
+ 71 | fi
+    | keyword:fi
+ 73 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 74 |     bind bolts = Item { name: "bolts", count: 40 }
+    | keyword:bind  variable:bolts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"bolts"  punctuation:,  field:count  punctuation::  number:40  punctuation:}
+ 75 |     bind nuts = Item { name: "nuts", count: 25 }
+    | keyword:bind  variable:nuts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"nuts"  punctuation:,  field:count  punctuation::  number:25  punctuation:}
+ 76 |     bind washers = Item { name: "washers", count: 3 }
+    | keyword:bind  variable:washers  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"washers"  punctuation:,  field:count  punctuation::  number:3  punctuation:}
+ 77 |     bind springs = Item { name: "springs", count: 0 }
+    | keyword:bind  variable:springs  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"springs"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
+ 78 |     hold items = [bolts, nuts, washers, springs]
+    | keyword:hold  variable:items  operator:=  punctuation:[  variable:bolts  punctuation:,  variable:nuts  punctuation:,  variable:washers  punctuation:,  variable:springs  punctuation:]
+ 79 |     show("nuts are at ", find(items, "nuts").orElse(-1), ", gears at ", find(items, "gears").orElse(-1))
+    | builtin-fn:show  punctuation:(  string:"nuts are at "  punctuation:,  task:find  punctuation:(  variable:items  punctuation:,  string:"nuts"  punctuation:)  punctuation:.  method:orElse  punctuation:(  operator:-  number:1  punctuation:)  punctuation:,  string:", gears at "  punctuation:,  task:find  punctuation:(  variable:items  punctuation:,  string:"gears"  punctuation:)  punctuation:.  method:orElse  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)
+ 80 |     report("bolts", take(&items, "bolts", 15))
+    | task:report  punctuation:(  string:"bolts"  punctuation:,  task:take  punctuation:(  operator:&  variable:items  punctuation:,  string:"bolts"  punctuation:,  number:15  punctuation:)  punctuation:)
+ 81 |     report("washers", take(&items, "washers", 5))
+    | task:report  punctuation:(  string:"washers"  punctuation:,  task:take  punctuation:(  operator:&  variable:items  punctuation:,  string:"washers"  punctuation:,  number:5  punctuation:)  punctuation:)
+ 82 |     report("gears", take(&items, "gears", 1))
+    | task:report  punctuation:(  string:"gears"  punctuation:,  task:take  punctuation:(  operator:&  variable:items  punctuation:,  string:"gears"  punctuation:,  number:1  punctuation:)  punctuation:)
+ 83 |     report("bolts", take(&items, "bolts", 25))
+    | task:report  punctuation:(  string:"bolts"  punctuation:,  task:take  punctuation:(  operator:&  variable:items  punctuation:,  string:"bolts"  punctuation:,  number:25  punctuation:)  punctuation:)
+ 84 |     report("bolts", take(&items, "bolts", 1))
+    | task:report  punctuation:(  string:"bolts"  punctuation:,  task:take  punctuation:(  operator:&  variable:items  punctuation:,  string:"bolts"  punctuation:,  number:1  punctuation:)  punctuation:)
+ 85 | fi
+    | keyword:fi

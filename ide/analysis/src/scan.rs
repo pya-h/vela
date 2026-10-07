@@ -618,14 +618,15 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether the `<` at position `p` opens the types a declaration takes or a
-    /// use gives: one right after the name of a `task` or `shape`, or one whose
-    /// matching `>` is followed by `(` (a call) or `{` (a shape literal), as the
-    /// parser reads them.
+    /// use gives: one right after the name of a `task`, `shape`, or `kind`, or
+    /// one whose matching `>` is followed by `(` (a call), `{` (a shape
+    /// literal), or `.` and a variant (`Option<int>.None`), as the parser reads
+    /// them.
     fn opens_types(&self, p: usize) -> bool {
         if self.token(p) != Some(&Token::Lt) {
             return false;
         }
-        let declares = p >= 2 && self.ident(p - 1).is_some() && matches!(self.token(p - 2), Some(Token::Task | Token::Shape));
+        let declares = p >= 2 && self.ident(p - 1).is_some() && matches!(self.token(p - 2), Some(Token::Task | Token::Shape | Token::Kind));
         if declares {
             return true;
         }
@@ -639,9 +640,12 @@ impl<'a> Tokens<'a> {
                 Some(Token::LParen) => grouped += 1,
                 Some(Token::RParen) if grouped == 0 => return false,
                 Some(Token::RParen) => grouped -= 1,
-                // A call follows the types a task is given, and a literal the
-                // types a shape is given.
-                Some(Token::Gt) if depth == 0 => return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace)),
+                // A call follows the types a task is given, a literal the types
+                // a shape is given, and a variant the types a kind is given.
+                Some(Token::Gt) if depth == 0 => {
+                    return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace))
+                        || (self.token(q + 1) == Some(&Token::Dot) && self.ident(q + 2).is_some());
+                }
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
                 Some(token) if token.writes_type() => {}
@@ -689,11 +693,13 @@ impl<'a> Tokens<'a> {
             .iter()
             .skip(first + 1)
             .find(|t| match &t.kind {
-                LexKind::Token(Token::LParen | Token::LBracket | Token::LBrace) => {
+                // `< … >` holds the types a shape or kind is given, whose
+                // commas don't end the text: `Pair<int, text>`.
+                LexKind::Token(Token::LParen | Token::LBracket | Token::LBrace | Token::Lt) => {
                     depth += 1;
                     false
                 }
-                LexKind::Token(Token::RParen | Token::RBracket | Token::RBrace) if depth > 0 => {
+                LexKind::Token(Token::RParen | Token::RBracket | Token::RBrace | Token::Gt) if depth > 0 => {
                     depth -= 1;
                     false
                 }
@@ -1675,7 +1681,9 @@ impl<'a> Classifier<'a> {
         }
         // `.this`, `.x`, and `.m()`: the value a method is called on, and a
         // member of it, which its shape or kind declares.
-        if before == Some(&Token::Dot) && !p.checked_sub(2).and_then(|q| tokens.token(q)).is_some_and(ends_value) {
+        // (`Option<int>.None` is a variant, after the types its kind is given.)
+        let after_types = p.checked_sub(2).and_then(|q| tokens.token(q)) == Some(&Token::Gt) && self.kind_before().is_some();
+        if before == Some(&Token::Dot) && !after_types && !p.checked_sub(2).and_then(|q| tokens.token(q)).is_some_and(ends_value) {
             if name == THIS_WORD {
                 return (TokenClass::Keyword, None);
             }
@@ -2088,9 +2096,23 @@ impl<'a> Classifier<'a> {
     fn kind_before(&self) -> Option<usize> {
         let mut classified = self.out.iter().rev().filter(|token| token.class != TokenClass::Comment);
         let dot = classified.next()?;
-        let named = classified.next()?;
-        let text = self.tokens.source.get(dot.range.clone())?;
-        let id = named.symbol.filter(|_| text == ".")?;
+        let mut named = classified.next()?;
+        let text = |token: &Classified| self.tokens.source.get(token.range.clone()).unwrap_or_default();
+        // `Option<int>.None`: the kind is named before the types it is given.
+        if text(named) == ">" {
+            let mut depth = 0usize;
+            loop {
+                match text(named) {
+                    ">" => depth += 1,
+                    "<" if depth == 1 => break,
+                    "<" => depth -= 1,
+                    _ => {}
+                }
+                named = classified.next()?;
+            }
+            named = classified.next()?;
+        }
+        let id = named.symbol.filter(|_| text(dot) == ".")?;
         self.symbols.get(id).is_some_and(|s| s.kind == SymbolKind::Kind).then_some(id)
     }
 

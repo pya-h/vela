@@ -1,0 +1,85 @@
+; A small stock list, searched with kinds that take types. `Option<T>` holds a
+; found value or nothing, and `Outcome<T, E>` a value or the reason there is
+; none; one kind is made for each set of types they are given.
+
+kind Option<T: shown>
+    Some(value: T)
+    None
+
+    orElse(fallback: T) -> T
+        <- match .this
+        case Some v = v
+        case None = fallback
+        fi
+    fi
+fi
+
+kind Outcome<T, E>
+    Done(value: T)
+    Failed(why: E)
+fi
+
+kind Problem
+    Unknown(name: text)
+    Short(have: int, want: int)
+fi
+
+shape Item
+    name: text
+    count: int
+fi
+
+; The place of the item called `name`: its types come from the value, or,
+; for `None`, from what the task sends.
+task find(items: [Item#4], name: text) -> Option<int>
+    hold place = 0
+    each item in items
+        when item.name == name
+            <- Option.Some(place)
+        fi
+        place++
+    fi
+    <- Option.None
+fi
+
+task take(hold& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
+    bind spot = match find(items, name)
+    case Some found = found
+    case None
+        <- Outcome.Failed(Problem.Unknown(name))
+    fi
+    bind have = items[spot].count
+    when have < want
+        <- Outcome.Failed(Problem.Short(have, want))
+    fi
+    items[spot].count = have - want
+    <- Outcome.Done(have - want)
+fi
+
+task report(name: text, outcome: Outcome<int, Problem>)
+    match outcome
+    case Done left
+        show(name, ": taken, ", left, " left")
+    case Failed why
+        match why
+        case Unknown missing
+            show(name, ": no item called ", missing)
+        case Short have want
+            show(name, ": only ", have, " of ", want)
+        fi
+    fi
+fi
+
+task main()
+    bind bolts = Item { name: "bolts", count: 40 }
+    bind nuts = Item { name: "nuts", count: 25 }
+    bind washers = Item { name: "washers", count: 3 }
+    bind springs = Item { name: "springs", count: 0 }
+    hold items = [bolts, nuts, washers, springs]
+    show("nuts are at ", find(items, "nuts").orElse(-1), ", gears at ", find(items, "gears").orElse(-1))
+    report("bolts", take(&items, "bolts", 15))
+    report("washers", take(&items, "washers", 5))
+    report("gears", take(&items, "gears", 1))
+    report("bolts", take(&items, "bolts", 25))
+    report("bolts", take(&items, "bolts", 1))
+fi

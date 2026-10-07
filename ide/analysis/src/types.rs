@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, TypedForm, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, TypedForm, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -21,15 +21,15 @@ pub(crate) struct Context<'a> {
     pub sources: &'a HashMap<String, String>,
 }
 
-/// A type as the program writes it: a shape the compiler made for the types it
-/// was given (`Box__of__int`) reads as those types (`Box<int>`), and so do the
-/// types inside it.
-fn as_written(ty: &Type, made: &HashMap<&str, &ShapeDef>) -> Type {
+/// A type as the program writes it: a shape or kind the compiler made for the
+/// types it was given (`Box__of__int`) reads as those types (`Box<int>`), and
+/// so do the types inside it. `made` holds the types each was made for.
+fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
     match ty {
         Type::Named(name, region) => match made.get(name.as_str()) {
-            Some(shape) => Type::Applied(Box::new(Applied {
+            Some(given) => Type::Applied(Box::new(Applied {
                 name: as_written_name(name, made),
-                types: shape.given.iter().map(|ty| as_written(ty, made)).collect(),
+                types: given.iter().map(|ty| as_written(ty, made)).collect(),
                 region: region.clone(),
             })),
             None => ty.clone(),
@@ -54,7 +54,7 @@ fn as_written(ty: &Type, made: &HashMap<&str, &ShapeDef>) -> Type {
 
 /// The name of the shape a made one was made from: everything before the
 /// `__of__` the compiler joins its types with (no Vela name holds `__`).
-fn as_written_name(name: &str, made: &HashMap<&str, &ShapeDef>) -> String {
+fn as_written_name(name: &str, made: &HashMap<&str, &[Type]>) -> String {
     match made.contains_key(name) {
         true => name.split("__of__").next().unwrap_or(name).to_string(),
         false => name.to_string(),
@@ -186,12 +186,13 @@ impl Checked {
                 }
             }
         }
-        // A shape the compiler made for the types it was given is written as
-        // those types (`Box<int>`), the way the program writes it.
-        let made: HashMap<&str, &ShapeDef> = items
+        // A shape or kind the compiler made for the types it was given is
+        // written as those types (`Box<int>`), the way the program writes it.
+        let made: HashMap<&str, &[Type]> = items
             .iter()
             .filter_map(|item| match item {
-                Item::Shape(s) if !s.given.is_empty() => Some((s.name.as_str(), s)),
+                Item::Shape(s) if !s.given.is_empty() => Some((s.name.as_str(), s.given.as_slice())),
+                Item::Kind(k) if !k.given.is_empty() => Some((k.name.as_str(), k.given.as_slice())),
                 _ => None,
             })
             .collect();

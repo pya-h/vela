@@ -868,13 +868,19 @@ fn type_angle(k: &Knowledge, q: usize) -> Option<usize> {
 /// one whose matching `>` is followed by `(` (a call) or `{` (a shape literal),
 /// as the parser reads them.
 fn opens_types(k: &Knowledge, p: usize) -> bool {
-    if p >= 2 && k.ident(p - 1).is_some() && matches!(k.token(p - 2), Some(Token::Task | Token::Shape)) {
+    if p >= 2 && k.ident(p - 1).is_some() && matches!(k.token(p - 2), Some(Token::Task | Token::Shape | Token::Kind)) {
         return true;
     }
     // `Box<` in a written type, where the name is a shape that takes types: the
     // `>` may not be typed yet.
     if let Some(name) = p.checked_sub(1).and_then(|q| k.ident(q))
         && k.global(name, SymbolKind::Shape).is_some_and(|id| k.symbols().get(id).is_some_and(|shape| shape.detail.starts_with('<')))
+    {
+        return true;
+    }
+    // `Option<`, where the name is a kind that takes types.
+    if let Some(name) = p.checked_sub(1).and_then(|q| k.ident(q))
+        && k.global(name, SymbolKind::Kind).is_some_and(|id| k.children(id).any(|(_, child)| child.kind == SymbolKind::TypeParam))
     {
         return true;
     }
@@ -888,9 +894,11 @@ fn opens_types(k: &Knowledge, p: usize) -> bool {
             Some(Token::LParen) => grouped += 1,
             Some(Token::RParen) if grouped == 0 => return false,
             Some(Token::RParen) => grouped -= 1,
-            // A call follows the types a task is given, and a literal the types
-            // a shape is given.
-            Some(Token::Gt) if depth == 0 => return matches!(k.token(q + 1), Some(Token::LParen | Token::LBrace)),
+            // A call follows the types a task is given, a literal the types a
+            // shape is given, and a variant the types a kind is given.
+            Some(Token::Gt) if depth == 0 => {
+                return matches!(k.token(q + 1), Some(Token::LParen | Token::LBrace)) || (k.token(q + 1) == Some(&Token::Dot) && k.ident(q + 2).is_some());
+            }
             Some(Token::Lt) => depth += 1,
             Some(Token::Gt) => depth -= 1,
             Some(token) if token.writes_type() => {}

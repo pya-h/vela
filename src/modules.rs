@@ -859,11 +859,13 @@ impl Resolver<'_> {
             }
             Item::Kind(k) => {
                 k.name = self.own_full(&k.name);
+                self.enter_type_params(&k.types, "kind", &k.name)?;
                 for variant in &mut k.variants {
                     for field in &mut variant.payload {
                         field.ty = self.ty(&field.ty, field.ty_span)?;
                     }
                 }
+                self.params.clear();
                 Ok(())
             }
             Item::Macro(m) => {
@@ -1375,6 +1377,24 @@ impl Resolver<'_> {
                     *ty = self.ty(&ty.clone(), *at)?;
                 }
                 fields.iter_mut().try_for_each(|field| self.expr(&mut field.value))
+            }
+            // `Option<int>.None`: the kind and its variant, named as the file
+            // writes them, and the types written types too.
+            ExprKind::Construct { kind, tag, args, types } if !types.is_empty() => {
+                let Some(entry) = self.kind(kind, span)? else {
+                    let what = match self.lookup(kind, span, false)? {
+                        Some(entry) if entry.what == What::Shape => format!("'{0}' is a shape, so its values are written '{0}<…> {{ … }}'", kind),
+                        Some(entry) => format!("'{}' is a {}, not a kind, so it has no variant '{}'", kind, entry.what.word(), tag),
+                        None => format!("unknown kind '{}'", kind),
+                    };
+                    return err(span, what);
+                };
+                self.variant(&entry, kind, tag, span)?;
+                *kind = entry.full;
+                for (ty, at) in types.iter_mut() {
+                    *ty = self.ty(&ty.clone(), *at)?;
+                }
+                args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::Construct { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::Field(base, _) | ExprKind::Deref(base) | ExprKind::Ref(base) | ExprKind::Unary(_, base) | ExprKind::Fail(base) | ExprKind::Wrap(base) => self.expr(base),

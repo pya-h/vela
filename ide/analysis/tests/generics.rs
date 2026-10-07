@@ -354,3 +354,10 @@ fn class_at_in(source: &str, needle: &str) -> Option<TokenClass> {
     let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
     Analysis::new(source).tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
 }
+
+#[test]
+fn a_shape_given_types_is_read_from_the_source_when_the_file_does_not_parse() {
+    let source = shapes("show(1)") + "task g(\n";
+    assert_eq!(hover(&source, "kept:").0, "bind kept: Box<text>@r");
+    assert_eq!(hover(&source, "pair:").0, "bind pair: Pair<int, text>");
+}

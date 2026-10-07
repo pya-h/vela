@@ -1568,6 +1568,30 @@ fn split_list(text: &str) -> Vec<&str> {
     parts
 }
 
+/// The types between the `<` and `>` of a shape or kind given them, split at
+/// their commas outside brackets, parentheses, and the `< … >` of another.
+fn split_angled(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let (mut depth, mut start) = (0usize, 0usize);
+    let mut previous = ' ';
+    for (i, c) in text.char_indices() {
+        match c {
+            '[' | '(' | '<' => depth += 1,
+            // The `>` of an arrow, `->`, closes nothing.
+            '>' if previous == '-' => {}
+            ']' | ')' | '>' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.extend(text.get(start..i));
+                start = i + 1;
+            }
+            _ => {}
+        }
+        previous = c;
+    }
+    parts.extend(text.get(start..));
+    parts
+}
+
 /// A type without `or`: after any `^` and `maybe`, a name or brackets, and
 /// its region.
 fn parse_simple_type(text: &str, depth: usize) -> Option<Type> {
@@ -1577,7 +1601,21 @@ fn parse_simple_type(text: &str, depth: usize) -> Option<Type> {
     if !is_name(region) {
         return None;
     }
-    Some(parse_prefixed_type(ty, depth)?.map_regions_of_names(&mut |_| Some(region.to_string())))
+    Some(given_no_regions(&parse_prefixed_type(ty, depth)?.map_regions_of_names(&mut |_| Some(region.to_string()))))
+}
+
+/// `ty` with the types each shape or kind in it is given written without
+/// regions, as a program writes them: `Box<text>@r`, whose text is in `r`.
+fn given_no_regions(ty: &Type) -> Type {
+    match ty {
+        Type::Applied(applied) => Type::Applied(Box::new(applied.with_types(applied.types.iter().map(Type::without_regions).collect()))),
+        Type::Ptr(inner, region) => Type::Ptr(Box::new(given_no_regions(inner)), region.clone()),
+        Type::Slice(inner, region) => Type::Slice(Box::new(given_no_regions(inner)), region.clone()),
+        Type::Array(inner, count) => Type::Array(Box::new(given_no_regions(inner)), *count),
+        Type::Maybe(inner) => Type::Maybe(Box::new(given_no_regions(inner))),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(given_no_regions).collect()),
+        other => other.clone(),
+    }
 }
 
 fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
@@ -1622,6 +1660,16 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
             }
         }
         name if is_name(name) => Type::builtin(name).unwrap_or_else(|| Type::named(name)),
+        // `Box<int>` or `Option<text>`: a shape or kind given types.
+        applied if applied.ends_with('>') && applied.find('<').is_some_and(|open| applied.get(..open).is_some_and(|name| is_name(name.trim()))) => {
+            let open = applied.find('<')?;
+            let inside = applied.get(open + 1..applied.len() - 1)?;
+            let types: Vec<Type> = split_angled(inside).into_iter().map(|item| parse_type_within(item, depth + 1)).collect::<Option<_>>()?;
+            if types.is_empty() {
+                return None;
+            }
+            Type::Applied(Box::new(vela::ast::Applied { name: applied.get(..open)?.trim().to_string(), types, region: None }))
+        }
         // Another module's shape or kind: `geometry.Point`.
         // A module the file can't name is written by its path: `shapes/geometry.Point`.
         name if name.rsplit_once(MODULE_SEPARATOR).is_some_and(|(module, member)| is_module_path(module) && is_name(member)) => Type::named(name),

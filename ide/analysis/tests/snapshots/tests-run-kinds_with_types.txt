@@ -1,0 +1,304 @@
+  1 | ; Kinds that take types, `kind Option<T>`: one kind is made for each set of
+    | comment:; Kinds that take types, `kind Option<T>`: one kind is made for each set of
+  2 | ; types the program uses. A variant's types come from its values, or from the
+    | comment:; types the program uses. A variant's types come from its values, or from the
+  3 | ; place the value goes, or are written after the kind's name.
+    | comment:; place the value goes, or are written after the kind's name.
+  5 | kind Option<T: shown>
+    | keyword:kind  type:Option  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+  6 |     Some(value: T)
+    | variant:Some  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+  7 |     None
+    | variant:None
+  9 |     orElse(fallback: T) -> T
+    | method:orElse  punctuation:(  parameter:fallback  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 10 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 11 |         case Some v = v
+    | keyword:case  variant:Some  variable:v  operator:=  variable:v
+ 12 |         case None = fallback
+    | keyword:case  variant:None  operator:=  parameter:fallback
+ 13 |         fi
+    | keyword:fi
+ 14 |     fi
+    | keyword:fi
+ 16 |     isSome() -> bool
+    | method:isSome  punctuation:(  punctuation:)  operator:->  type-builtin:bool
+ 17 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 18 |         case Some _ = true
+    | keyword:case  variant:Some  keyword:_  operator:=  keyword:true
+ 19 |         case None = false
+    | keyword:case  variant:None  operator:=  keyword:false
+ 20 |         fi
+    | keyword:fi
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi
+ 24 | kind Either<A, B>
+    | keyword:kind  type:Either  punctuation:<  type:A  punctuation:,  type:B  punctuation:>
+ 25 |     Left(a: A)
+    | variant:Left  punctuation:(  field:a  punctuation::  type:A  punctuation:)
+ 26 |     Right(b: B)
+    | variant:Right  punctuation:(  field:b  punctuation::  type:B  punctuation:)
+ 27 | fi
+    | keyword:fi
+ 29 | ; A variant may name its kind again behind a pointer.
+    | comment:; A variant may name its kind again behind a pointer.
+ 30 | kind Tree<T>
+    | keyword:kind  type:Tree  punctuation:<  type:T  punctuation:>
+ 31 |     Leaf(value: T)
+    | variant:Leaf  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 32 |     Node(left: ^Tree<T>, right: ^Tree<T>)
+    | variant:Node  punctuation:(  field:left  punctuation::  operator:^  type:Tree  punctuation:<  type:T  punctuation:>  punctuation:,  field:right  punctuation::  operator:^  type:Tree  punctuation:<  type:T  punctuation:>  punctuation:)
+ 33 | fi
+    | keyword:fi
+ 35 | ; The words a kind asks of its types, as a shape's.
+    | comment:; The words a kind asks of its types, as a shape's.
+ 36 | kind Ranked<T: ordered>
+    | keyword:kind  type:Ranked  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>
+ 37 |     Top(value: T)
+    | variant:Top  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 38 |     Rest
+    | variant:Rest
+ 39 | fi
+    | keyword:fi
+ 41 | ; Its own `str`, made for each set of types.
+    | comment:; Its own `str`, made for each set of types.
+ 42 | kind Quiet<T>
+    | keyword:kind  type:Quiet  punctuation:<  type:T  punctuation:>
+ 43 |     Said(value: T)
+    | variant:Said  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 44 |     Silent
+    | variant:Silent
+ 46 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 47 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 48 |         case Said _ = "something".copy() at r
+    | keyword:case  variant:Said  keyword:_  operator:=  string:"something"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 49 |         case Silent = "nothing".copy() at r
+    | keyword:case  variant:Silent  operator:=  string:"nothing"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 50 |         fi
+    | keyword:fi
+ 51 |     fi
+    | keyword:fi
+ 52 | fi
+    | keyword:fi
+ 54 | ; A method that changes the value it is called on.
+    | comment:; A method that changes the value it is called on.
+ 55 | kind Counter<T>
+    | keyword:kind  type:Counter  punctuation:<  type:T  punctuation:>
+ 56 |     Count(n: int, last: T)
+    | variant:Count  punctuation:(  field:n  punctuation::  type-builtin:int  punctuation:,  field:last  punctuation::  type:T  punctuation:)
+ 58 |     alters bump(v: T)
+    | keyword:alters  method:bump  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)
+ 59 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 60 |         case Count n _
+    | keyword:case  variant:Count  variable:n  keyword:_
+ 61 |             .this = Counter.Count(n + 1, v)
+    | punctuation:.  keyword:this  operator:=  type:Counter  punctuation:.  variant:Count  punctuation:(  variable:n  operator:+  number:1  punctuation:,  parameter:v  punctuation:)
+ 62 |         fi
+    | keyword:fi
+ 63 |     fi
+    | keyword:fi
+ 64 | fi
+    | keyword:fi
+ 66 | shape Holder<T: shown>
+    | keyword:shape  type:Holder  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+ 67 |     value: Option<T>
+    | field:value  punctuation::  type:Option  punctuation:<  type:T  punctuation:>
+ 68 | fi
+    | keyword:fi
+ 70 | task half(n: int) -> Option<int>
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 71 |     when n % 2 == 0
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:0
+ 72 |         <- Option.Some(n / 2)
+    | keyword:<-  type:Option  punctuation:.  variant:Some  punctuation:(  parameter:n  operator:/  number:2  punctuation:)
+ 73 |     fi
+    | keyword:fi
+ 74 |     <- Option.None
+    | keyword:<-  type:Option  punctuation:.  variant:None
+ 75 | fi
+    | keyword:fi
+ 77 | ; A task that takes types, given a kind of them.
+    | comment:; A task that takes types, given a kind of them.
+ 78 | task first<T: shown>(o: Option<T>@r, fallback: T) -> T
+    | keyword:task  task:first  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:o  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:,  parameter:fallback  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 79 |     match o
+    | keyword:match  parameter:o
+ 80 |     case Some v
+    | keyword:case  variant:Some  variable:v
+ 81 |         <- v
+    | keyword:<-  variable:v
+ 82 |     case None
+    | keyword:case  variant:None
+ 83 |         <- fallback
+    | keyword:<-  parameter:fallback
+ 84 |     fi
+    | keyword:fi
+ 85 | fi
+    | keyword:fi
+ 87 | task wrap<T: shown>(r: region, x: T) -> Option<T>@r
+    | keyword:task  task:wrap  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r
+ 88 |     <- Option.Some(x)
+    | keyword:<-  type:Option  punctuation:.  variant:Some  punctuation:(  parameter:x  punctuation:)
+ 89 | fi
+    | keyword:fi
+ 91 | task empty<T: shown>(r: region) -> Option<T>@r
+    | keyword:task  task:empty  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r
+ 92 |     <- Option<T>.None
+    | keyword:<-  type:Option  punctuation:<  type:T  punctuation:>  punctuation:.  variant:None
+ 93 | fi
+    | keyword:fi
+ 95 | task alike<T: similar & shown>(a: Option<T>@r, b: Option<T>@r) -> bool
+    | keyword:task  task:alike  punctuation:<  type:T  punctuation::  keyword:similar  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:a  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 96 |     <- a ~= b
+    | keyword:<-  parameter:a  operator:~=  parameter:b
+ 97 | fi
+    | keyword:fi
+ 99 | task replace<T: shown>(hold& o: Option<T>@r, v: T)
+    | keyword:task  task:replace  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  keyword:hold  keyword:&  parameter:o  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)
+100 |     o = Option.Some(v)
+    | parameter:o  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  parameter:v  punctuation:)
+101 | fi
+    | keyword:fi
+103 | task leaves(t: Tree<int>@r) -> int
+    | keyword:task  task:leaves  punctuation:(  parameter:t  punctuation::  type:Tree  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+104 |     match t
+    | keyword:match  parameter:t
+105 |     case Leaf v
+    | keyword:case  variant:Leaf  variable:v
+106 |         <- v
+    | keyword:<-  variable:v
+107 |     case Node left right
+    | keyword:case  variant:Node  variable:left  variable:right
+108 |         <- leaves(left^) + leaves(right^)
+    | keyword:<-  task:leaves  punctuation:(  variable:left  operator:^  punctuation:)  operator:+  task:leaves  punctuation:(  variable:right  operator:^  punctuation:)
+109 |     fi
+    | keyword:fi
+110 | fi
+    | keyword:fi
+112 | ; The kind of an error, its types from the error type.
+    | comment:; The kind of an error, its types from the error type.
+113 | task checked(n: int) -> int ~ Option<text>
+    | keyword:task  task:checked  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:Option  punctuation:<  type-builtin:text  punctuation:>
+114 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+115 |         <- fail Option.None
+    | keyword:<-  keyword:fail  type:Option  punctuation:.  variant:None
+116 |     fi
+    | keyword:fi
+117 |     when n > 100
+    | keyword:when  parameter:n  operator:>  number:100
+118 |         <- fail Option.Some("too big")
+    | keyword:<-  keyword:fail  type:Option  punctuation:.  variant:Some  punctuation:(  string:"too big"  punctuation:)
+119 |     fi
+    | keyword:fi
+120 |     <- n
+    | keyword:<-  parameter:n
+121 | fi
+    | keyword:fi
+123 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+124 |     region r
+    | keyword:region  region:r
+125 |     show(half(8), " ", half(7))
+    | builtin-fn:show  punctuation:(  task:half  punctuation:(  number:8  punctuation:)  punctuation:,  string:" "  punctuation:,  task:half  punctuation:(  number:7  punctuation:)  punctuation:)
+127 |     ; From the values, the place, or written.
+    | comment:; From the values, the place, or written.
+128 |     bind some = Option.Some("hi")
+    | keyword:bind  variable:some  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  string:"hi"  punctuation:)
+129 |     bind empty_text: Option<text> = Option.None
+    | keyword:bind  variable:empty_text  punctuation::  type:Option  punctuation:<  type-builtin:text  punctuation:>  operator:=  type:Option  punctuation:.  variant:None
+130 |     bind written = Option<float>.None
+    | keyword:bind  variable:written  operator:=  type:Option  punctuation:<  type-builtin:float  punctuation:>  punctuation:.  variant:None
+131 |     bind left: Either<int, text> = Either.Left(3)
+    | keyword:bind  variable:left  punctuation::  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Either  punctuation:.  variant:Left  punctuation:(  number:3  punctuation:)
+132 |     bind right = Either<int, text>.Right("r")
+    | keyword:bind  variable:right  operator:=  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Right  punctuation:(  string:"r"  punctuation:)
+133 |     show(some, " ", empty_text, " ", written, " ", left, " ", right)
+    | builtin-fn:show  punctuation:(  variable:some  punctuation:,  string:" "  punctuation:,  variable:empty_text  punctuation:,  string:" "  punctuation:,  variable:written  punctuation:,  string:" "  punctuation:,  variable:left  punctuation:,  string:" "  punctuation:,  variable:right  punctuation:)
+134 |     show(some.type, " ", right.type)
+    | builtin-fn:show  punctuation:(  variable:some  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:right  punctuation:.  keyword:type  punctuation:)
+136 |     ; Beside a value that tells them: in an array, a branch, a comparison.
+    | comment:; Beside a value that tells them: in an array, a branch, a comparison.
+137 |     bind many = [Option.Some(1), Option.None, Option.Some(3)]
+    | keyword:bind  variable:many  operator:=  punctuation:[  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:,  type:Option  punctuation:.  variant:None  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:3  punctuation:)  punctuation:]
+138 |     show(many)
+    | builtin-fn:show  punctuation:(  variable:many  punctuation:)
+139 |     bind chosen = when some.isSome() Option.Some(1) else Option.None fi
+    | keyword:bind  variable:chosen  operator:=  keyword:when  variable:some  punctuation:.  method:isSome  punctuation:(  punctuation:)  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  keyword:else  type:Option  punctuation:.  variant:None  keyword:fi
+140 |     show(chosen, " ", chosen == Option.None, " ", Option.Some(1) ~= chosen)
+    | builtin-fn:show  punctuation:(  variable:chosen  punctuation:,  string:" "  punctuation:,  variable:chosen  operator:==  type:Option  punctuation:.  variant:None  punctuation:,  string:" "  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  operator:~=  variable:chosen  punctuation:)
+141 |     bind nested: Option<Option<int>> = Option.Some(Option.None)
+    | keyword:bind  variable:nested  punctuation::  type:Option  punctuation:<  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:)
+142 |     bind maybe_one: maybe Option<int> = Option.None
+    | keyword:bind  variable:maybe_one  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:None
+143 |     show(nested, " ", maybe_one)
+    | builtin-fn:show  punctuation:(  variable:nested  punctuation:,  string:" "  punctuation:,  variable:maybe_one  punctuation:)
+145 |     ; Methods, and tasks that take types.
+    | comment:; Methods, and tasks that take types.
+146 |     show(first(Option.Some(5), 0), " ", first(Option<int>.None, 9))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  number:5  punctuation:)  punctuation:,  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:first  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:.  variant:None  punctuation:,  number:9  punctuation:)  punctuation:)
+147 |     show(wrap(r, "w"), " ", wrap(r, 2.5), " ", wrap(r, 3).orElse(1))
+    | builtin-fn:show  punctuation:(  task:wrap  punctuation:(  region:r  punctuation:,  string:"w"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:wrap  punctuation:(  region:r  punctuation:,  number:2.5  punctuation:)  punctuation:,  string:" "  punctuation:,  task:wrap  punctuation:(  region:r  punctuation:,  number:3  punctuation:)  punctuation:.  method:orElse  punctuation:(  number:1  punctuation:)  punctuation:)
+148 |     bind nothing_yet: Option<int> = empty(r)
+    | keyword:bind  variable:nothing_yet  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  task:empty  punctuation:(  region:r  punctuation:)
+149 |     show(nothing_yet.orElse(7), " ", nothing_yet.isSome())
+    | builtin-fn:show  punctuation:(  variable:nothing_yet  punctuation:.  method:orElse  punctuation:(  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nothing_yet  punctuation:.  method:isSome  punctuation:(  punctuation:)  punctuation:)
+150 |     show(alike(Option.Some(1), Option.Some(1)), " ", alike(Option.Some("a"), Option<text>.None))
+    | builtin-fn:show  punctuation:(  task:alike  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:alike  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  string:"a"  punctuation:)  punctuation:,  type:Option  punctuation:<  type-builtin:text  punctuation:>  punctuation:.  variant:None  punctuation:)  punctuation:)
+151 |     hold kept: Option<int> = Option.None
+    | keyword:hold  variable:kept  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:None
+152 |     replace(&kept, 5)
+    | task:replace  punctuation:(  operator:&  variable:kept  punctuation:,  number:5  punctuation:)
+153 |     show(kept)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:)
+155 |     ; Behind pointers, in a region.
+    | comment:; Behind pointers, in a region.
+156 |     bind a = new Tree<int>(Tree.Leaf(1)) at r
+    | keyword:bind  variable:a  operator:=  keyword:new  type:Tree  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Tree  punctuation:.  variant:Leaf  punctuation:(  number:1  punctuation:)  punctuation:)  keyword:at  region:r
+157 |     bind b = new Tree<int>(Tree.Leaf(2)) at r
+    | keyword:bind  variable:b  operator:=  keyword:new  type:Tree  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Tree  punctuation:.  variant:Leaf  punctuation:(  number:2  punctuation:)  punctuation:)  keyword:at  region:r
+158 |     show(leaves(Tree.Node(a, b)))
+    | builtin-fn:show  punctuation:(  task:leaves  punctuation:(  type:Tree  punctuation:.  variant:Node  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  punctuation:)  punctuation:)
+160 |     show(Ranked.Top(3), " ", Ranked<text>.Rest)
+    | builtin-fn:show  punctuation:(  type:Ranked  punctuation:.  variant:Top  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Ranked  punctuation:<  type-builtin:text  punctuation:>  punctuation:.  variant:Rest  punctuation:)
+161 |     show(Quiet.Said(1), " ", Quiet<text>.Silent)
+    | builtin-fn:show  punctuation:(  type:Quiet  punctuation:.  variant:Said  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Quiet  punctuation:<  type-builtin:text  punctuation:>  punctuation:.  variant:Silent  punctuation:)
+162 |     hold count = Counter.Count(0, "a")
+    | keyword:hold  variable:count  operator:=  type:Counter  punctuation:.  variant:Count  punctuation:(  number:0  punctuation:,  string:"a"  punctuation:)
+163 |     count.bump("b")
+    | variable:count  punctuation:.  method:bump  punctuation:(  string:"b"  punctuation:)
+164 |     count.bump("c")
+    | variable:count  punctuation:.  method:bump  punctuation:(  string:"c"  punctuation:)
+165 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+166 |     bind held = Holder { value: Option.Some(4) }
+    | keyword:bind  variable:held  operator:=  type:Holder  punctuation:{  field:value  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:4  punctuation:)  punctuation:}
+167 |     show(held.value)
+    | builtin-fn:show  punctuation:(  variable:held  punctuation:.  field:value  punctuation:)
+168 |     bind words = Option.Some("w".copy() at r)
+    | keyword:bind  variable:words  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  string:"w"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+169 |     show(words)
+    | builtin-fn:show  punctuation:(  variable:words  punctuation:)
+171 |     show(checked(5) { 0 })
+    | builtin-fn:show  punctuation:(  task:checked  punctuation:(  number:5  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+172 |     match checked(500)
+    | keyword:match  task:checked  punctuation:(  number:500  punctuation:)
+173 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+174 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+175 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+176 |         show(e.orElse("?"))
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:.  method:orElse  punctuation:(  string:"?"  punctuation:)  punctuation:)
+177 |     fi
+    | keyword:fi
+178 | fi
+    | keyword:fi

@@ -434,6 +434,8 @@ pub fn input_error_kind() -> KindDef {
         default: None,
     };
     KindDef {
+        types: Vec::new(),
+        given: Vec::new(),
         name: INPUT_ERROR.to_string(),
         variants: vec![
             Variant { tag: ENDED.to_string(), payload: Vec::new(), span },
@@ -457,6 +459,8 @@ pub fn parse_error_kind() -> KindDef {
     let span = builtin_span();
     let variant = |tag: &str| Variant { tag: tag.to_string(), payload: Vec::new(), span };
     KindDef {
+        types: Vec::new(),
+        given: Vec::new(),
         name: PARSE_ERROR.to_string(),
         variants: vec![variant(NOT_A_NUMBER), variant(TOO_LARGE)],
         span,
@@ -1346,10 +1350,16 @@ pub enum ExprKind {
     StructInit { name: String, types: Vec<TypeArg>, fields: Vec<FieldInit> },
     /// A variant constructor, `Circle(1.0)` or `Empty`. The parser produces
     /// `Call` or `Var` for these; the checker rewrites them into `Construct`.
+    /// One naming the types of a kind that takes them, `Option<int>.None`, is
+    /// a `Construct` from the parser on, with those `types`; they are empty
+    /// otherwise, when the values and the place the value goes say them. A
+    /// value of a kind made for its types is of that kind, which its type
+    /// names: `kind` stays the kind it was made from.
     Construct {
         kind: String,
         tag: String,
         args: Vec<Expr>,
+        types: Vec<TypeArg>,
     },
     Range(Box<Expr>, Box<Expr>),
     /// `fail e`: an error value, which fits a `T ~ E`.
@@ -2350,6 +2360,14 @@ pub struct Variant {
 #[derive(Debug, Clone)]
 pub struct KindDef {
     pub name: String,
+    /// `kind Option<T>`: the types the kind takes, empty for an ordinary kind.
+    /// Its variants are checked once with these in place of types, and one
+    /// kind is made for each set of types it is given (see the checker's
+    /// `kind_instance`), as for a shape.
+    pub types: Vec<TypeParam>,
+    /// The types this kind was made for, when it is one use of a kind that
+    /// takes types; empty otherwise.
+    pub given: Vec<Type>,
     pub variants: Vec<Variant>,
     /// Position of the kind name.
     pub span: Span,
