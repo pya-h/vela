@@ -1,0 +1,48 @@
+; A 'new' of the empty value needs no '( )': 'new [T]' and 'new [K: V]' are
+; empty, and 'new Point' is a Point of the values its fields fall back on.
+; Each is the same as the form with '()', which stays.
+
+shape Point
+    x: int = 1
+    y: int = 2
+fi
+
+shape Label
+    name: text = "none"
+    spot: Point = Point { x: 5 }
+fi
+
+shape Tally<T>
+    count: int = 0
+fi
+
+task total(xs: [int]@r) -> int
+    hold sum = 0
+    each x in xs
+        sum = sum + x
+    fi
+    <- sum
+fi
+
+task main()
+    region r default
+    region s
+
+    hold numbers = new [int]
+    numbers.add(4)
+    numbers.add(5)
+    hold prices = new [:float] at s
+    prices["tea"] = 2.5
+    hold seen = new@s [text: bool]
+    seen["a"] = true
+    show(numbers.len, " ", prices.len, " ", seen.len, " ", total(numbers))
+
+    bind p = new Point
+    bind q = new Point() at s
+    bind label = new@s Label
+    bind tally = new Tally<text>
+    show(p^.x + q^.y, " ", label^.name, " ", label^.spot.x, " ", label^.spot.y, " ", tally^.count)
+
+    ; Still a value of its own inside a call or a list.
+    show(total(new [int]), " ", [new [int], numbers].len)
+fi

@@ -3798,6 +3798,21 @@ save(500) {
         them through <code>^</code>, as in <code>p^.x</code> (<code>p.x</code> is an error that says so). Writing
         through a pointer is allowed even from a <code>bind</code>, which holds the address, not the value.
       </p>
+      <p id="new-empty">
+        <strong>The empty value needs no <code>( )</code>.</strong> Where a <code>new</code> gives no value, the
+        parentheses may be left out: <code>new [text] at r</code> is the same as <code>new [text]() at r</code>, an empty
+        slice, and <code>new [:float]</code> and <code>new [text: int]</code> are empty maps. A shape whose fields all
+        fall back on values (see <a href="#field-defaults">fields with defaults</a>) is made the same way:
+        <code>new Point at r</code> and <code>new Point() at r</code> both copy <code>Point {}</code>, the value of its
+        defaults, into <code>r</code>. Nothing else has an empty value, so <code>new int at r</code>, a kind, or a shape
+        with a field that falls back on none is an error that names what is missing. Both forms make the same program;
+        the one with <code>( )</code> stays. A <code>{</code> after the type is an error too: the value goes in
+        <code>( )</code>, and a <code>new</code> never fails, so no plan B follows it.
+      </p>
+      <pre><span class="keyword">region</span> r <span class="keyword">default</span>
+<span class="keyword">hold</span> names = <span class="keyword">new</span> [text]             <span class="comment">; [text]@r, as new [text]()</span>
+<span class="keyword">hold</span> prices = <span class="keyword">new</span> [:float]          <span class="comment">; [text: float]@r</span>
+<span class="keyword">bind</span> origin = <span class="keyword">new</span> Point            <span class="comment">; ^Point@r, as new Point(Point {})</span></pre>
 
       <h3>Pointer types name their region</h3>
       <p>
@@ -4090,8 +4105,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         be), its type names its region except in a field and after <code>new</code>, it can't be stored in another
         region, and a task sends one only into a region it is given. <code>new [T](items) at r</code> makes a slice by
         copying the items into <code>r</code>: <code>[v#n]</code> for <code>n</code> copies of <code>v</code>, where
-        <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T]() at r</code>
-        makes one with no items.
+        <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T] at r</code>
+        (or <code>new [T]() at r</code>, see <a href="#new-empty">the empty value</a>) makes one with no items.
       </p>
       <p id="slice-shortcut">
         <strong>Written by its values.</strong> <code>[1, 2, ...] at r</code> is the short form of
@@ -4100,7 +4115,7 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         names the region too (<code>[1, 2, ...]@r</code>), and in a block with a <a href="#default-region">default
         region</a> neither is needed. Both forms are the same slice, so either can be given, assigned
         (<code>xs = [7, ...] at r</code> makes <code>xs</code> a new slice), or passed. Where the values don't say the
-        type, the long form does: <code>[...]</code> holds none (<code>new [int]() at r</code>), and
+        type, the long form does: <code>[...]</code> holds none (<code>new [int] at r</code>), and
         <code>[none, ...]</code> doesn't say what a value would be (<code>new [maybe int]([none]) at r</code>). An array
         never becomes a slice: <code>[1, 2]</code> where a slice is expected is an error that shows both forms, and
         <code>[1, 2] at r</code> is one too, since an array names no region.
@@ -4213,7 +4228,7 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         the key's hash in about the same time however many keys it holds. Its table is in region <code>r</code>, and
         like a slice it names that region in its type except in a field and after <code>new</code>.
         <code>[:V]</code> is written for <code>[text: V]</code>, the most usual map. It is made with <code>new</code>, from
-        its pairs or none, or written by its pairs: <code>["a": 1, "b": 2] at r</code> is the short form of
+        its pairs or none (<code>new [:V] at r</code> is empty, as <code>new [:V]() at r</code> is), or written by its pairs: <code>["a": 1, "b": 2] at r</code> is the short form of
         <code>new [text: int](["a": 1, "b": 2]) at r</code>, with the keys' and values' types worked out from the pairs,
         <code>@r</code> naming the region too and a block's <a href="#default-region">default region</a> needing
         neither. A key in the pairs is any value, a variable too; in the <code>[:V]</code> form of <code>new</code> a key

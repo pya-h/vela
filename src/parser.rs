@@ -4174,7 +4174,8 @@ impl Parser {
         Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
-    /// `new T(value) at r` or `new@r T(value)`.
+    /// `new T(value) at r` or `new@r T(value)`; `new [T] at r` for an empty
+    /// value, as `new [T]() at r` writes it.
     fn parse_new(&mut self) -> Result<Expr> {
         // A `new` holds a type and a value, and takes more stack than most
         // expressions, so it counts as a level of its own.
@@ -4229,14 +4230,33 @@ impl Parser {
         // `new [:float](…)`: a map whose keys are text, written as names.
         let named_keys = self.check(Token::LBracket) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
         let ty = self.parse_type()?;
-        self.expect(Token::LParen)?;
+        // `new [T]`, `new [K: V]` or `new Point`, with no `( )`: the empty
+        // value `()` writes, which is all `new` can make without one.
+        let bare = !self.check(Token::LParen);
+        if bare && self.check(Token::LBrace) {
+            let example = if matches!(ty, Type::Named(..) | Type::Applied(..)) { format!("{0}({0} {{ … }})", ty) } else { format!("{}(…)", ty) };
+            return Err(Error::at(self.peek_span(), format!("'new' takes its value in '( )', as in 'new {}'; a 'new' never fails, so no plan B follows it", example)));
+        }
+        if !bare {
+            self.advance(); // (
+        }
+        let empty = bare || self.check(Token::RParen);
+        let empty_at = if bare { ty_span } else { self.peek_span() };
         // `new [T]() at r` makes an empty slice; its value is an array of no
         // values, which no literal can write. `new [K: V]() at r` makes an
-        // empty map, of no pairs.
-        let value = if self.check(Token::RParen) && matches!(ty, Type::Slice(..)) {
-            Expr::new(ExprKind::Array(Vec::new()), self.peek_span())
-        } else if self.check(Token::RParen) && matches!(ty, Type::Map(..)) {
-            Expr::new(ExprKind::Pairs(Vec::new()), self.peek_span())
+        // empty map, of no pairs. `new Point() at r` makes a shape of the
+        // values its fields fall back on, which the checker sees all have one
+        // (see `Checker::check_new`).
+        let value = if empty && matches!(ty, Type::Slice(..)) {
+            Expr::new(ExprKind::Array(Vec::new()), empty_at)
+        } else if empty && matches!(ty, Type::Map(..)) {
+            Expr::new(ExprKind::Pairs(Vec::new()), empty_at)
+        } else if empty && let Some((name, types)) = match &ty {
+            Type::Named(name, _) => Some((name.clone(), Vec::new())),
+            Type::Applied(applied) => Some((applied.name.clone(), applied.types.iter().map(|given| (given.clone(), ty_span)).collect())),
+            _ => None,
+        } {
+            Expr::new(ExprKind::StructInit { name, types, fields: Vec::new() }, ty_span)
         } else if named_keys && self.check(Token::LBracket) {
             let opened = self.peek_span();
             self.advance(); // [
@@ -4247,15 +4267,20 @@ impl Parser {
             let value = self.parse_expr()?;
             let pairs = self.parse_pairs_after(vec![(key, value)], opened, true)?;
             Expr::new(ExprKind::Pairs(pairs), opened)
-        } else if self.check(Token::RParen) {
+        } else if empty {
             return Err(Error::at(
-                self.peek_span(),
-                format!("'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice or a map can be made empty, as in 'new [int]() at r' or 'new [text: int]() at r'", ty),
+                empty_at,
+                format!(
+                    "'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'",
+                    ty
+                ),
             ));
         } else {
             self.parse_expr()?
         };
-        self.expect(Token::RParen)?;
+        if !bare {
+            self.expect(Token::RParen)?;
+        }
         if self.check(Token::In) {
             return Err(Error::at(self.peek_span(), "a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range"));
         }

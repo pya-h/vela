@@ -7777,6 +7777,12 @@ impl Checker {
         if matches!(**ty, Type::Or(..)) {
             return err(ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
         }
+        // `new Point` or `new Point()`: the parser wrote the literal of no
+        // fields at the type, which only a shape whose fields all fall back on
+        // values takes.
+        if value.span == ty_span && matches!(&value.kind, ExprKind::StructInit { fields, .. } if fields.is_empty()) {
+            self.check_empty_shape(ty, ty_span)?;
+        }
         // The region written, or the block's default, which is kept on
         // the node so the code generator sees the region either way.
         let written = ty.to_string();
@@ -7812,6 +7818,39 @@ impl Checker {
         self.check_expr(value)?;
         self.coerce(value, &pointee)?;
         Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
+    }
+
+    /// Checks that `ty`, made by a `new` with no value at `span`, is a shape
+    /// whose fields all fall back on values, which is the value it makes.
+    fn check_empty_shape(&mut self, ty: &Type, span: Span) -> Result<()> {
+        let name = match ty {
+            Type::Named(name, _) => name.as_str(),
+            Type::Applied(applied) => applied.name.as_str(),
+            _ => "",
+        };
+        let Some(shape) = self.shapes.get(name).filter(|_| !self.kinds.contains_key(name)) else {
+            return err(
+                span,
+                format!(
+                    "'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'",
+                    ty
+                ),
+            );
+        };
+        // A private field from another file is the literal's to report: no
+        // value written here could give it.
+        let outside = module_of(name) != self.current_module;
+        if let Some(field) = shape.fields.iter().find(|field| field.default.is_none()).filter(|field| !(field.private && outside)) {
+            return err(
+                span,
+                format!(
+                    "a 'new' with no value makes a '{0}' of the values its fields fall back on, and field '{1}' falls back on none; give the value, as in 'new {0}({0} {{ {1}: … }})'",
+                    unqualified(name),
+                    field.name
+                ),
+            );
+        }
+        Ok(())
     }
 
     /// Checks `p^`, the value a pointer points to.

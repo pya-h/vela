@@ -68,7 +68,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "new",
         "new T(value) at r",
-        "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v#n], an array, or a slice.",
+        "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v#n], an array, or a slice. An empty value needs no ( ): new [T] at r and new [K: V] at r are empty, and new Point at r is a Point of the values its fields fall back on.",
     ),
     ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at'). It also names where new text goes: a + b at r joins text, as (a + b)@r does, \"n = {n}\" at r holds values, and scan(prompt) at r reads a line."),
     ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),

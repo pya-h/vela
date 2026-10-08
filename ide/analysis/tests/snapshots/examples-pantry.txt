@@ -1,0 +1,66 @@
+  1 | ; A pantry: what is on its shelves, and how many of each. Where `new` makes an
+    | comment:; A pantry: what is on its shelves, and how many of each. Where `new` makes an
+  2 | ; empty value it needs no `( )`: `new [text]` is an empty slice, `new [:int]` an
+    | comment:; empty value it needs no `( )`: `new [text]` is an empty slice, `new [:int]` an
+  3 | ; empty map, and `new Shelf` a shelf of the values its fields fall back on, the
+    | comment:; empty map, and `new Shelf` a shelf of the values its fields fall back on, the
+  4 | ; same as `new Shelf()`.
+    | comment:; same as `new Shelf()`.
+  6 | shape Shelf
+    | keyword:shape  type:Shelf
+  7 |     label: text = "spare"
+    | field:label  punctuation::  type-builtin:text  operator:=  string:"spare"
+  8 |     room: int = 4
+    | field:room  punctuation::  type-builtin:int  operator:=  number:4
+  9 | fi
+    | keyword:fi
+ 11 | ; Every name in `items`, counted, in the order each was first seen.
+    | comment:; Every name in `items`, counted, in the order each was first seen.
+ 12 | task count(r: region default, items: [text]@r) -> [:int]@r
+    | keyword:task  task:count  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:items  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r
+ 13 |     hold counts = new [:int]
+    | keyword:hold  variable:counts  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:int  punctuation:]
+ 14 |     each item in items
+    | keyword:each  variable:item  keyword:in  parameter:items
+ 15 |         bind before = counts[#item] { 0 }
+    | keyword:bind  variable:before  operator:=  variable:counts  punctuation:[  punctuation:#  variable:item  punctuation:]  punctuation:{  number:0  punctuation:}
+ 16 |         counts[item] = before + 1
+    | variable:counts  punctuation:[  variable:item  punctuation:]  operator:=  variable:before  operator:+  number:1
+ 17 |     fi
+    | keyword:fi
+ 18 |     <- counts
+    | keyword:<-  variable:counts
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     region r default
+    | keyword:region  region:r  keyword:default
+ 24 |     hold bought = new [text]
+    | keyword:hold  variable:bought  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]
+ 25 |     each item in ["rice", "tea", "rice", "salt", "tea", "rice"]
+    | keyword:each  variable:item  keyword:in  punctuation:[  string:"rice"  punctuation:,  string:"tea"  punctuation:,  string:"rice"  punctuation:,  string:"salt"  punctuation:,  string:"tea"  punctuation:,  string:"rice"  punctuation:]
+ 26 |         bought.add(item)
+    | variable:bought  punctuation:.  field:add  punctuation:(  variable:item  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 |     each item, many in count(r, bought)
+    | keyword:each  variable:item  punctuation:,  variable:many  keyword:in  task:count  punctuation:(  region:r  punctuation:,  variable:bought  punctuation:)
+ 29 |         show(item, ": ", many)
+    | builtin-fn:show  punctuation:(  variable:item  punctuation:,  string:": "  punctuation:,  variable:many  punctuation:)
+ 30 |     fi
+    | keyword:fi
+ 32 |     ; A shelf of defaults, and one written out, both in `r`.
+    | comment:; A shelf of defaults, and one written out, both in `r`.
+ 33 |     bind spare = new Shelf
+    | keyword:bind  variable:spare  operator:=  keyword:new  type:Shelf
+ 34 |     bind top = new Shelf(Shelf { label: "top", room: 2 })
+    | keyword:bind  variable:top  operator:=  keyword:new  type:Shelf  punctuation:(  type:Shelf  punctuation:{  field:label  punctuation::  string:"top"  punctuation:,  field:room  punctuation::  number:2  punctuation:}  punctuation:)
+ 35 |     show(spare^.label, " holds ", spare^.room, ", ", top^.label, " holds ", top^.room)
+    | builtin-fn:show  punctuation:(  variable:spare  operator:^  punctuation:.  field:label  punctuation:,  string:" holds "  punctuation:,  variable:spare  operator:^  punctuation:.  field:room  punctuation:,  string:", "  punctuation:,  variable:top  operator:^  punctuation:.  field:label  punctuation:,  string:" holds "  punctuation:,  variable:top  operator:^  punctuation:.  field:room  punctuation:)
+ 37 |     ; Nothing bought yet, nothing counted.
+    | comment:; Nothing bought yet, nothing counted.
+ 38 |     show(count(r, new [text]).len)
+    | builtin-fn:show  punctuation:(  task:count  punctuation:(  region:r  punctuation:,  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:)  punctuation:.  field:len  punctuation:)
+ 39 | fi
+    | keyword:fi

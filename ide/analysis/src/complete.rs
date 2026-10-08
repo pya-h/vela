@@ -700,7 +700,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // After a finished value, only the words that can continue it.
     if let Some(q) = prev
         && k.range(q).end < word_start
-        && ends_value(&k, q)
+        && (ends_value(&k, q) || bare_new(&k, q).is_some())
     {
         return (continuation_items(&k, q), word_start, byte);
     }
@@ -738,12 +738,20 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
     loop {
         match k.token(p) {
             Some(Token::New) => return k.token(p + 1) != Some(&Token::AtSign),
-            Some(Token::Ident(_) | Token::Dot | Token::LBracket | Token::RBracket | Token::Hash | Token::Int(_) | Token::Caret | Token::Maybe) => {}
+            Some(Token::Ident(_) | Token::Dot | Token::LBracket | Token::RBracket | Token::Colon | Token::Hash | Token::Int(_) | Token::Caret | Token::Maybe) => {}
             _ => return false,
         }
         let Some(previous) = p.checked_sub(1) else { return false };
         p = previous;
     }
+}
+
+/// Whether the type ending at position `q` is a `new`'s, written without
+/// `( )` for the empty value, `new [int]` or `new Point`, which is a value
+/// already: `Some` with whether it names its region after it, as a `new@r`
+/// doesn't.
+fn bare_new(k: &Knowledge, q: usize) -> Option<bool> {
+    k.bare_new(q).map(|new| k.token(new + 1) != Some(&Token::AtSign))
 }
 
 /// The words that can follow the finished value, type, or name ending at
@@ -755,11 +763,12 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     if k.token_before(q) == Some(&Token::Each) {
         return vec![keyword("in")];
     }
-    if ends_type(k, q) {
+    let bare = bare_new(k, q);
+    if bare.is_none() && ends_type(k, q) {
         return if on_line(&Token::Tilde) { Vec::new() } else { vec![error_separator()] };
     }
     let mut items = Vec::new();
-    if names_region_after(k, q) {
+    if bare == Some(true) || names_region_after(k, q) {
         items.push(keyword("at"));
     }
     // After `and`, another part may be an `is`; an `is` is never joined with

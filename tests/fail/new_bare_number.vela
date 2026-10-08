@@ -1,0 +1,6 @@
+; error: 5:18: 'new' needs the value to put in the region, as in 'new int(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'
+; Without '( )', 'new' makes only an empty value, which a number has none of.
+task main()
+    region r
+    bind p = new int at r
+fi

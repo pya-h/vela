@@ -1,0 +1,12 @@
+; error: 11:18: a 'new' with no value makes a 'Point' of the values its fields fall back on, and field 'x' falls back on none; give the value, as in 'new Point(Point { x: … })'
+; 'new Point' makes a Point of the values its fields fall back on, so each
+; field needs one.
+shape Point
+    x: int
+    y: int = 0
+fi
+
+task main()
+    region r
+    bind p = new Point at r
+fi

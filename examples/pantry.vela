@@ -1,0 +1,39 @@
+; A pantry: what is on its shelves, and how many of each. Where `new` makes an
+; empty value it needs no `( )`: `new [text]` is an empty slice, `new [:int]` an
+; empty map, and `new Shelf` a shelf of the values its fields fall back on, the
+; same as `new Shelf()`.
+
+shape Shelf
+    label: text = "spare"
+    room: int = 4
+fi
+
+; Every name in `items`, counted, in the order each was first seen.
+task count(r: region default, items: [text]@r) -> [:int]@r
+    hold counts = new [:int]
+    each item in items
+        bind before = counts[#item] { 0 }
+        counts[item] = before + 1
+    fi
+    <- counts
+fi
+
+task main()
+    region r default
+
+    hold bought = new [text]
+    each item in ["rice", "tea", "rice", "salt", "tea", "rice"]
+        bought.add(item)
+    fi
+    each item, many in count(r, bought)
+        show(item, ": ", many)
+    fi
+
+    ; A shelf of defaults, and one written out, both in `r`.
+    bind spare = new Shelf
+    bind top = new Shelf(Shelf { label: "top", room: 2 })
+    show(spare^.label, " holds ", spare^.room, ", ", top^.label, " holds ", top^.room)
+
+    ; Nothing bought yet, nothing counted.
+    show(count(r, new [text]).len)
+fi

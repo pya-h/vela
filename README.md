@@ -17,7 +17,7 @@ several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int#4]`)
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0#n]) at r`
-(or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
+(or empty, `new [int] at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
 writes a value as text: every value has one (`Point { x: 1, y: 2 }`), and a shape or kind may give its own with a method `str`. `float(n)` and `int(x)` turn a value into a

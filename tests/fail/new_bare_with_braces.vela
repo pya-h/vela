@@ -1,0 +1,10 @@
+; error: 9:24: 'new' takes its value in '( )', as in 'new Point(Point { … })'; a 'new' never fails, so no plan B follows it
+; The value goes in '( )'; a 'new' never fails, so no plan B follows it.
+shape Point
+    x: int = 0
+fi
+
+task main()
+    region r
+    bind p = new Point { x: 1 } at r
+fi

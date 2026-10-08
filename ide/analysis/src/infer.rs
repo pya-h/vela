@@ -657,6 +657,11 @@ impl<'a> Knowledge<'a> {
             return None;
         }
         let exact = |p: usize| self.start(p).and_then(|s| self.checked.exprs.get(&(s.line, s.col))).cloned();
+        // `new [int]` or `new Point`: a `new` of the empty value, written
+        // without `( )`.
+        if let Some(new) = self.bare_new(q) {
+            return exact(new).or_else(|| self.new_type(new, self.range(q).end));
+        }
         match self.token(q)? {
             // `t.0`: an item of a tuple, which the checker records at its position.
             Token::Int(n) if self.token_before(q) == Some(&Token::Dot) => exact(q).or_else(|| {
@@ -717,6 +722,14 @@ impl<'a> Knowledge<'a> {
                 if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.closes_values(q - 2) {
                     return Some(Type::Text(Some(name.to_string())));
                 }
+                // `new [T] at r` or `new Point at r`: a `new` of the empty value,
+                // written without `( )`, in `r`.
+                if self.token_before(q) == Some(&Token::At)
+                    && let Some(end) = q.checked_sub(2)
+                    && let Some(new) = self.bare_new(end)
+                {
+                    return exact(new).or_else(|| Some(self.in_region(&self.new_type(new, self.range(end).end)?, name)));
+                }
                 // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`;
                 // `scan(…) at r` or `scan(…)@r`: a line in `r`.
                 if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
@@ -739,6 +752,7 @@ impl<'a> Knowledge<'a> {
                     return match self.expression_type(q - 2, depth + 1)? {
                         Type::Ptr(pointee, _) => Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string()))),
                         Type::Slice(items, _) => Some(Type::Slice(Box::new(self.in_region(&items, name)), Some(name.to_string()))),
+                        made @ Type::Map(..) => Some(self.in_region(&made, name)),
                         Type::Maybe(line) if matches!(*line, Type::Text(_)) => Some(Type::Maybe(Box::new(Type::Text(Some(name.to_string()))))),
                         // `n.str() at r` and `text(n) at r`.
                         Type::Text(_) => Some(Type::Text(Some(name.to_string()))),
@@ -794,28 +808,17 @@ impl<'a> Knowledge<'a> {
             }
             Token::RParen => {
                 let open = self.matching_open(q, &Token::LParen, &Token::RParen)?;
-                // `new T(…)`, `new ^T(…)`, `new@r T(…)`, `new [T](…)`: the type is
-                // everything between `new` (and its region) and `(`.
+                // `new T(…)`, `new ^T(…)`, `new@r T(…)`, `new [T](…)`, `new [K: V](…)`:
+                // the type is everything between `new` (and its region) and `(`.
                 let type_token = |r: usize| {
                     matches!(
                         self.token(r),
-                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Hash | Token::Int(_) | Token::Tilde)
+                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Colon | Token::Hash | Token::Int(_) | Token::Tilde)
                     )
                 };
                 let new = open.checked_sub(1).and_then(|before| (0..=before).rev().take_while(|&r| type_token(r)).find(|&r| self.token(r) == Some(&Token::New)));
                 if let Some(new) = new.filter(|&new| (new + 1..open).all(|r| self.token(r) != Some(&Token::New))) {
-                    return exact(new).or_else(|| {
-                        let region = (self.token(new + 1) == Some(&Token::AtSign)).then(|| self.ident(new + 2)).flatten();
-                        let from = if region.is_some() { self.range(new + 2).end } else { self.range(new).end };
-                        let written = parse_type(self.source.get(from..self.range(open).start)?)?;
-                        Some(match (written, region) {
-                            // `new [T](…)` makes the slice itself.
-                            (Type::Slice(items, _), Some(region)) => Type::Slice(Box::new(self.in_region(&items, region)), Some(region.to_string())),
-                            (slice @ Type::Slice(..), None) => slice,
-                            (pointee, Some(region)) => Type::Ptr(Box::new(self.in_region(&pointee, region)), Some(region.to_string())),
-                            (pointee, None) => Type::Ptr(Box::new(pointee), None),
-                        })
-                    });
+                    return exact(new).or_else(|| self.new_type(new, self.range(open).start));
                 }
                 // `t.at(i)`: a byte of text, or none.
                 if open.checked_sub(1).is_some_and(|p| self.token(p) == Some(&Token::At) && self.token_before(p) == Some(&Token::Dot)) {
@@ -1232,6 +1235,51 @@ impl<'a> Knowledge<'a> {
             return true;
         }
         self.qualified_at(word).is_some_and(|(name, _)| self.global(&name, SymbolKind::Task).is_some())
+    }
+
+    /// When the type ending at `q` is a `new`'s, written without `( )` for
+    /// the empty value, `new [int]` or `new Point`, which is a value already:
+    /// the position of the `new`.
+    pub fn bare_new(&self, q: usize) -> Option<usize> {
+        let mut p = q;
+        // The brackets open around `p`: a `,` or a `:` is a type's only inside one.
+        let mut depth = 0usize;
+        loop {
+            match self.token(p) {
+                Some(Token::New) => {
+                    let start = if self.token(p + 1) == Some(&Token::AtSign) { p + 3 } else { p + 1 };
+                    return (start <= q && depth == 0).then_some(p);
+                }
+                Some(Token::RBracket | Token::Gt) => depth += 1,
+                Some(Token::LBracket | Token::Lt) => depth = depth.checked_sub(1)?,
+                Some(Token::Colon | Token::Comma) if depth > 0 => {}
+                Some(Token::Ident(_) | Token::Dot | Token::Hash | Token::Int(_) | Token::Caret | Token::Maybe | Token::AtSign) => {}
+                _ => return None,
+            }
+            p = p.checked_sub(1)?;
+        }
+    }
+
+    /// The value the `new` at `new` makes, its type written up to the byte
+    /// `end`: a pointer, or the slice or map itself, in the region a `new@r`
+    /// names.
+    fn new_type(&self, new: usize, end: usize) -> Option<Type> {
+        let region = (self.token(new + 1) == Some(&Token::AtSign)).then(|| self.ident(new + 2)).flatten();
+        let from = if region.is_some() { self.range(new + 2).end } else { self.range(new).end };
+        let written = parse_type(self.source.get(from..end)?)?;
+        Some(match region {
+            Some(region) => self.in_region(&Self::made_by_new(written), region),
+            None => Self::made_by_new(written),
+        })
+    }
+
+    /// What a `new` of the type `written` makes: the slice or map itself, or
+    /// a pointer to the value.
+    fn made_by_new(written: Type) -> Type {
+        match written {
+            made @ (Type::Slice(..) | Type::Map(..)) => made,
+            pointee => Type::Ptr(Box::new(pointee), None),
+        }
     }
 
     /// When the `)` at `q` ends `x.copy()`, the position where `x` ends.
@@ -1741,6 +1789,7 @@ fn given_no_regions(ty: &Type) -> Type {
         Type::Applied(applied) => Type::Applied(Box::new(applied.with_types(applied.types.iter().map(Type::without_regions).collect()))),
         Type::Ptr(inner, region) => Type::Ptr(Box::new(given_no_regions(inner)), region.clone()),
         Type::Slice(inner, region) => Type::Slice(Box::new(given_no_regions(inner)), region.clone()),
+        Type::Map(key, value, region) => Type::Map(Box::new(given_no_regions(key)), Box::new(given_no_regions(value)), region.clone()),
         Type::Array(inner, count) => Type::Array(Box::new(given_no_regions(inner)), *count),
         Type::Maybe(inner) => Type::Maybe(Box::new(given_no_regions(inner))),
         Type::Tuple(items) => Type::Tuple(items.iter().map(given_no_regions).collect()),
@@ -1778,15 +1827,20 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
                 Err(items) => Type::Tuple(Some(items).filter(|items| items.len() >= 2)?),
             }
         }
-        // `[T#n]` or `[T]`.
+        // `[T#n]`, `[K: V]`, `[:V]` (keys of text), or `[T]`.
         brackets if brackets.starts_with('[') && brackets.ends_with(']') => {
             let inside = brackets.get(1..brackets.len() - 1)?;
-            match unbracketed(inside, "#").next() {
-                Some(hash) => {
+            match (unbracketed(inside, "#").next(), unbracketed(inside, ":").next()) {
+                (Some(hash), _) => {
                     let count = inside.get(hash + 1..)?.trim().parse::<u64>().ok().filter(|count| *count > 0)?;
                     Type::Array(Box::new(parse_type_within(inside.get(..hash)?, depth + 1)?), count)
                 }
-                None => Type::Slice(Box::new(parse_type_within(inside, depth + 1)?), None),
+                (None, Some(colon)) => {
+                    let key = inside.get(..colon)?.trim();
+                    let key = if key.is_empty() { Type::Text(None) } else { parse_type_within(key, depth + 1)? };
+                    Type::Map(Box::new(key), Box::new(parse_type_within(inside.get(colon + 1..)?, depth + 1)?), None)
+                }
+                (None, None) => Type::Slice(Box::new(parse_type_within(inside, depth + 1)?), None),
             }
         }
         name if is_name(name) => Type::builtin(name).unwrap_or_else(|| Type::named(name)),
