@@ -1,0 +1,29 @@
+; error: 22:15: 'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; error: 25:14: 'c' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'a.copy() at r'
+; error: 28:10: 'poke' changes what its parameter 'xs' reaches, so it can't be given what fixed 'xs' owns; give it a copy, 'xs.copy() at r', or keep 'xs' in a flex variable
+; error: 28:14: 'poke' changes what its parameter 'm' reaches, so it can't be given what fixed 'm' owns; give it a copy, 'm.copy() at r', or keep 'm' in a flex variable
+; The user's examples of Hole A, in the new words: a flex copy of a fixed slice, a
+; flex copy of a fixed shape holding one, and a task changing what its flex
+; parameters reach, each changed what the fixed name holds. Each is refused where
+; the value is given.
+
+shape Bag
+    items: [int]
+fi
+
+task poke(flex xs: [int]@r, flex m: [text: int]@r, r: region)
+    xs[0] = 9
+    m["b"] = 2
+fi
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    flex ys = xs
+    ys[0] = 9
+    fixed a = Bag { items: [5, 6, ...] }
+    flex c = a
+    c.items[0] = 50
+    fixed m = ["a": 1]
+    poke(xs, m, r)
+fi

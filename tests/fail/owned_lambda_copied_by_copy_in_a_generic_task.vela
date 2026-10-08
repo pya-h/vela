@@ -1,0 +1,16 @@
+; error: 12:15: 'gs' is given a lambda that may send back what fixed 'xs' owns, and nothing changes through what a fixed name owns; make 'gs' fixed, or have the lambda send back a copy, as in '<- xs.copy() at r'
+; copy() in a generic task given a lambda for its type: the copy shares the
+; lambda, which sends back what a fixed name owns.
+
+task copied<T>(r: region, xs: [T]@r) -> [T]@r
+    <- xs.copy() at r
+fi
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    fixed fs = [[@r]() -> [int]@r <- xs fi, ...]
+    flex gs = copied<[@r]() -> [int]@r>(r, fs)
+    flex z = gs[0]()
+    z[0] = 99
+    show(xs)
+fi

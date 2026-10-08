@@ -1,0 +1,86 @@
+  1 | ; The user's examples of what stays allowed with a fixed name, in the new words.
+    | comment:; The user's examples of what stays allowed with a fixed name, in the new words.
+  2 | ; Hole B is accepted: a flex owner may still change what a fixed name made of
+    | comment:; Hole B is accepted: a flex owner may still change what a fixed name made of
+  3 | ; it sees. A value copied whole, a shape of an int and text, may be given to a
+    | comment:; it sees. A value copied whole, a shape of an int and text, may be given to a
+  4 | ; flex name. And the general rule: what a task reads to make new data may be
+    | comment:; flex name. And the general rule: what a task reads to make new data may be
+  5 | ; given to a flex name, while what it sends back of its parameter is only read.
+    | comment:; given to a flex name, while what it sends back of its parameter is only read.
+  7 | shape Test
+    | keyword:shape  type:Test
+  8 |     n: int
+    | field:n  punctuation::  type-builtin:int
+  9 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 10 | fi
+    | keyword:fi
+ 12 | task first_two(xs: [int]@r) -> [int]@r
+    | keyword:task  task:first_two  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 13 |     <- xs[0..2]
+    | keyword:<-  parameter:xs  punctuation:[  number:0  operator:..  number:2  punctuation:]
+ 14 | fi
+    | keyword:fi
+ 16 | task lengths(r: region, names: [text]@r) -> [int]@r
+    | keyword:task  task:lengths  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:names  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 17 |     flex out = new [int]() at r
+    | keyword:flex  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 18 |     each name in names
+    | keyword:each  variable:name  keyword:in  parameter:names
+ 19 |         out.add(name.len)
+    | variable:out  punctuation:.  field:add  punctuation:(  variable:name  punctuation:.  field:len  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- out
+    | keyword:<-  variable:out
+ 22 | fi
+    | keyword:fi
+ 24 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 25 |     region r default
+    | keyword:region  region:r  keyword:default
+ 27 |     ; Hole B: the owner changes what both see.
+    | comment:; Hole B: the owner changes what both see.
+ 28 |     flex ys = [1, 2, ...]
+    | keyword:flex  variable:ys  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 29 |     fixed zs = ys
+    | keyword:fixed  variable:zs  operator:=  variable:ys
+ 30 |     ys[0] = 7
+    | variable:ys  punctuation:[  number:0  punctuation:]  operator:=  number:7
+ 31 |     show(zs)
+    | builtin-fn:show  punctuation:(  variable:zs  punctuation:)
+ 33 |     ; Copied whole, so the flex copy is a value of its own.
+    | comment:; Copied whole, so the flex copy is a value of its own.
+ 34 |     fixed a = Test { n: 1, name: "a" }
+    | keyword:fixed  variable:a  operator:=  type:Test  punctuation:{  field:n  punctuation::  number:1  punctuation:,  field:name  punctuation::  string:"a"  punctuation:}
+ 35 |     flex c = a
+    | keyword:flex  variable:c  operator:=  variable:a
+ 36 |     c.n = 2
+    | variable:c  punctuation:.  field:n  operator:=  number:2
+ 37 |     c.name = "c"
+    | variable:c  punctuation:.  field:name  operator:=  string:"c"
+ 38 |     show(a.n, " ", a.name, " ", c.n, " ", c.name)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:name  punctuation:)
+ 40 |     ; Kept fixed, a part a task sends back is read; new data may change.
+    | comment:; Kept fixed, a part a task sends back is read; new data may change.
+ 41 |     fixed nums = [1, 2, 3, ...]
+    | keyword:fixed  variable:nums  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 42 |     fixed part = first_two(nums)
+    | keyword:fixed  variable:part  operator:=  task:first_two  punctuation:(  variable:nums  punctuation:)
+ 43 |     fixed names = ["ada", "bo", ...]
+    | keyword:fixed  variable:names  operator:=  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:,  keyword:...  punctuation:]
+ 44 |     flex sizes = lengths(r, names)
+    | keyword:flex  variable:sizes  operator:=  task:lengths  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
+ 45 |     sizes[0] = 0
+    | variable:sizes  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 46 |     show(part, " ", sizes, " ", nums)
+    | builtin-fn:show  punctuation:(  variable:part  punctuation:,  string:" "  punctuation:,  variable:sizes  punctuation:,  string:" "  punctuation:,  variable:nums  punctuation:)
+ 48 |     ; A fixed name made of a fresh value never changes.
+    | comment:; A fixed name made of a fresh value never changes.
+ 49 |     fixed fresh = [4, 5, ...]
+    | keyword:fixed  variable:fresh  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]
+ 50 |     show(fresh)
+    | builtin-fn:show  punctuation:(  variable:fresh  punctuation:)
+ 51 | fi
+    | keyword:fi

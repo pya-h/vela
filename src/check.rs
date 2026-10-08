@@ -106,6 +106,10 @@ enum Own {
     /// What a lambda that keeps what it uses keeps of the code around it,
     /// which a call of it may send back.
     Kept(String),
+    /// What `from` owns, copied in the generic `task` as a value of type `ty`:
+    /// a copy shares nothing, but a lambda in it still sends back what it
+    /// keeps, so it counts only where a copy of the task gives `ty` a lambda.
+    Copied { task: String, ty: Type, from: Vec<Own> },
 }
 
 /// The types one copy of a generic task was given: as the program writes them,
@@ -5375,11 +5379,11 @@ impl Checker {
             // a lambda keeps stays shared; a slice of the values written, or of
             // one value repeated, holds them as they are.
             ExprKind::New { ty, value, .. } => match ty.as_ref() {
-                map @ Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) && !has_closure(map) => Vec::new(),
-                Type::Slice(item, _) if !matches!(value.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) && !has_closure(item) => Vec::new(),
+                map @ Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) => self.copied_owners(map, value),
+                Type::Slice(item, _) if !matches!(value.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) => self.copied_owners(item, value),
                 _ => self.owners(value),
             },
-            ExprKind::Copy { .. } => Vec::new(),
+            ExprKind::Copy { value, .. } => value.ty.as_ref().map_or_else(Vec::new, |ty| self.copied_owners(ty, value)),
             ExprKind::PlanB { value, body, .. } => {
                 let mut given = Vec::new();
                 last_values(body, &mut given);
@@ -5419,6 +5423,29 @@ impl Checker {
             });
         }
         owners
+    }
+
+    /// What owns a complete copy of `value`, whose items or whole are of type
+    /// `ty`: nothing, unless a lambda is in it, which the copy shares, or may
+    /// be, in a generic task given a lambda for one of its types.
+    fn copied_owners(&self, ty: &Type, value: &Expr) -> Vec<Own> {
+        if has_closure(ty) {
+            return self.owners(value);
+        }
+        if ty.params().is_empty() && !self.may_hold(ty, true) {
+            return Vec::new();
+        }
+        let from = self.owners(value);
+        if from.is_empty() {
+            return from;
+        }
+        vec![Own::Copied { task: self.current_task.clone(), ty: ty.clone(), from }]
+    }
+
+    /// Whether a copy of the generic `task` gives a type parameter in `ty` a
+    /// lambda, which a complete copy shares (see `Own::Copied`).
+    fn copies_a_lambda(&self, task: &str, ty: &Type) -> bool {
+        self.copies.get(task).is_some_and(|copies| copies.iter().any(|(_, given)| has_closure(&in_copy(ty, given))))
     }
 
     /// Where the value a call of `task` given `args` gives back may come
@@ -5530,7 +5557,8 @@ impl Checker {
     /// message suggests a copy of `copied`, or of the owner (`OWNER_MARK`)
     /// for a lambda, whose value can't be copied.
     fn handed(&self, span: Span, owners: Vec<Own>, to: HandedTo, copied: &str, ty: &Type) -> Handed {
-        let lambda = self.only_lambdas(ty);
+        // A lambda can't be copied, so neither can a value holding one.
+        let lambda = self.only_lambdas(ty) || has_closure(ty);
         let copied = if lambda { OWNER_MARK } else { copied };
         let (region, none_here) = match ty {
             Type::Closure(closure) => self.copy_region_here(&closure.task.ret),
@@ -5756,6 +5784,7 @@ impl Checker {
             Own::Param(i, _) => *i == param,
             Own::Sent { task, param: given, from } => self.may_send_back(task, *given, sends_back) && self.reaches_param(from, param, sends_back),
             Own::Kept(lambda) => self.reaches_param(&self.lambda_sends(lambda), param, sends_back),
+            Own::Copied { task, ty, from } => self.copies_a_lambda(task, ty) && self.reaches_param(from, param, sends_back),
             Own::Root(_) => false,
         })
     }
@@ -5773,6 +5802,7 @@ impl Checker {
             Own::Param(_, name) => Some((name.clone(), true)),
             Own::Sent { task, param, from } => self.may_send_back(task, *param, sends_back).then(|| self.owner_of_handed(from, sends_back)).flatten(),
             Own::Kept(lambda) => self.owner_of_handed(&self.lambda_sends(lambda), sends_back),
+            Own::Copied { task, ty, from } => self.copies_a_lambda(task, ty).then(|| self.owner_of_handed(from, sends_back)).flatten(),
         })
     }
 
@@ -5804,6 +5834,10 @@ impl Checker {
                     self.around_lambda(kept, lambda, &self.lambda_sends(inner))
                 }
                 Own::Kept(_) => vec![own.clone()],
+                Own::Copied { task, ty, from } => {
+                    let from = self.around_lambda(kept, lambda, from);
+                    if from.is_empty() { Vec::new() } else { vec![Own::Copied { task: task.clone(), ty: ty.clone(), from }] }
+                }
             })
             .collect()
     }
@@ -10885,6 +10919,10 @@ impl Checker {
                         info.ty
                     ));
                 }
+                // A lambda's copy: the hint says which lambda changes it.
+                if info.kept {
+                    return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
+                }
                 refuse(format!(
                     "it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can",
                     name, info.span.line, info.span.col
@@ -11830,6 +11868,10 @@ impl Checker {
                         "it needs a place that can change, and '{0}' is a parameter, which never does; to pass on the caller's place, write 'flex& {0}: {1}'",
                         name, info.ty
                     ));
+                }
+                // A lambda's copy: the hint says which lambda changes it.
+                if info.kept {
+                    return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
                 }
                 refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can", name, info.span.line, info.span.col))
             }

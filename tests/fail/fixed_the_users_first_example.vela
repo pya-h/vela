@@ -1,0 +1,23 @@
+; error: 18:5: cannot change 'xs[0]': nothing changes through immutable variable 'xs', at any depth
+; error: 20:5: cannot change 'p^.x': nothing changes through immutable variable 'p', at any depth
+; error: 21:5: 'Point.bump' changes 'p^', the value it is called on, and nothing changes through immutable variable 'p', at any depth
+; The program that started Part 22, in the new words: written as 'bind', an item of
+; the slice, a field through the pointer and an alters method through it all changed.
+; Nothing changes through a fixed name now, at any depth.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    xs[0] = 9
+    fixed p = new Point(Point { x: 1 })
+    p^.x = 5
+    p^.bump()
+    show(xs, " ", p^.x)
+fi

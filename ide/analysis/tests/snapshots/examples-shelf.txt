@@ -1,0 +1,84 @@
+  1 | ; What a fixed name keeps: nothing changes through it, at any depth, and what
+    | comment:; What a fixed name keeps: nothing changes through it, at any depth, and what
+  2 | ; it owns, a slice, a map or a pointer, is never given to a name that may change
+    | comment:; it owns, a slice, a map or a pointer, is never given to a name that may change
+  3 | ; it. A task that reads it to make something new gives back data of its own; a
+    | comment:; it. A task that reads it to make something new gives back data of its own; a
+  4 | ; task that gives back a part of it gives back what the fixed name owns, which
+    | comment:; task that gives back a part of it gives back what the fixed name owns, which
+  5 | ; is only read. To change such a value, the program writes a copy, which shares
+    | comment:; is only read. To change such a value, the program writes a copy, which shares
+  6 | ; nothing with it.
+    | comment:; nothing with it.
+  7 | shape Book
+    | keyword:shape  type:Book
+  8 |     title: text
+    | field:title  punctuation::  type-builtin:text
+  9 |     tags: [text]
+    | field:tags  punctuation::  punctuation:[  type-builtin:text  punctuation:]
+ 10 | fi
+    | keyword:fi
+ 12 | ; Reads the shelf to make a new slice: the caller may change it.
+    | comment:; Reads the shelf to make a new slice: the caller may change it.
+ 13 | task titles(r: region, shelf: [Book]@r) -> [text]@r
+    | keyword:task  task:titles  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:shelf  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
+ 14 |     flex out = new [text]() at r
+    | keyword:flex  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 15 |     each book in shelf
+    | keyword:each  variable:book  keyword:in  parameter:shelf
+ 16 |         out.add(book.title)
+    | variable:out  punctuation:.  field:add  punctuation:(  variable:book  punctuation:.  field:title  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 |     <- out
+    | keyword:<-  variable:out
+ 19 | fi
+    | keyword:fi
+ 21 | ; Gives back a part of the shelf: what the caller's fixed name owns.
+    | comment:; Gives back a part of the shelf: what the caller's fixed name owns.
+ 22 | task first(shelf: [Book]@r) -> Book@r
+    | keyword:task  task:first  punctuation:(  parameter:shelf  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type:Book  operator:@  region:r
+ 23 |     <- shelf[0]
+    | keyword:<-  parameter:shelf  punctuation:[  number:0  punctuation:]
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     region r default
+    | keyword:region  region:r  keyword:default
+ 28 |     fixed shelf = [Book { title: "Dune", tags: ["sf", ...] }, Book { title: "Emma", tags: ["classic", ...] }, ...]
+    | keyword:fixed  variable:shelf  operator:=  punctuation:[  type:Book  punctuation:{  field:title  punctuation::  string:"Dune"  punctuation:,  field:tags  punctuation::  punctuation:[  string:"sf"  punctuation:,  keyword:...  punctuation:]  punctuation:}  punctuation:,  type:Book  punctuation:{  field:title  punctuation::  string:"Emma"  punctuation:,  field:tags  punctuation::  punctuation:[  string:"classic"  punctuation:,  keyword:...  punctuation:]  punctuation:}  punctuation:,  keyword:...  punctuation:]
+ 30 |     flex names = titles(r, shelf)
+    | keyword:flex  variable:names  operator:=  task:titles  punctuation:(  region:r  punctuation:,  variable:shelf  punctuation:)
+ 31 |     names.add("Ulysses")
+    | variable:names  punctuation:.  field:add  punctuation:(  string:"Ulysses"  punctuation:)
+ 32 |     show(names)
+    | builtin-fn:show  punctuation:(  variable:names  punctuation:)
+ 34 |     ; A part of the shelf, kept in a fixed name and only read.
+    | comment:; A part of the shelf, kept in a fixed name and only read.
+ 35 |     fixed top = first(shelf)
+    | keyword:fixed  variable:top  operator:=  task:first  punctuation:(  variable:shelf  punctuation:)
+ 36 |     show(top.title, " ", top.tags)
+    | builtin-fn:show  punctuation:(  variable:top  punctuation:.  field:title  punctuation:,  string:" "  punctuation:,  variable:top  punctuation:.  field:tags  punctuation:)
+ 38 |     ; A copy of the whole shelf, at every depth, to change.
+    | comment:; A copy of the whole shelf, at every depth, to change.
+ 39 |     flex edited = new [Book](shelf) at r
+    | keyword:flex  variable:edited  operator:=  keyword:new  punctuation:[  type:Book  punctuation:]  punctuation:(  variable:shelf  punctuation:)  keyword:at  region:r
+ 40 |     edited[0].tags.add("desert")
+    | variable:edited  punctuation:[  number:0  punctuation:]  punctuation:.  field:tags  punctuation:.  field:add  punctuation:(  string:"desert"  punctuation:)
+ 41 |     edited[1].title = "Persuasion"
+    | variable:edited  punctuation:[  number:1  punctuation:]  punctuation:.  field:title  operator:=  string:"Persuasion"
+ 42 |     show(shelf[0].tags, " ", edited[0].tags)
+    | builtin-fn:show  punctuation:(  variable:shelf  punctuation:[  number:0  punctuation:]  punctuation:.  field:tags  punctuation:,  string:" "  punctuation:,  variable:edited  punctuation:[  number:0  punctuation:]  punctuation:.  field:tags  punctuation:)
+ 43 |     show(shelf[1].title, " ", edited[1].title)
+    | builtin-fn:show  punctuation:(  variable:shelf  punctuation:[  number:1  punctuation:]  punctuation:.  field:title  punctuation:,  string:" "  punctuation:,  variable:edited  punctuation:[  number:1  punctuation:]  punctuation:.  field:title  punctuation:)
+ 45 |     ; And a copy of one book.
+    | comment:; And a copy of one book.
+ 46 |     flex mine = top.copy() at r
+    | keyword:flex  variable:mine  operator:=  variable:top  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 47 |     mine.tags[0] = "space"
+    | variable:mine  punctuation:.  field:tags  punctuation:[  number:0  punctuation:]  operator:=  string:"space"
+ 48 |     show(top.tags, " ", mine.tags)
+    | builtin-fn:show  punctuation:(  variable:top  punctuation:.  field:tags  punctuation:,  string:" "  punctuation:,  variable:mine  punctuation:.  field:tags  punctuation:)
+ 49 | fi
+    | keyword:fi

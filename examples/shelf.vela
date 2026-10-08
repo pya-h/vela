@@ -1,0 +1,49 @@
+; What a fixed name keeps: nothing changes through it, at any depth, and what
+; it owns, a slice, a map or a pointer, is never given to a name that may change
+; it. A task that reads it to make something new gives back data of its own; a
+; task that gives back a part of it gives back what the fixed name owns, which
+; is only read. To change such a value, the program writes a copy, which shares
+; nothing with it.
+shape Book
+    title: text
+    tags: [text]
+fi
+
+; Reads the shelf to make a new slice: the caller may change it.
+task titles(r: region, shelf: [Book]@r) -> [text]@r
+    flex out = new [text]() at r
+    each book in shelf
+        out.add(book.title)
+    fi
+    <- out
+fi
+
+; Gives back a part of the shelf: what the caller's fixed name owns.
+task first(shelf: [Book]@r) -> Book@r
+    <- shelf[0]
+fi
+
+task main()
+    region r default
+    fixed shelf = [Book { title: "Dune", tags: ["sf", ...] }, Book { title: "Emma", tags: ["classic", ...] }, ...]
+
+    flex names = titles(r, shelf)
+    names.add("Ulysses")
+    show(names)
+
+    ; A part of the shelf, kept in a fixed name and only read.
+    fixed top = first(shelf)
+    show(top.title, " ", top.tags)
+
+    ; A copy of the whole shelf, at every depth, to change.
+    flex edited = new [Book](shelf) at r
+    edited[0].tags.add("desert")
+    edited[1].title = "Persuasion"
+    show(shelf[0].tags, " ", edited[0].tags)
+    show(shelf[1].title, " ", edited[1].title)
+
+    ; And a copy of one book.
+    flex mine = top.copy() at r
+    mine.tags[0] = "space"
+    show(top.tags, " ", mine.tags)
+fi

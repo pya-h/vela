@@ -1,0 +1,20 @@
+; error: 16:9: 'Point.bump' changes the value it is called on, so it needs a place that can change, and 'n' never does; 'n' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[flex @r](…)', and one that changes the variable itself keeps it as a place, '[flex& n, @r]'
+; A '[@r]' lambda's copy never changes, so an alters method called on it is
+; refused, with the hint for a lambda's copy.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    flex n = Point { x: 1 }
+    fixed f = [@r]() -> int
+        n.bump()
+        <- 1
+    fi
+    show(f())
+fi
