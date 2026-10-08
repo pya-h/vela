@@ -81,14 +81,14 @@ fn a_region_after_a_call_is_the_one_it_takes_last_whether_or_not_the_file_checks
     for checks in [true, false] {
         let source = program(checks, "show(after)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "after ="), "bind after: text@work", "{}", when);
-        assert_eq!(hover(&source, "tight ="), "bind tight: text@work", "{}", when);
-        assert_eq!(hover(&source, "inside ="), "bind inside: text@work", "{}", when);
+        assert_eq!(hover(&source, "after ="), "fixed after: text@work", "{}", when);
+        assert_eq!(hover(&source, "tight ="), "fixed tight: text@work", "{}", when);
+        assert_eq!(hover(&source, "inside ="), "fixed inside: text@work", "{}", when);
         // A result that is neither text nor a pointer keeps its own type.
-        assert_eq!(hover(&source, "tag ="), "bind tag: Tag@work", "{}", when);
-        assert_eq!(hover(&source, "planned ="), "bind planned: text@work", "{}", when);
-        assert_eq!(hover(&source, "method ="), "bind method: text@work", "{}", when);
-        assert_eq!(hover(&source, "chained ="), "bind chained: text@work", "{}", when);
+        assert_eq!(hover(&source, "tag ="), "fixed tag: Tag@work", "{}", when);
+        assert_eq!(hover(&source, "planned ="), "fixed planned: text@work", "{}", when);
+        assert_eq!(hover(&source, "method ="), "fixed method: text@work", "{}", when);
+        assert_eq!(hover(&source, "chained ="), "fixed chained: text@work", "{}", when);
     }
 }
 
@@ -150,8 +150,8 @@ fi
 ";
     for (when, first) in [("checked", "show(0)"), ("declared", "show(unknown)"), ("unparsed", "show(1 +)")] {
         let source = source.replace("CHECK", first);
-        assert_eq!(hover(&source, "kept ="), "bind kept: ^Node@s", "{}", when);
-        assert_eq!(hover(&source, "firsts ="), "bind firsts: [text]@s", "{}", when);
-        assert_eq!(hover(&source, "picked ="), "bind picked: text@s", "{}", when);
+        assert_eq!(hover(&source, "kept ="), "fixed kept: ^Node@s", "{}", when);
+        assert_eq!(hover(&source, "firsts ="), "fixed firsts: [text]@s", "{}", when);
+        assert_eq!(hover(&source, "picked ="), "fixed picked: text@s", "{}", when);
     }
 }

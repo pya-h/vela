@@ -73,9 +73,9 @@ const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
 /// A loop in three parts, with a name of its own.
-const LOOP_PARTS_SNIPPET: &str = "loop hold ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
+const LOOP_PARTS_SNIPPET: &str = "loop flex ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
 
-const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "endless", "each", "block", "match", "region"];
+const STATEMENT_KEYWORDS: &[&str] = &["fixed", "flex", "when", "loop", "endless", "each", "block", "match", "region"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail", "match", "when"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
@@ -445,7 +445,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // After `shared` in a shape: whether the field changes, and who changes it,
     // or `new`, a shared method's name. (Otherwise its name is being declared.)
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Shape] {
-        return (vec![keyword("hold"), keyword(vela::ast::READ), keyword(vela::ast::NEW_WORD)], word_start, byte);
+        return (vec![keyword("flex"), keyword(vela::ast::READ), keyword(vela::ast::NEW_WORD)], word_start, byte);
     }
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Kind] {
         return (vec![keyword(vela::ast::NEW_WORD)], word_start, byte);
@@ -463,7 +463,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     }
 
     // Names being declared get no suggestions, including another name in a
-    // `bind` or `hold` list (`bind q, r = …`).
+    // `fixed` or `flex` list (`fixed q, r = …`).
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Fixed | Token::Flex | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
     }
@@ -475,7 +475,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if matches!(prev_token, Some(Token::Break | Token::Continue)) {
         return (loop_name_items(&k, byte), word_start, byte);
     }
-    // `hold& name` and `bind& name`: the `&` is part of the word.
+    // `flex& name` and `fixed& name`: the `&` is part of the word.
     if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Flex | Token::Fixed)) {
         return (Vec::new(), word_start, byte);
     }
@@ -541,7 +541,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         && prev.and_then(|q| type_paren(&k, q)).is_none()
         && (first_token == Some(&Token::Task) || blocks.last() == Some(&Block::Kind) || prev.is_some_and(|q| method_header(&k, q)))
     {
-        // A task's or a method's parameter may be one it changes (`hold n: int`);
+        // A task's or a method's parameter may be one it changes (`flex n: int`);
         // a variant's value never is. In a kind, `V(` may be either until the
         // line says `alters` or what the method sends.
         let in_kind = blocks.contains(&Block::Kind);
@@ -551,7 +551,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 .any(|p| matches!(k.token(p), Some(Token::Arrow)) || k.ident(p) == Some(vela::ast::ALTERS))
         });
         let takes = first_token == Some(&Token::Task) || (prev.is_some_and(|q| method_header(&k, q)) && (!in_kind || says_method));
-        let items = if takes { vec![keyword("hold"), keyword("hold&"), keyword("bind"), keyword("bind&")] } else { Vec::new() };
+        let items = if takes { vec![keyword("flex"), keyword("flex&"), keyword("fixed"), keyword("fixed&")] } else { Vec::new() };
         return (items, word_start, byte);
     }
 
@@ -844,8 +844,8 @@ fn names_a_result(k: &Knowledge, q: usize) -> bool {
     k.token(p) == Some(&Token::Comma) && result_list(k, p) == Some(true)
 }
 
-/// Whether the comma at position `q` separates the names of a `bind` or
-/// `hold`, so another name follows it. A comma inside a name's tuple type
+/// Whether the comma at position `q` separates the names of a `fixed` or
+/// `flex`, so another name follows it. A comma inside a name's tuple type
 /// separates its items, not names.
 fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     let line = k.line_start(q);

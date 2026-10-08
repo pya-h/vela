@@ -81,7 +81,7 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "said ="), "bind said: text");
+    assert_eq!(hover(source, "said ="), "fixed said: text");
     assert_eq!(hover(source, "worded)"), "task worded(next: (int) -> int, n: int) -> text");
     let names: Vec<String> = Analysis::new(source).outline().into_iter().map(|item| item.name).collect();
     assert_eq!(names, ["worded", "sq", "main"]);
@@ -110,7 +110,7 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "depth))"), "shared hold depth: int");
+    assert_eq!(hover(source, "depth))"), "shared flex depth: int");
     let at = LineIndex::new(source).utf16_of(source.find("depth))").unwrap());
     let declared = LineIndex::new(source).utf16_of(source.find("depth:").unwrap());
     assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));
@@ -151,7 +151,7 @@ fi
     assert_eq!(hover(source, "enroll\n    $"), "shared enroll(f: (int) -> int)");
     assert_eq!(hover(source, "timed)"), "shared timed(next: (int) -> int, n: int) -> int");
     assert_eq!(hover(source, "cube\n    show"), "shared cube(n: int) -> int");
-    assert_eq!(hover(source, "f = "), "bind f: (int) -> int");
+    assert_eq!(hover(source, "f = "), "fixed f: (int) -> int");
     let at = LineIndex::new(source).utf16_of(source.find("enroll\n    $").unwrap());
     let declared = LineIndex::new(source).utf16_of(source.find("enroll(f").unwrap());
     assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));

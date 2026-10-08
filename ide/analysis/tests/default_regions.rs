@@ -71,14 +71,14 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_value_that_names_no_region_has_the_type_of_the_default() {
     let source = program("show(1)");
     // Hover says where a value lives, which is what a written `at r` would say.
-    assert_eq!(hover(&source, "p = new").0, "bind p: ^int@kept");
-    assert_eq!(hover(&source, "greeting =").0, "bind greeting: text@kept");
-    assert_eq!(hover(&source, "shown =").0, "bind shown: text@kept");
-    assert_eq!(hover(&source, "squares =").0, "bind squares: [int]@kept");
+    assert_eq!(hover(&source, "p = new").0, "fixed p: ^int@kept");
+    assert_eq!(hover(&source, "greeting =").0, "fixed greeting: text@kept");
+    assert_eq!(hover(&source, "shown =").0, "fixed shown: text@kept");
+    assert_eq!(hover(&source, "squares =").0, "fixed squares: [int]@kept");
     // An inner block's own default: this text is freed when the loop's pass ends.
-    assert_eq!(hover(&source, "line = ").0, "bind line: text@pass");
+    assert_eq!(hover(&source, "line = ").0, "fixed line: text@pass");
     // The region a task is given, which its header makes the default.
-    assert_eq!(hover(&source, "made = new").0, "hold made: [int]@r");
+    assert_eq!(hover(&source, "made = new").0, "flex made: [int]@r");
 }
 
 #[test]

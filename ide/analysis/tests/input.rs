@@ -50,9 +50,9 @@ fn a_line_read_is_a_maybe_text_in_its_region_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks, "show(1)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "asked =").0, "bind asked: maybe text@lines", "{}", when);
-        assert_eq!(hover(&source, "short =").0, "bind short: maybe text@lines", "{}", when);
-        assert_eq!(hover(&source, "name =").0, "bind name: text@lines", "{}", when);
+        assert_eq!(hover(&source, "asked =").0, "fixed asked: maybe text@lines", "{}", when);
+        assert_eq!(hover(&source, "short =").0, "fixed short: maybe text@lines", "{}", when);
+        assert_eq!(hover(&source, "name =").0, "fixed name: text@lines", "{}", when);
     }
 }
 

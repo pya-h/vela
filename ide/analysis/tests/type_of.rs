@@ -66,7 +66,7 @@ fn type_hovers_with_what_it_reads_and_word_is_text() {
         assert!(hover.doc.starts_with("The type of the value as code writes it"), "{}", hover.doc);
         let byte = source.find("word =").unwrap();
         let hover = Analysis::new(&source).hover(LineIndex::new(&source).utf16_of(byte)).unwrap();
-        assert_eq!(hover.code, "bind word: text", "checks: {}", checks);
+        assert_eq!(hover.code, "fixed word: text", "checks: {}", checks);
     }
 }
 

@@ -64,14 +64,14 @@ fn hover_shows_what_a_new_without_parentheses_makes() {
         // Where nothing names the region, only the checker knows the default.
         let checked = first == "show(0)" || first == "show(unknown)";
         let region = if checked { "@r" } else { "" };
-        assert_eq!(hover(&source, "a ="), format!("bind a: [text]{}", region), "{}", first);
-        assert_eq!(hover(&source, "p ="), format!("bind p: ^Point{}", region), "{}", first);
-        assert_eq!(hover(&source, "b ="), "bind b: [text: int]@r", "{}", first);
-        assert_eq!(hover(&source, "c ="), "bind c: [int]@r", "{}", first);
-        assert_eq!(hover(&source, "q ="), "bind q: ^Point@r", "{}", first);
+        assert_eq!(hover(&source, "a ="), format!("fixed a: [text]{}", region), "{}", first);
+        assert_eq!(hover(&source, "p ="), format!("fixed p: ^Point{}", region), "{}", first);
+        assert_eq!(hover(&source, "b ="), "fixed b: [text: int]@r", "{}", first);
+        assert_eq!(hover(&source, "c ="), "fixed c: [int]@r", "{}", first);
+        assert_eq!(hover(&source, "q ="), "fixed q: ^Point@r", "{}", first);
         // A map made with `( )` too, its keys written or text.
-        assert_eq!(hover(&source, "made ="), "bind made: [text: int]@r", "{}", first);
-        assert_eq!(hover(&source, "names ="), "bind names: [text: int]@r", "{}", first);
+        assert_eq!(hover(&source, "made ="), "fixed made: [text: int]@r", "{}", first);
+        assert_eq!(hover(&source, "names ="), "fixed names: [text: int]@r", "{}", first);
     }
 }
 

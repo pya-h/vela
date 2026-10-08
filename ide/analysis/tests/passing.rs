@@ -1,5 +1,5 @@
-//! How parameters take their values, in the editor: `hold n: int`, a parameter
-//! the task changes, and `hold& n: int`, the caller's place, which a call gives
+//! How parameters take their values, in the editor: `flex n: int`, a parameter
+//! the task changes, and `flex& n: int`, the caller's place, which a call gives
 //! as `&a`, are parameters whose hover says so, the words before them are
 //! keywords, a parameter list offers them, and all of it holds while the file
 //! doesn't check. In the sources below, `@@` marks the cursor.
@@ -54,16 +54,16 @@ fn the_program_used_by_these_tests_compiles() {
 }
 
 #[test]
-fn a_hold_parameter_is_a_parameter_whose_hover_says_it_changes() {
+fn a_flex_parameter_is_a_parameter_whose_hover_says_it_changes() {
     for checks in [true, false] {
         let source = program(checks);
         let when = if checks { "checked" } else { "declared" };
         let (code, doc) = hover(&source, "n: int");
-        assert_eq!(code, "hold n: int", "{}", when);
+        assert_eq!(code, "flex n: int", "{}", when);
         assert!(doc.starts_with("A parameter of task countdown."), "{}: {}", when, doc);
         assert!(doc.contains("the caller's value never does"), "{}: {}", when, doc);
         // Where it is used, too, and a plain one beside it says nothing of the kind.
-        assert_eq!(hover(&source, "n > 0").0, "hold n: int", "{}", when);
+        assert_eq!(hover(&source, "n > 0").0, "flex n: int", "{}", when);
         assert_eq!(hover(&source, "step: int").0, "step: int", "{}", when);
         let analysis = Analysis::new(&source);
         let class_at = |needle: &str| {
@@ -77,16 +77,16 @@ fn a_hold_parameter_is_a_parameter_whose_hover_says_it_changes() {
 }
 
 #[test]
-fn a_parameter_list_offers_hold() {
+fn a_parameter_list_offers_flex() {
     for marked in ["task f(@@)\nfi\n", "task f(a: int, @@)\nfi\n", "task f(ho@@)\nfi\n"] {
         let items = completions(marked);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["hold", "hold&", "bind", "bind&"], "{:?}", marked);
+        assert_eq!(labels, ["flex", "flex&", "fixed", "fixed&"], "{:?}", marked);
     }
     // A method's too, in a shape, and in a kind once the line says it is one.
     for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
         let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
-        assert_eq!(labels, ["hold", "hold&", "bind", "bind&"], "{:?}", marked);
+        assert_eq!(labels, ["flex", "flex&", "fixed", "fixed&"], "{:?}", marked);
     }
     // Not after the word, where the parameter's name goes.
     assert!(completions("task f(flex @@)\nfi\n").is_empty());
@@ -116,17 +116,17 @@ fi
 }
 
 #[test]
-fn a_hold_ref_parameter_is_the_callers_place() {
+fn a_flex_ref_parameter_is_the_callers_place() {
     for checks in [true, false] {
         let source = program(checks);
         let when = if checks { "checked" } else { "declared" };
         let (code, doc) = hover(&source, "a: int");
-        assert_eq!(code, "hold& a: int", "{}", when);
+        assert_eq!(code, "flex& a: int", "{}", when);
         assert!(doc.starts_with("A parameter of task swap."), "{}: {}", when, doc);
         assert!(doc.contains("The caller's place"), "{}: {}", when, doc);
-        assert_eq!(hover(&source, "a, b = b").0, "hold& a: int", "{}", when);
+        assert_eq!(hover(&source, "a, b = b").0, "flex& a: int", "{}", when);
         // The place given at the call is the variable itself.
-        assert_eq!(hover(&source, "x, &y").0, "hold x: int", "{}", when);
+        assert_eq!(hover(&source, "x, &y").0, "flex x: int", "{}", when);
         let analysis = Analysis::new(&source);
         let class_at = |needle: &str| {
             let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
@@ -171,11 +171,11 @@ fn a_local_reference_hovers_with_its_word_and_type() {
         let source = REFERENCES.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
         let when = if checks { "checked" } else { "declared" };
         let (code, doc) = hover(&source, "y = &x");
-        assert_eq!(code, "hold& y: int", "{}", when);
+        assert_eq!(code, "flex& y: int", "{}", when);
         assert!(doc.contains("a change to either is a change to both"), "{}: {}", when, doc);
-        assert_eq!(hover(&source, "y = 5").0, "hold& y: int", "{}", when);
-        assert_eq!(hover(&source, "seen = &x").0, "bind& seen: int", "{}", when);
-        assert_eq!(hover(&source, "n = &c.n").0, "hold& n: int", "{}", when);
+        assert_eq!(hover(&source, "y = 5").0, "flex& y: int", "{}", when);
+        assert_eq!(hover(&source, "seen = &x").0, "fixed& seen: int", "{}", when);
+        assert_eq!(hover(&source, "n = &c.n").0, "flex& n: int", "{}", when);
         let analysis = Analysis::new(&source);
         let class_at = |needle: &str| {
             let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
@@ -200,7 +200,7 @@ fn a_reference_that_only_reads_is_reported_where_it_is_changed() {
 }
 
 #[test]
-fn bind_and_bind_ref_parameters_are_parameters_whose_hover_says_how_they_are_given() {
+fn fixed_and_fixed_ref_parameters_are_parameters_whose_hover_says_how_they_are_given() {
     let base = "shape Point\n    x: int\nfi\n\ntask look(fixed& p: Point, fixed q: Point) -> bool\n    CHECK\n    <- p == q\nfi\n\ntask main()\n    fixed a = Point { x: 1 }\n    show(look(&a, a))\nfi\n";
     for checks in [true, false] {
         let source = base.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
@@ -208,10 +208,10 @@ fn bind_and_bind_ref_parameters_are_parameters_whose_hover_says_how_they_are_giv
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
         }
         let (code, doc) = hover(&source, "p: Point");
-        assert_eq!(code, "bind& p: Point", "checks: {}", checks);
+        assert_eq!(code, "fixed& p: Point", "checks: {}", checks);
         assert!(doc.contains("read where it is and never changed"), "{}", doc);
         let (code, doc) = hover(&source, "q: Point");
-        assert_eq!(code, "bind q: Point", "checks: {}", checks);
+        assert_eq!(code, "fixed q: Point", "checks: {}", checks);
         assert!(doc.contains("Always a copy"), "{}", doc);
         // The words are keywords, and a use of the name is the parameter.
         let analysis = Analysis::new(&source);

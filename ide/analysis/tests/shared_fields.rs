@@ -68,22 +68,22 @@ fn a_shared_field_hovers_with_its_words_and_says_how_it_is_read() {
         assert_eq!(code, "shared start: int", "{}", when);
         assert!(doc.contains("read as Meter.start") && doc.contains("never changes"), "{}: {}", when, doc);
         let (code, doc) = hover(&source, "made: int");
-        assert_eq!(code, "shared hold made: int", "{}", when);
+        assert_eq!(code, "shared flex made: int", "{}", when);
         assert!(doc.contains("Any code that sees it may change it"), "{}: {}", when, doc);
         let (code, doc) = hover(&source, "seen: int");
         assert_eq!(code, "shared read seen: int", "{}", when);
         assert!(doc.contains("only the methods of its shape change it"), "{}: {}", when, doc);
-        assert_eq!(hover(&source, "secret: int").0, "priv shared hold secret: int", "{}", when);
+        assert_eq!(hover(&source, "secret: int").0, "priv shared flex secret: int", "{}", when);
         // The shape lists them with their words.
         let shape = hover(&source, "Meter\n").0;
         assert!(shape.contains("    shared start: int\n") && shape.contains("    shared read seen: int\n"), "{}: {}", when, shape);
-        assert!(shape.contains("    priv shared hold secret: int\n"), "{}: {}", when, shape);
+        assert!(shape.contains("    priv shared flex secret: int\n"), "{}: {}", when, shape);
         // An ordinary field beside them is as it was.
         assert_eq!(hover(&source, "count: int").0, "count: int", "{}", when);
     }
     // Where the program reads one, the hover is the field's.
     let source = program(true, "show(counted)");
-    assert_eq!(hover(&source, "made + 1").0, "shared hold made: int");
+    assert_eq!(hover(&source, "made + 1").0, "shared flex made: int");
     assert_eq!(hover(&source, "start\n").0, "shared start: int");
 }
 
@@ -148,8 +148,8 @@ fn a_shapes_member_line_offers_the_words_of_a_shared_field() {
     assert!(labels(&completions(&shape("@@"))).contains(&"shared"));
     assert!(labels(&completions(&shape("priv @@"))).contains(&"shared"));
     // Or `new`, the name of a shared method.
-    assert_eq!(labels(&completions(&shape("shared @@"))), ["hold", "read", "new"]);
-    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["hold", "read", "new"]);
+    assert_eq!(labels(&completions(&shape("shared @@"))), ["flex", "read", "new"]);
+    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["flex", "read", "new"]);
     // A kind has no fields, so no shared ones, but shared methods.
     let kind = "kind Mood\n    Calm\n    shared @@\nfi\n";
     assert_eq!(labels(&completions(kind)), ["new"]);

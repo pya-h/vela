@@ -1,4 +1,4 @@
-//! Loops that give a value, `bind r = each x in xs … fi`: the type they give,
+//! Loops that give a value, `fixed r = each x in xs … fi`: the type they give,
 //! `break r` offered by the variable's name, and `LoopResult` from
 //! `std/loops`.
 
@@ -47,8 +47,8 @@ fn the_program_used_by_these_tests_compiles() {
 
 #[test]
 fn a_loop_that_gives_a_value_hovers_with_what_it_fails_with() {
-    assert_eq!(hover(PROGRAM, "found =").as_deref(), Some("bind found: int ~ LoopResult<int, bool>"));
-    assert_eq!(hover(PROGRAM, "sum:").as_deref(), Some("bind sum: int ~ LoopResult<bool, bool>"));
+    assert_eq!(hover(PROGRAM, "found =").as_deref(), Some("fixed found: int ~ LoopResult<int, bool>"));
+    assert_eq!(hover(PROGRAM, "sum:").as_deref(), Some("fixed sum: int ~ LoopResult<bool, bool>"));
 }
 
 #[test]

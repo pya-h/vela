@@ -96,7 +96,7 @@ fn a_files_own_kind_leads_to_its_variants() {
     assert_definition(&source, ("Red\n    match", 0), ("Red\n", 0));
     let hover = analysis.hover(at(&source, "Dimmed(2)", 0)).unwrap();
     assert_eq!((hover.code.as_str(), hover.doc.as_str()), ("Dimmed(level: int)", "A variant of kind Light."));
-    assert_eq!(analysis.hover(at(&source, "glow =", 0)).unwrap().code, "bind glow: Light");
+    assert_eq!(analysis.hover(at(&source, "glow =", 0)).unwrap().code, "fixed glow: Light");
 
     // Completion after the kind's name: its variants, as values.
     let completions = |marked: &str| {

@@ -67,16 +67,16 @@ fn maps_hover_with_their_types_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("ages ="), "hold ages: [text: int]@r", "{}", when);
-        assert_eq!(code("sizes ="), "hold sizes: [text: float]@r", "{}", when);
-        assert_eq!(code("named ="), "hold named: [text: int]@r", "{}", when);
-        assert_eq!(code("age ="), "bind age: int", "{}", when);
-        assert_eq!(code("maybe_age ="), "bind maybe_age: maybe int", "{}", when);
-        assert_eq!(code("known ="), "bind known: bool", "{}", when);
-        assert_eq!(code("taken ="), "bind taken: maybe int", "{}", when);
-        assert_eq!(code("names ="), "bind names: [text]@r", "{}", when);
-        assert_eq!(code("counts ="), "bind counts: [int]@r", "{}", when);
-        assert_eq!(code("how_many ="), "bind how_many: int", "{}", when);
+        assert_eq!(code("ages ="), "flex ages: [text: int]@r", "{}", when);
+        assert_eq!(code("sizes ="), "flex sizes: [text: float]@r", "{}", when);
+        assert_eq!(code("named ="), "flex named: [text: int]@r", "{}", when);
+        assert_eq!(code("age ="), "fixed age: int", "{}", when);
+        assert_eq!(code("maybe_age ="), "fixed maybe_age: maybe int", "{}", when);
+        assert_eq!(code("known ="), "fixed known: bool", "{}", when);
+        assert_eq!(code("taken ="), "fixed taken: maybe int", "{}", when);
+        assert_eq!(code("names ="), "fixed names: [text]@r", "{}", when);
+        assert_eq!(code("counts ="), "fixed counts: [int]@r", "{}", when);
+        assert_eq!(code("how_many ="), "fixed how_many: int", "{}", when);
         assert_eq!(code("name, count"), "each name: text@r", "{}", when);
         assert_eq!(code("count in"), "each count: int", "{}", when);
     }

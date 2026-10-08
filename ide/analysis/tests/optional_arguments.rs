@@ -74,10 +74,10 @@ fn hover_shows_the_types_of_parameters_with_values_to_fall_back_on() {
         assert!(hover(&source, "pad(t").contains("width: int = 8"), "{}", first);
         assert_eq!(hover(&source, "width:"), "width: int", "{}", first);
         assert_eq!(hover(&source, "fill:"), "fill: text", "{}", first);
-        assert_eq!(hover(&source, "w ="), "bind w: int", "{}", first);
+        assert_eq!(hover(&source, "w ="), "fixed w: int", "{}", first);
         // A task named as a value takes every value, as its type says.
-        assert_eq!(hover(&source, "g ="), "bind g: (text, int, text, (int) -> int) -> int", "{}", first);
-        assert_eq!(hover(&source, "n ="), "bind n: int", "{}", first);
+        assert_eq!(hover(&source, "g ="), "fixed g: (text, int, text, (int) -> int) -> int", "{}", first);
+        assert_eq!(hover(&source, "n ="), "fixed n: int", "{}", first);
     }
 }
 

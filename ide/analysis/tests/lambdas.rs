@@ -47,13 +47,13 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_lambda_hovers_with_its_type_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "double ="), "bind double: (int) -> int", "{}", when);
-        assert_eq!(hover(&source, "say ="), "bind say: (text) -> nothing", "{}", when);
-        assert_eq!(hover(&source, "after ="), "bind after: int", "{}", when);
+        assert_eq!(hover(&source, "double ="), "fixed double: (int) -> int", "{}", when);
+        assert_eq!(hover(&source, "say ="), "fixed say: (text) -> nothing", "{}", when);
+        assert_eq!(hover(&source, "after ="), "fixed after: int", "{}", when);
     }
     // A call spanning lines is typed from the checked program.
     for when in ["checked", "declared"] {
-        assert_eq!(hover(&program(when), "squared ="), "bind squared: int", "{}", when);
+        assert_eq!(hover(&program(when), "squared ="), "fixed squared: int", "{}", when);
     }
 }
 
@@ -63,7 +63,7 @@ fn a_lambda_declares_its_parameters_for_its_body() {
         let source = program(when);
         assert_eq!(hover(&source, "n: int"), "n: int", "{}", when);
         assert_eq!(hover(&source, "t: text"), "t: text", "{}", when);
-        assert_eq!(hover(&source, "kept ="), "bind kept: int", "{}", when);
+        assert_eq!(hover(&source, "kept ="), "fixed kept: int", "{}", when);
         let at = |needle: &str| LineIndex::new(&source).utf16_of(source.find(needle).unwrap());
         let tokens = Analysis::new(&source).tokens();
         let class = |needle: &str| tokens.iter().find(|t| t.from == at(needle)).map(|t| t.class);

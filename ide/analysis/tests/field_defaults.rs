@@ -62,8 +62,8 @@ fn a_field_that_falls_back_on_a_value_has_its_type_alone() {
         assert_eq!(hover(&source, "note: maybe").0, "note: maybe text", "{}", when);
         assert_eq!(hover(&source, "state: State =").0, "state: State", "{}", when);
         // And a name bound to one reads the same type, left out or not.
-        assert_eq!(hover(&source, "tries = job").0, "bind tries: int", "{}", when);
-        assert_eq!(hover(&source, "note = job").0, "bind note: maybe text", "{}", when);
+        assert_eq!(hover(&source, "tries = job").0, "fixed tries: int", "{}", when);
+        assert_eq!(hover(&source, "note = job").0, "fixed note: maybe text", "{}", when);
     }
 }
 

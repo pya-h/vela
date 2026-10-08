@@ -61,7 +61,7 @@ fn a_read_field_is_a_field_whose_hover_says_who_assigns_it() {
         assert_eq!(hover(&source, "count: int =").0, "read count: int", "{}", when);
         // An ordinary field beside them says nothing of the kind.
         assert_eq!(hover(&source, "note: text").0, "note: text", "{}", when);
-        assert_eq!(hover(&source, "counted =").0, "bind counted: int", "{}", when);
+        assert_eq!(hover(&source, "counted =").0, "fixed counted: int", "{}", when);
         // The shape lists its members with their markers.
         let shape = hover(&source, "Meter\n").0;
         assert!(shape.contains("    read label: text\n") && shape.contains("    read count: int\n"), "{}: {}", when, shape);

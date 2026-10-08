@@ -68,10 +68,10 @@ fn a_copy_has_the_type_of_its_value_in_the_region_named_whether_or_not_the_file_
     for checks in [true, false] {
         let source = program(checks, "show(1)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "written =").0, "bind written: text@kept", "{}", when);
-        assert_eq!(hover(&source, "short =").0, "bind short: text@kept", "{}", when);
-        assert_eq!(hover(&source, "person =").0, "bind person: Person@kept", "{}", when);
-        assert_eq!(hover(&source, "nodes =").0, "bind nodes: ^Node@kept", "{}", when);
+        assert_eq!(hover(&source, "written =").0, "fixed written: text@kept", "{}", when);
+        assert_eq!(hover(&source, "short =").0, "fixed short: text@kept", "{}", when);
+        assert_eq!(hover(&source, "person =").0, "fixed person: Person@kept", "{}", when);
+        assert_eq!(hover(&source, "nodes =").0, "fixed nodes: ^Node@kept", "{}", when);
     }
 }
 

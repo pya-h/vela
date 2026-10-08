@@ -1,4 +1,4 @@
-//! Loops in three parts, `loop hold i = 0, j = 9 || i < j || i++, j--`, and
+//! Loops in three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and
 //! `endless`: the names a start declares, where they are seen, and what is
 //! offered around them, whether or not the file checks.
 
@@ -58,13 +58,13 @@ fn the_program_used_by_these_tests_compiles() {
 fn the_names_a_start_declares_hover_with_the_word_that_covers_them() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "i = 1").as_deref(), Some("hold i: int"), "{}", when);
-        assert_eq!(hover(&source, "j = 10").as_deref(), Some("hold j: int"), "{}", when);
-        assert_eq!(hover(&source, "limit = 7").as_deref(), Some("bind limit: int"), "{}", when);
+        assert_eq!(hover(&source, "i = 1").as_deref(), Some("flex i: int"), "{}", when);
+        assert_eq!(hover(&source, "j = 10").as_deref(), Some("flex j: int"), "{}", when);
+        assert_eq!(hover(&source, "limit = 7").as_deref(), Some("fixed limit: int"), "{}", when);
         // Each is seen after its item, in the condition, the step and the body.
-        assert_eq!(hover(&source, "limit ||").as_deref(), Some("bind limit: int"), "{}", when);
-        assert_eq!(hover(&source, "j--").as_deref(), Some("hold j: int"), "{}", when);
-        assert_eq!(hover(&source, "j\n").as_deref(), Some("hold j: int"), "{}", when);
+        assert_eq!(hover(&source, "limit ||").as_deref(), Some("fixed limit: int"), "{}", when);
+        assert_eq!(hover(&source, "j--").as_deref(), Some("flex j: int"), "{}", when);
+        assert_eq!(hover(&source, "j\n").as_deref(), Some("flex j: int"), "{}", when);
     }
 }
 
@@ -112,7 +112,7 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "q, yy, a").as_deref(), Some("hold q: int"));
-    assert_eq!(hover(source, "yy, a, b)").as_deref(), Some("hold yy: int"));
-    assert_eq!(hover(source, "b)").as_deref(), Some("hold b: int"));
+    assert_eq!(hover(source, "q, yy, a").as_deref(), Some("flex q: int"));
+    assert_eq!(hover(source, "yy, a, b)").as_deref(), Some("flex yy: int"));
+    assert_eq!(hover(source, "b)").as_deref(), Some("flex b: int"));
 }

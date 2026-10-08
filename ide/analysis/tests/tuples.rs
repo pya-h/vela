@@ -85,16 +85,16 @@ fn tuples_and_the_names_unpacking_them_have_types_whether_or_not_the_file_checks
     for checks in [true, false] {
         let source = program(checks, "show(part)\n    show(word)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "pair =").0, "bind pair: (text, int)", "{}", when);
-        assert_eq!(hover(&source, "nested:").0, "bind nested: (int, (float, text))", "{}", when);
-        assert_eq!(hover(&source, "quotient,").0, "bind quotient: int", "{}", when);
-        assert_eq!(hover(&source, "remainder =").0, "bind remainder: int", "{}", when);
-        assert_eq!(hover(&source, "whole,").0, "bind whole: int", "{}", when);
-        assert_eq!(hover(&source, "part,").0, "bind part: float", "{}", when);
-        assert_eq!(hover(&source, "word)").0, "bind word: text", "{}", when);
-        assert_eq!(hover(&source, "kept =").0, "bind kept: (text@r, int)", "{}", when);
-        assert_eq!(hover(&source, "age =").0, "bind age: int", "{}", when);
-        assert_eq!(hover(&source, "deep =").0, "bind deep: text", "{}", when);
+        assert_eq!(hover(&source, "pair =").0, "fixed pair: (text, int)", "{}", when);
+        assert_eq!(hover(&source, "nested:").0, "fixed nested: (int, (float, text))", "{}", when);
+        assert_eq!(hover(&source, "quotient,").0, "fixed quotient: int", "{}", when);
+        assert_eq!(hover(&source, "remainder =").0, "fixed remainder: int", "{}", when);
+        assert_eq!(hover(&source, "whole,").0, "fixed whole: int", "{}", when);
+        assert_eq!(hover(&source, "part,").0, "fixed part: float", "{}", when);
+        assert_eq!(hover(&source, "word)").0, "fixed word: text", "{}", when);
+        assert_eq!(hover(&source, "kept =").0, "fixed kept: (text@r, int)", "{}", when);
+        assert_eq!(hover(&source, "age =").0, "fixed age: int", "{}", when);
+        assert_eq!(hover(&source, "deep =").0, "fixed deep: text", "{}", when);
     }
 }
 
@@ -143,8 +143,8 @@ fn names_a_pattern_takes_from_a_tuple_have_types() {
         assert_eq!(hover(&source, "code, label").0, "code: int", "{}", when);
         assert_eq!(hover(&source, "label)").0, "label: text", "{}", when);
         assert_eq!(hover(&source, "why)").0, "why: text", "{}", when);
-        assert_eq!(hover(&source, "person, count").0, "hold person: text", "{}", when);
-        assert_eq!(hover(&source, "count)").0, "hold count: int", "{}", when);
+        assert_eq!(hover(&source, "person, count").0, "flex person: text", "{}", when);
+        assert_eq!(hover(&source, "count)").0, "flex count: int", "{}", when);
     }
 }
 
@@ -173,7 +173,7 @@ fn completion_offers_types_inside_a_tuple_type() {
         // A name of a binding, and one of a parameter, are still being declared,
         // and a parameter may be one the task changes.
         assert!(labels(&program(checks, "fixed one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
-        assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["hold", "hold&", "bind", "bind&"]);
+        assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["flex", "flex&", "fixed", "fixed&"]);
     }
 }
 
@@ -214,12 +214,12 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "held: maybe").0, "bind held: maybe (int ~ text)");
-    assert_eq!(hover(source, "plain: (int)").0, "bind plain: int");
-    assert_eq!(hover(source, "inner = v").0, "bind inner: int ~ text");
+    assert_eq!(hover(source, "held: maybe").0, "fixed held: maybe (int ~ text)");
+    assert_eq!(hover(source, "plain: (int)").0, "fixed plain: int");
+    assert_eq!(hover(source, "inner = v").0, "fixed inner: int ~ text");
     // And while the file does not check, where types are read as they are written.
     let typing = source.replace("    show(kept(held), plain)", "    show(unknown)\n    show(kept(held), plain)");
     assert!(!Analysis::new(&typing).diagnostics().is_empty());
     assert_eq!(hover(&typing, "v: maybe").0, "v: maybe (int ~ text)");
-    assert_eq!(hover(&typing, "plain: (int)").0, "bind plain: int");
+    assert_eq!(hover(&typing, "plain: (int)").0, "fixed plain: int");
 }

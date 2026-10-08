@@ -128,10 +128,10 @@ fn hover_names_things_as_the_file_writes_them() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("tea:"), "bind tea: Product", "{}", when);
-        assert_eq!(code("big ="), "bind big: shop.Size", "{}", when);
-        assert_eq!(code("tank ="), "bind tank: Fuel", "{}", when);
-        assert_eq!(code("can ="), "bind can: Fuel", "{}", when);
+        assert_eq!(code("tea:"), "fixed tea: Product", "{}", when);
+        assert_eq!(code("big ="), "fixed big: shop.Size", "{}", when);
+        assert_eq!(code("tank ="), "fixed tank: Fuel", "{}", when);
+        assert_eq!(code("can ="), "fixed can: Fuel", "{}", when);
         assert_eq!(code("liters\n"), "liters: int", "{}", when);
         assert_eq!(code("extra\n"), "extra: int", "{}", when);
     }

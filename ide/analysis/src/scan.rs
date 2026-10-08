@@ -8,7 +8,7 @@
 //! lines name), which may be used before they are declared. The declarations
 //! of each module the file includes are added then too, named as the file names
 //! them (`geometry.area`). The second walks the tokens in order, tracking
-//! blocks and the variables declared in them (parameters, `bind`/`hold`,
+//! blocks and the variables declared in them (parameters, `fixed`/`flex`,
 //! `each`, the names `case` and `is` patterns bind, the error a plan B names,
 //! and regions), which are only visible after their declaration.
 
@@ -75,7 +75,7 @@ pub enum SymbolKind {
     /// A shape field or a variant's payload field.
     Field,
     Parameter,
-    /// A `bind`, `hold`, `each`, `case`, `is`, or plan B (`fail e`) binding.
+    /// A `fixed`, `flex`, `each`, `case`, `is`, or plan B (`fail e`) binding.
     Variable,
     /// A region: declared by `region r`, taken as a parameter `r: region`, or
     /// only named in a task header's types (`@r`).
@@ -120,7 +120,7 @@ pub(crate) struct Symbol {
     /// end of its declaring line to the end of its block. Everything else is
     /// visible everywhere.
     pub visible: Range<usize>,
-    /// The keyword that declared a variable: `bind`, `hold`, `each`, `case`,
+    /// The keyword that declared a variable: `fixed`, `flex`, `each`, `case`,
     /// `is`, or `fail` (the error a plan B names), or `=>` for a loop's name
     /// (`LOOP_NAME`); for a region, `region` (a
     /// region statement) or `@` (a region a task header only names); for a
@@ -150,7 +150,7 @@ pub(crate) struct Symbol {
     pub read: bool,
     /// A shape's `shared` field (`shared made: int = 0`): one value for the
     /// whole program, read through the shape's name, never a value's. `intro`
-    /// is `hold` for one any code may change. A shared method (`shared
+    /// is `flex` for one any code may change. A shared method (`shared
     /// new(…)`), called on the shape's or kind's name, has `intro` `shared`.
     pub shared: bool,
 }
@@ -560,7 +560,7 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether what is before position `p` is what a lambda keeps, `[@r]`,
-    /// `[hold @r]`, or `[hold& count, @r]`.
+    /// `[flex @r]`, or `[flex& count, @r]`.
     fn after_kept(&self, p: usize) -> bool {
         self.kept_open(p).is_some()
     }
@@ -573,20 +573,20 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether the token at `q` may be part of what a lambda keeps: a name,
-    /// `@`, `hold`, `bind`, `&`, or a comma.
+    /// `@`, `flex`, `fixed`, `&`, or a comma.
     fn kept_part(&self, q: usize) -> bool {
         matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Flex | Token::Fixed | Token::Amp | Token::Comma))
     }
 
     /// The `]` closing what a lambda keeps, when the `[` at `open` starts
-    /// one: its region, `@r` or `hold @r`, and the places it keeps.
+    /// one: its region, `@r` or `flex @r`, and the places it keeps.
     fn kept_list(&self, open: usize) -> Option<usize> {
         let close = (open + 1..).find(|&q| !self.kept_part(q))?;
         let region = (open + 1..close).any(|q| self.token(q) == Some(&Token::AtSign));
         (self.token(close) == Some(&Token::RBracket) && region && close > open + 1).then_some(close)
     }
 
-    /// Whether position `p` is inside what a lambda keeps, `[hold& count, @r]`.
+    /// Whether position `p` is inside what a lambda keeps, `[flex& count, @r]`.
     pub(crate) fn in_kept_list(&self, p: usize) -> bool {
         (0..p).rev().find(|&q| !self.kept_part(q)).is_some_and(|open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open).is_some_and(|close| close > p))
     }
@@ -597,7 +597,7 @@ impl<'a> Tokens<'a> {
     /// is written, since `() -> int` is also the type of a task that takes none.
     fn starts_lambda(&self, p: usize) -> bool {
         // A header's parameters, and a call's values, follow a name; a
-        // lambda's follow what it keeps, `[@r]` or `[hold @r]`, which is a
+        // lambda's follow what it keeps, `[@r]` or `[flex @r]`, which is a
         // lambda's type where a type is written.
         let kept = self.kept_open(p);
         if kept.and_then(|open| self.before(open)).is_some_and(|before| matches!(before, Token::Colon | Token::Arrow | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde)) {
@@ -613,7 +613,7 @@ impl<'a> Tokens<'a> {
                 && !matches!(self.before(p), Some(Token::Arrow | Token::Colon | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde))
                 && !self.ends_in_a_list(p + 3);
         }
-        // `(hold& n: int` names a parameter; a type's `(hold& int)` names none.
+        // `(flex& n: int` names a parameter; a type's `(flex& int)` names none.
         let named = |q: usize| self.ident(q).is_some() && self.token(q + 1) == Some(&Token::Colon);
         let after_word = if self.token(p + 2) == Some(&Token::Amp) { p + 3 } else { p + 2 };
         if !(matches!(self.token(p + 1), Some(Token::Flex | Token::Fixed)) && named(after_word)) && !named(p + 1) {
@@ -735,7 +735,7 @@ impl<'a> Tokens<'a> {
     }
 
     /// The variable a loop starting at `p` gives its value, which names the
-    /// loop: `r` of `bind r = loop …`, of `bind r: int ~ LoopResult = loop …`
+    /// loop: `r` of `fixed r = loop …`, of `fixed r: int ~ LoopResult = loop …`
     /// and of `r = each …`, the loop's word the first after the line's `=`.
     fn loop_variable(&self, p: usize) -> Option<usize> {
         if self.before(p) != Some(&Token::Assign) {
@@ -854,8 +854,8 @@ fn read_marker(tokens: &Tokens, p: usize) -> bool {
 }
 
 /// Whether the name at `p` is a shape's `shared` field, as in `shared f`,
-/// `shared hold f`, or `shared read f`, with `shared` starting its line (after
-/// `priv`, if it is written); and if so, whether it is `hold`.
+/// `shared flex f`, or `shared read f`, with `shared` starting its line (after
+/// `priv`, if it is written); and if so, whether it is `flex`.
 fn shared_marker(tokens: &Tokens, p: usize) -> Option<bool> {
     let (at, flex) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
         Some(Token::Shared) => (p - 1, false),
@@ -1135,7 +1135,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         field.default = falls_back;
                         field.read = read_marker(tokens, p) || (shared.is_some() && tokens.ident(p - 1) == Some(READ));
                         field.shared = shared.is_some();
-                        field.intro = shared.filter(|flex| *flex).map(|_| "hold");
+                        field.intro = shared.filter(|flex| *flex).map(|_| "flex");
                         // `priv shared f`: `declare` looks only just before the name.
                         if shared.is_some() {
                             let start = (p.saturating_sub(3)..p).find(|q| tokens.token(*q) == Some(&Token::Shared));
@@ -1260,11 +1260,11 @@ impl<'a> Classifier<'a> {
         // body starts on their line.
         let mut lambda_params = false;
         let mut lambda_results = false;
-        // In the names of a `bind` or `hold`, where each comma declares
+        // In the names of a `fixed` or `flex`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
-        // In a loop's start, before its first `||`, and the word, `hold` or
-        // `bind`, that covers the names after it there.
+        // In a loop's start, before its first `||`, and the word, `flex` or
+        // `fixed`, that covers the names after it there.
         let mut loop_start = false;
         let mut loop_words: Option<&'static str> = None;
         // The position after that loop's `loop`.
@@ -1516,7 +1516,7 @@ impl<'a> Classifier<'a> {
                     // `@r` or `or E` may follow the type.
                     after_type = true;
                 }
-                // `bind a, (b, c) = t`: the names of a tuple's items.
+                // `fixed a, (b, c) = t`: the names of a tuple's items.
                 Token::LParen if declaring_now.is_some() => {
                     self.push(range, TokenClass::Punctuation, None);
                     declaring = declaring_now;
@@ -1551,11 +1551,11 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     needs_word = true;
                 }
-                // `hold&` is one word, and `&a` gives a place at a call.
-                // The name after `hold&` or `bind&` is still being declared.
+                // `flex&` is one word, and `&a` gives a place at a call.
+                // The name after `flex&` or `fixed&` is still being declared.
                 Token::Amp if matches!(tokens.before(p), Some(Token::Flex | Token::Fixed)) => {
                     self.push(range, TokenClass::Keyword, None);
-                    // `(hold& int) -> nothing`: in a task's type, a type follows.
+                    // `(flex& int) -> nothing`: in a task's type, a type follows.
                     if was_type {
                         in_type = true;
                     } else {
@@ -1568,9 +1568,9 @@ impl<'a> Classifier<'a> {
                     match (declaring_list, loop_words) {
                         // `-> int, int`: another result type.
                         _ if in_results => in_type = true,
-                        // `bind q, r = …`: another name.
+                        // `fixed q, r = …`: another name.
                         (Some(intro), _) => declaring = Some(intro),
-                        // `loop hold i = 0, j = 9`: another name the word covers.
+                        // `loop flex i = 0, j = 9`: another name the word covers.
                         (None, Some(intro))
                             if loop_start
                                 && tokens.ident(p + 1).is_some()
@@ -1637,8 +1637,8 @@ impl<'a> Classifier<'a> {
                         Token::Block => self.open(ScopeKind::Other),
                         Token::Loop | Token::Endless | Token::Each => {
                             self.open(ScopeKind::Other);
-                            // `loop hold i = 0, j = 9 || …`: the start, up to its
-                            // first `||`, declares the names after `hold` or `bind`.
+                            // `loop flex i = 0, j = 9 || …`: the start, up to its
+                            // first `||`, declares the names after `flex` or `fixed`.
                             loop_start = *token == Token::Loop;
                             loop_words = None;
                             loop_first = p + 1;
@@ -1648,7 +1648,7 @@ impl<'a> Classifier<'a> {
                                     named.symbol = Some(id);
                                 }
                             } else if let Some(q) = tokens.loop_variable(p) {
-                                // `bind r = loop …`, `total = each …`: the variable
+                                // `fixed r = loop …`, `total = each …`: the variable
                                 // the loop gives names it, for `break r`.
                                 self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), "=".to_string());
                             }
@@ -1657,23 +1657,23 @@ impl<'a> Classifier<'a> {
                             }
                         }
                         Token::Match => self.open(ScopeKind::Match),
-                        // `(hold n: int`: a parameter the task changes, which
+                        // `(flex n: int`: a parameter the task changes, which
                         // the header declares below, not a variable.
-                        // (and `bind`, `hold&`, `bind&`).
-                        // `(hold& int) -> nothing`: how a task's type takes a place.
-                        // `[hold& count, @r]`: what a lambda keeps names
+                        // (and `fixed`, `flex&`, `fixed&`).
+                        // `(flex& int) -> nothing`: how a task's type takes a place.
+                        // `[flex& count, @r]`: what a lambda keeps names
                         // variables of the code around it, and declares none.
                         Token::Flex | Token::Fixed if tokens.in_kept_list(p) => {}
                         Token::Flex | Token::Fixed if was_type => in_type = true,
                         Token::Flex | Token::Fixed if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Fixed | Token::Flex => {
-                            // `hold& y = &x` and `bind& y = &x`: references.
+                            // `flex& y = &x` and `fixed& y = &x`: references.
                             let reference = tokens.token(p + 1) == Some(&Token::Amp);
                             let intro = match (*keyword == Token::Fixed, reference) {
-                                (true, false) => "bind",
-                                (true, true) => "bind&",
-                                (false, false) => "hold",
-                                (false, true) => "hold&",
+                                (true, false) => "fixed",
+                                (true, true) => "fixed&",
+                                (false, false) => "flex",
+                                (false, true) => "flex&",
                             };
                             declaring = Some(intro);
                             declaring_list = Some(intro);
@@ -1837,13 +1837,13 @@ impl<'a> Classifier<'a> {
         }
         // A name being declared is one even where a type would be written,
         // as a result's name is (`-> total: int`).
-        // `is hold (x, y)`: the pattern declares the names, `hold` only says they
+        // `is flex (x, y)`: the pattern declares the names, `flex` only says they
         // can be assigned, so they take their types from the value matched.
-        if let Some(intro) = declaring.filter(|intro| !(in_pattern && *intro == "hold")) {
+        if let Some(intro) = declaring.filter(|intro| !(in_pattern && *intro == "flex")) {
             if intro == "region" {
                 return (TokenClass::Region, Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())));
             }
-            // `bind q: int, r = …` and `-> steps: int, peak: int`: the type
+            // `fixed q: int, r = …` and `-> steps: int, peak: int`: the type
             // ends at the next name.
             let detail = if after == Some(&Token::Colon) {
                 tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::Comma))
@@ -1858,12 +1858,12 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
-        // `hold n: int`, `hold& n: int`, `bind n: int`, and `bind& n: int`:
+        // `flex n: int`, `flex& n: int`, `fixed n: int`, and `fixed& n: int`:
         // the word, and its `&`, before a parameter's name.
         let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
         let word_at = |q: usize| match tokens.token(q) {
-            Some(Token::Flex) if opens_param(q) => Some("hold"),
-            Some(Token::Fixed) if opens_param(q) => Some("bind"),
+            Some(Token::Flex) if opens_param(q) => Some("flex"),
+            Some(Token::Fixed) if opens_param(q) => Some("fixed"),
             _ => None,
         };
         let marked = match before {
@@ -1878,10 +1878,10 @@ impl<'a> Classifier<'a> {
             let takes_region = crate::infer::without_default(&detail) == "region";
             let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
             let intro = match marked.as_deref() {
-                Some("hold&") => Some("hold&"),
-                Some("hold") => Some("hold"),
-                Some("bind&") => Some("bind&"),
-                Some("bind") => Some("bind"),
+                Some("flex&") => Some("flex&"),
+                Some("flex") => Some("flex"),
+                Some("fixed&") => Some("fixed&"),
+                Some("fixed") => Some("fixed"),
                 _ => None,
             };
             return (kind.class(), Some(self.declare_local(p, kind, intro, detail)));
@@ -2139,10 +2139,10 @@ impl<'a> Classifier<'a> {
             Some("is") => (p..tokens.len()).take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None)).find(|&q| tokens.token(q) == Some(&Token::And)),
             _ => None,
         };
-        // `loop hold i = 0, j = i || i < j || …`: a name a loop's start declares
+        // `loop flex i = 0, j = i || i < j || …`: a name a loop's start declares
         // is seen from the end of its item, its `,` or the `||` after it.
         let item_end = match intro {
-            Some("hold" | "bind") => {
+            Some("flex" | "fixed") => {
                 let line: Vec<usize> = (p..tokens.len()).take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None)).collect();
                 let mut depth = 0usize;
                 let mut assigned = false;
@@ -2172,7 +2172,7 @@ impl<'a> Classifier<'a> {
     }
 
     /// The variable or parameter called `name` visible at byte `at`, innermost
-    /// first. (A variable isn't visible in its own initializer: `bind y = y + 1`.)
+    /// first. (A variable isn't visible in its own initializer: `fixed y = y + 1`.)
     fn local(&self, name: &str, at: usize) -> Option<usize> {
         self.scoped(name, at, false)
     }

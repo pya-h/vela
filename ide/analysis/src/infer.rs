@@ -257,8 +257,8 @@ impl<'a> Knowledge<'a> {
         }
     }
 
-    /// The type of the value a `bind` or `hold` without a written type gives
-    /// `symbol`: `bind x = Point { … }`, `bind ok = a < b`. In a list, the name's
+    /// The type of the value a `fixed` or `flex` without a written type gives
+    /// `symbol`: `fixed x = Point { … }`, `fixed ok = a < b`. In a list, the name's
     /// place decides which value it takes.
     fn initializer_type(&self, symbol: &Symbol, depth: usize) -> Option<Type> {
         let name = self.at_byte(symbol.name_range.start)?;
@@ -298,16 +298,16 @@ impl<'a> Knowledge<'a> {
                 self.span_type(first, last, depth + 1)?
             }
         };
-        // `bind a, (b, c) = …`: the item of each tuple the name is in.
+        // `fixed a, (b, c) = …`: the item of each tuple the name is in.
         inside.iter().try_fold(value, |value, &item| match value {
             Type::Tuple(items) => items.into_iter().nth(item),
             _ => None,
         })
     }
 
-    /// Where the `bind` or `hold` name at position `name` is in its list, and
+    /// Where the `fixed` or `flex` name at position `name` is in its list, and
     /// the position of the `=` that ends the names.
-    /// Where the `bind` or `hold` name at position `name` is: its place in the
+    /// Where the `fixed` or `flex` name at position `name` is: its place in the
     /// list and, inside `( … )`, in each tuple it unpacks; how many names the
     /// list has; and the position of the `=` that ends the names.
     fn binding_place(&self, name: usize) -> Option<(Vec<usize>, usize, usize)> {
@@ -318,7 +318,7 @@ impl<'a> Knowledge<'a> {
         let mut path = vec![0usize];
         let mut names = 1;
         // Before the `=`, a `<` only opens the types a type is given, whose
-        // commas part no names: `bind e: Either<int, text> = …`.
+        // commas part no names: `fixed e: Either<int, text> = …`.
         let mut angles = 0usize;
         for q in start..equals {
             match self.token(q) {
@@ -351,7 +351,7 @@ impl<'a> Knowledge<'a> {
         Some((path, names, equals))
     }
 
-    /// Where `q` is in a loop's start, `loop hold i = 0, j = 9 || …`: the
+    /// Where `q` is in a loop's start, `loop flex i = 0, j = 9 || …`: the
     /// first position of its item, and the one of the `,` or `||` ending it,
     /// as the parser parts them (see `vela::parser`'s `loop_items`).
     fn loop_item(&self, q: usize) -> Option<(usize, usize)> {
@@ -480,8 +480,8 @@ impl<'a> Knowledge<'a> {
 
     /// The position of the variant's name in the pattern after the `case` or
     /// `is` at `case`: `Circle`, `Shape.Circle`, or `m.Shape.Circle`.
-    /// Whether the pattern name at `name` was written `hold name`, directly or
-    /// inside a `hold ( … )`, so it can be assigned.
+    /// Whether the pattern name at `name` was written `flex name`, directly or
+    /// inside a `flex ( … )`, so it can be assigned.
     pub fn pattern_name_mutable(&self, name: usize) -> bool {
         let line = self.line_start(name);
         let mut at = name;
@@ -571,7 +571,7 @@ impl<'a> Knowledge<'a> {
         let name = self.at_byte(symbol.name_range.start)?;
         let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
         let outcome = || self.pattern_subject(case, depth);
-        // `hold` before the names makes them changeable; the pattern goes on after it.
+        // `flex` before the names makes them changeable; the pattern goes on after it.
         let start = if self.token(case + 1) == Some(&Token::Flex) { case + 2 } else { case + 1 };
         match self.token(start)? {
             // `{v}` and `{(a, b)}`: the value inside, and its items.
@@ -585,7 +585,7 @@ impl<'a> Knowledge<'a> {
             Token::LParen => self.pattern_item(outcome()?, start, name),
             _ => {
                 let tag_at = self.pattern_variant_at(case);
-                // The names before this one, which `hold` may be written before.
+                // The names before this one, which `flex` may be written before.
                 let index = (tag_at + 1..name).filter(|&q| matches!(self.token(q), Some(Token::Ident(_) | Token::Underscore))).count();
                 let tag = self.ident(tag_at)?;
                 // The variant of the matched value's kind, which may be another
@@ -1609,7 +1609,7 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
     if !inside.trim().is_empty() {
         for param in split_list(inside) {
             let param = param.trim();
-            // `@r`, a region it takes, and `hold& int`, a place (see `Taken`).
+            // `@r`, a region it takes, and `flex& int`, a place (see `Taken`).
             let (how, ty) = if let Some(region) = param.strip_prefix('@') {
                 (Taken::Region(region.trim().to_string()), Type::Region)
             } else if let Some((passing, ty)) = place_word(param) {
@@ -1651,7 +1651,7 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
     let mut taken = Vec::new();
     for (name, ty) in parameters(detail) {
         let ty = ty?;
-        // The name carries how it is given, `hold& n`, which a type keeps for
+        // The name carries how it is given, `flex& n`, which a type keeps for
         // a place; a region is named as its parameter is.
         taken.push(match (&ty, name.split_whitespace().collect::<Vec<_>>().as_slice()) {
             (Type::Region, [.., region]) => Taken::Region(region.to_string()),
@@ -1669,28 +1669,28 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
 const FLEX_WORDS: [&str; 2] = ["flex", "hold"];
 const FIXED_WORDS: [&str; 2] = ["fixed", "bind"];
 
-/// How a place in a task's type or a lambda's header is taken, `hold& int` or
-/// `bind& int` in either spelling, and the text after the word and its `&`.
+/// How a place in a task's type or a lambda's header is taken, `flex& int` or
+/// `fixed& int` in either spelling, and the text after the word and its `&`.
 fn place_word(text: &str) -> Option<(Passing, &str)> {
     let after = |words: [&'static str; 2]| words.iter().find_map(|word| text.strip_prefix(word)?.strip_prefix('&'));
     after(FLEX_WORDS).map(|rest| (Passing::FlexRef, rest)).or_else(|| after(FIXED_WORDS).map(|rest| (Passing::FixedRef, rest)))
 }
 
-/// `item` without the word it may start with, `hold` or `bind` in either
+/// `item` without the word it may start with, `flex` or `fixed` in either
 /// spelling.
 fn without_word(item: &str) -> &str {
     FLEX_WORDS.iter().chain(FIXED_WORDS.iter()).find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
-/// `[@r]` or `[hold @r]` at the start of `text`, what a lambda keeps: the
+/// `[@r]` or `[flex @r]` at the start of `text`, what a lambda keeps: the
 /// region, whether it changes what it keeps, and the text after it.
 fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
     let inner = text.strip_prefix('[')?;
     let close = inner.find(']')?;
-    // The region among the places it keeps, `[hold& count, @r]`.
+    // The region among the places it keeps, `[flex& count, @r]`.
     let mut region = None;
     for item in inner.get(..close)?.split(',').map(str::trim) {
-        // `hold& count`, written `hold & count` too.
+        // `flex& count`, written `flex & count` too.
         let word = without_word(item);
         if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;

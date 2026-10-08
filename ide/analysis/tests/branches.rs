@@ -142,9 +142,9 @@ fn a_match_and_a_when_used_as_values_check() {
 #[test]
 fn hover_shows_the_type_the_branches_settle_on() {
     // A case gives an int and another `none`, so the whole is a maybe int.
-    assert_eq!(hover(VALUES, "half = match").0, "bind half: maybe int");
+    assert_eq!(hover(VALUES, "half = match").0, "fixed half: maybe int");
     // Text from a `when` inside a case.
-    assert_eq!(hover(VALUES, "label = match").0, "bind label: text");
+    assert_eq!(hover(VALUES, "label = match").0, "fixed label: text");
     // The name a case's pattern binds, inside that case.
     assert_eq!(hover(VALUES, "value / 2").0, "value: int");
 }

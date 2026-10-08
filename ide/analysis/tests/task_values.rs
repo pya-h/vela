@@ -63,12 +63,12 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_task_value_hovers_with_its_type_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "value ="), "bind value: (int) -> int", "{}", when);
-        assert_eq!(hover(&source, "lettered ="), "bind lettered: (text@r) -> text@r", "{}", when);
-        assert_eq!(hover(&source, "applied ="), "bind applied: int", "{}", when);
-        assert_eq!(hover(&source, "called ="), "bind called: int", "{}", when);
-        assert_eq!(hover(&source, "picked ="), "bind picked: int", "{}", when);
-        assert_eq!(hover(&source, "kept:"), "hold kept: maybe (int) -> int", "{}", when);
+        assert_eq!(hover(&source, "value ="), "fixed value: (int) -> int", "{}", when);
+        assert_eq!(hover(&source, "lettered ="), "fixed lettered: (text@r) -> text@r", "{}", when);
+        assert_eq!(hover(&source, "applied ="), "fixed applied: int", "{}", when);
+        assert_eq!(hover(&source, "called ="), "fixed called: int", "{}", when);
+        assert_eq!(hover(&source, "picked ="), "fixed picked: int", "{}", when);
+        assert_eq!(hover(&source, "kept:"), "flex kept: maybe (int) -> int", "{}", when);
     }
 }
 
@@ -127,14 +127,14 @@ fi
         if when == "checked" {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
         }
-        assert_eq!(hover(&source, "bumped ="), "bind bumped: (flex& int) -> nothing", "{}", when);
-        assert_eq!(hover(&source, "totalled ="), "bind totalled: (fixed& int) -> int", "{}", when);
-        assert_eq!(hover(&source, "squared ="), "bind squared: (@r, int) -> [int]@r", "{}", when);
-        assert_eq!(hover(&source, "kept:"), "hold kept: maybe (@r, int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "bumped ="), "fixed bumped: (flex& int) -> nothing", "{}", when);
+        assert_eq!(hover(&source, "totalled ="), "fixed totalled: (fixed& int) -> int", "{}", when);
+        assert_eq!(hover(&source, "squared ="), "fixed squared: (@r, int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "kept:"), "flex kept: maybe (@r, int) -> [int]@r", "{}", when);
         // A region taken by default is a region still, and what a call through
         // the value sends is in the region the call gives.
-        assert_eq!(hover(&source, "kinder ="), "bind kinder: (@r, int) -> [int]@r", "{}", when);
-        assert_eq!(hover(&source, "made ="), "bind made: [int]@q", "{}", when);
+        assert_eq!(hover(&source, "kinder ="), "fixed kinder: (@r, int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "made ="), "fixed made: [int]@q", "{}", when);
     }
 }
 
@@ -178,7 +178,7 @@ task main()
 fi
 task g(
 ";
-    assert_eq!(hover(source, "got ="), "bind got: [int]@_");
-    assert_eq!(hover(source, "kept ="), "bind kept: [int]@q");
+    assert_eq!(hover(source, "got ="), "fixed got: [int]@_");
+    assert_eq!(hover(source, "kept ="), "fixed kept: [int]@q");
     assert_eq!(hover(source, "r: region"), "r: region");
 }

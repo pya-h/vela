@@ -76,9 +76,9 @@ fn the_length_of_text_is_an_int_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "count =").0, "bind count: int", "{}", when);
-        assert_eq!(hover(&source, "inner =").0, "bind inner: int", "{}", when);
-        assert_eq!(hover(&source, "read =").0, "bind read: int", "{}", when);
+        assert_eq!(hover(&source, "count =").0, "fixed count: int", "{}", when);
+        assert_eq!(hover(&source, "inner =").0, "fixed inner: int", "{}", when);
+        assert_eq!(hover(&source, "read =").0, "fixed read: int", "{}", when);
     }
     let source = program(true, "show(0)");
     let len = source.find("name.len").unwrap() + "name.".len();
@@ -92,12 +92,12 @@ fn a_part_of_text_is_text_where_the_text_is_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "part =").0, "bind part: text", "{}", when);
-        assert_eq!(hover(&source, "kept =").0, "bind kept: text@r", "{}", when);
-        assert_eq!(hover(&source, "inside =").0, "bind inside: text", "{}", when);
+        assert_eq!(hover(&source, "part =").0, "fixed part: text", "{}", when);
+        assert_eq!(hover(&source, "kept =").0, "fixed kept: text@r", "{}", when);
+        assert_eq!(hover(&source, "inside =").0, "fixed inside: text", "{}", when);
     }
     // A comparison's type comes from the checker.
-    assert_eq!(hover(&program(true, "show(0)"), "before =").0, "bind before: bool");
+    assert_eq!(hover(&program(true, "show(0)"), "before =").0, "fixed before: bool");
 }
 
 #[test]
@@ -132,9 +132,9 @@ fn joined_text_is_text_of_its_region_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "joined =").0, "bind joined: text@r", "{}", when);
-        assert_eq!(hover(&source, "wrapped =").0, "bind wrapped: text@r", "{}", when);
-        assert_eq!(hover(&source, "sum =").0, "bind sum: int", "{}", when);
+        assert_eq!(hover(&source, "joined =").0, "fixed joined: text@r", "{}", when);
+        assert_eq!(hover(&source, "wrapped =").0, "fixed wrapped: text@r", "{}", when);
+        assert_eq!(hover(&source, "sum =").0, "fixed sum: int", "{}", when);
     }
 }
 
@@ -154,7 +154,7 @@ fn a_value_turned_into_text_is_text_of_its_region_whether_or_not_the_file_checks
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
         for name in ["digits", "given", "cast", "point"] {
-            assert_eq!(hover(&source, &format!("{} =", name)).0, format!("bind {}: text@r", name), "{} {}", name, when);
+            assert_eq!(hover(&source, &format!("{} =", name)).0, format!("fixed {}: text@r", name), "{} {}", name, when);
         }
     }
 }
@@ -180,8 +180,8 @@ fn text_holding_values_is_text_of_its_region_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "said =").0, "bind said: text@r", "{}", when);
-        assert_eq!(hover(&source, "shouted =").0, "bind shouted: text@r", "{}", when);
+        assert_eq!(hover(&source, "said =").0, "fixed said: text@r", "{}", when);
+        assert_eq!(hover(&source, "shouted =").0, "fixed shouted: text@r", "{}", when);
     }
 }
 
@@ -191,7 +191,7 @@ fn names_inside_braces_are_names_like_any() {
     let analysis = Analysis::new(&source);
     let index = LineIndex::new(&source);
     let inside = source.find("{count}").unwrap() + 1;
-    assert_eq!(hover(&source, "count}\" at").0, "bind count: int");
+    assert_eq!(hover(&source, "count}\" at").0, "fixed count: int");
     let target = analysis.definition(index.utf16_of(inside)).expect("a definition");
     assert_eq!(index.byte_of_utf16(target.from), source.find("count =").unwrap());
     // The text around the values is text, braces and all; the values are code.

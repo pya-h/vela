@@ -66,11 +66,11 @@ fn units_hover_with_their_type_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("b: unit ="), "hold b: unit", "{}", when);
-        assert_eq!(code("next ="), "bind next: unit", "{}", when);
-        assert_eq!(code("wide ="), "bind wide: int", "{}", when);
-        assert_eq!(code("cast ="), "bind cast: unit", "{}", when);
-        assert_eq!(code("doubled ="), "bind doubled: unit", "{}", when);
+        assert_eq!(code("b: unit ="), "flex b: unit", "{}", when);
+        assert_eq!(code("next ="), "fixed next: unit", "{}", when);
+        assert_eq!(code("wide ="), "fixed wide: int", "{}", when);
+        assert_eq!(code("cast ="), "fixed cast: unit", "{}", when);
+        assert_eq!(code("doubled ="), "fixed doubled: unit", "{}", when);
     }
     let source = program(true, "show(0)");
     assert!(hover(&source, "unit =").1.starts_with("A whole number from 0 to 255"));
@@ -104,11 +104,11 @@ fn chars_hover_with_their_type_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("c = 'a'"), "hold c: char", "{}", when);
-        assert_eq!(code("next_char ="), "bind next_char: char", "{}", when);
-        assert_eq!(code("apart ="), "bind apart: int", "{}", when);
-        assert_eq!(code("first ="), "bind first: char", "{}", when);
-        assert_eq!(code("found ="), "bind found: maybe char", "{}", when);
+        assert_eq!(code("c = 'a'"), "flex c: char", "{}", when);
+        assert_eq!(code("next_char ="), "fixed next_char: char", "{}", when);
+        assert_eq!(code("apart ="), "fixed apart: int", "{}", when);
+        assert_eq!(code("first ="), "fixed first: char", "{}", when);
+        assert_eq!(code("found ="), "fixed found: maybe char", "{}", when);
     }
 }
 
@@ -148,7 +148,7 @@ fn a_safe_index_is_a_maybe_of_the_item_whether_or_not_the_file_checks() {
         let source = program(checks, "fixed i = 0\n    fixed maybe_letter = word[#1]\n    fixed scores = [1, 2]\n    fixed maybe_score = scores[#i]");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("maybe_letter ="), "bind maybe_letter: maybe char", "{}", when);
-        assert_eq!(code("maybe_score ="), "bind maybe_score: maybe int", "{}", when);
+        assert_eq!(code("maybe_letter ="), "fixed maybe_letter: maybe char", "{}", when);
+        assert_eq!(code("maybe_score ="), "fixed maybe_score: maybe int", "{}", when);
     }
 }

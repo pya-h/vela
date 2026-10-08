@@ -114,7 +114,7 @@ fn a_shared_method_is_hovered_with_its_word() {
         let (code, _) = hover(&source, "start()\n    show");
         assert_eq!(code, "shared start() -> Light");
         // What it makes is known where it is bound.
-        assert_eq!(hover(&source, "p = Point").0, "bind p: Point");
+        assert_eq!(hover(&source, "p = Point").0, "fixed p: Point");
     }
 }
 

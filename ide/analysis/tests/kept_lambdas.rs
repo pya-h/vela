@@ -60,11 +60,11 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_lambda_that_keeps_what_it_uses_hovers_with_its_type_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "next ="), "hold next: [flex @r]() -> int", "{}", when);
-        assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> int", "{}", when);
-        assert_eq!(hover(&source, "got ="), "bind got: int", "{}", when);
-        assert_eq!(hover(&source, "made ="), "bind made: [@r](int) -> [int]@r", "{}", when);
-        assert_eq!(hover(&source, "list ="), "bind list: [int]@r", "{}", when);
+        assert_eq!(hover(&source, "next ="), "flex next: [flex @r]() -> int", "{}", when);
+        assert_eq!(hover(&source, "add ="), "fixed add: [@r](int) -> int", "{}", when);
+        assert_eq!(hover(&source, "got ="), "fixed got: int", "{}", when);
+        assert_eq!(hover(&source, "made ="), "fixed made: [@r](int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "list ="), "fixed list: [int]@r", "{}", when);
     }
 }
 
@@ -74,8 +74,8 @@ fn its_parameters_and_what_it_keeps_name_what_they_are() {
         let source = program(when);
         assert_eq!(hover(&source, "x: int"), "x: int", "{}", when);
         assert_eq!(hover(&source, "x + base"), "x: int", "{}", when);
-        assert_eq!(hover(&source, "base fi"), "bind base: int", "{}", when);
-        assert_eq!(hover(&source, "n = n"), "hold n: int", "{}", when);
+        assert_eq!(hover(&source, "base fi"), "fixed base: int", "{}", when);
+        assert_eq!(hover(&source, "n = n"), "flex n: int", "{}", when);
         assert_eq!(hover(&source, "r](x"), "region r", "{}", when);
         assert_eq!(class(&source, "flex @r]() -> int\n        n"), TokenClass::Keyword, "{}", when);
     }
@@ -95,10 +95,10 @@ fi
 ";
     for when in ["checked", "unparsed"] {
         let source = if when == "unparsed" { format!("{}task g(\n", source) } else { source.to_string() };
-        assert_eq!(hover(&source, "count, fixed"), "hold count: int", "{}", when);
-        assert_eq!(hover(&source, "big, @r"), "bind big: [int#3]", "{}", when);
+        assert_eq!(hover(&source, "count, fixed"), "flex count: int", "{}", when);
+        assert_eq!(hover(&source, "big, @r"), "fixed big: [int#3]", "{}", when);
         assert_eq!(hover(&source, "n: int"), "n: int", "{}", when);
-        assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> nothing", "{}", when);
+        assert_eq!(hover(&source, "add ="), "fixed add: [@r](int) -> nothing", "{}", when);
     }
 }
 
@@ -119,9 +119,9 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "n: int)"), "hold& n: int");
-    assert_eq!(hover(source, "n = f"), "hold& n: int");
-    assert_eq!(hover(source, "j: int"), "hold& j: int");
-    assert_eq!(hover(source, "j + 1"), "hold& j: int");
+    assert_eq!(hover(source, "n: int)"), "flex& n: int");
+    assert_eq!(hover(source, "n = f"), "flex& n: int");
+    assert_eq!(hover(source, "j: int"), "flex& j: int");
+    assert_eq!(hover(source, "j + 1"), "flex& j: int");
     assert_eq!(class(source, "int) -> int, flex"), TokenClass::TypeBuiltin);
 }

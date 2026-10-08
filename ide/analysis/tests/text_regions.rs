@@ -66,16 +66,16 @@ fn hover_shows_text_and_shapes_in_regions_whether_or_not_the_file_checks() {
     for checks in [true, false] {
         let source = program(checks);
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover_code(&source, "kept ="), "bind kept: text@r", "{}", when);
-        assert_eq!(hover_code(&source, "lasting ="), "bind lasting: text", "{}", when);
-        assert_eq!(hover_code(&source, "plain ="), "bind plain: Person", "{}", when);
-        assert_eq!(hover_code(&source, "held ="), "bind held: Person@r", "{}", when);
-        assert_eq!(hover_code(&source, "first ="), "bind first: text@r", "{}", when);
-        assert_eq!(hover_code(&source, "label ="), "bind label: text@r", "{}", when);
+        assert_eq!(hover_code(&source, "kept ="), "fixed kept: text@r", "{}", when);
+        assert_eq!(hover_code(&source, "lasting ="), "fixed lasting: text", "{}", when);
+        assert_eq!(hover_code(&source, "plain ="), "fixed plain: Person", "{}", when);
+        assert_eq!(hover_code(&source, "held ="), "fixed held: Person@r", "{}", when);
+        assert_eq!(hover_code(&source, "first ="), "fixed first: text@r", "{}", when);
+        assert_eq!(hover_code(&source, "label ="), "fixed label: text@r", "{}", when);
         // Text of no region in particular lasts, and an array takes a region
         // any of its items has.
-        assert_eq!(hover_code(&source, "either ="), "bind either: text", "{}", when);
-        assert_eq!(hover_code(&source, "both ="), "bind both: [text@r#2]", "{}", when);
+        assert_eq!(hover_code(&source, "either ="), "fixed either: text", "{}", when);
+        assert_eq!(hover_code(&source, "both ="), "fixed both: [text@r#2]", "{}", when);
     }
 }
 

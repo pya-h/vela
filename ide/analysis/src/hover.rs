@@ -96,7 +96,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "alters",
         "alters name(…)",
-        "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a hold variable, a field or item of one, or what a pointer points to.",
+        "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a flex variable, a field or item of one, or what a pointer points to.",
     ),
     (
         "type",
@@ -199,10 +199,10 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
     Some((info, token.range.clone()))
 }
 
-/// A pattern's name, written `hold name` when the pattern can assign it.
+/// A pattern's name, written `flex name` when the pattern can assign it.
 fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
     if k.pattern_name_mutable(at) {
-        return (format!("hold {}", typed), format!("{} It can be assigned.", doc));
+        return (format!("flex {}", typed), format!("{} It can be assigned.", doc));
     }
     (typed.to_string(), doc.to_string())
 }
@@ -337,21 +337,21 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         }
         SymbolKind::Parameter => {
             let doc = task_around(k, symbol.name_range.start).map(|task| format!("A parameter of {}.", task)).unwrap_or_default();
-            if symbol.intro == Some("hold&") {
+            if symbol.intro == Some("flex&") {
                 let doc = format!("{} The caller's place, which the call gives as '&a': every change to it is a change there.", doc);
-                return Some((format!("hold& {}", typed(&symbol.name)), doc.trim_start().to_string()));
+                return Some((format!("flex& {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
-            if symbol.intro == Some("hold") {
+            if symbol.intro == Some("flex") {
                 let doc = format!("{} The task's own copy, which it may change; the caller's value never does.", doc);
-                return Some((format!("hold {}", typed(&symbol.name)), doc.trim_start().to_string()));
+                return Some((format!("flex {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
-            if symbol.intro == Some("bind&") {
+            if symbol.intro == Some("fixed&") {
                 let doc = format!("{} The caller's place, which the call gives as '&a', read where it is and never changed.", doc);
-                return Some((format!("bind& {}", typed(&symbol.name)), doc.trim_start().to_string()));
+                return Some((format!("fixed& {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
-            if symbol.intro == Some("bind") {
+            if symbol.intro == Some("fixed") {
                 let doc = format!("{} Always a copy, even of a large value the compiler would otherwise read where the caller keeps it.", doc);
-                return Some((format!("bind {}", typed(&symbol.name)), doc.trim_start().to_string()));
+                return Some((format!("fixed {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
             (typed(&symbol.name), doc)
         }
@@ -401,13 +401,13 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 };
                 (format!("each {}", typed(&symbol.name)), doc.to_string())
             }
-            Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
-            Some("hold&") => (
-                format!("hold& {}", typed(&symbol.name)),
+            Some("flex") => (format!("flex {}", typed(&symbol.name)), "A mutable variable.".to_string()),
+            Some("flex&") => (
+                format!("flex& {}", typed(&symbol.name)),
                 "A reference: another name for the place given after '=', so a change to either is a change to both.".to_string(),
             ),
-            Some("bind&") => (
-                format!("bind& {}", typed(&symbol.name)),
+            Some("fixed&") => (
+                format!("fixed& {}", typed(&symbol.name)),
                 "A reference that reads the place given after '=', as it is when read, and never changes it.".to_string(),
             ),
             Some("result") => {
@@ -417,7 +417,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 };
                 (format!("result {}", typed(&symbol.name)), format!("{} Set it with '{} <- …'.", doc, symbol.name))
             }
-            _ => (format!("bind {}", typed(&symbol.name)), "An immutable variable.".to_string()),
+            _ => (format!("fixed {}", typed(&symbol.name)), "An immutable variable.".to_string()),
         },
     })
 }
@@ -459,12 +459,12 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
 }
 
 /// The words a shape's member is declared with before its name, as a hover
-/// writes them: `priv`, `read`, and for a shared field, `shared` and `hold`.
+/// writes them: `priv`, `read`, and for a shared field, `shared` and `flex`.
 fn shared_words(member: &Symbol) -> String {
     let private = if member.private { "priv " } else { "" };
     if !member.shared {
         return if member.private { private.to_string() } else if member.read { "read ".to_string() } else { String::new() };
     }
-    let change = if member.intro.is_some() { "hold " } else if member.read { "read " } else { "" };
+    let change = if member.intro.is_some() { "flex " } else if member.read { "read " } else { "" };
     format!("{}shared {}", private, change)
 }

@@ -47,15 +47,15 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_power_hovers_with_its_type_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "exact ="), "bind exact: int", "{}", when);
-        assert_eq!(hover(&source, "fraction ="), "bind fraction: float", "{}", when);
-        assert_eq!(hover(&source, "by_unit ="), "bind by_unit: int", "{}", when);
-        assert_eq!(hover(&source, "small ="), "bind small: unit", "{}", when);
-        assert_eq!(hover(&source, "root ="), "bind root: float", "{}", when);
-        assert_eq!(hover(&source, "mixed ="), "bind mixed: float", "{}", when);
-        assert_eq!(hover(&source, "chained ="), "bind chained: int", "{}", when);
-        assert_eq!(hover(&source, "grouped ="), "bind grouped: int", "{}", when);
-        assert_eq!(hover(&source, "inverse ="), "bind inverse: float", "{}", when);
+        assert_eq!(hover(&source, "exact ="), "fixed exact: int", "{}", when);
+        assert_eq!(hover(&source, "fraction ="), "fixed fraction: float", "{}", when);
+        assert_eq!(hover(&source, "by_unit ="), "fixed by_unit: int", "{}", when);
+        assert_eq!(hover(&source, "small ="), "fixed small: unit", "{}", when);
+        assert_eq!(hover(&source, "root ="), "fixed root: float", "{}", when);
+        assert_eq!(hover(&source, "mixed ="), "fixed mixed: float", "{}", when);
+        assert_eq!(hover(&source, "chained ="), "fixed chained: int", "{}", when);
+        assert_eq!(hover(&source, "grouped ="), "fixed grouped: int", "{}", when);
+        assert_eq!(hover(&source, "inverse ="), "fixed inverse: float", "{}", when);
     }
 }
 

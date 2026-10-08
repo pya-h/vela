@@ -55,10 +55,10 @@ fn each_block_has_its_own_names() {
     for checks in [true, false] {
         let source = program(checks, "show(total)");
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(hover(&source, "inner = 2"), "hold inner: int", "{}", when);
-        assert_eq!(hover(&source, "inner\n    fi\n    block"), "hold inner: int", "{}", when);
-        assert_eq!(hover(&source, "inner = \"text\""), "bind inner: text", "{}", when);
-        assert_eq!(hover(&source, "inner)\n    fi\n    show"), "bind inner: text", "{}", when);
+        assert_eq!(hover(&source, "inner = 2"), "flex inner: int", "{}", when);
+        assert_eq!(hover(&source, "inner\n    fi\n    block"), "flex inner: int", "{}", when);
+        assert_eq!(hover(&source, "inner = \"text\""), "fixed inner: text", "{}", when);
+        assert_eq!(hover(&source, "inner)\n    fi\n    show"), "fixed inner: text", "{}", when);
         let analysis = Analysis::new(&source);
         let byte = source.find("block").unwrap_or_default();
         let class = analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class);

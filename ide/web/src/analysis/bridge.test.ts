@@ -173,8 +173,8 @@ describe("VelaAnalysis", () => {
     ]);
     // The shape the compiler makes for the types never shows: the type reads as
     // the program writes it.
-    expect(analysis.hover(source, source.indexOf("kept:"))?.code).toBe("bind kept: Box<text>@r");
-    expect(analysis.hover(source, source.indexOf("count ="))?.code).toBe("bind count: Box<int>");
+    expect(analysis.hover(source, source.indexOf("kept:"))?.code).toBe("fixed kept: Box<text>@r");
+    expect(analysis.hover(source, source.indexOf("count ="))?.code).toBe("fixed count: Box<int>");
     const types = analysis.complete(source.replace("Box<int>", "Box<>"), source.indexOf("Box<int>") + "Box<".length).items;
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "Box", "maybe"]);
   });
@@ -223,28 +223,28 @@ describe("VelaAnalysis", () => {
     expect(source.slice(diagnostic?.from, diagnostic?.to)).toBe("missing");
 
     const use = source.indexOf("count)");
-    expect(analysis.hover(source, use)?.code).toBe("bind count: int");
+    expect(analysis.hover(source, use)?.code).toBe("fixed count: int");
     const definition = analysis.definition(source, use);
     expect(definition && source.slice(definition.from, definition.to)).toBe("count");
     expect(definition?.from).toBe(source.indexOf("count"));
 
     const line = source.indexOf("    show(missing)") + 4;
     const labels = analysis.complete(source, line).items.map((item) => item.label);
-    expect(labels).toEqual(expect.arrayContaining(["bind", "count", "show", "match"]));
+    expect(labels).toEqual(expect.arrayContaining(["fixed", "count", "show", "match"]));
   });
 
   it("completes and describes the changes a slice has", () => {
     const source = "task main()\n    region r\n    flex names = new [text]() at r\n    names.add(\"a\")\n    fixed last = names.del()\n    show(last)\n    names.\nfi\n";
     const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
     expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["str", "str() at ${r}"], ["copy", "copy()"], ["type", undefined]]);
-    expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("bind last: text@r");
+    expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("fixed last: text@r");
     expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
   });
 
   it("describes scan and the line it reads", () => {
     const source = "task main()\n    region lines\n    fixed name = scan(\"Name: \") at lines { \"nobody\" }\n    show(name)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
-    expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("bind name: text@lines");
+    expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("fixed name: text@lines");
     expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe(
       "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float ~ InputError",
     );
@@ -253,22 +253,22 @@ describe("VelaAnalysis", () => {
   it("describes a number read from input", () => {
     const source = "task main()\n    fixed age = scan(\"Age: \", int)\n    show(age { 0 })\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
-    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int ~ InputError");
+    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("fixed age: int ~ InputError");
     expect(analysis.hover(source, source.indexOf("int)"))?.code).toBe("int");
   });
 
   it("describes a copy into a region", () => {
     const source = "task main()\n    region kept\n    region work\n    fixed line = scan(\"\") at work { \"\" }\n    flex place: text@kept = \"\"\n    place = line.copy()\n    fixed short = line.copy()@kept\n    show(place)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
-    expect(analysis.hover(source, source.indexOf("short ="))?.code).toBe("bind short: text@kept");
+    expect(analysis.hover(source, source.indexOf("short ="))?.code).toBe("fixed short: text@kept");
     expect(analysis.hover(source, source.indexOf("copy()"))?.code).toBe("copy() at r or copy()@r");
   });
 
   it("describes tuples, their items, and the names taking them apart", () => {
     const source = "task main()\n    fixed pair = (\"Ada\", 36)\n    fixed name, age = pair\n    show(pair.1 + age)\n    show(name)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
-    expect(analysis.hover(source, source.indexOf("pair ="))?.code).toBe("bind pair: (text, int)");
-    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int");
+    expect(analysis.hover(source, source.indexOf("pair ="))?.code).toBe("fixed pair: (text, int)");
+    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("fixed age: int");
     expect(analysis.hover(source, source.indexOf("1 + age"))?.code).toBe("item 1: int");
   });
 
@@ -276,7 +276,7 @@ describe("VelaAnalysis", () => {
     const source = "task main()\n    flex found: maybe (text, int) = none\n    when found is {(who, flex years)}\n        years = years + 1\n        show(who)\n        show(years)\n    fi\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("who,"))?.code).toBe("who: text");
-    expect(analysis.hover(source, source.indexOf("years)}"))?.code).toBe("hold years: int");
+    expect(analysis.hover(source, source.indexOf("years)}"))?.code).toBe("flex years: int");
   });
 
   it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {

@@ -83,8 +83,8 @@ fn a_macro_hovers_with_its_value_and_type_whether_or_not_the_file_checks() {
         let (code, doc) = hover(&source, "LIMIT\n");
         assert_eq!(code, "#LIMIT = 10", "{}", when);
         assert!(doc.contains("of type int"), "{}: {}", when, doc);
-        assert_eq!(hover(&source, "twice =").0, "bind twice: int", "{}", when);
-        assert_eq!(hover(&source, "limit =").0, "bind limit: int", "{}", when);
+        assert_eq!(hover(&source, "twice =").0, "fixed twice: int", "{}", when);
+        assert_eq!(hover(&source, "limit =").0, "fixed limit: int", "{}", when);
     }
 }
 
@@ -178,7 +178,7 @@ fn values_made_of_macros_have_types_when_the_file_does_not_parse() {
         let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
         analysis.hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle))
     };
-    assert_eq!(hover("z =").code, "bind z: int");
-    assert_eq!(hover("w =").code, "bind w: int");
+    assert_eq!(hover("z =").code, "fixed z: int");
+    assert_eq!(hover("w =").code, "fixed w: int");
     assert!(hover("TAU").doc.contains("of type int"), "{}", hover("TAU").doc);
 }

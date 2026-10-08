@@ -225,9 +225,9 @@ fn a_value_of_a_shape_given_types_hovers_as_the_program_writes_it() {
     let source = shapes("show(1)");
     // The shape the compiler makes for the types is never shown: the type reads
     // as it is written.
-    assert_eq!(hover(&source, "kept:").0, "bind kept: Box<text>@r");
-    assert_eq!(hover(&source, "count =").0, "bind count: Box<int>");
-    assert_eq!(hover(&source, "pair:").0, "bind pair: Pair<int, text>");
+    assert_eq!(hover(&source, "kept:").0, "fixed kept: Box<text>@r");
+    assert_eq!(hover(&source, "count =").0, "fixed count: Box<int>");
+    assert_eq!(hover(&source, "pair:").0, "fixed pair: Pair<int, text>");
     let (code, doc) = hover(&source, "Box<text>@r");
     assert_eq!(code, "shape Box<T: frozen>\n    value: T\nfi");
     assert_eq!(doc, "");
@@ -321,7 +321,7 @@ fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "b: Box<text>@r").0, "b: Box<text>@r");
-    assert_eq!(hover(source, "paired:").0, "bind paired: Pair<Box<text>, int>@r");
+    assert_eq!(hover(source, "paired:").0, "fixed paired: Pair<Box<text>, int>@r");
     assert_eq!(hover(source, "textOf(b").0, "task textOf(b: Box<text>@r) -> text@r");
     assert_eq!(hover(source, "leftText(p").0, "task leftText(p: Pair<Box<text>, int>@r) -> text@r");
 }
@@ -358,6 +358,6 @@ fn class_at_in(source: &str, needle: &str) -> Option<TokenClass> {
 #[test]
 fn a_shape_given_types_is_read_from_the_source_when_the_file_does_not_parse() {
     let source = shapes("show(1)") + "task g(\n";
-    assert_eq!(hover(&source, "kept:").0, "bind kept: Box<text>@r");
-    assert_eq!(hover(&source, "pair:").0, "bind pair: Pair<int, text>");
+    assert_eq!(hover(&source, "kept:").0, "fixed kept: Box<text>@r");
+    assert_eq!(hover(&source, "pair:").0, "fixed pair: Pair<int, text>");
 }

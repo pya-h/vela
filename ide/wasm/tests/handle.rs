@@ -34,7 +34,7 @@ fn answers_each_query_in_order() {
     assert_eq!(results[2], serde_json::to_value(analysis.outline()).unwrap());
     assert_eq!(results[3], json!({ "from": 22, "to": 23 }));
     assert_eq!(results[4], serde_json::to_value(analysis.complete(16)).unwrap());
-    assert_eq!(results[5]["code"], "bind x: int");
+    assert_eq!(results[5]["code"], "fixed x: int");
 }
 
 #[test]

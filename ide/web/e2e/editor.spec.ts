@@ -214,10 +214,10 @@ test("several results: highlighting, hover, and completion of the names", async 
 
   // Each name takes the type of the value in its place.
   await content.locator(".tok-variable", { hasText: /^q$/ }).first().hover();
-  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("bind q: int");
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("fixed q: int");
 
   // Another result type after a comma in a header, but no name to suggest
-  // after a comma in a `bind`.
+  // after a comma in a `fixed`.
   await cursorAtEndOf(page, 1);
   await page.keyboard.type(", ");
   await page.keyboard.press("Control+Space");

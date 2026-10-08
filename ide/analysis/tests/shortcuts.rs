@@ -44,9 +44,9 @@ fn a_slice_shortcut_hovers_as_a_slice_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("xs ="), "hold xs: [int]@r", "{}", when);
-        assert_eq!(code("names ="), "bind names: [text]@r", "{}", when);
-        assert_eq!(code("firsts ="), "bind firsts: int", "{}", when);
-        assert_eq!(code("kept_values ="), "bind kept_values: [float]@kept", "{}", when);
+        assert_eq!(code("xs ="), "flex xs: [int]@r", "{}", when);
+        assert_eq!(code("names ="), "fixed names: [text]@r", "{}", when);
+        assert_eq!(code("firsts ="), "fixed firsts: int", "{}", when);
+        assert_eq!(code("kept_values ="), "fixed kept_values: [float]@kept", "{}", when);
     }
 }

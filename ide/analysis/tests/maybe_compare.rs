@@ -55,12 +55,12 @@ fn the_program_used_by_these_tests_compiles() {
 #[test]
 fn a_plan_b_giving_none_is_a_maybe_whether_or_not_the_file_checks() {
     for source in programs() {
-        assert_eq!(hover(&source, "b = scan"), "bind b: maybe int", "{}", source);
-        assert_eq!(hover(&source, "m = half"), "bind m: maybe int", "{}", source);
-        assert_eq!(hover(&source, "n = half"), "bind n: int", "{}", source);
+        assert_eq!(hover(&source, "b = scan"), "fixed b: maybe int", "{}", source);
+        assert_eq!(hover(&source, "m = half"), "fixed m: maybe int", "{}", source);
+        assert_eq!(hover(&source, "n = half"), "fixed n: int", "{}", source);
         // Over several lines, when the last line is `none`, and not otherwise.
-        assert_eq!(hover(&source, "k = half"), "bind k: maybe int", "{}", source);
-        assert_eq!(hover(&source, "j = half"), "bind j: int", "{}", source);
+        assert_eq!(hover(&source, "k = half"), "fixed k: maybe int", "{}", source);
+        assert_eq!(hover(&source, "j = half"), "fixed j: int", "{}", source);
     }
 }
 

@@ -82,7 +82,7 @@ fn assert_offers(marked: &str, present: &[&str], absent: &[&str]) {
 
 #[test]
 fn item_level_offers_declarations() {
-    assert_offers("@@", &["task", "shape", "kind", "task -> type"], &["bind", "show", "Point"]);
+    assert_offers("@@", &["task", "shape", "kind", "task -> type"], &["fixed", "show", "Point"]);
     assert_offers(&PROGRAM.replace("    @@\n", "").replace("fi\n", "fi\n@@\n"), &["task", "kind"], &["when"]);
     let task = complete("@@").0.items.into_iter().find(|i| i.kind == CompletionKind::Snippet && i.label == "task").unwrap();
     assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t${}\nfi"));
@@ -93,7 +93,7 @@ fn item_level_offers_declarations() {
 #[test]
 fn private_offers_the_declarations_it_can_mark() {
     let after = "task main()\nfi\n\npriv @@";
-    assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "bind"]);
+    assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "fixed"]);
     // The word being typed is completed too.
     assert_offers("priv sh@@", &["shape"], &["priv"]);
     // A shape's private field is a name being declared, a private method may
@@ -107,7 +107,7 @@ fn private_offers_the_declarations_it_can_mark() {
 fn statements_offer_keywords_snippets_and_visible_names() {
     assert_offers(
         PROGRAM,
-        &["bind", "hold", "when", "each", "match", "fi", "p", "line", "figure", "total", "area", "origin", "show", "match figure"],
+        &["fixed", "flex", "when", "each", "match", "fi", "p", "line", "figure", "total", "area", "origin", "show", "match figure"],
         &["task", "else", "case", "Circle", "x", "hidden", "true", "send"],
     );
     // The word being typed is replaced.
@@ -138,7 +138,7 @@ fn the_program_used_by_these_tests_compiles() {
 
 #[test]
 fn expressions_offer_values() {
-    assert_offers(&in_main("fixed q = @@"), &["p", "total", "area", "Circle", "Dot", "true", "none", "new", "show"], &["bind", "q", "hidden", "int"]);
+    assert_offers(&in_main("fixed q = @@"), &["p", "total", "area", "Circle", "Dot", "true", "none", "new", "show"], &["fixed", "q", "hidden", "int"]);
     assert_eq!(item(&in_main("fixed q = @@"), "Circle").snippet.as_deref(), Some("Circle(${radius})"));
     assert_eq!(item(&in_main("fixed q = @@"), "Dot").snippet, None);
     assert_eq!(item(&in_main("fixed q = @@"), "Rectangle").detail, "Shape (width: float, height: float)");
@@ -150,18 +150,18 @@ fn expressions_offer_values() {
 
 #[test]
 fn nothing_is_offered_inside_text_ending_in_an_escaped_quote() {
-    assert_offers(&in_main("show(\"say \\\"@@"), &[], &["bind", "when", "p"]);
-    assert_offers(&in_main("show(\"say \\\"hi@@"), &[], &["bind", "when", "p"]);
+    assert_offers(&in_main("show(\"say \\\"@@"), &[], &["fixed", "when", "p"]);
+    assert_offers(&in_main("show(\"say \\\"hi@@"), &[], &["fixed", "when", "p"]);
 }
 
 #[test]
 fn statement_items_start_a_line_even_after_invalid_text() {
-    assert_offers(&in_main("fixed s = 1 @ @@"), &[], &["bind", "when"]);
+    assert_offers(&in_main("fixed s = 1 @ @@"), &[], &["fixed", "when"]);
 }
 
 #[test]
 fn types_are_offered_where_a_type_is_written() {
-    assert_offers(&in_main("fixed q: @@"), &["int", "text", "Point", "Shape"], &["nothing", "p", "bind"]);
+    assert_offers(&in_main("fixed q: @@"), &["int", "text", "Point", "Shape"], &["nothing", "p", "fixed"]);
     assert_offers(&in_main("fixed q: ^@@"), &["int", "Point"], &["p"]);
     assert_offers(&in_main("fixed q = new @@"), &["Point"], &["p"]);
     assert_offers("task f(a: @@", &["int", "float"], &["nothing"]);
@@ -199,7 +199,7 @@ fn fields_still_complete_when_the_rest_of_the_file_is_broken() {
 #[test]
 fn case_offers_the_variants_not_yet_matched() {
     let marked = in_main("match figure\n    case Circle r\n        show(r)\n    case @@\n    fi");
-    assert_offers(&marked, &["Rectangle", "Dot", "all remaining cases"], &["Circle", "p", "bind"]);
+    assert_offers(&marked, &["Rectangle", "Dot", "all remaining cases"], &["Circle", "p", "fixed"]);
     assert_eq!(item(&marked, "Rectangle").snippet.as_deref(), Some("Rectangle ${width} ${height}"));
     assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}"));
     // The bindings after a variant are new names.
@@ -254,7 +254,7 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
     }
     // A parameter's name is new, but it may be one the task changes.
     for marked in ["task f(@@", "task f(a: int, @@"] {
-        assert_eq!(labels(marked), ["hold", "hold&", "bind", "bind&"], "at {:?}", marked);
+        assert_eq!(labels(marked), ["flex", "flex&", "fixed", "fixed&"], "at {:?}", marked);
     }
     // A field's or a method's name is new, but it may be private, a shape's
     // field may be read-only or shared, and a method may change its value or
@@ -283,8 +283,8 @@ fn hover_describes_declarations() {
     );
     let pair = |code: &str, doc: &str| (code.to_string(), doc.to_string());
     assert_eq!(code_and_doc(hover(&source, "area(figure)", 0)), pair("task area(s: Shape) -> float", ""));
-    assert_eq!(code_and_doc(hover(&source, "p,", 0)), pair("bind p: Point", "An immutable variable."));
-    assert_eq!(code_and_doc(hover(&source, "total >", 0)), pair("hold total: int", "A mutable variable."));
+    assert_eq!(code_and_doc(hover(&source, "p,", 0)), pair("fixed p: Point", "An immutable variable."));
+    assert_eq!(code_and_doc(hover(&source, "total >", 0)), pair("flex total: int", "A mutable variable."));
     assert_eq!(code_and_doc(hover(&source, "s: Shape", 0)), pair("s: Shape", "A parameter of task area."));
     assert_eq!(code_and_doc(hover(&source, "r)", 0)), pair("r: float", "Bound by case Circle."));
     assert_eq!(code_and_doc(hover(&source, "i)", 0)), pair("each i: int", "The counter of an each loop."));
@@ -318,7 +318,7 @@ fn a_value_shown_by_its_own_str_keeps_its_type_in_the_editor() {
     let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    region r\n    flex cards = new [Card]() at r\n    cards.add(Card { name: \"Ada\" })\n    show(cards[0])\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_offers(&source.replace("show(cards[0])", "show(cards[0].@@)"), &["name", "str", "copy"], &["len"]);
-    assert_eq!(hover(source, "cards[0])", 0).code, "hold cards: [Card]@r");
+    assert_eq!(hover(source, "cards[0])", 0).code, "flex cards: [Card]@r");
 }
 
 #[test]
@@ -328,7 +328,7 @@ fn show_takes_a_value_with_its_own_str() {
     // value into the call of that method.
     let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    fixed card = Card { name: \"Ada\" }\n    show(\"top: \", card)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "card)", 0).code, "bind card: Card");
+    assert_eq!(hover(source, "card)", 0).code, "fixed card: Card");
     assert_eq!(hover(source, "str(r", 0).code, "str(r: region) -> text@r");
 }
 
@@ -344,7 +344,7 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     // The type a reading gives, and the kind where an error type goes.
     let bound = "task main()\n    fixed n = int(\"42\")\n    show(n { 0 })\nfi\n";
     assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
-    assert_eq!(hover(bound, "n =", 0).code, "bind n: int ~ ParseError");
+    assert_eq!(hover(bound, "n =", 0).code, "fixed n: int ~ ParseError");
     assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["nothing"]);
     // Hovering the kind itself shows what it is.
     let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        failure e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
@@ -367,8 +367,8 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
         let shown = if checks { "show(age { 0 })" } else { "show(unknown)" };
         let bound = format!("task main()\n    fixed age = scan(\"Age: \", int)\n    fixed size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
         assert_eq!(Analysis::new(&bound).diagnostics().is_empty(), checks);
-        assert_eq!(hover(&bound, "age =", 0).code, "bind age: int ~ InputError", "checks: {}", checks);
-        assert_eq!(hover(&bound, "size =", 0).code, "bind size: float ~ InputError", "checks: {}", checks);
+        assert_eq!(hover(&bound, "age =", 0).code, "fixed age: int ~ InputError", "checks: {}", checks);
+        assert_eq!(hover(&bound, "size =", 0).code, "fixed size: float ~ InputError", "checks: {}", checks);
     }
     // The two types this form reads, offered after the prompt, and the kind
     // where an error type goes.
@@ -410,10 +410,10 @@ fn hover_reads_declared_types_when_the_file_doesnt_check() {
         "    @@\n",
         "    show(missing)\n    fixed q = Point { x: 1, y: 2 }\n    fixed far = line.finish\n    fixed made = origin()\n    fixed c = Circle(2.0)\n    show(q)\n",
     );
-    assert_eq!(hover(&source, "q =", 0).code, "bind q: Point");
-    assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point@points");
-    assert_eq!(hover(&source, "made", 0).code, "bind made: Point");
-    assert_eq!(hover(&source, "c =", 0).code, "bind c: Shape");
+    assert_eq!(hover(&source, "q =", 0).code, "fixed q: Point");
+    assert_eq!(hover(&source, "far", 0).code, "fixed far: ^Point@points");
+    assert_eq!(hover(&source, "made", 0).code, "fixed made: Point");
+    assert_eq!(hover(&source, "c =", 0).code, "fixed c: Shape");
 }
 
 const REGIONAL: &str = "\
@@ -453,12 +453,12 @@ fn values_holding_pointers_are_in_the_region_of_their_parts_whether_or_not_the_f
         assert_eq!(Analysis::new(&source).diagnostics().is_empty(), checks);
         let code = |needle: &str| hover(&source, needle, 0).code;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("branch ="), "bind branch: Tree@r", "{}", when);
-        assert_eq!(code("bare ="), "bind bare: Tree@r", "{}", when);
-        assert_eq!(code("lone ="), "bind lone: ^Node@r", "{}", when);
-        assert_eq!(code("linked ="), "bind linked: Node@r", "{}", when);
-        assert_eq!(code("following ="), "bind following: maybe ^Node@r", "{}", when);
-        assert_eq!(code("count ="), "bind count: int", "{}", when);
+        assert_eq!(code("branch ="), "fixed branch: Tree@r", "{}", when);
+        assert_eq!(code("bare ="), "fixed bare: Tree@r", "{}", when);
+        assert_eq!(code("lone ="), "fixed lone: ^Node@r", "{}", when);
+        assert_eq!(code("linked ="), "fixed linked: Node@r", "{}", when);
+        assert_eq!(code("following ="), "fixed following: maybe ^Node@r", "{}", when);
+        assert_eq!(code("count ="), "fixed count: int", "{}", when);
         assert_eq!(code("left right"), "left: ^Tree@r", "{}", when);
     }
 }
@@ -469,12 +469,12 @@ fn a_value_turned_into_a_number_reads_as_that_number() {
     // editor reads them as that number, whether or not the file checks.
     let source = "task main()\n    fixed n = 7\n    fixed f = float(n)\n    fixed w = int(2.9)\n    fixed c = int(n > 3)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "f =", 0).code, "bind f: float");
-    assert_eq!(hover(source, "w =", 0).code, "bind w: int");
-    assert_eq!(hover(source, "c =", 0).code, "bind c: int");
+    assert_eq!(hover(source, "f =", 0).code, "fixed f: float");
+    assert_eq!(hover(source, "w =", 0).code, "fixed w: int");
+    assert_eq!(hover(source, "c =", 0).code, "fixed c: int");
     let broken = source.replace("    fixed c =", "    show(missing)\n    fixed c =");
-    assert_eq!(hover(&broken, "f =", 0).code, "bind f: float");
-    assert_eq!(hover(&broken, "w =", 0).code, "bind w: int");
+    assert_eq!(hover(&broken, "f =", 0).code, "fixed f: float");
+    assert_eq!(hover(&broken, "w =", 0).code, "fixed w: int");
     // Hovering the name of the call says what it does.
     assert!(hover(source, "float(n)", 0).doc.contains("float(n) turns an int"), "{:?}", hover(source, "float(n)", 0).doc);
 }
@@ -487,16 +487,16 @@ fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
          fixed mixed = float(1) + 2.5\n    fixed whole = 2 * total - -(total % 3)\n    fixed inner = (total)\n    fixed unknown = total + missing\n    fixed crossed = 1 + 2.5\n",
     );
     for (needle, code) in [
-        ("less =", "bind less: bool"),
-        ("wrapped =", "bind wrapped: bool"),
-        ("both =", "bind both: bool"),
-        ("mixed =", "bind mixed: float"),
+        ("less =", "fixed less: bool"),
+        ("wrapped =", "fixed wrapped: bool"),
+        ("both =", "fixed both: bool"),
+        ("mixed =", "fixed mixed: float"),
         // An int and a float don't mix, so the arithmetic has no type to read.
-        ("crossed =", "bind crossed"),
-        ("whole =", "bind whole: int"),
-        ("inner =", "bind inner: int"),
+        ("crossed =", "fixed crossed"),
+        ("whole =", "fixed whole: int"),
+        ("inner =", "fixed inner: int"),
         // An operand of unknown type leaves the arithmetic's type unknown.
-        ("unknown =", "bind unknown"),
+        ("unknown =", "fixed unknown"),
     ] {
         assert_eq!(hover(&source, needle, 0).code, code, "at {:?}", needle);
     }
@@ -568,12 +568,12 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
 #[test]
 fn plan_b_blocks_offer_values_and_statements() {
     assert_offers(&in_outcomes("fixed n = m { @@"), &["total", "m", "fail", "none"], &[]);
-    assert_offers(&in_outcomes("fixed n = m {\n        @@"), &["bind", "total", "when"], &[]);
+    assert_offers(&in_outcomes("fixed n = m {\n        @@"), &["fixed", "total", "when"], &[]);
     // `}` closes a plan B, not `fi`, and only its first line may name the failure.
     let marked = in_outcomes("when total > 0\n        fixed n = r {\n            @@");
-    assert_offers(&marked, &["failure", "bind"], &["fi", "else"]);
+    assert_offers(&marked, &["failure", "fixed"], &["fi", "else"]);
     assert_eq!(item(&marked, "failure").snippet.as_deref(), Some("failure ${e}"));
-    assert_offers(&in_outcomes("fixed n = r {\n        failure e\n        @@"), &["bind"], &["failure", "fi"]);
+    assert_offers(&in_outcomes("fixed n = r {\n        failure e\n        @@"), &["fixed"], &["failure", "fi"]);
     // After the plan B closes, the blocks around it continue.
     assert_offers(&in_outcomes("when total > 0\n        fixed n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["failure"]);
     assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
@@ -588,8 +588,8 @@ fn hover_describes_maybe_and_error_names() {
     );
     assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("failure problem: Problem".to_string(), "The failure this plan B handles.".to_string()));
     assert_eq!(code_and_doc(hover(&source, "value + n", 0)), ("value: int".to_string(), "Bound by an is condition.".to_string()));
-    assert_eq!(hover(&source, "m:", 0).code, "bind m: maybe int");
-    assert_eq!(hover(&source, "r =", 0).code, "bind r: int ~ Problem");
+    assert_eq!(hover(&source, "m:", 0).code, "fixed m: maybe int");
+    assert_eq!(hover(&source, "r =", 0).code, "fixed r: int ~ Problem");
     assert_eq!(hover(&source, "maybe int", 0).code, "maybe T");
     assert_eq!(hover(&source, "none", 0).code, "none");
     // `~` explains itself (its class is an operator, as the snapshots show).
@@ -610,8 +610,8 @@ fn hover_reads_maybe_and_error_names_when_the_file_doesnt_check() {
          match r\n    case {got}\n        show(got)\n    case failure bad\n        show(1)\n    fi\n",
     );
     for (needle, code) in [
-        ("a =", "bind a: int"),
-        ("b =", "bind b: int"),
+        ("a =", "fixed a: int"),
+        ("b =", "fixed b: int"),
         ("problem", "failure problem: Problem"),
         ("value}", "value: int"),
         ("wrong", "wrong: Problem"),
@@ -685,11 +685,11 @@ fn hover_describes_regions() {
     assert_eq!(hover(&source, "nodes\n", 0).code, "region nodes");
     assert_eq!(hover(&source, "region nodes", 0).code, "region r");
     assert_eq!(hover(&source, "new Node", 0).code, "new T(value) at r");
-    assert_eq!(hover(&source, "first =", 0).code, "bind first: ^Node@nodes");
+    assert_eq!(hover(&source, "first =", 0).code, "fixed first: ^Node@nodes");
     // While the file doesn't check, written types still show their regions.
     let broken = source.replace("    <- 0\n", "    <- missing\n").replace("fixed first = push(nodes, none)", "fixed first: maybe ^Node@nodes = none\n    fixed two = new@nodes int(2)");
-    assert_eq!(hover(&broken, "first:", 0).code, "bind first: maybe ^Node@nodes");
-    assert_eq!(hover(&broken, "two =", 0).code, "bind two: ^int@nodes");
+    assert_eq!(hover(&broken, "first:", 0).code, "fixed first: maybe ^Node@nodes");
+    assert_eq!(hover(&broken, "two =", 0).code, "fixed two: ^int@nodes");
     assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
     // `at` names a region, and `in` counts through a range.
     assert!(hover(&source, "at r", 0).doc.contains("Allocates in region r"));
@@ -728,9 +728,9 @@ fi
     for source in [&checks, &broken] {
         // The task's `r` and `q` are the caller's `nodes`: from the region
         // argument, from an argument's type, or from a plan B's fallback.
-        assert_eq!(hover(source, "a =", 0).code, "bind a: ^Node@nodes");
-        assert_eq!(hover(source, "b =", 0).code, "bind b: ^Node@nodes");
-        assert_eq!(hover(source, "c =", 0).code, "bind c: ^Node@nodes");
+        assert_eq!(hover(source, "a =", 0).code, "fixed a: ^Node@nodes");
+        assert_eq!(hover(source, "b =", 0).code, "fixed b: ^Node@nodes");
+        assert_eq!(hover(source, "c =", 0).code, "fixed c: ^Node@nodes");
         // A result no argument gives a region to is in none, which hover explains.
         let n = hover(source, "n}", 0);
         assert_eq!(n.code, "n: ^Node@_");
@@ -764,7 +764,7 @@ fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
     assert_offers(source, &["show", "e"], &["fi", "else"]);
     // While the file doesn't check, the binding still has the value's type, not the error's.
     let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    fixed r = parse(\"x\") { failure e\n        0\n    }\n    show(r)\nfi\n";
-    assert_eq!(hover(broken, "r = parse", 0).code, "bind r: int");
+    assert_eq!(hover(broken, "r = parse", 0).code, "fixed r: int");
 }
 
 #[test]
@@ -848,17 +848,17 @@ fn several_results_are_typed_and_completed() {
     assert_eq!(Analysis::new(&RESULTS.replace("    @@\n", "")).diagnostics(), Vec::new());
 
     // Each name in a list takes the type of the value in its place.
-    assert_eq!(hover(RESULTS, "q,", 0).code, "bind q: int");
-    assert_eq!(hover(RESULTS, "r =", 0).code, "bind r: int");
-    assert_eq!(hover(RESULTS, "first", 0).code, "bind first: float");
-    assert_eq!(hover(RESULTS, "second", 0).code, "bind second: bool");
+    assert_eq!(hover(RESULTS, "q,", 0).code, "fixed q: int");
+    assert_eq!(hover(RESULTS, "r =", 0).code, "fixed r: int");
+    assert_eq!(hover(RESULTS, "first", 0).code, "fixed first: float");
+    assert_eq!(hover(RESULTS, "second", 0).code, "fixed second: bool");
     assert_eq!(hover(RESULTS, "divmod", 0).code, "task divmod(a: int, b: int) -> int, int");
 
     // The same while the file doesn't check, from the declarations alone.
     let broken = in_results("show(missing)");
-    assert_eq!(hover(&broken, "q,", 0).code, "bind q: int");
-    assert_eq!(hover(&broken, "second", 0).code, "bind second: bool");
-    assert_eq!(hover(&broken, "r =", 0).code, "bind r: int");
+    assert_eq!(hover(&broken, "q,", 0).code, "fixed q: int");
+    assert_eq!(hover(&broken, "second", 0).code, "fixed second: bool");
+    assert_eq!(hover(&broken, "r =", 0).code, "fixed r: int");
 
     // Another result type after a comma, where `nothing` is not one.
     assert_offers("task f() -> int, @@", &["int", "text", "maybe"], &["nothing", "f"]);
@@ -867,11 +867,11 @@ fn several_results_are_typed_and_completed() {
     // A parameter list's comma still declares a name.
     assert_offers("task f(a: int, @@", &[], &["int", "a"]);
 
-    // Another name after a comma in a `bind`, then values after the `=`.
+    // Another name after a comma in a `fixed`, then values after the `=`.
     assert_offers(&in_results("fixed a, @@"), &[], &["int", "q", "divmod"]);
-    assert_offers(&in_results("flex a, b = 1, @@"), &["q", "divmod", "true"], &["bind"]);
-    assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["bind"]);
-    assert_offers(&in_results("<- 1, @@"), &["q", "divmod"], &["bind"]);
+    assert_offers(&in_results("flex a, b = 1, @@"), &["q", "divmod", "true"], &["fixed"]);
+    assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["fixed"]);
+    assert_offers(&in_results("<- 1, @@"), &["q", "divmod"], &["fixed"]);
 }
 
 const NAMED: &str = "\
@@ -914,8 +914,8 @@ fn named_results_are_names_of_the_task() {
 
     // A named result's type is the task's result type, as a call gives it.
     let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    fixed s, p = pair()\n    show(missing)\nfi\n";
-    assert_eq!(hover(broken, "s, p = pair", 0).code, "bind s: int");
-    assert_eq!(hover(broken, "p = pair", 0).code, "bind p: int");
+    assert_eq!(hover(broken, "s, p = pair", 0).code, "fixed s: int");
+    assert_eq!(hover(broken, "p = pair", 0).code, "fixed p: int");
 
     // Setting a result is offered as a statement, inside its task only.
     assert_offers(&in_named("@@"), &["show", "when"], &["total <- "]);

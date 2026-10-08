@@ -74,12 +74,12 @@ fn hover_shows_array_and_slice_types_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("scores ="), "bind scores: [int#3]", "{}", when);
-        assert_eq!(code("points ="), "bind points: [Point]@r", "{}", when);
-        assert_eq!(code("boxed ="), "bind boxed: ^[int#3]@r", "{}", when);
-        assert_eq!(code("part ="), "bind part: [Point]@r", "{}", when);
-        assert_eq!(code("first ="), "bind first: Point", "{}", when);
-        assert_eq!(code("count ="), "bind count: int", "{}", when);
+        assert_eq!(code("scores ="), "fixed scores: [int#3]", "{}", when);
+        assert_eq!(code("points ="), "fixed points: [Point]@r", "{}", when);
+        assert_eq!(code("boxed ="), "fixed boxed: ^[int#3]@r", "{}", when);
+        assert_eq!(code("part ="), "fixed part: [Point]@r", "{}", when);
+        assert_eq!(code("first ="), "fixed first: Point", "{}", when);
+        assert_eq!(code("count ="), "fixed count: int", "{}", when);
         assert_eq!(code("xs:"), "xs: [int]@r", "{}", when);
         assert_eq!(hover(&source, "x in"), ("each x: int".to_string(), "An item of the array or slice an each loop goes through.".to_string()), "{}", when);
         assert_eq!(code("point in"), "each point: Point", "{}", when);
@@ -151,7 +151,7 @@ fn completion_continues_array_and_slice_expressions() {
         for name in ["scores", "points", "part", "count", "sum"] {
             assert!(values.contains(&name.to_string()), "{} in {:?} ({})", name, values, when);
         }
-        assert!(!values.iter().any(|name| name == "bind" || name == "each" || name == "fi"), "{:?} ({})", values, when);
+        assert!(!values.iter().any(|name| name == "fixed" || name == "each" || name == "fi"), "{:?} ({})", values, when);
         // After its name, only `in`.
         assert_eq!(labels(&program(checks, "each v @@")), ["in"], "{}", when);
     }
@@ -166,9 +166,9 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
         if checks {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
         }
-        assert_eq!(hover(&source, "names =").0, "hold names: [text]@r", "{}", when);
-        assert_eq!(hover(&source, "taken =").0, "bind taken: text@r", "{}", when);
-        assert_eq!(hover(&source, "last =").0, "bind last: Point", "{}", when);
+        assert_eq!(hover(&source, "names =").0, "flex names: [text]@r", "{}", when);
+        assert_eq!(hover(&source, "taken =").0, "fixed taken: text@r", "{}", when);
+        assert_eq!(hover(&source, "last =").0, "fixed last: Point", "{}", when);
     }
     let source = program(true, "flex names = new [text]() at r\n    names.add(\"a\")\n    show(names.del())");
     let (code, doc) = hover(&source, "add(");
@@ -188,7 +188,7 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
 fn a_variant_named_like_a_change_is_still_a_variant() {
     let source = "kind Step\n    add(amount: int)\n    del\nfi\n\ntask main()\n    fixed a = Step.add(2)\n    fixed b = Step.del\n    match a\n        case add n\n            show(n)\n        case del\n            show(0)\n    fi\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "a =").0, "bind a: Step");
+    assert_eq!(hover(source, "a =").0, "fixed a: Step");
 }
 
 #[test]

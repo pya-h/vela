@@ -68,10 +68,10 @@ fn the_program_used_by_these_tests_compiles() {
 #[test]
 fn a_value_of_a_kind_given_types_hovers_as_the_program_writes_it() {
     let source = program("checked");
-    assert_eq!(hover(&source, "some ="), "bind some: Option<int>");
-    assert_eq!(hover(&source, "empty:"), "bind empty: Option<text>");
-    assert_eq!(hover(&source, "written ="), "bind written: Option<float>");
-    assert_eq!(hover(&source, "either ="), "bind either: Either<int, text>");
+    assert_eq!(hover(&source, "some ="), "fixed some: Option<int>");
+    assert_eq!(hover(&source, "empty:"), "fixed empty: Option<text>");
+    assert_eq!(hover(&source, "written ="), "fixed written: Option<float>");
+    assert_eq!(hover(&source, "either ="), "fixed either: Either<int, text>");
     assert_eq!(hover(&source, "v\n"), "v: int");
 }
 
@@ -79,7 +79,7 @@ fn a_value_of_a_kind_given_types_hovers_as_the_program_writes_it() {
 fn a_written_type_reads_the_same_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "empty:"), "bind empty: Option<text>", "{}", when);
+        assert_eq!(hover(&source, "empty:"), "fixed empty: Option<text>", "{}", when);
     }
 }
 
@@ -139,8 +139,8 @@ fn the_types_a_kind_takes_are_offered_inside_it() {
 fn a_variant_given_types_and_what_a_case_binds_of_one_read_the_same_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when).replace("fixed either = Either<int, text>.Right(\"r\")", "fixed either = Either<int, text>.Right(\"r\")\n    match either\n    case Left l\n        show(l)\n    case Right r\n        show(r)\n    fi");
-        assert_eq!(hover(&source, "written ="), "bind written: Option<float>", "{}", when);
-        assert_eq!(hover(&source, "either ="), "bind either: Either<int, text>", "{}", when);
+        assert_eq!(hover(&source, "written ="), "fixed written: Option<float>", "{}", when);
+        assert_eq!(hover(&source, "either ="), "fixed either: Either<int, text>", "{}", when);
         assert_eq!(hover(&source, "l\n        show(l)"), "l: int", "{}", when);
         assert_eq!(hover(&source, "r\n        show(r)"), "r: text", "{}", when);
     }

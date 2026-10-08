@@ -219,8 +219,8 @@ fn hover_and_definitions_follow_names_into_modules() {
     let color = analysis.hover(at(&source, "Color =", 0)).unwrap();
     assert_eq!(color.code, "kind palette.Color\n    Red\n    Blue\nfi");
     // The checker's types name other modules' shapes as the file does.
-    assert_eq!(analysis.hover(at(&source, "corner:", 0)).unwrap().code, "bind corner: geometry.Point");
-    assert_eq!(analysis.hover(at(&source, "square =", 0)).unwrap().code, "bind square: geometry.Figure");
+    assert_eq!(analysis.hover(at(&source, "corner:", 0)).unwrap().code, "fixed corner: geometry.Point");
+    assert_eq!(analysis.hover(at(&source, "square =", 0)).unwrap().code, "fixed square: geometry.Figure");
 
     let definition = analysis.definition(at(&source, "area(square)", 0)).unwrap();
     let from = LineIndex::new(GEOMETRY).utf16_of(GEOMETRY.find("task area(").unwrap() + "task ".len());
@@ -376,7 +376,7 @@ fn types_a_file_cant_write_are_spelled_with_their_module_path() {
         let source = braces_program(checks, "show(size.size)");
         let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
         assert_eq!(analysis.diagnostics().is_empty(), checks, "{:?}", analysis.diagnostics());
-        assert_eq!(analysis.hover(at(&source, "size =", 0)).unwrap().code, "bind size: shapes/geometry.Measure", "checks: {}", checks);
+        assert_eq!(analysis.hover(at(&source, "size =", 0)).unwrap().code, "fixed size: shapes/geometry.Measure", "checks: {}", checks);
         assert_eq!(labels(&braces_program(checks, "show(size.@@)")), ["size", "str", "type"], "checks: {}", checks);
         // A variant listed alone belongs to a kind the file can't name, spelled
         // as the compiler spells it.

@@ -118,8 +118,8 @@ fn the_math_module_hovers_and_completes_its_macros_and_tasks() {
     let pi = analysis.hover(at(&source, "P / 2.0")).unwrap();
     assert_eq!(pi.code, "#P = 3.141592653589793");
     assert!(pi.doc.contains("of type float"), "{}", pi.doc);
-    assert_eq!(analysis.hover(at(&source, "rise =")).unwrap().code, "bind rise: float");
-    assert_eq!(analysis.hover(at(&source, "grown =")).unwrap().code, "bind grown: float");
+    assert_eq!(analysis.hover(at(&source, "rise =")).unwrap().code, "fixed rise: float");
+    assert_eq!(analysis.hover(at(&source, "grown =")).unwrap().code, "fixed grown: float");
     let found = labels(&MATH.replace("    @@\n", "    show(math.@@)\n"));
     for name in ["P", "e", "pow", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log"] {
         assert!(found.contains(&name.to_string()), "{} in {:?}", name, found);

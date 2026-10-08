@@ -295,8 +295,8 @@ fn completion_after_a_dot_starting_a_value_inside_a_method_offers_the_value_and_
 #[test]
 fn a_methods_body_completes_as_a_tasks_does() {
     for checks in [true, false] {
-        assert_offers(&in_step(checks, "@@"), &["bind", "hold", "when", "fi", "by", "show"], &["priv", "alters"]);
-        assert_offers(&in_step(checks, "show(b@@)"), &["by"], &["bind"]);
+        assert_offers(&in_step(checks, "@@"), &["fixed", "flex", "when", "fi", "by", "show"], &["priv", "alters"]);
+        assert_offers(&in_step(checks, "show(b@@)"), &["by"], &["fixed"]);
     }
     // A method's parameter is being named after `(`, and a type follows `:`.
     let source = program(true, "show(1)");
@@ -307,8 +307,8 @@ fn a_methods_body_completes_as_a_tasks_does() {
 #[test]
 fn a_member_line_of_a_shape_or_a_kind_offers_priv_and_alters() {
     let source = program(true, "show(1)");
-    assert_offers(&source.replace("    count: int\n", "    count: int\n    @@\n"), &["priv", "alters"], &["bind"]);
-    assert_offers(&source.replace("    Green\n", "    Green\n    @@\n"), &["priv", "alters"], &["bind"]);
+    assert_offers(&source.replace("    count: int\n", "    count: int\n    @@\n"), &["priv", "alters"], &["fixed"]);
+    assert_offers(&source.replace("    Green\n", "    Green\n    @@\n"), &["priv", "alters"], &["fixed"]);
     assert_offers(&source.replace("    count: int\n", "    count: int\n    priv @@\n"), &["alters"], &["priv"]);
     // A method's name is being declared after `alters`.
     assert_offers(&source.replace("    count: int\n", "    count: int\n    alters @@\n"), &[], &["alters", "count"]);

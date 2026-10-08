@@ -41,7 +41,7 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_group_and_its_values_read_as_declared() {
     assert_eq!(hover(PROGRAM, "args: P"), "args: P...");
     assert_eq!(hover(PROGRAM, "f: ("), "f: (P...) -> R");
-    assert_eq!(hover(PROGRAM, "sum ="), "bind sum: int");
+    assert_eq!(hover(PROGRAM, "sum ="), "fixed sum: int");
     assert_eq!(hover(PROGRAM, "...) -> R"), "P..., args: P..., (P...) -> R, f(args...)");
     assert_eq!(class(PROGRAM, "P..., R"), Some(TokenClass::Type));
     assert_eq!(class(PROGRAM, "args...)"), Some(TokenClass::Parameter));

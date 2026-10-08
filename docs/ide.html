@@ -392,11 +392,11 @@ Press Ctrl+C to stop.</pre>
             as types, and the variant after them;
             <code>endless</code> among the statements and after a loop's name (<code>outer =&gt;</code>), with a snippet
             for it and one for a loop in three parts, and the names a loop's start declares
-            (<code>loop hold i = 0, j = 9 || …</code>, but not the values given them) inside that loop only, typed even
+            (<code>loop flex i = 0, j = 9 || …</code>, but not the values given them) inside that loop only, typed even
             in a file that doesn't parse;
             <code>break</code> and <code>continue</code> inside a loop, but not inside a lambda in it, and after either the names of the loops around it
             (<code>outer =&gt; each …</code>, which hover as loops and are offered nowhere else, and the variable a loop
-            that gives a value gives, <code>bind r = each …</code> or <code>bind r: int ~ LoopResult = each …</code>, which
+            that gives a value gives, <code>fixed r = each …</code> or <code>fixed r: int ~ LoopResult = each …</code>, which
             hovers as <code>r = loop</code>); fields and
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
@@ -426,7 +426,7 @@ Press Ctrl+C to stop.</pre>
             A <code>new</code> written without <code>( )</code>, <code>new [text]</code> or <code>new Point</code>, is a finished value,
             so <code>at</code> follows it rather than <code>~</code>, and it hovers with what it makes even in a file that
             doesn't parse, maps among them. Nothing is offered where a name is being declared: the names after the commas
-            of <code>bind q, r = …</code> and inside the parentheses of <code>bind a, (b, c) = …</code>, which each
+            of <code>fixed q, r = …</code> and inside the parentheses of <code>fixed a, (b, c) = …</code>, which each
             hover with the type of the value in their place (a tuple's item, for a name that takes one apart), and the
             names in the <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code> and
             <code>shape Box&lt;T&gt;</code>. After a <code>:</code> or an <code>&amp;</code> inside those
@@ -438,21 +438,20 @@ Press Ctrl+C to stop.</pre>
             those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it; and
             <code>priv</code>, <code>alters</code>, and <code>shared</code> at the start of a shape's or a kind's
             member, with <code>alters</code> after its <code>priv</code>; a shape's also offers <code>read</code>,
-            with <code>hold</code>, <code>read</code>, and <code>new</code> after <code>shared</code> (a kind's, only
+            with <code>flex</code>, <code>read</code>, and <code>new</code> after <code>shared</code> (a kind's, only
             <code>new</code>). After a shape's name and a dot, <code>Point.</code>, its
             <a href="vela.html#shared">shared fields</a> and <a href="vela.html#shared-methods">shared methods</a> are
             offered, and after a kind's its variants and shared methods, never after a value's name or in a literal;
-            a shared field hovers as <code>shared hold made: int</code>, saying who may change it, and a shared method
+            a shared field hovers as <code>shared flex made: int</code>, saying who may change it, and a shared method
             as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
-            <code>hold</code> and <code>hold&amp;</code>, which make the parameter the task's own copy to change, or
-            the caller's place; such a parameter hovers as <code>hold n: int</code> or <code>hold&amp; n: int</code>,
+            <code>flex</code> and <code>flex&amp;</code>, which make the parameter the task's own copy to change, or
+            the caller's place; such a parameter hovers as <code>flex n: int</code> or <code>flex&amp; n: int</code>,
             and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
-            <code>hold&amp; y = &amp;x</code> or <code>bind&amp; y = &amp;x</code>, hovers as <code>hold&amp; y: int</code>
-            or <code>bind&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.
+            <code>flex&amp; y = &amp;x</code> or <code>fixed&amp; y = &amp;x</code>, hovers as <code>flex&amp; y: int</code>
+            or <code>fixed&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.
             <code>flex</code> and <code>fixed</code>, the new spellings of <code>hold</code> and <code>bind</code>, are
-            read the same everywhere, as keywords, in parameters, in a task's type and in what a lambda keeps. The
-            compiler's messages and the types in a hover say the new words already (<code>(flex&amp; int) -&gt; nothing</code>),
-            while the word a hover starts with is still the old one (<code>hold n: int</code>) until Studio's own words change.</p>
+            read the same everywhere, as keywords, in parameters, in a task's type and in what a lambda keeps; hovers,
+            completion and messages say the new words, whichever spelling the program uses.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -480,7 +479,7 @@ Press Ctrl+C to stop.</pre>
             <code>else when</code> lines up as its <code>else</code> does and indents its own block, since one
             <code>fi</code> closes the whole chain. A <code>match</code> or a <code>when</code>
             <a href="vela.html#choices">used as a value</a> opens its block wherever it is written, so
-            <code>bind area = match s</code> takes its cases at the <code>bind</code>'s own level. A line that closes
+            <code>fixed area = match s</code> takes its cases at the <code>fixed</code>'s own level. A line that closes
             every block it opens, as a one-line plan B does, opens none of them. Blocks, a method's
             among them, fold from the gutter.</p>
         </div>
