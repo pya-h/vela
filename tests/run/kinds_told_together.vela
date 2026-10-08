@@ -1,0 +1,94 @@
+; Variants that tell their kind's types together: each tells what it can,
+; a failure is told by the error of the place, and a shape literal's other
+; fields tell what one field's variant doesn't.
+
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+kind Pair<T: shown>
+    Two(a: T, b: Option<T>)
+    Nothing
+fi
+
+kind Quiet<T>
+    Said(value: T)
+    Silent
+fi
+
+shape Holder<T: shown>
+    v: Option<T>
+    q: Quiet<T>
+fi
+
+; A branch's failure, told by the error the task sends.
+task positive(n: int) -> int ~ Option<text>
+    <- when n > 0 n else fail Option.None fi
+fi
+
+task named(m: maybe int) -> int ~ Option<text>
+    <- match m
+    case {v} = when v > 9 fail Option.Some("big") else v fi
+    case none = fail Option.None
+    fi
+fi
+
+; Each branch tells one of the types.
+task swap<A: shown, B: shown>(e: Either<A, B>@r) -> Either<B, A>@r
+    <- match e
+    case Left a = Either.Right(a)
+    case Right b = Either.Left(b)
+    fi
+fi
+
+; A payload of a kind given the task's types, in the region of the value.
+task pair<T: shown>(r: region, a: T, b: Option<T>@r) -> Pair<T>@r
+    <- Pair.Two(a, b)
+fi
+
+task holder<T: shown>(r: region, x: T) -> Holder<T>@r
+    <- Holder { v: Option.Some(x), q: Quiet.Silent }
+fi
+
+task takes(e: Either<int, text>)
+    show("takes ", e)
+fi
+
+task positive_of(o: Option<int>) -> Option<bool>
+    <- match o
+    case Some v = Option.Some(v > 0)
+    case None = Option.None
+    fi
+fi
+
+task main()
+    region r
+    show(positive(3) { 0 }, " ", positive(-3) { 0 }, " ", named(4) { 0 }, " ", named(40) { 0 })
+    match named(none)
+    case {v}
+        show(v)
+    case failure e
+        show("failed ", e)
+    fi
+
+    bind chosen: Either<int, text> = when true Either.Right("x") else Either.Left(1) fi
+    takes(when false Either.Right("y") else Either.Left(2) fi)
+    bind typed: [Either<int, text>#2] = [Either.Right("a"), Either.Left(1)]
+    bind both = [Either.Left(1), Either.Right("b")]
+    show(chosen, " ", typed, " ", both, " ", swap(chosen))
+
+    show(pair(r, "a", Option.Some("b")), " ", pair(r, 1, Option.None))
+    bind h = Holder { q: Quiet<int>.Silent, v: Option.None }
+    bind g = Holder { v: Option.Some(1), q: Quiet.Silent }
+    show(h.v, " ", g.v, " ", holder(r, "z").v)
+
+    ; A task value is written with the kinds as they are written.
+    bind convert: (Option<int>) -> Option<bool> = positive_of
+    show(convert, " ", convert(Option.Some(5)))
+fi

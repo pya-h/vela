@@ -1,0 +1,6 @@
+; error: 3:29: expected '||': a loop takes one condition, so join two with 'and' or 'or', got ','
+task main()
+    loop hold j = 0 || j < 3, j > 5 || j++
+        show(j)
+    fi
+fi

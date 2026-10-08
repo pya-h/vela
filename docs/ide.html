@@ -390,8 +390,10 @@ Press Ctrl+C to stop.</pre>
             <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor;
             the types after a kind's name before one of its variants (<code>Option&lt;int&gt;.None</code>), colored
             as types, and the variant after them;
-            <code>endless</code> among the statements, and the names a loop's start declares
-            (<code>loop hold i = 0, j = 9 || …</code>) inside that loop only, typed even in a file that doesn't parse;
+            <code>endless</code> among the statements and after a loop's name (<code>outer =&gt;</code>), with a snippet
+            for it and one for a loop in three parts, and the names a loop's start declares
+            (<code>loop hold i = 0, j = 9 || …</code>, but not the values given them) inside that loop only, typed even
+            in a file that doesn't parse;
             <code>break</code> and <code>continue</code> inside a loop, but not inside a lambda in it, and after either the names of the loops around it
             (<code>outer =&gt; each …</code>, which hover as loops and are offered nowhere else); fields and
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through

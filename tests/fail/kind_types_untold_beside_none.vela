@@ -1,0 +1,15 @@
+; error: 13:24: cannot infer the type of 'left', since its value doesn't say every type its kind takes; give it a type, such as 'left: Either<maybe int, int>', or write them, as in 'Either<maybe int, int>.…'
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+task main()
+    bind left = Either.Left(none)
+    show(left)
+fi

@@ -72,6 +72,9 @@ const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
+/// A loop in three parts, with a name of its own.
+const LOOP_PARTS_SNIPPET: &str = "loop hold ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
+
 const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "endless", "each", "block", "match", "region"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail", "match", "when"];
 
@@ -128,8 +131,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let items = vec![
             keyword("loop"),
             keyword("each"),
+            keyword("endless"),
             snippet("loop", "repeat while a condition holds", "loop ${condition}\n\t${}\nfi"),
+            snippet("loop … || … || …", "a loop with a start, a condition and a step", LOOP_PARTS_SNIPPET),
             snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
+            snippet("endless", "a loop that never ends by itself", "endless\n\t${}\nfi"),
         ];
         return (items, word_start, byte);
     }
@@ -2001,7 +2007,9 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         snippet("loop", "repeat while a condition holds", "loop ${condition}\n\t${}\nfi"),
         snippet("when … is", "run a block when a pattern matches", "when ${value} is {${name}}\n\t${}\nfi"),
         snippet("loop … is", "repeat while a pattern matches", "loop ${value} is {${name}}\n\t${}\nfi"),
+        snippet("loop … || … || …", "a loop with a start, a condition and a step", LOOP_PARTS_SNIPPET),
         snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
+        snippet("endless", "a loop that never ends by itself", "endless\n\t${}\nfi"),
         snippet("block", "a block of its own, whose names and regions end at its fi", "block\n\t${}\nfi"),
         snippet("match", "a match on a kind", "match ${value}\ncase ${Variant}\n\t${}\nfi"),
     ]);

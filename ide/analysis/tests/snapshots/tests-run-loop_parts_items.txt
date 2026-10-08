@@ -1,0 +1,144 @@
+  1 | ; warning: 83:5: this loop never ends by its condition; write 'endless' to say so
+    | comment:; warning: 83:5: this loop never ends by its condition; write 'endless' to say so
+  2 | ; Items of a loop's parts with types, lambdas and blocks in them, a condition
+    | comment:; Items of a loop's parts with types, lambdas and blocks in them, a condition
+  3 | ; over several lines, and loops that never finish a task.
+    | comment:; over several lines, and loops that never finish a task.
+  5 | kind Either<A: shown, B: shown>
+    | keyword:kind  type:Either  punctuation:<  type:A  punctuation::  keyword:shown  punctuation:,  type:B  punctuation::  keyword:shown  punctuation:>
+  6 |     Left(value: A)
+    | variant:Left  punctuation:(  field:value  punctuation::  type:A  punctuation:)
+  7 |     Right(value: B)
+    | variant:Right  punctuation:(  field:value  punctuation::  type:B  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | shape Pair<L, R>
+    | keyword:shape  type:Pair  punctuation:<  type:L  punctuation:,  type:R  punctuation:>
+ 11 |     left: L
+    | field:left  punctuation::  type:L
+ 12 |     right: R
+    | field:right  punctuation::  type:R
+ 13 | fi
+    | keyword:fi
+ 15 | shape Bag
+    | keyword:shape  type:Bag
+ 16 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+ 17 | fi
+    | keyword:fi
+ 19 | kind Token
+    | keyword:kind  type:Token
+ 20 |     Num(n: int)
+    | variant:Num  punctuation:(  field:n  punctuation::  type-builtin:int  punctuation:)
+ 21 |     Stop
+    | variant:Stop
+ 22 | fi
+    | keyword:fi
+ 24 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 25 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 26 | fi
+    | keyword:fi
+ 28 | task token(i: int) -> Token
+    | keyword:task  task:token  punctuation:(  parameter:i  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Token
+ 29 |     <- when i < 4 Token.Num(i * 2) else Token.Stop fi
+    | keyword:<-  keyword:when  parameter:i  operator:<  number:4  type:Token  punctuation:.  variant:Num  punctuation:(  parameter:i  operator:*  number:2  punctuation:)  keyword:else  type:Token  punctuation:.  variant:Stop  keyword:fi
+ 30 | fi
+    | keyword:fi
+ 32 | ; Ends only by sending, so the task never finishes without a value.
+    | comment:; Ends only by sending, so the task never finishes without a value.
+ 33 | task first_over(xs: [int]@r, limit: int) -> int
+    | keyword:task  task:first_over  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 35 |     endless
+    | keyword:endless
+ 36 |         when xs[i] > limit
+    | keyword:when  parameter:xs  punctuation:[  variable:i  punctuation:]  operator:>  parameter:limit
+ 37 |             <- xs[i]
+    | keyword:<-  parameter:xs  punctuation:[  variable:i  punctuation:]
+ 38 |         fi
+    | keyword:fi
+ 39 |         i++
+    | variable:i  operator:++
+ 40 |     fi
+    | keyword:fi
+ 41 | fi
+    | keyword:fi
+ 43 | ; Results set inside the loop change its condition.
+    | comment:; Results set inside the loop change its condition.
+ 44 | task count() -> total: int
+    | keyword:task  task:count  punctuation:(  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int
+ 45 |     total <- 0
+    | variable:total  keyword:<-  number:0
+ 46 |     loop total < 3
+    | keyword:loop  variable:total  operator:<  number:3
+ 47 |         total <- total + 1
+    | variable:total  keyword:<-  variable:total  operator:+  number:1
+ 48 |     fi
+    | keyword:fi
+ 49 | fi
+    | keyword:fi
+ 51 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 52 |     region r
+    | keyword:region  region:r
+ 54 |     ; The commas of types given part no items.
+    | comment:; The commas of types given part no items.
+ 55 |     loop hold e = Either<int, text>.Left(3), p: Pair<int, text> = Pair { left: 1, right: "a" }, n = 0 || n < 1 || n++
+    | keyword:loop  keyword:hold  variable:e  operator:=  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Left  punctuation:(  number:3  punctuation:)  punctuation:,  variable:p  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:1  punctuation:,  field:right  punctuation::  string:"a"  punctuation:}  punctuation:,  variable:n  operator:=  number:0  operator:||  variable:n  operator:<  number:1  operator:||  variable:n  operator:++
+ 56 |         show(e, " ", p.left, p.right)
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:left  punctuation:,  variable:p  punctuation:.  field:right  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 59 |     ; Nor do those of a lambda's call, before its 'fi' or after it.
+    | comment:; Nor do those of a lambda's call, before its 'fi' or after it.
+ 60 |     loop hold v = apply((x: int) -> int <- x * 2 fi, 3), j = 0 || j < v || j = apply((x: int) -> int <- x + 2 fi, j)
+    | keyword:loop  keyword:hold  variable:v  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  number:3  punctuation:)  punctuation:,  variable:j  operator:=  number:0  operator:||  variable:j  operator:<  variable:v  operator:||  variable:j  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  number:2  keyword:fi  punctuation:,  variable:j  punctuation:)
+ 61 |         show("j ", j)
+    | builtin-fn:show  punctuation:(  string:"j "  punctuation:,  variable:j  punctuation:)
+ 62 |     fi
+    | keyword:fi
+ 63 |     loop hold i = 0, bind twice = (x: int) -> int <- x * 2 fi || i < 3 || i++
+    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  keyword:bind  variable:twice  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 64 |         show("twice ", twice(i))
+    | builtin-fn:show  punctuation:(  string:"twice "  punctuation:,  variable:twice  punctuation:(  variable:i  punctuation:)  punctuation:)
+ 65 |     fi
+    | keyword:fi
+ 67 |     ; A condition over several lines, and the step after its 'fi'.
+    | comment:; A condition over several lines, and the step after its 'fi'.
+ 68 |     loop hold k = 0 || match token(k)
+    | keyword:loop  keyword:hold  variable:k  operator:=  number:0  operator:||  keyword:match  task:token  punctuation:(  variable:k  punctuation:)
+ 69 |     case Num n = n < 5
+    | keyword:case  variant:Num  variable:n  operator:=  variable:n  operator:<  number:5
+ 70 |     case Stop = false
+    | keyword:case  variant:Stop  operator:=  keyword:false
+ 71 |     fi || k++
+    | keyword:fi  operator:||  variable:k  operator:++
+ 72 |         show("k ", k)
+    | builtin-fn:show  punctuation:(  string:"k "  punctuation:,  variable:k  punctuation:)
+ 73 |     fi
+    | keyword:fi
+ 75 |     ; A slice changed in the loop, and results set in it.
+    | comment:; A slice changed in the loop, and results set in it.
+ 76 |     hold b: Bag@r = Bag { items: [0, ...] at r }
+    | keyword:hold  variable:b  punctuation::  type:Bag  operator:@  region:r  operator:=  type:Bag  punctuation:{  field:items  punctuation::  punctuation:[  number:0  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:}
+ 77 |     loop b.items.len < 3
+    | keyword:loop  variable:b  punctuation:.  field:items  punctuation:.  field:len  operator:<  number:3
+ 78 |         b.items.add(1)
+    | variable:b  punctuation:.  field:items  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+ 79 |     fi
+    | keyword:fi
+ 80 |     show(b.items.len, " ", count(), " ", first_over([1, 5, 9, ...] at r, 4))
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:items  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  task:count  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  task:first_over  punctuation:(  punctuation:[  number:1  punctuation:,  number:5  punctuation:,  number:9  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  number:4  punctuation:)  punctuation:)
+ 82 |     ; 'true' as the only part says no more than 'endless'.
+    | comment:; 'true' as the only part says no more than 'endless'.
+ 83 |     loop || true
+    | keyword:loop  operator:||  keyword:true
+ 84 |         break
+    | keyword:break
+ 85 |     fi
+    | keyword:fi
+ 86 | fi
+    | keyword:fi

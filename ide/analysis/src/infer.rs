@@ -30,6 +30,16 @@ pub(crate) struct Knowledge<'a> {
     takes_region: OnceCell<HashSet<String>>,
 }
 
+impl vela::parser::LineTokens for Knowledge<'_> {
+    fn token_at(&self, p: usize) -> Option<&Token> {
+        self.token(p)
+    }
+
+    fn gt_touches_next(&self, p: usize) -> bool {
+        self.range(p).end == self.range(p + 1).start
+    }
+}
+
 impl<'a> Knowledge<'a> {
     pub fn new(source: &'a str, scan: &'a Scan, checked: &'a Checked) -> Self {
         let sig = scan
@@ -78,31 +88,7 @@ impl<'a> Knowledge<'a> {
     /// given, a literal the types a shape is given, and a variant, its `.`
     /// touching the `>`, the types a kind is given.
     pub fn types_close(&self, p: usize) -> Option<usize> {
-        if self.token(p) != Some(&Token::Lt) {
-            return None;
-        }
-        let mut depth = 0usize;
-        // Parentheses pair up inside the types, and no `>` inside them closes
-        // anything, as the parser has it (`(i < n), m > (k)` compares).
-        let mut grouped = 0usize;
-        for q in p + 1.. {
-            match self.token(q) {
-                Some(Token::Gt) if grouped > 0 && depth == 0 => return None,
-                Some(Token::LParen) => grouped += 1,
-                Some(Token::RParen) if grouped == 0 => return None,
-                Some(Token::RParen) => grouped -= 1,
-                Some(Token::Gt) if depth == 0 => {
-                    let touching = self.range(q).end == self.range(q + 1).start;
-                    let opens = matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace)) || (touching && self.token(q + 1) == Some(&Token::Dot) && self.ident(q + 2).is_some());
-                    return opens.then_some(q);
-                }
-                Some(Token::Lt) => depth += 1,
-                Some(Token::Gt) => depth -= 1,
-                Some(token) if token.writes_type() => {}
-                _ => return None,
-            }
-        }
-        None
+        vela::parser::types_close(self, p)
     }
 
     /// Whether the `(` at `q` starts a lambda (see `Scan::lambdas`).
@@ -375,62 +361,7 @@ impl<'a> Knowledge<'a> {
         if q >= bar {
             return None;
         }
-        let opens = |token: Option<&Token>| matches!(token, Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block));
-        let closes = |token: Option<&Token>| matches!(token, Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi));
-        let sets = |token: Option<&Token>| matches!(token, Some(Token::Assign)) || token.is_some_and(|token| vela::parser::step_operator(token).is_some());
-        // Whether an item starts at `p`: `hold` or `bind`, or a place set
-        // before the next `,`.
-        let starts = |p: usize| {
-            if matches!(self.token(p), Some(Token::Hold | Token::Bind)) {
-                return true;
-            }
-            let mut depth = 0usize;
-            for r in p..bar {
-                match self.token(r) {
-                    token if opens(token) => depth += 1,
-                    token if closes(token) => depth = depth.saturating_sub(1),
-                    _ if depth > 0 => {}
-                    Some(Token::Comma) => return false,
-                    token if sets(token) => return true,
-                    _ => {}
-                }
-            }
-            false
-        };
-        let places = |from: usize, to: usize| {
-            from < to && (from..to).all(|r| matches!(self.token(r), Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma)) || (r == from && matches!(self.token(r), Some(Token::Hold | Token::Bind))))
-        };
-        let (mut start, mut depth, mut names, mut values) = (first, 0usize, 1usize, None::<usize>);
-        for p in first..bar {
-            let token = self.token(p);
-            match token {
-                _ if opens(token) => depth += 1,
-                _ if closes(token) => depth = depth.saturating_sub(1),
-                _ if depth > 0 => {}
-                Some(Token::Assign) if values.is_none() => values = Some(1),
-                Some(Token::Comma) => {
-                    let parts = match values {
-                        None if places(start, p) => {
-                            names += 1;
-                            false
-                        }
-                        None => true,
-                        Some(given) => given >= names || starts(p + 1),
-                    };
-                    if parts {
-                        if (start..p).contains(&q) {
-                            return Some((start, p));
-                        }
-                        (start, names, values) = (p + 1, 1, None);
-                    } else if let Some(given) = values.as_mut() {
-                        *given += 1;
-                    }
-                }
-                _ if values.is_none() && sets(token) => values = Some(names),
-                _ => {}
-            }
-        }
-        Some((start, bar))
+        vela::parser::loop_items(self, first, bar).into_iter().find(|&(_, last)| q <= last)
     }
 
     /// The first and last position of each value between `first` and `last`,

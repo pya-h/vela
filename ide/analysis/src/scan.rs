@@ -478,7 +478,25 @@ fn named_key(tokens: &Tokens, p: usize) -> bool {
     }
 }
 
+impl vela::parser::LineTokens for Tokens<'_> {
+    fn token_at(&self, p: usize) -> Option<&Token> {
+        self.token(p)
+    }
+
+    fn gt_touches_next(&self, p: usize) -> bool {
+        self.range(p).end == self.range(p + 1).start
+    }
+}
+
 impl<'a> Tokens<'a> {
+    /// Whether an item of the start of the loop whose line starts after
+    /// `first` begins at `p`, as the parser parts them (see `vela::parser`'s
+    /// `loop_items`): the start ends at its first `||`, or with the line.
+    fn starts_loop_item(&self, first: usize, p: usize) -> bool {
+        let last = (p..).find(|&q| matches!(self.token(q), Some(Token::Parts | Token::Newline) | None)).unwrap_or(p);
+        vela::parser::loop_items(self, first, last).iter().any(|&(start, _)| start == p)
+    }
+
     fn new(source: &'a str, all: &'a [LexToken]) -> Self {
         let significant = all
             .iter()
@@ -1226,6 +1244,8 @@ impl<'a> Classifier<'a> {
         // `bind`, that covers the names after it there.
         let mut loop_start = false;
         let mut loop_words: Option<&'static str> = None;
+        // The position after that loop's `loop`.
+        let mut loop_first = 0usize;
         // On an `include` line, and inside its parentheses of names.
         let mut in_include = false;
         let mut in_include_names = false;
@@ -1528,7 +1548,12 @@ impl<'a> Classifier<'a> {
                         // `bind q, r = …`: another name.
                         (Some(intro), _) => declaring = Some(intro),
                         // `loop hold i = 0, j = 9`: another name the word covers.
-                        (None, Some(intro)) if loop_start && tokens.ident(p + 1).is_some() && matches!(tokens.token(p + 2), Some(Token::Assign | Token::Comma)) => {
+                        (None, Some(intro))
+                            if loop_start
+                                && tokens.ident(p + 1).is_some()
+                                && matches!(tokens.token(p + 2), Some(Token::Assign | Token::Comma | Token::Colon))
+                                && tokens.starts_loop_item(loop_first, p + 1) =>
+                        {
                             declaring = Some(intro);
                             declaring_list = Some(intro);
                         }
@@ -1593,6 +1618,7 @@ impl<'a> Classifier<'a> {
                             // first `||`, declares the names after `hold` or `bind`.
                             loop_start = *token == Token::Loop;
                             loop_words = None;
+                            loop_first = p + 1;
                             if let Some((q, at)) = loop_name.take() {
                                 let id = self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), String::new());
                                 if let Some(named) = self.out.get_mut(at) {

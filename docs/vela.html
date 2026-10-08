@@ -382,7 +382,8 @@ block shared type break continue endless</pre>
       <p>
         A task that returns a value must send one on every path: the compiler rejects a task that could reach its
         end without sending. A <code>when</code> counts only if both branches send, a <code>match</code> only if every
-        case does, and a loop never counts, since its body might not run. A task without a return type uses a bare
+        case does, and a loop counts only if it never ends by itself and no <code>break</code> stops it, as an
+        <code>endless</code> one that leaves only with <code>&lt;-</code> (any other loop's body might not run). A task without a return type uses a bare
         <code>&lt;-</code> to return early. A task whose results are named sets them instead, and reaching its end
         sends them; the same paths are walked, to make sure each one is set (see <a href="#named-results">Named
         Results</a>).
@@ -584,7 +585,7 @@ block shared type break continue endless</pre>
       </p>
       <p id="loop-warnings">
         Two more are about loops that never end. A loop written to never end by itself, <code>loop || ||</code>,
-        <code>loop ||</code>, or <code>loop true</code>, is told to say so with <code>endless</code> (see
+        <code>loop ||</code>, <code>loop true</code>, or <code>loop || true</code>, is told to say so with <code>endless</code> (see
         <a href="#loop-parts">A loop in three parts</a>). And a loop whose condition reads only variables that
         nothing in the loop changes, with nothing in it that leaves, never ends once it starts:
       </p>
@@ -597,7 +598,8 @@ block shared type break continue endless</pre>
         It looks only at simple cases, and costs one walk over the loop: a condition of variables, values, fields and
         operators, each variable a plain value of the task, and a loop with no <code>break</code> or
         <code>&lt;-</code> in it. Anything that may change a variable counts as changing it: setting it or a part of
-        it, giving it with <code>&amp;</code>, calling a method on it, or a lambda keeping it as a place; and a
+        it, a result set with <code>total &lt;- …</code>, giving it with <code>&amp;</code>, calling a method on it
+        or changing a slice in it (<code>b.items.add(1)</code>), or a lambda keeping it as a place; and a
         condition that calls a task, or reads through a pointer, a reference or a shared field, is never told, since
         those may change elsewhere.
       </p>
@@ -2212,7 +2214,11 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           in a task sending <code>int ~ Option&lt;text&gt;</code>), and a value of the kind beside it in an array, in
           the branches of a <code>when</code> or a <code>match</code>, or across <code>==</code>. A whole
           <code>when</code> or <code>match</code>, and a tuple, take them from the place too:
-          <code>&lt;- when c Option.None else Option.None fi</code> in a task sending <code>Option&lt;int&gt;</code>.
+          <code>&lt;- when c Option.None else Option.None fi</code> in a task sending <code>Option&lt;int&gt;</code>,
+          and a branch's <code>fail Option.None</code> takes them from the error side. Values side by side may each
+          say some: <code>[Either.Left(1), Either.Right("x")]</code> is an <code>[Either&lt;int, text&gt;#2]</code>,
+          and in a shape literal one field's variant takes them from the fields beside it, as in
+          <code>Holder { v: Option.Some(1), q: Quiet.Silent }</code>.
           Where nothing says them, they are written after the kind's name, <code>Option&lt;int&gt;.None</code>,
           <code>Either&lt;int, text&gt;.Right("r")</code>: all of them or none, never after the variant, and with
           the <code>.</code> touching the <code>&gt;</code>, which tells them from a comparison with a field of
@@ -3222,17 +3228,23 @@ show(total)</pre>
           no part of it uses is an error. Items run left to right, so one may use the names before it.</li>
         <li><strong>Items and commas.</strong> A <code>,</code> ends an item only where the next one starts, so
           <code>a, b = b, a + b</code> and <code>hold q, r = divmod(a, b)</code> are one item each, as they are on a
-          line of their own.</li>
+          line of their own; nor do the commas of brackets, of the types a use is given
+          (<code>Either&lt;int, text&gt;.Left(3)</code>), or of a lambda part items. The start and the step stay on
+          the loop's line, so a <code>when</code> or <code>match</code> in an item closes with <code>fi</code> there.</li>
         <li><strong>The condition.</strong> One, or none: a loop with none never ends by itself. It is any condition
           a loop takes, an <code>is</code> and parts joined with <code>and</code> too, and it is tested inside the
-          loop, so a plan B there may stop it.</li>
+          loop, so a plan B there may stop it. It alone may go on past the line, as a <code>match</code> giving a
+          <code>bool</code> does, and then the step follows its <code>fi</code>: <code>fi || i++</code>. A start that
+          only gives a value, as in <code>loop a || b</code>, is an error that says Vela writes <code>or</code>.</li>
         <li><strong>The step.</strong> Any statements, a call or a one-line <code>when … fi</code> too, run after
           each pass. <code>continue</code> goes to the step, as in C, and <code>break</code> leaves without it. So a
           step has no <code>continue</code> of its loop, and declares no names, which would end before anything could
           use them. With no step, the last <code>||</code> may be left out: <code>loop hold w = 0 || w &lt; 2</code>.</li>
         <li><strong>Endless.</strong> <code>endless</code> takes nothing on its line. <code>loop || ||</code>,
-          <code>loop ||</code> and <code>loop true</code> work the same, with a warning to write <code>endless</code>
-          (see <a href="#warnings">Warnings</a>). Either can be named, <code>outer =&gt; endless</code>.</li>
+          <code>loop ||</code>, <code>loop true</code> and <code>loop || true</code> work the same, with a warning to
+          write <code>endless</code> (see <a href="#warnings">Warnings</a>). Either can be named,
+          <code>outer =&gt; endless</code>. One that nothing in it stops never finishes, so a task that ends with it
+          sends from inside it, with no <code>&lt;-</code> needed after it.</li>
         <li><strong>Not 'or'.</strong> <code>||</code> parts a loop's parts and nothing else: anywhere else it is an
           error that says Vela writes <code>or</code>.</li>
       </ul>

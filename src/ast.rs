@@ -925,7 +925,13 @@ impl Type {
             }
             Type::Named(name, None) => Type::Named(name.clone(), f(name)),
             Type::Applied(applied) => {
-                let region = applied.region.clone().or_else(|| f(&applied.name));
+                // One given types a task or shape takes may hold text or
+                // pointers, as `Option<T>` may.
+                let region = applied
+                    .region
+                    .clone()
+                    .or_else(|| f(&applied.name))
+                    .or_else(|| applied.types.iter().any(|ty| ty.params().iter().any(|param| !param.starts_with('?'))).then(|| f("")).flatten());
                 Type::Applied(Box::new(Applied {
                     name: applied.name.clone(),
                     types: applied.types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect(),

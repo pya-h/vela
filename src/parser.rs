@@ -2,13 +2,13 @@ use crate::ast::*;
 use crate::error::{Error, Result};
 use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
-/// The mistake of a macro written inside a task, shape, or kind.
 /// A loop's start, condition and step, each the first and the one after the
 /// last position of its items (see `Parser::loop_parts`).
 type LoopParts = Vec<Vec<(usize, usize)>>;
 
 /// The error for `||` where it parts no loop's parts.
 const PARTS_AS_OR: &str = "unexpected '||'; Vela writes 'or'";
+/// The mistake of a macro written inside a task, shape, or kind.
 const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line";
 
 /// How deeply code may nest: parentheses, operators in a row, unary
@@ -2395,9 +2395,6 @@ impl Parser {
         Ok(Stmt::new(if stop { StmtKind::Break(name) } else { StmtKind::Continue(name) }, span))
     }
 
-    /// `outer => loop …` or `outer => each …`: a loop and its name, which a
-    /// `break` or a `continue` in a loop inside it gives to stop it or go on
-    /// with it.
     /// `endless`, then its statements from the next line, closed by `fi`: a
     /// loop that never ends by itself, `loop || ||` said in a word.
     fn parse_endless(&mut self) -> Result<Stmt> {
@@ -2419,18 +2416,27 @@ impl Parser {
     /// After `loop`, where its line holds `||` outside brackets: the parts it
     /// parts, each the positions of its items, from first to the one after
     /// the last. The `||`s, and the `,`s parting items, are made line ends,
-    /// so each item is read as a statement on a line of its own.
+    /// so each item is read as a statement on a line of its own. The
+    /// condition alone may go on past the line, as a `match` there does, and
+    /// the step follows its `fi`.
     fn loop_parts(&mut self) -> Result<Option<LoopParts>> {
         let mut depth = 0usize;
+        let mut blocks = 0usize;
         let mut bars = Vec::new();
         let mut end = self.pos;
         while let Some(token) = self.tokens.get(end) {
             match token {
-                Token::Newline | Token::Eof => break,
-                Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless => depth += 1,
-                Token::RParen | Token::RBracket | Token::RBrace | Token::Fi => depth = depth.saturating_sub(1),
+                Token::Eof => break,
+                Token::Newline if blocks == 0 || bars.len() != 1 => break,
                 Token::Parts if depth == 0 => bars.push(end),
-                _ => {}
+                Token::Lt => {
+                    if let Some(close) = types_close(self, end) {
+                        end = close;
+                    }
+                }
+                _ => {
+                    nests(Some(token), &mut depth, &mut blocks);
+                }
             }
             end += 1;
         }
@@ -2450,7 +2456,7 @@ impl Parser {
         let mut parts = Vec::new();
         for (i, (&first, &last)) in bounds.iter().zip(&ends).enumerate() {
             // The condition is one value, or none.
-            let items = if i == 1 { if first < last { vec![(first, last)] } else { Vec::new() } } else { self.loop_items(first, last) };
+            let items = if i == 1 { if first < last { vec![(first, last)] } else { Vec::new() } } else { loop_items(self, first, last) };
             parts.push(items);
         }
         for p in bars.into_iter().chain(parts.iter().flatten().map(|&(_, last)| last)) {
@@ -2463,99 +2469,6 @@ impl Parser {
         Ok(Some(parts))
     }
 
-    /// The items of a loop's start or step from `first` to the one before
-    /// `last`, parted by `,`s. A `,` parts two items only where the next one
-    /// starts, so `a, b = b, a` and `hold q, r = divmod(a, b)` are one item
-    /// each: before an item's `=`, a `,` follows a place it sets, and after
-    /// it, one of the values for those places, until each has one.
-    fn loop_items(&self, first: usize, last: usize) -> Vec<(usize, usize)> {
-        let mut items = Vec::new();
-        let mut start = first;
-        let mut depth = 0usize;
-        let mut places = 1usize;
-        let mut values: Option<usize> = None;
-        let mut p = first;
-        while p < last {
-            match self.tokens.get(p) {
-                Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block | Token::Loop | Token::Each) => depth += 1,
-                Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi) => depth = depth.saturating_sub(1),
-                _ if depth > 0 => {}
-                Some(Token::Assign) if values.is_none() => values = Some(1),
-                Some(token) if values.is_none() && step_operator(token).is_some() => {
-                    values = Some(if matches!(token, Token::Increment | Token::Decrement) { places } else { 1 });
-                }
-                Some(Token::Comma) => {
-                    let parts = match values {
-                        // `a, b = …`: another place, or the end of a statement with none.
-                        None if self.sets_places(start, p) => {
-                            places += 1;
-                            false
-                        }
-                        None => true,
-                        Some(given) => given >= places || self.starts_loop_item(p + 1, last),
-                    };
-                    if parts {
-                        items.push((start, p));
-                        start = p + 1;
-                        places = 1;
-                        values = None;
-                    } else if let Some(given) = values.as_mut() {
-                        *given += 1;
-                    }
-                }
-                _ => {}
-            }
-            p += 1;
-        }
-        if start < last || !items.is_empty() {
-            items.push((start, last));
-        }
-        items
-    }
-
-    /// Whether the tokens from `first` to the one before `last` are places an
-    /// assignment or a declaration sets, as `hold q` and `t.x` are, rather
-    /// than a statement of its own, as `advance(&it)` is.
-    fn sets_places(&self, first: usize, last: usize) -> bool {
-        let mut depth = 0usize;
-        first < last
-            && (first..last).all(|p| match self.tokens.get(p) {
-            Some(Token::LBracket) => {
-                depth += 1;
-                true
-            }
-            Some(Token::RBracket) => {
-                depth = depth.saturating_sub(1);
-                true
-            }
-            _ if depth > 0 => true,
-            Some(Token::Hold | Token::Bind) => p == first,
-            Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma) => true,
-            _ => false,
-        })
-    }
-
-    /// Whether a loop's item starts at `p`: `hold` or `bind`, or what sets a
-    /// place, before the next `,` or `last`.
-    fn starts_loop_item(&self, p: usize, last: usize) -> bool {
-        if matches!(self.tokens.get(p), Some(Token::Hold | Token::Bind)) {
-            return true;
-        }
-        let mut depth = 0usize;
-        for q in p..last {
-            match self.tokens.get(q) {
-                Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block) => depth += 1,
-                Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi) => depth = depth.saturating_sub(1),
-                _ if depth > 0 => {}
-                Some(Token::Comma) => return false,
-                Some(Token::Assign) => return true,
-                Some(token) if step_operator(token).is_some() => return true,
-                _ => {}
-            }
-        }
-        false
-    }
-
     /// The rest of `loop start || condition || step` (see `loop_parts`).
     fn parse_parted_loop(&mut self, span: Span, parts: LoopParts) -> Result<Stmt> {
         let mut parts = parts.into_iter();
@@ -2566,7 +2479,8 @@ impl Parser {
         // after it, each item one.
         let mut declaring: Option<bool> = None;
         let mut started = Vec::new();
-        for (first, last) in start {
+        let items = start.len();
+        for (n, (first, last)) in start.into_iter().enumerate() {
             self.pos = first;
             let item = match self.peek() {
                 Token::Hold | Token::Bind => {
@@ -2583,7 +2497,18 @@ impl Parser {
             if let StmtKind::Binding { reference: true, .. } = item.kind {
                 return Err(Error::at(item.span, "a loop's start declares values for the loop, not references; name the place itself"));
             }
-            self.end_loop_item(last)?;
+            // `loop a || b`: a start that only gives a value is a condition,
+            // and `||` was meant as 'or'.
+            if let StmtKind::Expr(e) = &item.kind
+                && matches!(e.kind, ExprKind::Binary(..) | ExprKind::Unary(..) | ExprKind::Var(_) | ExprKind::BoolLit(_))
+            {
+                let bar = if n + 1 == items { last } else { first };
+                return Err(Error::at(
+                    self.spans.get(bar).copied().unwrap_or_default(),
+                    "a loop's start sets places or calls tasks, and this one only gives a value; for either of two conditions, Vela writes 'or'",
+                ));
+            }
+            self.end_loop_item(last, "',' or '||': a loop's start parts its items with ',', and '||' ends it")?;
             started.push(item);
         }
         let cond = match cond.first() {
@@ -2593,7 +2518,8 @@ impl Parser {
                     return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
                 }
                 let cond = self.parse_condition()?;
-                self.end_loop_item(last)?;
+                let what = if step.is_empty() { "the end of the line or '||': a loop takes one condition, so join two with 'and' or 'or'" } else { "'||': a loop takes one condition, so join two with 'and' or 'or'" };
+                self.end_loop_item(last, what)?;
                 Some(cond)
             }
             None => None,
@@ -2605,7 +2531,7 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), "an item of a loop's step is missing between two ','s"));
             }
             steps.push(self.parse_stmt()?);
-            self.end_loop_item(last)?;
+            self.end_loop_item(last, "',' or the end of the line: a loop's step parts its items with ',', and its line ends after them")?;
         }
         // The line ends after the last part.
         while !matches!(self.peek(), Token::Newline | Token::Eof) {
@@ -2618,14 +2544,25 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
-    /// After an item of a loop's parts, which ends at `last`.
-    fn end_loop_item(&mut self, last: usize) -> Result<()> {
+    /// After an item of a loop's parts, which ends at `last`; `what` is
+    /// what may follow it.
+    fn end_loop_item(&mut self, last: usize, what: &str) -> Result<()> {
         if self.pos < last {
-            return Err(self.unexpected("',' or '||': a loop's start and step part their items with ',', and '||' parts the start, the condition and the step"));
+            return Err(self.unexpected(what));
+        }
+        // A block an item opens closes on the loop's line.
+        if self.pos > last {
+            return Err(Error::at(
+                self.spans.get(last).copied().unwrap_or_default(),
+                "an item of a loop's start or step ends on the loop's line, so a 'when' or 'match' in it closes with 'fi' there; for more, put them in the loop's body",
+            ));
         }
         Ok(())
     }
 
+    /// `outer => loop …` or `outer => each …`: a loop and its name, which a
+    /// `break` or a `continue` in a loop inside it gives to stop it or go on
+    /// with it.
     fn parse_named_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let name = self.expect_ident()?;
@@ -4549,4 +4486,197 @@ pub fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
         Token::PowerAssign => (BinaryOp::Pow, "**="),
         _ => return None,
     })
+}
+
+/// The tokens a loop's line is read from, by position, as `loop_items` and
+/// `types_close` read them: the parser's, or Studio's, which hold comments
+/// too (no token at their positions).
+pub trait LineTokens {
+    fn token_at(&self, p: usize) -> Option<&Token>;
+    /// Whether the `>` at `p` touches what follows it.
+    fn gt_touches_next(&self, p: usize) -> bool;
+}
+
+impl LineTokens for Parser {
+    fn token_at(&self, p: usize) -> Option<&Token> {
+        self.tokens.get(p)
+    }
+
+    fn gt_touches_next(&self, p: usize) -> bool {
+        match (self.spans.get(p), self.spans.get(p + 1)) {
+            (Some(gt), Some(next)) => gt.line == next.line && gt.col + 1 == next.col,
+            _ => false,
+        }
+    }
+}
+
+/// How `token` nests what follows it: brackets, and the words a `fi` closes,
+/// which `blocks` counts, so that the `fi` of a lambda, whose parentheses
+/// have opened and closed already, closes nothing. Whether it nests.
+fn nests(token: Option<&Token>, depth: &mut usize, blocks: &mut usize) -> bool {
+    match token {
+        Some(Token::LParen | Token::LBracket | Token::LBrace) => *depth += 1,
+        Some(Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless) => {
+            *depth += 1;
+            *blocks += 1;
+        }
+        Some(Token::RParen | Token::RBracket | Token::RBrace) => *depth = depth.saturating_sub(1),
+        Some(Token::Fi) => {
+            if *blocks > 0 {
+                *blocks -= 1;
+                *depth = depth.saturating_sub(1);
+            }
+        }
+        _ => return false,
+    }
+    true
+}
+
+/// The `>` closing the types a use gives, when the `<` at `p` opens them, as
+/// the parser reads them: a call follows the types a task is given, a
+/// literal the types a shape is given, and a variant, its `.` touching the
+/// `>`, the types a kind is given.
+pub fn types_close(tokens: &impl LineTokens, p: usize) -> Option<usize> {
+    if tokens.token_at(p) != Some(&Token::Lt) {
+        return None;
+    }
+    let mut depth = 0usize;
+    // Parentheses pair up inside the types, and no `>` inside them closes
+    // anything: `(i < n), m > (k)` compares.
+    let mut grouped = 0usize;
+    for q in p + 1.. {
+        match tokens.token_at(q) {
+            Some(Token::Gt) if grouped > 0 && depth == 0 => return None,
+            Some(Token::LParen) => grouped += 1,
+            Some(Token::RParen) if grouped == 0 => return None,
+            Some(Token::RParen) => grouped -= 1,
+            Some(Token::Gt) if depth == 0 => {
+                let next = tokens.token_at(q + 1);
+                let opens = matches!(next, Some(Token::LParen | Token::LBrace))
+                    || (tokens.gt_touches_next(q) && next == Some(&Token::Dot) && matches!(tokens.token_at(q + 2), Some(Token::Ident(_))));
+                return opens.then_some(q);
+            }
+            Some(Token::Lt) => depth += 1,
+            Some(Token::Gt) => depth -= 1,
+            Some(token) if token.writes_type() => {}
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// The items of a loop's start or step from `first` to the one before
+/// `last`, parted by `,`s, each its first position and the one after its
+/// last. A `,` parts two items only where the next one starts, so `a, b =
+/// b, a` and `hold q, r = divmod(a, b)` are one item each: before an item's
+/// `=`, a `,` follows a place it sets, and after it, one of the values for
+/// those places, until each has one. No `,` inside brackets, a block, or the
+/// types a use gives or a name is written with parts anything.
+pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(usize, usize)> {
+    let mut items = Vec::new();
+    let mut start = first;
+    let (mut depth, mut blocks) = (0usize, 0usize);
+    // The `<…>`s open in a type written after `:`.
+    let mut typed: Option<usize> = None;
+    let mut places = 1usize;
+    let mut values: Option<usize> = None;
+    let mut p = first;
+    while p < last {
+        let token = tokens.token_at(p);
+        if typed.is_some() && values.is_none() {
+            match token {
+                Some(Token::Lt) => typed = typed.map(|open| open + 1),
+                Some(Token::Gt) => typed = typed.map(|open| open.saturating_sub(1)),
+                Some(Token::Comma) if typed > Some(0) => {}
+                _ => {}
+            }
+            if typed > Some(0) {
+                p += 1;
+                continue;
+            }
+        }
+        match token {
+            Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, p) => p = close,
+            _ if nests(token, &mut depth, &mut blocks) => {}
+            _ if depth > 0 => {}
+            Some(Token::Colon) if values.is_none() => typed = Some(0),
+            Some(Token::Assign) if values.is_none() => values = Some(1),
+            Some(token) if values.is_none() && step_operator(token).is_some() => {
+                values = Some(if matches!(token, Token::Increment | Token::Decrement) { places } else { 1 });
+            }
+            Some(Token::Comma) => {
+                let parts = match values {
+                    // `a, b = …`: another place, or the end of a statement with none.
+                    None if sets_places(tokens, start, p) => {
+                        places += 1;
+                        false
+                    }
+                    None => true,
+                    Some(given) => given >= places || starts_loop_item(tokens, p + 1, last),
+                };
+                if parts {
+                    items.push((start, p));
+                    start = p + 1;
+                    places = 1;
+                    values = None;
+                    typed = None;
+                } else if let Some(given) = values.as_mut() {
+                    *given += 1;
+                }
+            }
+            _ => {}
+        }
+        p += 1;
+    }
+    if start < last || !items.is_empty() {
+        items.push((start, last));
+    }
+    items
+}
+
+/// Whether the tokens from `first` to the one before `last` are places an
+/// assignment or a declaration sets, as `hold q` and `t.x` are, rather than
+/// a statement of its own, as `advance(&it)` is.
+fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
+    let mut depth = 0usize;
+    first < last
+        && (first..last).all(|p| match tokens.token_at(p) {
+            Some(Token::LBracket) => {
+                depth += 1;
+                true
+            }
+            Some(Token::RBracket) => {
+                depth = depth.saturating_sub(1);
+                true
+            }
+            _ if depth > 0 => true,
+            Some(Token::Hold | Token::Bind) => p == first,
+            Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma) | None => true,
+            _ => false,
+        })
+}
+
+/// Whether a loop's item starts at `p`: `hold` or `bind`, a name and the
+/// type it is written with, or what sets a place, before the next `,` or
+/// `last`.
+fn starts_loop_item(tokens: &impl LineTokens, p: usize, last: usize) -> bool {
+    if matches!(tokens.token_at(p), Some(Token::Hold | Token::Bind)) {
+        return true;
+    }
+    let (mut depth, mut blocks) = (0usize, 0usize);
+    let mut q = p;
+    while q < last {
+        let token = tokens.token_at(q);
+        match token {
+            Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, q) => q = close,
+            _ if nests(token, &mut depth, &mut blocks) => {}
+            _ if depth > 0 => {}
+            Some(Token::Comma) => return false,
+            Some(Token::Assign | Token::Colon) => return true,
+            Some(token) if step_operator(token).is_some() => return true,
+            _ => {}
+        }
+        q += 1;
+    }
+    false
 }

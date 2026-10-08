@@ -1523,7 +1523,7 @@ impl Generator {
                     self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
                     match ty {
                         Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, v);"),
-                        Type::Task(_) | Type::Closure(_) => self.w.line(&format!("(void)v; VELA__RT__PUT(&w, \"{}\");", task_text(ty))),
+                        Type::Task(_) | Type::Closure(_) => self.w.line(&format!("(void)v; VELA__RT__PUT(&w, \"{}\");", self.task_text(ty))),
                         _ => self.w.line(&format!("{}(&w, v);", write_helper(ty))),
                     }
                     self.w.line("return vela__rt__built(&w, r);");
@@ -1597,7 +1597,7 @@ impl Generator {
                 self.w.open("if (i > 0)");
                 self.w.line("VELA__RT__PUT(w, \", \");");
                 self.w.close();
-                self.w.line(&put_item(items, "v.items[i]"));
+                self.w.line(&self.put_item(items, "v.items[i]"));
                 self.w.close();
                 self.w.line("VELA__RT__PUT(w, \"]\");");
             }
@@ -1617,9 +1617,9 @@ impl Generator {
                 self.w.line("VELA__RT__PUT(w, \", \");");
                 self.w.close();
                 self.w.line("first = false;");
-                self.w.line(&put_item(key, "v->entries[i].key"));
+                self.w.line(&self.put_item(key, "v->entries[i].key"));
                 self.w.line("VELA__RT__PUT(w, \": \");");
-                self.w.line(&put_item(value, "v->entries[i].value"));
+                self.w.line(&self.put_item(value, "v->entries[i].value"));
                 self.w.close();
                 self.w.line("VELA__RT__PUT(w, \"]\");");
             }
@@ -1629,7 +1629,7 @@ impl Generator {
                     if i > 0 {
                         self.w.line("VELA__RT__PUT(w, \", \");");
                     }
-                    self.w.line(&put_item(item, &format!("v.{}", tuple_member(i))));
+                    self.w.line(&self.put_item(item, &format!("v.{}", tuple_member(i))));
                 }
                 self.w.line("VELA__RT__PUT(w, \")\");");
             }
@@ -1641,7 +1641,7 @@ impl Generator {
                 self.w.line("return;");
                 self.w.close();
                 self.w.line("VELA__RT__PUT(w, \"{ \");");
-                self.w.line(&put_item(inner, &value));
+                self.w.line(&self.put_item(inner, &value));
                 self.w.line("VELA__RT__PUT(w, \" }\");");
             }
             Type::Named(owner, _) if self.has_own_str(owner) => {
@@ -1661,7 +1661,7 @@ impl Generator {
                     for (i, field) in fields.iter().enumerate() {
                         let before = if i == 0 { format!("{} {{ ", written) } else { ", ".to_string() };
                         self.w.line(&format!("VELA__RT__PUT(w, \"{}{}: \");", before, field.name));
-                        self.w.line(&put_item(&field.ty, &format!("v.{}", c_ident(&field.name))));
+                        self.w.line(&self.put_item(&field.ty, &format!("v.{}", c_ident(&field.name))));
                     }
                     self.w.line("VELA__RT__PUT(w, \" }\");");
                 }
@@ -1678,7 +1678,7 @@ impl Generator {
                         if i > 0 {
                             self.w.line("    VELA__RT__PUT(w, \", \");");
                         }
-                        self.w.line(&format!("    {}", put_item(&field.ty, &format!("v.data.{}.{}", c_ident(&variant.tag), c_ident(&field.name)))));
+                        self.w.line(&format!("    {}", self.put_item(&field.ty, &format!("v.data.{}.{}", c_ident(&variant.tag), c_ident(&field.name)))));
                     }
                     if !variant.payload.is_empty() {
                         self.w.line("    VELA__RT__PUT(w, \")\");");
@@ -2221,8 +2221,20 @@ impl Generator {
                 // step runs after a `continue` too, and never after a `break`.
                 let name = self.loop_name.take();
                 self.w.open("");
-                for item in &parted.start {
+                for (i, item) in parted.start.iter().enumerate() {
                     self.gen_stmt(item)?;
+                    // A name of the loop's own that it only sets is unread in C.
+                    if let StmtKind::Binding { names, .. } = &item.kind {
+                        for bound in names.iter().flat_map(Bound::leaves).filter(|bound| bound.name != DISCARD) {
+                            let read = block_reads(parted.start.get(i + 1..).unwrap_or_default(), &bound.name)
+                                || parted.cond.iter().flat_map(Condition::parts).any(|part| expr_reads(&part.value, &bound.name))
+                                || block_reads(&parted.step, &bound.name)
+                                || block_reads(&parted.body, &bound.name);
+                            if !read {
+                                self.w.line(&format!("(void){};", c_ident(&bound.name)));
+                            }
+                        }
+                    }
                 }
                 self.enter_loop(name);
                 self.w.open("while (1)");
@@ -3355,10 +3367,10 @@ impl Generator {
         };
         for arg in before {
             let value = self.gen_expr(arg)?;
-            self.w.line(&shown(e, arg.ty()?, &value, false)?);
+            self.w.line(&self.shown(e, arg.ty()?, &value, false)?);
         }
         let value = self.gen_expr(last)?;
-        self.w.line(&shown(e, last.ty()?, &value, true)?);
+        self.w.line(&self.shown(e, last.ty()?, &value, true)?);
         Ok(())
     }
 
@@ -4038,41 +4050,43 @@ fn written_helper(ty: &Type, ends: bool) -> String {
     format!("vela__rt__{}_{}", if ends { "show" } else { "write" }, name)
 }
 
-/// The statement `show` writes a value `value` of type `ty` with, ending the
-/// line when `ends`: a number, a bool, or text by the runtime's own helper, and
-/// anything else through a writer to the output (see `Generator::gen_writer`).
-fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
-    let written = match ty {
-        Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
-        Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
-        Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, task_text(ty)),
-        Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
-            format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
+impl Generator {
+    /// The statement `show` writes a value `value` of type `ty` with, ending the
+    /// line when `ends`: a number, a bool, or text by the runtime's own helper, and
+    /// anything else through a writer to the output (see `Generator::gen_writer`).
+    fn shown(&self, e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
+        let written = match ty {
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
+            Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
+            Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, self.task_text(ty)),
+            Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
+                format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
+            }
+            other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
+        };
+        Ok(if ends { format!("{} vela__rt__show_line();", written) } else { written })
+    }
+
+    /// What a task value is written as: its type, `task (int) -> int`, with each
+    /// shape or kind by its own name. A value can't say which task it holds.
+    fn task_text(&self, ty: &Type) -> String {
+        format!("task {}", ty.map_names(&|name| self.written_name(name)))
+    }
+
+    /// The statement that writes `value`, of type `ty`, inside another value: text
+    /// in quotes, a pointer as its address, and anything but a number or a bool
+    /// by its type's `write`.
+    fn put_item(&self, ty: &Type, value: &str) -> String {
+        match ty {
+            Type::Int | Type::Unit => format!("vela__rt__put_int(w, {});", value),
+            Type::Char => format!("vela__rt__put_char(w, {});", value),
+            Type::Float => format!("vela__rt__put_float(w, {});", value),
+            Type::Bool => format!("vela__rt__put_bool(w, {});", value),
+            Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
+            Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
+            Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(w, \"{}\");", value, self.task_text(ty)),
+            _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
         }
-        other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
-    };
-    Ok(if ends { format!("{} vela__rt__show_line();", written) } else { written })
-}
-
-/// What a task value is written as: its type, `task (int) -> int`, with each
-/// shape or kind by its own name. A value can't say which task it holds.
-fn task_text(ty: &Type) -> String {
-    format!("task {}", ty.map_names(&|name| unqualified(name).to_string()))
-}
-
-/// The statement that writes `value`, of type `ty`, inside another value: text
-/// in quotes, a pointer as its address, and anything but a number or a bool
-/// by its type's `write`.
-fn put_item(ty: &Type, value: &str) -> String {
-    match ty {
-        Type::Int | Type::Unit => format!("vela__rt__put_int(w, {});", value),
-        Type::Char => format!("vela__rt__put_char(w, {});", value),
-        Type::Float => format!("vela__rt__put_float(w, {});", value),
-        Type::Bool => format!("vela__rt__put_bool(w, {});", value),
-        Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
-        Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
-        Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(w, \"{}\");", value, task_text(ty)),
-        _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
     }
 }
 

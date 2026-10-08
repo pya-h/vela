@@ -1,0 +1,8 @@
+; error: 5:12: a loop's start sets places or calls tasks, and this one only gives a value; for either of two conditions, Vela writes 'or'
+task main()
+    hold a = true
+    hold b = false
+    loop a || b
+        a = false
+    fi
+fi

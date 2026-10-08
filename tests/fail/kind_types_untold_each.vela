@@ -1,0 +1,16 @@
+; error: 13:16: can't tell which type 'T' is for this 'Option', since its values don't say and nothing this value goes into names one; write it, as in 'Option<int>.None'
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+task main()
+    each x in [Option.None]
+        show(x)
+    fi
+fi

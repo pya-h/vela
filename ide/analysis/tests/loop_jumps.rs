@@ -108,8 +108,10 @@ fn what_an_each_goes_through_is_outside_its_loop() {
 #[test]
 fn only_a_loop_is_offered_after_a_loop_s_name() {
     let offered = labels("task main()\n    outer => @@\nfi\n");
-    assert!(offered.iter().all(|label| label == "loop" || label == "each"), "{:?}", offered);
-    assert!(!offered.is_empty());
+    assert!(offered.iter().all(|label| label.starts_with("loop") || label == "each" || label == "endless"), "{:?}", offered);
+    for word in ["loop", "each", "endless", "loop … || … || …"] {
+        assert!(offered.iter().any(|label| label == word), "{:?}", offered);
+    }
 }
 
 #[test]

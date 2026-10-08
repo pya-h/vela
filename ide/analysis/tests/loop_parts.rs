@@ -95,3 +95,24 @@ fn endless_is_a_loop_that_break_stops() {
     let named = labels(&PROGRAM.replace("break outer", "break @@"));
     assert_eq!(named, ["outer"]);
 }
+
+#[test]
+fn values_in_a_start_are_no_names_of_its_own() {
+    let source = "\
+task sum3(a: int, b: int, c: int) -> int
+    <- a + b + c
+fi
+task main()
+    hold p = 1
+    hold q = 2
+    hold yy = 4
+    loop hold i = 0, n = sum3(p, q, 3), a, b = p, yy || i < n || i++
+        show(i, q, yy, a, b)
+    fi
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "q, yy, a").as_deref(), Some("hold q: int"));
+    assert_eq!(hover(source, "yy, a, b)").as_deref(), Some("hold yy: int"));
+    assert_eq!(hover(source, "b)").as_deref(), Some("hold b: int"));
+}

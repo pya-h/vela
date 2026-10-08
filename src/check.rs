@@ -230,10 +230,11 @@ pub struct Checker {
     noted_instances: HashSet<String>,
     /// The variants of kinds that take types made in the statement being
     /// checked whose types neither their values nor anything else has told
-    /// yet: where each is, its kind, its variant, and the first type untold. The place
+    /// yet: where each is, its kind, its variant, the first type untold, and
+    /// its types as a message writes them, `int` for each untold. The place
     /// the value goes tells them (see `settle_variant`); one still untold at
     /// the statement's end is a mistake.
-    untold_kinds: Vec<(Span, String, String, String)>,
+    untold_kinds: Vec<(Span, String, String, String, String)>,
     /// The shapes being made for their types, innermost last: a field of one may
     /// name a shape given types of its own, which needs that shape made first
     /// (see `shape_instance`).
@@ -1768,12 +1769,21 @@ impl Checker {
         // is left to that one.
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
+        let kinds = self.untold_kinds.len();
         let mut found = Ok(());
         for field in fields.iter_mut() {
             let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else { continue };
             match self.check_expr(&mut field.value) {
                 Ok(ty) => {
-                    self.match_params(&declared.ty, &ty, &mut given);
+                    // A variant whose types it didn't tell, `Option.None`,
+                    // tells nothing, and another field may.
+                    let mut told = HashMap::new();
+                    self.match_params(&declared.ty, &ty, &mut told);
+                    for (param, ty) in told {
+                        if !ty.params().iter().any(|name| name.starts_with(UNTOLD)) {
+                            given.entry(param).or_insert(ty);
+                        }
+                    }
                 }
                 Err(error) => {
                     found = Err(error);
@@ -1783,6 +1793,7 @@ impl Checker {
         }
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
+        self.untold_kinds.truncate(kinds);
         found?;
         let mut types = Vec::new();
         for param in &shape.types {
@@ -3027,16 +3038,29 @@ impl Checker {
         // and a jump there leaves a loop around this one. A name without
         // `hold` or `bind` is one already declared, which it changes.
         for item in parted.start.iter_mut() {
-            if let StmtKind::Assign(targets, _) = &item.kind
-                && let Some((name, at)) = targets.iter().find_map(|target| match target {
-                    Target::Place(Expr { kind: ExprKind::Var(name), span, .. }) if self.lookup(name).is_none() => Some((name.clone(), *span)),
-                    _ => None,
-                })
-            {
+            let mut places = Vec::new();
+            match &item.kind {
+                StmtKind::Assign(targets, _) => targets.iter().for_each(|target| target_places(target, &mut places)),
+                StmtKind::Step { target, .. } => places.push(target),
+                _ => {}
+            }
+            if let Some((name, at)) = places.iter().find_map(|place| match &place.kind {
+                ExprKind::Var(name) if self.lookup(name).is_none() => Some((name.clone(), place.span)),
+                _ => None,
+            }) {
                 return err(
                     at,
                     format!("unknown variable '{0}'; a loop's start sets names already declared, and declares its own after 'hold' or 'bind', as in 'loop hold {0} = 0 || …'", name),
                 );
+            }
+            // The loop's name is no name of its start, whose names live in the
+            // loop, though a jump there leaves the loop around it.
+            if let (StmtKind::Binding { names, .. }, Some((loop_name, at))) = (&item.kind, &named) {
+                let mut declared = Vec::new();
+                names.iter().for_each(|bound| bound_names(bound, &mut declared));
+                if let Some((name, span)) = declared.into_iter().find(|(name, _)| name == loop_name) {
+                    return err(span, format!("'{}' is already the name of a loop around this, at {}:{}", name, at.line, at.col));
+                }
             }
             self.check_stmt(item)?;
         }
@@ -3054,6 +3078,11 @@ impl Checker {
         match &parted.cond {
             None if !parted.endless && parted.start.is_empty() && parted.step.is_empty() => self.warnings.push(Error::at(span, ENDLESS_UNSAID)),
             None => {}
+            Some(cond) if says_true(cond) => {
+                if parted.start.is_empty() && parted.step.is_empty() {
+                    self.warnings.push(Error::at(span, ENDLESS_UNSAID));
+                }
+            }
             Some(cond) => {
                 if let Some(names) = unchanging {
                     self.warn_unchanging(&names, cond.value.span);
@@ -3517,17 +3546,19 @@ impl Checker {
         // that nothing told it: `Option.None == Option.None`. A place that
         // tells other types is a mistake of its own (`Either<int, text>`
         // given `Either.Right(5)`).
-        if let (Err(error), Some((at, kind, tag, param))) = (&result, &untold_kind)
-            && !error.message.starts_with("expected type")
-            && !error.message.starts_with("cannot infer")
-            && error.message.contains(&format!("{}<", unqualified(kind)))
-            && ["<…", "…>", ", …"].iter().any(|untold| error.message.contains(untold))
+        if let (Err(error), Some((at, kind, tag, param, example))) = (&result, &untold_kind)
+            && ((!error.message.starts_with("expected type")
+                && !error.message.starts_with("cannot infer")
+                && error.message.contains(&format!("{}<", unqualified(kind)))
+                && ["<…", "…>", ", …"].iter().any(|untold| error.message.contains(untold)))
+                // `each x in [Option.None]`: no item tells its types.
+                || error.message.starts_with("cannot tell the type of"))
         {
-            return err(*at, self.untold_kind_message(kind, tag, param));
+            return err(*at, untold_kind_message(kind, tag, param, example));
         }
         result?;
-        if let Some((at, kind, tag, param)) = untold_kind {
-            return err(at, self.untold_kind_message(&kind, &tag, &param));
+        if let Some((at, kind, tag, param, example)) = untold_kind {
+            return err(at, untold_kind_message(&kind, &tag, &param, &example));
         }
         if let Some(at) = unsettled {
             return err(at, self.unsettled_copy());
@@ -3788,7 +3819,7 @@ impl Checker {
                 self.unset = entry;
                 result?;
                 // `loop true`: one that never ends by itself says so in a word.
-                if cond.single() && cond.pattern.is_none() && matches!(cond.value.kind, ExprKind::BoolLit(true)) {
+                if says_true(cond) {
                     self.warnings.push(Error::at(span, ENDLESS_UNSAID));
                 } else if let Some(names) = unchanging {
                     self.warn_unchanging(&names, cond.value.span);
@@ -3990,6 +4021,7 @@ impl Checker {
         let Some(branches) = gives else { return Ok(None) };
         let settled = self.settle_branches(span, &given, branches)?;
         let Some(settled) = settled else { return Ok(None) };
+        let settled = self.made_kinds(settled, span)?;
         for (i, _, _) in given.iter().filter(|(_, ty, _)| !ty.unknown() && *ty != settled) {
             match (arms.get_mut(*i), else_block.as_mut()) {
                 (Some(arm), _) => self.settle_value(&mut arm.body, &settled)?,
@@ -4763,6 +4795,7 @@ impl Checker {
         }
         let Some(words) = gives else { return Ok(None) };
         let Some(settled) = self.settle_branches(span, &given, words)? else { return Ok(None) };
+        let settled = self.made_kinds(settled, span)?;
         for (i, _, _) in given.iter().filter(|(_, ty, _)| !ty.unknown() && *ty != settled) {
             if let Some(case) = cases.get_mut(*i) {
                 self.settle_value(&mut case.body, &settled)?;
@@ -5025,6 +5058,15 @@ impl Checker {
         }
     }
 
+    /// How `ty`, a kind whose variant didn't tell all of its types, is written
+    /// with them, as the variant's message suggests (see `untold_kinds`):
+    /// `Option<Option<int>>` for `Option.Some(Option.None)`.
+    fn untold_example(&self, ty: &Type) -> Option<String> {
+        let Type::Applied(applied) = ty else { return None };
+        let (_, kind, _, _, example) = self.untold_kinds.iter().rev().find(|(_, kind, ..)| *kind == applied.name)?;
+        Some(format!("{}<{}>", unqualified(kind), example))
+    }
+
     /// The type a `bind` or `hold` without an annotation gives `name`, from the
     /// type of its value.
     fn inferred_type(&self, name: &str, actual: &Type, at: Span) -> Result<Type> {
@@ -5043,8 +5085,8 @@ impl Checker {
                 format!(
                     "cannot infer the type of '{0}', since its value doesn't say every type its kind takes; give it a type, such as '{0}: {1}', or write them, as in '{2}'",
                     name,
-                    settled_example(other),
-                    untold_written(other)
+                    self.untold_example(other).unwrap_or_else(|| settled_example(other).to_string()),
+                    self.untold_example(other).map_or_else(|| untold_written(other), |example| format!("{}.…", example))
                 ),
             ),
             other if unsettled(other) => err(
@@ -6909,13 +6951,19 @@ impl Checker {
         }
         // A kind that takes types: the ones written, or the ones the values
         // show, and the rest from the place the value goes (see `settle_variant`).
-        let given = self.variant_types(kind, &def, &variant, written, args)?;
+        let (given, hints) = self.variant_types(kind, &def, &variant, written, args)?;
         if def.types.iter().all(|param| given.contains_key(&param.name)) {
             let types: Vec<Type> = def.types.iter().filter_map(|param| given.get(&param.name).cloned()).collect();
-            return self.made_variant(kind, tag, &types, args, span);
+            return self.made_variant(kind, tag, &types, args, false, span);
         }
         let untold = def.types.iter().find(|param| !given.contains_key(&param.name)).map(|param| param.name.clone()).unwrap_or_default();
-        self.untold_kinds.push((span, kind.to_string(), tag.to_string(), untold));
+        // The types to suggest: the ones told, and `int` in place of each untold.
+        let example: Vec<String> = def
+            .types
+            .iter()
+            .map(|param| given.get(&param.name).or_else(|| hints.get(&param.name)).map_or(Type::Int, |ty| settled_example(&ty.without_regions())).to_string())
+            .collect();
+        self.untold_kinds.push((span, kind.to_string(), tag.to_string(), untold, example.join(", ")));
         let types = def.types.iter().map(|param| given.get(&param.name).cloned().unwrap_or_else(|| Type::Param(format!("{}{}", UNTOLD, param.name)))).collect();
         Ok(Type::Applied(Box::new(Applied { name: kind.to_string(), types, region: None })))
     }
@@ -6923,7 +6971,9 @@ impl Checker {
     /// The types the variant `variant` of `kind` (`def`, which takes types) is
     /// given: all the ones `written` names, which are all of them or none, or
     /// the ones its values `args` show, which may be fewer.
-    fn variant_types(&mut self, kind: &str, def: &KindDef, variant: &Variant, written: &mut [TypeArg], args: &mut [Expr]) -> Result<HashMap<String, Type>> {
+    /// Also the types its values show that hold one untold, which tell
+    /// nothing, for a message to suggest.
+    fn variant_types(&mut self, kind: &str, def: &KindDef, variant: &Variant, written: &mut [TypeArg], args: &mut [Expr]) -> Result<(HashMap<String, Type>, HashMap<String, Type>)> {
         let mut given: HashMap<String, Type> = HashMap::new();
         if let Some((_, at)) = written.first() {
             if written.len() != def.types.len() {
@@ -6948,7 +6998,7 @@ impl Checker {
                 self.check_need("kind", kind, param, ty, *at)?;
                 given.insert(param.name.clone(), ty.clone());
             }
-            return Ok(given);
+            return Ok((given, HashMap::new()));
         }
         // The values say which types they are. They are checked again with the
         // kind made for them, so what this check left to settle is left to that one.
@@ -6956,8 +7006,11 @@ impl Checker {
         let untold = self.unsettled_types.len();
         let kinds = self.untold_kinds.len();
         let mut found = Ok(());
+        // `none` tells no type either, but a message can suggest a maybe.
+        let mut unsettled_values = Vec::new();
         for (arg, field) in args.iter_mut().zip(&variant.payload) {
             match self.check_expr(arg) {
+                Ok(ty) if unsettled(&ty) && matches!(field.ty, Type::Param(_)) => unsettled_values.push((field.ty.to_string(), ty)),
                 Ok(ty) => self.match_params(&field.ty, &ty, &mut given),
                 Err(error) => {
                     found = Err(error);
@@ -6971,27 +7024,35 @@ impl Checker {
         found?;
         // A value that is itself a variant with types untold, as in
         // `Option.Some(Option.None)`, tells nothing either.
-        given.retain(|_, ty| !ty.params().iter().any(|param| param.starts_with(UNTOLD)));
+        let mut hints: HashMap<String, Type> = unsettled_values.into_iter().collect();
+        given.retain(|param, ty| {
+            let told = !ty.params().iter().any(|name| name.starts_with(UNTOLD));
+            if !told {
+                hints.insert(param.clone(), ty.clone());
+            }
+            told
+        });
         for param in &def.types {
             if let Some(ty) = given.get(&param.name) {
                 self.check_need("kind", kind, param, ty, args.first().map_or(variant.span, |arg| arg.span))?;
             }
         }
-        Ok(given)
+        Ok((given, hints))
     }
 
     /// The value of the variant `tag` of `kind` given `types`, all known, with
     /// its values `args`: of the kind made for them, or, where a type this
     /// declaration takes is among them, of the kind given them, which each use
-    /// makes (see `settle_applications`).
-    fn made_variant(&mut self, kind: &str, tag: &str, types: &[Type], args: &mut [Expr], span: Span) -> Result<Type> {
+    /// makes (see `settle_applications`). Values already `checked` are not
+    /// checked again.
+    fn made_variant(&mut self, kind: &str, tag: &str, types: &[Type], args: &mut [Expr], checked: bool, span: Span) -> Result<Type> {
         let def = self.kinds.get(kind).cloned().ok_or_else(|| Error::internal_at(span, format!("unknown kind '{}'", kind)))?;
         let payload = |def: &KindDef| def.variants.iter().find(|v| v.tag == *tag).map(|variant| variant.payload.clone()).unwrap_or_default();
         if types.iter().any(|ty| !ty.params().is_empty()) {
             let names: HashMap<&str, &Type> = def.types.iter().map(|param| param.name.as_str()).zip(types).collect();
             let payload: Vec<Field> = payload(&def).into_iter().map(|field| Field { ty: field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())), ..field }).collect();
             let mut values: Vec<&mut Expr> = args.iter_mut().collect();
-            let region = self.check_fields_of_value(&mut values, &payload, None)?;
+            let region = if checked { self.fields_region(&mut values, &payload)? } else { self.check_fields_of_value(&mut values, &payload, None)? };
             let may_hold = self.takes_region.contains(kind) || def.variants.iter().flat_map(|variant| &variant.payload).any(|field| !field.ty.params().is_empty());
             return Ok(Type::Applied(Box::new(Applied { name: kind.to_string(), types: types.to_vec(), region: may_hold.then_some(region) })));
         }
@@ -7000,7 +7061,7 @@ impl Checker {
         let key = self.kind_instance(kind, types, span)?;
         let made = self.kinds.get(&key).cloned().ok_or_else(|| Error::internal_at(span, format!("no kind made for '{}'", kind)))?;
         let mut values: Vec<&mut Expr> = args.iter_mut().collect();
-        let region = self.check_fields_of_value(&mut values, &payload(&made), None)?;
+        let region = if checked { self.fields_region(&mut values, &payload(&made))? } else { self.check_fields_of_value(&mut values, &payload(&made), None)? };
         Ok(Type::Named(key.clone(), self.region_of_value(&key, region)))
     }
 
@@ -7011,7 +7072,7 @@ impl Checker {
     fn settle_variant(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         // `fail Option.None` where a `T ~ Option<int>` goes: the failure's
         // value goes where the error does.
-        if let (ExprKind::Fail(inner), Type::Or(_, error)) = (&mut expr.kind, expected)
+        if let (ExprKind::Fail(inner), Type::Or(_, error) | Type::Fail(error)) = (&mut expr.kind, expected)
             && inner.ty.as_ref().is_some_and(untold_kind)
         {
             self.settle_variant(inner, error)?;
@@ -7029,6 +7090,19 @@ impl Checker {
             && !holds_untold(expected)
         {
             expr.ty = Some(expected.clone());
+            return Ok(());
+        }
+        // A branch's value made part of the `T ~ E` the branches give, whose
+        // error a branch's `fail Option.None` gave untold.
+        if let ExprKind::Wrap(inner) = &mut expr.kind
+            && let Some(Type::Or(value, error)) = &expr.ty
+            && untold_kind(error)
+            && let Type::Or(_, told) = expected
+            && !holds_untold(told)
+        {
+            let own = Type::Or(value.clone(), told.clone());
+            self.settle_variant(inner, &own)?;
+            expr.ty = Some(own);
             return Ok(());
         }
         // A branch's `Option.None` made part of the maybe the branches give.
@@ -7060,22 +7134,38 @@ impl Checker {
             return Ok(());
         }
         // The variant whose types are untold, or the one a maybe of it holds,
-        // as a `when` giving `none` or `Option.None` is.
-        let sent = match expr.ty.clone() {
-            Some(Type::Applied(sent)) if sent.types.iter().any(is_untold) => sent,
-            Some(Type::Maybe(inner)) if matches!(&expr.kind, ExprKind::Choice(_)) && untold_kind(&inner) => match *inner {
-                Type::Applied(sent) => sent,
+        // as a `when` giving `none` or `Option.None` is, and the failure of one
+        // giving `fail Option.None`, which the error of the place tells.
+        // The whole then becomes `own`, its value's type kept.
+        let choice = matches!(&expr.kind, ExprKind::Choice(_));
+        let (sent, place, own) = match expr.ty.clone() {
+            Some(Type::Applied(sent)) if sent.types.iter().any(is_untold) => (sent, expected.clone(), expected.clone()),
+            Some(Type::Maybe(inner)) if choice && untold_kind(&inner) => match *inner {
+                Type::Applied(sent) => (sent, expected.clone(), expected.clone()),
+                _ => return Ok(()),
+            },
+            Some(Type::Or(value, error)) if choice && untold_kind(&error) => match (*error, expected) {
+                (Type::Applied(sent), Type::Or(_, place)) => (sent, (**place).clone(), Type::Or(value, place.clone())),
+                _ => return Ok(()),
+            },
+            // `when … none else when … fail Option.None else n fi`, a maybe of a
+            // `T ~ E` going where a `maybe T ~ E` goes, branch by branch.
+            Some(Type::Maybe(inner)) if choice && matches!(&*inner, Type::Or(_, error) if untold_kind(error)) => match (*inner, expected) {
+                (Type::Or(_, error), Type::Or(_, place)) => match *error {
+                    Type::Applied(sent) => (sent, (**place).clone(), expected.clone()),
+                    _ => return Ok(()),
+                },
                 _ => return Ok(()),
             },
             _ => return Ok(()),
         };
         let span = expr.span;
-        let Some(types) = self.told_types(&sent, expected) else { return Ok(()) };
+        let Some(types) = self.told_types(&sent, &place) else { return Ok(()) };
         // `when c Option.None else Option.None fi`: each branch's value is
         // told by the place the whole goes.
         if let ExprKind::Choice(stmt) = &mut expr.kind {
-            self.settle_branch_values(stmt, expected)?;
-            expr.ty = Some(expected.clone());
+            self.settle_branch_values(stmt, &own)?;
+            expr.ty = Some(own);
             return Ok(());
         }
         if !untold_kind(expr.ty.as_ref().unwrap_or(&Type::Unknown)) {
@@ -7088,9 +7178,10 @@ impl Checker {
             }
             let ExprKind::Construct { tag, args, .. } = &mut expr.kind else { return Ok(()) };
             let tag = tag.clone();
-            let ty = self.made_variant(&sent.name, &tag, &types, args, span)?;
+            // Its values were checked where they are, whose names may be gone.
+            let ty = self.made_variant(&sent.name, &tag, &types, args, true, span)?;
             expr.ty = Some(ty);
-            if let Some(at) = self.untold_kinds.iter().rposition(|(at, _, _, _)| *at == span) {
+            if let Some(at) = self.untold_kinds.iter().rposition(|(at, ..)| *at == span) {
                 self.untold_kinds.remove(at);
             }
         }
@@ -7135,32 +7226,73 @@ impl Checker {
                 && sent.types.iter().zip(&named.types).all(|(sent, named)| is_untold(sent) || fits(&sent.without_regions(), &named.without_regions()))
         };
         match (untold_kind(a), untold_kind(b)) {
-            (true, false) if told(a, b) => Some(b.clone()),
-            (false, true) if told(b, a) => Some(a.clone()),
-            (true, true) if a == b => Some(a.clone()),
-            _ => join_types(a, b),
+            (true, false) if told(a, b) => return Some(b.clone()),
+            (false, true) if told(b, a) => return Some(a.clone()),
+            // `Either.Left(1)` beside `Either.Right("x")`: each tells what it
+            // can, and what neither tells stays untold.
+            (true, true) => {
+                let (Type::Applied(left), Type::Applied(right)) = (a, b) else { return None };
+                if left.name != right.name || left.types.len() != right.types.len() {
+                    return None;
+                }
+                let types = left
+                    .types
+                    .iter()
+                    .zip(&right.types)
+                    .map(|(x, y)| match (is_untold(x), is_untold(y)) {
+                        (true, _) => Some(y.clone()),
+                        (false, true) => Some(x.clone()),
+                        _ if fits(x, y) => Some(y.clone()),
+                        _ if fits(y, x) => Some(x.clone()),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<Type>>>()?;
+                let region = left.region.clone().or_else(|| right.region.clone());
+                return Some(Type::Applied(Box::new(Applied { name: left.name.clone(), types, region })));
+            }
+            _ => {}
         }
+        // A branch's `fail Option.None` beside a failure or a value of the
+        // kind: the errors join as values do.
+        let failing_untold = |ty: &Type| matches!(ty, Type::Fail(error) | Type::Or(_, error) if untold_kind(error));
+        if failing_untold(a) || failing_untold(b) {
+            match (a, b) {
+                (Type::Fail(x), Type::Fail(y)) => return self.join(x, y).map(|error| Type::Fail(Box::new(error))),
+                (Type::Or(value, x), Type::Fail(y)) | (Type::Fail(y), Type::Or(value, x)) => {
+                    return self.join(x, y).map(|error| Type::Or(value.clone(), Box::new(error)));
+                }
+                (Type::Or(v, x), Type::Or(w, y)) => return Some(Type::Or(Box::new(self.join(v, w)?), Box::new(self.join(x, y)?))),
+                _ => {}
+            }
+        }
+        join_types(a, b)
     }
 
-    /// The message for a variant of `kind` whose type `param` nothing told.
     /// The error of the variant at `at` whose types nothing told, if it is
     /// one (see `untold_kinds`).
     fn untold_kind_error(&self, at: Span) -> Option<Error> {
-        let (at, kind, tag, param) = self.untold_kinds.iter().rev().find(|(span, _, _, _)| *span == at)?;
-        Some(Error::at(*at, self.untold_kind_message(kind, tag, param)))
+        let (at, kind, tag, param, example) = self.untold_kinds.iter().rev().find(|(span, ..)| *span == at)?;
+        Some(Error::at(*at, untold_kind_message(kind, tag, param, example)))
     }
 
-    fn untold_kind_message(&self, kind: &str, tag: &str, param: &str) -> String {
-        let count = self.kinds.get(kind).map_or(1, |def| def.types.len().max(1));
-        format!(
-            "can't tell which type '{}' is for this '{}', since its values don't say and nothing this value goes into names one; write {}, as in '{}<{}>.{}'",
-            param,
-            unqualified(kind),
-            if count == 1 { "it" } else { "them" },
-            unqualified(kind),
-            vec!["int"; count].join(", "),
-            tag
-        )
+    /// `ty`, a type values beside each other settled on (see `join`), with the
+    /// kind made for each kind given types its variants told between them,
+    /// `Either<int, text>` for `Either.Left(1)` beside `Either.Right("x")`.
+    fn made_kinds(&mut self, ty: Type, at: Span) -> Result<Type> {
+        Ok(match ty {
+            Type::Applied(applied)
+                if applied.types.iter().all(|ty| ty.params().is_empty()) && self.kinds.get(&applied.name).is_some_and(|def| !def.types.is_empty()) =>
+            {
+                let key = self.kind_instance(&applied.name, &applied.types, at)?;
+                let region = applied.region.and_then(|region| self.region_of_value(&key, region));
+                Type::Named(key, region)
+            }
+            Type::Maybe(inner) => Type::Maybe(Box::new(self.made_kinds(*inner, at)?)),
+            Type::Or(value, error) => Type::Or(Box::new(self.made_kinds(*value, at)?), Box::new(self.made_kinds(*error, at)?)),
+            Type::Array(items, count) => Type::Array(Box::new(self.made_kinds(*items, at)?), count),
+            Type::Tuple(items) => Type::Tuple(items.into_iter().map(|item| self.made_kinds(item, at)).collect::<Result<_>>()?),
+            other => other,
+        })
     }
 
     /// Checks `new T(value) at r` (see `ExprKind::New`).
@@ -7290,7 +7422,7 @@ impl Checker {
                 })?,
             });
         }
-        let items = joined.unwrap_or(Type::Nothing);
+        let items = self.made_kinds(joined.unwrap_or(Type::Nothing), span)?;
         if items == Type::Nothing {
             return err(span, "an array can't hold 'nothing', which has no value");
         }
@@ -8593,10 +8725,10 @@ impl Checker {
         let mut rt = self.check_expr(r)?;
         // `Option.None == k`: a variant whose types it didn't tell is told
         // them by the value beside it.
-        if untold_kind(&lt) && !untold_kind(&rt) {
+        if holds_untold(&lt) && !holds_untold(&rt) {
             self.settle_variant(l, &rt)?;
             lt = l.ty.clone().unwrap_or(lt);
-        } else if untold_kind(&rt) && !untold_kind(&lt) {
+        } else if holds_untold(&rt) && !holds_untold(&lt) {
             self.settle_variant(r, &lt)?;
             rt = r.ty.clone().unwrap_or(rt);
         }
@@ -8988,13 +9120,23 @@ impl Checker {
     /// back on, written in its module, `filled`'s other half, and read there,
     /// which may give what the literal's own can't, such as a private field.
     fn check_fields_of_value(&mut self, values: &mut [&mut Expr], declared: &[Field], filled: Option<(usize, &str)>) -> Result<String> {
-        const OWN: &str = "";
-        let mut regions = HashMap::new();
         // A literal nests in a literal, so this loop is kept small, as the
         // stack each level takes (see `check_in_module`).
         let from = filled.map_or(usize::MAX, |(from, _)| from);
-        for (at, (value, field)) in values.iter_mut().zip(declared).enumerate() {
-            let ty = if at < from { self.check_expr(value) } else { self.check_in_module(value, filled) }?;
+        for (at, value) in values.iter_mut().enumerate().take(declared.len()) {
+            if at < from { self.check_expr(value) } else { self.check_in_module(value, filled) }?;
+        }
+        self.fields_region(values, declared)
+    }
+
+    /// The region of the value `values`, already checked, make for the fields
+    /// or payload `declared` (see `check_fields_of_value`), each value made to
+    /// fit its field there.
+    fn fields_region(&mut self, values: &mut [&mut Expr], declared: &[Field]) -> Result<String> {
+        const OWN: &str = "";
+        let mut regions = HashMap::new();
+        for (value, field) in values.iter().zip(declared) {
+            let ty = value.ty()?.clone();
             self.match_regions(&self.in_region(&field.ty, OWN), &ty, &mut regions);
         }
         let region = regions.remove(OWN).unwrap_or_else(|| ANY_REGION.to_string());
@@ -10470,8 +10612,9 @@ impl Checker {
     /// Whether values of type `ty` allow what `need` asks: a type parameter
     /// allows it when its own word already does.
     fn allows(&self, need: Need, ty: &Type) -> bool {
-        // A value of no type had a mistake of its own, already reported.
-        if ty.unknown() {
+        // A value of no type had a mistake of its own, already reported, as a
+        // type nothing told is (see `untold_kinds`).
+        if ty.unknown() || is_untold(ty) {
             return true;
         }
         // A group allows what it asks of each of its types.
@@ -12177,6 +12320,20 @@ fn settled_example(ty: &Type) -> Type {
     }
 }
 
+/// The message for a variant `tag` of `kind` whose type `param` nothing told,
+/// suggesting its types as `example` writes them.
+fn untold_kind_message(kind: &str, tag: &str, param: &str, example: &str) -> String {
+    format!(
+        "can't tell which type '{}' is for this '{}', since its values don't say and nothing this value goes into names one; write {}, as in '{}<{}>.{}'",
+        param,
+        unqualified(kind),
+        if example.contains(", ") { "them" } else { "it" },
+        unqualified(kind),
+        example,
+        tag
+    )
+}
+
 /// What marks a type of a kind's variant that nothing has told yet, before the
 /// name the kind gives it: `Option<?T>` for `Option.None` (see
 /// `Checker::settle_variant`). No type's name starts with it.
@@ -12417,14 +12574,31 @@ fn always_sends(block: &Block) -> bool {
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         StmtKind::Block(body) => always_sends(body),
+        // A loop that never ends by itself, and that nothing in it stops, never
+        // finishes: `endless`, or a loop written so.
+        StmtKind::Named(_, inner) => never_finishes(inner),
+        StmtKind::Loop(..) | StmtKind::Parted(_) => never_finishes(stmt),
         _ => false,
     })
 }
 
-/// Whether running `block` always leaves it before its end: it always sends
-/// (see `always_sends`), or stops or goes on with a loop around it, with
-/// `break` or `continue`, on every path. A loop inside it doesn't count, as a
-/// `break` inside one stops that loop only.
+/// Whether the loop `stmt` never ends by itself, and nothing in it stops it.
+fn never_finishes(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Loop(cond, body) if says_true(cond) => !stops_loop(&[body]),
+        StmtKind::Parted(parted) if parted.cond.as_ref().is_none_or(says_true) => !stops_loop(&[&parted.start, &parted.step, &parted.body]),
+        _ => false,
+    }
+}
+
+/// Whether a `break` in `parts`, the statements of a loop, may stop it, or a
+/// `continue` go on with a loop around it (see `loop_effects`).
+fn stops_loop(parts: &[&Block]) -> bool {
+    let mut effects = LoopEffects::default();
+    parts.iter().for_each(|part| loop_effects(part, &[], 0, &mut effects));
+    effects.stops
+}
+
 /// The warning for a loop written to never end by itself, without the word.
 const ENDLESS_UNSAID: &str = "this loop never ends by its condition; write 'endless' to say so";
 
@@ -12435,7 +12609,7 @@ fn unused_in_loop(parted: &PartedLoop) -> Option<(String, Span)> {
     let mut closures = false;
     let mut used = |stmts: &[Stmt], names: &mut Vec<(String, Span)>| {
         walk_block(stmts, &mut |e| match &e.kind {
-            ExprKind::Var(name) => names.retain(|(declared, _)| declared != name),
+            ExprKind::Var(name) | ExprKind::Call { name, .. } => names.retain(|(declared, _)| declared != name),
             ExprKind::Closure { .. } => closures = true,
             _ => {}
         });
@@ -12526,6 +12700,8 @@ struct LoopEffects {
     leaves: bool,
     /// Something may change one of the variables looked at.
     changes: bool,
+    /// A `break` may stop the loop, or a `continue` go on with one around it.
+    stops: bool,
 }
 
 /// What `stmts`, inside a loop and `inner` loops deep inside it, may do to
@@ -12544,14 +12720,22 @@ fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut Lo
     for stmt in stmts {
         match &stmt.kind {
             StmtKind::Send(_) => effects.leaves = true,
-            StmtKind::Break(name) => effects.leaves |= inner == 0 || name.is_some(),
-            StmtKind::Continue(name) => effects.leaves |= name.is_some(),
+            StmtKind::Break(name) => {
+                let stops = inner == 0 || name.is_some();
+                effects.leaves |= stops;
+                effects.stops |= stops;
+            }
+            StmtKind::Continue(name) => {
+                effects.leaves |= name.is_some();
+                effects.stops |= name.is_some();
+            }
             StmtKind::Assign(targets, _) => {
                 let mut set = Vec::new();
                 targets.iter().for_each(|target| target_places(target, &mut set));
                 effects.changes |= set.into_iter().any(|place| root(place).is_some_and(|name| names.contains(&name)));
             }
             StmtKind::Step { target, .. } => effects.changes |= root(target).is_some_and(|name| names.contains(&name)),
+            StmtKind::SetResults(set, _) => effects.changes |= set.iter().any(|(name, _)| names.contains(name)),
             StmtKind::When(arms, else_block) => {
                 arms.iter().for_each(|arm| loop_effects(&arm.body, names, inner, effects));
                 if let Some(block) = else_block {
@@ -12568,14 +12752,14 @@ fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut Lo
                 loop_effects(&parted.body, names, inner + 1, effects);
             }
             StmtKind::Match(_, cases) => cases.iter().for_each(|case| loop_effects(&case.body, names, inner, effects)),
-            StmtKind::Expr(_) | StmtKind::Binding { .. } | StmtKind::SetResults(..) | StmtKind::Region { .. } => {}
+            StmtKind::Expr(_) | StmtKind::Binding { .. } | StmtKind::Region { .. } => {}
         }
         // What its values do: a place given with `&`, a method that may alter
         // its value, a lambda keeping a place, and the plan Bs and the `when`s
         // and `match`es used as values, whose statements may leave or change.
         walk_stmt(stmt, &mut |e| match &e.kind {
             ExprKind::Ref(place) => effects.changes |= root(place).is_some_and(|name| names.contains(&name)),
-            ExprKind::MethodCall { value, .. } => effects.changes |= root(value).is_some_and(|name| names.contains(&name)),
+            ExprKind::MethodCall { value, .. } | ExprKind::Edit { items: value, .. } => effects.changes |= root(value).is_some_and(|name| names.contains(&name)),
             ExprKind::Closure { places, .. } => effects.changes |= places.iter().any(|place| names.contains(&place.name)),
             ExprKind::PlanB { body, .. } => loop_effects(body, names, inner, effects),
             ExprKind::Choice(choice) => loop_effects(std::slice::from_ref(&**choice), names, inner, effects),
@@ -12584,6 +12768,10 @@ fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut Lo
     }
 }
 
+/// Whether running `block` always leaves it before its end: it always sends
+/// (see `always_sends`), or stops or goes on with a loop around it, with
+/// `break` or `continue`, on every path. A loop inside it doesn't count, as a
+/// `break` inside one stops that loop only.
 fn always_leaves(block: &[Stmt]) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) | StmtKind::Break(_) | StmtKind::Continue(_) => true,
@@ -13844,6 +14032,11 @@ fn padded_group_tuples(ty: &Type) -> Type {
         Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(padded_group_tuples).collect(), taken: task.taken.clone(), ret: padded_group_tuples(&task.ret) })),
         other => other.clone(),
     }
+}
+
+/// Whether `cond` is `true` as written, which never ends a loop.
+fn says_true(cond: &Condition) -> bool {
+    cond.single() && cond.pattern.is_none() && matches!(cond.value.kind, ExprKind::BoolLit(true))
 }
 
 /// Whether `cond`, in a copy of a task, is known true or false: a condition

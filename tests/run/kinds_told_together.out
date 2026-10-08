@@ -1,0 +1,7 @@
+3 0 4 0
+failed None
+takes Left(2)
+Right("x") [Right("a"), Left(1)] [Left(1), Right("b")] Left("x")
+Two("a", Some("b")) Two(1, None)
+None Some(1) Some("z")
+task (Option<int>) -> Option<bool> Some(true)

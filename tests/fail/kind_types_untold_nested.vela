@@ -1,0 +1,15 @@
+; error: 13:26: cannot infer the type of 'nested', since its value doesn't say every type its kind takes; give it a type, such as 'nested: Option<Option<int>>', or write them, as in 'Option<Option<int>>.…'
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+task main()
+    bind nested = Option.Some(Option.None)
+    show(nested)
+fi

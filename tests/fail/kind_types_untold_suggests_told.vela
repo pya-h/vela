@@ -1,0 +1,14 @@
+; error: 13:17: can't tell which type 'A' is for this 'Either', since its values don't say and nothing this value goes into names one; write them, as in 'Either<int, text>.Right'
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+task main()
+    show(Either.Right("x"))
+fi
