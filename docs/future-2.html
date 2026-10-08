@@ -315,7 +315,7 @@ task print_name(read name: text)
     show(name)
 fi
 
-task reset(hold write counter: ^int@r)
+task reset(flex write counter: ^int@r)
     ; `write` means mutable access to memory owned by someone else.
     counter^ = 0
 fi</pre>
@@ -355,7 +355,7 @@ fi</pre>
         </p>
         <pre>task process_files() -> int
     region arena
-    bind buffer: [byte]@arena = allocate(arena, 4096)
+    fixed buffer: [byte]@arena = allocate(arena, 4096)
     work(buffer)
     ; `buffer` and everything in `arena` are freed here automatically.
     <- 0
@@ -364,7 +364,7 @@ fi</pre>
           A function can accept a region parameter so that callers decide where data lives:
         </p>
         <pre>task load_config(arena: region) -> text@arena
-    bind bytes: text@arena = read_file(arena, "config.ini")
+    fixed bytes: text@arena = read_file(arena, "config.ini")
     <- bytes
 fi</pre>
         <div class="pros-cons">
@@ -406,7 +406,7 @@ fi</pre>
           A small, powerful statement that schedules cleanup when the current block ends. It works with any resource, not just memory: files, locks, network sockets.
         </p>
         <pre>task read_lines(path: text)
-    bind f = open(path)
+    fixed f = open(path)
     defer close(f)
 
     loop not eof(f)
@@ -465,7 +465,7 @@ fi
           The compiler could require every resource-acquiring expression to have a matching release on every control-flow path. This is like a borrow checker but only for resources, and only forward-propagating.
         </p>
         <pre>task leaky(path: text) -> int
-    bind f = open(path)
+    fixed f = open(path)
     show(read_line(f))
     ; Error: `f` is owned but never closed.
     <- 0
@@ -501,7 +501,7 @@ fi</pre>
     fi
 fi
 
-bind table: [int#10] = comptime build_lookup_table()</pre>
+fixed table: [int#10] = comptime build_lookup_table()</pre>
         <p>
           <code>comptime</code> tasks run in the compiler using the same interpreter (or the same code generator targeting a small VM). They have no I/O and no mutable global state. The result must be a constant value.
         </p>
@@ -523,9 +523,9 @@ bind table: [int#10] = comptime build_lookup_table()</pre>
         <p>
           Explicit vector types that map directly to CPU SIMD registers. No auto-vectorization magic, just predictable performance.
         </p>
-        <pre>bind a: vec4f = [1.0, 2.0, 3.0, 4.0]
-bind b: vec4f = [5.0, 6.0, 7.0, 8.0]
-bind c: vec4f = a + b   ; four additions in one instruction</pre>
+        <pre>fixed a: vec4f = [1.0, 2.0, 3.0, 4.0]
+fixed b: vec4f = [5.0, 6.0, 7.0, 8.0]
+fixed c: vec4f = a + b   ; four additions in one instruction</pre>
         <p>
           Vectors support lane-wise arithmetic, shuffles, reductions, and masked operations. The compiler generates the right intrinsics for the target; if SIMD is unavailable, it scalarizes cleanly.
         </p>
@@ -563,8 +563,8 @@ fi</pre>
           An <code>asm</code> block where inputs and outputs are ordinary Vela values, type-checked by the compiler.
         </p>
         <pre>task rdtsc() -> int
-    hold low = 0             ; Vela has no uninitialized variables
-    hold high = 0
+    flex low = 0             ; Vela has no uninitialized variables
+    flex high = 0
     asm("rdtsc" : "=a"(low), "=d"(high))
     <- (high &lt;&lt; 32) | low
 fi</pre>
@@ -618,7 +618,7 @@ fi</pre>
         <p>
           Let <code>match</code> produce a value, so it can be used on the right side of a binding.
         </p>
-        <pre>bind grade = match score
+        <pre>fixed grade = match score
     case A _ -> "excellent"
     case B _ -> "good"
     case C _ -> "pass"
@@ -670,7 +670,7 @@ fi</pre>
           for the type itself, not its text.
         </p>
         <pre>task total&lt;P...: shown&gt;(args: P...) -&gt; float
-    hold sum = 0.0
+    flex sum = 0.0
     each v in args
         match v?
             case int n
@@ -716,7 +716,7 @@ fi</pre>
             anything (a pointer and a count). <code>case [int#4] xs</code> would match only that count, and give the
             array itself.</li>
           <li><strong>Taking a tuple apart</strong> could use the pattern Vela already has, <code>case (int, float) (a, b)</code>,
-            or the idea's <code>case (int, float) a, b</code>, which reads like <code>bind a, b = t</code>.</li>
+            or the idea's <code>case (int, float) a, b</code>, which reads like <code>fixed a, b = t</code>.</li>
           <li><strong>Shapes and kinds by name:</strong> <code>case Point p</code>, and <code>case maybe int m</code>
             for a <code>maybe</code>. A kind's variants are a value match, which <code>match</code> already does, so a
             type case only names the kind: <code>case Shape s</code>.</li>
@@ -844,8 +844,8 @@ fi</pre>
 derive Eq, Hash, Show
 fi
 
-bind a = Point { x: 1, y: 2 }
-bind b = Point { x: 1, y: 2 }
+fixed a = Point { x: 1, y: 2 }
+fixed b = Point { x: 1, y: 2 }
 show(a == b)   ; true, generated automatically</pre>
         <div class="note">
           <strong>Partly there without a word:</strong> every value can already be shown (<code>show(a)</code> writes
@@ -866,7 +866,7 @@ show(a == b)   ; true, generated automatically</pre>
         <p>
           A syntax for chaining tasks left-to-right, making nested calls read more naturally.
         </p>
-        <pre>bind result = fetch(url)
+        <pre>fixed result = fetch(url)
     |> parse_json()
     |> extract_user()
     |> validate()</pre>
@@ -892,8 +892,8 @@ show(a == b)   ; true, generated automatically</pre>
         </p>
         <pre>task worker(input: Chan[own Job], output: Chan[own Result])
     endless
-        bind job = recv(input)
-        bind result = process(job)
+        fixed job = recv(input)
+        fixed result = process(job)
         send(output, result)
     fi
 fi</pre>
@@ -914,7 +914,7 @@ fi</pre>
           A task can be spawned as an actor with its own mailbox. The actor owns its state; messages are handled sequentially. No locks, no shared mutable state.
         </p>
         <pre>actor Counter
-    hold count = 0
+    flex count = 0
 
     on Increment
         count = count + 1
@@ -938,7 +938,7 @@ fi</pre>
       <div class="cards">
         <div class="card">
           <h3>Refinement types <span class="badge b-idea">Idea</span></h3>
-          <p><code>bind n: int where n > 0 = 5</code> — the compiler checks predicates where it can, and runtime checks where it must.</p>
+          <p><code>fixed n: int where n > 0 = 5</code> — the compiler checks predicates where it can, and runtime checks where it must.</p>
         </div>
         <div class="card">
           <h3>Tagged pointers <span class="badge b-idea">Idea</span></h3>

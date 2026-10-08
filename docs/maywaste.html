@@ -323,18 +323,18 @@ text(x)@r</code></pre>
     <section>
       <h2 id="parameters">Parameters</h2>
 
-      <div class="entry" id="bind-parameters">
-        <h3><code>bind x: T</code> parameters <span class="badge b-watch">watch</span></h3>
+      <div class="entry" id="fixed-parameters">
+        <h3><code>fixed x: T</code> parameters <span class="badge b-watch">watch</span></h3>
         <p>
-          A <code>bind x: T</code> parameter is always a copy, and a plain <code>x: T</code> is a copy too unless
+          A <code>fixed x: T</code> parameter is always a copy, and a plain <code>x: T</code> is a copy too unless
           the value takes more than 64 bytes, when the compiler reads it where the caller keeps it (see
-          <a href="vela.html#bind-parameters">Parameters that read</a>). The two differ only for a large value, and
+          <a href="vela.html#fixed-parameters">Parameters that read</a>). The two differ only for a large value, and
           only where the body reads where the value is: <code>==</code> on it, or <code>&amp;x</code>.
         </p>
         <dl>
           <dt>Why it may waste</dt>
-          <dd>For a value of 64 bytes or less, <code>bind x</code> and <code>x</code> give the same program, and for
-            a larger one <code>bind x</code> costs a copy the compiler would have saved. Most of its use may be to
+          <dd>For a value of 64 bytes or less, <code>fixed x</code> and <code>x</code> give the same program, and for
+            a larger one <code>fixed x</code> costs a copy the compiler would have saved. Most of its use may be to
             silence the <a href="vela.html#warnings">warning</a>, which <code>~=</code> does too.</dd>
           <dt>Why it stays</dt>
           <dd>It is the one way to say "a place of its own" when a body compares by where a value is; without it,

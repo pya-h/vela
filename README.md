@@ -10,10 +10,10 @@ lasts as long as the program (`text`, as a literal does) or is in a region (`tex
 text may name one (`Person@r`). A value that may
 be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read with `match`, `is`, or a
 plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain. A
-`match` or a `when` can be the value itself, with every branch giving one (`bind area = match s case Circle r
+`match` or a `when` can be the value itself, with every branch giving one (`fixed area = match s case Circle r
 = 3.14 * r * r … fi`), on a case's own line with `=` or on the last line of a block.
-Blocks close with `fi`, a comment starts with `;` (`bind x = 1 ; the first`), and a task sends its results with `<-`: one value, or
-several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
+Blocks close with `fi`, a comment starts with `;` (`fixed x = 1 ; the first`), and a task sends its results with `<-`: one value, or
+several (`-> int, int` … `<- a / b, a % b`), received with `fixed q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. The last
 parameters may name a value a call that leaves them out is given (`task pad(t: text, width: int = 8)`, then
 `pad("a")`). An `int`
@@ -34,7 +34,7 @@ with a shape's or kind's own `str` in a region it makes for the line and frees a
 whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
-(`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as
+(`fixed name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as
 values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word saying what may be done with them
 (`frozen`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
 from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
@@ -52,11 +52,11 @@ name, so only a place that can change may call it. A shape may have `shared` fie
 program, named through it (`Tally.count`, `Point.new(…)`), fields that fall back on a value (`n: int = 0`), and
 `read` fields only its methods change.
 
-A parameter is read and never changed (`x: T`), or says how it is given: `hold x: T` is the task's own copy to
-change, `hold& x: T` changes the caller's place, which the call marks, `f(&a)`, `bind x: T` is always a copy, and
-`bind& x: T` reads the caller's place where it is. A call never gives one place twice where it changes it, and a
+A parameter is read and never changed (`x: T`), or says how it is given: `flex x: T` is the task's own copy to
+change, `flex& x: T` changes the caller's place, which the call marks, `f(&a)`, `fixed x: T` is always a copy, and
+`fixed& x: T` reads the caller's place where it is. A call never gives one place twice where it changes it, and a
 plain parameter larger than 64 bytes is read where the caller keeps it when nothing can change it meanwhile, with a
-warning where that choice shows. `hold& y = &x` and `bind& y = &x` name a place in a block too. `==` compares an
+warning where that choice shows. `flex& y = &x` and `fixed& y = &x` name a place in a block too. `==` compares an
 array, a shape, or a tuple by where it is, and `~=` (and `<>`, its opposite) item by item; a `maybe` is compared
 with `==` only with `none`, and with `~=` with a plain value too, which an empty one never matches. `&x` shows or
 compares where a place is, `x.type` is its type as text, and whole numbers may be written in hex, octal, or
@@ -64,9 +64,9 @@ binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `mayb
 `is` with `and`, as in `when found is {v} and v > 0`. `each v in xs` goes through a slice as it was when the loop
 started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
 pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. A loop may come in
-three parts, `loop hold i = 0, j = 9 || i < j || i++, j--`, and one that never ends by itself is written
+three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and one that never ends by itself is written
 `endless`; the compiler warns about a loop that never ends without saying so. A loop can be a value,
-`bind r = each x in xs … fi`, the last line of its final pass, or a failure that says why it has none
+`fixed r = each x in xs … fi`, the last line of its final pass, or a failure that says why it has none
 (`LoopResult` of `std/loops`: it never ran, `break = v` stopped it, its final pass ended with `continue`, or its
 last line failed). Kinds take types as
 shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,

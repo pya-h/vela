@@ -217,7 +217,7 @@
         <code>match</code>, <code>maybe</code> and <code>T ~ E</code> for what may be missing or fail, and memory in
         named regions: a pointer's type names the region it points into (<code>^T@r</code>), and a region frees
         everything in it when its block closes. Mutation is marked at both ends: an <code>alters</code> method, a
-        <code>hold&amp;</code> parameter, and the call's own <code>&amp;a</code>. The library is written in Vela and
+        <code>flex&amp;</code> parameter, and the call's own <code>&amp;a</code>. The library is written in Vela and
         held inside the compiler; the runtime is one C header. There is an editor, Vela Studio, sharing the compiler
         as a library.
       </p>
@@ -269,7 +269,7 @@
       <div class="entry">
         <h3>One word for one idea, and the words say what they mean <span class="badge b-strong">strong</span></h3>
         <p>
-          <code>bind</code> never changes and <code>hold</code> may; <code>-&gt;</code> names what a task gives and
+          <code>fixed</code> never changes and <code>flex</code> may; <code>-&gt;</code> names what a task gives and
           <code>&lt;-</code> gives it; <code>maybe T</code> and <code>T ~ E</code> make absence and failure types a
           caller must face; <code>fi</code> closes every block so nesting is visible; a plan B
           (<code>x { fallback }</code>) reads as what it is. The reserve is the real achievement: there is no
@@ -303,8 +303,8 @@
       <div class="entry">
         <h3>Mutation marked at both ends <span class="badge b-strong">strong</span></h3>
         <p>
-          <code>alters grow(...)</code> at the definition and <code>c.grow()</code> on a <code>bind</code> refused at
-          the call; <code>hold&amp; n</code> in a header and <code>f(&amp;n)</code> at the call site; a call that
+          <code>alters grow(...)</code> at the definition and <code>c.grow()</code> on a <code>fixed</code> refused at
+          the call; <code>flex&amp; n</code> in a header and <code>f(&amp;n)</code> at the call site; a call that
           gives one place twice where it changes it, refused. Reading a call tells you what may change, without
           looking at the callee. C++<code>const</code> and Rust <code>&amp;mut</code> both put the burden on one
           end or the other; Vela's two-sided marks are the cleanest version of this idea I've seen in a small
@@ -517,10 +517,10 @@ vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>) 
           other way. Methods fit the language's own rule, that a
           member of a value is written after a dot:
         </p>
-        <pre><span class="keyword">bind</span> flags = <span class="number">0b1010</span>
+        <pre><span class="keyword">fixed</span> flags = <span class="number">0b1010</span>
 flags = flags.bor(<span class="number">0b0110</span>)          <span class="comment">; 0b1110</span>
 show(flags.band(<span class="number">0b0010</span>), flags.shl(<span class="number">2</span>))
-hold c: unit = <span class="number">0xff</span>
+flex c: unit = <span class="number">0xff</span>
 show(c.shr(<span class="number">4</span>), c.bnot())            <span class="comment">; 15 0</span></pre>
         <dl>
           <dt>What it adds</dt>
@@ -667,7 +667,7 @@ fi</pre>
           (<code>#PI = 3.14159</code>). Letting one name a <em>type</em> &mdash; <code>#Vec2 = (float, float)</code>,
           <code>#Grid = [int#64]</code> &mdash; would give tuples and arrays the short names they now lack, with
           no new grammar: the <code>#</code> line is already there, and a use site already says
-          <code>bind</code> of what type it wants. The one honest cost is that a name could then be a value or a
+          <code>fixed</code> of what type it wants. The one honest cost is that a name could then be a value or a
           type, which today it never is; the rule "a macro is what its declaration says" answers it.
         </p>
       </div>
@@ -811,7 +811,7 @@ fi</pre>
       <ul>
         <li><strong>Region timelines.</strong> When the compiler rejects a pointer that outlives its region, Studio
           draws the two blocks: the region that owns the value and the block that tries to keep it.</li>
-        <li><strong>Aliasing arrows.</strong> For the <code>hold&amp;</code> place-given-twice error, Studio shows the
+        <li><strong>Aliasing arrows.</strong> For the <code>flex&amp;</code> place-given-twice error, Studio shows the
           two expressions that name the same place, with a line between them.</li>
         <li><strong>Region-colored types.</strong> Tint <code>^T@r</code>, <code>text@r</code>, and
           <code>[T]@r</code> with a faint color per region name in the editor, so a reader sees lifetime boundaries
@@ -842,7 +842,7 @@ fi</pre>
       </p>
       <pre><span class="comment">;; Count how many items equal wanted.</span>
 <span class="keyword">task</span> countOf&lt;T: same&gt;(xs: [T]@r, wanted: T) -&gt; int
-    <span class="keyword">hold</span> seen = <span class="number">0</span>
+    <span class="keyword">flex</span> seen = <span class="number">0</span>
     <span class="keyword">each</span> v <span class="keyword">in</span> xs
         <span class="keyword">when</span> v == wanted
             seen++
@@ -976,7 +976,7 @@ cli = { git = "https://github.com/example/vela-cli", tag = "v1.2.0" }</pre>
           a standard compiler optimization, but in Vela it also makes the generated C smaller and faster to compile
           with the system's C compiler.</li>
         <li><strong>Fold pure task calls at compile time.</strong> A task that only works on constants and has no
-          side effects (no <code>show</code>, no <code>new</code>, no <code>hold&amp;</code>) could be evaluated while
+          side effects (no <code>show</code>, no <code>new</code>, no <code>flex&amp;</code>) could be evaluated while
           checking, the way macros are today. This is the narrow end of the <code>comptime</code> idea in the second
           notebook, and it would let macros grow into real functions without losing their compile-time power.</li>
       </ul>

@@ -199,7 +199,7 @@
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> notes = File { path: "notes.txt" }
+    <span class="keyword">flex</span> notes = File { path: "notes.txt" }
     notes.open(FileMode.Write) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
         show("could not open it")
     }
@@ -259,7 +259,7 @@
       <p>
         Each of <code>read</code>, <code>line</code>, <code>lines</code>, <code>write</code>, <code>size</code>,
         <code>rename</code>, and <code>delete</code> can fail, and their results are <code>~ FileError</code>. The
-        methods marked <code>alters</code> change the File, so they are called on a <code>hold</code> variable (or
+        methods marked <code>alters</code> change the File, so they are called on a <code>flex</code> variable (or
         through a pointer). The ones that take a region take it last, so it is written after the call:
         <code>notes.read() at r</code>, as <a href="vela.html#region-after-call">any such call</a> may.
       </p>
@@ -307,7 +307,7 @@
         File's methods left it, and what the file is, its methods tell.
       </p>
       <pre><span class="keyword">region</span> r
-<span class="keyword">hold</span> kept = File { path: "notes.txt" }
+<span class="keyword">flex</span> kept = File { path: "notes.txt" }
 <span class="keyword">each</span> pass <span class="keyword">in</span> 0..1
     <span class="keyword">region</span> round
     kept.open(FileMode.Read) <span class="keyword">at</span> round { <span class="keyword">failure</span> e
@@ -336,7 +336,7 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <pre><span class="keyword">include</span> std/loops {LoopResult}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">bind</span> found: int ~ LoopResult = <span class="keyword">each</span> x <span class="keyword">in</span> [<span class="number">2</span>, <span class="number">7</span>, <span class="number">4</span>]
+    <span class="keyword">fixed</span> found: int ~ LoopResult = <span class="keyword">each</span> x <span class="keyword">in</span> [<span class="number">2</span>, <span class="number">7</span>, <span class="number">4</span>]
         <span class="keyword">when</span> x &gt; <span class="number">5</span>
             <span class="keyword">break</span> = x
         <span class="keyword">fi</span>

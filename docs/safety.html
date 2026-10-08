@@ -195,8 +195,8 @@
       where for what only running it tells. This page lists those rules, and the concerns neither settles yet, to come
       back to. Most of the concerns are about places two names share. In Vela a value behaves as a copy: giving it to a
       task, binding it to another name, or putting it in a shape never lets two names change one thing. A few features
-      give that up on purpose, since they are how two names share one place: a reference (<code>hold&amp;</code>,
-      <code>bind&amp;</code>), a pointer (<code>^T</code>), a shared field, a slice (a view of items in a region, so a
+      give that up on purpose, since they are how two names share one place: a reference (<code>flex&amp;</code>,
+      <code>fixed&amp;</code>), a pointer (<code>^T</code>), a shared field, a slice (a view of items in a region, so a
       copy of it sees the same items), and a <code>File</code> (a copy names the same open file). Nothing here changes
       the language.
     </p>
@@ -218,8 +218,8 @@
           <thead><tr><th>Rule</th><th>When</th><th>What it prevents</th></tr></thead>
           <tbody>
             <tr>
-              <td>A place a call changes is given once: two <code>hold&amp;</code> parameters, or a
-                <code>hold&amp;</code> and a <code>bind&amp;</code> or a plain parameter, never name one place, and
+              <td>A place a call changes is given once: two <code>flex&amp;</code> parameters, or a
+                <code>flex&amp;</code> and a <code>fixed&amp;</code> or a plain parameter, never name one place, and
                 nor do <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>, which may. A method that
                 <code>alters</code> the value it is called on counts as changing it. Two slices count as two places even
                 when they view the same items (see <a href="#slice-copies">below</a>).</td>
@@ -273,15 +273,15 @@
                 <code>[@r]</code>, keeps copies in a block of <code>r</code>, which its type names, so neither reads a
                 variable after the task that wrote it has ended, nor what it keeps after <code>r</code> is freed. It keeps
                 no copy of a value of another region, and its copy of a slice never changes the slice's length. A variable it keeps
-                as a place, <code>[hold&amp; count, @r]</code>, is one declared before <code>r</code>, in its block or one
+                as a place, <code>[flex&amp; count, @r]</code>, is one declared before <code>r</code>, in its block or one
                 around it, so the lambda ends first.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
               <td>A closure reading a dead stack frame, or memory its region freed. See <a href="vela.html#lambdas">Lambdas</a>
                 and <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
             </tr>
             <tr>
-              <td>A <code>[hold @r]</code> lambda, which changes what it keeps, is never copied: held in a
-                <code>hold</code> variable, given as a place, or named by a reference.</td>
+              <td>A <code>[flex @r]</code> lambda, which changes what it keeps, is never copied: held in a
+                <code>flex</code> variable, given as a place, or named by a reference.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
               <td>Two copies changing one hidden block, each seeing the other's changes as its own (a shared mutable
                 closure). See <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
@@ -290,7 +290,7 @@
               <td>A tuple's items never change, neither assigned nor changed by a method that <code>alters</code>
                 them, and hold nothing that changes through a pointer, a slice, or an array.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
-              <td>A value that looks fixed changing through another name. See
+              <td>A value that looks unchangeable changing through another name. See
                 <a href="vela.html#tuples">Tuples</a>.</td>
             </tr>
             <tr>
@@ -405,33 +405,33 @@
         <h3>A reference parameter changed through a pointer <span class="badge b-open">open</span></h3>
         <p>
           The rule that a call gives a place it changes once compares the places written at the call. A pointer
-          reaches a place the call doesn't write, so a task given <code>&amp;p^</code> as a <code>bind&amp;</code>
+          reaches a place the call doesn't write, so a task given <code>&amp;p^</code> as a <code>fixed&amp;</code>
           and <code>p</code> itself can change what the reference reads:
         </p>
         <pre><code><span class="keyword">shape</span> Box
     v: int
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> f(<span class="keyword">bind&amp;</span> x: Box, p: ^Box@r)
+<span class="keyword">task</span> f(<span class="keyword">fixed&amp;</span> x: Box, p: ^Box@r)
     p^.v = 99
     show(x.v)                      <span class="comment">; 99: x is where p points</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
+    <span class="keyword">fixed</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
     f(&amp;p^, p)
 <span class="keyword">fi</span></code></pre>
         <p>
           Two pointers that hold one address slip past the same rule, since the compiler can't tell they do:
         </p>
-        <pre><code><span class="keyword">task</span> two(<span class="keyword">hold&amp;</span> a: int, <span class="keyword">hold&amp;</span> b: int)
+        <pre><code><span class="keyword">task</span> two(<span class="keyword">flex&amp;</span> a: int, <span class="keyword">flex&amp;</span> b: int)
     a = 1
     b = 2
     show(a, <span class="string">" "</span>, b)                <span class="comment">; 2 2</span>
 <span class="keyword">fi</span>
 
-<span class="keyword">bind</span> q = p
+<span class="keyword">fixed</span> q = p
 two(&amp;p^.v, &amp;q^.v)</code></pre>
         <p>
           The value an <code>alters</code> method is called on is given the same way, so <code>p^.set(p)</code>, where
@@ -452,14 +452,14 @@ two(&amp;p^.v, &amp;q^.v)</code></pre>
       <div class="entry" id="shared-fields">
         <h3>A reference to a shared field the task changes <span class="badge b-open">open</span></h3>
         <p>
-          A shared field that changes (<code>shared hold</code>) is one place for the whole program, and every task
-          can reach it by name. A task given it as a <code>bind&amp;</code> reads it where it is, so its own change
+          A shared field that changes (<code>shared flex</code>) is one place for the whole program, and every task
+          can reach it by name. A task given it as a <code>fixed&amp;</code> reads it where it is, so its own change
           to the field shows through the reference:
         </p>
         <pre><code><span class="keyword">shape</span> Tally
     n: int
 
-    <span class="keyword">alters</span> grow(<span class="keyword">hold</span> m: [int: Tally]@r)
+    <span class="keyword">alters</span> grow(<span class="keyword">flex</span> m: [int: Tally]@r)
         <span class="keyword">each</span> i <span class="keyword">in</span> 1..9
             m[i] = Tally { n: 0 }      <span class="comment">; the ninth key moves the table</span>
         <span class="keyword">fi</span>
@@ -469,7 +469,7 @@ two(&amp;p^.v, &amp;q^.v)</code></pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> m = [0: Tally { n: 1 }] <span class="keyword">at</span> r
+    <span class="keyword">flex</span> m = [0: Tally { n: 1 }] <span class="keyword">at</span> r
     m[0].grow(m)
     show(m[0].n)                       <span class="comment">; 1, not 9</span>
     <span class="keyword">each</span> k, v <span class="keyword">in</span> m                  <span class="comment">; the entries there when the loop started</span>
@@ -496,19 +496,19 @@ two(&amp;p^.v, &amp;q^.v)</code></pre>
       <div class="entry" id="references-read-now">
         <h3>A reference reads the place as it is now <span class="badge b-design">by design</span></h3>
         <p>
-          <code>bind&amp; y = &amp;x</code> can't change <code>x</code>, but it reads <code>x</code> as it is each
+          <code>fixed&amp; y = &amp;x</code> can't change <code>x</code>, but it reads <code>x</code> as it is each
           time it is read, and <code>x</code> may change between two reads:
         </p>
-        <pre><code><span class="keyword">hold</span> x = 1
-<span class="keyword">bind&amp;</span> y = &amp;x
+        <pre><code><span class="keyword">flex</span> x = 1
+<span class="keyword">fixed&amp;</span> y = &amp;x
 show(y)                            <span class="comment">; 1</span>
 x = 2
 show(y)                            <span class="comment">; 2</span></code></pre>
         <p>
-          That is what a reference is for, and a <code>bind&amp;</code> parameter is the same inside the task.
+          That is what a reference is for, and a <code>fixed&amp;</code> parameter is the same inside the task.
           What the word promises is that the reader doesn't change the place, not that nothing does. A reader who
-          needs the value to stay as it was keeps a copy: <code>bind v = y</code>, or a
-          <a href="vela.html#bind-parameters"><code>bind x</code></a> parameter.
+          needs the value to stay as it was keeps a copy: <code>fixed v = y</code>, or a
+          <a href="vela.html#fixed-parameters"><code>fixed x</code></a> parameter.
         </p>
       </div>
 
@@ -517,18 +517,18 @@ show(y)                            <span class="comment">; 2</span></code></pre>
         <p>
           A call never gives one place twice where one of them changes it (see
           <a href="vela.html#task-types-places">Places and regions</a>). A lambda that keeps a variable as a place,
-          <code>[hold&amp; count, @s]</code>, is a second name for it that the call doesn't see, so it can be given
+          <code>[flex&amp; count, @s]</code>, is a second name for it that the call doesn't see, so it can be given
           beside the place itself:
         </p>
-        <pre><code><span class="keyword">task</span> f(<span class="keyword">hold&amp;</span> x: int, g: [@s]() -&gt; nothing)
+        <pre><code><span class="keyword">task</span> f(<span class="keyword">flex&amp;</span> x: int, g: [@s]() -&gt; nothing)
     g()                            <span class="comment">; changes x, through count</span>
     show(x)                        <span class="comment">; 5</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
-    <span class="keyword">hold</span> count = 1
+    <span class="keyword">flex</span> count = 1
     <span class="keyword">region</span> s
-    <span class="keyword">bind</span> g = [<span class="keyword">hold&amp;</span> count, @s]() -&gt; nothing count = 5 <span class="keyword">fi</span>
+    <span class="keyword">fixed</span> g = [<span class="keyword">flex&amp;</span> count, @s]() -&gt; nothing count = 5 <span class="keyword">fi</span>
     f(&amp;count, g)
 <span class="keyword">fi</span></code></pre>
         <p>
@@ -546,7 +546,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
           place. Its value is the same either way, but what reads where the value is sees the difference:
           <code>&amp;x</code>, and <code>==</code> on a shape, an array, or a tuple, which compare by where the
           value is. Such a read is a <a href="vela.html#warnings">warning</a> that says which way the compiler went;
-          <code>bind x</code> and <code>bind&amp; x</code> say which is meant.
+          <code>fixed x</code> and <code>fixed&amp; x</code> say which is meant.
         </p>
       </div>
 
@@ -573,7 +573,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> b = <span class="keyword">new</span> Bag(Bag { items: <span class="keyword">new</span> [Item]([Item { n: 1 }]) <span class="keyword">at</span> r }) <span class="keyword">at</span> r
+    <span class="keyword">fixed</span> b = <span class="keyword">new</span> Bag(Bag { items: <span class="keyword">new</span> [Item]([Item { n: 1 }]) <span class="keyword">at</span> r }) <span class="keyword">at</span> r
     b^.items[0].poke(b, r)
     show(b^.items[0].n, <span class="string">" "</span>, b^.items.len)   <span class="comment">; 1 3, not 9 3</span>
 <span class="keyword">fi</span></code></pre>
@@ -599,14 +599,14 @@ show(y)                            <span class="comment">; 2</span></code></pre>
         <h3>A value in a map, while the map changes <span class="badge b-open">open</span></h3>
         <p>
           A map's values are in its table, which moves when the map grows and is packed again in place when most of
-          its keys were taken out. So a reference never names a value in a map (<code>hold&amp; v = &amp;m[k]</code> is
+          its keys were taken out. So a reference never names a value in a map (<code>flex&amp; v = &amp;m[k]</code> is
           refused, as for a slice's item), and a slice never points into one (<code>m[k][0..2]</code> is refused
           for an array value, whose part would come to point at another key's value). Two uses aren't held to that rule, and see the table as it was:
         </p>
         <pre><code><span class="keyword">shape</span> Tally
     n: int
 
-    <span class="keyword">alters</span> grow(<span class="keyword">hold</span> m: [text: Tally]@r)
+    <span class="keyword">alters</span> grow(<span class="keyword">flex</span> m: [text: Tally]@r)
         m[<span class="string">"b"</span>] = Tally { n: 0 }          <span class="comment">; may move the table</span>
         .n = 9                         <span class="comment">; written where the value was</span>
     <span class="keyword">fi</span>
@@ -614,7 +614,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> m = [<span class="string">"a"</span>: Tally { n: 1 }] <span class="keyword">at</span> r
+    <span class="keyword">flex</span> m = [<span class="string">"a"</span>: Tally { n: 1 }] <span class="keyword">at</span> r
     m[<span class="string">"a"</span>].grow(m)
     <span class="keyword">each</span> k, v <span class="keyword">in</span> m                  <span class="comment">; the entries there when the loop started</span>
         m.del(k)                       <span class="comment">; taking out and adding may pack them in place</span>
@@ -644,11 +644,11 @@ show(y)                            <span class="comment">; 2</span></code></pre>
           A map value is a handle to its table, so every copy of it, a variable, a field, an argument, names the same
           map, and a key one of them adds is there for all:
         </p>
-        <pre><code><span class="keyword">hold</span> a = [<span class="string">"x"</span>: 1] <span class="keyword">at</span> r
-<span class="keyword">hold</span> b = a
+        <pre><code><span class="keyword">flex</span> a = [<span class="string">"x"</span>: 1] <span class="keyword">at</span> r
+<span class="keyword">flex</span> b = a
 b[<span class="string">"y"</span>] = 2
 show(a.len, <span class="string">" "</span>, a == b)                 <span class="comment">; 2 true</span>
-<span class="keyword">hold</span> c = a.copy() <span class="keyword">at</span> r                <span class="comment">; a map of its own</span></code></pre>
+<span class="keyword">flex</span> c = a.copy() <span class="keyword">at</span> r                <span class="comment">; a map of its own</span></code></pre>
         <p>
           This is what Go does, and what copying a slice does for its items. Copying every key and value at each
           assignment would hide a cost that grows with the map; <code>.copy()</code> says when one is wanted, and
@@ -659,8 +659,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
       <div class="entry" id="slice-copies">
         <h3>A copy of a slice shares its items <span class="badge b-design">by design</span></h3>
         <p>
-          A slice is a view of items in a region, so a copy of it, a <code>bind</code> of it, or a plain parameter
-          given it, sees the same items, and a write through one is seen through all. <code>bind</code> and a plain
+          A slice is a view of items in a region, so a copy of it, a <code>fixed</code> of it, or a plain parameter
+          given it, sees the same items, and a write through one is seen through all. <code>fixed</code> and a plain
           parameter keep the slice's length from changing, not its items:
         </p>
         <pre><code><span class="keyword">task</span> change(xs: [int]@r)
@@ -669,14 +669,14 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> xs = <span class="keyword">new</span> [int]([1, 2, 3]) <span class="keyword">at</span> r
-    <span class="keyword">bind</span> seen = xs
+    <span class="keyword">flex</span> xs = <span class="keyword">new</span> [int]([1, 2, 3]) <span class="keyword">at</span> r
+    <span class="keyword">fixed</span> seen = xs
     change(seen)
     show(xs[0])                        <span class="comment">; 99</span>
 <span class="keyword">fi</span></code></pre>
         <p>
           For the same reason, keeping a copy in a variable doesn't separate a slice given twice to a call that
-          changes it: <code>hold ys = xs</code> and then <code>f(&amp;xs, &amp;ys)</code> gives two views of the same
+          changes it: <code>flex ys = xs</code> and then <code>f(&amp;xs, &amp;ys)</code> gives two views of the same
           items. <code>xs.copy() at r</code> makes items of its own.
         </p>
         <dl>
@@ -694,8 +694,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
           that moves the items, it keeps viewing the old block:
         </p>
         <pre><code><span class="keyword">region</span> r
-<span class="keyword">hold</span> xs = <span class="keyword">new</span> [int]([1, 2, 3, 4]) <span class="keyword">at</span> r
-<span class="keyword">bind</span> v = xs[2..4]
+<span class="keyword">flex</span> xs = <span class="keyword">new</span> [int]([1, 2, 3, 4]) <span class="keyword">at</span> r
+<span class="keyword">fixed</span> v = xs[2..4]
 xs.del(0)
 show(v[0], <span class="string">" "</span>, v[1])                  <span class="comment">; 4 4: the items moved under v</span></code></pre>
         <p>
@@ -705,7 +705,7 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
         </p>
         <dl>
           <dt>Ways it could go</dt>
-          <dd>A warning where a view or copy of a <code>hold</code> slice is read after <code>add</code> or
+          <dd>A warning where a view or copy of a <code>flex</code> slice is read after <code>add</code> or
             <code>del</code> changed that slice in the same block.</dd>
         </dl>
       </div>
@@ -721,11 +721,11 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> a = File { path: <span class="string">"fa.txt"</span> }
+    <span class="keyword">flex</span> a = File { path: <span class="string">"fa.txt"</span> }
     a.open(FileMode.Write) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
         show(<span class="string">"no"</span>)
     }
-    <span class="keyword">bind</span> b = a
+    <span class="keyword">fixed</span> b = a
     a.close() { <span class="keyword">failure</span> e
         show(<span class="string">"no"</span>)
     }
@@ -762,12 +762,12 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
           <code>_</code>. Binding it to a name that is never read does:
         </p>
         <pre><code><span class="keyword">task</span> main()
-    <span class="keyword">bind</span> x = int(<span class="string">"oops"</span>)
+    <span class="keyword">fixed</span> x = int(<span class="string">"oops"</span>)
     show(<span class="string">"went on"</span>)                    <span class="comment">; went on: nothing read the ParseError</span>
 <span class="keyword">fi</span></code></pre>
         <p>
-          So does a <code>hold</code> given a new value before the old one was read, and one of several results bound
-          by name, <code>bind a, b = int("7"), int("x")</code>.
+          So does a <code>flex</code> given a new value before the old one was read, and one of several results bound
+          by name, <code>fixed a, b = int("7"), int("x")</code>.
         </p>
         <dl>
           <dt>Why it is hard</dt>
@@ -793,7 +793,7 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
     show(f(0))                         <span class="comment">; Segmentation fault, exit 139</span>
 <span class="keyword">fi</span></code></pre>
         <p>
-          An array held by value lives on the C stack, so <code>hold big = [1#20000000]</code> crashes the same way,
+          An array held by value lives on the C stack, so <code>flex big = [1#20000000]</code> crashes the same way,
           as does a <code>new</code> of a very large array, whose value is made on the stack before it is copied.
         </p>
         <dl>
@@ -844,9 +844,9 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
           order, so when two parts of one expression would each stop the program, which one stops it isn't
           defined:
         </p>
-        <pre><code><span class="keyword">hold</span> xs = [1, 2]
-<span class="keyword">hold</span> i = 5
-<span class="keyword">hold</span> n = 9223372036854775807
+        <pre><code><span class="keyword">flex</span> xs = [1, 2]
+<span class="keyword">flex</span> i = 5
+<span class="keyword">flex</span> n = 9223372036854775807
 show(xs[i] + (n + 1))                  <span class="comment">; vela: integer overflow at 5:21 in task 'main', not the index</span></code></pre>
         <p>
           Either way the program stops, with a message saying where. Ordering every part that may stop the program
@@ -860,7 +860,7 @@ show(xs[i] + (n + 1))                  <span class="comment">; vela: integer ove
           A <code>float</code> that is <code>nan</code> (as <code>0.0 / 0.0</code> gives) is neither equal, similar,
           smaller, nor larger than anything, itself included, as in C and every language following IEEE 754:
         </p>
-        <pre><code><span class="keyword">bind</span> nan = 0.0 / 0.0
+        <pre><code><span class="keyword">fixed</span> nan = 0.0 / 0.0
 show(nan == nan, <span class="string">" "</span>, nan ~= nan, <span class="string">" "</span>, nan &lt; 1.0, <span class="string">" "</span>, nan &gt;= 1.0)   <span class="comment">; false false false false</span></code></pre>
         <p>
           So <code>~=</code> isn't always true of a value and itself, and the largest of a list holding <code>nan</code>

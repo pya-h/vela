@@ -401,7 +401,7 @@
         </div>
         <div class="card">
           <h3>Multiple results <span class="badge b-done">Done</span></h3>
-          <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="vela.html#results">The language guide describes it</a>; the reasoning is <a href="#results">below</a>.</p>
+          <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>fixed q, r = divmod(17, 5)</code>. <a href="vela.html#results">The language guide describes it</a>; the reasoning is <a href="#results">below</a>.</p>
         </div>
         <div class="card">
           <h3>Named results <span class="badge b-done">Done</span></h3>
@@ -488,24 +488,24 @@
 fi
 
 task main()
-    bind q, r = divmod(17, 5)
+    fixed q, r = divmod(17, 5)
     show(q)                      ; 3
     show(r)                      ; 2
 
-    bind whole, _ = divmod(9, 4)  ; _ skips a result
+    fixed whole, _ = divmod(9, 4)  ; _ skips a result
     show(whole)                  ; 2
 fi</pre>
       <ul>
         <li><strong>Sending:</strong> <code>&lt;- a, b</code> must list exactly as many values as the header has types,
           each of its type. A bare <code>&lt;-</code> stayed reserved for tasks with no results, until step 2 gave it a
           second meaning: sending named results as they are.</li>
-        <li><strong>Receiving:</strong> <code>bind</code>, <code>hold</code>, and assignment take a list of names:
-          <code>hold q, r = divmod(17, 5)</code> or <code>q, r = divmod(20, 6)</code>. Types can be written per name,
-          <code>bind q: int, r: int = …</code>. <code>_</code> receives a result and drops it; no Vela name can start
+        <li><strong>Receiving:</strong> <code>fixed</code>, <code>flex</code>, and assignment take a list of names:
+          <code>flex q, r = divmod(17, 5)</code> or <code>q, r = divmod(20, 6)</code>. Types can be written per name,
+          <code>fixed q: int, r: int = …</code>. <code>_</code> receives a result and drops it; no Vela name can start
           with <code>_</code>, so it's free for this.</li>
         <li><strong>Results aren't one value.</strong> <code>show(divmod(17, 5))</code> and
-          <code>bind pair = divmod(17, 5)</code> are errors: <em>'divmod' sends 2 values; receive them with
-          'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list.
+          <code>fixed pair = divmod(17, 5)</code> are errors: <em>'divmod' sends 2 values; receive them with
+          'fixed a, b = …'</em>. A task with several results can only be called as the whole right side of a list.
           Tuples came later as a type of their own (<code>-&gt; (int, int)</code> sends one tuple; see
           <a href="vela.html#tuples">Tuples</a>), and several results stay separate from them.</li>
         <li><strong>Regions:</strong> each result type follows today's rule, so <code>-&gt; ^Node@r, int</code> needs a
@@ -558,7 +558,7 @@ fi                              ; reaching the end sends total</pre>
         <code>total + 50</code> is sent. Setting a named result never ends the task. With several names:
       </p>
       <pre>task collatz(start: int) -&gt; steps: int, peak: int
-    hold n = start
+    flex n = start
     steps, peak &lt;- 0, start
     loop n != 1
         when n % 2 == 0
@@ -577,7 +577,7 @@ fi                              ; reaching the end sends total</pre>
 fi
 
 task main()
-    bind steps, peak = collatz(27)
+    fixed steps, peak = collatz(27)
     show(steps)                 ; 111
     show(peak)                  ; 9232
 fi</pre>
@@ -644,7 +644,7 @@ fi</pre>
         <p>
           Multiple results came first, since named results reuse their header list, send list, and C result
           struct; names went on top of them. What step 1 settled: a call that sends several values can only be the
-          whole right side of a list (<code>bind a, b = f()</code>, <code>a, b = f()</code>, <code>&lt;- f()</code>),
+          whole right side of a list (<code>fixed a, b = f()</code>, <code>a, b = f()</code>, <code>&lt;- f()</code>),
           and those values are taken as they are, since there is no single expression to wrap; every value of a
           list is computed before the first is stored, so <code>a, b = b, a</code> swaps; and all the tasks whose
           results have the same types share one C struct, whose members are <code>r0</code>, <code>r1</code>, …,
@@ -746,18 +746,18 @@ fi</pre>
       <p>
         The first step out of the limited types; tuples came next (<a href="vela.html#tuples">Tuples</a>), and then
         tasks that take types (<a href="#generics">below</a>), each a step of its own. An array
-        is a fixed number of values held in place, and a slice is a view of values in a region (see
+        is a set number of values held in place, and a slice is a view of values in a region (see
         <a href="vela.html#arrays">Arrays</a> and <a href="vela.html#slices">Slices</a> in the language guide):
       </p>
-      <pre>bind scores: [int#4] = [90, 72, 85, 60]
+      <pre>fixed scores: [int#4] = [90, 72, 85, 60]
 each score in scores
     show(score)
 fi
 region r
-bind all = new [int]([0#n]) at r     ; [int]@r: n zeros, n known as the program runs
-bind part = all[1..3]                 ; the same memory, not a copy
+fixed all = new [int]([0#n]) at r     ; [int]@r: n zeros, n known as the program runs
+fixed part = all[1..3]                 ; the same memory, not a copy
 part[0] = scores.len
-hold names = new [text]() at r        ; no items yet
+flex names = new [text]() at r        ; no items yet
 names.add("b")                        ; last
 names.add(0, "a")                     ; before item 0
 show(names.del(1))                    ; takes item 1 out: b</pre>
@@ -792,12 +792,12 @@ show(names.del(1))                    ; takes item 1 out: b</pre>
         then). A literal's values join into one
         type: <code>none</code> and a value make a <code>maybe</code>, <code>fail e</code> and a value a
         <code>T ~ E</code>, and a literal of only <code>none</code> takes its type from where it goes
-        (<code>bind slots: [maybe int#4] = [none#4]</code>). <strong>Checks.</strong> Every index and slice is checked
+        (<code>fixed slots: [maybe int#4] = [none#4]</code>). <strong>Checks.</strong> Every index and slice is checked
         as the program runs and stops it with a message saying where, as integer overflow does (<em>vela: index 4 is out
         of range 0..4 at 7:12 in task 'main'</em>). A constant index or bound out of range, a count below 1, and a type
         whose values would take more than 1 TiB are errors when compiling, the last so that every program the compiler
         accepts also compiles as C. <strong>Places.</strong> An array's item can be assigned where a field could be (in
-        a <code>hold</code>, or behind a pointer); a slice's items can always be written, as through a pointer; neither's
+        a <code>flex</code>, or behind a pointer); a slice's items can always be written, as through a pointer; neither's
         <code>len</code> can. An array behind a pointer, or an item of a slice, is in a region, so it can be sliced.
         <strong>C.</strong> An array is a struct holding a C array, which C can copy and return; a slice is a struct of a
         pointer, an <code>int64_t</code> length, and its room. Reading a slice's item, slicing, copying, and filling go
@@ -808,7 +808,7 @@ show(names.del(1))                    ; takes item 1 out: b</pre>
       </p>
       <p>
         What growing settled. <strong>Where.</strong> A change is written to the slice where it is kept, so the slice
-        must be in a place that can be assigned (a <code>hold</code> variable, a field of one, anything behind a pointer,
+        must be in a place that can be assigned (a <code>flex</code> variable, a field of one, anything behind a pointer,
         an item of another slice), and <code>add</code> needs the slice's region itself (declared, or an
         <code>r: region</code> parameter), as <code>new</code> does. <strong>Room.</strong> A slice carries a pointer to
         its room: a block of its region holding its items and free space after them. A full block is replaced by one
@@ -865,9 +865,9 @@ fi
 
 show(first(ns))                 ; 4 — the argument says T is int
 show(first&lt;text@r&gt;(names))       ; Ada — or the call writes it out
-bind blank: maybe int = empty()   ; or the place the value goes says it
-bind count = Box { value: 1 }   ; Box&lt;int&gt;: the value given says which type
-bind kept: Box&lt;text&gt;@r = Box { value: name }   ; its text is in r
+fixed blank: maybe int = empty()   ; or the place the value goes says it
+fixed count = Box { value: 1 }   ; Box&lt;int&gt;: the value given says which type
+fixed kept: Box&lt;text&gt;@r = Box { value: name }   ; its text is in r
 show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'ordered' …</pre>
       <ul>
         <li><strong>Angle brackets, as in the header.</strong> <code>&lt;T&gt;</code> declares the types, and a call that
@@ -952,8 +952,8 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
     &lt;- none                   ; not found
 fi
 
-bind x: maybe float = 2.1
-hold y: maybe float = none</pre>
+fixed x: maybe float = 2.1
+flex y: maybe float = none</pre>
       <ul>
         <li>The word is <code>maybe</code>, never <code>Option</code>: the type reads as what it is, a value that is
           maybe there.</li>
@@ -1006,7 +1006,7 @@ fi</pre>
     show(index)
 fi
 
-hold current = first
+flex current = first
 loop current is {item}
     show(item^.title)
     current = item^.next
@@ -1021,17 +1021,17 @@ fi</pre>
       </p>
       <p><strong>3. Plan B</strong>, the compact form: a block after a value runs only when there is no value, and
         its last line is the value to use instead.</p>
-      <pre>bind y = x { 0.0 }                 ; x's value, or 0.0
-bind z: float = y * 5.2
+      <pre>fixed y = x { 0.0 }                 ; x's value, or 0.0
+fixed z: float = y * 5.2
 
-bind port = config_port() {
+fixed port = config_port() {
     show("no port set, using 8080")
     8080
 }
 
-bind scaled = x { 1.0 } * 2.2      ; works inside expressions
+fixed scaled = x { 1.0 } * 2.2      ; works inside expressions
 
-bind first = head {
+fixed first = head {
     &lt;-                             ; nothing to do: leave the task
 }</pre>
       <ul>
@@ -1064,9 +1064,9 @@ task parse(digits: text) -&gt; int ~ ParseError
 fi
 
 task main()
-    bind n = parse("42") { 0 }            ; the error is ignored: use 0
+    fixed n = parse("42") { 0 }            ; the error is ignored: use 0
 
-    bind m = parse("4x") {
+    fixed m = parse("4x") {
         failure e                         ; names the failure for this block
         match e
         case Empty
@@ -1321,7 +1321,7 @@ fi</pre>
           <code>'area' is already defined</code>.</li>
         <li><strong>No way to change a value in place.</strong> Vela has no address-of operator, so a task can only
           modify a shape that was allocated with <code>new</code> in a region and passed as <code>^Point@r</code>. A
-          <code>hold</code> variable on the stack can't be updated by a helper task.</li>
+          <code>flex</code> variable on the stack can't be updated by a helper task.</li>
         <li><strong>Nothing to discover.</strong> After <code>p.</code>, an editor can offer fields but not the
           operations that belong to <code>Point</code>.</li>
       </ul>
@@ -1345,7 +1345,7 @@ task (p: ^Point@r) shift(dx: float)
     p^.x = p^.x + dx
 fi
 
-bind size = p.length_squared()</pre>
+fixed size = p.length_squared()</pre>
         <div class="pros-cons">
           <div class="pros">
             <strong>Pros</strong>
@@ -1385,7 +1385,7 @@ bind size = p.length_squared()</pre>
         &lt;- self.x * self.x + self.y * self.y
     fi
 
-    task shift(hold self, dx: float)
+    task shift(flex self, dx: float)
         self.x = self.x + dx
     fi
 fi</pre>
@@ -1409,7 +1409,7 @@ fi</pre>
         </div>
         <div class="note">
           <strong>Verdict:</strong> Well organized and future-proof, but heavier than Vela needs today. Its
-          <code>self</code> / <code>hold self</code> receiver modes are worth keeping whichever syntax wins.
+          <code>self</code> / <code>flex self</code> receiver modes are worth keeping whichever syntax wins.
         </div>
       </div>
 
@@ -1462,8 +1462,8 @@ fi</pre>
     &lt;- p.x * p.x + p.y * p.y
 fi
 
-bind a = length_squared(p)
-bind b = p.length_squared()     ; the same call</pre>
+fixed a = length_squared(p)
+fixed b = p.length_squared()     ; the same call</pre>
         <div class="pros-cons">
           <div class="pros">
             <strong>Pros</strong>
@@ -1501,11 +1501,11 @@ task Point.length_squared(self) -> float
     &lt;- self.x * self.x + self.y * self.y
 fi
 
-task Point.shift(hold self, dx: float)
+task Point.shift(flex self, dx: float)
     self.x = self.x + dx
 fi
 
-hold p = Point.origin()
+flex p = Point.origin()
 p.shift(2.5)
 show(p.length_squared())</pre>
         <div class="pros-cons">
@@ -1514,7 +1514,7 @@ show(p.length_squared())</pre>
             <ul>
               <li>Methods stay ordinary tasks; the only new syntax is <code>Type.</code> before the name</li>
               <li>Each type gets its own namespace: <code>Circle.area</code> and <code>Rect.area</code> coexist</li>
-              <li><code>hold self</code> changes a <code>hold</code> variable in place without an address-of operator</li>
+              <li><code>flex self</code> changes a <code>flex</code> variable in place without an address-of operator</li>
             </ul>
           </div>
           <div class="cons">
@@ -1539,10 +1539,10 @@ show(p.length_squared())</pre>
           </thead>
           <tbody>
             <tr><td>A. Receiver tasks</td><td>Receiver before the name</td><td>Yes</td><td>Only through <code>^</code></td><td>Partly</td></tr>
-            <tr><td>B. <code>extend</code> blocks</td><td>Keyword + block + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Heavy</td></tr>
+            <tr><td>B. <code>extend</code> blocks</td><td>Keyword + block + <code>self</code></td><td>Yes</td><td><code>flex self</code></td><td>Heavy</td></tr>
             <tr><td>C. Inside the shape</td><td>Tasks in shapes</td><td>Yes</td><td><code>alters</code></td><td>Chosen</td></tr>
             <tr><td>D. Uniform calls</td><td>None</td><td>No</td><td>Only through <code>^</code></td><td>Partly</td></tr>
-            <tr><td>E. Qualified tasks</td><td><code>Type.</code> + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Best</td></tr>
+            <tr><td>E. Qualified tasks</td><td><code>Type.</code> + <code>self</code></td><td>Yes</td><td><code>flex self</code></td><td>Best</td></tr>
           </tbody>
         </table>
       </div>
@@ -1574,7 +1574,7 @@ show(p.length_squared())</pre>
     fi
 fi
 
-hold c: Counter = Counter { label: "clicks", count: 0 }
+flex c: Counter = Counter { label: "clicks", count: 0 }
 c.step()
 show(c.total())</pre>
         <ul>
@@ -1587,7 +1587,7 @@ show(c.total())</pre>
             and a task. Nothing is in scope implicitly, so no rule is needed for a field and a variable of one name.</li>
           <li><strong><code>alters</code> marks a method that changes the value</strong> it is called on. A method
             without it that assigns a field is refused, with the fix named. Only a changeable place can call one (a
-            <code>hold</code> variable, a field of one, an item of a slice, or <code>p^</code>): a <code>bind</code>
+            <code>flex</code> variable, a field of one, an item of a slice, or <code>p^</code>): a <code>fixed</code>
             value never changes, and neither does a parameter, so <code>c.step()</code> on either is refused. The
             compiler passes the place's address in the generated C, and Vela code never sees a pointer.</li>
           <li><strong><code>.this</code> is the whole value.</strong> A kind has no fields, so its methods read it with
@@ -1664,8 +1664,8 @@ show(c.total())</pre>
           <a href="vela.html#shared-methods">shared methods</a> are done, 2026-09-28): a shape's <code>shared</code> field is one
           value for the whole program rather than one per value, and a <code>shared</code> method has no
           <code>.this</code>. Both are reached only through the shape's name, <code>Point.origin()</code> and
-          <code>Point.made</code>, never through a value. A shared field is <code>bind</code> unless it is
-          <code>shared hold</code>, may be <code>priv</code> or <code>read</code> like any field, and always names its
+          <code>Point.made</code>, never through a value. A shared field is <code>fixed</code> unless it is
+          <code>shared flex</code>, may be <code>priv</code> or <code>read</code> like any field, and always names its
           first value, one the compiler works out without running the program. A kind gets shared methods only, no
           fields, and a shared name may not be one of its variants' names. Shared fields that live in a region, and
           shared members in a shape that takes types, wait for the two ideas below
@@ -1716,7 +1716,7 @@ show(c.total())</pre>
 
       <h3>Syntax & Ergonomics</h3>
       <ul>
-        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r = 3.14 * r * r … fi</code>
+        <li><strong>Match expressions:</strong> <code>fixed area = match s case Circle r = 3.14 * r * r … fi</code>
           (not <code>-&gt;</code>, which names a task's result type)
           <em>(done: <a href="vela.html#choices">A match or a when as a value</a>, for <code>when</code> as well,
           where blocks give the value and <code>=</code> is a case's short form)</em></li>
@@ -1727,7 +1727,7 @@ show(c.total())</pre>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a>
           <em>(done: <a href="vela.html#tuples">Tuples</a>, including patterns that take them apart,
-          <code>when found is {(name, age)}</code> and <code>when pair is (x, y)</code>, and <code>hold</code> names
+          <code>when found is {(name, age)}</code> and <code>when pair is (x, y)</code>, and <code>flex</code> names
           in any pattern)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
@@ -1779,7 +1779,7 @@ show(c.total())</pre>
           <a href="vela.html#macros">Macros</a>). Macros that take values, and a macro as an array's count in a type,
           are next: see <a href="#macro-tasks">Macros that take values</a>.</li>
         <li><strong>Compile-time use of tuples:</strong> a tuple's items never change, so a tuple built from constants
-          (<code>bind limits = (0, 100)</code>) is itself a constant: the compiler could compute <code>limits.1 - limits.0</code>
+          (<code>fixed limits = (0, 100)</code>) is itself a constant: the compiler could compute <code>limits.1 - limits.0</code>
           when compiling, pass small tuples in registers, and share one copy of a constant tuple, with no check that it
           changed</li>
         <li><strong>Type conversions (casting):</strong> <span class="badge b-done">Done</span> — a value becomes text
@@ -1848,11 +1848,11 @@ fi</code></pre>
         <code>int(t)</code> sends <code>int ~ ParseError</code> (see
         <a href="vela.html#reading-numbers">Reading a number from text</a>).
       </p>
-      <pre>bind x = float(n)                  ; an int as a float, which never fails (done)
-bind whole = int(2.9)              ; a float as an int: 2, truncated toward zero (done)
-bind counted = int(n &gt; 3)          ; a bool as an int: 1 or 0 (done)
-bind shown = text(3.5) at r        ; a number to text makes text, in a region (done)
-bind age = int("42")               ; text to a number can fail: int ~ ParseError (done)</pre>
+      <pre>fixed x = float(n)                  ; an int as a float, which never fails (done)
+fixed whole = int(2.9)              ; a float as an int: 2, truncated toward zero (done)
+fixed counted = int(n &gt; 3)          ; a bool as an int: 1 or 0 (done)
+fixed shown = text(3.5) at r        ; a number to text makes text, in a region (done)
+fixed age = int("42")               ; text to a number can fail: int ~ ParseError (done)</pre>
       <p>
         <span class="badge b-done">Done</span>: the typed form <code>scan("Age: ", int)</code> reads a number from input
         in one step, and needs no region, since a number needs no memory. Its question was how the end of input is told
@@ -1886,7 +1886,7 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           <a href="#inner-kind-variants">Variants of a kind held in a kind</a> would remove.</li>
         <li><strong>Promotion.</strong> <span class="badge b-done">Done</span> — refused: <code>1 + 2.5</code> is an
           error that asks for <code>float(1) + 2.5</code>, so no <code>int</code> becomes a <code>float</code> quietly,
-          and arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
+          and arithmetic agrees with assignment, which already refused <code>fixed x: float = 3</code>.</li>
       </ul>
 
       <h3 id="error-spelling">Writing errors: <code>~</code>, and <code>fail</code> beside <code>failure</code></h3>
@@ -1913,7 +1913,7 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           written where the other belongs is an error that names the right one.</li>
       </ul>
       <pre><span class="keyword">task</span> age(line: <span class="type">text</span>) -&gt; <span class="type">int</span> ~ ParseError
-    <span class="keyword">bind</span> years = int(line) {
+    <span class="keyword">fixed</span> years = int(line) {
         <span class="keyword">failure</span> e                      <span class="comment">; names the failure: a pattern, like a case</span>
         &lt;- <span class="keyword">fail</span> e                     <span class="comment">; makes one: the verb</span>
     }
@@ -1984,7 +1984,7 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
         <li><strong>Source mapping:</strong> <code>#line</code> directives in the generated C, so C compiler errors and
           debuggers point at Vela lines, and Vela Studio could show the C a line produced</li>
         <li><strong>A stability promise:</strong> a short page saying which syntax is settled (<code>&lt;-</code>,
-          <code>fi</code>, <code>bind</code>/<code>hold</code>) and which may still change before 1.0</li>
+          <code>fi</code>, <code>fixed</code>/<code>flex</code>) and which may still change before 1.0</li>
       </ul>
 
       <h3>Concurrency</h3>
@@ -2013,14 +2013,14 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
         the program can't go past:
       </p>
       <pre><code>region global(64)                 ; 64 bytes, for the whole program
-    bind greeting = "hello"       ; a constant, written into the program, taking no room
-    hold visits: int = 0          ; a variable that lasts as long as the program
+    fixed greeting = "hello"       ; a constant, written into the program, taking no room
+    flex visits: int = 0          ; a variable that lasts as long as the program
 fi</code></pre>
       <p>
         <strong>As noted so far (the user's design):</strong> it is written in the main file only, not in a module, as a
-        block closed by <code>fi</code>; a <code>bind</code> in it is a constant, written into the program's code, and a
-        <code>hold</code> a variable; nothing in it ever grows, so it holds no slice, and a pointer in it points only at
-        a value of fixed size; it is never freed; a program that puts more in it than its size stops; and the
+        block closed by <code>fi</code>; a <code>fixed</code> in it is a constant, written into the program's code, and a
+        <code>flex</code> a variable; nothing in it ever grows, so it holds no slice, and a pointer in it points only at
+        a value of known size; it is never freed; a program that puts more in it than its size stops; and the
         language would have a limit on how much a program allocates in all.
       </p>
       <p><strong>What it would make possible:</strong></p>
@@ -2030,7 +2030,7 @@ fi</code></pre>
           <a href="#start-values">Values worked out where the program starts</a>). Values that live in no region (a
           number, a literal's text, a task) need no global region: they can be kept in hidden variables already.</li>
         <li>What a decorator records, kept for the whole run: a web module's routes, say, in a slice of text and
-          tasks, rather than a fixed number of shared fields.</li>
+          tasks, rather than a set number of shared fields.</li>
         <li>Shared fields holding region values, which the <a href="#static-region">static region</a> idea asked for;
           the two are one idea, and this one is the more careful.</li>
       </ul>
@@ -2046,13 +2046,13 @@ fi</code></pre>
         <li><strong>One direction for pointers.</strong> Today a value in region <code>r</code> points only into
           <code>r</code>. Anything may safely point into the global region, since it outlives every other; the global
           region may point only into itself, since every other region ends first. That is the rule the note's "a
-          pointer only at a value of fixed size" is after: what makes a pointer safe is where it points, not the size
+          pointer only at a value of known size" is after: what makes a pointer safe is where it points, not the size
           of what it points at.</li>
         <li><strong>A slice there is safe.</strong> Growing a slice takes new room and leaves the old where it was, and
           nothing in the global region is freed, so no copy ever dangles; the size bounds how far it grows. Refusing
           slices there isn't needed for safety, only for predictable memory, which the size already gives.</li>
-        <li><strong>A <code>bind</code> there is a macro.</strong> A constant written into the program is what
-          <code>#NAME = value</code> already is. A <code>bind</code> in the global region would add something only as a
+        <li><strong>A <code>fixed</code> there is a macro.</strong> A constant written into the program is what
+          <code>#NAME = value</code> already is. A <code>fixed</code> in the global region would add something only as a
           value worked out once where the program starts (from a call, say), which no macro can be: a constant of the
           run rather than of the source.</li>
         <li><strong>Modules need it too.</strong> "Only in the main file" leaves a module that records things (a web
@@ -2060,8 +2060,8 @@ fi</code></pre>
           the size the main file gives, or the main file's block gives the size and modules only use it.</li>
         <li><strong>One concept for globals.</strong> Shared fields are already the program's global variables, each
           named by its shape. Rather than two kinds of global, a shared field could hold values of the global region
-          (<code>shared hold routes: [text]@global</code>), and the block would only say how large the region is.</li>
-        <li><strong>A limit for the whole program</strong> fixed by the language would be wrong for some program
+          (<code>shared flex routes: [text]@global</code>), and the block would only say how large the region is.</li>
+        <li><strong>A limit for the whole program</strong> set by the language would be wrong for some program
           whatever it is; a size the program states, with a default, serves the same purpose.</li>
       </ul>
       <p><strong>Concerns to weigh:</strong></p>
@@ -2071,14 +2071,14 @@ fi</code></pre>
           worked out from another global must read one already set, which the compiler can check when every first
           value is a constant or reads only those above it.</li>
         <li><strong>Shared changing state.</strong> With <a href="events.html">events</a> or tasks running at once later,
-          a <code>hold</code> in the global region is state every part of the program can change at the same time. It
+          a <code>flex</code> in the global region is state every part of the program can change at the same time. It
           would need one owner, or reads and writes that can't interleave, before Vela runs anything at once.</li>
         <li><strong>Memory held for the whole run.</strong> Everything allocated there stays until the program ends,
           which is the cost regions were made to avoid; the size keeps it bounded, and a growing slice wastes the room
           its old items took.</li>
         <li><strong>A file opened in it</strong> stays open to the end, which is right for a log and wrong for most
           files.</li>
-        <li><strong>Performance</strong> is good: a global variable is read at a fixed address, and allocating there is
+        <li><strong>Performance</strong> is good: a global variable is read at a known address, and allocating there is
           a bump of a pointer and one comparison.</li>
       </ul>
 
@@ -2106,7 +2106,7 @@ fi</code></pre>
           region today (a slice, <code>text@r</code>, a pointer, a <code>File</code>), since every region ends before
           the program does. A <code>static</code> region would be one that lives as long as the program: it doesn't exist
           unless the program asks for it (with a command or a line that turns it on), and once it does, shared fields
-          may hold slices and other region values in it, <code>shared hold names: [text]@static</code>. The costs to
+          may hold slices and other region values in it, <code>shared flex names: [text]@static</code>. The costs to
           weigh: nothing in it is freed before the program ends, so a shared slice that grows in a loop grows forever;
           a file opened in it stays open to the end; and every task that stores something there holds memory for the
           whole run, which is the global-variable problem regions were meant to avoid. A narrower relative is a region
@@ -2147,7 +2147,7 @@ fi</code></pre>
         A task without a name, written where a value goes: its header without the word <code>task</code> or a name,
         then its body and <code>fi</code>, on lines of its own or on one line.
       </p>
-      <pre><code>bind double = (x: int) -&gt; int &lt;- x * 2 fi
+      <pre><code>fixed double = (x: int) -&gt; int &lt;- x * 2 fi
 show(apply((n: int) -&gt; int
     show("got ", n)
     &lt;- n + 1
@@ -2167,9 +2167,9 @@ fi, 5))</code></pre>
         has regions, and a region already answers "how long does this memory live". So a lambda that keeps what it uses
         names the one region it keeps it in, and its type names it too:
       </p>
-      <pre><code>task counter(r: region, start: int) -&gt; [hold @r]() -&gt; int
-    hold n = start
-    &lt;- [hold @r]() -&gt; int
+      <pre><code>task counter(r: region, start: int) -&gt; [flex @r]() -&gt; int
+    flex n = start
+    &lt;- [flex @r]() -&gt; int
         n = n + 1                   ; its own copy of n, kept in r
         &lt;- n
     fi
@@ -2177,7 +2177,7 @@ fi
 
 task main()
     region r
-    hold next = counter(r, 10)
+    flex next = counter(r, 10)
     show(next(), " ", next())       ; 11 12
 fi</code></pre>
       <ul>
@@ -2189,8 +2189,8 @@ fi</code></pre>
           text. What lives in <code>r</code> is used where it is, through the copied handles, and a value of another
           region is copied into <code>r</code> first, <code>xs.copy() at r</code>, the rule a <code>Person@r</code>
           follows.</li>
-        <li><strong><code>[hold @r]</code> changes its copies</strong>, as Rust's <code>FnMut</code> does, and so is never
-          copied: held in a <code>hold</code> variable and given as a place, <code>hold&amp; f</code>.</li>
+        <li><strong><code>[flex @r]</code> changes its copies</strong>, as Rust's <code>FnMut</code> does, and so is never
+          copied: held in a <code>flex</code> variable and given as a place, <code>flex&amp; f</code>.</li>
         <li><strong>Plain and keeping values mix one way.</strong> A plain task value goes where a <code>[@r]</code> type
           is expected, through a small function the compiler writes; a keeping one never goes where a plain type is
           expected, since that type names no region.</li>
@@ -2200,14 +2200,14 @@ fi</code></pre>
       </ul>
       <p>
         <strong>Places kept by name.</strong> <span class="badge b-done">Done</span> A variable named in the list beside
-        the region is kept as the variable itself: <code>[hold&amp; count, @r]</code> changes it, and
-        <code>[bind&amp; big, @r]</code> reads a large value where it is, with no copy. It is safe only where the lambda
+        the region is kept as the variable itself: <code>[flex&amp; count, @r]</code> changes it, and
+        <code>[fixed&amp; big, @r]</code> reads a large value where it is, with no copy. It is safe only where the lambda
         can't outlive the variable, so only where <code>r</code> is declared after the variable, in its block or one inside
         it, and ends first; a region given as a parameter, or one declared before the variable, is refused. Built: see
         <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.
       </p>
       <p>
-        <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[hold&amp; p.x, @r]</code>;
+        <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[flex&amp; p.x, @r]</code>;
         a lambda that keeps what it uses held in a field of a shape or kind; compared, or
         copied into another region with what it keeps; a rule for <code>add</code> and <code>del</code> on a slice the
         lambda keeps a copy of, which today it refuses (a slice kept as a place grows), since its copy shares the items and not the length; and data of another
@@ -2246,7 +2246,7 @@ fi</code></pre>
         <li><strong>Type groups, <code>P...</code>,</strong> let one wrapper fit a task of any parameters:
           <pre><code>task traced&lt;P..., R: shown&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
     show("calling")
-    bind result = next(args...)
+    fixed result = next(args...)
     show("sent ", result)
     &lt;- result
 fi</code></pre>
@@ -2278,8 +2278,8 @@ fi</code></pre>
           parameter, and <code>|&gt;&gt;</code> to its second, and so on, from the notes that started decorators. It is
           sugar over calls, and a pipe of tasks held as values (<code>value |&gt; steps[i]</code>) works the same way.</li>
         <li><strong>Calls the compiler can see through.</strong> A task value that is a known task and never changes
-          (<code>bind f = square</code>, a wrapper's <code>next</code>) can be called directly rather than through the
-          pointer, which lets C inline it: a higher-order task given a fixed task then costs what the loop written out
+          (<code>fixed f = square</code>, a wrapper's <code>next</code>) can be called directly rather than through the
+          pointer, which lets C inline it: a higher-order task given a known task then costs what the loop written out
           costs. The same goes for a generic task given a task: making one copy per task given (as for types) removes the
           pointer entirely, at the cost of a larger program, so it would be chosen only for small tasks.</li>
         <li><strong>A library of higher-order tasks:</strong> once lambdas and generics meet, <code>std</code> could give
@@ -2291,11 +2291,11 @@ fi</code></pre>
         <li><strong>More tasks as values:</strong> a generic task given its types, <code>first&lt;int&gt;</code>; a method
           of every value named on its shape, <code>Point.area</code>, a <code>(Point) -&gt; float</code> (a shared one,
           <code>Point.new</code>, is a value since 2026-10-04); and task types sending several values. Each is refused
-          today with a reason. (Task types taking places and regions, <code>(hold&amp; int) -&gt; nothing</code> and
+          today with a reason. (Task types taking places and regions, <code>(flex&amp; int) -&gt; nothing</code> and
           <code>(@r, int) -&gt; [int]@r</code>, are built since 2026-10-05.)</li>
         <li><strong>A table of startup decorators made when compiling:</strong> for a decorator that only records its
           tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
-          with no call at start at all. The count of uses is known when compiling, so the table is a fixed array, and a
+          with no call at start at all. The count of uses is known when compiling, so the table is an array of known size, and a
           decorator's registry needs no region that lasts.</li>
         <li><strong>Startup decorators that fail</strong> <span class="badge b-done">Done</span>: a decorator sending
           <code>nothing ~ E</code>, whose failure stops the program before <code>main</code> with its message, and
@@ -2318,7 +2318,7 @@ fi</code></pre>
           copies of generic tasks first; decorators on generic tasks themselves are not wanted (the user's choice,
           2026-10-01), so this stays to methods.</li>
         <li><strong>Decorators on tasks taking places or regions</strong> <span class="badge b-done">Done</span>
-          (2026-10-05): task types taking <code>hold&amp; T</code> and <code>bind&amp; T</code> places and <code>@r</code>
+          (2026-10-05): task types taking <code>flex&amp; T</code> and <code>fixed&amp; T</code> places and <code>@r</code>
           regions, task values, lambdas, wrappers and startup decorators of such tasks (see
           <a href="vela.html#task-types-places">Places and regions</a>). Nothing can keep a place or a region past the
           call, so passing them through a chain is as safe as passing them through calls.</li>
@@ -2442,9 +2442,9 @@ fi
           <code>maybe T</code> and <code>T ~ E</code> already cover what most generic kinds would be used for. The
           question to decide is whether a program that has shapes and tasks taking types still needs kinds taking them
           often enough to pay for that reach.</li>
-        <li id="knowing-shallow-copies"><strong>Copies that share, knowingly:</strong> the planned refactor of the
-          variable words (<code>hold</code> becomes <code>flex</code>, <code>bind</code> becomes <code>fixed</code>,
-          and a new <code>bind</code> names one value whose contents may change) makes <code>fixed</code> fully
+        <li id="knowing-shallow-copies"><strong>Copies that share, knowingly:</strong> the refactor of the
+          variable words (<code>hold</code> became <code>flex</code> and <code>bind</code> became <code>fixed</code>;
+          next, a new <code>bind</code> names one value whose contents may change) is to make <code>fixed</code> fully
           immutable. A slice, a map and a pointer are handles to items kept elsewhere, so a <code>flex</code> copy of a
           <code>fixed</code> one could change the items the <code>fixed</code> name sees. The plan closes that: giving a
           <code>fixed</code> value that holds a slice, a map or a pointer to a <code>flex</code> or <code>bind</code>
@@ -2468,7 +2468,7 @@ fi
             <li>Checks where the program runs: the items the shared copy reaches stay marked as owned by the
               <code>fixed</code> name, and a write to them through the copy stops the program with a message, as an
               index out of range does. It costs a check on each write through the copy.</li>
-            <li>The author's lock idea, <code>hold x!: int</code>: a place that only one name may change, refused by
+            <li>The author's lock idea, <code>flex x!: int</code>: a place that only one name may change, refused by
               the compiler where it can tell, and stopping the program where it can't. The same mark on a shared
               copy would say which side may write.</li>
             <li>Plain sharing with no check at all, for code that measured the copy and can't pay for it, as C would

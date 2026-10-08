@@ -320,7 +320,7 @@
         anything that is not its own. What is its own:
         <ul>
           <li>its own local variables;</li>
-          <li>for a <code>shared</code> event inside a shape, that shape's <code>shared hold</code> fields.</li>
+          <li>for a <code>shared</code> event inside a shape, that shape's <code>shared flex</code> fields.</li>
         </ul>
         Everything else needs <code>alters</code>. That includes the fields of the value a member event runs on (as for a
         method), a variable of the task the event is declared in, a shared field of another shape, and a shared field
@@ -336,14 +336,14 @@
       </p>
       <h3>Examples of the rule</h3>
       <pre><code>shape Counter
-    shared hold made: int = 0
+    shared flex made: int = 0
     shared event counted on init        ; no alters: made is this shape's own shared field
         Counter.made = Counter.made + 1
     fi
 fi
 
 shape Audit
-    shared hold seen: int = 0
+    shared flex seen: int = 0
     shared alters event noted on init   ; alters: seen is its own, but Counter.made is another shape's
         Audit.seen = Audit.seen + 1
         Counter.made = Counter.made + 1
@@ -351,8 +351,8 @@ shape Audit
 fi
 
 task main()
-    hold changes = 0
-    hold total = 0
+    flex changes = 0
+    flex total = 0
     alters event tally on total         ; alters: changes belongs to main, not to the event
         changes = changes + 1
     fi
@@ -364,7 +364,7 @@ fi</code></pre>
         <p>
           <span class="badge b-sugg">Suggestion</span> For events declared in a shape, the rule turns out to be the
           same as the rule for methods. A method takes <code>alters</code> to change <code>.this</code>, and needs no
-          <code>alters</code> to change its shape's <code>shared hold</code> fields. So "an event follows the method
+          <code>alters</code> to change its shape's <code>shared flex</code> fields. So "an event follows the method
           rule for the place it is declared in, and needs <code>alters</code> for anything outside that place" is one
           sentence a reader can keep in mind. It is worth saying in the guide exactly like that.
         </p>
@@ -450,7 +450,7 @@ fi</code></pre>
             <tr><td><code>onchange</code></td><td>any field of a value changes</td><td><span class="badge b-user">Author</span>
               It differs from a <a href="#change-trigger">change trigger</a>, which names particular fields. This one
               runs for any field.</td></tr>
-            <tr><td><code>shared onchange</code></td><td>any <code>shared hold</code> field of the shape changes</td><td><span class="badge b-user">Author</span>
+            <tr><td><code>shared onchange</code></td><td>any <code>shared flex</code> field of the shape changes</td><td><span class="badge b-user">Author</span>
               The shared version of <code>onchange</code>.</td></tr>
           </tbody>
         </table>
@@ -521,8 +521,8 @@ fi</code></pre>
       </p>
       <p>A larger example, in a task:</p>
       <pre><code>task main()
-    hold score = 0
-    hold best = 0
+    flex score = 0
+    flex best = 0
     alters(best) event record on score when score &gt; best
         best = score
     fi
@@ -642,7 +642,7 @@ record.paused       ; true or false</code></pre>
       <h3 id="hidden-changes">Changes the compiler can't see at the place they happen</h3>
       <p>
         A watched local can be changed in ways that don't look like an assignment to it: given to a task as
-        <code>&amp;total</code> for a <code>hold&amp;</code> parameter, changed through a <code>hold&amp; ref = &amp;total</code>
+        <code>&amp;total</code> for a <code>flex&amp;</code> parameter, changed through a <code>flex&amp; ref = &amp;total</code>
         reference, or changed by an <code>alters</code> method called on it. The task changing it doesn't know an event
         is watching. <span class="badge b-sugg">Suggestion</span> Treat the call, or the statement that uses the
         reference, as the change: the event runs once, after it. That keeps every change site in the watching code, and
@@ -666,7 +666,7 @@ record.paused       ; true or false</code></pre>
           closes.</li>
         <li><strong>A value a task sends back</strong> leaves the task without going away. The copy in the task
           doesn't drop, and the caller now has the value.</li>
-        <li><strong>A copy</strong> (<code>bind b = a</code>) is a second value. If it drops, but nothing ran for it
+        <li><strong>A copy</strong> (<code>fixed b = a</code>) is a second value. If it drops, but nothing ran for it
           when it was made, then a count kept with <code>on init</code> and <code>on drop</code> ends up lower than
           the true number. <span class="badge b-sugg">Suggestion</span> A copy also runs <code>on init</code>, or has
           an event of its own, <code>on copy</code>. Otherwise the count is never exact, and exact counting was the
@@ -775,7 +775,7 @@ record.paused       ; true or false</code></pre>
             returns.</li>
           <li>Whether cycles between events are refused when compiling, or stopped by a guard while running.</li>
           <li>The order of several events on one trigger, within a file and across files.</li>
-          <li>How changes made through <code>&amp;x</code>, <code>hold&amp;</code> references and
+          <li>How changes made through <code>&amp;x</code>, <code>flex&amp;</code> references and
             <code>alters</code> methods reach a change event.</li>
           <li>Whether read events may change the value read (lazy fields), and whether their own reads trigger
             them.</li>

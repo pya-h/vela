@@ -482,7 +482,7 @@
         Vela aims for Go-like minimalism: one way to define functions, one way to define records, one way to
         define unions. It avoids the dualities that plague other languages (structs vs classes, interfaces vs
         traits). It does have both references and pointers, but they don't overlap: a reference
-        (<code>hold&amp;</code>, <code>bind&amp;</code>) is another name for a place, never stored and never null, and a
+        (<code>flex&amp;</code>, <code>fixed&amp;</code>) is another name for a place, never stored and never null, and a
         pointer (<code>^T</code>) is a value kept in a region.
       </p>
       <ul>
@@ -497,10 +497,10 @@
       </p>
       <p>
         Like Go, a Vela task can send several values — <code>task divmod(a: int, b: int) -&gt; int, int</code>, then
-        <code>bind q, r = divmod(17, 5)</code> — so a pair of results needs no record and no output parameter, as it
+        <code>fixed q, r = divmod(17, 5)</code> — so a pair of results needs no record and no output parameter, as it
         does in C. Those values are not a tuple: they can only be received by a list of names. Vela has tuples too, as a
         separate type (<code>-&gt; (int, int)</code> sends one), like Rust's and Swift's but with items that never change:
-        <code>t.0 = 1</code> is an error even in a <code>hold</code> tuple, which can only take a whole new one.
+        <code>t.0 = 1</code> is an error even in a <code>flex</code> tuple, which can only take a whole new one.
       </p>
       <p>
         A Vela task or shape can take types as well as values — <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code>,
@@ -527,8 +527,8 @@
       <p>
         A parameter says how it is given, where C++ has <code>T</code>, <code>const T&amp;</code>, and <code>T&amp;</code>,
         C# has <code>in</code> and <code>ref</code>, and Swift <code>inout</code>: <code>x: T</code> is read and
-        never changed, <code>hold x: T</code> is the task's own copy to change, <code>hold&amp; x: T</code> changes the
-        caller's place, and <code>bind&amp; x: T</code> reads it where it is. The call marks a place it gives with
+        never changed, <code>flex x: T</code> is the task's own copy to change, <code>flex&amp; x: T</code> changes the
+        caller's place, and <code>fixed&amp; x: T</code> reads it where it is. The call marks a place it gives with
         <code>&amp;</code>, as C#'s <code>ref</code> and Swift's <code>&amp;</code> do, so a change is visible where
         the call is written. Rust's borrow checker makes sure two names never change one value; Vela checks one call
         at a time, refusing a place given twice where the call changes it, and lists what it doesn't check yet on

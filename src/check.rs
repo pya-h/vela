@@ -5733,7 +5733,7 @@ impl Checker {
             return err(
                 at,
                 format!(
-                    "{} takes a fixed number of values, and how many a group holds is known only where it is filled in; give a group's values to a task taking a group, as in 'next(args...)', or name them one by one",
+                    "{} takes a set number of values, and how many a group holds is known only where it is filled in; give a group's values to a task taking a group, as in 'next(args...)', or name them one by one",
                     callee
                 ),
             );
