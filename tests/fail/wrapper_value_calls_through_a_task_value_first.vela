@@ -1,0 +1,18 @@
+; error: 12:12: this value of wrapper 'logged' is worked out where the program starts, before task 'sq' can run, and it calls 'sq' through a task held as a value, then 'probe', whose wrappers read it; give a value that doesn't call it, or work it out inside the wrapper
+; The path names the task value where it is called, before what it reaches.
+shape H
+    shared hold f: (int) -> int = probe
+fi
+task logged(next: (int) -> int, k: int, n: int) -> int
+    <- next(n)
+fi
+task probe(k: int) -> int
+    <- sq(k)
+fi
+$(logged(H.f(1)))
+task sq(n: int) -> int
+    <- n * n
+fi
+task main()
+    show(sq(2))
+fi

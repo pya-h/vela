@@ -1,0 +1,19 @@
+; error: 16:16: 'wrap' would keep this in region 'outer' and in region 's', but everything a value in a region holds is in that region; copy it into 'outer' first, as in 'value.copy() at outer'
+; A kind given a type keeps the type's values in its own region.
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+task wrap<T: shown>(r: region, x: T) -> Option<T>@r
+    <- Option.Some(x)
+fi
+task main()
+    region outer
+    hold keep: Option<text>@outer = Option.None
+    block
+        region s
+        bind t = "hello".copy() at s
+        keep = wrap(outer, t)
+    fi
+    show(keep)
+fi

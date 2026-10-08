@@ -1,4 +1,4 @@
-; error: 6:3: wrapper 'logged' takes 'R' from a task value, where it is [int]@?, in a region that task value takes; which region that is only the body of 'logged' says, when it gives the task value one, so 'R' can't be in it; write that type out in the header of 'logged', with the region it takes, as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
+; error: 6:3: wrapper 'logged' takes 'R' from a task value, where it is [int]@a, with '@a' a region that task value takes; which region that is only the body of 'logged' says, when it gives the task value one, so 'R' can't be in it; write that type out in the header of 'logged', with the region it takes as a parameter of its own, 'a: region', as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
 ; A generic wrapper can't find what it sends in a region the task value takes: which one its body gives is not known at the use.
 task logged<R>(next: (@a, @b, int) -> R, a: region, b: region, n: int) -> R
     <- next(a, b, n)

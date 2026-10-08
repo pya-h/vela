@@ -56,3 +56,14 @@ fn the_variable_a_loop_gives_names_it_for_break() {
     let offered = labels(&PROGRAM.replace("break found = x", "break @@"));
     assert!(offered.iter().any(|label| label == "found"), "{:?}", offered);
 }
+
+#[test]
+fn a_variable_written_with_its_type_names_its_loop_too() {
+    let offered = labels(&PROGRAM.replace("        s += i\n", "        s += i\n        break @@\n"));
+    assert!(offered.iter().any(|label| label == "sum"), "{:?}", offered);
+}
+
+#[test]
+fn a_loop_named_by_its_variable_hovers_as_one() {
+    assert_eq!(hover(PROGRAM, "found = x").as_deref(), Some("found = loop"));
+}

@@ -1,0 +1,15 @@
+; error: 13:15: 'one' would keep this in region 'outer' and in region 's', but everything a value in a region holds is in that region; make the lambda keep what it uses in 'outer', as in '[@outer](…)'
+; A slice in one region holds no lambda keeping what it uses in another.
+task one<T>(r: region, x: T) -> [T]@r
+    hold xs = new [T]() at r
+    xs.add(x)
+    <- xs
+fi
+task main()
+    region outer
+    region s
+    bind n = 4
+    bind f = [@s]() -> int <- n fi
+    bind fs = one(outer, f)
+    show(fs.len)
+fi

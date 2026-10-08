@@ -1,0 +1,13 @@
+; error: 5:5: a loop that never ends by itself ends only by a 'break' or a '<-', so a plan B after it would run every time it ends; do what it does before the 'break' instead
+; An endless loop ends only by break, so its plan B would always run.
+task main()
+    hold i = 0
+    endless
+        i++
+        when i == 3
+            break
+        fi
+    fi {
+        show("stopped")
+    }
+fi

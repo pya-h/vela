@@ -734,6 +734,29 @@ impl<'a> Tokens<'a> {
         self.source.get(from..to).unwrap_or_default().trim().to_string()
     }
 
+    /// The variable a loop starting at `p` gives its value, which names the
+    /// loop: `r` of `bind r = loop …`, of `bind r: int ~ LoopResult = loop …`
+    /// and of `r = each …`, the loop's word the first after the line's `=`.
+    fn loop_variable(&self, p: usize) -> Option<usize> {
+        if self.before(p) != Some(&Token::Assign) {
+            return None;
+        }
+        // The start of the line.
+        let mut start = p - 1;
+        while start > 0 && !matches!(self.token(start - 1), Some(Token::Newline) | None) {
+            start -= 1;
+        }
+        let name = match self.token(start) {
+            Some(Token::Bind | Token::Hold) => start + 1,
+            _ => start,
+        };
+        self.ident(name)?;
+        // The name, then its type or the `=`, and no other `=` before the loop's.
+        let typed = self.token(name + 1) == Some(&Token::Colon);
+        let assigns = (name + 1..p - 1).any(|q| self.token(q) == Some(&Token::Assign));
+        (typed || name + 1 == p - 1).then_some(name).filter(|_| !assigns)
+    }
+
     fn ident(&self, p: usize) -> Option<&'a str> {
         match self.token(p) {
             Some(Token::Ident(name)) => Some(name),
@@ -1624,14 +1647,10 @@ impl<'a> Classifier<'a> {
                                 if let Some(named) = self.out.get_mut(at) {
                                     named.symbol = Some(id);
                                 }
-                            } else if let Some(q) = p.checked_sub(2).filter(|&q| {
+                            } else if let Some(q) = tokens.loop_variable(p) {
                                 // `bind r = loop …`, `total = each …`: the variable
                                 // the loop gives names it, for `break r`.
-                                tokens.before(p) == Some(&Token::Assign)
-                                    && tokens.ident(q).is_some()
-                                    && matches!(tokens.before(q), Some(Token::Bind | Token::Hold | Token::Newline) | None)
-                            }) {
-                                self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), String::new());
+                                self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), "=".to_string());
                             }
                             if *token == Token::Each {
                                 declaring = Some("each");

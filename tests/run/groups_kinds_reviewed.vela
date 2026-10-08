@@ -1,0 +1,55 @@
+; Groups and kinds the review of 2026-10-08 fixed: a shape or kind given
+; types in a group, a kind's variants told by none and by each other, and
+; values side by side holding regions.
+kind Option<T: shown>
+    Some(value: T)
+    None
+fi
+
+kind Either<A: shown, B: shown>
+    Left(a: A)
+    Right(b: B)
+fi
+
+shape Box<T>
+    value: T
+fi
+
+task traced<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    show("> ", args...)
+    <- next(args...)
+fi
+
+$(traced)
+task open(b: Box<int>) -> int
+    <- b.value
+fi
+
+task count<P...: fixed & shown>(args: P...) -> int
+    hold n = 0
+    each v in args
+        show(v)
+        n++
+    fi
+    bind t = (args...) { failure one
+        <- n
+    }
+    show(t.#1)
+    <- n
+fi
+
+task pick(c: int) -> maybe Option<int>
+    <- when c == 0 none else when c == 1 Option.None else Option.Some(c) fi
+fi
+
+task main()
+    show(open(Box<int> { value: 3 }))
+    show(count(1, Box<int> { value: 2 }, Option.Some("x")))
+    show(pick(0), " ", pick(1), " ", pick(2))
+    show([none, Option.None, Option.Some(1)])
+    show(Either.Left(1) == Either.Right("x"), " ", Either.Left(2) == Either<int, text>.Left(2))
+    region r
+    bind t = "x".copy() at r
+    bind sides = [Either.Right(t), Either.Left(1)]
+    show(sides)
+fi

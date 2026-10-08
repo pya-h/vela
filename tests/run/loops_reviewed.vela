@@ -1,0 +1,94 @@
+; Loops the review of 2026-10-08 fixed: parts holding an else when chain, a
+; lambda or a plan B over lines; jumps a loop that never ends by itself reads
+; to the loop they stop; and loops giving values in a plan B, told by their
+; place, and named by a variable with a plan B after them.
+include std/loops {LoopResult}
+
+kind Opt<T: shown>
+    No
+    Yes(v: T)
+fi
+
+kind Tok
+    Num(n: int)
+    Stop
+fi
+
+task tok(i: int) -> Tok
+    <- when i < 4 Tok.Num(i) else Tok.Stop fi
+fi
+
+task apply(f: (int) -> bool, n: int) -> bool
+    <- f(n)
+fi
+
+task first_over(xs: [int#3], limit: int) -> int
+    hold n = 0
+    endless
+        each k in 0..5
+            bind v = xs[#k] { break }    ; stops the each only
+            n += v
+        fi
+        when n > limit
+            <- n
+        fi
+    fi
+fi
+
+task get(n: int) -> int ~ text
+    when n > 2
+        <- fail "big"
+    fi
+    <- n
+fi
+
+task main()
+    ; Parts holding a chain of conditions, and a lambda in a condition over lines.
+    loop hold i = 0, k = when 1 > 2 5 else when 2 > 1 6 else 7 fi || i < k || i += 3
+        show("i ", i)
+    fi
+    loop hold j = 0 || match tok(j)
+    case Num n = apply((x: int) -> bool <- x < 3 fi, n)
+    case Stop = false
+    fi || j++
+        show("j ", j)
+    fi
+    bind xs = [5, 6, 7]
+    loop hold m = 0 || xs[#m] {
+        show("past the end")
+        break
+    } > 0 || m++
+        show("m ", m)
+    fi
+    show(first_over([3, 4, 5], 20))
+
+    ; A loop on the last line of a plan B gives its value.
+    bind z = get(5) {
+        each x in 0..3
+            x + 100
+        fi { -1 }
+    }
+    show(z)
+
+    ; A variant on the last line is told by the type the place names.
+    bind opt: Opt<text> ~ LoopResult = each x in 0..2
+        Opt.No
+    fi
+    show(opt { Opt.Yes("none") })
+
+    ; The variable names the loop with a plan B after it too.
+    bind found = each x in 0..10
+        each y in 0..10
+            when x * y == 12
+                break found = x
+            fi
+        fi
+        -1
+    fi { failure why
+        match why
+        case Broke b = b { 0 }
+        case _ = -2
+        fi
+    }
+    show(found)                      ; 2, as 'break found = x' gave
+fi

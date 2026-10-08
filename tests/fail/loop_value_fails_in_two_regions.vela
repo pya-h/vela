@@ -1,0 +1,20 @@
+; error: 11:13: this value is in region 'local', and another the loop fails with is in region 'out'; what a loop fails with is in one region, so give both in the same one
+; What a loop fails with is in one region.
+include std/loops {LoopResult}
+task f(out: region, b: int) -> int ~ LoopResult<text, text>@out
+    region local
+    <- each x in 0..3
+        when x == b
+            break = "b{x}" at out
+        fi
+        when x == 2
+            fail LoopResult.Manual("m{x}" at local)
+        else
+            x
+        fi
+    fi
+fi
+task main()
+    region r
+    show(f(r, 5) { 0 })
+fi

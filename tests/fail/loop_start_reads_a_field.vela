@@ -1,0 +1,12 @@
+; error: 9:14: a loop's start sets places or calls tasks, and this one only gives a value; for either of two conditions, Vela writes 'or'
+; || parts a loop; either of two conditions is written with or.
+shape S
+    a: bool
+    b: bool
+fi
+task main()
+    bind s = S { a: true, b: false }
+    loop s.a || s.b
+        show(1)
+    fi
+fi

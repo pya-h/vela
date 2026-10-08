@@ -1,0 +1,7 @@
+; A kind whose shared method a file brought in with braces names as a value.
+kind Tally
+    Empty
+    shared doubled(n: int) -> int
+        <- n * 2
+    fi
+fi

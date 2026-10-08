@@ -1,0 +1,14 @@
+  1 | ; A kind whose shared method a file brought in with braces names as a value.
+    | comment:; A kind whose shared method a file brought in with braces names as a value.
+  2 | kind Tally
+    | keyword:kind  type:Tally
+  3 |     Empty
+    | variant:Empty
+  4 |     shared doubled(n: int) -> int
+    | keyword:shared  method:doubled  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  5 |         <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+  6 |     fi
+    | keyword:fi
+  7 | fi
+    | keyword:fi

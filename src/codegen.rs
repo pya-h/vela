@@ -442,7 +442,23 @@ impl Generator {
         }) else {
             return;
         };
-        let taken = t.params.iter().map(|param| if param.ty == Type::Region { Taken::Region(param.name.clone()) } else if param.passing.is_ref() { Taken::Place(param.passing) } else { Taken::Value }).collect();
+        // `.this` of an `alters` method is the caller's place, as `hold&` is.
+        let alters = self.altering.contains(name);
+        let taken = t
+            .params
+            .iter()
+            .map(|param| {
+                if param.ty == Type::Region {
+                    Taken::Region(param.name.clone())
+                } else if param.passing.is_ref() {
+                    Taken::Place(param.passing)
+                } else if alters && param.name == THIS {
+                    Taken::Place(Passing::HoldRef)
+                } else {
+                    Taken::Value
+                }
+            })
+            .collect();
         let task = TaskType { params: t.params.iter().map(|param| param.ty.clone()).collect(), taken, ret: t.ret.clone() };
         let wanted = self.hidden_of_type(&task);
         let own = self.hidden_of(name).to_vec();

@@ -1,0 +1,14 @@
+; error: 5:19: a loop through the values of a group gives no value, since each pass is written out for a value of its own; give the values on to a task, or gather what the passes give in a variable
+; A loop over a group gives no value, said before the body's own mistakes.
+task f<P...: shown>(args: P...) -> int
+    <- when args.len > 0
+        each v in args
+            show(v)
+        fi { 0 }
+    else
+        1
+    fi
+fi
+task main()
+    show(f(1))
+fi

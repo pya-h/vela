@@ -416,7 +416,7 @@ impl State {
             own.entry(kind.name.clone()).or_insert_with(|| builtin_kind_entry(&kind.name, What::Kind, None));
         }
         let mut resolver =
-            Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, type_places: &self.type_places, params: Vec::new() };
+            Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, tables, type_places: &self.type_places, params: Vec::new() };
         let mut includes = Vec::new();
         for (include, &target) in module.includes.iter().zip(&module.included) {
             let id = self.modules.get(target).map(|m| m.id.clone()).unwrap_or_default();
@@ -824,6 +824,9 @@ struct Resolver<'a> {
     /// that part, the name it is included under (if any), and the path.
     unnamed: Vec<(String, Option<String>, String)>,
     variants: &'a Variants,
+    /// The names each module of the program declares, for a kind's methods,
+    /// which its file may name with no name of the module (`include m {K}`).
+    tables: &'a [Names],
     type_places: &'a TypePlaces,
     /// The names of the types the declaration being walked takes: they name no
     /// shape or kind, so a written type naming one is left as it is.
@@ -1027,13 +1030,17 @@ impl Resolver<'_> {
             None => {
                 // `Kind.m` without `(…)`, naming a method of the kind.
                 let method = method_name(&kind.full, tag);
-                let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| module.names));
-                match tables.flat_map(|names| names.values()).any(|entry| entry.full == method) {
+                match self.has_method(&method) {
                     true => err(at, format!("'{0}.{1}' is a method of kind '{0}', so it is called, as in '{0}.{1}(…)' when it is shared, or 'k.{1}(…)' on a value", kind_name, tag)),
                     false => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),
                 }
             }
         }
+    }
+
+    /// Whether the program declares method `method` (its name in the program).
+    fn has_method(&self, method: &str) -> bool {
+        std::iter::once(&self.own).chain(self.tables).flat_map(|names| names.values()).any(|entry| entry.full == method)
     }
 
     /// The kind `name` (as written, maybe `m.Kind`) stands for, if it names one.
@@ -1195,10 +1202,7 @@ impl Resolver<'_> {
             // `Kind.m`, a shared method named as a value, which the checker
             // knows from a method of every value (see `Checker::check_shared_use`).
             let method = method_name(&kind.full, tag);
-            let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| module.names));
-            if !self.variants.get(&kind.full).is_some_and(|tags| tags.contains_key(tag.as_str()))
-                && tables.flat_map(|names| names.values()).any(|entry| entry.full == method)
-            {
+            if !self.variants.get(&kind.full).is_some_and(|tags| tags.contains_key(tag.as_str())) && self.has_method(&method) {
                 expr.kind = ExprKind::Shared { shape: kind.full, field: tag.clone() };
                 return Ok(true);
             }

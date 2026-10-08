@@ -1,0 +1,15 @@
+; error: 4:35: expected type (int) -> int, got (int) -> maybe int
+; A wrapper sending another type makes the task send it.
+shape Hooks
+    shared hold f: (int) -> int = sq
+fi
+task worded(next: (int) -> int, n: int) -> maybe int
+    <- next(n)
+fi
+$(worded)
+task sq(n: int) -> int
+    <- n * n
+fi
+task main()
+    show(Hooks.f(2))
+fi

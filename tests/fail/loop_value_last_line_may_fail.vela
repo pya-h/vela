@@ -1,0 +1,10 @@
+; error: 5:10: this may fail, and the last line of a loop that gives a value fails only with 'fail LoopResult.Manual(…)' written there; give it a plan B, as in 'x { 0 }'
+; Another loop's failure on the last line says what that loop did.
+task main()
+    bind q = each a in 0..2
+        (each b in 0..a
+            b
+        fi)
+    fi
+    show(q { 0 })
+fi

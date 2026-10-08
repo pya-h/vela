@@ -77,8 +77,8 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
     (
         "$",
-        "$d, $d(values), or $(w1, w2(values))",
-        "A decorator, on a line above a task or a shared method, and itself a task or a shared method ($Registry.enroll). $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing. $(w1, w2) wraps the task: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. Both kinds of values are worked out where the program starts, so they hold no variable or region; a wrapper's are worked out once, before the startup decorators, and every call reads them.",
+        "$d, $d(values), $d?, or $(w1, w2(values), .m)",
+        "A decorator, on a line above a task or a shared method, and itself a task or a shared method ($Registry.enroll). $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing, or nothing ~ E, which stops the program, unless $d? lets it pass with a notice (--no-notices hides it). $(w1, w2) wraps the task, and $(.m) a method by another method of its type: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. Both kinds of values are worked out where the program starts, so they hold no variable or region; a wrapper's are worked out once, before the startup decorators, and every call reads them.",
     ),
     (
         "...",
@@ -376,6 +376,11 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             }
         }
         SymbolKind::Variable => match symbol.intro {
+            // `found = each …`: the variable a loop gives its value names it.
+            Some(LOOP_NAME) if symbol.detail == "=" => (
+                format!("{} = loop", symbol.name),
+                "The name of a loop, given by the variable the loop gives its value, which 'break' in a loop inside it gives to stop it, as in 'break found = v'.".to_string(),
+            ),
             Some(LOOP_NAME) => (format!("{} => loop", symbol.name), "The name of a loop, which 'break' and 'continue' in a loop inside it give to stop it or go on with it.".to_string()),
             Some("case") => {
                 let name = k.at_byte(symbol.name_range.start)?;

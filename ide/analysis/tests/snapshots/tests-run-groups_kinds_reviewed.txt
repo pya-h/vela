@@ -1,0 +1,96 @@
+  1 | ; Groups and kinds the review of 2026-10-08 fixed: a shape or kind given
+    | comment:; Groups and kinds the review of 2026-10-08 fixed: a shape or kind given
+  2 | ; types in a group, a kind's variants told by none and by each other, and
+    | comment:; types in a group, a kind's variants told by none and by each other, and
+  3 | ; values side by side holding regions.
+    | comment:; values side by side holding regions.
+  4 | kind Option<T: shown>
+    | keyword:kind  type:Option  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+  5 |     Some(value: T)
+    | variant:Some  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+  6 |     None
+    | variant:None
+  7 | fi
+    | keyword:fi
+  9 | kind Either<A: shown, B: shown>
+    | keyword:kind  type:Either  punctuation:<  type:A  punctuation::  keyword:shown  punctuation:,  type:B  punctuation::  keyword:shown  punctuation:>
+ 10 |     Left(a: A)
+    | variant:Left  punctuation:(  field:a  punctuation::  type:A  punctuation:)
+ 11 |     Right(b: B)
+    | variant:Right  punctuation:(  field:b  punctuation::  type:B  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+ 15 |     value: T
+    | field:value  punctuation::  type:T
+ 16 | fi
+    | keyword:fi
+ 18 | task traced<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 19 |     show("> ", args...)
+    | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 20 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 21 | fi
+    | keyword:fi
+ 23 | $(traced)
+    | keyword:$  punctuation:(  task:traced  punctuation:)
+ 24 | task open(b: Box<int>) -> int
+    | keyword:task  task:open  punctuation:(  parameter:b  punctuation::  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:)  operator:->  type-builtin:int
+ 25 |     <- b.value
+    | keyword:<-  parameter:b  punctuation:.  field:value
+ 26 | fi
+    | keyword:fi
+ 28 | task count<P...: fixed & shown>(args: P...) -> int
+    | keyword:task  task:count  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
+ 29 |     hold n = 0
+    | keyword:hold  variable:n  operator:=  number:0
+ 30 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 31 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 32 |         n++
+    | variable:n  operator:++
+ 33 |     fi
+    | keyword:fi
+ 34 |     bind t = (args...) { failure one
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:failure  variable:one
+ 35 |         <- n
+    | keyword:<-  variable:n
+ 36 |     }
+    | punctuation:}
+ 37 |     show(t.#1)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:1  punctuation:)
+ 38 |     <- n
+    | keyword:<-  variable:n
+ 39 | fi
+    | keyword:fi
+ 41 | task pick(c: int) -> maybe Option<int>
+    | keyword:task  task:pick  punctuation:(  parameter:c  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 42 |     <- when c == 0 none else when c == 1 Option.None else Option.Some(c) fi
+    | keyword:<-  keyword:when  parameter:c  operator:==  number:0  keyword:none  keyword:else  keyword:when  parameter:c  operator:==  number:1  type:Option  punctuation:.  variant:None  keyword:else  type:Option  punctuation:.  variant:Some  punctuation:(  parameter:c  punctuation:)  keyword:fi
+ 43 | fi
+    | keyword:fi
+ 45 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 46 |     show(open(Box<int> { value: 3 }))
+    | builtin-fn:show  punctuation:(  task:open  punctuation:(  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:)  punctuation:)
+ 47 |     show(count(1, Box<int> { value: 2 }, Option.Some("x")))
+    | builtin-fn:show  punctuation:(  task:count  punctuation:(  number:1  punctuation:,  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:2  punctuation:}  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  string:"x"  punctuation:)  punctuation:)  punctuation:)
+ 48 |     show(pick(0), " ", pick(1), " ", pick(2))
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  number:2  punctuation:)  punctuation:)
+ 49 |     show([none, Option.None, Option.Some(1)])
+    | builtin-fn:show  punctuation:(  punctuation:[  keyword:none  punctuation:,  type:Option  punctuation:.  variant:None  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:]  punctuation:)
+ 50 |     show(Either.Left(1) == Either.Right("x"), " ", Either.Left(2) == Either<int, text>.Left(2))
+    | builtin-fn:show  punctuation:(  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  operator:==  type:Either  punctuation:.  variant:Right  punctuation:(  string:"x"  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:2  punctuation:)  operator:==  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Left  punctuation:(  number:2  punctuation:)  punctuation:)
+ 51 |     region r
+    | keyword:region  region:r
+ 52 |     bind t = "x".copy() at r
+    | keyword:bind  variable:t  operator:=  string:"x"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 53 |     bind sides = [Either.Right(t), Either.Left(1)]
+    | keyword:bind  variable:sides  operator:=  punctuation:[  type:Either  punctuation:.  variant:Right  punctuation:(  variable:t  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:]
+ 54 |     show(sides)
+    | builtin-fn:show  punctuation:(  variable:sides  punctuation:)
+ 55 | fi
+    | keyword:fi

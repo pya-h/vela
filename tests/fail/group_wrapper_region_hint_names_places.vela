@@ -1,0 +1,15 @@
+; error: 8:7: task 'Acc.fill' takes the region 'r', which would be in the group of wrapper 'pass', and a group never holds a region; 'pass' names it as a parameter of its own, and 'next' names it in its type, as in 'next: (hold& Acc, @a, P...) -> R, hold& v: Acc, r: region, args: P...'
+; The hint names a place as the task takes it.
+task pass<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+shape Acc
+    n: int
+    $(pass)
+    alters fill(r: region, k: int) -> [int]@r
+        .n += k
+        <- new [int]() at r
+    fi
+fi
+task main()
+fi

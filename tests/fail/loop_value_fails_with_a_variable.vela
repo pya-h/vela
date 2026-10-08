@@ -1,0 +1,14 @@
+; error: 8:18: the last line of a loop that gives a value fails only with 'fail LoopResult.Manual(…)' written there, which says the loop failed by its own choice
+; The last line fails only with LoopResult.Manual written there.
+include std/loops {LoopResult}
+task main()
+    bind e: LoopResult<bool, bool> = LoopResult.Broke(none)
+    bind q = each a in 0..2
+        when a == 1
+            fail e
+        else
+            a
+        fi
+    fi
+    show(q { 0 })
+fi

@@ -1,0 +1,68 @@
+; Wrappers and decorators the review of 2026-10-08 fixed: an alters method of
+; a large shape, a str method, a kind's shared method named through braces,
+; a field naming a wrapped task, and none as a wrapper's own value.
+include modules/kinds_shared {Tally}
+
+task twice(next: (hold& Big) -> int, hold& b: Big) -> int
+    next(&b)
+    <- next(&b)
+fi
+
+shape Big
+    a: [int#20]
+
+    $(twice)
+    alters bump() -> int
+        .a[0] += 1
+        <- .a[0]
+    fi
+fi
+
+task loud(next: (Point, @a) -> text@a, p: Point, a: region) -> text@a
+    <- "<" + next(p, a) + ">" at a
+fi
+
+shape Point
+    x: int
+
+    $(loud)
+    str(r: region) -> text@r
+        <- "P{.x}" at r
+    fi
+fi
+
+task checked(next: (int) -> int, n: int) -> maybe int
+    when n < 0
+        <- none
+    fi
+    <- next(n)
+fi
+
+$(checked)
+task count(n: int) -> int
+    <- n * 10
+fi
+
+shape Hooks
+    say: (int) -> maybe int = count
+fi
+
+task primed<T: shown>(next: (T) -> T, first: maybe T, x: T) -> T
+    show("first ", first)
+    <- next(x)
+fi
+
+$(primed(none))
+task echo(t: text) -> text
+    <- t
+fi
+
+task main()
+    hold b = Big { a: [1#20] }
+    show(b.bump(), " ", b.a[0])
+    show(Point { x: 3 })
+    bind d = Tally.doubled
+    show(d(21))
+    show(Hooks {}.say(4), " ", Hooks {}.say(-1))
+    show(echo("hi"))
+fi

@@ -1,0 +1,112 @@
+  1 | ; Wrappers and decorators the review of 2026-10-08 fixed: an alters method of
+    | comment:; Wrappers and decorators the review of 2026-10-08 fixed: an alters method of
+  2 | ; a large shape, a str method, a kind's shared method named through braces,
+    | comment:; a large shape, a str method, a kind's shared method named through braces,
+  3 | ; a field naming a wrapped task, and none as a wrapper's own value.
+    | comment:; a field naming a wrapped task, and none as a wrapper's own value.
+  4 | include modules/kinds_shared {Tally}
+    | keyword:include  module:modules  operator:/  module:kinds_shared  punctuation:{  type:Tally  punctuation:}
+  6 | task twice(next: (hold& Big) -> int, hold& b: Big) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type:Big  punctuation:)  operator:->  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+  7 |     next(&b)
+    | parameter:next  punctuation:(  operator:&  parameter:b  punctuation:)
+  8 |     <- next(&b)
+    | keyword:<-  parameter:next  punctuation:(  operator:&  parameter:b  punctuation:)
+  9 | fi
+    | keyword:fi
+ 11 | shape Big
+    | keyword:shape  type:Big
+ 12 |     a: [int#20]
+    | field:a  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:20  punctuation:]
+ 14 |     $(twice)
+    | keyword:$  punctuation:(  task:twice  punctuation:)
+ 15 |     alters bump() -> int
+    | keyword:alters  method:bump  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 16 |         .a[0] += 1
+    | punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:+=  number:1
+ 17 |         <- .a[0]
+    | keyword:<-  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task loud(next: (Point, @a) -> text@a, p: Point, a: region) -> text@a
+    | keyword:task  task:loud  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Point  punctuation:,  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  parameter:p  punctuation::  type:Point  punctuation:,  region:a  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:a
+ 22 |     <- "<" + next(p, a) + ">" at a
+    | keyword:<-  string:"<"  operator:+  parameter:next  punctuation:(  parameter:p  punctuation:,  region:a  punctuation:)  operator:+  string:">"  keyword:at  region:a
+ 23 | fi
+    | keyword:fi
+ 25 | shape Point
+    | keyword:shape  type:Point
+ 26 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 28 |     $(loud)
+    | keyword:$  punctuation:(  task:loud  punctuation:)
+ 29 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 30 |         <- "P{.x}" at r
+    | keyword:<-  string:"P{  punctuation:.  field:x  string:}"  keyword:at  region:r
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | task checked(next: (int) -> int, n: int) -> maybe int
+    | keyword:task  task:checked  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 35 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 36 |         <- none
+    | keyword:<-  keyword:none
+ 37 |     fi
+    | keyword:fi
+ 38 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 39 | fi
+    | keyword:fi
+ 41 | $(checked)
+    | keyword:$  punctuation:(  task:checked  punctuation:)
+ 42 | task count(n: int) -> int
+    | keyword:task  task:count  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 43 |     <- n * 10
+    | keyword:<-  parameter:n  operator:*  number:10
+ 44 | fi
+    | keyword:fi
+ 46 | shape Hooks
+    | keyword:shape  type:Hooks
+ 47 |     say: (int) -> maybe int = count
+    | field:say  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int  operator:=  task:count
+ 48 | fi
+    | keyword:fi
+ 50 | task primed<T: shown>(next: (T) -> T, first: maybe T, x: T) -> T
+    | keyword:task  task:primed  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:,  parameter:first  punctuation::  keyword:maybe  type:T  punctuation:,  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 51 |     show("first ", first)
+    | builtin-fn:show  punctuation:(  string:"first "  punctuation:,  parameter:first  punctuation:)
+ 52 |     <- next(x)
+    | keyword:<-  parameter:next  punctuation:(  parameter:x  punctuation:)
+ 53 | fi
+    | keyword:fi
+ 55 | $(primed(none))
+    | keyword:$  punctuation:(  task:primed  punctuation:(  keyword:none  punctuation:)  punctuation:)
+ 56 | task echo(t: text) -> text
+    | keyword:task  task:echo  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 57 |     <- t
+    | keyword:<-  parameter:t
+ 58 | fi
+    | keyword:fi
+ 60 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 61 |     hold b = Big { a: [1#20] }
+    | keyword:hold  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  punctuation:[  number:1  punctuation:#  number:20  punctuation:]  punctuation:}
+ 62 |     show(b.bump(), " ", b.a[0])
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  method:bump  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
+ 63 |     show(Point { x: 3 })
+    | builtin-fn:show  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:}  punctuation:)
+ 64 |     bind d = Tally.doubled
+    | keyword:bind  variable:d  operator:=  type:Tally  punctuation:.  method:doubled
+ 65 |     show(d(21))
+    | builtin-fn:show  punctuation:(  variable:d  punctuation:(  number:21  punctuation:)  punctuation:)
+ 66 |     show(Hooks {}.say(4), " ", Hooks {}.say(-1))
+    | builtin-fn:show  punctuation:(  type:Hooks  punctuation:{  punctuation:}  punctuation:.  field:say  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Hooks  punctuation:{  punctuation:}  punctuation:.  field:say  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)
+ 67 |     show(echo("hi"))
+    | builtin-fn:show  punctuation:(  task:echo  punctuation:(  string:"hi"  punctuation:)  punctuation:)
+ 68 | fi
+    | keyword:fi

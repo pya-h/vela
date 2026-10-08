@@ -1,0 +1,9 @@
+; error: 3:3: 'show' is built in, so it can't be a wrapper: a wrapper is a task or a shared method the program declares
+; A builtin is no task the program declares.
+$(show)
+task sq(n: int) -> int
+    <- n * n
+fi
+task main()
+    show(sq(2))
+fi

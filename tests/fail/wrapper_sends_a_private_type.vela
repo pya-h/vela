@@ -1,0 +1,6 @@
+; error: modules/secret_box.vela:8:3: task 'f' is public, and its wrappers make it send 'Secret', which is private to its file, so other files couldn't name it; make the task 'priv' too, or the type public
+; What other files see of a public task names no private type.
+include modules/secret_box
+task main()
+    show(secret_box.f(3))
+fi

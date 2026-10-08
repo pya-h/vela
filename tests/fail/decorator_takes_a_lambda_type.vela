@@ -1,0 +1,12 @@
+; error: 6:2: decorator 'd' takes [@r](int) -> int first, the type of a lambda that keeps what it uses, and the task below it is a task, which keeps nothing; take it as '(int) -> int'
+; A decorator is given a task, which keeps nothing.
+task d(f: [@r](int) -> int)
+    show("d ", f(2))
+fi
+$d
+task sq(n: int) -> int
+    <- n * n
+fi
+task main()
+    show(sq(2))
+fi

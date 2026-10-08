@@ -1,4 +1,4 @@
-; error: 6:31: expected type P, got P#0; P#0 is the type of value 0 of the group 'P...', item 0 of its tuple, and 'P' alone is the type of the value of a turn of 'each v in args', so they may be different types
+; error: 6:31: expected type P, got P#0; P#0 is the type of value 1 of the group 'P...', item 0 of its tuple, and 'P' alone is the type of the value of a turn of 'each v in args', so they may be different types
 ; Each turn of 'each' has its own type, P, which is not a tuple item's.
 task t<P...: fixed & shown>(args: P...)
     bind tuple = (args...) { <- }

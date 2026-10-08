@@ -2649,7 +2649,9 @@ fi</code></pre>
       <p>
         Every call of the task goes through its wrappers: a call by its name, its value (<code>apply(sq, 2)</code>), a
         startup decorator's, and the task calling itself. A wrapper may send another type than the task does, and the
-        task then sends that to its callers; the one before it takes a task sending it. A wrapper that takes types fits
+        task then sends that to its callers, everywhere it is named, a field's value too; the one before it takes a
+        task sending it. What a public task sends that way is public as its header is, so a private wrapper can't make
+        it send a private type. A wrapper that takes types fits
         any task its types allow, <code>task noted&lt;R&gt;(next: (int) -&gt; R, n: int) -&gt; R</code>, and one of a
         region's text, <code>(text@r) -&gt; text@r</code>, passes the region through. A task taking a place or a region
         takes wrappers too: the wrapper takes the task's values as the task does, <code>hold&amp; n: int</code> or
@@ -2904,9 +2906,11 @@ fi</code></pre>
       </p>
       <p>
         A group's values are given on whole, <code>f(args...)</code>, so every value reaches a parameter of its own
-        type, or counted, <code>args.len</code>, a number each use knows. They go to a task value whose type takes the group, or to a named task
+        type, or counted, <code>args.len</code>, a number each use knows; an index or a sum it is part of is checked as
+        the program runs, as any value's is. They go to a task value whose type takes the group, or to a named task
         taking a group, between the values it names: <code>log("calling", args...)</code>. Values
-        written just before them join that task's group, <code>log("x", 1, args...)</code>, except in a call of the
+        written just before or after them join that task's group, <code>log("x", 1, args...)</code>, as many as
+        the task doesn't name after its group, except in a call of the
         task by itself, whose group would grow at each call; a task calling itself gives its group on whole. A task
         taking a fixed number of values is never given a group's, whose number is known only where the group is
         filled in.
@@ -3291,7 +3295,7 @@ show(total)</pre>
     <span class="comment">; A plan B may stop the loop instead of giving a value.</span>
     <span class="keyword">bind</span> words = [<span class="string">"one"</span>, <span class="string">"two"</span>, <span class="string">"three"</span>]
     <span class="keyword">hold</span> i = <span class="number">0</span>
-    <span class="keyword">loop</span> <span class="keyword">true</span>
+    <span class="keyword">endless</span>
         show(words[#i] { <span class="keyword">break</span> })    <span class="comment">; one, two, three, then it stops</span>
         i++
     <span class="keyword">fi</span>
@@ -3404,15 +3408,18 @@ show(total)</pre>
           stopped it, holding what <code>break = v</code> gave, or <code>none</code> for a bare <code>break</code>.
           <code>EndedByContinue</code>: its final pass ended with <code>continue</code>, before the last line, even
           when an earlier pass gave a value. <code>Manual(M)</code>: the final pass's last line failed with it. The
-          last line fails only with <code>Manual</code>; the other three say what the loop did.</li>
+          last line fails only with <code>fail LoopResult.Manual(…)</code> written there; the other three say what the
+          loop did, so a value that may fail, as another loop giving a value, takes a plan B on the last line.</li>
         <li><strong>Its types.</strong> <code>V</code> is what the last lines give, <code>B</code> what the
           <code>break</code>s give, and <code>M</code> what the last lines fail with, <code>bool</code> where a loop
-          gives none. The <code>break</code>s of a loop give one type. On the loop's own variable,
+          gives none. The <code>break</code>s of a loop give one type, and what they and the last lines fail with is in
+          one region. A <code>break</code> in a turn of an <code>each</code> over a group gives a loop around it no
+          value of the turn's own type, which each value makes another. On the loop's own variable,
           <code>bind r: int ~ LoopResult = loop …</code>, a bare <code>LoopResult</code> takes the loop's
           <code>B</code> and <code>M</code>; anywhere else its types are written, as any kind's are.</li>
         <li><strong>Its name.</strong> The variable it gives names it, <code>break r = v</code>, as
-          <code>bind r =</code>, <code>hold r =</code>, or <code>r =</code> does, and so it takes no name with
-          <code>=&gt;</code>. Where no variable is given, as in an argument, <code>outer =&gt; loop …</code> names it.</li>
+          <code>bind r =</code>, <code>hold r =</code>, or <code>r =</code> does, with a plan B after it too, and so
+          it takes no name with <code>=&gt;</code>. Where no variable is given, as in an argument, <code>outer =&gt; loop …</code> names it.</li>
         <li><strong>Without an include.</strong> A loop gives a value in any file. A file that writes
           <code>LoopResult</code> itself, in a type or a variant, brings it in with
           <code>include std/loops {LoopResult}</code>; a <code>case Broke b</code> names no kind, and needs none.</li>
@@ -3422,7 +3429,8 @@ show(total)</pre>
         <li><strong>What it can't be.</strong> A loop that never ends by itself, <code>endless</code>,
           <code>loop true</code> or one with no condition, gives no value, since no pass of it is the final one. A
           loop through the values of a <a href="#type-groups">group</a>, written out once per value, gives none
-          either. Its value can't be in a region a pass declares, which is freed when the pass ends.</li>
+          either. Its value can't be in a region a pass declares, which is freed when the pass ends. A loop that never
+          ends by itself takes no plan B as a statement either, which would run each time it ends.</li>
         <li><strong>In C.</strong> A temporary holds the value, <code>Skipped</code> until a pass gives one; each
           pass's last line, a <code>break</code> and a <code>continue</code> set it. No memory is allocated.</li>
       </ul>
@@ -4568,7 +4576,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           that takes types (see <a href="#lambdas">Lambdas</a>). One that keeps what it uses, <code>[@r]</code>, keeps
           copies in one region, keeps a variable as a place only where that region is declared after it (never a field
           or an item), and isn't compared, copied, held in a field, or given as a wrapper's value (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
-        <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither; a startup decorator sends nothing, or
+        <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither, nor a task that sends several values;
+          a builtin or a macro is no decorator; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a
           group's types, a type can't be written <code>(P...)</code>, and a group is given on to a task that calls

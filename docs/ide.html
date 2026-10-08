@@ -396,7 +396,8 @@ Press Ctrl+C to stop.</pre>
             in a file that doesn't parse;
             <code>break</code> and <code>continue</code> inside a loop, but not inside a lambda in it, and after either the names of the loops around it
             (<code>outer =&gt; each …</code>, which hover as loops and are offered nowhere else, and the variable a loop
-            that gives a value gives, <code>bind r = each …</code>); fields and
+            that gives a value gives, <code>bind r = each …</code> or <code>bind r: int ~ LoopResult = each …</code>, which
+            hovers as <code>r = loop</code>); fields and
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
             methods of the value it is called on; a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's, slice's, or text's (and <code>add</code> and <code>del</code> after a slice's),

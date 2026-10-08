@@ -1,0 +1,10 @@
+; error: 4:2: 'W' is a macro, a value that never changes, so it can't be a decorator: a decorator is a task or a shared method
+; A macro is a value, not a task.
+#W = 5
+$W
+task sq(n: int) -> int
+    <- n * n
+fi
+task main()
+    show(sq(2))
+fi

@@ -1,0 +1,12 @@
+; trap: index 3 is out of range 0..2 at 6:10 in task 'past'
+; A group's count, args.len, is a value each use knows, and an index or a sum
+; it is part of is checked as it runs, as any value's is.
+task past<P...>(args: P...) -> int
+    bind xs = [10, 20]
+    <- xs[args.len]
+fi
+
+task main()
+    show(past(1))
+    show(past(1, 2, 3))
+fi

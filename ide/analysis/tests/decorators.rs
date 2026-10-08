@@ -45,7 +45,7 @@ fn a_decorator_names_its_task_and_its_mark_explains_itself() {
         let source = program(checked);
         assert_eq!(hover(&source, "log $"), "task log(f: (int) -> int)");
         assert_eq!(hover(&source, "tag(\"sq"), "task tag(f: (int) -> int, name: text)");
-        assert_eq!(hover(&source, "$log"), "$d, $d(values), or $(w1, w2(values))");
+        assert_eq!(hover(&source, "$log"), "$d, $d(values), $d?, or $(w1, w2(values), .m)");
         let at = LineIndex::new(&source).utf16_of(source.find("$tag").unwrap());
         let class = Analysis::new(&source).tokens().into_iter().find(|t| t.from == at).map(|t| t.class);
         assert_eq!(class, Some(TokenClass::Keyword));
@@ -147,7 +147,7 @@ task main()
 fi
 ";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
-    assert_eq!(hover(source, "$Registry"), "$d, $d(values), or $(w1, w2(values))");
+    assert_eq!(hover(source, "$Registry"), "$d, $d(values), $d?, or $(w1, w2(values), .m)");
     assert_eq!(hover(source, "enroll\n    $"), "shared enroll(f: (int) -> int)");
     assert_eq!(hover(source, "timed)"), "shared timed(next: (int) -> int, n: int) -> int");
     assert_eq!(hover(source, "cube\n    show"), "shared cube(n: int) -> int");

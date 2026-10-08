@@ -2474,7 +2474,9 @@ impl Parser {
         while let Some(token) = self.tokens.get(end) {
             match token {
                 Token::Eof => break,
-                Token::Newline if blocks == 0 || bars.len() != 1 => break,
+                // The condition alone goes on past the line, inside a block
+                // or brackets.
+                Token::Newline if (blocks == 0 && depth == 0) || bars.len() != 1 => break,
                 Token::Parts if depth == 0 => bars.push(end),
                 Token::Lt => {
                     if let Some(close) = types_close(self, end) {
@@ -2482,7 +2484,7 @@ impl Parser {
                     }
                 }
                 _ => {
-                    nests(Some(token), &mut depth, &mut blocks);
+                    nests(self, end, &mut depth, &mut blocks);
                 }
             }
             end += 1;
@@ -2547,7 +2549,7 @@ impl Parser {
             // `loop a || b`: a start that only gives a value is a condition,
             // and `||` was meant as 'or'.
             if let StmtKind::Expr(e) = &item.kind
-                && matches!(e.kind, ExprKind::Binary(..) | ExprKind::Unary(..) | ExprKind::Var(_) | ExprKind::BoolLit(_))
+                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. })
             {
                 let bar = if n + 1 == items { last } else { first };
                 return Err(Error::at(
@@ -4594,12 +4596,18 @@ impl LineTokens for Parser {
     }
 }
 
-/// How `token` nests what follows it: brackets, and the words a `fi` closes,
-/// which `blocks` counts, so that the `fi` of a lambda, whose parentheses
-/// have opened and closed already, closes nothing. Whether it nests.
-fn nests(token: Option<&Token>, depth: &mut usize, blocks: &mut usize) -> bool {
-    match token {
+/// How the token at `p` nests what follows it: brackets, and the words a
+/// `fi` closes, which `blocks` counts, the `when` of an `else when` aside, as
+/// one `fi` closes the chain. A lambda opens a block at its `(` as well as
+/// the parentheses, so that its `fi` closes its own. Whether it nests.
+fn nests(tokens: &impl LineTokens, p: usize, depth: &mut usize, blocks: &mut usize) -> bool {
+    match tokens.token_at(p) {
+        Some(Token::LParen) if lambda_at(tokens, p) => {
+            *depth += 2;
+            *blocks += 1;
+        }
         Some(Token::LParen | Token::LBracket | Token::LBrace) => *depth += 1,
+        Some(Token::When) if p > 0 && tokens.token_at(p - 1) == Some(&Token::Else) => {}
         Some(Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless) => {
             *depth += 1;
             *blocks += 1;
@@ -4614,6 +4622,42 @@ fn nests(token: Option<&Token>, depth: &mut usize, blocks: &mut usize) -> bool {
         _ => return false,
     }
     true
+}
+
+/// Whether the `(` at `p` starts a lambda, as the parser tells one (see
+/// `Parser::at_lambda`): it takes nothing or starts with a parameter, its
+/// parentheses close on their line, and `->` follows them. One in a type,
+/// after `:` or `->`, is a task's type.
+fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
+    if p > 0 && matches!(tokens.token_at(p - 1), Some(Token::Colon | Token::Arrow)) {
+        return false;
+    }
+    let next = tokens.token_at(p + 1);
+    let takes = matches!(next, Some(Token::RParen | Token::Hold | Token::Bind)) || (matches!(next, Some(Token::Ident(_))) && tokens.token_at(p + 2) == Some(&Token::Colon));
+    if !takes {
+        return false;
+    }
+    let mut depth = 0usize;
+    let mut q = p;
+    loop {
+        match tokens.token_at(q) {
+            Some(Token::LParen | Token::LBracket) => depth += 1,
+            Some(Token::RParen | Token::RBracket) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return tokens.token_at(q) == Some(&Token::RParen) && tokens.token_at(q + 1) == Some(&Token::Arrow);
+                }
+            }
+            Some(Token::Newline | Token::Eof) => return false,
+            _ => {}
+        }
+        q += 1;
+        // Studio's tokens leave no token where a comment is; a line ends
+        // long before this.
+        if q > p + 10_000 {
+            return false;
+        }
+    }
 }
 
 /// The `>` closing the types a use gives, when the `<` at `p` opens them, as
@@ -4681,7 +4725,7 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
         }
         match token {
             Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, p) => p = close,
-            _ if nests(token, &mut depth, &mut blocks) => {}
+            _ if nests(tokens, p, &mut depth, &mut blocks) => {}
             _ if depth > 0 => {}
             Some(Token::Colon) if values.is_none() => typed = Some(0),
             Some(Token::Assign) if values.is_none() => values = Some(1),
@@ -4753,7 +4797,7 @@ fn starts_loop_item(tokens: &impl LineTokens, p: usize, last: usize) -> bool {
         let token = tokens.token_at(q);
         match token {
             Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, q) => q = close,
-            _ if nests(token, &mut depth, &mut blocks) => {}
+            _ if nests(tokens, q, &mut depth, &mut blocks) => {}
             _ if depth > 0 => {}
             Some(Token::Comma) => return false,
             Some(Token::Assign | Token::Colon) => return true,

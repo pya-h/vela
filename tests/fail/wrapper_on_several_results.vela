@@ -1,0 +1,13 @@
+; error: 6:3: task 'two' sends several values, so it can't have wrappers yet: each wrapper is given it as a task value, which sends one value or nothing
+; A wrapper is given the task as a task value, which sends one value.
+task logged(next: (int) -> int, n: int) -> int
+    <- next(n)
+fi
+$(logged)
+task two(n: int) -> int, int
+    <- n, n * 2
+fi
+task main()
+    bind a, b = two(3)
+    show(a, " ", b)
+fi

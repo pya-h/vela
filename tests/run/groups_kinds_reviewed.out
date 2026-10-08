@@ -1,0 +1,11 @@
+> Box<int> { value: 3 }
+3
+1
+Box<int> { value: 2 }
+Some("x")
+{ Box<int> { value: 2 } }
+3
+none { None } { Some(2) }
+[none, { None }, { Some(1) }]
+false true
+[Right("x"), Left(1)]
