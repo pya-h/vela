@@ -247,7 +247,7 @@ fn addresses_mean_the_same_under_an_optimizing_clang() {
         return;
     }
     let scratch = scratch_dir("clang-optimized");
-    for name in ["addresses", "bind_parameters", "chosen_parameters", "copies_own_places", "equality"] {
+    for name in ["addresses", "fixed_parameters", "chosen_parameters", "copies_own_places", "equality"] {
         let source = root().join("tests/run").join(format!("{}.vela", name));
         let c_path = scratch.join(format!("{}.c", name));
         let emitted = Command::new(VELA).arg(&source).arg("--emit-c").arg("-o").arg(&c_path).output().unwrap();

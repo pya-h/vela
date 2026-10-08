@@ -4,8 +4,8 @@
     | comment:; makes to `x` is a change there. The call marks the place it gives with `&`,
   3 | ; so a reader sees at the call what may change.
     | comment:; so a reader sees at the call what may change.
-  5 | include hold_ref_parameters/tally {Tally, double}
-    | keyword:include  module:hold_ref_parameters  operator:/  module:tally  punctuation:{  type:Tally  punctuation:,  task:double  punctuation:}
+  5 | include flex_ref_parameters/tally {Tally, double}
+    | keyword:include  module:flex_ref_parameters  operator:/  module:tally  punctuation:{  type:Tally  punctuation:,  task:double  punctuation:}
   7 | shape Counter
     | keyword:shape  type:Counter
   8 |     n: int = 0

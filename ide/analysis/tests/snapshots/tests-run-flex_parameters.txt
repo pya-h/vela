@@ -4,8 +4,8 @@
     | comment:; it as it changes any `flex` variable, and the value the caller gave never
   3 | ; changes, so the call needs no mark.
     | comment:; changes, so the call needs no mark.
-  5 | include hold_parameters/steps {collatz}
-    | keyword:include  module:hold_parameters  operator:/  module:steps  punctuation:{  task:collatz  punctuation:}
+  5 | include flex_parameters/steps {collatz}
+    | keyword:include  module:flex_parameters  operator:/  module:steps  punctuation:{  task:collatz  punctuation:}
   7 | shape Counter
     | keyword:shape  type:Counter
   8 |     n: int = 0

@@ -2,7 +2,7 @@
 ; it as it changes any `flex` variable, and the value the caller gave never
 ; changes, so the call needs no mark.
 
-include hold_parameters/steps {collatz}
+include flex_parameters/steps {collatz}
 
 shape Counter
     n: int = 0

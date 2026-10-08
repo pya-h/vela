@@ -2,7 +2,7 @@
 ; makes to `x` is a change there. The call marks the place it gives with `&`,
 ; so a reader sees at the call what may change.
 
-include hold_ref_parameters/tally {Tally, double}
+include flex_ref_parameters/tally {Tally, double}
 
 shape Counter
     n: int = 0
