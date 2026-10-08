@@ -13,8 +13,8 @@ use vela::lexer::Lexer;
 use vela::parser::Parser;
 
 fn parse(source: &str) -> Vec<Item> {
-    let (tokens, spans) = Lexer::new(source).tokenize().unwrap();
-    Parser::new(tokens, spans).parse_file().unwrap()
+    let (tokens, spans, ends) = Lexer::new(source).tokenize().unwrap();
+    Parser::new(tokens, spans, ends).parse_file().unwrap()
 }
 
 /// Generates C from `source` without checking it, expecting an internal error

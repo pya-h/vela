@@ -14,7 +14,7 @@ task chosen<T>(x: T) -> int
     fi
 fi
 
-task last<P...: fixed & shown>(args: P...)
+task last<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     region r
     bind s = when args.len > 2
@@ -29,7 +29,7 @@ fi
 
 ; An arm this copy knows holds drops the arms after it, so they may read what
 ; only that arm guards against.
-task guarded<P...: fixed & shown>(args: P...)
+task guarded<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     region r
     when args.len < 3
@@ -41,7 +41,7 @@ task guarded<P...: fixed & shown>(args: P...)
     fi
 fi
 
-task boxes<P...: shown & fixed>(args: P...)
+task boxes<P...: shown & frozen>(args: P...)
     region r
     each v in args
         bind b = Box<P> { v: v }
@@ -52,7 +52,7 @@ task boxes<P...: shown & fixed>(args: P...)
     fi
 fi
 
-task kept<P...: fixed & shown>(args: P...)
+task kept<P...: frozen & shown>(args: P...)
     bind t = (args...) {
         show("fewer than two")
         <-

@@ -42,8 +42,8 @@
     | keyword:<-  parameter:b  punctuation:.  field:value
  26 | fi
     | keyword:fi
- 28 | task count<P...: fixed & shown>(args: P...) -> int
-    | keyword:task  task:count  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
+ 28 | task count<P...: frozen & shown>(args: P...) -> int
+    | keyword:task  task:count  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
  29 |     hold n = 0
     | keyword:hold  variable:n  operator:=  number:0
  30 |     each v in args

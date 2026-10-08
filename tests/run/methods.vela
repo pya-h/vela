@@ -128,9 +128,9 @@ task main()
     show(c.total())
 
     ; A method that changes nothing is called on anything, a `bind` too.
-    bind fixed = Counter { label: "once", count: 1 }
-    show(fixed.total())
-    show(fixed.nameOf())
+    bind steady = Counter { label: "once", count: 1 }
+    show(steady.total())
+    show(steady.nameOf())
 
     hold p = Point { x: 3, y: 4 }
     show(p.lengthSquared())

@@ -25,7 +25,7 @@ task open(b: Box<int>) -> int
     <- b.value
 fi
 
-task count<P...: fixed & shown>(args: P...) -> int
+task count<P...: frozen & shown>(args: P...) -> int
     hold n = 0
     each v in args
         show(v)

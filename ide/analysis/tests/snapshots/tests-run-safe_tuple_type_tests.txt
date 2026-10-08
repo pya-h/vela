@@ -144,8 +144,8 @@
     | keyword:fi
  76 | ; An item holding a `T` is tested in each copy.
     | comment:; An item holding a `T` is tested in each copy.
- 77 | task held<T: shown & fixed>(x: T)
-    | keyword:task  task:held  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:&  keyword:fixed  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)
+ 77 | task held<T: shown & frozen>(x: T)
+    | keyword:task  task:held  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:&  keyword:frozen  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)
  78 |     bind t = (x, 1)
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:x  punctuation:,  number:1  punctuation:)
  79 |     when t.#0 is maybe int {y}
@@ -168,8 +168,8 @@
     | comment:; Text taken from a group's item may be in a region of the caller's, so it is
  89 | ; used inside the task.
     | comment:; used inside the task.
- 90 | task measured<P...: fixed & shown>(args: P...) -> int
-    | keyword:task  task:measured  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
+ 90 | task measured<P...: frozen & shown>(args: P...) -> int
+    | keyword:task  task:measured  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
  91 |     bind t = (args...) { <- 0 }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  number:0  punctuation:}
  92 |     when t.#1 is maybe text {s}
@@ -186,8 +186,8 @@
     | keyword:<-  number:0
  98 | fi
     | keyword:fi
-100 | task third<P...: fixed & shown>(args: P...)
-    | keyword:task  task:third  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+100 | task third<P...: frozen & shown>(args: P...)
+    | keyword:task  task:third  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
 101 |     bind t = (args...) {
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
 102 |         show("fewer than two")
@@ -240,8 +240,8 @@
     | keyword:fi
 126 | ; The arms after one each copy knows holds are dropped, tests and all.
     | comment:; The arms after one each copy knows holds are dropped, tests and all.
-127 | task after_taken<P...: fixed & shown>(args: P...)
-    | keyword:task  task:after_taken  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+127 | task after_taken<P...: frozen & shown>(args: P...)
+    | keyword:task  task:after_taken  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
 128 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 129 |     when args.len == 2
@@ -290,8 +290,8 @@
     | comment:; are, drops the arms after it; and after a part a copy knows doesn't hold,
 153 | ; the parts after it aren't made, so they may read what it guards against.
     | comment:; the parts after it aren't made, so they may read what it guards against.
-154 | task known_arms<P...: fixed & shown>(args: P...)
-    | keyword:task  task:known_arms  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+154 | task known_arms<P...: frozen & shown>(args: P...)
+    | keyword:task  task:known_arms  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
 155 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 156 |     region r

@@ -6,8 +6,8 @@
     | comment:; made for each set of types the program uses it with. A word after a type's `:`
   4 | ; says what every type given for it must allow: `ordered`, `shown`, `same`, or
     | comment:; says what every type given for it must allow: `ordered`, `shown`, `same`, or
-  5 | ; `fixed`. The type comes from the arguments, from the place the value goes, or
-    | comment:; `fixed`. The type comes from the arguments, from the place the value goes, or
+  5 | ; `frozen`. The type comes from the arguments, from the place the value goes, or
+    | comment:; `frozen`. The type comes from the arguments, from the place the value goes, or
   6 | ; written in `< >` at the call.
     | comment:; written in `< >` at the call.
   8 | task first<T>(xs: [T]@r) -> maybe T
@@ -68,8 +68,8 @@
     | keyword:<-  parameter:a  operator:==  parameter:b
  41 | fi
     | keyword:fi
- 43 | task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
-    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
+ 43 | task pairUp<A: frozen, B: frozen>(a: A, b: B) -> (A, B)
+    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:frozen  punctuation:,  type:B  punctuation::  keyword:frozen  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
  44 |     <- (a, b)
     | keyword:<-  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
  45 | fi

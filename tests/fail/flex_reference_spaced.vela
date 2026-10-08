@@ -1,0 +1,8 @@
+; error: 6:10: a reference is written 'hold& y = &x', with '&' against 'hold'
+; 'flex&' is one word, as 'hold&' is, in a reference too.
+
+task main()
+    flex n = 1
+    flex &m = &n
+    m = 2
+fi

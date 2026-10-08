@@ -212,12 +212,12 @@
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
 130 |     ; A method that changes nothing is called on anything, a `bind` too.
     | comment:; A method that changes nothing is called on anything, a `bind` too.
-131 |     bind fixed = Counter { label: "once", count: 1 }
-    | keyword:bind  variable:fixed  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
-132 |     show(fixed.total())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
-133 |     show(fixed.nameOf())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:nameOf  punctuation:(  punctuation:)  punctuation:)
+131 |     bind steady = Counter { label: "once", count: 1 }
+    | keyword:bind  variable:steady  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
+132 |     show(steady.total())
+    | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
+133 |     show(steady.nameOf())
+    | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:nameOf  punctuation:(  punctuation:)  punctuation:)
 135 |     hold p = Point { x: 3, y: 4 }
     | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}
 136 |     show(p.lengthSquared())

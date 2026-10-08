@@ -875,7 +875,7 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
           an index or a slice type, and braces as a plan B, a pattern, or a shape literal. A <code>&lt;</code> after a
           name starts types only when the matching <code>&gt;</code> is followed by <code>(</code>, so comparisons still
           read as comparisons.</li>
-        <li><strong>Five words, not traits.</strong> <code>fixed</code>, <code>same</code>, <code>similar</code>,
+        <li><strong>Five words, not traits.</strong> <code>frozen</code>, <code>same</code>, <code>similar</code>,
           <code>shown</code>, and <code>ordered</code> say what a type must allow — be a tuple's item, be compared with
           <code>==</code>, be compared item by item with <code>~=</code>, be shown, be compared with
           <code>&lt;</code> — and each is one thing, joined with <code>&amp;</code> to ask for
@@ -913,7 +913,7 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
       </p>
       <p>
         Shapes came next, in the same brackets and with the same words: <code>shape Box&lt;T&gt;</code>,
-        <code>shape Pair&lt;A: fixed, B: fixed&gt;</code>, and <code>shape Node&lt;T&gt;</code> whose field names the
+        <code>shape Pair&lt;A: frozen, B: frozen&gt;</code>, and <code>shape Node&lt;T&gt;</code> whose field names the
         shape again behind a pointer. The types given name no region, as a shape's fields don't
         (<code>Box&lt;text&gt;@r</code>, one shape for every region), and a literal works its types out from the values
         it gives (<code>Box { value: 1 }</code>) or names them (<code>Box&lt;int&gt; { value: none }</code>). One shape

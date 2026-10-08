@@ -96,8 +96,8 @@ task main()
     show(light.sameAs(Red))
 
     ; A method that changes nothing is called on a `bind` too.
-    bind fixed = Green
-    show(fixed.label())
+    bind steady = Green
+    show(steady.label())
     ; And on a variant as it is written.
     show(Light.Amber(1).label())
     show(Light.Red.label())

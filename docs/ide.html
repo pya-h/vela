@@ -386,7 +386,7 @@ Press Ctrl+C to stop.</pre>
             use gives a declaration that takes them (<code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>,
             <code>Box&lt;int&gt; { … }</code>), and nothing for an array type's count;
             the types a task, shape or kind takes are offered as types inside it (<code>T</code>), and after a
-            type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>fixed</code>,
+            type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>frozen</code>,
             <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor;
             the types after a kind's name before one of its variants (<code>Option&lt;int&gt;.None</code>), colored
             as types, and the variant after them;
@@ -448,7 +448,10 @@ Press Ctrl+C to stop.</pre>
             the caller's place; such a parameter hovers as <code>hold n: int</code> or <code>hold&amp; n: int</code>,
             and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
             <code>hold&amp; y = &amp;x</code> or <code>bind&amp; y = &amp;x</code>, hovers as <code>hold&amp; y: int</code>
-            or <code>bind&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.</p>
+            or <code>bind&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.
+            <code>flex</code> and <code>fixed</code>, the new spellings of <code>hold</code> and <code>bind</code>, are
+            read the same everywhere, as keywords, in parameters, in a task's type and in what a lambda keeps; the
+            hovers still say the old words until they go.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>

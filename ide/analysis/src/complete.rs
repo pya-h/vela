@@ -526,7 +526,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let declares = open.checked_sub(2).is_some_and(|before| matches!(k.token(before), Some(Token::Task | Token::Shape)));
         if declares {
             return match prev_token {
-                // `<T: ` and `<T: fixed & `: what the type must allow.
+                // `<T: ` and `<T: frozen & `: what the type must allow.
                 Some(Token::Colon | Token::Amp) => (need_items(), word_start, byte),
                 // A name is being declared.
                 _ => (Vec::new(), word_start, byte),
@@ -1724,7 +1724,7 @@ fn before_types(k: &Knowledge, q: usize) -> usize {
 /// The words a type a declaration takes can be asked to allow.
 fn need_items() -> Vec<CompletionItem> {
     let words = [
-        (Need::Fixed, "never changes, so it can be a tuple's item"),
+        (Need::Frozen, "never changes, so it can be a tuple's item"),
         (Need::Same, "can be compared with == and !="),
         (Need::Similar, "can be compared item by item with ~= and <>"),
         (Need::Shown, "can be shown"),

@@ -62,7 +62,7 @@ fi
 
 ; A shape that takes types and holds a pointer: its values live in a region, and
 ; a method may name it.
-shape Chain<T: fixed>
+shape Chain<T: frozen>
     head: T
     next: maybe ^Chain<T>
 
@@ -79,7 +79,7 @@ shape Chain<T: fixed>
     fi
 fi
 
-task lengthOf<T: fixed>(chain: ^Chain<T>@r) -> int
+task lengthOf<T: frozen>(chain: ^Chain<T>@r) -> int
     hold steps = 1
     hold here = chain
     loop here^.tailOf() is {next}
@@ -123,8 +123,8 @@ task main()
     deep.itemOf().tell()
 
     ; A method that changes nothing is called on a `bind` too.
-    bind fixed: Box<bool> = Box { value: true }
-    show(fixed.valueOf())
+    bind steady: Box<bool> = Box { value: true }
+    show(steady.valueOf())
 
     hold chain = new Chain<int>(Chain { head: 1, next: none }) at r
     chain = new Chain<int>(Chain { head: 2, next: chain }) at r

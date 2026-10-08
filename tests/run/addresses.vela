@@ -76,8 +76,8 @@ task main()
     hold mood = Mood.Calm
     show(spot(r, &p) == a, " ", spot(r, &mood) == "{&mood}" at r, " ", spot(r, &mood) == a)
     ; Read only, and read in order beside a call.
-    bind& fixed = &p
-    show(read(r, &p).len > 6, " ", "{&fixed}" at r == a)
+    bind& looked = &p
+    show(read(r, &p).len > 6, " ", "{&looked}" at r == a)
     bind pair = [p, q]
     show(&pair[zero()] == &pair[zero()], " ", &p == make(r), " ", &make(r)^ == &make(r)^)
 fi

@@ -271,7 +271,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                         "shown" => "Every type given for it can be shown.".to_string(),
                         "same" => "Every type given for it can be compared with '==', each by its own rule (an array, a shape, or a tuple by where it is).".to_string(),
                         "similar" => "Every type given for it can be compared item by item with '~=' and '<>'.".to_string(),
-                        "fixed" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
+                        "frozen" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
                         other => format!("Every type given for it must be '{}'.", other),
                     })
                     .collect::<Vec<_>>()

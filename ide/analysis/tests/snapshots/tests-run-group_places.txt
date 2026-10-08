@@ -10,8 +10,8 @@
     | builtin-fn:show  punctuation:(  string:"log: "  punctuation:,  parameter:args  keyword:...  punctuation:)
   6 | fi
     | keyword:fi
-  8 | task traced<P...: shown & fixed, R>(next: (P...) -> R, args: P...) -> R
-    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:fixed  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  8 | task traced<P...: shown & frozen, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:frozen  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
   9 |     log_all(args...)
     | task:log_all  punctuation:(  parameter:args  keyword:...  punctuation:)
  10 |     bind t = (args...) { <- next(args...) }

@@ -1,6 +1,6 @@
 ; Text a type test takes from an item may be what a when gives, inside the branch
 ; that took it.
-task f<P...: fixed & shown>(args: P...)
+task f<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     when t.#1 is maybe text {s}
         bind shown = when s.len > 2

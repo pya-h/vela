@@ -10,8 +10,8 @@
     | comment:; leaves it out there; `t.#k` reads an item in a maybe, none past the end.
   6 | ; `each v in args` gives each value in turn, of its own type, `P`.
     | comment:; `each v in args` gives each value in turn, of its own type, `P`.
-  8 | task described<P...: fixed & shown>(args: P...)
-    | keyword:task  task:described  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  8 | task described<P...: frozen & shown>(args: P...)
+    | keyword:task  task:described  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
   9 |     bind t = (args...) {
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
  10 |         failure one
@@ -42,8 +42,8 @@
     | keyword:fi
  24 | ; The same tuple through `args.tuple`, read with `match`.
     | comment:; The same tuple through `args.tuple`, read with `match`.
- 25 | task counted<P...: fixed>(args: P...) -> text
-    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text
+ 25 | task counted<P...: frozen>(args: P...) -> text
+    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text
  26 |     match args.tuple
     | keyword:match  parameter:args  punctuation:.  field:tuple
  27 |         case failure f

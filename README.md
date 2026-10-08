@@ -36,7 +36,7 @@ items, and what its pointers point to) into the region where it goes, or `value.
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
 (`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as
 values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word saying what may be done with them
-(`fixed`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
+(`frozen`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
 from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
 task or shape is made for each set of types used. The types a shape is given name no region, as its fields
 don't: `Box<text>@r` holds its text in `r`. A program can span

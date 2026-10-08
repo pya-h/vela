@@ -670,8 +670,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
     <span class="keyword">hold</span> xs = <span class="keyword">new</span> [int]([1, 2, 3]) <span class="keyword">at</span> r
-    <span class="keyword">bind</span> frozen = xs
-    change(frozen)
+    <span class="keyword">bind</span> seen = xs
+    change(seen)
     show(xs[0])                        <span class="comment">; 99</span>
 <span class="keyword">fi</span></code></pre>
         <p>

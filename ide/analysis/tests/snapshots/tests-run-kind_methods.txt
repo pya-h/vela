@@ -168,10 +168,10 @@
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
  98 |     ; A method that changes nothing is called on a `bind` too.
     | comment:; A method that changes nothing is called on a `bind` too.
- 99 |     bind fixed = Green
-    | keyword:bind  variable:fixed  operator:=  variant:Green
-100 |     show(fixed.label())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
+ 99 |     bind steady = Green
+    | keyword:bind  variable:steady  operator:=  variant:Green
+100 |     show(steady.label())
+    | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 101 |     ; And on a variant as it is written.
     | comment:; And on a variant as it is written.
 102 |     show(Light.Amber(1).label())

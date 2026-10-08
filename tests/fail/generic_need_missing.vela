@@ -1,4 +1,4 @@
-; error: 2:14: expected what the type must allow: 'fixed', 'same', 'shown', 'ordered'
+; error: 2:14: expected what the type must allow: 'frozen', 'same', 'shown', 'ordered'
 task tell<T: >(value: T)
     show(1)
 fi

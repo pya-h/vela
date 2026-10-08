@@ -144,9 +144,14 @@ pub enum Token {
 }
 
 /// Every keyword with its token: the one list of Vela's reserved words, used
-/// by the lexer and by tools such as editors.
+/// by the lexer and by tools such as editors. `fixed` and `flex` are the new
+/// spellings of `bind` and `hold`, which they replace (Part 22); until the old
+/// ones go, both spell the same token, and a message names a token by the
+/// first spelling here.
 pub const KEYWORDS: &[(&str, Token)] = &[
     ("task", Token::Task),
+    ("fixed", Token::Bind),
+    ("flex", Token::Hold),
     ("bind", Token::Bind),
     ("hold", Token::Hold),
     ("shape", Token::Shape),
@@ -449,11 +454,12 @@ impl Lexer {
         Lexer { file, ..Lexer::new(source) }
     }
 
-    /// Returns every token (ending with `Eof`) and, in parallel, its position,
-    /// or the first error.
-    pub fn tokenize(mut self) -> Result<(Vec<Token>, Vec<Span>)> {
+    /// Returns every token (ending with `Eof`) and, in parallel, its position
+    /// and where it ends, or the first error.
+    pub fn tokenize(mut self) -> Result<(Vec<Token>, Vec<Span>, Vec<Span>)> {
         let mut tokens = Vec::new();
         let mut spans = Vec::new();
+        let mut ends = Vec::new();
         loop {
             let item = self.next_item();
             match item.kind {
@@ -461,8 +467,9 @@ impl Lexer {
                     let is_eof = token == Token::Eof;
                     tokens.push(token);
                     spans.push(item.start);
+                    ends.push(item.end);
                     if is_eof {
-                        return Ok((tokens, spans));
+                        return Ok((tokens, spans, ends));
                     }
                 }
                 LexKind::Comment => {}

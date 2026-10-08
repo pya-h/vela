@@ -2762,12 +2762,12 @@ impl Checker {
                 let found = fields.iter().find_map(|ty| self.changeable_item(ty))?;
                 Some(format!("'{}', which holds {}", ty, found))
             }
-            // Only a type required to be `fixed` is known never to change.
-            Type::Param(name) if !self.allows(Need::Fixed, ty) => {
-                Some(format!("'{}', which {}", name, self.why_not(Need::Fixed, ty)))
+            // Only a type required to be `frozen` is known never to change.
+            Type::Param(name) if !self.allows(Need::Frozen, ty) => {
+                Some(format!("'{}', which {}", name, self.why_not(Need::Frozen, ty)))
             }
-            Type::Group(name) if !self.allows(Need::Fixed, ty) => {
-                Some(format!("'{}...', which {}", name, self.why_not(Need::Fixed, ty)))
+            Type::Group(name) if !self.allows(Need::Frozen, ty) => {
+                Some(format!("'{}...', which {}", name, self.why_not(Need::Frozen, ty)))
             }
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
@@ -5830,9 +5830,9 @@ impl Checker {
             LEN => Ok(Type::Int),
             // The tuple for two or more values; for one or none, a failure
             // holding the one value, or none (see `group_tuple_type`).
-            GROUP_TUPLE if !self.allows(Need::Fixed, &Type::Group(group.clone())) => err(
+            GROUP_TUPLE if !self.allows(Need::Frozen, &Type::Group(group.clone())) => err(
                 span,
-                format!("a tuple's items never change, so making one of the values of the group '{0}...' asks each of its types to be fixed: '<{0}...: fixed>'", group),
+                format!("a tuple's items never change, so making one of the values of the group '{0}...' asks each of its types to be frozen: '<{0}...: frozen>'", group),
             ),
             GROUP_TUPLE => Ok(group_tuple_type(&group)),
             _ => err(
@@ -11325,7 +11325,7 @@ impl Checker {
             Need::Shown => self.writable(ty),
             Need::Same => self.comparable(ty),
             Need::Similar => self.unsimilar_part(ty).is_none(),
-            Need::Fixed => self.changeable_item(ty).is_none(),
+            Need::Frozen => self.changeable_item(ty).is_none(),
         }
     }
 
@@ -11479,7 +11479,7 @@ impl Checker {
                 Some(part) if part != *ty => format!("holds {}, which can't be compared item by item", part),
                 _ => "can't be compared item by item".to_string(),
             },
-            Need::Fixed => match self.changeable_item(ty) {
+            Need::Frozen => match self.changeable_item(ty) {
                 Some(what) => format!("holds {}", what),
                 None => "can change".to_string(),
             },

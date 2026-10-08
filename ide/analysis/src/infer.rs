@@ -1612,10 +1612,8 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
             // `@r`, a region it takes, and `hold& int`, a place (see `Taken`).
             let (how, ty) = if let Some(region) = param.strip_prefix('@') {
                 (Taken::Region(region.trim().to_string()), Type::Region)
-            } else if let Some(ty) = param.strip_prefix("hold&") {
-                (Taken::Place(Passing::HoldRef), parse_type_within(ty, depth + 1)?)
-            } else if let Some(ty) = param.strip_prefix("bind&") {
-                (Taken::Place(Passing::BindRef), parse_type_within(ty, depth + 1)?)
+            } else if let Some((passing, ty)) = place_word(param) {
+                (Taken::Place(passing), parse_type_within(ty, depth + 1)?)
             } else {
                 (Taken::Value, parse_type_within(param, depth + 1)?)
             };
@@ -1657,13 +1655,31 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
         // a place; a region is named as its parameter is.
         taken.push(match (&ty, name.split_whitespace().collect::<Vec<_>>().as_slice()) {
             (Type::Region, [.., region]) => Taken::Region(region.to_string()),
-            (_, ["hold&", ..]) => Taken::Place(Passing::HoldRef),
-            (_, ["bind&", ..]) => Taken::Place(Passing::BindRef),
+            (_, [word, ..]) => place_word(word).map_or(Taken::Value, |(passing, _)| Taken::Place(passing)),
             _ => Taken::Value,
         });
         params.push(ty);
     }
     Some(Type::Task(Box::new(vela::ast::TaskType { params, taken, ret: return_type(detail) }.normalized_beside(kept))))
+}
+
+/// The spellings of the word for a place that changes, and of the one for a
+/// place only read: `flex` and `fixed` are the new ones, which replace `hold`
+/// and `bind` (Part 22). Until the old ones go, a program may write either.
+const HOLD_WORDS: [&str; 2] = ["flex", "hold"];
+const BIND_WORDS: [&str; 2] = ["fixed", "bind"];
+
+/// How a place in a task's type or a lambda's header is taken, `hold& int` or
+/// `bind& int` in either spelling, and the text after the word and its `&`.
+fn place_word(text: &str) -> Option<(Passing, &str)> {
+    let after = |words: [&'static str; 2]| words.iter().find_map(|word| text.strip_prefix(word)?.strip_prefix('&'));
+    after(HOLD_WORDS).map(|rest| (Passing::HoldRef, rest)).or_else(|| after(BIND_WORDS).map(|rest| (Passing::BindRef, rest)))
+}
+
+/// `item` without the word it may start with, `hold` or `bind` in either
+/// spelling.
+fn without_word(item: &str) -> &str {
+    HOLD_WORDS.iter().chain(BIND_WORDS.iter()).find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
 /// `[@r]` or `[hold @r]` at the start of `text`, what a lambda keeps: the
@@ -1675,11 +1691,11 @@ fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
     let mut region = None;
     for item in inner.get(..close)?.split(',').map(str::trim) {
         // `hold& count`, written `hold & count` too.
-        let word = item.trim_start_matches("hold").trim_start_matches("bind");
+        let word = without_word(item);
         if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;
         }
-        region = Some(match item.strip_prefix("hold") {
+        region = Some(match HOLD_WORDS.iter().find_map(|hold| item.strip_prefix(hold)) {
             Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
             _ => (false, item),
         });

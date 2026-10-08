@@ -153,22 +153,22 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("T]@r"))?.doc).toContain("A type task first takes");
     // The words after a type's ':', and types where a call names them.
     const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
-    expect(words).toEqual(["fixed", "same", "similar", "shown", "ordered"]);
+    expect(words).toEqual(["frozen", "same", "similar", "shown", "ordered"]);
     const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "maybe"]);
   });
 
   it("reads a shape that takes types: highlighting, outline, hover, and completion", () => {
     const source =
-      "shape Box<T: fixed>\n    value: T\nfi\n\ntask main()\n    region r\n    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    bind count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";
+      "shape Box<T: frozen>\n    value: T\nfi\n\ntask main()\n    region r\n    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    bind count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";
     const { tokens, diagnostics, outline } = analysis.file(source);
     expect(diagnostics).toEqual([]);
     expect(tokens.find((t) => t.from === source.indexOf("text>@r"))?.class).toBe("type-builtin");
     expect(tokens.find((t) => t.from === source.indexOf("value: 2"))?.class).toBe("field");
     const [shape] = outline;
-    expect([shape?.name, shape?.kind, shape?.detail]).toEqual(["Box", "shape", "<T: fixed>"]);
+    expect([shape?.name, shape?.kind, shape?.detail]).toEqual(["Box", "shape", "<T: frozen>"]);
     expect(shape?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([
-      ["T", "type-param", "fixed"],
+      ["T", "type-param", "frozen"],
       ["value", "field", "T"],
     ]);
     // The shape the compiler makes for the types never shows: the type reads as

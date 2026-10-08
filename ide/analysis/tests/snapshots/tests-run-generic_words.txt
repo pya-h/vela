@@ -2,8 +2,8 @@
     | comment:; Each word a type parameter asks for is one thing its body may do, and `&`
   2 | ; asks for several: `shown` writes the value, `same` compares it with `==`,
     | comment:; asks for several: `shown` writes the value, `same` compares it with `==`,
-  3 | ; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
-    | comment:; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+  3 | ; `frozen` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+    | comment:; `frozen` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
   5 | shape Point
     | keyword:shape  type:Point
   6 |     x: int
@@ -44,8 +44,8 @@
     | keyword:fi
  28 | ; A tuple holds only what never changes.
     | comment:; A tuple holds only what never changes.
- 29 | task twice<T: fixed & shown>(value: T) -> (T, T)
-    | keyword:task  task:twice  punctuation:<  type:T  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:value  punctuation::  type:T  punctuation:)  operator:->  punctuation:(  type:T  punctuation:,  type:T  punctuation:)
+ 29 | task twice<T: frozen & shown>(value: T) -> (T, T)
+    | keyword:task  task:twice  punctuation:<  type:T  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:value  punctuation::  type:T  punctuation:)  operator:->  punctuation:(  type:T  punctuation:,  type:T  punctuation:)
  30 |     show("twice ", value)
     | builtin-fn:show  punctuation:(  string:"twice "  punctuation:,  parameter:value  punctuation:)
  31 |     <- (value, value)

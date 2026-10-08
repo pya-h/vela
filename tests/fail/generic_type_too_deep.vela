@@ -1,5 +1,5 @@
 ; error: 3:8: this use of 'deeper' gives a type built up more than 24 types deep; a generic task whose call gives a type built from its own never stops
-task deeper<T: fixed>(v: T) -> int
+task deeper<T: frozen>(v: T) -> int
     <- deeper<(T, int)>((v, 1))
 fi
 

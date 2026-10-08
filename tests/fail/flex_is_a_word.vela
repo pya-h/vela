@@ -1,0 +1,10 @@
+; error: 4:6: expected a name, got 'flex', which is a reserved word
+; 'flex' is a word of the language, the new spelling of 'hold', so nothing takes it as a name.
+
+task flex() -> int
+    <- 1
+fi
+
+task main()
+    show(flex())
+fi

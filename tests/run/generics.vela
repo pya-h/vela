@@ -2,7 +2,7 @@
 ; checked once, with `T` standing for the type each use gives it, and one task is
 ; made for each set of types the program uses it with. A word after a type's `:`
 ; says what every type given for it must allow: `ordered`, `shown`, `same`, or
-; `fixed`. The type comes from the arguments, from the place the value goes, or
+; `frozen`. The type comes from the arguments, from the place the value goes, or
 ; written in `< >` at the call.
 
 task first<T>(xs: [T]@r) -> maybe T
@@ -40,7 +40,7 @@ task alike<T: same>(a: T, b: T) -> bool
     <- a == b
 fi
 
-task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
+task pairUp<A: frozen, B: frozen>(a: A, b: B) -> (A, B)
     <- (a, b)
 fi
 

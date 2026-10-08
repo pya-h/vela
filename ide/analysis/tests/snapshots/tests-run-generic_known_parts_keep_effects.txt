@@ -10,8 +10,8 @@
     | keyword:<-  keyword:true
   6 | fi
     | keyword:fi
-  8 | task f<P...: fixed & shown>(args: P...)
-    | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  8 | task f<P...: frozen & shown>(args: P...)
+    | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
   9 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
  10 |     when tick(1) and args.len > 5

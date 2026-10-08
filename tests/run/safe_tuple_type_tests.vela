@@ -74,7 +74,7 @@ task boxes()
 fi
 
 ; An item holding a `T` is tested in each copy.
-task held<T: shown & fixed>(x: T)
+task held<T: shown & frozen>(x: T)
     bind t = (x, 1)
     when t.#0 is maybe int {y}
         show("held int ", y + 1)
@@ -87,7 +87,7 @@ fi
 
 ; Text taken from a group's item may be in a region of the caller's, so it is
 ; used inside the task.
-task measured<P...: fixed & shown>(args: P...) -> int
+task measured<P...: frozen & shown>(args: P...) -> int
     bind t = (args...) { <- 0 }
     when t.#1 is maybe text {s}
         bind same = s
@@ -97,7 +97,7 @@ task measured<P...: fixed & shown>(args: P...) -> int
     <- 0
 fi
 
-task third<P...: fixed & shown>(args: P...)
+task third<P...: frozen & shown>(args: P...)
     bind t = (args...) {
         show("fewer than two")
         <-
@@ -124,7 +124,7 @@ task third<P...: fixed & shown>(args: P...)
     fi
 fi
 ; The arms after one each copy knows holds are dropped, tests and all.
-task after_taken<P...: fixed & shown>(args: P...)
+task after_taken<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     when args.len == 2
         show("two")
@@ -151,7 +151,7 @@ fi
 ; A test each copy knows holds, as `is none` past the end and `{x}` on an item
 ; are, drops the arms after it; and after a part a copy knows doesn't hold,
 ; the parts after it aren't made, so they may read what it guards against.
-task known_arms<P...: fixed & shown>(args: P...)
+task known_arms<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     region r
     when t.#2 is none

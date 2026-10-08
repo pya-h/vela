@@ -6,8 +6,8 @@
     | comment:; type's `:` says what the body may do with its values: `ordered` compares them
   4 | ; with `<` and `>`, `shown` shows them, `same` compares them with `==`, `similar`
     | comment:; with `<` and `>`, `shown` shows them, `same` compares them with `==`, `similar`
-  5 | ; compares them item by item with `~=`, and `fixed` lets them be a tuple's
-    | comment:; compares them item by item with `~=`, and `fixed` lets them be a tuple's
+  5 | ; compares them item by item with `~=`, and `frozen` lets them be a tuple's
+    | comment:; compares them item by item with `~=`, and `frozen` lets them be a tuple's
   6 | ; items. The type comes from the arguments, from the place the value goes, or
     | comment:; items. The type comes from the arguments, from the place the value goes, or
   7 | ; written in `< >` at the call.
@@ -152,10 +152,10 @@
     | keyword:fi
  86 | ; The two values as one tuple: a tuple's items never change, so both types must
     | comment:; The two values as one tuple: a tuple's items never change, so both types must
- 87 | ; be `fixed`.
-    | comment:; be `fixed`.
- 88 | task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
-    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
+ 87 | ; be `frozen`.
+    | comment:; be `frozen`.
+ 88 | task pairUp<A: frozen, B: frozen>(a: A, b: B) -> (A, B)
+    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:frozen  punctuation:,  type:B  punctuation::  keyword:frozen  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
  89 |     <- (a, b)
     | keyword:<-  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
  90 | fi

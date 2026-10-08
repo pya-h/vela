@@ -127,7 +127,7 @@ fn a_type_a_task_takes_completes_as_a_type_in_its_own_body() {
 
 #[test]
 fn completion_offers_the_words_a_type_can_be_asked_to_allow() {
-    let words = ["fixed", "same", "similar", "shown", "ordered"];
+    let words = ["frozen", "same", "similar", "shown", "ordered"];
     assert_eq!(labels("task f<T: @@>(x: T)\nfi\n"), words);
     assert_eq!(labels("task f<T: same & @@>(x: T)\nfi\n"), words);
     // The name of a type being declared is the writer's to choose.
@@ -182,20 +182,20 @@ fi
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.contains("'ordered' already means 'same'"), "{}", diagnostic.message);
     // Any other pair asks for two things, which says something new.
-    assert_eq!(Analysis::new(&source.replace("ordered & same", "same & fixed")).diagnostics(), Vec::new());
+    assert_eq!(Analysis::new(&source.replace("ordered & same", "same & frozen")).diagnostics(), Vec::new());
 }
 
 const SHAPES: &str = "\
-shape Box<T: fixed>
+shape Box<T: frozen>
     value: T
 fi
 
-shape Pair<A: fixed, B: fixed>
+shape Pair<A: frozen, B: frozen>
     left: A
     right: B
 fi
 
-task valueOf<T: fixed>(b: Box<T>@r) -> T
+task valueOf<T: frozen>(b: Box<T>@r) -> T
     <- b.value
 fi
 
@@ -229,9 +229,9 @@ fn a_value_of_a_shape_given_types_hovers_as_the_program_writes_it() {
     assert_eq!(hover(&source, "count =").0, "bind count: Box<int>");
     assert_eq!(hover(&source, "pair:").0, "bind pair: Pair<int, text>");
     let (code, doc) = hover(&source, "Box<text>@r");
-    assert_eq!(code, "shape Box<T: fixed>\n    value: T\nfi");
+    assert_eq!(code, "shape Box<T: frozen>\n    value: T\nfi");
     assert_eq!(doc, "");
-    let (_, doc) = hover(&source, "T: fixed");
+    let (_, doc) = hover(&source, "T: frozen");
     assert!(doc.starts_with("A type shape Box takes"), "{}", doc);
 }
 
@@ -239,9 +239,9 @@ fn a_value_of_a_shape_given_types_hovers_as_the_program_writes_it() {
 fn a_shape_and_the_types_it_takes_are_outlined_together() {
     let outline = Analysis::new(&shapes("show(1)")).outline();
     let box_shape = outline.first().expect("the first shape");
-    assert_eq!((box_shape.name.as_str(), box_shape.kind, box_shape.detail.as_str()), ("Box", SymbolKind::Shape, "<T: fixed>"));
+    assert_eq!((box_shape.name.as_str(), box_shape.kind, box_shape.detail.as_str()), ("Box", SymbolKind::Shape, "<T: frozen>"));
     let members: Vec<(&str, SymbolKind, &str)> = box_shape.children.iter().map(|c| (c.name.as_str(), c.kind, c.detail.as_str())).collect();
-    assert_eq!(members, [("T", SymbolKind::TypeParam, "fixed"), ("value", SymbolKind::Field, "T")]);
+    assert_eq!(members, [("T", SymbolKind::TypeParam, "frozen"), ("value", SymbolKind::Field, "T")]);
 }
 
 #[test]
@@ -255,8 +255,8 @@ fn the_types_a_shape_is_given_are_colored_as_types() {
     // In a written type, in a literal, and in the header of the shape itself.
     assert_eq!(class_at("text>@r"), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("int> { value: 2 }"), Some(TokenClass::TypeBuiltin));
-    assert_eq!(class_at("T: fixed"), Some(TokenClass::Type));
-    assert_eq!(class_at("fixed>"), Some(TokenClass::Keyword));
+    assert_eq!(class_at("T: frozen"), Some(TokenClass::Type));
+    assert_eq!(class_at("frozen>"), Some(TokenClass::Keyword));
     assert_eq!(class_at("Box<text>"), Some(TokenClass::Type));
 }
 
@@ -270,7 +270,7 @@ fn completion_offers_types_where_a_shape_is_given_them() {
     assert_eq!(labels("shape Box<T>\n    value: @@\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "T", "Box", "maybe"]);
     // The words a type can be asked to allow, and nothing where a name is
     // being declared.
-    assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["fixed", "same", "similar", "shown", "ordered"]);
+    assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["frozen", "same", "similar", "shown", "ordered"]);
     assert!(labels("shape Box<@@>\n    value: int\nfi\n").is_empty());
 }
 
@@ -294,11 +294,11 @@ fn a_shape_made_for_its_types_is_named_as_written_from_a_plain_header() {
     // set of them, and one given types may be given to another. The editor
     // names both as the program writes them, never as the shape made for them.
     let source = "\
-shape Box<T: fixed>
+shape Box<T: frozen>
     value: T
 fi
 
-shape Pair<A: fixed, B: fixed>
+shape Pair<A: frozen, B: frozen>
     left: A
     right: B
 fi

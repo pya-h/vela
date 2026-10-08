@@ -2316,12 +2316,12 @@ pub enum Need {
     /// `~=` and `<>`: values compared item by item.
     Similar,
     /// A value that never changes, so it can be a tuple's item.
-    Fixed,
+    Frozen,
 }
 
 impl Need {
     /// The words, in the order messages list them.
-    pub const ALL: [Need; 5] = [Need::Ordered, Need::Shown, Need::Same, Need::Similar, Need::Fixed];
+    pub const ALL: [Need; 5] = [Need::Ordered, Need::Shown, Need::Same, Need::Similar, Need::Frozen];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -2329,7 +2329,7 @@ impl Need {
             Need::Shown => "shown",
             Need::Same => "same",
             Need::Similar => "similar",
-            Need::Fixed => "fixed",
+            Need::Frozen => "frozen",
         }
     }
 
@@ -2381,7 +2381,7 @@ impl TaskDef {
 #[derive(Debug, Clone)]
 pub struct ShapeDef {
     pub name: String,
-    /// `shape Box<T: fixed>`: the types the shape takes, empty for an ordinary
+    /// `shape Box<T: frozen>`: the types the shape takes, empty for an ordinary
     /// shape. Its fields are checked once with these in place of types, and one
     /// shape is made for each set of types it is given (see the checker's
     /// `shape_instance`).

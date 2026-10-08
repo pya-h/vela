@@ -1,7 +1,7 @@
 ; error: 5:22: 'P' is a group of types, so a header writes it 'P...': a parameter's whole type, as in 'args: P...', or in a task's type, as in '(P...) -> R' or '(int, P...) -> R'; 'P' alone is one value's type, written only inside 'each v in args', as the type 'v' has
 ; `P` alone is the type of the value of a turn of `each v in args`, so it is
 ; written only inside one.
-task last<P...: shown & fixed>(args: P...)
+task last<P...: shown & frozen>(args: P...)
     hold kept: maybe P = none
     each v in args
         kept = v

@@ -274,8 +274,8 @@ impl State {
         let file = self.files.len();
         self.files.push(SourceFile { path: path.to_path_buf(), source, included_at });
         let source = self.files.get(file).map_or("", |f| f.source.as_str());
-        let (tokens, spans) = Lexer::for_file(source, file).tokenize()?;
-        let mut parser = Parser::new(tokens, spans);
+        let (tokens, spans, ends) = Lexer::for_file(source, file).tokenize()?;
+        let mut parser = Parser::new(tokens, spans, ends);
         let items = parser.parse_file()?;
         check_natives(&id, &items)?;
         self.type_places.extend(parser.type_places());

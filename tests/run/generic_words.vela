@@ -1,6 +1,6 @@
 ; Each word a type parameter asks for is one thing its body may do, and `&`
 ; asks for several: `shown` writes the value, `same` compares it with `==`,
-; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+; `frozen` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
 
 shape Point
     x: int
@@ -26,7 +26,7 @@ task larger<T: ordered & shown>(a: T, b: T) -> T
 fi
 
 ; A tuple holds only what never changes.
-task twice<T: fixed & shown>(value: T) -> (T, T)
+task twice<T: frozen & shown>(value: T) -> (T, T)
     show("twice ", value)
     <- (value, value)
 fi

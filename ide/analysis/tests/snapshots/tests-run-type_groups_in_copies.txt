@@ -26,8 +26,8 @@
     | keyword:fi
  15 | fi
     | keyword:fi
- 17 | task last<P...: fixed & shown>(args: P...)
-    | keyword:task  task:last  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 17 | task last<P...: frozen & shown>(args: P...)
+    | keyword:task  task:last  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
  18 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
  19 |     region r
@@ -54,8 +54,8 @@
     | comment:; An arm this copy knows holds drops the arms after it, so they may read what
  31 | ; only that arm guards against.
     | comment:; only that arm guards against.
- 32 | task guarded<P...: fixed & shown>(args: P...)
-    | keyword:task  task:guarded  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 32 | task guarded<P...: frozen & shown>(args: P...)
+    | keyword:task  task:guarded  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
  33 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
  34 |     region r
@@ -76,8 +76,8 @@
     | keyword:fi
  42 | fi
     | keyword:fi
- 44 | task boxes<P...: shown & fixed>(args: P...)
-    | keyword:task  task:boxes  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:fixed  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 44 | task boxes<P...: shown & frozen>(args: P...)
+    | keyword:task  task:boxes  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:frozen  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
  45 |     region r
     | keyword:region  region:r
  46 |     each v in args
@@ -96,8 +96,8 @@
     | keyword:fi
  53 | fi
     | keyword:fi
- 55 | task kept<P...: fixed & shown>(args: P...)
-    | keyword:task  task:kept  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 55 | task kept<P...: frozen & shown>(args: P...)
+    | keyword:task  task:kept  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
  56 |     bind t = (args...) {
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
  57 |         show("fewer than two")

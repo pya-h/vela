@@ -100,8 +100,8 @@
     | comment:; A shape that takes types and holds a pointer: its values live in a region, and
  64 | ; a method may name it.
     | comment:; a method may name it.
- 65 | shape Chain<T: fixed>
-    | keyword:shape  type:Chain  punctuation:<  type:T  punctuation::  keyword:fixed  punctuation:>
+ 65 | shape Chain<T: frozen>
+    | keyword:shape  type:Chain  punctuation:<  type:T  punctuation::  keyword:frozen  punctuation:>
  66 |     head: T
     | field:head  punctuation::  type:T
  67 |     next: maybe ^Chain<T>
@@ -126,8 +126,8 @@
     | keyword:fi
  80 | fi
     | keyword:fi
- 82 | task lengthOf<T: fixed>(chain: ^Chain<T>@r) -> int
-    | keyword:task  task:lengthOf  punctuation:<  type:T  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:chain  punctuation::  operator:^  type:Chain  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 82 | task lengthOf<T: frozen>(chain: ^Chain<T>@r) -> int
+    | keyword:task  task:lengthOf  punctuation:<  type:T  punctuation::  keyword:frozen  punctuation:>  punctuation:(  parameter:chain  punctuation::  operator:^  type:Chain  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  83 |     hold steps = 1
     | keyword:hold  variable:steps  operator:=  number:1
  84 |     hold here = chain
@@ -202,10 +202,10 @@
     | variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:tell  punctuation:(  punctuation:)
 125 |     ; A method that changes nothing is called on a `bind` too.
     | comment:; A method that changes nothing is called on a `bind` too.
-126 |     bind fixed: Box<bool> = Box { value: true }
-    | keyword:bind  variable:fixed  punctuation::  type:Box  punctuation:<  type-builtin:bool  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  keyword:true  punctuation:}
-127 |     show(fixed.valueOf())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
+126 |     bind steady: Box<bool> = Box { value: true }
+    | keyword:bind  variable:steady  punctuation::  type:Box  punctuation:<  type-builtin:bool  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  keyword:true  punctuation:}
+127 |     show(steady.valueOf())
+    | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 129 |     hold chain = new Chain<int>(Chain { head: 1, next: none }) at r
     | keyword:hold  variable:chain  operator:=  keyword:new  type:Chain  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Chain  punctuation:{  field:head  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
 130 |     chain = new Chain<int>(Chain { head: 2, next: chain }) at r

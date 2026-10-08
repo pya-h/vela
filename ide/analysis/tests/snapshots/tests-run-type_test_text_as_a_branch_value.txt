@@ -2,8 +2,8 @@
     | comment:; Text a type test takes from an item may be what a when gives, inside the branch
   2 | ; that took it.
     | comment:; that took it.
-  3 | task f<P...: fixed & shown>(args: P...)
-    | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  3 | task f<P...: frozen & shown>(args: P...)
+    | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
   4 |     bind t = (args...) { <- }
     | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
   5 |     when t.#1 is maybe text {s}

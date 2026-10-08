@@ -1,0 +1,8 @@
+; error: 3:9: a tuple's items never change, so it can't hold 'T', which is any type here; require it, as in '<T: frozen>'
+task pair<T>(a: T) -> (T, int)
+    <- (a, 1)
+fi
+
+task main()
+    show(pair(1).1)
+fi

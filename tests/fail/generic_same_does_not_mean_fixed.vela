@@ -1,8 +1,0 @@
-; error: 3:9: a tuple's items never change, so it can't hold 'T', which is only 'same' here; require it too, as in '<T: same & fixed>'
-task pair<T: same>(a: T, b: T) -> (T, T)
-    <- (a, b)
-fi
-
-task main()
-    show(pair(1, 2) == (1, 2))
-fi

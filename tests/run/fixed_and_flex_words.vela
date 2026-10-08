@@ -1,0 +1,92 @@
+; Every form of the words for variables, written with their new spellings,
+; fixed and flex, which replace bind and hold.
+
+include std/loops {LoopResult}
+
+shape Counter
+    label: text
+    count: int
+    shared flex made: int = 0
+    alters step()
+        .count = .count + 1
+    fi
+fi
+
+; A flex parameter is the task's own copy; flex& is the caller's place, and
+; fixed& reads the caller's place where it is.
+task countdown(flex n: int, by: int) -> int
+    flex steps = 0
+    loop n > 0
+        n = n - by
+        steps = steps + 1
+    fi
+    <- steps
+fi
+
+task bump(flex& n: int)
+    n = n + 1
+fi
+
+task same(fixed& a: Counter, fixed& b: Counter) -> bool
+    <- a == b
+fi
+
+task copied(fixed c: Counter) -> int
+    <- c.count
+fi
+
+task twice(f: (flex& int) -> nothing, flex& v: int)
+    f(&v)
+    f(&v)
+fi
+
+task tick_twice(flex& f: [flex @r]() -> int) -> int
+    <- f() + f()
+fi
+
+task main()
+    region r
+    fixed start = 10
+    flex n = start
+    show(countdown(n, 3), " ", n)
+    bump(&n)
+    show(n)
+    fixed q, rest = 17 / 5, 17 % 5
+    fixed (a, b) = (q, rest)
+    show(a, " ", b)
+    flex& alias = &n
+    alias = alias * 2
+    fixed& seen = &n
+    show(n, " ", seen)
+    flex c = Counter { label: "c", count: 0 }
+    c.step()
+    show(copied(c), " ", same(&c, &c))
+    Counter.made = Counter.made + 1
+    show(Counter.made)
+    twice(bump, &n)
+    show(n)
+    fixed total: int ~ LoopResult = loop flex i = 0, sum = 0 || i < 4 || i++
+        sum += i
+        sum
+    fi
+    show(total { 0 })
+    fixed pair = ("ann", 3)
+    when pair is flex (name, age)
+        age = age + 1
+        show(name, " ", age)
+    fi
+    flex sum = 0
+    region s
+    fixed add = [flex& sum, fixed& start, @s](x: int) -> nothing
+        sum = sum + x + start
+    fi
+    add(1)
+    add(2)
+    show(sum)
+    flex seen_calls = 0
+    flex tick = [flex @r]() -> int
+        seen_calls = seen_calls + 1
+        <- seen_calls
+    fi
+    show(tick_twice(&tick), " ", seen_calls)
+fi

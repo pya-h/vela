@@ -47,7 +47,7 @@ fn check_agreement(source: &str, what: &str) {
         _ => None,
     });
     match (Lexer::new(source).tokenize(), first_error) {
-        (Ok((strict_tokens, strict_spans)), None) => {
+        (Ok((strict_tokens, strict_spans, _)), None) => {
             let tolerant: Vec<(Token, Span)> = tokens
                 .iter()
                 .filter_map(|t| match &t.kind {
@@ -211,8 +211,13 @@ fn ranges_are_bytes_and_positions_are_characters() {
 fn every_keyword_lexes_to_its_token() {
     for (word, keyword) in KEYWORDS {
         assert_eq!(kinds(word), [token(keyword.clone()), token(Token::Eof)], "{}", word);
-        assert_eq!(keyword.describe(), format!("'{}'", word));
+        // A token spelled two ways, as `bind` and `fixed` are while one replaces
+        // the other, is named by its first spelling in the list.
+        let first = KEYWORDS.iter().find(|(_, token)| token == keyword).map(|(first, _)| *first);
+        assert_eq!(keyword.describe(), format!("'{}'", first.unwrap_or(word)));
     }
+    assert_eq!(Token::Bind.describe(), "'fixed'");
+    assert_eq!(Token::Hold.describe(), "'flex'");
     // Longer words that start with a keyword are names.
     assert_eq!(kinds("fine"), [token(Token::Ident("fine".into())), token(Token::Eof)]);
 }

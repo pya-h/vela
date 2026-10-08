@@ -112,6 +112,8 @@ enum Slot {
 pub struct Parser {
     tokens: Vec<Token>,
     spans: Vec<Span>,
+    /// Where each token ends, just after its last character.
+    ends: Vec<Span>,
     pos: usize,
     /// Current nesting level; see `MAX_NESTING`.
     depth: usize,
@@ -146,9 +148,10 @@ pub struct Parser {
 const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside";
 
 impl Parser {
-    /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
-    pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
+    /// `tokens`, `spans` and `ends` are parallel, as produced by
+    /// `Lexer::tokenize`.
+    pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
     }
 
     /// Whether the file has a loop that gives a value (see `ValueLoop`).
@@ -1464,9 +1467,8 @@ impl Parser {
         self.advance();
         let by_place = if self.check(Token::Amp) {
             // `hold&` is one word: `hold &x` reads as the `&` of a call.
-            let amp = self.peek_span();
-            if amp.line != at.line || amp.col != at.col + word.len() {
-                return Err(Error::at(amp, format!("a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'", word)));
+            if !self.amp_against_word() {
+                return Err(Error::at(self.peek_span(), format!("a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'", word)));
             }
             self.advance();
             true
@@ -2011,9 +2013,8 @@ impl Parser {
         let at = self.peek_span();
         let word = if hold { "hold" } else { "bind" };
         self.advance();
-        let amp = self.peek_span();
         // `hold&` is one word, as in a header.
-        if !self.check(Token::Amp) || amp.line != at.line || amp.col != at.col + word.len() {
+        if !self.amp_against_word() {
             return Err(Error::at(
                 at,
                 format!("a task's type takes a value as its type alone, '(int) -> nothing', whether the task copies it or not; '{0}&', with '&' against '{0}', is the caller's place", word),
@@ -2340,9 +2341,8 @@ impl Parser {
     /// `hold`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
         let word = if immutable { "bind" } else { "hold" };
-        let at = self.peek_span();
         self.advance(); // bind / hold
-        let reference = self.match_reference(word, at)?;
+        let reference = self.match_reference(word)?;
         let span = self.peek_span();
         self.parse_binding_names(immutable, reference, span)
     }
@@ -2370,15 +2370,21 @@ impl Parser {
         Ok(Stmt::new(kind, span))
     }
 
+    /// Whether the `&` at the cursor is written against the word just read, as
+    /// in `hold&`: it starts where the word ends, whichever spelling the word
+    /// has (`flex&` and `fixed&` too).
+    fn amp_against_word(&self) -> bool {
+        self.check(Token::Amp) && self.pos.checked_sub(1).and_then(|word| self.ends.get(word)) == Some(&self.peek_span())
+    }
+
     /// The `&` of `hold&` or `bind&` before a binding's name, written against
-    /// the word at `at`, which makes the binding a reference.
-    fn match_reference(&mut self, word: &str, at: Span) -> Result<bool> {
+    /// the word just read, which makes the binding a reference.
+    fn match_reference(&mut self, word: &str) -> Result<bool> {
         if !self.check(Token::Amp) {
             return Ok(false);
         }
-        let amp = self.peek_span();
-        if amp.line != at.line || amp.col != at.col + word.len() {
-            return Err(Error::at(amp, format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
+        if !self.amp_against_word() {
+            return Err(Error::at(self.peek_span(), format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
         }
         self.advance();
         if self.check(Token::Amp) {
@@ -4451,7 +4457,7 @@ impl Parser {
 /// The words a generic type can be asked to allow, for a message, from what
 /// most types allow to what fewest do.
 fn needs_list() -> String {
-    let words: Vec<String> = [Need::Fixed, Need::Same, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
+    let words: Vec<String> = [Need::Frozen, Need::Same, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
 }
 
@@ -4463,14 +4469,14 @@ fn why_means(narrower: Need, wider: Need) -> String {
         Need::Shown => "a value that can be shown",
         Need::Same => "a value that can be compared",
         Need::Similar => "a value compared item by item",
-        Need::Fixed => "a value that never changes",
+        Need::Frozen => "a value that never changes",
     };
     let also = match wider {
         Need::Ordered => "has an order",
         Need::Shown => "can be shown",
         Need::Same => "can be compared",
         Need::Similar => "is compared item by item",
-        Need::Fixed => "never changes",
+        Need::Frozen => "never changes",
     };
     format!("{} {}", value, also)
 }

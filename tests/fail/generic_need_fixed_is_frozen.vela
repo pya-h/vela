@@ -1,0 +1,10 @@
+; error: 4:14: expected what the type must allow: 'frozen', 'same', 'shown', 'ordered'
+; A type that never changes is asked for with 'frozen'; 'fixed' is the word for a variable.
+
+task pair<T: fixed>(v: T) -> (T, T)
+    <- (v, v)
+fi
+
+task main()
+    show(pair(1))
+fi

@@ -16,8 +16,8 @@
     | field:value  punctuation::  type:T
  10 | fi
     | keyword:fi
- 12 | shape Pair<A: fixed, B: fixed>
-    | keyword:shape  type:Pair  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>
+ 12 | shape Pair<A: frozen, B: frozen>
+    | keyword:shape  type:Pair  punctuation:<  type:A  punctuation::  keyword:frozen  punctuation:,  type:B  punctuation::  keyword:frozen  punctuation:>
  13 |     left: A
     | field:left  punctuation::  type:A
  14 |     right: B
@@ -92,8 +92,8 @@
     | comment:; One region name for two shapes given different types: the one made for a type
  57 | ; that holds nothing in a region names none, and the region is dropped for it.
     | comment:; that holds nothing in a region names none, and the region is dropped for it.
- 58 | task swap<A: fixed, B: fixed>(a: Box<A>@r, b: Box<B>@r) -> (Box<B>@r, Box<A>@r)
-    | keyword:task  task:swap  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:,  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:)
+ 58 | task swap<A: frozen, B: frozen>(a: Box<A>@r, b: Box<B>@r) -> (Box<B>@r, Box<A>@r)
+    | keyword:task  task:swap  punctuation:<  type:A  punctuation::  keyword:frozen  punctuation:,  type:B  punctuation::  keyword:frozen  punctuation:>  punctuation:(  parameter:a  punctuation::  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:,  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:)
  59 |     <- (b, a)
     | keyword:<-  punctuation:(  parameter:b  punctuation:,  parameter:a  punctuation:)
  60 | fi

@@ -5,7 +5,7 @@ task log_all<P...: shown>(args: P...)
     show("log: ", args...)
 fi
 
-task traced<P...: shown & fixed, R>(next: (P...) -> R, args: P...) -> R
+task traced<P...: shown & frozen, R>(next: (P...) -> R, args: P...) -> R
     log_all(args...)
     bind t = (args...) { <- next(args...) }
     show("first is ", t.0, ", second ", t.#1, ", third ", t.#2)

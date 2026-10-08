@@ -136,10 +136,10 @@
     | builtin-fn:show  punctuation:(  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)  operator:==  variable:a  punctuation:,  string:" "  punctuation:,  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:mood  punctuation:)  operator:==  string:"{  operator:&  variable:mood  string:}"  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:mood  punctuation:)  operator:==  variable:a  punctuation:)
  78 |     ; Read only, and read in order beside a call.
     | comment:; Read only, and read in order beside a call.
- 79 |     bind& fixed = &p
-    | keyword:bind  keyword:&  variable:fixed  operator:=  operator:&  variable:p
- 80 |     show(read(r, &p).len > 6, " ", "{&fixed}" at r == a)
-    | builtin-fn:show  punctuation:(  task:read  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:.  field:len  operator:>  number:6  punctuation:,  string:" "  punctuation:,  string:"{  operator:&  variable:fixed  string:}"  keyword:at  region:r  operator:==  variable:a  punctuation:)
+ 79 |     bind& looked = &p
+    | keyword:bind  keyword:&  variable:looked  operator:=  operator:&  variable:p
+ 80 |     show(read(r, &p).len > 6, " ", "{&looked}" at r == a)
+    | builtin-fn:show  punctuation:(  task:read  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:.  field:len  operator:>  number:6  punctuation:,  string:" "  punctuation:,  string:"{  operator:&  variable:looked  string:}"  keyword:at  region:r  operator:==  variable:a  punctuation:)
  81 |     bind pair = [p, q]
     | keyword:bind  variable:pair  operator:=  punctuation:[  variable:p  punctuation:,  variable:q  punctuation:]
  82 |     show(&pair[zero()] == &pair[zero()], " ", &p == make(r), " ", &make(r)^ == &make(r)^)

@@ -1,0 +1,166 @@
+  1 | ; Every form of the words for variables, written with their new spellings,
+    | comment:; Every form of the words for variables, written with their new spellings,
+  2 | ; fixed and flex, which replace bind and hold.
+    | comment:; fixed and flex, which replace bind and hold.
+  4 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  6 | shape Counter
+    | keyword:shape  type:Counter
+  7 |     label: text
+    | field:label  punctuation::  type-builtin:text
+  8 |     count: int
+    | field:count  punctuation::  type-builtin:int
+  9 |     shared flex made: int = 0
+    | keyword:shared  keyword:flex  field:made  punctuation::  type-builtin:int  operator:=  number:0
+ 10 |     alters step()
+    | keyword:alters  method:step  punctuation:(  punctuation:)
+ 11 |         .count = .count + 1
+    | punctuation:.  field:count  operator:=  punctuation:.  field:count  operator:+  number:1
+ 12 |     fi
+    | keyword:fi
+ 13 | fi
+    | keyword:fi
+ 15 | ; A flex parameter is the task's own copy; flex& is the caller's place, and
+    | comment:; A flex parameter is the task's own copy; flex& is the caller's place, and
+ 16 | ; fixed& reads the caller's place where it is.
+    | comment:; fixed& reads the caller's place where it is.
+ 17 | task countdown(flex n: int, by: int) -> int
+    | keyword:task  task:countdown  punctuation:(  keyword:flex  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:by  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 18 |     flex steps = 0
+    | keyword:flex  variable:steps  operator:=  number:0
+ 19 |     loop n > 0
+    | keyword:loop  parameter:n  operator:>  number:0
+ 20 |         n = n - by
+    | parameter:n  operator:=  parameter:n  operator:-  parameter:by
+ 21 |         steps = steps + 1
+    | variable:steps  operator:=  variable:steps  operator:+  number:1
+ 22 |     fi
+    | keyword:fi
+ 23 |     <- steps
+    | keyword:<-  variable:steps
+ 24 | fi
+    | keyword:fi
+ 26 | task bump(flex& n: int)
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 27 |     n = n + 1
+    | parameter:n  operator:=  parameter:n  operator:+  number:1
+ 28 | fi
+    | keyword:fi
+ 30 | task same(fixed& a: Counter, fixed& b: Counter) -> bool
+    | keyword:task  task:same  punctuation:(  keyword:fixed  keyword:&  parameter:a  punctuation::  type:Counter  punctuation:,  keyword:fixed  keyword:&  parameter:b  punctuation::  type:Counter  punctuation:)  operator:->  type-builtin:bool
+ 31 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 32 | fi
+    | keyword:fi
+ 34 | task copied(fixed c: Counter) -> int
+    | keyword:task  task:copied  punctuation:(  keyword:fixed  parameter:c  punctuation::  type:Counter  punctuation:)  operator:->  type-builtin:int
+ 35 |     <- c.count
+    | keyword:<-  parameter:c  punctuation:.  field:count
+ 36 | fi
+    | keyword:fi
+ 38 | task twice(f: (flex& int) -> nothing, flex& v: int)
+    | keyword:task  task:twice  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:flex  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:flex  keyword:&  parameter:v  punctuation::  type-builtin:int  punctuation:)
+ 39 |     f(&v)
+    | parameter:f  punctuation:(  operator:&  parameter:v  punctuation:)
+ 40 |     f(&v)
+    | parameter:f  punctuation:(  operator:&  parameter:v  punctuation:)
+ 41 | fi
+    | keyword:fi
+ 43 | task tick_twice(flex& f: [flex @r]() -> int) -> int
+    | keyword:task  task:tick_twice  punctuation:(  keyword:flex  keyword:&  parameter:f  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 44 |     <- f() + f()
+    | keyword:<-  parameter:f  punctuation:(  punctuation:)  operator:+  parameter:f  punctuation:(  punctuation:)
+ 45 | fi
+    | keyword:fi
+ 47 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 48 |     region r
+    | keyword:region  region:r
+ 49 |     fixed start = 10
+    | keyword:fixed  variable:start  operator:=  number:10
+ 50 |     flex n = start
+    | keyword:flex  variable:n  operator:=  variable:start
+ 51 |     show(countdown(n, 3), " ", n)
+    | builtin-fn:show  punctuation:(  task:countdown  punctuation:(  variable:n  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
+ 52 |     bump(&n)
+    | task:bump  punctuation:(  operator:&  variable:n  punctuation:)
+ 53 |     show(n)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)
+ 54 |     fixed q, rest = 17 / 5, 17 % 5
+    | keyword:fixed  variable:q  punctuation:,  variable:rest  operator:=  number:17  operator:/  number:5  punctuation:,  number:17  operator:%  number:5
+ 55 |     fixed (a, b) = (q, rest)
+    | keyword:fixed  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:=  punctuation:(  variable:q  punctuation:,  variable:rest  punctuation:)
+ 56 |     show(a, " ", b)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:)
+ 57 |     flex& alias = &n
+    | keyword:flex  keyword:&  variable:alias  operator:=  operator:&  variable:n
+ 58 |     alias = alias * 2
+    | variable:alias  operator:=  variable:alias  operator:*  number:2
+ 59 |     fixed& seen = &n
+    | keyword:fixed  keyword:&  variable:seen  operator:=  operator:&  variable:n
+ 60 |     show(n, " ", seen)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:,  string:" "  punctuation:,  variable:seen  punctuation:)
+ 61 |     flex c = Counter { label: "c", count: 0 }
+    | keyword:flex  variable:c  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"c"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
+ 62 |     c.step()
+    | variable:c  punctuation:.  method:step  punctuation:(  punctuation:)
+ 63 |     show(copied(c), " ", same(&c, &c))
+    | builtin-fn:show  punctuation:(  task:copied  punctuation:(  variable:c  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  operator:&  variable:c  punctuation:,  operator:&  variable:c  punctuation:)  punctuation:)
+ 64 |     Counter.made = Counter.made + 1
+    | type:Counter  punctuation:.  field:made  operator:=  type:Counter  punctuation:.  field:made  operator:+  number:1
+ 65 |     show(Counter.made)
+    | builtin-fn:show  punctuation:(  type:Counter  punctuation:.  field:made  punctuation:)
+ 66 |     twice(bump, &n)
+    | task:twice  punctuation:(  task:bump  punctuation:,  operator:&  variable:n  punctuation:)
+ 67 |     show(n)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)
+ 68 |     fixed total: int ~ LoopResult = loop flex i = 0, sum = 0 || i < 4 || i++
+    | keyword:fixed  variable:total  punctuation::  type-builtin:int  operator:~  type:LoopResult  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  variable:sum  operator:=  number:0  operator:||  variable:i  operator:<  number:4  operator:||  variable:i  operator:++
+ 69 |         sum += i
+    | variable:sum  operator:+=  variable:i
+ 70 |         sum
+    | variable:sum
+ 71 |     fi
+    | keyword:fi
+ 72 |     show(total { 0 })
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:{  number:0  punctuation:}  punctuation:)
+ 73 |     fixed pair = ("ann", 3)
+    | keyword:fixed  variable:pair  operator:=  punctuation:(  string:"ann"  punctuation:,  number:3  punctuation:)
+ 74 |     when pair is flex (name, age)
+    | keyword:when  variable:pair  keyword:is  keyword:flex  punctuation:(  variable:name  punctuation:,  variable:age  punctuation:)
+ 75 |         age = age + 1
+    | variable:age  operator:=  variable:age  operator:+  number:1
+ 76 |         show(name, " ", age)
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:,  string:" "  punctuation:,  variable:age  punctuation:)
+ 77 |     fi
+    | keyword:fi
+ 78 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+ 79 |     region s
+    | keyword:region  region:s
+ 80 |     fixed add = [flex& sum, fixed& start, @s](x: int) -> nothing
+    | keyword:fixed  variable:add  operator:=  punctuation:[  keyword:flex  keyword:&  variable:sum  punctuation:,  keyword:fixed  keyword:&  variable:start  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+ 81 |         sum = sum + x + start
+    | variable:sum  operator:=  variable:sum  operator:+  parameter:x  operator:+  variable:start
+ 82 |     fi
+    | keyword:fi
+ 83 |     add(1)
+    | variable:add  punctuation:(  number:1  punctuation:)
+ 84 |     add(2)
+    | variable:add  punctuation:(  number:2  punctuation:)
+ 85 |     show(sum)
+    | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
+ 86 |     flex seen_calls = 0
+    | keyword:flex  variable:seen_calls  operator:=  number:0
+ 87 |     flex tick = [flex @r]() -> int
+    | keyword:flex  variable:tick  operator:=  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 88 |         seen_calls = seen_calls + 1
+    | variable:seen_calls  operator:=  variable:seen_calls  operator:+  number:1
+ 89 |         <- seen_calls
+    | keyword:<-  variable:seen_calls
+ 90 |     fi
+    | keyword:fi
+ 91 |     show(tick_twice(&tick), " ", seen_calls)
+    | builtin-fn:show  punctuation:(  task:tick_twice  punctuation:(  operator:&  variable:tick  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:seen_calls  punctuation:)
+ 92 | fi
+    | keyword:fi

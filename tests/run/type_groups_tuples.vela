@@ -5,7 +5,7 @@
 ; leaves it out there; `t.#k` reads an item in a maybe, none past the end.
 ; `each v in args` gives each value in turn, of its own type, `P`.
 
-task described<P...: fixed & shown>(args: P...)
+task described<P...: frozen & shown>(args: P...)
     bind t = (args...) {
         failure one
         when one is {v}
@@ -22,7 +22,7 @@ task described<P...: fixed & shown>(args: P...)
 fi
 
 ; The same tuple through `args.tuple`, read with `match`.
-task counted<P...: fixed>(args: P...) -> text
+task counted<P...: frozen>(args: P...) -> text
     match args.tuple
         case failure f
             when f is {v}

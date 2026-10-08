@@ -1,7 +1,7 @@
 ; error: 6:17: this is the tuple of a group's values, which holds as many items as each use gives, so no list of names fits it; read its items as 't.0', or as 't.#0', a maybe
 ; A group's tuple holds as many items as each use gives, so no list of names
 ; fits it.
-task f<P...: fixed & shown>(args: P...)
+task f<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     bind a, b = t
     show(a, b)

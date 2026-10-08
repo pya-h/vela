@@ -9,7 +9,7 @@ shape Box<T>
     value: T
 fi
 
-shape Pair<A: fixed, B: fixed>
+shape Pair<A: frozen, B: frozen>
     left: A
     right: B
 fi
@@ -55,7 +55,7 @@ fi
 
 ; One region name for two shapes given different types: the one made for a type
 ; that holds nothing in a region names none, and the region is dropped for it.
-task swap<A: fixed, B: fixed>(a: Box<A>@r, b: Box<B>@r) -> (Box<B>@r, Box<A>@r)
+task swap<A: frozen, B: frozen>(a: Box<A>@r, b: Box<B>@r) -> (Box<B>@r, Box<A>@r)
     <- (b, a)
 fi
 

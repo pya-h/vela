@@ -5,7 +5,7 @@ task tick(k: int) -> bool
     <- true
 fi
 
-task f<P...: fixed & shown>(args: P...)
+task f<P...: frozen & shown>(args: P...)
     bind t = (args...) { <- }
     when tick(1) and args.len > 5
         show("big")
