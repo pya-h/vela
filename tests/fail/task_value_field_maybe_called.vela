@@ -5,6 +5,6 @@ shape Hook
 fi
 
 task main()
-    bind h = Hook { run: none }
+    fixed h = Hook { run: none }
     show(h.run(1))
 fi

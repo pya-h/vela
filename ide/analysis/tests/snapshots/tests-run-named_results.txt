@@ -38,8 +38,8 @@
     | keyword:fi  comment:; reaching the end sends total
  23 | task collatz(start: int) -> steps: int, peak: int
     | keyword:task  task:collatz  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:steps  punctuation::  type-builtin:int  punctuation:,  variable:peak  punctuation::  type-builtin:int
- 24 |     hold n = start
-    | keyword:hold  variable:n  operator:=  parameter:start
+ 24 |     flex n = start
+    | keyword:flex  variable:n  operator:=  parameter:start
  25 |     steps, peak <- 0, start
     | variable:steps  punctuation:,  variable:peak  keyword:<-  number:0  punctuation:,  parameter:start
  26 |     loop n != 1
@@ -150,8 +150,8 @@
     | variable:sum  punctuation:,  variable:made  keyword:<-  number:0  punctuation:,  number:0
  84 |     each i in 0..n
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
- 85 |         bind node = new Node(Node { value: i * i, next: none }) at scratch
-    | keyword:bind  variable:node  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  operator:*  variable:i  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:scratch
+ 85 |         fixed node = new Node(Node { value: i * i, next: none }) at scratch
+    | keyword:fixed  variable:node  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  operator:*  variable:i  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:scratch
  86 |         sum, made <- sum + node^.value, made + 1
     | variable:sum  punctuation:,  variable:made  keyword:<-  variable:sum  operator:+  variable:node  operator:^  punctuation:.  field:value  punctuation:,  variable:made  operator:+  number:1
  87 |     fi
@@ -174,8 +174,8 @@
     | builtin-fn:show  punctuation:(  task:score  punctuation:(  number:10  punctuation:,  number:1  punctuation:)  punctuation:)
  98 |     show(score(1, 100))
     | builtin-fn:show  punctuation:(  task:score  punctuation:(  number:1  punctuation:,  number:100  punctuation:)  punctuation:)
-100 |     bind steps, peak = collatz(27)
-    | keyword:bind  variable:steps  punctuation:,  variable:peak  operator:=  task:collatz  punctuation:(  number:27  punctuation:)
+100 |     fixed steps, peak = collatz(27)
+    | keyword:fixed  variable:steps  punctuation:,  variable:peak  operator:=  task:collatz  punctuation:(  number:27  punctuation:)
 101 |     show(steps)
     | builtin-fn:show  punctuation:(  variable:steps  punctuation:)
 102 |     show(peak)
@@ -194,12 +194,12 @@
     | builtin-fn:show  punctuation:(  task:brightness  punctuation:(  variant:Dimmed  punctuation:(  number:42  punctuation:)  punctuation:)  punctuation:)
 112 |     region r
     | keyword:region  region:r
-113 |     bind list, count = build(r, 4)
-    | keyword:bind  variable:list  punctuation:,  variable:count  operator:=  task:build  punctuation:(  region:r  punctuation:,  number:4  punctuation:)
+113 |     fixed list, count = build(r, 4)
+    | keyword:fixed  variable:list  punctuation:,  variable:count  operator:=  task:build  punctuation:(  region:r  punctuation:,  number:4  punctuation:)
 114 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
-115 |     hold current = list
-    | keyword:hold  variable:current  operator:=  variable:list
+115 |     flex current = list
+    | keyword:flex  variable:current  operator:=  variable:list
 116 |     loop current is {node}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
 117 |         show(node^.value)
@@ -208,14 +208,14 @@
     | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
 119 |     fi
     | keyword:fi
-121 |     bind sum, made = summed(4)
-    | keyword:bind  variable:sum  punctuation:,  variable:made  operator:=  task:summed  punctuation:(  number:4  punctuation:)
+121 |     fixed sum, made = summed(4)
+    | keyword:fixed  variable:sum  punctuation:,  variable:made  operator:=  task:summed  punctuation:(  number:4  punctuation:)
 122 |     show(sum)
     | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
 123 |     show(made)
     | builtin-fn:show  punctuation:(  variable:made  punctuation:)
-124 |     bind again, _ = twice(4)
-    | keyword:bind  variable:again  punctuation:,  keyword:_  operator:=  task:twice  punctuation:(  number:4  punctuation:)
+124 |     fixed again, _ = twice(4)
+    | keyword:fixed  variable:again  punctuation:,  keyword:_  operator:=  task:twice  punctuation:(  number:4  punctuation:)
 125 |     show(again)
     | builtin-fn:show  punctuation:(  variable:again  punctuation:)
 126 | fi

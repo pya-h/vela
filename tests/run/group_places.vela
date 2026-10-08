@@ -7,7 +7,7 @@ fi
 
 task traced<P...: shown & frozen, R>(next: (P...) -> R, args: P...) -> R
     log_all(args...)
-    bind t = (args...) { <- next(args...) }
+    fixed t = (args...) { <- next(args...) }
     show("first is ", t.0, ", second ", t.#1, ", third ", t.#2)
     each v in args
         show("value ", v)
@@ -30,22 +30,22 @@ task register<P..., R>(f: (P...) -> R)
 fi
 
 $(traced)
-task both(hold& a: int, bind& b: int) -> int
+task both(flex& a: int, fixed& b: int) -> int
     a = a + b
     <- a
 fi
 
 $register
 $(counted)
-task put(hold& n: int)
+task put(flex& n: int)
     n = n * 10
 fi
 
 task main()
-    hold x = 1
-    hold y = 2
+    flex x = 1
+    flex y = 2
     show(both(&x, &y), " ", x, " ", y)
-    hold k = 3
+    flex k = 3
     put(&k)
     show(k)
     show(use(both, &k, &y), " ", k)

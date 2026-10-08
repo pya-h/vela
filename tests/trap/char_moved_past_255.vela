@@ -1,5 +1,5 @@
 ; trap: 260 does not fit in a char at 4:12 in task 'main'
 task main()
-    bind c = char(250)
+    fixed c = char(250)
     show(c + 10)
 fi

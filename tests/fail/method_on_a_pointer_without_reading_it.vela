@@ -9,6 +9,6 @@ fi
 
 task main()
     region r
-    bind p = new Point(Point { x: 1 }) at r
+    fixed p = new Point(Point { x: 1 }) at r
     show(p.twice())
 fi

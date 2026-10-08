@@ -11,7 +11,7 @@ const PROGRAM: &str = "\
 include std/loops {LoopResult}
 
 task main()
-    bind found = each x in 0..10
+    fixed found = each x in 0..10
         each y in 0..10
             when x * y == 12
                 break found = x
@@ -19,7 +19,7 @@ task main()
         fi
         x
     fi
-    bind sum: int ~ LoopResult = loop hold i = 0, s = 0 || i < 4 || i++
+    fixed sum: int ~ LoopResult = loop flex i = 0, s = 0 || i < 4 || i++
         s += i
         s
     fi

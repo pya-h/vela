@@ -12,8 +12,8 @@ task build(depth: int, seed: int, r: region) -> Tree@r
     when depth == 0
         <- Leaf(seed % 10)
     fi
-    bind left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
-    bind right = new@r Tree(build(depth - 1, seed * 7 + 2)@r)
+    fixed left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
+    fixed right = new@r Tree(build(depth - 1, seed * 7 + 2)@r)
     <- Branch(left, right)
 fi
 
@@ -37,10 +37,10 @@ fi
 
 task main()
     region kept
-    hold best: Tree@kept = Leaf(0)
+    flex best: Tree@kept = Leaf(0)
     each round in 0..5
         region pass                      ; empty again, and freed, on every pass
-        bind candidate = build(6, round) at pass
+        fixed candidate = build(6, round) at pass
         show(total(candidate))
         when total(candidate) > total(best)
             best = copy(candidate) at kept

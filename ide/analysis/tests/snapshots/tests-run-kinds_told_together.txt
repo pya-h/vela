@@ -128,28 +128,28 @@
     | builtin-fn:show  punctuation:(  string:"failed "  punctuation:,  variable:e  punctuation:)
  78 |     fi
     | keyword:fi
- 80 |     bind chosen: Either<int, text> = when true Either.Right("x") else Either.Left(1) fi
-    | keyword:bind  variable:chosen  punctuation::  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:when  keyword:true  type:Either  punctuation:.  variant:Right  punctuation:(  string:"x"  punctuation:)  keyword:else  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  keyword:fi
+ 80 |     fixed chosen: Either<int, text> = when true Either.Right("x") else Either.Left(1) fi
+    | keyword:fixed  variable:chosen  punctuation::  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:when  keyword:true  type:Either  punctuation:.  variant:Right  punctuation:(  string:"x"  punctuation:)  keyword:else  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  keyword:fi
  81 |     takes(when false Either.Right("y") else Either.Left(2) fi)
     | task:takes  punctuation:(  keyword:when  keyword:false  type:Either  punctuation:.  variant:Right  punctuation:(  string:"y"  punctuation:)  keyword:else  type:Either  punctuation:.  variant:Left  punctuation:(  number:2  punctuation:)  keyword:fi  punctuation:)
- 82 |     bind typed: [Either<int, text>#2] = [Either.Right("a"), Either.Left(1)]
-    | keyword:bind  variable:typed  punctuation::  punctuation:[  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  type:Either  punctuation:.  variant:Right  punctuation:(  string:"a"  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:]
- 83 |     bind both = [Either.Left(1), Either.Right("b")]
-    | keyword:bind  variable:both  operator:=  punctuation:[  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Right  punctuation:(  string:"b"  punctuation:)  punctuation:]
+ 82 |     fixed typed: [Either<int, text>#2] = [Either.Right("a"), Either.Left(1)]
+    | keyword:fixed  variable:typed  punctuation::  punctuation:[  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  type:Either  punctuation:.  variant:Right  punctuation:(  string:"a"  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:]
+ 83 |     fixed both = [Either.Left(1), Either.Right("b")]
+    | keyword:fixed  variable:both  operator:=  punctuation:[  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Right  punctuation:(  string:"b"  punctuation:)  punctuation:]
  84 |     show(chosen, " ", typed, " ", both, " ", swap(chosen))
     | builtin-fn:show  punctuation:(  variable:chosen  punctuation:,  string:" "  punctuation:,  variable:typed  punctuation:,  string:" "  punctuation:,  variable:both  punctuation:,  string:" "  punctuation:,  task:swap  punctuation:(  variable:chosen  punctuation:)  punctuation:)
  86 |     show(pair(r, "a", Option.Some("b")), " ", pair(r, 1, Option.None))
     | builtin-fn:show  punctuation:(  task:pair  punctuation:(  region:r  punctuation:,  string:"a"  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  string:"b"  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:pair  punctuation:(  region:r  punctuation:,  number:1  punctuation:,  type:Option  punctuation:.  variant:None  punctuation:)  punctuation:)
- 87 |     bind h = Holder { q: Quiet<int>.Silent, v: Option.None }
-    | keyword:bind  variable:h  operator:=  type:Holder  punctuation:{  field:q  punctuation::  type:Quiet  punctuation:<  type-builtin:int  punctuation:>  punctuation:.  variant:Silent  punctuation:,  field:v  punctuation::  type:Option  punctuation:.  variant:None  punctuation:}
- 88 |     bind g = Holder { v: Option.Some(1), q: Quiet.Silent }
-    | keyword:bind  variable:g  operator:=  type:Holder  punctuation:{  field:v  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:,  field:q  punctuation::  type:Quiet  punctuation:.  variant:Silent  punctuation:}
+ 87 |     fixed h = Holder { q: Quiet<int>.Silent, v: Option.None }
+    | keyword:fixed  variable:h  operator:=  type:Holder  punctuation:{  field:q  punctuation::  type:Quiet  punctuation:<  type-builtin:int  punctuation:>  punctuation:.  variant:Silent  punctuation:,  field:v  punctuation::  type:Option  punctuation:.  variant:None  punctuation:}
+ 88 |     fixed g = Holder { v: Option.Some(1), q: Quiet.Silent }
+    | keyword:fixed  variable:g  operator:=  type:Holder  punctuation:{  field:v  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:,  field:q  punctuation::  type:Quiet  punctuation:.  variant:Silent  punctuation:}
  89 |     show(h.v, " ", g.v, " ", holder(r, "z").v)
     | builtin-fn:show  punctuation:(  variable:h  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:g  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  task:holder  punctuation:(  region:r  punctuation:,  string:"z"  punctuation:)  punctuation:.  field:v  punctuation:)
  91 |     ; A task value is written with the kinds as they are written.
     | comment:; A task value is written with the kinds as they are written.
- 92 |     bind convert: (Option<int>) -> Option<bool> = positive_of
-    | keyword:bind  variable:convert  punctuation::  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:bool  punctuation:>  operator:=  task:positive_of
+ 92 |     fixed convert: (Option<int>) -> Option<bool> = positive_of
+    | keyword:fixed  variable:convert  punctuation::  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:bool  punctuation:>  operator:=  task:positive_of
  93 |     show(convert, " ", convert(Option.Some(5)))
     | builtin-fn:show  punctuation:(  variable:convert  punctuation:,  string:" "  punctuation:,  variable:convert  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  number:5  punctuation:)  punctuation:)  punctuation:)
  94 | fi

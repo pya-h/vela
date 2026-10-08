@@ -3,7 +3,7 @@
 ; Writes the task's name before it runs, and what it sends after.
 task traced<P..., R: shown>(next: (P...) -> R, label: text, args: P...) -> R
     show("> ", label)
-    bind result = next(args...)
+    fixed result = next(args...)
     show("< ", label, " ", result)
     <- result
 fi

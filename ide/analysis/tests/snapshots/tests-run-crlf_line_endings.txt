@@ -2,8 +2,8 @@
     | comment:; A source file with CRLF line endings.
   3 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  4 |     bind word = "crlf"
-    | keyword:bind  variable:word  operator:=  string:"crlf"
+  4 |     fixed word = "crlf"
+    | keyword:fixed  variable:word  operator:=  string:"crlf"
   5 |     show(word)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:)
   6 | fi

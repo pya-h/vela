@@ -64,10 +64,10 @@
     | keyword:fi
  38 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 39 |     bind a: maybe int = 5
-    | keyword:bind  variable:a  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:5
- 40 |     hold b: maybe int = none
-    | keyword:hold  variable:b  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 39 |     fixed a: maybe int = 5
+    | keyword:fixed  variable:a  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:5
+ 40 |     flex b: maybe int = none
+    | keyword:flex  variable:b  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  41 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
  42 |     show(b)
@@ -96,18 +96,18 @@
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:half  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:)
  55 |     show(describe(7))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  number:7  punctuation:)  punctuation:)
- 57 |     bind r = Reading { label: "temperature", value: 21.5 }
-    | keyword:bind  variable:r  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"temperature"  punctuation:,  field:value  punctuation::  number:21.5  punctuation:}
- 58 |     bind blank = Reading { label: "wind", value: none }
-    | keyword:bind  variable:blank  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"wind"  punctuation:,  field:value  punctuation::  keyword:none  punctuation:}
+ 57 |     fixed r = Reading { label: "temperature", value: 21.5 }
+    | keyword:fixed  variable:r  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"temperature"  punctuation:,  field:value  punctuation::  number:21.5  punctuation:}
+ 58 |     fixed blank = Reading { label: "wind", value: none }
+    | keyword:fixed  variable:blank  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"wind"  punctuation:,  field:value  punctuation::  keyword:none  punctuation:}
  59 |     show(r.value)
     | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:value  punctuation:)
  60 |     show(blank.value)
     | builtin-fn:show  punctuation:(  variable:blank  punctuation:.  field:value  punctuation:)
- 62 |     bind flag: maybe bool = true
-    | keyword:bind  variable:flag  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:true
- 63 |     bind word: maybe text = "hi"
-    | keyword:bind  variable:word  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"hi"
+ 62 |     fixed flag: maybe bool = true
+    | keyword:fixed  variable:flag  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:true
+ 63 |     fixed word: maybe text = "hi"
+    | keyword:fixed  variable:word  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"hi"
  64 |     show(flag)
     | builtin-fn:show  punctuation:(  variable:flag  punctuation:)
  65 |     show(word)
@@ -118,8 +118,8 @@
     | task:first_word  punctuation:(  keyword:none  punctuation:)
  69 |     region cells
     | keyword:region  region:cells
- 70 |     bind boxed = new maybe int(3) at cells
-    | keyword:bind  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:cells
+ 70 |     fixed boxed = new maybe int(3) at cells
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:cells
  71 |     show(boxed^)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
  72 |     boxed^ = none

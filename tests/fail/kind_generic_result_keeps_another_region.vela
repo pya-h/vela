@@ -9,10 +9,10 @@ task wrap<T: shown>(r: region, x: T) -> Option<T>@r
 fi
 task main()
     region outer
-    hold keep: Option<text>@outer = Option.None
+    flex keep: Option<text>@outer = Option.None
     block
         region s
-        bind t = "hello".copy() at s
+        fixed t = "hello".copy() at s
         keep = wrap(outer, t)
     fi
     show(keep)

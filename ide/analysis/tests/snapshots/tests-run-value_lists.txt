@@ -1,5 +1,5 @@
-  1 | ; Lists of names: types on some or all of them, `hold` from a call sending
-    | comment:; Lists of names: types on some or all of them, `hold` from a call sending
+  1 | ; Lists of names: types on some or all of them, `flex` from a call sending
+    | comment:; Lists of names: types on some or all of them, `flex` from a call sending
   2 | ; several results, and `_` dropping a result.
     | comment:; several results, and `_` dropping a result.
   4 | task divmod(a: int, b: int) -> int, int
@@ -18,20 +18,20 @@
     | keyword:fi
  13 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 14 |     bind x: int, y: float = 3, 0.5
-    | keyword:bind  variable:x  punctuation::  type-builtin:int  punctuation:,  variable:y  punctuation::  type-builtin:float  operator:=  number:3  punctuation:,  number:0.5
+ 14 |     fixed x: int, y: float = 3, 0.5
+    | keyword:fixed  variable:x  punctuation::  type-builtin:int  punctuation:,  variable:y  punctuation::  type-builtin:float  operator:=  number:3  punctuation:,  number:0.5
  15 |     show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
  16 |     show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
- 17 |     hold a, b = divmod(17, 5)
-    | keyword:hold  variable:a  punctuation:,  variable:b  operator:=  task:divmod  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
+ 17 |     flex a, b = divmod(17, 5)
+    | keyword:flex  variable:a  punctuation:,  variable:b  operator:=  task:divmod  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
  18 |     a = a + b
     | variable:a  operator:=  variable:a  operator:+  variable:b
  19 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
- 20 |     hold c: maybe int, d = none, 4
-    | keyword:hold  variable:c  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  variable:d  operator:=  keyword:none  punctuation:,  number:4
+ 20 |     flex c: maybe int, d = none, 4
+    | keyword:flex  variable:c  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  variable:d  operator:=  keyword:none  punctuation:,  number:4
  21 |     c = d
     | variable:c  operator:=  variable:d
  22 |     show(c)

@@ -18,12 +18,12 @@
     | keyword:fi
  13 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 14 |     bind x: maybe int = oddOrNone(2)
-    | keyword:bind  variable:x  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:2  punctuation:)
- 15 |     bind y: maybe int = itself(1)
-    | keyword:bind  variable:y  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:itself  punctuation:(  number:1  punctuation:)
- 16 |     bind z: int = oddOrNone(3) { 0 }
-    | keyword:bind  variable:z  punctuation::  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}
+ 14 |     fixed x: maybe int = oddOrNone(2)
+    | keyword:fixed  variable:x  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:2  punctuation:)
+ 15 |     fixed y: maybe int = itself(1)
+    | keyword:fixed  variable:y  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:itself  punctuation:(  number:1  punctuation:)
+ 16 |     fixed z: int = oddOrNone(3) { 0 }
+    | keyword:fixed  variable:z  punctuation::  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}
  17 |     show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
  18 |     show(y)

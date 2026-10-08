@@ -40,7 +40,7 @@ shape Node
     fi
 
     shared pair(r: region, a: int, b: int) -> Node@r
-        bind last = new Node(Node.single(r, b)) at r
+        fixed last = new Node(Node.single(r, b)) at r
         <- Node { value: a, next: last }
     fi
 fi
@@ -65,14 +65,14 @@ fi
 
 task main()
     region r
-    bind p = Point.new(1, 2)
+    fixed p = Point.new(1, 2)
     show(p, " ", Point.origin().moved(3), " ", Point.made, " ", Point.label(r, 4))
-    bind list = Node.pair(r, 1, 2)
-    bind second = list.next { <- }
+    fixed list = Node.pair(r, 1, 2)
+    fixed second = list.next { <- }
     show(list.value, " ", second^.value)
     show(Light.start(), " ", Light.start().next())
     ; Another module's, brought in by name and under another name.
-    bind cheap = Item.new("pen", -2)
-    bind dear = Item.new("lamp", 30)
+    fixed cheap = Item.new("pen", -2)
+    fixed dear = Item.new("lamp", 30)
     show(cheap.price, " ", Item.made, " ", Fit.of(dear.price), " ", Fit.of(cheap.price))
 fi

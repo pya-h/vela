@@ -1,6 +1,6 @@
 ; trap: division by zero at 5:12 in task 'main'
 task main()
-    bind b: unit = 9
-    bind z: unit = 0
+    fixed b: unit = 9
+    fixed z: unit = 0
     show(b / z)
 fi

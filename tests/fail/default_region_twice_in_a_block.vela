@@ -2,6 +2,6 @@
 task main()
     region first default
     region second default
-    bind p = new int(1)
+    fixed p = new int(1)
     show(p^)
 fi

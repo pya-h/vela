@@ -9,8 +9,8 @@ task first_copy<T>(r: region, bs: [Box<T>]@r) -> T
 fi
 task main()
     region q
-    bind s = "hi".copy() at q
-    hold bs = new [Box<text>]() at q
+    fixed s = "hi".copy() at q
+    flex bs = new [Box<text>]() at q
     bs.add(Box<text> { v: s })
     show(first_copy(q, bs))
 fi

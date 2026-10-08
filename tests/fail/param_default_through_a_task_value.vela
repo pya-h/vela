@@ -6,6 +6,6 @@ task pad(word: text, width: int = 8) -> int
 fi
 
 task main()
-    bind f = pad
+    fixed f = pad
     show(f("a"))
 fi

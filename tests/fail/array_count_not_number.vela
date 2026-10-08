@@ -1,5 +1,5 @@
-; error: 4:21: an array's count is a whole number, as in '[int#4]'
+; error: 4:22: an array's count is a whole number, as in '[int#4]'
 task main()
-    bind n = 3
-    bind days: [int#n] = [1, 2, 3]
+    fixed n = 3
+    fixed days: [int#n] = [1, 2, 3]
 fi

@@ -22,14 +22,14 @@
     | comment:; The line is made in a region of its own, freed when it is shown.
  14 |     region work default
     | keyword:region  region:work  keyword:default
- 15 |     bind units = cents / 100
-    | keyword:bind  variable:units  operator:=  parameter:cents  operator:/  number:100
- 16 |     bind part = cents % 100
-    | keyword:bind  variable:part  operator:=  parameter:cents  operator:%  number:100
- 17 |     bind price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
-    | keyword:bind  variable:price  operator:=  keyword:when  variable:part  operator:<  number:10  string:"{  variable:units  string:}.0{  variable:part  string:}"  keyword:else  string:"{  variable:units  string:}.{  variable:part  string:}"  keyword:fi
- 18 |     hold out: text@work = name
-    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  parameter:name
+ 15 |     fixed units = cents / 100
+    | keyword:fixed  variable:units  operator:=  parameter:cents  operator:/  number:100
+ 16 |     fixed part = cents % 100
+    | keyword:fixed  variable:part  operator:=  parameter:cents  operator:%  number:100
+ 17 |     fixed price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
+    | keyword:fixed  variable:price  operator:=  keyword:when  variable:part  operator:<  number:10  string:"{  variable:units  string:}.0{  variable:part  string:}"  keyword:else  string:"{  variable:units  string:}.{  variable:part  string:}"  keyword:fi
+ 18 |     flex out: text@work = name
+    | keyword:flex  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  parameter:name
  19 |     each i in 0..width - name.len - price.len
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:width  operator:-  parameter:name  punctuation:.  field:len  operator:-  variable:price  punctuation:.  field:len
  20 |         out = out + fill
@@ -46,8 +46,8 @@
     | keyword:task  task:rule  punctuation:(  parameter:width  punctuation::  type-builtin:int  operator:=  variant:WIDTH  punctuation:,  parameter:fill  punctuation::  type-builtin:text  operator:=  string:"-"  punctuation:)
  27 |     region work default
     | keyword:region  region:work  keyword:default
- 28 |     hold out: text@work = ""
-    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  string:""
+ 28 |     flex out: text@work = ""
+    | keyword:flex  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  string:""
  29 |     each i in 0..width
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:width
  30 |         out = out + fill
@@ -76,12 +76,12 @@
     | keyword:fi
  45 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 46 |     bind tea = priced(450)
-    | keyword:bind  variable:tea  operator:=  task:priced  punctuation:(  number:450  punctuation:)
- 47 |     bind bread = priced(320, sale)
-    | keyword:bind  variable:bread  operator:=  task:priced  punctuation:(  number:320  punctuation:,  task:sale  punctuation:)
- 48 |     bind jam = priced(1299)
-    | keyword:bind  variable:jam  operator:=  task:priced  punctuation:(  number:1299  punctuation:)
+ 46 |     fixed tea = priced(450)
+    | keyword:fixed  variable:tea  operator:=  task:priced  punctuation:(  number:450  punctuation:)
+ 47 |     fixed bread = priced(320, sale)
+    | keyword:fixed  variable:bread  operator:=  task:priced  punctuation:(  number:320  punctuation:,  task:sale  punctuation:)
+ 48 |     fixed jam = priced(1299)
+    | keyword:fixed  variable:jam  operator:=  task:priced  punctuation:(  number:1299  punctuation:)
  49 |     line("tea", tea)
     | task:line  punctuation:(  string:"tea"  punctuation:,  variable:tea  punctuation:)
  50 |     line("bread", bread)

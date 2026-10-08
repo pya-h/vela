@@ -12,9 +12,9 @@ fi
 task main()
     show(3.0 / 2.0)
     show(float(1) + 2.5)
-    bind x = float(1) + 2.5
+    fixed x = float(1) + 2.5
     show(x)
-    bind y = float(7) / 2.0
+    fixed y = float(7) / 2.0
     show(y)
     show(7 / 2)
     show(5.5 % 2.0)
@@ -25,11 +25,11 @@ task main()
     show(1000000000000000000000.0)
     show(-2.5 * float(2))
 
-    hold f = 0.0
+    flex f = 0.0
     f = f + float(1)
     show(f)
 
-    bind v = Vec1 { x: 2.0 }
+    fixed v = Vec1 { x: 2.0 }
     show(v.x * float(2))
     show(half(3))
 fi

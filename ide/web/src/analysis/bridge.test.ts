@@ -15,7 +15,7 @@ beforeAll(async () => {
 describe("VelaAnalysis", () => {
   it("highlights with offsets that are JavaScript string indices", () => {
     // 'é' is one UTF-16 unit and '𝄞' two; both are several UTF-8 bytes.
-    const source = 'task main()\n    show("é𝄞 ok")\n    bind total = 1\n    show(total)\nfi\n';
+    const source = 'task main()\n    show("é𝄞 ok")\n    fixed total = 1\n    show(total)\nfi\n';
     const { tokens, diagnostics } = analysis.file(source);
     expect(diagnostics).toEqual([]);
     const variables = tokens.filter((t) => t.class === "variable").map((t) => source.slice(t.from, t.to));
@@ -24,14 +24,14 @@ describe("VelaAnalysis", () => {
   });
 
   it("reports a warning with its severity, in a file that builds", () => {
-    const source = "shape Point\n    x: int\nfi\n\ntask same(a: Point, b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    bind p = Point { x: 1 }\n    show(same(p, p))\nfi\n";
+    const source = "shape Point\n    x: int\nfi\n\ntask same(a: Point, b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    fixed p = Point { x: 1 }\n    show(same(p, p))\nfi\n";
     const { diagnostics } = analysis.file(source);
     expect(diagnostics.map((d) => [d.severity, d.line, d.col])).toEqual([
       ["warning", 6, 8],
       ["warning", 6, 13],
     ]);
     expect(diagnostics[0]?.message).toContain("given as the compiler chose");
-    expect(analysis.file(source.replace("same(a: Point", "same(bind& a: Point").replace("b: Point)", "bind& b: Point)").replace("same(p, p)", "same(&p, &p)")).diagnostics).toEqual([]);
+    expect(analysis.file(source.replace("same(a: Point", "same(fixed& a: Point").replace("b: Point)", "bind& b: Point)").replace("same(p, p)", "same(&p, &p)")).diagnostics).toEqual([]);
   });
 
   it("analyzes text holding a lone surrogate, with offsets unchanged", () => {
@@ -53,7 +53,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("reports every mistake in the file, each at its own place", () => {
-    const source = "task main()\n    show(first)\n    bind ok = 1\n    show(second)\n    show(ok)\nfi\n";
+    const source = "task main()\n    show(first)\n    fixed ok = 1\n    show(second)\n    show(ok)\nfi\n";
     const { diagnostics } = analysis.file(source);
     expect(diagnostics).toMatchObject([
       { from: source.indexOf("first"), line: 2, message: "unknown variable 'first'" },
@@ -105,7 +105,7 @@ describe("VelaAnalysis", () => {
     const bad = analysis.file(source, { path: "app/main.vela", modules: {} });
     expect(bad.diagnostics[0]?.message).toBe("a module included with only its parts ('{…}') has no name in this file, so it can't be given one with '=>'");
 
-    const main = "include shapes/geometry {Figure => Shape, area}\n\ntask main()\n    show(area(Shape.Square(2)))\n    bind n: int = Shape.Square(1)\nfi\n";
+    const main = "include shapes/geometry {Figure => Shape, area}\n\ntask main()\n    show(area(Shape.Square(2)))\n    fixed n: int = Shape.Square(1)\nfi\n";
     const geometry = "kind Figure\n    Square(side: int)\nfi\n\ntask area(figure: Figure) -> int\n    <- 1\nfi\n";
     const context = { path: "app/main.vela", modules: { "app/shapes/geometry.vela": geometry } };
     const { tokens, diagnostics } = analysis.file(main, context);
@@ -137,7 +137,7 @@ describe("VelaAnalysis", () => {
 
   it("reads the types a task takes: highlighting, outline, hover, and completion", () => {
     const source =
-      "task first<T: ordered>(xs: [T]@r) -> maybe T\n    each v in xs\n        <- v\n    fi\n    <- none\nfi\n\ntask main()\n    region r\n    bind ns: [int]@r = new [int]([2, 3]) at r\n    show(first<int>(ns))\nfi\n";
+      "task first<T: ordered>(xs: [T]@r) -> maybe T\n    each v in xs\n        <- v\n    fi\n    <- none\nfi\n\ntask main()\n    region r\n    fixed ns: [int]@r = new [int]([2, 3]) at r\n    show(first<int>(ns))\nfi\n";
     const { tokens, diagnostics, outline } = analysis.file(source);
     expect(diagnostics).toEqual([]);
     // The type is a type wherever it is written, and the word is the language's.
@@ -160,7 +160,7 @@ describe("VelaAnalysis", () => {
 
   it("reads a shape that takes types: highlighting, outline, hover, and completion", () => {
     const source =
-      "shape Box<T: frozen>\n    value: T\nfi\n\ntask main()\n    region r\n    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    bind count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";
+      "shape Box<T: frozen>\n    value: T\nfi\n\ntask main()\n    region r\n    fixed kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    fixed count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";
     const { tokens, diagnostics, outline } = analysis.file(source);
     expect(diagnostics).toEqual([]);
     expect(tokens.find((t) => t.from === source.indexOf("text>@r"))?.class).toBe("type-builtin");
@@ -181,7 +181,7 @@ describe("VelaAnalysis", () => {
 
   it("reads methods: highlighting, outline, hover, and completion after a dot", () => {
     const source =
-      "shape Counter\n    count: int\n\n    total() -> int\n        <- .count\n    fi\n\n    alters step(by: int)\n        .count = .count + by\n    fi\nfi\n\ntask main()\n    hold c = Counter { count: 0 }\n    c.step(2)\n    show(c.total())\nfi\n";
+      "shape Counter\n    count: int\n\n    total() -> int\n        <- .count\n    fi\n\n    alters step(by: int)\n        .count = .count + by\n    fi\nfi\n\ntask main()\n    flex c = Counter { count: 0 }\n    c.step(2)\n    show(c.total())\nfi\n";
     const { tokens, diagnostics, outline } = analysis.file(source);
     expect(diagnostics).toEqual([]);
     const classAt = (needle: string) => tokens.find((t) => t.from === source.indexOf(needle))?.class;
@@ -217,7 +217,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("reports diagnostics, completions, hovers, and definitions", () => {
-    const source = "task main()\n    bind count = 1\n    show(count)\n    show(missing)\nfi\n";
+    const source = "task main()\n    fixed count = 1\n    show(count)\n    show(missing)\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;
     expect(diagnostic?.message).toBe("unknown variable 'missing'");
     expect(source.slice(diagnostic?.from, diagnostic?.to)).toBe("missing");
@@ -234,7 +234,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("completes and describes the changes a slice has", () => {
-    const source = "task main()\n    region r\n    hold names = new [text]() at r\n    names.add(\"a\")\n    bind last = names.del()\n    show(last)\n    names.\nfi\n";
+    const source = "task main()\n    region r\n    flex names = new [text]() at r\n    names.add(\"a\")\n    fixed last = names.del()\n    show(last)\n    names.\nfi\n";
     const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
     expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["str", "str() at ${r}"], ["copy", "copy()"], ["type", undefined]]);
     expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("bind last: text@r");
@@ -242,7 +242,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("describes scan and the line it reads", () => {
-    const source = "task main()\n    region lines\n    bind name = scan(\"Name: \") at lines { \"nobody\" }\n    show(name)\nfi\n";
+    const source = "task main()\n    region lines\n    fixed name = scan(\"Name: \") at lines { \"nobody\" }\n    show(name)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("bind name: text@lines");
     expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe(
@@ -251,21 +251,21 @@ describe("VelaAnalysis", () => {
   });
 
   it("describes a number read from input", () => {
-    const source = "task main()\n    bind age = scan(\"Age: \", int)\n    show(age { 0 })\nfi\n";
+    const source = "task main()\n    fixed age = scan(\"Age: \", int)\n    show(age { 0 })\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int ~ InputError");
     expect(analysis.hover(source, source.indexOf("int)"))?.code).toBe("int");
   });
 
   it("describes a copy into a region", () => {
-    const source = "task main()\n    region kept\n    region work\n    bind line = scan(\"\") at work { \"\" }\n    hold place: text@kept = \"\"\n    place = line.copy()\n    bind short = line.copy()@kept\n    show(place)\nfi\n";
+    const source = "task main()\n    region kept\n    region work\n    fixed line = scan(\"\") at work { \"\" }\n    flex place: text@kept = \"\"\n    place = line.copy()\n    fixed short = line.copy()@kept\n    show(place)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("short ="))?.code).toBe("bind short: text@kept");
     expect(analysis.hover(source, source.indexOf("copy()"))?.code).toBe("copy() at r or copy()@r");
   });
 
   it("describes tuples, their items, and the names taking them apart", () => {
-    const source = "task main()\n    bind pair = (\"Ada\", 36)\n    bind name, age = pair\n    show(pair.1 + age)\n    show(name)\nfi\n";
+    const source = "task main()\n    fixed pair = (\"Ada\", 36)\n    fixed name, age = pair\n    show(pair.1 + age)\n    show(name)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("pair ="))?.code).toBe("bind pair: (text, int)");
     expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int");
@@ -273,7 +273,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("describes the names a pattern takes from a tuple", () => {
-    const source = "task main()\n    hold found: maybe (text, int) = none\n    when found is {(who, hold years)}\n        years = years + 1\n        show(who)\n        show(years)\n    fi\nfi\n";
+    const source = "task main()\n    flex found: maybe (text, int) = none\n    when found is {(who, flex years)}\n        years = years + 1\n        show(who)\n        show(years)\n    fi\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("who,"))?.code).toBe("who: text");
     expect(analysis.hover(source, source.indexOf("years)}"))?.code).toBe("hold years: int");
@@ -283,10 +283,10 @@ describe("VelaAnalysis", () => {
     // The compiler stops at its nesting limit, well inside the module's stack.
     const deep = 20_000;
     const sources = [
-      `task main()\n    bind a = ${"[".repeat(deep)}1${"]".repeat(deep)}\n    show(a)\nfi\n`,
+      `task main()\n    fixed a = ${"[".repeat(deep)}1${"]".repeat(deep)}\n    show(a)\nfi\n`,
       `task main()\n    show(${"(".repeat(deep)}1${")".repeat(deep)})\nfi\n`,
       `task f(a: ${"[".repeat(deep)}int${"; 2]".repeat(deep)})\nfi\n`,
-      `task main()\n    bind a: ${"[".repeat(deep)}int${"]".repeat(deep)}@r = 1\nfi\n`,
+      `task main()\n    fixed a: ${"[".repeat(deep)}int${"]".repeat(deep)}@r = 1\nfi\n`,
     ];
     for (const source of sources) {
       expect(analysis.file(source).diagnostics[0]?.message).toContain("nested too deeply");

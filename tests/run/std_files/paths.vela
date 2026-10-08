@@ -4,6 +4,6 @@
 include std/files
 
 task readable(path: text@p) -> bool
-    bind file = files.File { path: path }
+    fixed file = files.File { path: path }
     <- file.exists()
 fi

@@ -1,7 +1,7 @@
-; error: 5:10: 'e' is already the name of a macro this file includes
+; error: 5:11: 'e' is already the name of a macro this file includes
 include std/math (e)
 
 task main()
-    bind e = 2
+    fixed e = 2
     show(e)
 fi

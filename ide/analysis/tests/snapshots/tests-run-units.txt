@@ -12,20 +12,20 @@
     | keyword:fi
   8 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  9 |     hold b: unit = 200
-    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  number:200
+  9 |     flex b: unit = 200
+    | keyword:flex  variable:b  punctuation::  type-builtin:unit  operator:=  number:200
  10 |     b = b + 55
     | variable:b  operator:=  variable:b  operator:+  number:55
  11 |     show(b)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:)
  12 |     show(twice(100))
     | builtin-fn:show  punctuation:(  task:twice  punctuation:(  number:100  punctuation:)  punctuation:)
- 13 |     bind m: maybe unit = 7
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:unit  operator:=  number:7
+ 13 |     fixed m: maybe unit = 7
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:unit  operator:=  number:7
  14 |     show(m, " ", m ~= 7)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  variable:m  operator:~=  number:7  punctuation:)
- 15 |     bind xs: [unit#3] = [1, 2, 3]
-    | keyword:bind  variable:xs  punctuation::  punctuation:[  type-builtin:unit  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 15 |     fixed xs: [unit#3] = [1, 2, 3]
+    | keyword:fixed  variable:xs  punctuation::  punctuation:[  type-builtin:unit  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  16 |     show(xs, " ", xs ~= [1, 2, 3])
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:xs  operator:~=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
  17 |     ; Conversions: to an int or a float always, to a unit when it fits.

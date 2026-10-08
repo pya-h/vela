@@ -4,16 +4,16 @@
     | comment:; loop condition, and not at all when `and` doesn't need its value.
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  5 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
-  6 |     bind m: maybe int = none
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+  5 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+  6 |     fixed m: maybe int = none
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
   7 |     loop m {
     | keyword:loop  variable:m  punctuation:{
   8 |         region r
     | keyword:region  region:r
-  9 |         bind p = new int(count) at r
-    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:count  punctuation:)  keyword:at  region:r
+  9 |         fixed p = new int(count) at r
+    | keyword:fixed  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:count  punctuation:)  keyword:at  region:r
  10 |         p^
     | variable:p  operator:^
  11 |     } < 3
@@ -24,14 +24,14 @@
     | keyword:fi
  14 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
- 16 |     bind b: maybe bool = none
-    | keyword:bind  variable:b  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:none
+ 16 |     fixed b: maybe bool = none
+    | keyword:fixed  variable:b  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:none
  17 |     show(false and b {
     | builtin-fn:show  punctuation:(  keyword:false  keyword:and  variable:b  punctuation:{
  18 |         region unused
     | keyword:region  region:unused
- 19 |         bind flag = new bool(true) at unused
-    | keyword:bind  variable:flag  operator:=  keyword:new  type-builtin:bool  punctuation:(  keyword:true  punctuation:)  keyword:at  region:unused
+ 19 |         fixed flag = new bool(true) at unused
+    | keyword:fixed  variable:flag  operator:=  keyword:new  type-builtin:bool  punctuation:(  keyword:true  punctuation:)  keyword:at  region:unused
  20 |         show("not shown")
     | builtin-fn:show  punctuation:(  string:"not shown"  punctuation:)
  21 |         flag^

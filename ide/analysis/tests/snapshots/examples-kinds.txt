@@ -78,20 +78,20 @@
     | keyword:fi
  46 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 47 |     bind c = Circle(5.0)
-    | keyword:bind  variable:c  operator:=  variant:Circle  punctuation:(  number:5.0  punctuation:)
+ 47 |     fixed c = Circle(5.0)
+    | keyword:fixed  variable:c  operator:=  variant:Circle  punctuation:(  number:5.0  punctuation:)
  48 |     show(c, " covers ", c.area())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:,  string:" covers "  punctuation:,  variable:c  punctuation:.  method:area  punctuation:(  punctuation:)  punctuation:)
- 50 |     ; Only a `hold` value can change.
-    | comment:; Only a `hold` value can change.
- 51 |     hold rect = Rectangle(3.0, 4.0)
-    | keyword:hold  variable:rect  operator:=  variant:Rectangle  punctuation:(  number:3.0  punctuation:,  number:4.0  punctuation:)
+ 50 |     ; Only a `flex` value can change.
+    | comment:; Only a `flex` value can change.
+ 51 |     flex rect = Rectangle(3.0, 4.0)
+    | keyword:flex  variable:rect  operator:=  variant:Rectangle  punctuation:(  number:3.0  punctuation:,  number:4.0  punctuation:)
  52 |     rect.grow()
     | variable:rect  punctuation:.  method:grow  punctuation:(  punctuation:)
  53 |     show(rect, " covers ", rect.area())
     | builtin-fn:show  punctuation:(  variable:rect  punctuation:,  string:" covers "  punctuation:,  variable:rect  punctuation:.  method:area  punctuation:(  punctuation:)  punctuation:)
- 55 |     hold d = Dot
-    | keyword:hold  variable:d  operator:=  variant:Dot
+ 55 |     flex d = Dot
+    | keyword:flex  variable:d  operator:=  variant:Dot
  56 |     show(d)
     | builtin-fn:show  punctuation:(  variable:d  punctuation:)
  57 |     d.grow()

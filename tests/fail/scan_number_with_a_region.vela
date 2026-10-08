@@ -1,5 +1,5 @@
-; error: 4:38: a number needs no memory, so 'scan' reading one names no region: write 'scan("Age: ", int)'
+; error: 4:39: a number needs no memory, so 'scan' reading one names no region: write 'scan("Age: ", int)'
 task main()
     region r
-    bind age = scan("Age: ", int) at r
+    fixed age = scan("Age: ", int) at r
 fi

@@ -4,6 +4,6 @@ task apply(f: [@r](int) -> int, x: int) -> int
     <- f(x)
 fi
 task main()
-    bind plain = (x: int) -> int <- x - 1 fi
+    fixed plain = (x: int) -> int <- x - 1 fi
     show(apply(plain, 10))
 fi

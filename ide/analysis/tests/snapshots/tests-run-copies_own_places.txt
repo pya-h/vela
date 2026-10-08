@@ -20,40 +20,40 @@
     | field:c  punctuation::  type-builtin:int
  11 |     d: int
     | field:d  punctuation::  type-builtin:int
- 13 |     same(bind& o: Mid) -> bool
-    | method:same  punctuation:(  keyword:bind  keyword:&  parameter:o  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
+ 13 |     same(fixed& o: Mid) -> bool
+    | method:same  punctuation:(  keyword:fixed  keyword:&  parameter:o  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
  14 |         <- &.this == &o
     | keyword:<-  operator:&  punctuation:.  keyword:this  operator:==  operator:&  parameter:o
  15 |     fi
     | keyword:fi
  16 | fi
     | keyword:fi
- 18 | task plain(a: Mid, bind& b: Mid) -> bool
-    | keyword:task  task:plain  punctuation:(  parameter:a  punctuation::  type:Mid  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
+ 18 | task plain(a: Mid, fixed& b: Mid) -> bool
+    | keyword:task  task:plain  punctuation:(  parameter:a  punctuation::  type:Mid  punctuation:,  keyword:fixed  keyword:&  parameter:b  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
  19 |     <- &a == &b
     | keyword:<-  operator:&  parameter:a  operator:==  operator:&  parameter:b
  20 | fi
     | keyword:fi
- 22 | task pair(p: (int, int), bind& q: (int, int)) -> bool
-    | keyword:task  task:pair  punctuation:(  parameter:p  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:,  keyword:bind  keyword:&  parameter:q  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:bool
+ 22 | task pair(p: (int, int), fixed& q: (int, int)) -> bool
+    | keyword:task  task:pair  punctuation:(  parameter:p  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:,  keyword:fixed  keyword:&  parameter:q  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:bool
  23 |     <- &p == &q
     | keyword:<-  operator:&  parameter:p  operator:==  operator:&  parameter:q
  24 | fi
     | keyword:fi
  26 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 27 |     hold w = Mid { a: 1, b: 2, c: 3, d: 4 }
-    | keyword:hold  variable:w  operator:=  type:Mid  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:}
+ 27 |     flex w = Mid { a: 1, b: 2, c: 3, d: 4 }
+    | keyword:flex  variable:w  operator:=  type:Mid  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:}
  28 |     show(plain(w, &w))
     | builtin-fn:show  punctuation:(  task:plain  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:)
  29 |     show(w.same(&w))
     | builtin-fn:show  punctuation:(  variable:w  punctuation:.  method:same  punctuation:(  operator:&  variable:w  punctuation:)  punctuation:)
- 30 |     hold t = (1, 2)
-    | keyword:hold  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 30 |     flex t = (1, 2)
+    | keyword:flex  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
  31 |     show(pair(t, &t))
     | builtin-fn:show  punctuation:(  task:pair  punctuation:(  variable:t  punctuation:,  operator:&  variable:t  punctuation:)  punctuation:)
- 32 |     bind& v = &w
-    | keyword:bind  keyword:&  variable:v  operator:=  operator:&  variable:w
+ 32 |     fixed& v = &w
+    | keyword:fixed  keyword:&  variable:v  operator:=  operator:&  variable:w
  33 |     show(&v == &w)
     | builtin-fn:show  punctuation:(  operator:&  variable:v  operator:==  operator:&  variable:w  punctuation:)
  34 | fi

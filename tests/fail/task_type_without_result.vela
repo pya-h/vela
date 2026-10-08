@@ -1,5 +1,5 @@
 ; error: 4:19: a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'
 ; A task type names what it sends after its arrow.
 task main()
-    hold f: () -> = none
+    flex f: () -> = none
 fi

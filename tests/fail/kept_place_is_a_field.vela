@@ -1,10 +1,10 @@
-; error: 9:21: a lambda keeps a variable as a place, not a field or an item of one; keep the variable, 'hold& p'
+; error: 9:22: a lambda keeps a variable as a place, not a field or an item of one; keep the variable, 'hold& p'
 ; A lambda keeps a variable as a place, never a field or an item of one.
 shape P
     x: int
 fi
 task main()
-    hold p = P { x: 1 }
+    flex p = P { x: 1 }
     region r
-    bind f = [hold& p.x, @r]() -> nothing show(1) fi
+    fixed f = [flex& p.x, @r]() -> nothing show(1) fi
 fi

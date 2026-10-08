@@ -2,12 +2,12 @@
 shape Tally
     count: int = 0
 
-    alters add_into(hold& total: int)
+    alters add_into(flex& total: int)
         total = total + .count
         .count = 0
     fi
 fi
 
-task double(hold& n: int)
+task double(flex& n: int)
     n = n * 2
 fi

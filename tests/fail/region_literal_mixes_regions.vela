@@ -1,4 +1,4 @@
-; error: 10:28: expected type Node@b, got Node@a; a value can't move to another region: what it holds in region 'a' is never stored in region 'b'
+; error: 10:29: expected type Node@b, got Node@a; a value can't move to another region: what it holds in region 'a' is never stored in region 'b'
 shape Node
     value: int
     next: maybe ^Node
@@ -6,6 +6,6 @@ fi
 task main()
     region a
     region b
-    bind first = new Node(Node { value: 1, next: none }) at a
-    bind second = new Node(Node { value: 2, next: first }) at b
+    fixed first = new Node(Node { value: 1, next: none }) at a
+    fixed second = new Node(Node { value: 2, next: first }) at b
 fi

@@ -1,10 +1,10 @@
-; error: 16:14: a region is given as it is, so a task's type writes it '@r' alone, never as a place
+; error: 16:15: a region is given as it is, so a task's type writes it '@r' alone, never as a place
 ; A region is given as it is, never as a place.
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 
-task both(hold& a: int, bind& b: int)
+task both(flex& a: int, fixed& b: int)
     a = b
 fi
 
@@ -13,5 +13,5 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 task main()
-    bind f: (hold& @r) -> int = squares
+    fixed f: (flex& @r) -> int = squares
 fi

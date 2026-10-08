@@ -10,6 +10,6 @@ fi
 
 task main()
     region r
-    bind w = "a" + "b" at r
+    fixed w = "a" + "b" at r
     show(on(shout, w))
 fi

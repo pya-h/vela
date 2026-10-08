@@ -1,11 +1,11 @@
-  1 | ; A [hold @r] lambda changes its copies, so it is never copied: it is held in a
-    | comment:; A [hold @r] lambda changes its copies, so it is never copied: it is held in a
-  2 | ; hold variable, given as a place to a hold& parameter, or named by a reference,
-    | comment:; hold variable, given as a place to a hold& parameter, or named by a reference,
+  1 | ; A [flex @r] lambda changes its copies, so it is never copied: it is held in a
+    | comment:; A [flex @r] lambda changes its copies, so it is never copied: it is held in a
+  2 | ; flex variable, given as a place to a flex& parameter, or named by a reference,
+    | comment:; flex variable, given as a place to a flex& parameter, or named by a reference,
   3 | ; and every call through any of them changes the same copies.
     | comment:; and every call through any of them changes the same copies.
-  4 | task twice(hold& f: [hold @r]() -> int) -> int
-    | keyword:task  task:twice  punctuation:(  keyword:hold  keyword:&  parameter:f  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  4 | task twice(flex& f: [flex @r]() -> int) -> int
+    | keyword:task  task:twice  punctuation:(  keyword:flex  keyword:&  parameter:f  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   5 |     <- f() + f()
     | keyword:<-  parameter:f  punctuation:(  punctuation:)  operator:+  parameter:f  punctuation:(  punctuation:)
   6 | fi
@@ -14,10 +14,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   9 |     region r
     | keyword:region  region:r
- 10 |     hold seen = 0
-    | keyword:hold  variable:seen  operator:=  number:0
- 11 |     hold tick = [hold @r]() -> int
-    | keyword:hold  variable:tick  operator:=  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 10 |     flex seen = 0
+    | keyword:flex  variable:seen  operator:=  number:0
+ 11 |     flex tick = [flex @r]() -> int
+    | keyword:flex  variable:tick  operator:=  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
  12 |         seen = seen + 1
     | variable:seen  operator:=  variable:seen  operator:+  number:1
  13 |         <- seen
@@ -26,24 +26,24 @@
     | keyword:fi
  15 |     show(twice(&tick), " ", tick())
     | builtin-fn:show  punctuation:(  task:twice  punctuation:(  operator:&  variable:tick  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:tick  punctuation:(  punctuation:)  punctuation:)
- 16 |     hold& again = &tick
-    | keyword:hold  keyword:&  variable:again  operator:=  operator:&  variable:tick
+ 16 |     flex& again = &tick
+    | keyword:flex  keyword:&  variable:again  operator:=  operator:&  variable:tick
  17 |     show(again(), " ", tick(), " ", seen)
     | builtin-fn:show  punctuation:(  variable:again  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:tick  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:seen  punctuation:)
  18 |     ; A lambda that only reads what it keeps goes where one that changes it is expected.
     | comment:; A lambda that only reads what it keeps goes where one that changes it is expected.
- 19 |     bind four = [@r]() -> int <- 4 fi
-    | keyword:bind  variable:four  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  number:4  keyword:fi
- 20 |     hold held: [hold @r]() -> int = four
-    | keyword:hold  variable:held  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  variable:four
+ 19 |     fixed four = [@r]() -> int <- 4 fi
+    | keyword:fixed  variable:four  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  number:4  keyword:fi
+ 20 |     flex held: [flex @r]() -> int = four
+    | keyword:flex  variable:held  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  variable:four
  21 |     show(twice(&held))
     | builtin-fn:show  punctuation:(  task:twice  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:)
  22 |     ; Another lambda may keep it as a place, which it calls where it is.
     | comment:; Another lambda may keep it as a place, which it calls where it is.
  23 |     region s
     | keyword:region  region:s
- 24 |     bind more = [hold& tick, @s]() -> int <- tick() + tick() fi
-    | keyword:bind  variable:more  operator:=  punctuation:[  keyword:hold  keyword:&  variable:tick  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:tick  punctuation:(  punctuation:)  operator:+  variable:tick  punctuation:(  punctuation:)  keyword:fi
+ 24 |     fixed more = [flex& tick, @s]() -> int <- tick() + tick() fi
+    | keyword:fixed  variable:more  operator:=  punctuation:[  keyword:flex  keyword:&  variable:tick  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:tick  punctuation:(  punctuation:)  operator:+  variable:tick  punctuation:(  punctuation:)  keyword:fi
  25 |     show(more(), " ", tick())
     | builtin-fn:show  punctuation:(  variable:more  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:tick  punctuation:(  punctuation:)  punctuation:)
  26 | fi

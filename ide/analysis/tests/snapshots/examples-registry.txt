@@ -36,8 +36,8 @@
     | keyword:shared  method:run_all  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)
  23 |         each i in 0..Commands.count
     | keyword:each  variable:i  keyword:in  number:0  operator:..  type:Commands  punctuation:.  field:count
- 24 |             bind run = Commands.runs[i]
-    | keyword:bind  variable:run  operator:=  type:Commands  punctuation:.  field:runs  punctuation:[  variable:i  punctuation:]
+ 24 |             fixed run = Commands.runs[i]
+    | keyword:fixed  variable:run  operator:=  type:Commands  punctuation:.  field:runs  punctuation:[  variable:i  punctuation:]
  25 |             show(Commands.names[i], "(", n, ") = ", run(n))
     | builtin-fn:show  punctuation:(  type:Commands  punctuation:.  field:names  punctuation:[  variable:i  punctuation:]  punctuation:,  string:"("  punctuation:,  parameter:n  punctuation:,  string:") = "  punctuation:,  variable:run  punctuation:(  parameter:n  punctuation:)  punctuation:)
  26 |         fi
@@ -48,8 +48,8 @@
     | keyword:fi
  30 | shape Stats
     | keyword:shape  type:Stats
- 31 |     shared hold calls: int = 0
-    | keyword:shared  keyword:hold  field:calls  punctuation::  type-builtin:int  operator:=  number:0
+ 31 |     shared flex calls: int = 0
+    | keyword:shared  keyword:flex  field:calls  punctuation::  type-builtin:int  operator:=  number:0
  33 |     ; Wraps a command: counts its calls.
     | comment:; Wraps a command: counts its calls.
  34 |     shared counted(next: (int) -> int, n: int) -> int

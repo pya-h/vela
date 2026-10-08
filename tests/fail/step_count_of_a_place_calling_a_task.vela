@@ -4,7 +4,7 @@ task next() -> int
 fi
 
 task main()
-    hold xs = [1, 2]
+    flex xs = [1, 2]
     xs[next()]++
     show(xs)
 fi

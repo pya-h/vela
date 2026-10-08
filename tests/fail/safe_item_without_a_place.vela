@@ -1,6 +1,6 @@
 ; error: 5:13: '.#' reads a tuple's item in a maybe, by its place written as a number, as in 't.#0'
 ; '.#' is followed by the item's place, a number.
 task main()
-    bind t = (1, 2)
+    fixed t = (1, 2)
     show(t.#x)
 fi

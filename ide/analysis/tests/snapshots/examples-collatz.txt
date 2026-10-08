@@ -8,10 +8,10 @@
     | comment:; is longer than a goal, stopping once it finds one.
   6 | task steps(from: int) -> int
     | keyword:task  task:steps  punctuation:(  parameter:from  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  7 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
-  8 |     loop hold n = from || n != 1 || count++
-    | keyword:loop  keyword:hold  variable:n  operator:=  parameter:from  operator:||  variable:n  operator:!=  number:1  operator:||  variable:count  operator:++
+  7 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+  8 |     loop flex n = from || n != 1 || count++
+    | keyword:loop  keyword:flex  variable:n  operator:=  parameter:from  operator:||  variable:n  operator:!=  number:1  operator:||  variable:count  operator:++
   9 |         when n % 2 == 0
     | keyword:when  variable:n  operator:%  number:2  operator:==  number:0
  10 |             n = n / 2
@@ -32,12 +32,12 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  19 |     ; The walks of the first few starts, and the longest of them.
     | comment:; The walks of the first few starts, and the longest of them.
- 20 |     hold longest = 0
-    | keyword:hold  variable:longest  operator:=  number:0
- 21 |     loop hold start = 1, bind last = 8 || start <= last || start++
-    | keyword:loop  keyword:hold  variable:start  operator:=  number:1  punctuation:,  keyword:bind  variable:last  operator:=  number:8  operator:||  variable:start  operator:<=  variable:last  operator:||  variable:start  operator:++
- 22 |         bind walk = steps(start)
-    | keyword:bind  variable:walk  operator:=  task:steps  punctuation:(  variable:start  punctuation:)
+ 20 |     flex longest = 0
+    | keyword:flex  variable:longest  operator:=  number:0
+ 21 |     loop flex start = 1, fixed last = 8 || start <= last || start++
+    | keyword:loop  keyword:flex  variable:start  operator:=  number:1  punctuation:,  keyword:fixed  variable:last  operator:=  number:8  operator:||  variable:start  operator:<=  variable:last  operator:||  variable:start  operator:++
+ 22 |         fixed walk = steps(start)
+    | keyword:fixed  variable:walk  operator:=  task:steps  punctuation:(  variable:start  punctuation:)
  23 |         show(start, ": ", walk, " steps")
     | builtin-fn:show  punctuation:(  variable:start  punctuation:,  string:": "  punctuation:,  variable:walk  punctuation:,  string:" steps"  punctuation:)
  24 |         when walk > longest
@@ -52,8 +52,8 @@
     | builtin-fn:show  punctuation:(  string:"longest: "  punctuation:,  variable:longest  punctuation:)
  30 |     ; The first start whose walk takes more than 100 steps.
     | comment:; The first start whose walk takes more than 100 steps.
- 31 |     hold start = 1
-    | keyword:hold  variable:start  operator:=  number:1
+ 31 |     flex start = 1
+    | keyword:flex  variable:start  operator:=  number:1
  32 |     endless
     | keyword:endless
  33 |         when steps(start) > 100

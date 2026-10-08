@@ -1,7 +1,7 @@
-; error: 5:19: 'r' is the region this lambda keeps what it uses in, '[@r]', so a parameter of its own is named otherwise
+; error: 5:20: 'r' is the region this lambda keeps what it uses in, '[@r]', so a parameter of its own is named otherwise
 ; A lambda takes no region named as the one it keeps what it uses in.
 task main()
     region r
-    bind f = [@r](r: region, x: int) -> int <- x fi
+    fixed f = [@r](r: region, x: int) -> int <- x fi
     show(1)
 fi

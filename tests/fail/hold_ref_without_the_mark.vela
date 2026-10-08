@@ -1,9 +1,9 @@
 ; error: 8:12: task 'sample' changes 'x', the place it is given, so the call marks that place with '&', as in '&a'
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 
 task main()
-    hold a = 1
+    flex a = 1
     sample(a)
 fi

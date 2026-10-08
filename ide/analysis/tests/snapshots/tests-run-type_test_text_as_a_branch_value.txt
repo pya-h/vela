@@ -4,12 +4,12 @@
     | comment:; that took it.
   3 | task f<P...: frozen & shown>(args: P...)
     | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
-  4 |     bind t = (args...) { <- }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+  4 |     fixed t = (args...) { <- }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
   5 |     when t.#1 is maybe text {s}
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
-  6 |         bind shown = when s.len > 2
-    | keyword:bind  variable:shown  operator:=  keyword:when  variable:s  punctuation:.  field:len  operator:>  number:2
+  6 |         fixed shown = when s.len > 2
+    | keyword:fixed  variable:shown  operator:=  keyword:when  variable:s  punctuation:.  field:len  operator:>  number:2
   7 |             s
     | variable:s
   8 |         else
@@ -26,8 +26,8 @@
     | builtin-fn:show  punctuation:(  string:"no text"  punctuation:)
  14 |     fi
     | keyword:fi
- 15 |     bind first = when t.#1 is maybe text {s}
-    | keyword:bind  variable:first  operator:=  keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
+ 15 |     fixed first = when t.#1 is maybe text {s}
+    | keyword:fixed  variable:first  operator:=  keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
  16 |         s
     | variable:s
  17 |     else

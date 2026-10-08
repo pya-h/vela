@@ -18,10 +18,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  11 |     region q
     | keyword:region  region:q
- 12 |     bind s = "hi".copy() at q
-    | keyword:bind  variable:s  operator:=  string:"hi"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:q
- 13 |     hold bs = new [Box<text>]() at q
-    | keyword:hold  variable:bs  operator:=  keyword:new  punctuation:[  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:q
+ 12 |     fixed s = "hi".copy() at q
+    | keyword:fixed  variable:s  operator:=  string:"hi"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:q
+ 13 |     flex bs = new [Box<text>]() at q
+    | keyword:flex  variable:bs  operator:=  keyword:new  punctuation:[  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:q
  14 |     bs.add(Box<text> { v: s })
     | variable:bs  punctuation:.  field:add  punctuation:(  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:v  punctuation::  variable:s  punctuation:}  punctuation:)
  15 |     show(first_copy(q, bs))

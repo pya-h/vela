@@ -25,7 +25,7 @@ fi
 
 ; Counts the calls of any task, in a shared field.
 shape Calls
-    shared hold count: int = 0
+    shared flex count: int = 0
 fi
 
 task counted<P..., R>(next: (P...) -> R, args: P...) -> R
@@ -42,7 +42,7 @@ task seven() -> int
 fi
 
 ; A large value, and a copy the task may change, given through a group.
-task sum(x: Big, hold y: Big) -> int
+task sum(x: Big, flex y: Big) -> int
     y.a = y.a + 10
     <- x.a + y.a
 fi
@@ -79,7 +79,7 @@ fi
 task main()
     show(call(add, 2, 3))
     show(call(seven))
-    bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    fixed big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
     show(call(sum, big, big))
     show(twice(inc, 5))
     show(area(3, 4))

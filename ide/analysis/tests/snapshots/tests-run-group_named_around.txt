@@ -40,8 +40,8 @@
     | keyword:$  punctuation:(  task:traced  punctuation:)
  25 | task squares(r: region, n: int) -> [int]@r
     | keyword:task  task:squares  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 26 |     hold made = new [int]() at r
-    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 26 |     flex made = new [int]() at r
+    | keyword:flex  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  27 |     each i in 1..n + 1
     | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:n  operator:+  number:1
  28 |         made.add(i * i)
@@ -54,8 +54,8 @@
     | keyword:fi
  33 | $(labelled)
     | keyword:$  punctuation:(  task:labelled  punctuation:)
- 34 | task label(n: int, hold& count: int, r: region) -> text@r
-    | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:count  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 34 | task label(n: int, flex& count: int, r: region) -> text@r
+    | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  keyword:flex  keyword:&  parameter:count  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  35 |     count++
     | parameter:count  operator:++
  36 |     <- "n is {n}" at r
@@ -68,8 +68,8 @@
     | keyword:region  region:kept
  41 |     show(squares(kept, 3))
     | builtin-fn:show  punctuation:(  task:squares  punctuation:(  region:kept  punctuation:,  number:3  punctuation:)  punctuation:)
- 42 |     hold c = 0
-    | keyword:hold  variable:c  operator:=  number:0
+ 42 |     flex c = 0
+    | keyword:flex  variable:c  operator:=  number:0
  43 |     show(label(5, &c, kept))
     | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:5  punctuation:,  operator:&  variable:c  punctuation:,  region:kept  punctuation:)  punctuation:)
  44 |     show(label(6, &c) at kept, " ", c)

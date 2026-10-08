@@ -11,7 +11,7 @@ shape C
     fi
 fi
 task main()
-    bind c = C { n: 1 }
-    bind a, b = c.two()
+    fixed c = C { n: 1 }
+    fixed a, b = c.two()
     show(a, b)
 fi

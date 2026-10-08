@@ -1,6 +1,6 @@
-; error: 5:17: 'Open' is private to module 'library'
+; error: 5:18: 'Open' is private to module 'library'
 include modules/library
 
 task main()
-    bind lock = library.Open
+    fixed lock = library.Open
 fi

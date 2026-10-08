@@ -1,6 +1,6 @@
 ; error: 4:15: 'each v in &…' goes through the items of an array, a slice, or a map as they are at each pass, but this value is int
 task main()
-    hold n = 3
+    flex n = 3
     each v in &n
         show(v)
     fi

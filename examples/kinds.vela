@@ -44,15 +44,15 @@ kind Shape
 fi
 
 task main()
-    bind c = Circle(5.0)
+    fixed c = Circle(5.0)
     show(c, " covers ", c.area())
 
-    ; Only a `hold` value can change.
-    hold rect = Rectangle(3.0, 4.0)
+    ; Only a `flex` value can change.
+    flex rect = Rectangle(3.0, 4.0)
     rect.grow()
     show(rect, " covers ", rect.area())
 
-    hold d = Dot
+    flex d = Dot
     show(d)
     d.grow()
     show(d)

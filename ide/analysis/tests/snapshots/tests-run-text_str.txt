@@ -72,14 +72,14 @@
     | builtin-fn:show  punctuation:(  keyword:true  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  41 |     show(text(false) at r)
     | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  keyword:false  punctuation:)  keyword:at  region:r  punctuation:)
- 42 |     bind word = "word"
-    | keyword:bind  variable:word  operator:=  string:"word"
+ 42 |     fixed word = "word"
+    | keyword:fixed  variable:word  operator:=  string:"word"
  43 |     show(word.str() at r == word)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:==  variable:word  punctuation:)
  44 |     show(text(word) at r)
     | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:word  punctuation:)  keyword:at  region:r  punctuation:)
- 45 |     bind n = 9223372036854775807
-    | keyword:bind  variable:n  operator:=  number:9223372036854775807
+ 45 |     fixed n = 9223372036854775807
+    | keyword:fixed  variable:n  operator:=  number:9223372036854775807
  46 |     show(n.str() at r)
     | builtin-fn:show  punctuation:(  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  47 |     show(text(-n - 1) at r)
@@ -88,8 +88,8 @@
     | builtin-fn:show  punctuation:(  punctuation:(  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
  49 |     show("n = " + n.str()@r at r)
     | builtin-fn:show  punctuation:(  string:"n = "  operator:+  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  operator:@  region:r  keyword:at  region:r  punctuation:)
- 50 |     bind p = Point { x: 3, y: -4 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  operator:-  number:4  punctuation:}
+ 50 |     fixed p = Point { x: 3, y: -4 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  operator:-  number:4  punctuation:}
  51 |     show(p.str() at r)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  52 |     show(text(p) at r)
@@ -106,14 +106,14 @@
     | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"name"  punctuation:,  string:"Ada"  punctuation:,  region:r  punctuation:)  punctuation:)
  58 |     ; Text a region holds, kept in another region.
     | comment:; Text a region holds, kept in another region.
- 59 |     hold kept = new [text]() at r
-    | keyword:hold  variable:kept  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 59 |     flex kept = new [text]() at r
+    | keyword:flex  variable:kept  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  60 |     loop kept.len < 3
     | keyword:loop  variable:kept  punctuation:.  field:len  operator:<  number:3
  61 |         region pass
     | keyword:region  region:pass
- 62 |         bind shown = (kept.len * 10).str() at pass
-    | keyword:bind  variable:shown  operator:=  punctuation:(  variable:kept  punctuation:.  field:len  operator:*  number:10  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:pass
+ 62 |         fixed shown = (kept.len * 10).str() at pass
+    | keyword:fixed  variable:shown  operator:=  punctuation:(  variable:kept  punctuation:.  field:len  operator:*  number:10  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:pass
  63 |         kept.add(shown.str() at r)
     | variable:kept  punctuation:.  field:add  punctuation:(  variable:shown  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  64 |     fi

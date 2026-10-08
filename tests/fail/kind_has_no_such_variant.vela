@@ -1,9 +1,9 @@
-; error: 8:19: kind 'Suit' has no variant 'Clubs'
+; error: 8:20: kind 'Suit' has no variant 'Clubs'
 kind Suit
     Hearts
     Spades
 fi
 
 task main()
-    bind s = Suit.Clubs
+    fixed s = Suit.Clubs
 fi

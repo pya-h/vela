@@ -4,5 +4,5 @@ shape Node
     next: maybe ^Node
 fi
 task main()
-    hold n = Node { value: 1, next: none }
+    flex n = Node { value: 1, next: none }
 fi

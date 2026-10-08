@@ -174,7 +174,7 @@ fn a_module_reached_through_a_folder_above_is_read_once() {
     std::fs::create_dir_all(&app).unwrap();
     std::fs::write(app.join("shapes.vela"), "shape Point\n    x: int\nfi\n\ntask origin() -> Point\n    <- Point { x: 7 }\nfi\n").unwrap();
     std::fs::write(app.join("maker.vela"), "include ../app/shapes\n\ntask make() -> shapes.Point\n    <- shapes.origin()\nfi\n").unwrap();
-    std::fs::write(app.join("main.vela"), "include maker\ninclude shapes\n\ntask main()\n    bind p: shapes.Point = maker.make()\n    show(p.x)\nfi\n").unwrap();
+    std::fs::write(app.join("main.vela"), "include maker\ninclude shapes\n\ntask main()\n    fixed p: shapes.Point = maker.make()\n    show(p.x)\nfi\n").unwrap();
     let out = Command::new(VELA).args(["main.vela", "-o", "main"]).current_dir(&app).output().unwrap();
     assert!(out.status.success(), "{}", stderr(&out));
     let run = Command::new(app.join("main")).output().unwrap();
@@ -552,7 +552,7 @@ fn modules_are_read_next_to_the_program() {
 
 /// A program that builds, with one warning: `==` on a plain parameter's
 /// shape, which the compiler gives as a copy.
-const WARNED: &str = "shape Point\n    x: int\nfi\n\ntask same(a: Point, bind& b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    bind p = Point { x: 1 }\n    show(same(p, &p))\nfi\n";
+const WARNED: &str = "shape Point\n    x: int\nfi\n\ntask same(a: Point, fixed& b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    fixed p = Point { x: 1 }\n    show(same(p, &p))\nfi\n";
 
 #[test]
 fn warnings_go_to_stderr_and_the_program_still_builds() {
@@ -582,7 +582,7 @@ fn warnings_go_to_stderr_and_the_program_still_builds() {
 
     // Saying how the parameter is given silences it; a mistake is reported
     // alone, its warnings left until it is fixed.
-    std::fs::write(dir.join("said.vela"), WARNED.replace("same(a: Point", "same(bind a: Point")).unwrap();
+    std::fs::write(dir.join("said.vela"), WARNED.replace("same(a: Point", "same(fixed a: Point")).unwrap();
     let out = vela(&[dir.join("said.vela").to_str().unwrap(), "--check"]);
     assert!(out.status.success() && out.stderr.is_empty(), "{}", stderr(&out));
     std::fs::write(dir.join("broken.vela"), WARNED.replace("show(same(p, &p))", "show(same(p, &p), missing)")).unwrap();

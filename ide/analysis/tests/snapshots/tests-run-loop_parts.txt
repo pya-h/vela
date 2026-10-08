@@ -18,18 +18,18 @@
     | keyword:fi
  12 | fi
     | keyword:fi
- 14 | task advance(hold& spot: int)
-    | keyword:task  task:advance  punctuation:(  keyword:hold  keyword:&  parameter:spot  punctuation::  type-builtin:int  punctuation:)
+ 14 | task advance(flex& spot: int)
+    | keyword:task  task:advance  punctuation:(  keyword:flex  keyword:&  parameter:spot  punctuation::  type-builtin:int  punctuation:)
  15 |     spot += 2
     | parameter:spot  operator:+=  number:2
  16 | fi
     | keyword:fi
  18 | task joined<T: shown>(r: region, xs: [T]@r) -> text@r
     | keyword:task  task:joined  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 19 |     hold out: text@r = ""
-    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""
- 20 |     loop hold i = 0 || i < xs.len || i++
-    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:xs  punctuation:.  field:len  operator:||  variable:i  operator:++
+ 19 |     flex out: text@r = ""
+    | keyword:flex  variable:out  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""
+ 20 |     loop flex i = 0 || i < xs.len || i++
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:xs  punctuation:.  field:len  operator:||  variable:i  operator:++
  21 |         out += "{xs[i]} " at r
     | variable:out  operator:+=  string:"{  parameter:xs  punctuation:[  variable:i  punctuation:]  string:} "  keyword:at  region:r
  22 |     fi
@@ -42,18 +42,18 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  27 |     region r
     | keyword:region  region:r
- 29 |     ; A name of its own, and several of them, after 'hold' and 'bind'.
-    | comment:; A name of its own, and several of them, after 'hold' and 'bind'.
- 30 |     loop hold i = 0 || i < 3 || i++
-    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 29 |     ; A name of its own, and several of them, after 'flex' and 'fixed'.
+    | comment:; A name of its own, and several of them, after 'flex' and 'fixed'.
+ 30 |     loop flex i = 0 || i < 3 || i++
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
  31 |         show("i ", i)
     | builtin-fn:show  punctuation:(  string:"i "  punctuation:,  variable:i  punctuation:)
  32 |     fi
     | keyword:fi
- 33 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 34 |     loop hold i = 1, j = 10, bind limit = 7 || i < j and i < limit || i++, j--
-    | keyword:loop  keyword:hold  variable:i  operator:=  number:1  punctuation:,  variable:j  operator:=  number:10  punctuation:,  keyword:bind  variable:limit  operator:=  number:7  operator:||  variable:i  operator:<  variable:j  keyword:and  variable:i  operator:<  variable:limit  operator:||  variable:i  operator:++  punctuation:,  variable:j  operator:--
+ 33 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 34 |     loop flex i = 1, j = 10, fixed limit = 7 || i < j and i < limit || i++, j--
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:1  punctuation:,  variable:j  operator:=  number:10  punctuation:,  keyword:fixed  variable:limit  operator:=  number:7  operator:||  variable:i  operator:<  variable:j  keyword:and  variable:i  operator:<  variable:limit  operator:||  variable:i  operator:++  punctuation:,  variable:j  operator:--
  35 |         total += i * j
     | variable:total  operator:+=  variable:i  operator:*  variable:j
  36 |     fi
@@ -62,12 +62,12 @@
     | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:)
  39 |     ; Names already declared come first; the step may swap and call.
     | comment:; Names already declared come first; the step may swap and call.
- 40 |     hold k = 0
-    | keyword:hold  variable:k  operator:=  number:0
- 41 |     hold calls = 0
-    | keyword:hold  variable:calls  operator:=  number:0
- 42 |     loop k = 1, calls = 0, hold a = 0, b = 1 || b < 30 || a, b = b, a + b, calls++
-    | keyword:loop  variable:k  operator:=  number:1  punctuation:,  variable:calls  operator:=  number:0  punctuation:,  keyword:hold  variable:a  operator:=  number:0  punctuation:,  variable:b  operator:=  number:1  operator:||  variable:b  operator:<  number:30  operator:||  variable:a  punctuation:,  variable:b  operator:=  variable:b  punctuation:,  variable:a  operator:+  variable:b  punctuation:,  variable:calls  operator:++
+ 40 |     flex k = 0
+    | keyword:flex  variable:k  operator:=  number:0
+ 41 |     flex calls = 0
+    | keyword:flex  variable:calls  operator:=  number:0
+ 42 |     loop k = 1, calls = 0, flex a = 0, b = 1 || b < 30 || a, b = b, a + b, calls++
+    | keyword:loop  variable:k  operator:=  number:1  punctuation:,  variable:calls  operator:=  number:0  punctuation:,  keyword:flex  variable:a  operator:=  number:0  punctuation:,  variable:b  operator:=  number:1  operator:||  variable:b  operator:<  number:30  operator:||  variable:a  punctuation:,  variable:b  operator:=  variable:b  punctuation:,  variable:a  operator:+  variable:b  punctuation:,  variable:calls  operator:++
  43 |         show("fib ", b)
     | builtin-fn:show  punctuation:(  string:"fib "  punctuation:,  variable:b  punctuation:)
  44 |     fi
@@ -76,8 +76,8 @@
     | builtin-fn:show  punctuation:(  string:"k "  punctuation:,  variable:k  punctuation:,  string:" calls "  punctuation:,  variable:calls  punctuation:)
  47 |     ; 'continue' runs the step, 'break' doesn't.
     | comment:; 'continue' runs the step, 'break' doesn't.
- 48 |     hold last = 0
-    | keyword:hold  variable:last  operator:=  number:0
+ 48 |     flex last = 0
+    | keyword:flex  variable:last  operator:=  number:0
  49 |     loop last = 0 || last < 10 || last++
     | keyword:loop  variable:last  operator:=  number:0  operator:||  variable:last  operator:<  number:10  operator:||  variable:last  operator:++
  50 |         when last % 2 == 1
@@ -100,52 +100,52 @@
     | builtin-fn:show  punctuation:(  string:"last "  punctuation:,  variable:last  punctuation:)
  60 |     ; A part may be empty; the last '||' may be left out.
     | comment:; A part may be empty; the last '||' may be left out.
- 61 |     hold m = 0
-    | keyword:hold  variable:m  operator:=  number:0
+ 61 |     flex m = 0
+    | keyword:flex  variable:m  operator:=  number:0
  62 |     loop || m < 3 || m++
     | keyword:loop  operator:||  variable:m  operator:<  number:3  operator:||  variable:m  operator:++
  63 |         show("m ", m)
     | builtin-fn:show  punctuation:(  string:"m "  punctuation:,  variable:m  punctuation:)
  64 |     fi
     | keyword:fi
- 65 |     loop hold w = 0 || w < 2
-    | keyword:loop  keyword:hold  variable:w  operator:=  number:0  operator:||  variable:w  operator:<  number:2
+ 65 |     loop flex w = 0 || w < 2
+    | keyword:loop  keyword:flex  variable:w  operator:=  number:0  operator:||  variable:w  operator:<  number:2
  66 |         show("w ", w)
     | builtin-fn:show  punctuation:(  string:"w "  punctuation:,  variable:w  punctuation:)
  67 |         w++
     | variable:w  operator:++
  68 |     fi
     | keyword:fi
- 69 |     loop hold pos = 0 || pos < 7 || advance(&pos)
-    | keyword:loop  keyword:hold  variable:pos  operator:=  number:0  operator:||  variable:pos  operator:<  number:7  operator:||  task:advance  punctuation:(  operator:&  variable:pos  punctuation:)
+ 69 |     loop flex pos = 0 || pos < 7 || advance(&pos)
+    | keyword:loop  keyword:flex  variable:pos  operator:=  number:0  operator:||  variable:pos  operator:<  number:7  operator:||  task:advance  punctuation:(  operator:&  variable:pos  punctuation:)
  70 |         show("pos ", pos)
     | builtin-fn:show  punctuation:(  string:"pos "  punctuation:,  variable:pos  punctuation:)
  71 |     fi
     | keyword:fi
  73 |     ; A pattern, and parts joined with 'and', as any loop takes them.
     | comment:; A pattern, and parts joined with 'and', as any loop takes them.
- 74 |     bind words = ["ox", "elk", "yak", "zebra", "eel"]
-    | keyword:bind  variable:words  operator:=  punctuation:[  string:"ox"  punctuation:,  string:"elk"  punctuation:,  string:"yak"  punctuation:,  string:"zebra"  punctuation:,  string:"eel"  punctuation:]
- 75 |     loop hold n = 0 || words[#n] is {word} and word.len < 4 || n++
-    | keyword:loop  keyword:hold  variable:n  operator:=  number:0  operator:||  variable:words  punctuation:[  punctuation:#  variable:n  punctuation:]  keyword:is  punctuation:{  variable:word  punctuation:}  keyword:and  variable:word  punctuation:.  field:len  operator:<  number:4  operator:||  variable:n  operator:++
+ 74 |     fixed words = ["ox", "elk", "yak", "zebra", "eel"]
+    | keyword:fixed  variable:words  operator:=  punctuation:[  string:"ox"  punctuation:,  string:"elk"  punctuation:,  string:"yak"  punctuation:,  string:"zebra"  punctuation:,  string:"eel"  punctuation:]
+ 75 |     loop flex n = 0 || words[#n] is {word} and word.len < 4 || n++
+    | keyword:loop  keyword:flex  variable:n  operator:=  number:0  operator:||  variable:words  punctuation:[  punctuation:#  variable:n  punctuation:]  keyword:is  punctuation:{  variable:word  punctuation:}  keyword:and  variable:word  punctuation:.  field:len  operator:<  number:4  operator:||  variable:n  operator:++
  76 |         show("word ", word)
     | builtin-fn:show  punctuation:(  string:"word "  punctuation:,  variable:word  punctuation:)
  77 |     fi
     | keyword:fi
  79 |     ; A step of any statement, a 'when' too, and the regions of a pass.
     | comment:; A step of any statement, a 'when' too, and the regions of a pass.
- 80 |     loop hold s = 0 || s < 6 || s++, when s == 3 s++ fi
-    | keyword:loop  keyword:hold  variable:s  operator:=  number:0  operator:||  variable:s  operator:<  number:6  operator:||  variable:s  operator:++  punctuation:,  keyword:when  variable:s  operator:==  number:3  variable:s  operator:++  keyword:fi
+ 80 |     loop flex s = 0 || s < 6 || s++, when s == 3 s++ fi
+    | keyword:loop  keyword:flex  variable:s  operator:=  number:0  operator:||  variable:s  operator:<  number:6  operator:||  variable:s  operator:++  punctuation:,  keyword:when  variable:s  operator:==  number:3  variable:s  operator:++  keyword:fi
  81 |         region pass
     | keyword:region  region:pass
- 82 |         bind label = "s{s}" at pass
-    | keyword:bind  variable:label  operator:=  string:"s{  variable:s  string:}"  keyword:at  region:pass
+ 82 |         fixed label = "s{s}" at pass
+    | keyword:fixed  variable:label  operator:=  string:"s{  variable:s  string:}"  keyword:at  region:pass
  83 |         show(label)
     | builtin-fn:show  punctuation:(  variable:label  punctuation:)
  84 |     fi
     | keyword:fi
- 85 |     hold c = Counter { n: 0 }
-    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:0  punctuation:}
+ 85 |     flex c = Counter { n: 0 }
+    | keyword:flex  variable:c  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:0  punctuation:}
  86 |     loop || c.n < 3 || c.bump()
     | keyword:loop  operator:||  variable:c  punctuation:.  field:n  operator:<  number:3  operator:||  variable:c  punctuation:.  method:bump  punctuation:(  punctuation:)
  87 |         show("c ", c.n)
@@ -156,12 +156,12 @@
     | builtin-fn:show  punctuation:(  task:joined  punctuation:(  region:r  punctuation:,  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:,  task:joined  punctuation:(  region:r  punctuation:,  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:)
  91 |     ; 'endless', named, stopped from inside.
     | comment:; 'endless', named, stopped from inside.
- 92 |     hold e = 0
-    | keyword:hold  variable:e  operator:=  number:0
+ 92 |     flex e = 0
+    | keyword:flex  variable:e  operator:=  number:0
  93 |     outer => endless
     | variable:outer  operator:=>  keyword:endless
- 94 |         loop hold inner = 0 || || inner++
-    | keyword:loop  keyword:hold  variable:inner  operator:=  number:0  operator:||  operator:||  variable:inner  operator:++
+ 94 |         loop flex inner = 0 || || inner++
+    | keyword:loop  keyword:flex  variable:inner  operator:=  number:0  operator:||  operator:||  variable:inner  operator:++
  95 |             e++
     | variable:e  operator:++
  96 |             when e > 7
@@ -190,8 +190,8 @@
     | keyword:break
 109 |     fi
     | keyword:fi
-110 |     hold t = 0
-    | keyword:hold  variable:t  operator:=  number:0
+110 |     flex t = 0
+    | keyword:flex  variable:t  operator:=  number:0
 111 |     loop true
     | keyword:loop  keyword:true
 112 |         t++

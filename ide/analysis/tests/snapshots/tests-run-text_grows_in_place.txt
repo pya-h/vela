@@ -6,20 +6,20 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     region r
     | keyword:region  region:r
-  5 |     hold t: text@r = "" + "" at r
-    | keyword:hold  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""  operator:+  string:""  keyword:at  region:r
+  5 |     flex t: text@r = "" + "" at r
+    | keyword:flex  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""  operator:+  string:""  keyword:at  region:r
   6 |     each i in 0..3000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3000
   7 |         t += "x"
     | variable:t  operator:+=  string:"x"
   8 |     fi
     | keyword:fi
-  9 |     hold u = t + "!" at r
-    | keyword:hold  variable:u  operator:=  variable:t  operator:+  string:"!"  keyword:at  region:r
+  9 |     flex u = t + "!" at r
+    | keyword:flex  variable:u  operator:=  variable:t  operator:+  string:"!"  keyword:at  region:r
  10 |     t += "y"
     | variable:t  operator:+=  string:"y"
- 11 |     hold v = t + "z" at r
-    | keyword:hold  variable:v  operator:=  variable:t  operator:+  string:"z"  keyword:at  region:r
+ 11 |     flex v = t + "z" at r
+    | keyword:flex  variable:v  operator:=  variable:t  operator:+  string:"z"  keyword:at  region:r
  12 |     t += "{t.len}"
     | variable:t  operator:+=  string:"{  variable:t  punctuation:.  field:len  string:}"
  13 |     show(t.len, " ", u.len, " ", v.len)
@@ -28,8 +28,8 @@
     | builtin-fn:show  punctuation:(  variable:u  punctuation:[  number:2998  operator:..  number:3001  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:v  punctuation:[  number:2999  operator:..  number:3002  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:[  number:2999  operator:..  number:3005  punctuation:]  punctuation:)
  15 |     ; Itself joined to itself.
     | comment:; Itself joined to itself.
- 16 |     hold w: text@r = "ab" + "" at r
-    | keyword:hold  variable:w  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"ab"  operator:+  string:""  keyword:at  region:r
+ 16 |     flex w: text@r = "ab" + "" at r
+    | keyword:flex  variable:w  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"ab"  operator:+  string:""  keyword:at  region:r
  17 |     w += w
     | variable:w  operator:+=  variable:w
  18 |     w += w

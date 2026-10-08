@@ -60,8 +60,8 @@
     | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Red  punctuation:)  punctuation:)
  36 |     show(name(Amber()))
     | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Amber  punctuation:(  punctuation:)  punctuation:)  punctuation:)
- 37 |     hold light = Green
-    | keyword:hold  variable:light  operator:=  variant:Green
+ 37 |     flex light = Green
+    | keyword:flex  variable:light  operator:=  variant:Green
  38 |     show(name(light))
     | builtin-fn:show  punctuation:(  task:name  punctuation:(  variable:light  punctuation:)  punctuation:)
  39 |     light = Red

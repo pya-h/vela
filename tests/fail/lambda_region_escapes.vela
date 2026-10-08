@@ -1,5 +1,5 @@
-; error: 4:37: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+; error: 4:38: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 ; A lambda whose type gives no region can't send text of the one it is given.
 task main()
-    bind f = (t: text@r) -> text <- t fi
+    fixed f = (t: text@r) -> text <- t fi
 fi

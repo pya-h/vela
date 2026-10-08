@@ -1,5 +1,5 @@
 ; trap: 300 does not fit in a unit at 4:10 in task 'main'
 task main()
-    bind n = 300
+    fixed n = 300
     show(unit(n))
 fi

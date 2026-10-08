@@ -2,6 +2,6 @@
 include std/files {File, FileState}
 
 task main()
-    hold notes = File { path: "notes.txt" }
+    flex notes = File { path: "notes.txt" }
     notes.state = FileState.Open
 fi

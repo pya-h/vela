@@ -6,8 +6,8 @@ fi
 
 task main()
     region outer
-    hold xs: [text@outer]@outer = new [text](["x"]) at outer
-    bind s: text@outer = "hello".copy() at outer
+    flex xs: [text@outer]@outer = new [text](["x"]) at outer
+    fixed s: text@outer = "hello".copy() at outer
     setCopy(xs, s)
     show(xs[0])
 fi

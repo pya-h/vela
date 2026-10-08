@@ -3,32 +3,32 @@
 
 task main()
     when true
-        bind y = 1
+        fixed y = 1
         show(y)
     else
-        bind y = 2
+        fixed y = 2
         show(y)
     fi
 
     when false
-        bind y = "unused"
+        fixed y = "unused"
         show(y)
     else
-        bind y = 3
+        fixed y = 3
         show(y)
     fi
 
     each i in 0..3
-        bind square = i * i
+        fixed square = i * i
         show(square)
     fi
     each i in 0..1
         show(i)
     fi
 
-    hold n = 0
+    flex n = 0
     loop n < 2
-        bind step = 1
+        fixed step = 1
         n = n + step
     fi
     show(n)

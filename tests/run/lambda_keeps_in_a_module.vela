@@ -4,10 +4,10 @@ include lambda_keeps_in_a_module/lib
 
 task main()
     region r
-    hold c = lib.counter(r, 5)
+    flex c = lib.counter(r, 5)
     show(c(), " ", c())
-    bind msg = "main's lambda"
-    hold g = [hold @r]() -> int
+    fixed msg = "main's lambda"
+    flex g = [flex @r]() -> int
         show(msg)
         <- 0
     fi

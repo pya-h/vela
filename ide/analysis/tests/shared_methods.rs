@@ -40,8 +40,8 @@ fi
 
 task main()
     CHECK
-    bind p = Point.new(1)
-    bind light = Light.start()
+    fixed p = Point.new(1)
+    fixed light = Light.start()
     @@
 fi
 ";
@@ -121,14 +121,14 @@ fn a_shared_method_is_hovered_with_its_word() {
 #[test]
 fn shared_methods_are_completed_after_the_name_and_never_after_a_value() {
     for checks in [true, false] {
-        let on_shape = labels(&completions(&program(checks, "bind q = Point.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
+        let on_shape = labels(&completions(&program(checks, "fixed q = Point.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
         assert!(on_shape.contains(&"new".to_string()) && on_shape.contains(&"made".to_string()), "{:?}", on_shape);
         // A private one is its file's, and this is its file.
         assert!(on_shape.contains(&"checked".to_string()), "{:?}", on_shape);
         assert!(!on_shape.contains(&"moved".to_string()) && !on_shape.contains(&"x".to_string()), "{:?}", on_shape);
-        let on_kind = labels(&completions(&program(checks, "bind l = Light.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
+        let on_kind = labels(&completions(&program(checks, "fixed l = Light.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
         assert!(on_kind.contains(&"start".to_string()) && on_kind.contains(&"Red".to_string()), "{:?}", on_kind);
-        let on_value = labels(&completions(&program(checks, "bind q = p.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
+        let on_value = labels(&completions(&program(checks, "fixed q = p.@@"))).into_iter().map(str::to_string).collect::<Vec<_>>();
         assert!(on_value.contains(&"moved".to_string()) && !on_value.contains(&"new".to_string()), "{:?}", on_value);
     }
 }
@@ -146,7 +146,7 @@ fn a_shared_method_leads_to_its_declaration() {
 #[test]
 fn a_kind_shared_method_named_without_a_call_is_a_method_not_a_variant() {
     for checks in [true, false] {
-        let source = program(checks, "bind made = Light.start\n    bind red = Light.Red");
+        let source = program(checks, "fixed made = Light.start\n    fixed red = Light.Red");
         assert_eq!(class_at(&source, "start\n"), TokenClass::Method);
         assert_eq!(class_at(&source, "Red\nfi"), TokenClass::Variant);
         assert_eq!(hover(&source, "start\n").0, "shared start() -> Light");

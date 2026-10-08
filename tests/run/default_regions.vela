@@ -12,7 +12,7 @@ fi
 
 ; A task allocates in the region it is given, which its header makes the default.
 task grow(r: region default, upto: int) -> [int]@r
-    hold made = new [int]()
+    flex made = new [int]()
     each n in 1..upto
         made.add(n * n)
     fi
@@ -21,7 +21,7 @@ fi
 
 ; A region the header only names is no default: this one allocates nowhere.
 task total(xs: [int]@r) -> int
-    hold sum = 0
+    flex sum = 0
     each x in xs
         sum = sum + x
     fi
@@ -30,35 +30,35 @@ fi
 
 task main()
     region kept default
-    bind squares = grow(kept, 5)
+    fixed squares = grow(kept, 5)
     show(total(squares))
 
     ; Every form that makes memory takes the default: a pointer, a slice, text
     ; joined, a value written as text, and text holding values.
-    bind p = new int(7)
-    hold names = new [text]()
+    fixed p = new int(7)
+    flex names = new [text]()
     names.add("Ada")
-    bind greeting = "Hello, " + names[0]
-    bind shown = p^.str()
-    bind cast = text(p^)
-    bind sentence = "{greeting}, {shown} and {cast}"
+    fixed greeting = "Hello, " + names[0]
+    fixed shown = p^.str()
+    fixed cast = text(p^)
+    fixed sentence = "{greeting}, {shown} and {cast}"
     show(sentence)
     show(Card { rank: 3 })
     ; Values of any type turned into text there, as 'at r' would.
-    bind count = 3
+    fixed count = 3
     show("count {count}, {[1, 2]}, {Card { rank: count }}, nested {"{count + 1}"}")
 
     ; An inner block names its own default; the outer one is back after it.
     each round in 0..3
         region pass default
-        bind line = "pass " + round.str()
+        fixed line = "pass " + round.str()
         show(line)
     fi
-    bind after = new [int]([1, 2, 3])
+    fixed after = new [int]([1, 2, 3])
     show(after.len, " kept")
 
     ; A region that is not the default is still written.
     region other
-    bind elsewhere = new int(1) at other
+    fixed elsewhere = new int(1) at other
     show(elsewhere^)
 fi

@@ -88,10 +88,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  55 |     region r
     | keyword:region  region:r
- 56 |     bind card = Card { name: "Ada", wins: 3 }
-    | keyword:bind  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
- 57 |     bind light = Light.Green(30)
-    | keyword:bind  variable:light  operator:=  type:Light  punctuation:.  variant:Green  punctuation:(  number:30  punctuation:)
+ 56 |     fixed card = Card { name: "Ada", wins: 3 }
+    | keyword:fixed  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
+ 57 |     fixed light = Light.Green(30)
+    | keyword:fixed  variable:light  operator:=  type:Light  punctuation:.  variant:Green  punctuation:(  number:30  punctuation:)
  59 |     ; A value of its own, and values around it.
     | comment:; A value of its own, and values around it.
  60 |     show(card)
@@ -114,18 +114,18 @@
     | comment:; Where the value comes from doesn't matter: a pointer it points to, a
  72 |     ; field, an item of a slice, an item of a tuple, a call's result.
     | comment:; field, an item of a slice, an item of a tuple, a call's result.
- 73 |     bind pointer = new Card(Card { name: "Cleo", wins: 7 }) at r
-    | keyword:bind  variable:pointer  operator:=  keyword:new  type:Card  punctuation:(  type:Card  punctuation:{  field:name  punctuation::  string:"Cleo"  punctuation:,  field:wins  punctuation::  number:7  punctuation:}  punctuation:)  keyword:at  region:r
+ 73 |     fixed pointer = new Card(Card { name: "Cleo", wins: 7 }) at r
+    | keyword:fixed  variable:pointer  operator:=  keyword:new  type:Card  punctuation:(  type:Card  punctuation:{  field:name  punctuation::  string:"Cleo"  punctuation:,  field:wins  punctuation::  number:7  punctuation:}  punctuation:)  keyword:at  region:r
  74 |     show("pointed ", pointer^)
     | builtin-fn:show  punctuation:(  string:"pointed "  punctuation:,  variable:pointer  operator:^  punctuation:)
- 75 |     hold cards = new [Card]() at r
-    | keyword:hold  variable:cards  operator:=  keyword:new  punctuation:[  type:Card  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 75 |     flex cards = new [Card]() at r
+    | keyword:flex  variable:cards  operator:=  keyword:new  punctuation:[  type:Card  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  76 |     cards.add(card.copy() at r)
     | variable:cards  punctuation:.  field:add  punctuation:(  variable:card  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  77 |     show("item ", cards[0])
     | builtin-fn:show  punctuation:(  string:"item "  punctuation:,  variable:cards  punctuation:[  number:0  punctuation:]  punctuation:)
- 78 |     bind pair = (card, 2)
-    | keyword:bind  variable:pair  operator:=  punctuation:(  variable:card  punctuation:,  number:2  punctuation:)
+ 78 |     fixed pair = (card, 2)
+    | keyword:fixed  variable:pair  operator:=  punctuation:(  variable:card  punctuation:,  number:2  punctuation:)
  79 |     show("in a tuple ", pair.0, " with ", pair.1)
     | builtin-fn:show  punctuation:(  string:"in a tuple "  punctuation:,  variable:pair  punctuation:.  field:0  punctuation:,  string:" with "  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:)
  80 |     show("made ", best(cards, r))
@@ -146,22 +146,22 @@
     | comment:; while the line around it is still being written, and each has its own
  91 |     ; region.
     | comment:; region.
- 92 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 92 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  93 |     show("plan B ", missing { show("inner ", card) 9 })
     | builtin-fn:show  punctuation:(  string:"plan B "  punctuation:,  variable:missing  punctuation:{  builtin-fn:show  punctuation:(  string:"inner "  punctuation:,  variable:card  punctuation:)  number:9  punctuation:}  punctuation:)
  95 |     ; A task that sends from inside a value of a `show` leaves its line
     | comment:; A task that sends from inside a value of a `show` leaves its line
  96 |     ; unfinished, and the next thing written goes on with it.
     | comment:; unfinished, and the next thing written goes on with it.
- 97 |     bind gave = give_up(cards)
-    | keyword:bind  variable:gave  operator:=  task:give_up  punctuation:(  variable:cards  punctuation:)
+ 97 |     fixed gave = give_up(cards)
+    | keyword:fixed  variable:gave  operator:=  task:give_up  punctuation:(  variable:cards  punctuation:)
  98 |     show(" -> ", gave)
     | builtin-fn:show  punctuation:(  string:" -> "  punctuation:,  variable:gave  punctuation:)
 100 |     ; Every pass of a loop frees the region of its own line.
     | comment:; Every pass of a loop frees the region of its own line.
-101 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+101 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
 102 |     loop i < 3
     | keyword:loop  variable:i  operator:<  number:3
 103 |         show("pass ", i, ": ", Card { name: "x", wins: i })
@@ -186,8 +186,8 @@
     | comment:; what is written next goes on with it.
 115 | task give_up(cards: [Card@r]@r) -> int
     | keyword:task  task:give_up  punctuation:(  parameter:cards  punctuation::  punctuation:[  type:Card  operator:@  region:r  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
-116 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+116 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
 117 |     show("gave up on ", cards[0], missing { <- 0 })
     | builtin-fn:show  punctuation:(  string:"gave up on "  punctuation:,  parameter:cards  punctuation:[  number:0  punctuation:]  punctuation:,  variable:missing  punctuation:{  keyword:<-  number:0  punctuation:}  punctuation:)
 118 |     <- 1

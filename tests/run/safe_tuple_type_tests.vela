@@ -4,7 +4,7 @@
 ; item's reads in its condition and block are of that type. Nothing is tested
 ; when the program runs; in a task taking a group, each copy decides.
 task plain()
-    bind t = (1, "two")
+    fixed t = (1, "two")
     when t.#5 is none
         show("no 5")
     fi
@@ -62,7 +62,7 @@ fi
 
 ; A shape given types is tested as written.
 task boxes()
-    bind t = (Box<int> { value: 3 }, 1)
+    fixed t = (Box<int> { value: 3 }, 1)
     when t.#0 is maybe Box<int> {b}
         show("box of ", b.value)
     fi
@@ -75,7 +75,7 @@ fi
 
 ; An item holding a `T` is tested in each copy.
 task held<T: shown & frozen>(x: T)
-    bind t = (x, 1)
+    fixed t = (x, 1)
     when t.#0 is maybe int {y}
         show("held int ", y + 1)
     else when t.#0 is maybe int m
@@ -88,9 +88,9 @@ fi
 ; Text taken from a group's item may be in a region of the caller's, so it is
 ; used inside the task.
 task measured<P...: frozen & shown>(args: P...) -> int
-    bind t = (args...) { <- 0 }
+    fixed t = (args...) { <- 0 }
     when t.#1 is maybe text {s}
-        bind same = s
+        fixed same = s
         show(same, " is ", s.len, " long")
         <- s.len
     fi
@@ -98,7 +98,7 @@ task measured<P...: frozen & shown>(args: P...) -> int
 fi
 
 task third<P...: frozen & shown>(args: P...)
-    bind t = (args...) {
+    fixed t = (args...) {
         show("fewer than two")
         <-
     }
@@ -117,7 +117,7 @@ task third<P...: frozen & shown>(args: P...)
     when t.#2 is maybe float m
         show("third float or none: ", m)
     fi
-    hold k = 0
+    flex k = 0
     loop t.#1 is maybe int {v} and k < 2
         k += v
         show("k ", k)
@@ -125,7 +125,7 @@ task third<P...: frozen & shown>(args: P...)
 fi
 ; The arms after one each copy knows holds are dropped, tests and all.
 task after_taken<P...: frozen & shown>(args: P...)
-    bind t = (args...) { <- }
+    fixed t = (args...) { <- }
     when args.len == 2
         show("two")
     else when t.#2 is maybe int {x}
@@ -138,7 +138,7 @@ fi
 ; A test the compiler settles decides which arms can run, so a task whose
 ; every arm that can run sends needs nothing after them.
 task sent() -> int
-    bind t = (1, "a")
+    fixed t = (1, "a")
     when t.#1? is maybe int
         <- 1
     else when t.#1 is maybe text {s}
@@ -152,7 +152,7 @@ fi
 ; are, drops the arms after it; and after a part a copy knows doesn't hold,
 ; the parts after it aren't made, so they may read what it guards against.
 task known_arms<P...: frozen & shown>(args: P...)
-    bind t = (args...) { <- }
+    fixed t = (args...) { <- }
     region r
     when t.#2 is none
         show("two only")
@@ -167,7 +167,7 @@ task known_arms<P...: frozen & shown>(args: P...)
     when args.len > 2 and t.2.str(r).len > 2
         show("a third longer than two")
     fi
-    hold k = 1
+    flex k = 1
     when k > 0 and args.len > 2
         show("a third after a check: ", t.2)
     fi
@@ -179,7 +179,7 @@ task main()
     held(5)
     held("s")
     region r
-    bind made = "ab" + "cd" at r
+    fixed made = "ab" + "cd" at r
     show(measured(1, made))
     show(measured(1, 2))
     third(1, 2, 3)

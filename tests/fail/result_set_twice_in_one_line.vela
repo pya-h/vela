@@ -5,6 +5,6 @@ task pair(n: int) -> steps: int, peak: int
 fi
 
 task main()
-    bind s, p = pair(1)
+    fixed s, p = pair(1)
     show(s + p)
 fi

@@ -21,14 +21,14 @@ shape Commands
 
     shared run_all(n: int)
         each i in 0..Commands.count
-            bind run = Commands.runs[i]
+            fixed run = Commands.runs[i]
             show(Commands.names[i], "(", n, ") = ", run(n))
         fi
     fi
 fi
 
 shape Stats
-    shared hold calls: int = 0
+    shared flex calls: int = 0
 
     ; Wraps a command: counts its calls.
     shared counted(next: (int) -> int, n: int) -> int

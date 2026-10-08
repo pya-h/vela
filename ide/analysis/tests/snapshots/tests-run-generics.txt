@@ -24,8 +24,8 @@
     | keyword:fi
  15 | task last<T>(xs: [T]@r) -> maybe T
     | keyword:task  task:last  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  type:T
- 16 |     hold seen: maybe T = none
-    | keyword:hold  variable:seen  punctuation::  keyword:maybe  type:T  operator:=  keyword:none
+ 16 |     flex seen: maybe T = none
+    | keyword:flex  variable:seen  punctuation::  keyword:maybe  type:T  operator:=  keyword:none
  17 |     each v in xs
     | keyword:each  variable:v  keyword:in  parameter:xs
  18 |         seen = v
@@ -114,8 +114,8 @@
     | comment:; The region a generic task is given is where it builds.
  70 | task listOf<T>(r: region, a: T, b: T) -> [T]@r
     | keyword:task  task:listOf  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
- 71 |     hold made: [T]@r = new [T]() at r
-    | keyword:hold  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 71 |     flex made: [T]@r = new [T]() at r
+    | keyword:flex  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  72 |     made.add(a)
     | variable:made  punctuation:.  field:add  punctuation:(  parameter:a  punctuation:)
  73 |     made.add(b)
@@ -130,8 +130,8 @@
     | comment:; keeps that type in (`[T]@r` here), so a use may give any type.
  79 | task copiedInto<T>(r: region, xs: [T]@r) -> [T]@r
     | keyword:task  task:copiedInto  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
- 80 |     hold made: [T]@r = new [T]() at r
-    | keyword:hold  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 80 |     flex made: [T]@r = new [T]() at r
+    | keyword:flex  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  81 |     each v in xs
     | keyword:each  variable:v  keyword:in  parameter:xs
  82 |         made.add(v.copy() at r)
@@ -172,10 +172,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
 104 |     region r
     | keyword:region  region:r
-105 |     bind ns: [int]@r = new [int]([4, 5, 6]) at r
-    | keyword:bind  variable:ns  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:]  punctuation:)  keyword:at  region:r
-106 |     bind names: [text@r]@r = new [text](["ada", "bo"]) at r
-    | keyword:bind  variable:names  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:]  punctuation:)  keyword:at  region:r
+105 |     fixed ns: [int]@r = new [int]([4, 5, 6]) at r
+    | keyword:fixed  variable:ns  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:]  punctuation:)  keyword:at  region:r
+106 |     fixed names: [text@r]@r = new [text](["ada", "bo"]) at r
+    | keyword:fixed  variable:names  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:]  punctuation:)  keyword:at  region:r
 108 |     ; The type comes from the arguments.
     | comment:; The type comes from the arguments.
 109 |     show(first(ns))
@@ -192,12 +192,12 @@
     | builtin-fn:show  punctuation:(  task:first  punctuation:<  type-builtin:text  operator:@  region:r  punctuation:>  punctuation:(  variable:names  punctuation:)  punctuation:)
 117 |     ; Or from the place the value goes, including through a plan B.
     | comment:; Or from the place the value goes, including through a plan B.
-118 |     bind nothingYet: maybe int = empty()
-    | keyword:bind  variable:nothingYet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:empty  punctuation:(  punctuation:)
+118 |     fixed nothingYet: maybe int = empty()
+    | keyword:fixed  variable:nothingYet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:empty  punctuation:(  punctuation:)
 119 |     show(nothingYet)
     | builtin-fn:show  punctuation:(  variable:nothingYet  punctuation:)
-120 |     bind fallback: text = empty() { "nothing there" }
-    | keyword:bind  variable:fallback  punctuation::  type-builtin:text  operator:=  task:empty  punctuation:(  punctuation:)  punctuation:{  string:"nothing there"  punctuation:}
+120 |     fixed fallback: text = empty() { "nothing there" }
+    | keyword:fixed  variable:fallback  punctuation::  type-builtin:text  operator:=  task:empty  punctuation:(  punctuation:)  punctuation:{  string:"nothing there"  punctuation:}
 121 |     show(fallback)
     | builtin-fn:show  punctuation:(  variable:fallback  punctuation:)
 123 |     ; A word says what the body may do with the values.
@@ -216,26 +216,26 @@
     | builtin-fn:show  punctuation:(  task:alike  punctuation:(  string:"a"  punctuation:,  string:"b"  punctuation:)  punctuation:)
 131 |     ; Two types at once, and results that are both of one type.
     | comment:; Two types at once, and results that are both of one type.
-132 |     bind pair: (int, text) = pairUp(1, "two")
-    | keyword:bind  variable:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  task:pairUp  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+132 |     fixed pair: (int, text) = pairUp(1, "two")
+    | keyword:fixed  variable:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  task:pairUp  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
 133 |     show(pair.0)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  punctuation:)
 134 |     show(pair.1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)
-135 |     bind a, b = twoOf(true)
-    | keyword:bind  variable:a  punctuation:,  variable:b  operator:=  task:twoOf  punctuation:(  keyword:true  punctuation:)
+135 |     fixed a, b = twoOf(true)
+    | keyword:fixed  variable:a  punctuation:,  variable:b  operator:=  task:twoOf  punctuation:(  keyword:true  punctuation:)
 136 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
 137 |     show(b)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:)
 139 |     ; Shapes, kinds, tuples, slices, and pointers are types like any other.
     | comment:; Shapes, kinds, tuples, slices, and pointers are types like any other.
-140 |     bind place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
-    | keyword:bind  variable:place  operator:=  task:second  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
+140 |     fixed place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
+    | keyword:fixed  variable:place  operator:=  task:second  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
 141 |     show(place.x)
     | builtin-fn:show  punctuation:(  variable:place  punctuation:.  field:x  punctuation:)
-142 |     bind shade = middle(Shade.Light, Shade.Dark(7))
-    | keyword:bind  variable:shade  operator:=  task:middle  punctuation:(  type:Shade  punctuation:.  variant:Light  punctuation:,  type:Shade  punctuation:.  variant:Dark  punctuation:(  number:7  punctuation:)  punctuation:)
+142 |     fixed shade = middle(Shade.Light, Shade.Dark(7))
+    | keyword:fixed  variable:shade  operator:=  task:middle  punctuation:(  type:Shade  punctuation:.  variant:Light  punctuation:,  type:Shade  punctuation:.  variant:Dark  punctuation:(  number:7  punctuation:)  punctuation:)
 143 |     match shade
     | keyword:match  variable:shade
 144 |         case Light
@@ -248,40 +248,40 @@
     | builtin-fn:show  punctuation:(  variable:level  punctuation:)
 148 |     fi
     | keyword:fi
-149 |     bind both = second((1, "one"), (2, "two"))
-    | keyword:bind  variable:both  operator:=  task:second  punctuation:(  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)  punctuation:,  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:)  punctuation:)
+149 |     fixed both = second((1, "one"), (2, "two"))
+    | keyword:fixed  variable:both  operator:=  task:second  punctuation:(  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)  punctuation:,  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:)  punctuation:)
 150 |     show(both.1)
     | builtin-fn:show  punctuation:(  variable:both  punctuation:.  field:1  punctuation:)
-151 |     bind rows = second<[int]@r>(ns, ns)
-    | keyword:bind  variable:rows  operator:=  task:second  punctuation:<  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:>  punctuation:(  variable:ns  punctuation:,  variable:ns  punctuation:)
+151 |     fixed rows = second<[int]@r>(ns, ns)
+    | keyword:fixed  variable:rows  operator:=  task:second  punctuation:<  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:>  punctuation:(  variable:ns  punctuation:,  variable:ns  punctuation:)
 152 |     show(rows.len)
     | builtin-fn:show  punctuation:(  variable:rows  punctuation:.  field:len  punctuation:)
-153 |     bind held: ^int@r = new int(9) at r
-    | keyword:bind  variable:held  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:9  punctuation:)  keyword:at  region:r
+153 |     fixed held: ^int@r = new int(9) at r
+    | keyword:fixed  variable:held  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:9  punctuation:)  keyword:at  region:r
 154 |     show(second(held, held)^)
     | builtin-fn:show  punctuation:(  task:second  punctuation:(  variable:held  punctuation:,  variable:held  punctuation:)  operator:^  punctuation:)
 155 |     show(countDown("still here", 3))
     | builtin-fn:show  punctuation:(  task:countDown  punctuation:(  string:"still here"  punctuation:,  number:3  punctuation:)  punctuation:)
 157 |     ; A slice built in the region the task is given, and a copy made there.
     | comment:; A slice built in the region the task is given, and a copy made there.
-158 |     bind made = listOf(r, 10, 20)
-    | keyword:bind  variable:made  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  number:10  punctuation:,  number:20  punctuation:)
+158 |     fixed made = listOf(r, 10, 20)
+    | keyword:fixed  variable:made  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  number:10  punctuation:,  number:20  punctuation:)
 159 |     show(made[0] + made[1])
     | builtin-fn:show  punctuation:(  variable:made  punctuation:[  number:0  punctuation:]  operator:+  variable:made  punctuation:[  number:1  punctuation:]  punctuation:)
-160 |     bind words = listOf(r, "one".copy() at r, "two".copy() at r)
-    | keyword:bind  variable:words  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  string:"one"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+160 |     fixed words = listOf(r, "one".copy() at r, "two".copy() at r)
+    | keyword:fixed  variable:words  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  string:"one"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 161 |     show(words[1])
     | builtin-fn:show  punctuation:(  variable:words  punctuation:[  number:1  punctuation:]  punctuation:)
 162 |     show(kept(r, 3))
     | builtin-fn:show  punctuation:(  task:kept  punctuation:(  region:r  punctuation:,  number:3  punctuation:)  punctuation:)
 163 |     show(kept(r, "a literal is in no region"))
     | builtin-fn:show  punctuation:(  task:kept  punctuation:(  region:r  punctuation:,  string:"a literal is in no region"  punctuation:)  punctuation:)
-164 |     bind copies = copiedInto(r, names)
-    | keyword:bind  variable:copies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
+164 |     fixed copies = copiedInto(r, names)
+    | keyword:fixed  variable:copies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
 165 |     show(copies[0])
     | builtin-fn:show  punctuation:(  variable:copies  punctuation:[  number:0  punctuation:]  punctuation:)
-166 |     bind alsoCopies = copiedInto(r, ns)
-    | keyword:bind  variable:alsoCopies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:ns  punctuation:)
+166 |     fixed alsoCopies = copiedInto(r, ns)
+    | keyword:fixed  variable:alsoCopies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:ns  punctuation:)
 167 |     show(alsoCopies[2])
     | builtin-fn:show  punctuation:(  variable:alsoCopies  punctuation:[  number:2  punctuation:]  punctuation:)
 168 | fi

@@ -17,8 +17,8 @@ fi
 
 task main()
     region r
-    bind ada = Person { first: "Ada", last: "Lovelace" }
-    bind name = full(ada, r)
+    fixed ada = Person { first: "Ada", last: "Lovelace" }
+    fixed name = full(ada, r)
     show(name)
     show(name.len)
     show(("<" + name + ">")@r)
@@ -29,7 +29,7 @@ task main()
     show(("ab\0" + "cd")@r.len)
     show("caf" + "é ✓" at r)
     ; Joined text can be joined again, and compared and cut like any text.
-    hold line = "" + "" at r
+    flex line = "" + "" at r
     each word in ["one", "two", "three"]
         line = line + word + "," at r
     fi
@@ -37,28 +37,28 @@ task main()
     show(line[0..line.len - 1])
     show(line < "p" + "" at r)
     ; Text in a region inside a loop, freed on every pass.
-    hold count = 0
+    flex count = 0
     loop count < 2
         region pass
-        bind greeting = "hi " + name at pass
+        fixed greeting = "hi " + name at pass
         show(greeting)
         count = count + 1
     fi
     ; A slice of joined text.
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add("x" + "y" at r)
     names.add(names[0] + names[0] at r)
     show(names[1])
     ; A join is one operand of whatever is around it.
-    bind a = "x"
+    fixed a = "x"
     show(a + "y" at r == "xy")
     when a + a at r < "xz" and a + "" at r == a
         show("both")
     fi
     show((a + a)@r[0..1])
     show((a + "!")@r.len)
-    bind pair = (a + "1" at r, a + "2" at r)
+    fixed pair = (a + "1" at r, a + "2" at r)
     show(pair.1)
-    bind found: maybe text@r = a + "m" at r
+    fixed found: maybe text@r = a + "m" at r
     show(found { "none" })
 fi

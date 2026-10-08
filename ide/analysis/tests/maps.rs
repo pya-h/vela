@@ -9,7 +9,7 @@ use vela_analysis::{Analysis, CompletionItem, LineIndex};
 
 const PROGRAM: &str = "\
 task total(m: [text: int]@r) -> int
-    hold sum = 0
+    flex sum = 0
     each name, count in m
         sum = sum + count
     fi
@@ -19,17 +19,17 @@ fi
 task main()
     CHECK
     region r
-    hold ages = new [text: int]([\"ana\": 31]) at r
-    hold sizes = [\"w\": 1.5, \"h\": 2.0] at r
-    hold named = new [:int]([one: 1, two: 2]) at r
+    flex ages = new [text: int]([\"ana\": 31]) at r
+    flex sizes = [\"w\": 1.5, \"h\": 2.0] at r
+    flex named = new [:int]([one: 1, two: 2]) at r
     ages[\"bo\"] = 25
-    bind age = ages[\"ana\"]
-    bind maybe_age = ages[#\"cy\"]
-    bind known = ages.has(\"bo\")
-    bind taken = ages.del(\"bo\")
-    bind names = ages.keys at r
-    bind counts = ages.values at r
-    bind how_many = ages.len
+    fixed age = ages[\"ana\"]
+    fixed maybe_age = ages[#\"cy\"]
+    fixed known = ages.has(\"bo\")
+    fixed taken = ages.del(\"bo\")
+    fixed names = ages.keys at r
+    fixed counts = ages.values at r
+    fixed how_many = ages.len
     @@
 fi
 ";

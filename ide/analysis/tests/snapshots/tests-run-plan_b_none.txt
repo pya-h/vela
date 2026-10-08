@@ -66,24 +66,24 @@
     | keyword:region  region:r
  40 |     ; A typed scan: a number read, or none when the line isn't one.
     | comment:; A typed scan: a number read, or none when the line isn't one.
- 41 |     bind b: maybe int = scan("enter: ", int) { none }
-    | keyword:bind  variable:b  punctuation::  keyword:maybe  type-builtin:int  operator:=  builtin-fn:scan  punctuation:(  string:"enter: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 41 |     fixed b: maybe int = scan("enter: ", int) { none }
+    | keyword:fixed  variable:b  punctuation::  keyword:maybe  type-builtin:int  operator:=  builtin-fn:scan  punctuation:(  string:"enter: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
  42 |     when b ~= 10
     | keyword:when  variable:b  operator:~=  number:10
  43 |         show("ok")
     | builtin-fn:show  punctuation:(  string:"ok"  punctuation:)
  44 |     fi
     | keyword:fi
- 45 |     bind c = scan("again: ", int) { none }
-    | keyword:bind  variable:c  operator:=  builtin-fn:scan  punctuation:(  string:"again: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 45 |     fixed c = scan("again: ", int) { none }
+    | keyword:fixed  variable:c  operator:=  builtin-fn:scan  punctuation:(  string:"again: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
  46 |     show(b, " ", c, " ", c == none)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:,  string:" "  punctuation:,  variable:c  operator:==  keyword:none  punctuation:)
  47 |     ; A value that can fail, with or without naming the failure.
     | comment:; A value that can fail, with or without naming the failure.
- 48 |     bind good = checked(4) { none }
-    | keyword:bind  variable:good  operator:=  task:checked  punctuation:(  number:4  punctuation:)  punctuation:{  keyword:none  punctuation:}
- 49 |     bind bad = checked(-4) {
-    | keyword:bind  variable:bad  operator:=  task:checked  punctuation:(  operator:-  number:4  punctuation:)  punctuation:{
+ 48 |     fixed good = checked(4) { none }
+    | keyword:fixed  variable:good  operator:=  task:checked  punctuation:(  number:4  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 49 |     fixed bad = checked(-4) {
+    | keyword:fixed  variable:bad  operator:=  task:checked  punctuation:(  operator:-  number:4  punctuation:)  punctuation:{
  50 |         failure e
     | keyword:failure  variable:e
  51 |         show("dropped: ", e)
@@ -96,28 +96,28 @@
     | builtin-fn:show  punctuation:(  variable:good  punctuation:,  string:" "  punctuation:,  variable:bad  punctuation:,  string:" "  punctuation:,  variable:good  operator:~=  number:4  punctuation:,  string:" "  punctuation:,  variable:bad  operator:~=  number:4  punctuation:)
  55 |     ; A plan B choosing between a value and none, through a when.
     | comment:; A plan B choosing between a value and none, through a when.
- 56 |     bind first = checked(-1) { when good ~= 4 7 else none fi }
-    | keyword:bind  variable:first  operator:=  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:when  variable:good  operator:~=  number:4  number:7  keyword:else  keyword:none  keyword:fi  punctuation:}
- 57 |     bind second = checked(-1) { when good ~= 5 7 else none fi }
-    | keyword:bind  variable:second  operator:=  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:when  variable:good  operator:~=  number:5  number:7  keyword:else  keyword:none  keyword:fi  punctuation:}
+ 56 |     fixed first = checked(-1) { when good ~= 4 7 else none fi }
+    | keyword:fixed  variable:first  operator:=  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:when  variable:good  operator:~=  number:4  number:7  keyword:else  keyword:none  keyword:fi  punctuation:}
+ 57 |     fixed second = checked(-1) { when good ~= 5 7 else none fi }
+    | keyword:fixed  variable:second  operator:=  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:when  variable:good  operator:~=  number:5  number:7  keyword:else  keyword:none  keyword:fi  punctuation:}
  58 |     show(first, " ", second)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:,  string:" "  punctuation:,  variable:second  punctuation:)
  59 |     ; A kind, and a pointer.
     | comment:; A kind, and a pointer.
- 60 |     bind big = sized(20) { none }
-    | keyword:bind  variable:big  operator:=  task:sized  punctuation:(  number:20  punctuation:)  punctuation:{  keyword:none  punctuation:}
- 61 |     bind small = sized(2) { none }
-    | keyword:bind  variable:small  operator:=  task:sized  punctuation:(  number:2  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 60 |     fixed big = sized(20) { none }
+    | keyword:fixed  variable:big  operator:=  task:sized  punctuation:(  number:20  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 61 |     fixed small = sized(2) { none }
+    | keyword:fixed  variable:small  operator:=  task:sized  punctuation:(  number:2  punctuation:)  punctuation:{  keyword:none  punctuation:}
  62 |     show(big, " ", small)
     | builtin-fn:show  punctuation:(  variable:big  punctuation:,  string:" "  punctuation:,  variable:small  punctuation:)
- 63 |     bind three = new int(3) at r
-    | keyword:bind  variable:three  operator:=  keyword:new  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:r
+ 63 |     fixed three = new int(3) at r
+    | keyword:fixed  variable:three  operator:=  keyword:new  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:r
  64 |     show(point(three, true) { none } ~= three, " ", point(three, false) { none } == none)
     | builtin-fn:show  punctuation:(  task:point  punctuation:(  variable:three  punctuation:,  keyword:true  punctuation:)  punctuation:{  keyword:none  punctuation:}  operator:~=  variable:three  punctuation:,  string:" "  punctuation:,  task:point  punctuation:(  variable:three  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:none  punctuation:}  operator:==  keyword:none  punctuation:)
  65 |     ; On a value that is a maybe already, 'm { none }' is m itself.
     | comment:; On a value that is a maybe already, 'm { none }' is m itself.
- 66 |     bind m = half(8) { none }
-    | keyword:bind  variable:m  operator:=  task:half  punctuation:(  number:8  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 66 |     fixed m = half(8) { none }
+    | keyword:fixed  variable:m  operator:=  task:half  punctuation:(  number:8  punctuation:)  punctuation:{  keyword:none  punctuation:}
  67 |     show(m, " ", half(7) { none }, " ", half(8) { none } ~= 4)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  task:half  punctuation:(  number:7  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:,  string:" "  punctuation:,  task:half  punctuation:(  number:8  punctuation:)  punctuation:{  keyword:none  punctuation:}  operator:~=  number:4  punctuation:)
  68 | fi

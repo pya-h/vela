@@ -9,7 +9,7 @@ use vela_analysis::{Analysis, LineIndex, TokenClass};
 
 const PROGRAM: &str = "\
 task main()
-    hold total = 0
+    flex total = 0
     outer => each a in 0..4
         inner => loop total < 100
             total = total + a
@@ -88,11 +88,11 @@ fn break_and_continue_are_offered_inside_a_loop_and_take_the_names_of_the_loops_
 
 #[test]
 fn a_lambda_inside_a_loop_is_a_task_of_its_own() {
-    let program = "task main()\n    outer => each a in 0..4\n        bind f = (x: int) -> int\n            INSIDE\n            <- x\n        fi\n        AFTER\n    fi\nfi\n";
+    let program = "task main()\n    outer => each a in 0..4\n        fixed f = (x: int) -> int\n            INSIDE\n            <- x\n        fi\n        AFTER\n    fi\nfi\n";
     let offers_jumps = |marked: &str| labels(marked).iter().any(|label| label == "break");
     assert!(!offers_jumps(&program.replace("INSIDE", "@@").replace("AFTER", "show(1)")));
     assert!(offers_jumps(&program.replace("            INSIDE\n", "").replace("AFTER", "@@")));
-    let one_line = "task main()\n    each a in 0..4\n        bind f = (x: int) -> int <- x * 2 fi\n        @@\n    fi\nfi\n";
+    let one_line = "task main()\n    each a in 0..4\n        fixed f = (x: int) -> int <- x * 2 fi\n        @@\n    fi\nfi\n";
     assert!(offers_jumps(one_line));
     // Only the lambda's own loops are named in it.
     let named = program.replace("INSIDE", "inner => each j in 0..2\n                break @@\n            fi").replace("AFTER", "show(1)");
@@ -101,7 +101,7 @@ fn a_lambda_inside_a_loop_is_a_task_of_its_own() {
 
 #[test]
 fn what_an_each_goes_through_is_outside_its_loop() {
-    let source = "task main()\n    bind xs = [1, 2]\n    each x in xs[#5] { @@\n    }\n        show(x)\n    fi\nfi\n";
+    let source = "task main()\n    fixed xs = [1, 2]\n    each x in xs[#5] { @@\n    }\n        show(x)\n    fi\nfi\n";
     assert!(!labels(source).iter().any(|label| label == "break"));
 }
 

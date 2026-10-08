@@ -1,9 +1,9 @@
-; error: 8:23: expected type int, got Light
+; error: 8:24: expected type int, got Light
 kind Light
     Off
     Dim(level: int)
 fi
 
 task main()
-    bind level: int = Light.Off
+    fixed level: int = Light.Off
 fi

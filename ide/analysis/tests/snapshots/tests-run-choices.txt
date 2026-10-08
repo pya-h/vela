@@ -42,8 +42,8 @@
     | keyword:<-  keyword:match  parameter:s
  26 |     case Circle r
     | keyword:case  variant:Circle  variable:r
- 27 |         bind size = r * 2.0
-    | keyword:bind  variable:size  operator:=  variable:r  operator:*  number:2.0
+ 27 |         fixed size = r * 2.0
+    | keyword:fixed  variable:size  operator:=  variable:r  operator:*  number:2.0
  28 |         when size > 10.0
     | keyword:when  variable:size  operator:>  number:10.0
  29 |             "a wide circle"
@@ -108,8 +108,8 @@
     | keyword:fi
  63 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 64 |     bind circle = Circle(2.0)
-    | keyword:bind  variable:circle  operator:=  variant:Circle  punctuation:(  number:2.0  punctuation:)
+ 64 |     fixed circle = Circle(2.0)
+    | keyword:fixed  variable:circle  operator:=  variant:Circle  punctuation:(  number:2.0  punctuation:)
  65 |     show(area(circle), " ", area(Rect(2.0, 3.0)))
     | builtin-fn:show  punctuation:(  task:area  punctuation:(  variable:circle  punctuation:)  punctuation:,  string:" "  punctuation:,  task:area  punctuation:(  variant:Rect  punctuation:(  number:2.0  punctuation:,  number:3.0  punctuation:)  punctuation:)  punctuation:)
  66 |     show(describe(circle), ", ", describe(Circle(0.5)), ", ", describe(Rect(1.0, 1.0)))
@@ -120,8 +120,8 @@
     | comment:; A case that gives `none` makes the whole a maybe, and one that gives a
  70 |     ; failure makes it a `T ~ E`.
     | comment:; failure makes it a `T ~ E`.
- 71 |     bind half = match Ok(8)
-    | keyword:bind  variable:half  operator:=  keyword:match  variant:Ok  punctuation:(  number:8  punctuation:)
+ 71 |     fixed half = match Ok(8)
+    | keyword:fixed  variable:half  operator:=  keyword:match  variant:Ok  punctuation:(  number:8  punctuation:)
  72 |     case Ok value = value / 2
     | keyword:case  variant:Ok  variable:value  operator:=  variable:value  operator:/  number:2
  73 |     case Missing = none
@@ -130,8 +130,8 @@
     | keyword:fi
  75 |     show(half)
     | builtin-fn:show  punctuation:(  variable:half  punctuation:)
- 76 |     bind checked = match Ok(-1)
-    | keyword:bind  variable:checked  operator:=  keyword:match  variant:Ok  punctuation:(  operator:-  number:1  punctuation:)
+ 76 |     fixed checked = match Ok(-1)
+    | keyword:fixed  variable:checked  operator:=  keyword:match  variant:Ok  punctuation:(  operator:-  number:1  punctuation:)
  77 |     case Ok value
     | keyword:case  variant:Ok  variable:value
  78 |         when value < 0
@@ -154,8 +154,8 @@
     | comment:; A branch may leave the task instead of giving a value, and a value may be
  88 |     ; used anywhere: in an argument, or in a larger expression.
     | comment:; used anywhere: in an argument, or in a larger expression.
- 89 |     bind doubled = 1 + match Ok(20)
-    | keyword:bind  variable:doubled  operator:=  number:1  operator:+  keyword:match  variant:Ok  punctuation:(  number:20  punctuation:)
+ 89 |     fixed doubled = 1 + match Ok(20)
+    | keyword:fixed  variable:doubled  operator:=  number:1  operator:+  keyword:match  variant:Ok  punctuation:(  number:20  punctuation:)
  90 |     case Ok value = value
     | keyword:case  variant:Ok  variable:value  operator:=  variable:value
  91 |     case Missing
@@ -174,8 +174,8 @@
     | comment:; literal lasts, so it fits beside text of a region.
  99 |     region kept default
     | keyword:region  region:kept  keyword:default
-100 |     bind note = when doubled > 10
-    | keyword:bind  variable:note  operator:=  keyword:when  variable:doubled  operator:>  number:10
+100 |     fixed note = when doubled > 10
+    | keyword:fixed  variable:note  operator:=  keyword:when  variable:doubled  operator:>  number:10
 101 |         "big: " + doubled.str()
     | string:"big: "  operator:+  variable:doubled  punctuation:.  field:str  punctuation:(  punctuation:)
 102 |     else
@@ -190,10 +190,10 @@
     | comment:; A plan B's block gives its value the same way, so a `when` or a `match` on
 108 |     ; its last line gives it through their branches.
     | comment:; its last line gives it through their branches.
-109 |     bind first: maybe int = none
-    | keyword:bind  variable:first  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
-110 |     bind fallback = first {
-    | keyword:bind  variable:fallback  operator:=  variable:first  punctuation:{
+109 |     fixed first: maybe int = none
+    | keyword:fixed  variable:first  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+110 |     fixed fallback = first {
+    | keyword:fixed  variable:fallback  operator:=  variable:first  punctuation:{
 111 |         when doubled > 10
     | keyword:when  variable:doubled  operator:>  number:10
 112 |             doubled
@@ -242,8 +242,8 @@
     | comment:; around it may widen: here the case giving `none` makes the whole a maybe,
 136 |     ; so the inner `when` gives a maybe int too.
     | comment:; so the inner `when` gives a maybe int too.
-137 |     bind inner = match Ok(3)
-    | keyword:bind  variable:inner  operator:=  keyword:match  variant:Ok  punctuation:(  number:3  punctuation:)
+137 |     fixed inner = match Ok(3)
+    | keyword:fixed  variable:inner  operator:=  keyword:match  variant:Ok  punctuation:(  number:3  punctuation:)
 138 |     case Ok value
     | keyword:case  variant:Ok  variable:value
 139 |         when value > 2
@@ -292,8 +292,8 @@
     | comment:; Branches that all give `none`, or all give a failure: the type comes from
 163 |     ; the place the value goes, and each branch becomes part of it.
     | comment:; the place the value goes, and each branch becomes part of it.
-164 |     bind empty: maybe int = when doubled > 10
-    | keyword:bind  variable:empty  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:when  variable:doubled  operator:>  number:10
+164 |     fixed empty: maybe int = when doubled > 10
+    | keyword:fixed  variable:empty  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:when  variable:doubled  operator:>  number:10
 165 |         none
     | keyword:none
 166 |     else
@@ -304,8 +304,8 @@
     | keyword:fi
 169 |     show(empty)
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:)
-170 |     bind failed: int ~ text = match Ok(1)
-    | keyword:bind  variable:failed  punctuation::  type-builtin:int  operator:~  type-builtin:text  operator:=  keyword:match  variant:Ok  punctuation:(  number:1  punctuation:)
+170 |     fixed failed: int ~ text = match Ok(1)
+    | keyword:fixed  variable:failed  punctuation::  type-builtin:int  operator:~  type-builtin:text  operator:=  keyword:match  variant:Ok  punctuation:(  number:1  punctuation:)
 171 |     case Ok value = fail "first"
     | keyword:case  variant:Ok  variable:value  operator:=  keyword:fail  string:"first"
 172 |     case Missing = fail "second"

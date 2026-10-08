@@ -4,19 +4,19 @@ task logged<R>(next: (@a, @b, int) -> R, a: region, b: region, n: int) -> R
     <- next(a, b, n)
 fi
 task cubes(s: region, r: region, n: int) -> [int]@s
-    hold made = new [int]() at s
+    flex made = new [int]() at s
     made.add(n)
     <- made
 fi
 task main()
     region r
-    hold keep = new [int]() at r
+    flex keep = new [int]() at r
     block
         region inner
         keep = logged(cubes, inner, r, 3)
     fi
     region other
-    hold junk = new [int]() at other
+    flex junk = new [int]() at other
     each i in 0..1000
         junk.add(i)
     fi

@@ -2,6 +2,6 @@
 include modules/library
 
 task main()
-    bind suit = library.Suit.Hearts
+    fixed suit = library.Suit.Hearts
     show(suit.strength())
 fi

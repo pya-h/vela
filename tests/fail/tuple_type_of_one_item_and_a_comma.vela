@@ -1,5 +1,5 @@
-; error: 3:13: a tuple holds two or more items, as in '(int, text)'
+; error: 3:14: a tuple holds two or more items, as in '(int, text)'
 task main()
-    bind t: (int,) = 1
+    fixed t: (int,) = 1
     show(t)
 fi

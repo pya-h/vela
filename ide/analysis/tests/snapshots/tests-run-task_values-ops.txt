@@ -20,7 +20,7 @@
     | field:name  punctuation::  type-builtin:text  operator:=  string:"sq"
  14 |     run: (int) -> int = sq
     | field:run  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:sq
- 15 |     shared hold chosen: (int) -> int = sq
-    | keyword:shared  keyword:hold  field:chosen  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:sq
+ 15 |     shared flex chosen: (int) -> int = sq
+    | keyword:shared  keyword:flex  field:chosen  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:sq
  16 | fi
     | keyword:fi

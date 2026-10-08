@@ -2,7 +2,7 @@
 ; `P` alone is the type of the value of a turn of `each v in args`, so it is
 ; written only inside one.
 task last<P...: shown & frozen>(args: P...)
-    hold kept: maybe P = none
+    flex kept: maybe P = none
     each v in args
         kept = v
     fi

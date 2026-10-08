@@ -1,4 +1,4 @@
-; error: 3:10: '( … )' takes the items of a tuple, but this value is int
+; error: 3:11: '( … )' takes the items of a tuple, but this value is int
 task main()
-    bind (a, b) = 5
+    fixed (a, b) = 5
 fi

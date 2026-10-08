@@ -1,7 +1,7 @@
-; error: 5:15: '[@r]' keeps what the lambda uses in 'r', so a region the lambda takes is named otherwise, as in '@a'
+; error: 5:16: '[@r]' keeps what the lambda uses in 'r', so a region the lambda takes is named otherwise, as in '@a'
 ; The type of a lambda that keeps what it uses takes no region named as the one it keeps.
 task main()
     region r
-    bind f: [@r](@r, int) -> int = 3
+    fixed f: [@r](@r, int) -> int = 3
     show(1)
 fi

@@ -5,9 +5,9 @@ kind Which
 fi
 
 task main()
-    bind k = First
-    bind c = true
-    bind bad = match k
+    fixed k = First
+    fixed c = true
+    fixed bad = match k
     case First
         when c
             1

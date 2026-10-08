@@ -1,4 +1,4 @@
-; Lists of names: types on some or all of them, `hold` from a call sending
+; Lists of names: types on some or all of them, `flex` from a call sending
 ; several results, and `_` dropping a result.
 
 task divmod(a: int, b: int) -> int, int
@@ -11,13 +11,13 @@ task twice(n: int) -> int
 fi
 
 task main()
-    bind x: int, y: float = 3, 0.5
+    fixed x: int, y: float = 3, 0.5
     show(x)
     show(y)
-    hold a, b = divmod(17, 5)
+    flex a, b = divmod(17, 5)
     a = a + b
     show(a)
-    hold c: maybe int, d = none, 4
+    flex c: maybe int, d = none, 4
     c = d
     show(c)
     _ = twice(4)

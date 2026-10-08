@@ -1,6 +1,6 @@
 ; error: 5:13: type [int]@r has no methods; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'
 task main()
     region r
-    hold xs = new [int]([1]) at r
+    flex xs = new [int]([1]) at r
     show(xs.pop())
 fi

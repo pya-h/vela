@@ -11,7 +11,7 @@ shape Pad
     fi
 fi
 task main()
-    bind p = Pad { size: 3 }
+    fixed p = Pad { size: 3 }
     show(p.per(1))
     show(p.per(0))
 fi

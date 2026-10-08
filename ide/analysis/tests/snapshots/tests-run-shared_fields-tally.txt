@@ -10,10 +10,10 @@
     | keyword:shared  keyword:read  field:made  punctuation::  type-builtin:int  operator:=  number:0
   7 |     ; Any file that sees it may change it.
     | comment:; Any file that sees it may change it.
-  8 |     shared hold limit: int = 3
-    | keyword:shared  keyword:hold  field:limit  punctuation::  type-builtin:int  operator:=  number:3
-  9 |     priv shared hold secret: int = 42
-    | keyword:priv  keyword:shared  keyword:hold  field:secret  punctuation::  type-builtin:int  operator:=  number:42
+  8 |     shared flex limit: int = 3
+    | keyword:shared  keyword:flex  field:limit  punctuation::  type-builtin:int  operator:=  number:3
+  9 |     priv shared flex secret: int = 42
+    | keyword:priv  keyword:shared  keyword:flex  field:secret  punctuation::  type-builtin:int  operator:=  number:42
  11 |     alters tick()
     | keyword:alters  method:tick  punctuation:(  punctuation:)
  12 |         .n = .n + 1

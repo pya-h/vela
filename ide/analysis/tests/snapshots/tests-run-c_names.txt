@@ -58,16 +58,16 @@
     | keyword:fi
  36 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 37 |     bind char = 1
-    | keyword:bind  variable:char  operator:=  number:1
- 38 |     hold unsigned = char + 1
-    | keyword:hold  variable:unsigned  operator:=  variable:char  operator:+  number:1
+ 37 |     fixed char = 1
+    | keyword:fixed  variable:char  operator:=  number:1
+ 38 |     flex unsigned = char + 1
+    | keyword:flex  variable:unsigned  operator:=  variable:char  operator:+  number:1
  39 |     unsigned = unsigned * 10
     | variable:unsigned  operator:=  variable:unsigned  operator:*  number:10
  40 |     show(unsigned)
     | builtin-fn:show  punctuation:(  variable:unsigned  punctuation:)
- 41 |     bind r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
-    | keyword:bind  variable:r  operator:=  type:Record  punctuation:{  field:default  punctuation::  number:3  punctuation:,  field:int  punctuation::  number:1.5  punctuation:,  field:stdout  punctuation::  string:"out"  punctuation:,  field:size_t  punctuation::  keyword:true  punctuation:}
+ 41 |     fixed r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
+    | keyword:fixed  variable:r  operator:=  type:Record  punctuation:{  field:default  punctuation::  number:3  punctuation:,  field:int  punctuation::  number:1.5  punctuation:,  field:stdout  punctuation::  string:"out"  punctuation:,  field:size_t  punctuation::  keyword:true  punctuation:}
  42 |     show(r.default)
     | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:default  punctuation:)
  43 |     show(r.int)
@@ -92,20 +92,20 @@
     | builtin-fn:show  punctuation:(  variable:NULL  punctuation:)
  53 |     fi
     | keyword:fi
- 54 |     bind vela_x = 5
-    | keyword:bind  variable:vela_x  operator:=  number:5
+ 54 |     fixed vela_x = 5
+    | keyword:fixed  variable:vela_x  operator:=  number:5
  55 |     show(vela_x)
     | builtin-fn:show  punctuation:(  variable:vela_x  punctuation:)
  56 |     region free
     | keyword:region  region:free
- 57 |     bind boxed = new Record(r) at free
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)  keyword:at  region:free
+ 57 |     fixed boxed = new Record(r) at free
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)  keyword:at  region:free
  58 |     show(boxed^.stdout)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:stdout  punctuation:)
  59 |     region static
     | keyword:region  region:static
- 60 |     bind message = new@static text("boxed text")
-    | keyword:bind  variable:message  operator:=  keyword:new  operator:@  region:static  type-builtin:text  punctuation:(  string:"boxed text"  punctuation:)
+ 60 |     fixed message = new@static text("boxed text")
+    | keyword:fixed  variable:message  operator:=  keyword:new  operator:@  region:static  type-builtin:text  punctuation:(  string:"boxed text"  punctuation:)
  61 |     show(message^)
     | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
  62 | fi

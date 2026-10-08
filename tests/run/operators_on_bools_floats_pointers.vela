@@ -10,9 +10,9 @@ task main()
     show(true or false and false)
     show(false and true or true)
     region r
-    bind p = new int(1) at r
-    bind q = new int(1) at r
+    fixed p = new int(1) at r
+    fixed q = new int(1) at r
     show(p != q)
-    bind same = p
+    fixed same = p
     show(same == p)
 fi

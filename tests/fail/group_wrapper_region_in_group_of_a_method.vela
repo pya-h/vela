@@ -8,7 +8,7 @@ shape Pad
     n: int
     $(audited)
     rows(r: region, k: int) -> [int]@r
-        hold xs = new [int]() at r
+        flex xs = new [int]() at r
         xs.add(.n + k)
         <- xs
     fi
@@ -16,6 +16,6 @@ fi
 
 task main()
     region q
-    bind p = Pad { n: 1 }
+    fixed p = Pad { n: 1 }
     show(p.rows(q, 2).len)
 fi

@@ -6,8 +6,8 @@
     | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
   5 |     show("> ", label)
     | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:label  punctuation:)
-  6 |     bind result = next(args...)
-    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+  6 |     fixed result = next(args...)
+    | keyword:fixed  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
   7 |     show("< ", label, " ", result)
     | builtin-fn:show  punctuation:(  string:"< "  punctuation:,  parameter:label  punctuation:,  string:" "  punctuation:,  variable:result  punctuation:)
   8 |     <- result

@@ -10,7 +10,7 @@ shape Counter
 fi
 
 task main()
-    hold c = Counter { count: 1_152_921_504_606_846_976 }
+    flex c = Counter { count: 1_152_921_504_606_846_976 }
     endless
         show(c.count)
         c.step()

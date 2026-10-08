@@ -20,7 +20,7 @@ fi
 task main()
     region r
     ; A File is made from its path, and asked about.
-    bind here = File { path: "paths.vela" }
+    fixed here = File { path: "paths.vela" }
     show(here.path, " ", here.exists())
     show(File { path: "no such file" }.exists())
     ; An empty file is a file; a folder is not one, though a file in it is.
@@ -31,7 +31,7 @@ task main()
     show(readable("paths.vela"), " ", readable(""))
 
     ; Written, then added to, then read back.
-    hold notes = File { path: "notes.txt" }
+    flex notes = File { path: "notes.txt" }
     show(notes.str() at r)
     notes.open(FileMode.Write) at r { failure e
         show(why(e))
@@ -57,7 +57,7 @@ task main()
         show(why(e))
     }
     show(notes.line() at r { "failed" }, " ", notes.ended())
-    bind rest = notes.lines() at r { failure e
+    fixed rest = notes.lines() at r { failure e
         new [text]([why(e)]) at r
     }
     show(rest.len, " ", rest[0], " ", rest[1], " ", notes.ended())
@@ -67,11 +67,11 @@ task main()
     }
 
     ; The whole of a file at once, and lines ended the Windows way.
-    hold windows = File { path: "windows.txt" }
+    flex windows = File { path: "windows.txt" }
     windows.open(FileMode.Read) at r { failure e
         show(why(e))
     }
-    bind lines = windows.lines() at r { failure e
+    fixed lines = windows.lines() at r { failure e
         new [text]([why(e)]) at r
     }
     show(lines.len, " [", lines[0], "] [", lines[1], "] [", lines[2], "]")
@@ -87,7 +87,7 @@ task main()
     }
 
     ; Read and written through one opening.
-    hold both = File { path: "notes.txt" }
+    flex both = File { path: "notes.txt" }
     both.open(FileMode.ReadWrite) at r { failure e
         show(why(e))
     }
@@ -111,7 +111,7 @@ task main()
     }
 
     ; What goes wrong.
-    hold wrong = File { path: "notes.txt" }
+    flex wrong = File { path: "notes.txt" }
     wrong.open(FileMode.Read) at r { failure e
         show(why(e))
     }
@@ -139,7 +139,7 @@ task main()
     wrong.close() { failure e
         show(why(e))
     }
-    hold missing = File { path: "missing.txt" }
+    flex missing = File { path: "missing.txt" }
     missing.open(FileMode.Read) at r { failure e
         show(why(e))
     }
@@ -152,7 +152,7 @@ task main()
 
     ; A region that ends closes the file opened in it; the File kept outside
     ; it still says what its methods left it, and finds it closed.
-    hold kept = File { path: "empty.txt" }
+    flex kept = File { path: "empty.txt" }
     each pass in 0..2
         region round
         kept.open(FileMode.Read) at round { failure e
@@ -167,11 +167,11 @@ task main()
     show(kept.str() at r)
 
     ; A copy closes the file for both.
-    hold first = File { path: "empty.txt" }
+    flex first = File { path: "empty.txt" }
     first.open(FileMode.Read) at r { failure e
         show(why(e))
     }
-    hold second = first
+    flex second = first
     second.close() { failure e
         show(why(e))
     }
@@ -180,7 +180,7 @@ task main()
     })
 
     ; Renamed, then deleted.
-    hold moved = File { path: "notes.txt" }
+    flex moved = File { path: "notes.txt" }
     moved.rename("moved.txt") { failure e
         show(why(e))
     }

@@ -2,7 +2,7 @@
 ; A group's count, args.len, is a value each use knows, and an index or a sum
 ; it is part of is checked as it runs, as any value's is.
 task past<P...>(args: P...) -> int
-    bind xs = [10, 20]
+    fixed xs = [10, 20]
     <- xs[args.len]
 fi
 

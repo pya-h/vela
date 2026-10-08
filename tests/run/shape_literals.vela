@@ -14,9 +14,9 @@ task describe(m: Marker, p: Point)
 fi
 
 task main()
-    bind p = Point { y: 2, x: 1 }
+    fixed p = Point { y: 2, x: 1 }
     describe(Marker {}, p)
-    hold q = Point { x: 10, y: 20 }
+    flex q = Point { x: 10, y: 20 }
     q = Point { y: q.x, x: q.y }
     show(q.x)
     show(q.y)

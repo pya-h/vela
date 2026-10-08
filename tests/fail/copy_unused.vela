@@ -1,6 +1,6 @@
 ; error: 5:10: this value is unused; only a task call can be used as a statement
 task main()
     region r
-    bind line = scan("") at r { "" }
+    fixed line = scan("") at r { "" }
     line.copy() at r
 fi

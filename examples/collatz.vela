@@ -4,8 +4,8 @@
 ; is longer than a goal, stopping once it finds one.
 
 task steps(from: int) -> int
-    hold count = 0
-    loop hold n = from || n != 1 || count++
+    flex count = 0
+    loop flex n = from || n != 1 || count++
         when n % 2 == 0
             n = n / 2
         else
@@ -17,9 +17,9 @@ fi
 
 task main()
     ; The walks of the first few starts, and the longest of them.
-    hold longest = 0
-    loop hold start = 1, bind last = 8 || start <= last || start++
-        bind walk = steps(start)
+    flex longest = 0
+    loop flex start = 1, fixed last = 8 || start <= last || start++
+        fixed walk = steps(start)
         show(start, ": ", walk, " steps")
         when walk > longest
             longest = walk
@@ -28,7 +28,7 @@ task main()
     show("longest: ", longest)
 
     ; The first start whose walk takes more than 100 steps.
-    hold start = 1
+    flex start = 1
     endless
         when steps(start) > 100
             break

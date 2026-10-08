@@ -6,7 +6,7 @@ fi
 
 task main()
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     each i in 0..4
         xs.add(i)
     fi
@@ -25,7 +25,7 @@ task main()
     fi
     show("left ", xs.len)
     ; An item added is gone through too
-    hold ys = new [int]([1]) at r
+    flex ys = new [int]([1]) at r
     each v in &ys
         when v < 5
             ys.add(v + 1)
@@ -33,14 +33,14 @@ task main()
         show(v)
     fi
     ; An array's items as they are now
-    hold arr = [1, 2, 3]
+    flex arr = [1, 2, 3]
     each v in &arr
         when v == 1
             arr[2] = 30
         fi
         show(v)
     fi
-    bind b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
+    fixed b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
     each v in &b^.items
         show(v)
     fi

@@ -3,20 +3,20 @@
 
 task sum_until_none(a: maybe int, b: maybe int) -> total: int, seen: int
     total, seen <- 0, 0
-    bind first = a { <- }
+    fixed first = a { <- }
     total, seen <- first, 1
-    bind second = b { <- }
+    fixed second = b { <- }
     total, seen <- total + second, seen + 1
 fi
 
 task main()
-    bind t1, s1 = sum_until_none(none, 4)
+    fixed t1, s1 = sum_until_none(none, 4)
     show(t1)
     show(s1)
-    bind t2, s2 = sum_until_none(3, none)
+    fixed t2, s2 = sum_until_none(3, none)
     show(t2)
     show(s2)
-    bind t3, s3 = sum_until_none(3, 4)
+    fixed t3, s3 = sum_until_none(3, 4)
     show(t3)
     show(s3)
 fi

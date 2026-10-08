@@ -3,7 +3,7 @@
 ; Writes what goes in and what comes out.
 task traced(next: (int) -> int, label: text, n: int) -> int
     show("> ", label, "(", n, ")")
-    bind result = next(n)
+    fixed result = next(n)
     show("< ", label, " = ", result)
     <- result
 fi

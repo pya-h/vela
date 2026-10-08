@@ -1,4 +1,4 @@
-; error: 11:18: a 'new' with no value makes a 'Point' of the values its fields fall back on, and field 'y' falls back on none; give the value, as in 'new Point(Point { y: … })'
+; error: 11:19: a 'new' with no value makes a 'Point' of the values its fields fall back on, and field 'y' falls back on none; give the value, as in 'new Point(Point { y: … })'
 ; 'new Point()' is the same as 'new Point', so each field needs a value to
 ; fall back on.
 shape Point
@@ -8,5 +8,5 @@ fi
 
 task main()
     region r
-    bind p = new Point() at r
+    fixed p = new Point() at r
 fi

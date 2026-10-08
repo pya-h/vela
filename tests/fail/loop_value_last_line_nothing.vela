@@ -3,7 +3,7 @@ task note(x: int)
     show(x)
 fi
 task main()
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         note(x)
     fi
 fi

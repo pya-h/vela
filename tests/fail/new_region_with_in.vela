@@ -1,5 +1,5 @@
-; error: 4:25: a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range
+; error: 4:26: a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range
 task main()
     region r
-    bind p = new int(1) in r
+    fixed p = new int(1) in r
 fi

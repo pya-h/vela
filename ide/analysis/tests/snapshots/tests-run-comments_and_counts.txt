@@ -6,12 +6,12 @@
     | comment:; its count, as in item #4.
   5 | task main()   ; a comment after a header
     | keyword:task  task:main  punctuation:(  punctuation:)  comment:; a comment after a header
-  6 |     bind week: [int#7] = [1, 2, 3, 4, 5, 6, 7] ; after a statement
-    | keyword:bind  variable:week  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:7  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:]  comment:; after a statement
-  7 |     bind zeros = [0 # 3]                        ; spaces around '#' are allowed
-    | keyword:bind  variable:zeros  operator:=  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  comment:; spaces around '#' are allowed
-  8 |     bind grid: [[float#2]#3] = [[0.5#2]#3]
-    | keyword:bind  variable:grid  punctuation::  punctuation:[  punctuation:[  type-builtin:float  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]
+  6 |     fixed week: [int#7] = [1, 2, 3, 4, 5, 6, 7] ; after a statement
+    | keyword:fixed  variable:week  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:7  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:]  comment:; after a statement
+  7 |     fixed zeros = [0 # 3]                        ; spaces around '#' are allowed
+    | keyword:fixed  variable:zeros  operator:=  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  comment:; spaces around '#' are allowed
+  8 |     fixed grid: [[float#2]#3] = [[0.5#2]#3]
+    | keyword:fixed  variable:grid  punctuation::  punctuation:[  punctuation:[  type-builtin:float  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]
   9 |     show(week[3], " ", zeros.len, " ", grid[2][1])
     | builtin-fn:show  punctuation:(  variable:week  punctuation:[  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:zeros  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:[  number:2  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
  10 |     show(1);                                    ; a C habit: the ';' is a comment

@@ -80,7 +80,7 @@ kind Label
 fi
 
 task main()
-    hold light = Red
+    flex light = Red
     light.tell()
     light.flip()
     light.tell()
@@ -95,21 +95,21 @@ task main()
     show(light.sameAs(Amber(2)))
     show(light.sameAs(Red))
 
-    ; A method that changes nothing is called on a `bind` too.
-    bind steady = Green
+    ; A method that changes nothing is called on a `fixed` too.
+    fixed steady = Green
     show(steady.label())
     ; And on a variant as it is written.
     show(Light.Amber(1).label())
     show(Light.Red.label())
 
     region r
-    hold word: Label@r = Word("a word".copy() at r)
+    flex word: Label@r = Word("a word".copy() at r)
     show(word.wordOf())
     word.clear()
     show(word.wordOf())
 
     ; Through a pointer into a region.
-    hold here = new Light(Red) at r
+    flex here = new Light(Red) at r
     here^.flip()
     here^.tell()
 fi

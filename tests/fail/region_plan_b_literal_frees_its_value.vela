@@ -5,7 +5,7 @@ shape Node
 fi
 
 task main()
-    bind p = Node { value: 1, next: none }.next {
+    fixed p = Node { value: 1, next: none }.next {
         region local
         new Node(Node { value: 5, next: none }) at local
     }

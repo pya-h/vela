@@ -3,7 +3,7 @@
 ; last), but not more.
 task main()
     region r
-    hold items = new [int]([1, 2]) at r
+    flex items = new [int]([1, 2]) at r
     items.add(items.len, 3)
     show(items[2])
     items.add(4, 9)

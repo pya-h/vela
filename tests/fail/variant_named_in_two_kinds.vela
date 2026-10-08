@@ -10,5 +10,5 @@ kind Fan
 fi
 
 task main()
-    bind fan = Fan.Off
+    fixed fan = Fan.Off
 fi

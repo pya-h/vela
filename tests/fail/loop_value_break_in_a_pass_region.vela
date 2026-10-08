@@ -2,7 +2,7 @@
 ; A break's value in a region a pass declares would outlive the region.
 task main()
     region outer
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         region pass
         when x == 1
             break = ("o{x}" at outer, "p{x}" at pass)

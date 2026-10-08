@@ -1,6 +1,6 @@
 ; error: 5:12: 'keys' makes a slice, so it names the region it goes in, as in 'm.keys at r' or 'm.keys@r'; 'each k in m.keys' goes through them without one; or make a region the block's default, as in 'region r default'
 task main()
     region r
-    bind m = ["a": 1] at r
+    fixed m = ["a": 1] at r
     show(m.keys)
 fi

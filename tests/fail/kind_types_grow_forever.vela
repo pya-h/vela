@@ -6,5 +6,5 @@ fi
 
 task main()
     region r
-    bind g: Grow<int> = Grow.Stop
+    fixed g: Grow<int> = Grow.Stop
 fi

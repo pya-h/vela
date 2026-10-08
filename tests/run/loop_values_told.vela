@@ -37,22 +37,22 @@ fi
 task main()
     region q
     said(q, firsts([1, 2, 3]))
-    bind a: int ~ LoopResult<text, bool> = each x in 0..3
+    fixed a: int ~ LoopResult<text, bool> = each x in 0..3
         when x == 1
             break
         fi
         x
     fi
     said(q, a)
-    bind b: int ~ LoopResult<bool, text> = each x in 0..0
+    fixed b: int ~ LoopResult<bool, text> = each x in 0..0
         x
     fi
     said(q, b)
-    bind e: int ~ LoopResult<text, int> = each x in 0..2
+    fixed e: int ~ LoopResult<text, int> = each x in 0..2
         x
     fi
     said(q, e)
-    bind c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
+    fixed c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
         when x == 0
             Opt.No
         else
@@ -60,8 +60,8 @@ task main()
         fi
     fi
     said(q, c)
-    hold d: int ~ LoopResult<text, text> = 0
-    d = loop hold i = 0 || i < 3 || i++
+    flex d: int ~ LoopResult<text, text> = 0
+    d = loop flex i = 0 || i < 3 || i++
         when i == 2
             continue
         fi

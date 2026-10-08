@@ -104,8 +104,8 @@
     | keyword:fi
  60 | task doubled_or_zero(size: int) -> int
     | keyword:task  task:doubled_or_zero  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 61 |     bind n = check_size(size) {
-    | keyword:bind  variable:n  operator:=  task:check_size  punctuation:(  parameter:size  punctuation:)  punctuation:{
+ 61 |     fixed n = check_size(size) {
+    | keyword:fixed  variable:n  operator:=  task:check_size  punctuation:(  parameter:size  punctuation:)  punctuation:{
  62 |         failure e
     | keyword:failure  variable:e
  63 |         show(explain(e))
@@ -124,8 +124,8 @@
     | builtin-fn:show  punctuation:(  task:check_size  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  71 |     show(check_size(-1) { 0 })
     | builtin-fn:show  punctuation:(  task:check_size  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 73 |     bind described = check_size(-500) {
-    | keyword:bind  variable:described  operator:=  task:check_size  punctuation:(  operator:-  number:500  punctuation:)  punctuation:{
+ 73 |     fixed described = check_size(-500) {
+    | keyword:fixed  variable:described  operator:=  task:check_size  punctuation:(  operator:-  number:500  punctuation:)  punctuation:{
  74 |         failure problem
     | keyword:failure  variable:problem
  75 |         show(explain(problem))
@@ -200,8 +200,8 @@
     | builtin-fn:show  punctuation:(  variable:message  punctuation:)
 115 |     fi
     | keyword:fi
-117 |     hold stored: int ~ BadSize = fail Empty
-    | keyword:hold  variable:stored  punctuation::  type-builtin:int  operator:~  type:BadSize  operator:=  keyword:fail  variant:Empty
+117 |     flex stored: int ~ BadSize = fail Empty
+    | keyword:flex  variable:stored  punctuation::  type-builtin:int  operator:~  type:BadSize  operator:=  keyword:fail  variant:Empty
 118 |     show(stored { -1 })
     | builtin-fn:show  punctuation:(  variable:stored  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
 119 |     stored = 8
@@ -212,8 +212,8 @@
     | builtin-fn:show  punctuation:(  task:lookup  punctuation:(  string:"answer"  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:{  number:0  punctuation:}  punctuation:)
 123 |     show(lookup("other") { none })
     | builtin-fn:show  punctuation:(  task:lookup  punctuation:(  string:"other"  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:)
-124 |     bind missing = lookup("") {
-    | keyword:bind  variable:missing  operator:=  task:lookup  punctuation:(  string:""  punctuation:)  punctuation:{
+124 |     fixed missing = lookup("") {
+    | keyword:fixed  variable:missing  operator:=  task:lookup  punctuation:(  string:""  punctuation:)  punctuation:{
 125 |         failure why
     | keyword:failure  variable:why
 126 |         show(why)

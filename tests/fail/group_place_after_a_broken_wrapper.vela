@@ -7,11 +7,11 @@ task use<P..., R>(f: (P...) -> R, args: P...) -> R
     <- f(args...)
 fi
 $(bad)
-task mk(hold& c: int) -> int
+task mk(flex& c: int) -> int
     c = c + 1
     <- c
 fi
 task main()
-    hold c = 1
+    flex c = 1
     show(use(mk, &c))
 fi

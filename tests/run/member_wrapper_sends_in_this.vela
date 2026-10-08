@@ -33,8 +33,8 @@ shape Account
 fi
 task main()
     region r
-    bind t = "Ada" + "x" at r
-    hold a = Account { owner: t, balance: 0 }
+    fixed t = "Ada" + "x" at r
+    flex a = Account { owner: t, balance: 0 }
     a.rename("Bo" + "b" at r)
     show(a.name())
     show(a.name2())

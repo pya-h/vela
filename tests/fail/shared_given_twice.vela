@@ -1,10 +1,10 @@
 ; error: 13:23: 'Point.made' is given as 'a' too, and the call changes it through 'b'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
 shape Point
-    shared hold made: int = 0
+    shared flex made: int = 0
 fi
 
-task swap(hold& a: int, hold& b: int)
-    bind t = a
+task swap(flex& a: int, flex& b: int)
+    fixed t = a
     a = b
     b = t
 fi

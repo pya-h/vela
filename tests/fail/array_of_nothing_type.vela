@@ -1,4 +1,4 @@
-; error: 3:19: an array can't hold 'nothing', which has no value
+; error: 3:20: an array can't hold 'nothing', which has no value
 task main()
-    bind values: [nothing#2] = [1, 2]
+    fixed values: [nothing#2] = [1, 2]
 fi

@@ -20,12 +20,12 @@
     | builtin-fn:show  punctuation:(  number:3.0  operator:/  number:2.0  punctuation:)
  14 |     show(float(1) + 2.5)
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5  punctuation:)
- 15 |     bind x = float(1) + 2.5
-    | keyword:bind  variable:x  operator:=  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5
+ 15 |     fixed x = float(1) + 2.5
+    | keyword:fixed  variable:x  operator:=  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5
  16 |     show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
- 17 |     bind y = float(7) / 2.0
-    | keyword:bind  variable:y  operator:=  type-builtin:float  punctuation:(  number:7  punctuation:)  operator:/  number:2.0
+ 17 |     fixed y = float(7) / 2.0
+    | keyword:fixed  variable:y  operator:=  type-builtin:float  punctuation:(  number:7  punctuation:)  operator:/  number:2.0
  18 |     show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
  19 |     show(7 / 2)
@@ -44,14 +44,14 @@
     | builtin-fn:show  punctuation:(  number:1000000000000000000000.0  punctuation:)
  26 |     show(-2.5 * float(2))
     | builtin-fn:show  punctuation:(  operator:-  number:2.5  operator:*  type-builtin:float  punctuation:(  number:2  punctuation:)  punctuation:)
- 28 |     hold f = 0.0
-    | keyword:hold  variable:f  operator:=  number:0.0
+ 28 |     flex f = 0.0
+    | keyword:flex  variable:f  operator:=  number:0.0
  29 |     f = f + float(1)
     | variable:f  operator:=  variable:f  operator:+  type-builtin:float  punctuation:(  number:1  punctuation:)
  30 |     show(f)
     | builtin-fn:show  punctuation:(  variable:f  punctuation:)
- 32 |     bind v = Vec1 { x: 2.0 }
-    | keyword:bind  variable:v  operator:=  type:Vec1  punctuation:{  field:x  punctuation::  number:2.0  punctuation:}
+ 32 |     fixed v = Vec1 { x: 2.0 }
+    | keyword:fixed  variable:v  operator:=  type:Vec1  punctuation:{  field:x  punctuation::  number:2.0  punctuation:}
  33 |     show(v.x * float(2))
     | builtin-fn:show  punctuation:(  variable:v  punctuation:.  field:x  operator:*  type-builtin:float  punctuation:(  number:2  punctuation:)  punctuation:)
  34 |     show(half(3))

@@ -20,14 +20,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  13 |     region r
     | keyword:region  region:r
- 14 |     hold d = Dir { name: "a", subs: new [Dir]() at r }
-    | keyword:hold  variable:d  operator:=  type:Dir  punctuation:{  field:name  punctuation::  string:"a"  punctuation:,  field:subs  punctuation::  keyword:new  punctuation:[  type:Dir  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 14 |     flex d = Dir { name: "a", subs: new [Dir]() at r }
+    | keyword:flex  variable:d  operator:=  type:Dir  punctuation:{  field:name  punctuation::  string:"a"  punctuation:,  field:subs  punctuation::  keyword:new  punctuation:[  type:Dir  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
  15 |     d.subs.add(Dir { name: "b", subs: new [Dir]() at r })
     | variable:d  punctuation:.  field:subs  punctuation:.  field:add  punctuation:(  type:Dir  punctuation:{  field:name  punctuation::  string:"b"  punctuation:,  field:subs  punctuation::  keyword:new  punctuation:[  type:Dir  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)
  16 |     show(d.subs.len, " ", d.subs[0].name)
     | builtin-fn:show  punctuation:(  variable:d  punctuation:.  field:subs  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:d  punctuation:.  field:subs  punctuation:[  number:0  punctuation:]  punctuation:.  field:name  punctuation:)
- 17 |     hold kids = new [Tree]() at r
-    | keyword:hold  variable:kids  operator:=  keyword:new  punctuation:[  type:Tree  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 17 |     flex kids = new [Tree]() at r
+    | keyword:flex  variable:kids  operator:=  keyword:new  punctuation:[  type:Tree  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  18 |     kids.add(Node(new [Tree]() at r))
     | variable:kids  punctuation:.  field:add  punctuation:(  variant:Node  punctuation:(  keyword:new  punctuation:[  type:Tree  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:)
  19 |     show(Node(kids))

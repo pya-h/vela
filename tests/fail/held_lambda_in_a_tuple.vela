@@ -1,12 +1,12 @@
-; error: 10:15: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, 'f(…)', or give it as a place, '&f', to a 'hold& f: [hold @r]() -> int' parameter
-; A [hold @r] lambda is held alone.
+; error: 10:16: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, 'f(…)', or give it as a place, '&f', to a 'hold& f: [hold @r]() -> int' parameter
+; A [flex @r] lambda is held alone.
 task main()
     region r
-    hold n = 0
-    hold f = [hold @r]() -> int
+    flex n = 0
+    flex f = [flex @r]() -> int
         n = n + 1
         <- n
     fi
-    bind t = (f, 1)
+    fixed t = (f, 1)
     show(1)
 fi

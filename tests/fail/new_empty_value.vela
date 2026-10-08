@@ -1,5 +1,5 @@
-; error: 4:22: 'new' needs the value to put in the region, as in 'new int(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'
+; error: 4:23: 'new' needs the value to put in the region, as in 'new int(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'
 task main()
     region r
-    bind p = new int() at r
+    fixed p = new int() at r
 fi

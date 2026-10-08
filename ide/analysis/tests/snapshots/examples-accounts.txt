@@ -36,8 +36,8 @@
     | keyword:read  field:balance  punctuation::  type-builtin:int
  22 |     priv limit: int = 300
     | keyword:priv  field:limit  punctuation::  type-builtin:int  operator:=  number:300
- 24 |     alters guarded(next: (hold& Account@a, int) -> bool, amount: int) -> bool
-    | keyword:alters  method:guarded  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type:Account  operator:@  region:a  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 24 |     alters guarded(next: (flex& Account@a, int) -> bool, amount: int) -> bool
+    | keyword:alters  method:guarded  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:flex  keyword:&  type:Account  operator:@  region:a  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
  25 |         when amount > .balance
     | keyword:when  parameter:amount  operator:>  punctuation:.  field:balance
  26 |             show("  refused: ", .owner, " holds only ", .balance)
@@ -88,8 +88,8 @@
     | keyword:fi
  53 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 54 |     hold ada = Account { owner: "Ada", balance: 0 }
-    | keyword:hold  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
+ 54 |     flex ada = Account { owner: "Ada", balance: 0 }
+    | keyword:flex  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
  55 |     ada.deposit(500)
     | variable:ada  punctuation:.  method:deposit  punctuation:(  number:500  punctuation:)
  56 |     show(ada.withdraw(120))

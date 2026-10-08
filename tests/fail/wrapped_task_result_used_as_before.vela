@@ -1,4 +1,4 @@
-; error: 13:19: expected type int, got text
+; error: 13:20: expected type int, got text
 ; A wrapper that changes what a task sends changes it for every caller.
 task worded(next: (int) -> int, n: int) -> text
     <- "x"
@@ -10,5 +10,5 @@ task sq(n: int) -> int
 fi
 
 task main()
-    bind n: int = sq(2)
+    fixed n: int = sq(2)
 fi

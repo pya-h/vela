@@ -24,8 +24,8 @@
     | comment:; How many times a counted task has run.
  15 | shape Runs
     | keyword:shape  type:Runs
- 16 |     shared hold count: int = 0
-    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 16 |     shared flex count: int = 0
+    | keyword:shared  keyword:flex  field:count  punctuation::  type-builtin:int  operator:=  number:0
  17 | fi
     | keyword:fi
  19 | ; Counts each call of the task it wraps, whatever the task takes.
@@ -68,8 +68,8 @@
     | comment:; How many of the numbers pass a rule.
  42 | task count(xs: [int]@r, keep: (int) -> bool) -> int
     | keyword:task  task:count  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:keep  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:)  operator:->  type-builtin:int
- 43 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
+ 43 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
  44 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
  45 |         when keep(x)
@@ -88,8 +88,8 @@
     | comment:; Each number changed by a task, into a new slice.
  53 | task mapped(xs: [int]@r, change: (int) -> int, out: region) -> [int]@out
     | keyword:task  task:mapped  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:change  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  region:out  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:out
- 54 |     hold ys = new [int]() at out
-    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:out
+ 54 |     flex ys = new [int]() at out
+    | keyword:flex  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:out
  55 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
  56 |         ys.add(change(x))
@@ -104,30 +104,30 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  62 |     region r
     | keyword:region  region:r
- 63 |     bind xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:3  punctuation:,  number:8  punctuation:,  number:15  punctuation:,  number:4  punctuation:,  number:23  punctuation:,  number:42  punctuation:,  operator:-  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 64 |     bind even = Rule { name: "even", check: is_even }
-    | keyword:bind  variable:even  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"even"  punctuation:,  field:check  punctuation::  task:is_even  punctuation:}
- 65 |     bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
-    | keyword:bind  variable:big  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"big"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  parameter:n  operator:>  number:10  keyword:fi  punctuation:}
- 66 |     bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
-    | keyword:bind  variable:odd  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"odd"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  keyword:not  task:is_even  punctuation:(  parameter:n  punctuation:)  keyword:fi  punctuation:}
- 67 |     bind rules = [even, big, odd]
-    | keyword:bind  variable:rules  operator:=  punctuation:[  variable:even  punctuation:,  variable:big  punctuation:,  variable:odd  punctuation:]
+ 63 |     fixed xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:3  punctuation:,  number:8  punctuation:,  number:15  punctuation:,  number:4  punctuation:,  number:23  punctuation:,  number:42  punctuation:,  operator:-  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 64 |     fixed even = Rule { name: "even", check: is_even }
+    | keyword:fixed  variable:even  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"even"  punctuation:,  field:check  punctuation::  task:is_even  punctuation:}
+ 65 |     fixed big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
+    | keyword:fixed  variable:big  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"big"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  parameter:n  operator:>  number:10  keyword:fi  punctuation:}
+ 66 |     fixed odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
+    | keyword:fixed  variable:odd  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"odd"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  keyword:not  task:is_even  punctuation:(  parameter:n  punctuation:)  keyword:fi  punctuation:}
+ 67 |     fixed rules = [even, big, odd]
+    | keyword:fixed  variable:rules  operator:=  punctuation:[  variable:even  punctuation:,  variable:big  punctuation:,  variable:odd  punctuation:]
  68 |     each rule in rules
     | keyword:each  variable:rule  keyword:in  variable:rules
  69 |         show(rule.name, ": ", count(xs, rule.check))
     | builtin-fn:show  punctuation:(  variable:rule  punctuation:.  field:name  punctuation:,  string:": "  punctuation:,  task:count  punctuation:(  variable:xs  punctuation:,  variable:rule  punctuation:.  field:check  punctuation:)  punctuation:)
  70 |     fi
     | keyword:fi
- 71 |     bind doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
-    | keyword:bind  variable:doubled  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  region:r  punctuation:)
+ 71 |     fixed doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
+    | keyword:fixed  variable:doubled  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  region:r  punctuation:)
  72 |     show(doubled)
     | builtin-fn:show  punctuation:(  variable:doubled  punctuation:)
- 73 |     bind squared = mapped(xs, (x: int) -> int
-    | keyword:bind  variable:squared  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 74 |         bind y = x * x
-    | keyword:bind  variable:y  operator:=  parameter:x  operator:*  parameter:x
+ 73 |     fixed squared = mapped(xs, (x: int) -> int
+    | keyword:fixed  variable:squared  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 74 |         fixed y = x * x
+    | keyword:fixed  variable:y  operator:=  parameter:x  operator:*  parameter:x
  75 |         <- y
     | keyword:<-  variable:y
  76 |     fi, r)

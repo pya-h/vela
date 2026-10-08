@@ -21,7 +21,7 @@ use vela_studio::{Config, Studio};
 
 use common::*;
 
-const LOOP_FOREVER: &str = "task main()\n    hold n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
+const LOOP_FOREVER: &str = "task main()\n    flex n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 

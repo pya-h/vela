@@ -4,16 +4,16 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     region r
     | keyword:region  region:r
-  5 |     bind xs = new [int]([1, 2, 3, 4]) at r
-    | keyword:bind  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]  punctuation:)  keyword:at  region:r
+  5 |     fixed xs = new [int]([1, 2, 3, 4]) at r
+    | keyword:fixed  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]  punctuation:)  keyword:at  region:r
   6 |     each x in xs[1..3]
     | keyword:each  variable:x  keyword:in  variable:xs  punctuation:[  number:1  operator:..  number:3  punctuation:]
   7 |         show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
   8 |     fi
     | keyword:fi
-  9 |     bind boxed = new [int#3]([7, 8, 9]) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:]  punctuation:)  keyword:at  region:r
+  9 |     fixed boxed = new [int#3]([7, 8, 9]) at r
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:]  punctuation:)  keyword:at  region:r
  10 |     show(boxed^.len)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:len  punctuation:)
  11 |     each v in boxed^

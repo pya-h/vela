@@ -56,36 +56,36 @@
     | keyword:fi
  35 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 36 |     bind unused = 1
-    | keyword:bind  variable:unused  operator:=  number:1
- 37 |     hold overwritten = 2
-    | keyword:hold  variable:overwritten  operator:=  number:2
+ 36 |     fixed unused = 1
+    | keyword:fixed  variable:unused  operator:=  number:1
+ 37 |     flex overwritten = 2
+    | keyword:flex  variable:overwritten  operator:=  number:2
  38 |     overwritten = 3
     | variable:overwritten  operator:=  number:3
- 39 |     hold moved = Point { x: 1, y: 2 }
-    | keyword:hold  variable:moved  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 39 |     flex moved = Point { x: 1, y: 2 }
+    | keyword:flex  variable:moved  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
  40 |     moved.x = 10
     | variable:moved  punctuation:.  field:x  operator:=  number:10
  41 |     region scratch
     | keyword:region  region:scratch
- 42 |     bind boxed = new int(4) at scratch
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)  keyword:at  region:scratch
+ 42 |     fixed boxed = new int(4) at scratch
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)  keyword:at  region:scratch
  43 |     boxed^ = 5
     | variable:boxed  operator:^  operator:=  number:5
  44 |     unused_region(scratch, boxed, scratch)
     | task:unused_region  punctuation:(  region:scratch  punctuation:,  variable:boxed  punctuation:,  region:scratch  punctuation:)
- 45 |     bind later = 6
-    | keyword:bind  variable:later  operator:=  number:6
+ 45 |     fixed later = 6
+    | keyword:fixed  variable:later  operator:=  number:6
  46 |     when true
     | keyword:when  keyword:true
  47 |         show(later)
     | builtin-fn:show  punctuation:(  variable:later  punctuation:)
- 48 |         bind inner = 7
-    | keyword:bind  variable:inner  operator:=  number:7
+ 48 |         fixed inner = 7
+    | keyword:fixed  variable:inner  operator:=  number:7
  49 |     else
     | keyword:else
- 50 |         bind inner = 8
-    | keyword:bind  variable:inner  operator:=  number:8
+ 50 |         fixed inner = 8
+    | keyword:fixed  variable:inner  operator:=  number:8
  51 |         show(inner)
     | builtin-fn:show  punctuation:(  variable:inner  punctuation:)
  52 |     fi

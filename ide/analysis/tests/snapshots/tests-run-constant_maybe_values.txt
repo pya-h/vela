@@ -24,8 +24,8 @@
     | keyword:fi
  14 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 15 |     bind b = B {}
-    | keyword:bind  variable:b  operator:=  type:B  punctuation:{  punctuation:}
+ 15 |     fixed b = B {}
+    | keyword:fixed  variable:b  operator:=  type:B  punctuation:{  punctuation:}
  16 |     show(A.v, " ", A.arr, " ", b.w, " ", b.t)
     | builtin-fn:show  punctuation:(  type:A  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  type:A  punctuation:.  field:arr  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:w  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:t  punctuation:)
  17 | fi

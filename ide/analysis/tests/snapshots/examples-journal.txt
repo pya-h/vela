@@ -14,10 +14,10 @@
     | comment:; only what goes somewhere else names a region.
   9 | task read_notes(r: region default) -> [text]@r
     | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
- 10 |     hold notes = new [text]()
-    | keyword:hold  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)
- 11 |     hold reading = true
-    | keyword:hold  variable:reading  operator:=  keyword:true
+ 10 |     flex notes = new [text]()
+    | keyword:flex  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)
+ 11 |     flex reading = true
+    | keyword:flex  variable:reading  operator:=  keyword:true
  12 |     loop reading
     | keyword:loop  variable:reading
  13 |         ; Freed at the end of every pass, with the line read into it. Inside this
@@ -26,8 +26,8 @@
     | comment:; block it is the default, so the line needs no `at line_memory`.
  15 |         region line_memory default
     | keyword:region  region:line_memory  keyword:default
- 16 |         bind line = scan("note> ") { "" }
-    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  punctuation:{  string:""  punctuation:}
+ 16 |         fixed line = scan("note> ") { "" }
+    | keyword:fixed  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  punctuation:{  string:""  punctuation:}
  17 |         when line == ""
     | keyword:when  variable:line  operator:==  string:""
  18 |             reading = false
@@ -54,16 +54,16 @@
     | comment:; Written out, as it always could be: a region is named where memory goes.
  30 |     region kept
     | keyword:region  region:kept
- 31 |     bind name = scan("Your name: ") at kept { "stranger" }
-    | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
+ 31 |     fixed name = scan("Your name: ") at kept { "stranger" }
+    | keyword:fixed  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
  32 |     show("Hello, ", name, "!")
     | builtin-fn:show  punctuation:(  string:"Hello, "  punctuation:,  variable:name  punctuation:,  string:"!"  punctuation:)
- 33 |     hold notes = read_notes(kept)
-    | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
+ 33 |     flex notes = read_notes(kept)
+    | keyword:flex  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
  34 |     show(notes.len, " notes, last first")
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:,  string:" notes, last first"  punctuation:)
- 35 |     hold number = notes.len
-    | keyword:hold  variable:number  operator:=  variable:notes  punctuation:.  field:len
+ 35 |     flex number = notes.len
+    | keyword:flex  variable:number  operator:=  variable:notes  punctuation:.  field:len
  36 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
  37 |         ; `show` writes each value in turn, so a line printed once needs no text

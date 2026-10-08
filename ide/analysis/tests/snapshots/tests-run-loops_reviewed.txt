@@ -38,14 +38,14 @@
     | keyword:fi
  25 | task first_over(xs: [int#3], limit: int) -> int
     | keyword:task  task:first_over  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 26 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
+ 26 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
  27 |     endless
     | keyword:endless
  28 |         each k in 0..5
     | keyword:each  variable:k  keyword:in  number:0  operator:..  number:5
- 29 |             bind v = xs[#k] { break }    ; stops the each only
-    | keyword:bind  variable:v  operator:=  parameter:xs  punctuation:[  punctuation:#  variable:k  punctuation:]  punctuation:{  keyword:break  punctuation:}  comment:; stops the each only
+ 29 |             fixed v = xs[#k] { break }    ; stops the each only
+    | keyword:fixed  variable:v  operator:=  parameter:xs  punctuation:[  punctuation:#  variable:k  punctuation:]  punctuation:{  keyword:break  punctuation:}  comment:; stops the each only
  30 |             n += v
     | variable:n  operator:+=  variable:v
  31 |         fi
@@ -76,14 +76,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  46 |     ; Parts holding a chain of conditions, and a lambda in a condition over lines.
     | comment:; Parts holding a chain of conditions, and a lambda in a condition over lines.
- 47 |     loop hold i = 0, k = when 1 > 2 5 else when 2 > 1 6 else 7 fi || i < k || i += 3
-    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  variable:k  operator:=  keyword:when  number:1  operator:>  number:2  number:5  keyword:else  keyword:when  number:2  operator:>  number:1  number:6  keyword:else  number:7  keyword:fi  operator:||  variable:i  operator:<  variable:k  operator:||  variable:i  operator:+=  number:3
+ 47 |     loop flex i = 0, k = when 1 > 2 5 else when 2 > 1 6 else 7 fi || i < k || i += 3
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  variable:k  operator:=  keyword:when  number:1  operator:>  number:2  number:5  keyword:else  keyword:when  number:2  operator:>  number:1  number:6  keyword:else  number:7  keyword:fi  operator:||  variable:i  operator:<  variable:k  operator:||  variable:i  operator:+=  number:3
  48 |         show("i ", i)
     | builtin-fn:show  punctuation:(  string:"i "  punctuation:,  variable:i  punctuation:)
  49 |     fi
     | keyword:fi
- 50 |     loop hold j = 0 || match tok(j)
-    | keyword:loop  keyword:hold  variable:j  operator:=  number:0  operator:||  keyword:match  task:tok  punctuation:(  variable:j  punctuation:)
+ 50 |     loop flex j = 0 || match tok(j)
+    | keyword:loop  keyword:flex  variable:j  operator:=  number:0  operator:||  keyword:match  task:tok  punctuation:(  variable:j  punctuation:)
  51 |     case Num n = apply((x: int) -> bool <- x < 3 fi, n)
     | keyword:case  variant:Num  variable:n  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  parameter:x  operator:<  number:3  keyword:fi  punctuation:,  variable:n  punctuation:)
  52 |     case Stop = false
@@ -94,10 +94,10 @@
     | builtin-fn:show  punctuation:(  string:"j "  punctuation:,  variable:j  punctuation:)
  55 |     fi
     | keyword:fi
- 56 |     bind xs = [5, 6, 7]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:]
- 57 |     loop hold m = 0 || xs[#m] {
-    | keyword:loop  keyword:hold  variable:m  operator:=  number:0  operator:||  variable:xs  punctuation:[  punctuation:#  variable:m  punctuation:]  punctuation:{
+ 56 |     fixed xs = [5, 6, 7]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:]
+ 57 |     loop flex m = 0 || xs[#m] {
+    | keyword:loop  keyword:flex  variable:m  operator:=  number:0  operator:||  variable:xs  punctuation:[  punctuation:#  variable:m  punctuation:]  punctuation:{
  58 |         show("past the end")
     | builtin-fn:show  punctuation:(  string:"past the end"  punctuation:)
  59 |         break
@@ -112,8 +112,8 @@
     | builtin-fn:show  punctuation:(  task:first_over  punctuation:(  punctuation:[  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:]  punctuation:,  number:20  punctuation:)  punctuation:)
  65 |     ; A loop on the last line of a plan B gives its value.
     | comment:; A loop on the last line of a plan B gives its value.
- 66 |     bind z = get(5) {
-    | keyword:bind  variable:z  operator:=  task:get  punctuation:(  number:5  punctuation:)  punctuation:{
+ 66 |     fixed z = get(5) {
+    | keyword:fixed  variable:z  operator:=  task:get  punctuation:(  number:5  punctuation:)  punctuation:{
  67 |         each x in 0..3
     | keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
  68 |             x + 100
@@ -126,8 +126,8 @@
     | builtin-fn:show  punctuation:(  variable:z  punctuation:)
  73 |     ; A variant on the last line is told by the type the place names.
     | comment:; A variant on the last line is told by the type the place names.
- 74 |     bind opt: Opt<text> ~ LoopResult = each x in 0..2
-    | keyword:bind  variable:opt  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
+ 74 |     fixed opt: Opt<text> ~ LoopResult = each x in 0..2
+    | keyword:fixed  variable:opt  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
  75 |         Opt.No
     | type:Opt  punctuation:.  variant:No
  76 |     fi
@@ -136,8 +136,8 @@
     | builtin-fn:show  punctuation:(  variable:opt  punctuation:{  type:Opt  punctuation:.  variant:Yes  punctuation:(  string:"none"  punctuation:)  punctuation:}  punctuation:)
  79 |     ; The variable names the loop with a plan B after it too.
     | comment:; The variable names the loop with a plan B after it too.
- 80 |     bind found = each x in 0..10
-    | keyword:bind  variable:found  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:10
+ 80 |     fixed found = each x in 0..10
+    | keyword:fixed  variable:found  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:10
  81 |         each y in 0..10
     | keyword:each  variable:y  keyword:in  number:0  operator:..  number:10
  82 |             when x * y == 12

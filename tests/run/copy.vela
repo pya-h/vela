@@ -49,7 +49,7 @@ task parse(r: region, line: text@s) -> int ~ Problem@r
 fi
 
 task build(r: region, n: int) -> ^Node@r
-    hold head = new Node(Node { label: "last", next: none, other: none }) at r
+    flex head = new Node(Node { label: "last", next: none, other: none }) at r
     each i in 0..n
         head = new Node(Node { label: "node", next: head, other: none }) at r
     fi
@@ -57,8 +57,8 @@ task build(r: region, n: int) -> ^Node@r
 fi
 
 task count(list: ^Node@r) -> int
-    hold n = 1
-    hold node = list
+    flex n = 1
+    flex node = list
     loop node^.next is {next}
         n = n + 1
         node = next
@@ -68,23 +68,23 @@ fi
 
 task main()
     region kept
-    hold people = new [Person]() at kept
-    hold entries = new [Entry]() at kept
-    hold lines = new [text]() at kept
-    hold named: maybe text@kept = none
-    hold list: maybe ^Node@kept = none
-    hold bag = Bag { names: new [text]() at kept, first: none }
-    hold both: [text#2]@kept = ["", ""]
-    hold result: int ~ Problem@kept = 0
+    flex people = new [Person]() at kept
+    flex entries = new [Entry]() at kept
+    flex lines = new [text]() at kept
+    flex named: maybe text@kept = none
+    flex list: maybe ^Node@kept = none
+    flex bag = Bag { names: new [text]() at kept, first: none }
+    flex both: [text#2]@kept = ["", ""]
+    flex result: int ~ Problem@kept = 0
     each pass in 0..1
         region work
-        bind line = scan("") at work { "nobody" }
+        fixed line = scan("") at work { "nobody" }
 
         ; Text, into the place it goes, or into the region written.
         lines.add(line.copy())
         named = line.copy()
-        bind at_kept = line.copy() at kept
-        bind short = line.copy()@kept
+        fixed at_kept = line.copy() at kept
+        fixed short = line.copy()@kept
         lines.add(at_kept)
         lines.add(short)
         lines.add(keep(kept, line))
@@ -92,25 +92,25 @@ task main()
 
         ; Shapes and kinds, and copies inside their literals.
         people.add(Person { name: line.copy(), age: 36 })
-        bind worker: Person@work = Person { name: line, age: 7 }
+        fixed worker: Person@work = Person { name: line, age: 7 }
         people.add(worker.copy())
-        bind numbers = new [int]([1, 2, 3]) at work
+        fixed numbers = new [int]([1, 2, 3]) at work
         entries.add(Entry.Numbers(line, numbers).copy())
         entries.add(Note(line.copy()))
         entries.add(Empty.copy()@kept)
         result = parse(kept, scan("") at work { "" })
 
         ; A slice in a shape, and a maybe.
-        hold names = new [text]() at work
+        flex names = new [text]() at work
         names.add(line)
         names.add("literal")
-        bind held: Bag@work = Bag { names: names, first: line }
+        fixed held: Bag@work = Bag { names: names, first: line }
         bag = held.copy()
         names[0] = "changed"
 
         ; Linked nodes: one shared by two pointers, and a cycle.
-        bind nodes = build(work, 5)
-        bind second = nodes^.next { nodes }
+        fixed nodes = build(work, 5)
+        fixed second = nodes^.next { nodes }
         nodes^.other = second
         second^.other = nodes
         list = nodes.copy()
@@ -152,7 +152,7 @@ task main()
         show(count(head))
         ; The copy of the shared node is shared: a change through one pointer
         ; shows through the other, and the cycle leads back to the copy.
-        bind second = head^.other { head }
+        fixed second = head^.other { head }
         second^.label = "shared"
         show(head^.next { head }^.label)
         show(second^.other { second }^.label)
@@ -160,11 +160,11 @@ task main()
 
     ; A long list, copied into the region it is in, and a copy's items are its own.
     region big
-    bind long = build(big, 100000)
-    bind again = long.copy() at big
+    fixed long = build(big, 100000)
+    fixed again = long.copy() at big
     show(count(again))
-    hold values = new [int]([1, 2]) at big
-    hold copied = values.copy()@big
+    flex values = new [int]([1, 2]) at big
+    flex copied = values.copy()@big
     copied[0] = 5
     copied.add(3)
     show(values[0])

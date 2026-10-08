@@ -8,9 +8,9 @@
 use vela_analysis::{Analysis, LineIndex, TokenClass};
 
 const PROGRAM: &str = "\
-task counter(r: region, start: int) -> [hold @r]() -> int
-    hold n = start
-    <- [hold @r]() -> int
+task counter(r: region, start: int) -> [flex @r]() -> int
+    flex n = start
+    <- [flex @r]() -> int
         n = n + 1
         <- n
     fi
@@ -18,14 +18,14 @@ fi
 
 task main()
     region r
-    hold next = counter(r, 10)
-    bind base = 100
-    bind add = [@r](x: int) -> int <- x + base fi
-    bind got = add(1)
-    bind made = [@r](k: int) -> [int]@r
+    flex next = counter(r, 10)
+    fixed base = 100
+    fixed add = [@r](x: int) -> int <- x + base fi
+    fixed got = add(1)
+    fixed made = [@r](k: int) -> [int]@r
         <- new [int]() at r
     fi
-    bind list = made(2)
+    fixed list = made(2)
     CHECK
     show(next(), got, list)
 fi
@@ -77,7 +77,7 @@ fn its_parameters_and_what_it_keeps_name_what_they_are() {
         assert_eq!(hover(&source, "base fi"), "bind base: int", "{}", when);
         assert_eq!(hover(&source, "n = n"), "hold n: int", "{}", when);
         assert_eq!(hover(&source, "r](x"), "region r", "{}", when);
-        assert_eq!(class(&source, "hold @r]() -> int\n        n"), TokenClass::Keyword, "{}", when);
+        assert_eq!(class(&source, "flex @r]() -> int\n        n"), TokenClass::Keyword, "{}", when);
     }
 }
 
@@ -85,17 +85,17 @@ fn its_parameters_and_what_it_keeps_name_what_they_are() {
 fn a_place_it_keeps_names_the_variable_around_it() {
     let source = "\
 task main()
-    hold count = 0
-    bind big = [1, 2, 3]
+    flex count = 0
+    fixed big = [1, 2, 3]
     region r
-    bind add = [hold& count, bind& big, @r](n: int) -> nothing count = count + n + big[0] fi
+    fixed add = [flex& count, fixed& big, @r](n: int) -> nothing count = count + n + big[0] fi
     add(2)
     show(count)
 fi
 ";
     for when in ["checked", "unparsed"] {
         let source = if when == "unparsed" { format!("{}task g(\n", source) } else { source.to_string() };
-        assert_eq!(hover(&source, "count, bind"), "hold count: int", "{}", when);
+        assert_eq!(hover(&source, "count, fixed"), "hold count: int", "{}", when);
         assert_eq!(hover(&source, "big, @r"), "bind big: [int#3]", "{}", when);
         assert_eq!(hover(&source, "n: int"), "n: int", "{}", when);
         assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> nothing", "{}", when);
@@ -105,14 +105,14 @@ fi
 #[test]
 fn a_lambda_s_type_in_a_header_or_a_variable_is_a_type() {
     let source = "\
-task poke(f: [@r](int) -> int, hold& n: int)
+task poke(f: [@r](int) -> int, flex& n: int)
     n = f(n)
 fi
 
 task main()
     region r
-    hold k = 1
-    bind g: [@r](hold& int) -> nothing = [@r](hold& j: int) -> nothing j = j + 1 fi
+    flex k = 1
+    fixed g: [@r](flex& int) -> nothing = [@r](flex& j: int) -> nothing j = j + 1 fi
     g(&k)
     poke([@r](x: int) -> int <- x * 2 fi, &k)
     show(k)
@@ -123,5 +123,5 @@ fi
     assert_eq!(hover(source, "n = f"), "hold& n: int");
     assert_eq!(hover(source, "j: int"), "hold& j: int");
     assert_eq!(hover(source, "j + 1"), "hold& j: int");
-    assert_eq!(class(source, "int) -> int, hold"), TokenClass::TypeBuiltin);
+    assert_eq!(class(source, "int) -> int, flex"), TokenClass::TypeBuiltin);
 }

@@ -1,5 +1,5 @@
-; error: 4:14: 'r' is a region, not a value; allocate in it with 'new T(…) at r'
+; error: 4:15: 'r' is a region, not a value; allocate in it with 'new T(…) at r'
 task main()
     region r
-    bind x = r
+    fixed x = r
 fi

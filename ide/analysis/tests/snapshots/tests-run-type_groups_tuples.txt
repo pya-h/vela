@@ -12,8 +12,8 @@
     | comment:; `each v in args` gives each value in turn, of its own type, `P`.
   8 | task described<P...: frozen & shown>(args: P...)
     | keyword:task  task:described  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
-  9 |     bind t = (args...) {
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
+  9 |     fixed t = (args...) {
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
  10 |         failure one
     | keyword:failure  variable:one
  11 |         when one is {v}
@@ -66,14 +66,14 @@
     | keyword:fi
  37 | task listed<P...: shown>(args: P...)
     | keyword:task  task:listed  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
- 38 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
+ 38 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
  39 |     each v in args
     | keyword:each  variable:v  keyword:in  parameter:args
  40 |         n++
     | variable:n  operator:++
- 41 |         bind kept: P = v
-    | keyword:bind  variable:kept  punctuation::  type:P  operator:=  variable:v
+ 41 |         fixed kept: P = v
+    | keyword:fixed  variable:kept  punctuation::  type:P  operator:=  variable:v
  42 |         show(n, ". ", kept, " (", v.type, ")")
     | builtin-fn:show  punctuation:(  variable:n  punctuation:,  string:". "  punctuation:,  variable:kept  punctuation:,  string:" ("  punctuation:,  variable:v  punctuation:.  keyword:type  punctuation:,  string:")"  punctuation:)
  43 |     fi
@@ -98,12 +98,12 @@
     | task:listed  punctuation:(  punctuation:)
  54 |     ; A tuple of known length read in a maybe: none past its end.
     | comment:; A tuple of known length read in a maybe: none past its end.
- 55 |     bind pair = (1, "a")
-    | keyword:bind  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 55 |     fixed pair = (1, "a")
+    | keyword:fixed  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
  56 |     show(pair.#0, " ", pair.#1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  punctuation:#  number:0  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  punctuation:#  number:1  punctuation:)
- 57 |     bind past: maybe int = pair.#5
-    | keyword:bind  variable:past  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:pair  punctuation:.  punctuation:#  number:5
+ 57 |     fixed past: maybe int = pair.#5
+    | keyword:fixed  variable:past  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:pair  punctuation:.  punctuation:#  number:5
  58 |     show(past, " ", pair.#0 { 0 })
     | builtin-fn:show  punctuation:(  variable:past  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  punctuation:#  number:0  punctuation:{  number:0  punctuation:}  punctuation:)
  59 | fi

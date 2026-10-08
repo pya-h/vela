@@ -6,7 +6,7 @@
 #WIDTH = 6
 
 task free_run(row: text, from: int) -> int
-    hold run = 0
+    flex run = 0
     each at_seat in from..WIDTH
         when row[at_seat] != '.'
             break
@@ -17,9 +17,9 @@ task free_run(row: text, from: int) -> int
 fi
 
 task seat(hall: [text#4], party: int)
-    hold placed = false
+    flex placed = false
     rows => each r in 0..4
-        bind row = hall[r]
+        fixed row = hall[r]
         when row[0] == '#'
             show("row ", r, " is closed")
             continue
@@ -38,7 +38,7 @@ task seat(hall: [text#4], party: int)
 fi
 
 task main()
-    bind hall = ["x..x.x", "######", "xx...x", "......"]
+    fixed hall = ["x..x.x", "######", "xx...x", "......"]
     seat(hall, 2)
     seat(hall, 3)
     seat(hall, 5)
@@ -47,7 +47,7 @@ task main()
     ; The free seats at the start of the last row: its bytes are read as
     ; maybes, and the loop stops at the first taken one, or past the end,
     ; where its plan B stops it.
-    hold count = 0
+    flex count = 0
     loop hall[3].at(count) { break } == '.'
         count++
     fi

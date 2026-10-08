@@ -2,15 +2,15 @@
 shape Point
     x: int
 
-    alters grow(bind& by: Point)
+    alters grow(fixed& by: Point)
         .x = .x + by.x
     fi
 fi
 
-task g(hold& p: Point)
+task g(flex& p: Point)
     p.x = 1
 fi
 
-task f(bind& p: Point)
+task f(fixed& p: Point)
     g(&p)
 fi

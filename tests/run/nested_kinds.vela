@@ -33,7 +33,7 @@ task main()
     show(describe(Holding(Circle(1))))
     show(describe(Holding(Square(2))))
     show(describe(Empty))
-    bind b = Box.Holding(Shape.Square(4))
+    fixed b = Box.Holding(Shape.Square(4))
     when b is Box.Holding inner
         when inner is Shape.Square s
             show(s)

@@ -8,11 +8,11 @@ shape Counter
     fi
 fi
 
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 
 task main()
-    bind c = Counter {}
+    fixed c = Counter {}
     show(c.peek())
 fi

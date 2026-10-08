@@ -4,7 +4,7 @@
 
 import { cursorAtEndOf, expect, launch, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
-const FOREVER = "task main()\n    hold n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
+const FOREVER = "task main()\n    flex n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
 
 test("shortcuts inside a dialog do nothing, not the browser's action", async ({ page, studio }) => {
   await launch(page, studio);

@@ -1,4 +1,4 @@
-; error: 3:17: an array holds at least one value, as in '[0#4]'
+; error: 3:18: an array holds at least one value, as in '[0#4]'
 task main()
-    bind days = []
+    fixed days = []
 fi

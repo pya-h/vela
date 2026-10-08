@@ -62,7 +62,7 @@ shape Dial
 fi
 
 task main()
-    hold job = Job { name: "sweep" }
+    flex job = Job { name: "sweep" }
     show(job.name, " ", job.tries, " ", job.weight, " ", job.ready)
     show(job.note { "no note" }, " ", job.marks[2], " ", job.room[0])
     show(job.place.0, " ", job.place.1, " ", job.told())
@@ -74,7 +74,7 @@ task main()
     fi
 
     ; A literal writes what it likes and falls back on the rest.
-    hold picked = Job { name: "scrub", tries: 3, note: "again", state: State.Busy, place: (2, "second") }
+    flex picked = Job { name: "scrub", tries: 3, note: "again", state: State.Busy, place: (2, "second") }
     show(picked.tries, " ", picked.note { "" }, " ", picked.place.1)
     match picked.state
     case Idle
@@ -83,32 +83,32 @@ task main()
         show("busy")
     fi
 
-    bind empty = Counters {}
+    fixed empty = Counters {}
     show(empty.hits, " ", empty.misses)
 
     region r
-    hold box = Boxed<int> { value: 4 }
+    flex box = Boxed<int> { value: 4 }
     show(box.label, " ", box.value, " ", box.spare { -1 })
-    bind shelf = Shelf { box: Boxed<int> { value: 6, spare: 7 } }
+    fixed shelf = Shelf { box: Boxed<int> { value: 6, spare: 7 } }
     show(shelf.box.value, " ", shelf.box.spare { -1 })
     show(Dial { step: 3 }.reach())
-    hold named = Boxed<text> { value: "deep", label: "kept" }
+    flex named = Boxed<text> { value: "deep", label: "kept" }
     show(named.label, " ", named.value)
 
     ; A default is read where the literal is, so each value gets its own.
-    hold first = Counters {}
-    hold second = Counters {}
+    flex first = Counters {}
+    flex second = Counters {}
     first.hits = 9
     show(first.hits, " ", second.hits)
 
     ; Text a field falls back on lasts as long as the program, so it fits a
     ; value of any region.
-    bind line = "job {picked.tries}" at r
-    hold moved = Job { name: line }
+    fixed line = "job {picked.tries}" at r
+    flex moved = Job { name: line }
     show(moved.name, " ", moved.note { "no note" })
 
     ; Another module's shape, built without the private field it keeps.
-    hold machine = Machine { name: "press" }
+    flex machine = Machine { name: "press" }
     machine.run()
     machine.run()
     show(machine.name, " ", machine.runs(), " ", Plant {}.cell.level())

@@ -108,15 +108,15 @@ task main()
     area(Spot {})
     area(Spot { x: 1, y: 1 }, "one")
     show(pick([4, 5, ...]) { 0 }, " ", pick([4, 5, ...], 9) { 0 }, " ", pick([4, 5, ...], 9, 6) { 0 })
-    bind c = Counter.starting()
+    fixed c = Counter.starting()
     show(c.n, " ", c.bumped().n, " ", c.bumped(5).n, " ", Counter.starting(3).bumped().n)
-    bind small = square()
-    bind big = square(4)
+    fixed small = square()
+    fixed big = square(4)
     show(small, " ", big)
     ; Another file's defaults, which name its private parts.
     show(run(1), " ", run(1, double), " ", run(1, double, 0), " ", Box {}.grown().v)
     ; A task named as a value takes every value, as its type says.
-    bind f = pad
+    fixed f = pad
     f("e", 2, '+', Side.Left)
     show(math.log(1000.0), " ", math.log(8.0, 2.0))
 fi

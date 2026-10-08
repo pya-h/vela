@@ -34,8 +34,8 @@
     | keyword:fi
  22 | ; Adds a hundred items, which moves the slice's items to a bigger block.
     | comment:; Adds a hundred items, which moves the slice's items to a bigger block.
- 23 | task grow(hold& xs: [int]@r, r: region) -> int
-    | keyword:task  task:grow  punctuation:(  keyword:hold  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
+ 23 | task grow(flex& xs: [int]@r, r: region) -> int
+    | keyword:task  task:grow  punctuation:(  keyword:flex  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
  24 |     each i in 0..100
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:100
  25 |         xs.add(i)
@@ -74,8 +74,8 @@
     | comment:; A slice kept in a variable of its own can change, and be sent back.
  45 | task evens(r: region, n: int) -> [int]@r
     | keyword:task  task:evens  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 46 |     hold out = new [int]() at r
-    | keyword:hold  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 46 |     flex out = new [int]() at r
+    | keyword:flex  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  47 |     each i in 0..n
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
  48 |         when i % 2 == 0
@@ -110,8 +110,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  65 |     region r
     | keyword:region  region:r
- 66 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 66 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  67 |     show(xs.len)
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  punctuation:)
  68 |     xs.add(1)
@@ -146,8 +146,8 @@
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)  operator:-  variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
  86 |     ; A copy shares the items, but adding to one never writes over the other's.
     | comment:; A copy shares the items, but adding to one never writes over the other's.
- 87 |     hold copy = xs
-    | keyword:hold  variable:copy  operator:=  variable:xs
+ 87 |     flex copy = xs
+    | keyword:flex  variable:copy  operator:=  variable:xs
  88 |     xs.add(7)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:7  punctuation:)
  89 |     copy.add(8)
@@ -158,14 +158,14 @@
     | builtin-fn:show  punctuation:(  variable:copy  punctuation:[  variable:copy  punctuation:.  field:len  operator:-  number:1  punctuation:]  punctuation:)
  93 |     ; A part ending where the slice ends, and one ending before it.
     | comment:; A part ending where the slice ends, and one ending before it.
- 94 |     hold numbers = new [int]([1, 2, 3, 4]) at r
-    | keyword:hold  variable:numbers  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]  punctuation:)  keyword:at  region:r
+ 94 |     flex numbers = new [int]([1, 2, 3, 4]) at r
+    | keyword:flex  variable:numbers  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]  punctuation:)  keyword:at  region:r
  95 |     numbers.add(5)
     | variable:numbers  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
- 96 |     hold tail = numbers[3..5]
-    | keyword:hold  variable:tail  operator:=  variable:numbers  punctuation:[  number:3  operator:..  number:5  punctuation:]
- 97 |     hold head = numbers[0..2]
-    | keyword:hold  variable:head  operator:=  variable:numbers  punctuation:[  number:0  operator:..  number:2  punctuation:]
+ 96 |     flex tail = numbers[3..5]
+    | keyword:flex  variable:tail  operator:=  variable:numbers  punctuation:[  number:3  operator:..  number:5  punctuation:]
+ 97 |     flex head = numbers[0..2]
+    | keyword:flex  variable:head  operator:=  variable:numbers  punctuation:[  number:0  operator:..  number:2  punctuation:]
  98 |     head.add(9)
     | variable:head  punctuation:.  field:add  punctuation:(  number:9  punctuation:)
  99 |     tail.add(6)
@@ -184,10 +184,10 @@
     | builtin-fn:show  punctuation:(  variable:numbers  punctuation:[  number:5  punctuation:]  punctuation:)
 107 |     ; A slice made from an array in a region, or copied, grows too.
     | comment:; A slice made from an array in a region, or copied, grows too.
-108 |     bind boxed = new [int#3]([1, 2, 3]) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
-109 |     hold view = boxed^[0..2]
-    | keyword:hold  variable:view  operator:=  variable:boxed  operator:^  punctuation:[  number:0  operator:..  number:2  punctuation:]
+108 |     fixed boxed = new [int#3]([1, 2, 3]) at r
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+109 |     flex view = boxed^[0..2]
+    | keyword:flex  variable:view  operator:=  variable:boxed  operator:^  punctuation:[  number:0  operator:..  number:2  punctuation:]
 110 |     view.add(10)
     | variable:view  punctuation:.  field:add  punctuation:(  number:10  punctuation:)
 111 |     show(boxed^[2])
@@ -196,10 +196,10 @@
     | builtin-fn:show  punctuation:(  variable:view  punctuation:[  number:2  punctuation:]  punctuation:)
 114 |     ; Many items, with other allocations in between.
     | comment:; Many items, with other allocations in between.
-115 |     hold many = new [int]() at r
-    | keyword:hold  variable:many  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-116 |     hold pointers = new [^int]() at r
-    | keyword:hold  variable:pointers  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+115 |     flex many = new [int]() at r
+    | keyword:flex  variable:many  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+116 |     flex pointers = new [^int]() at r
+    | keyword:flex  variable:pointers  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 117 |     each i in 0..20000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:20000
 118 |         many.add(i)
@@ -208,8 +208,8 @@
     | variable:pointers  punctuation:.  field:add  punctuation:(  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:at  region:r  punctuation:)
 120 |     fi
     | keyword:fi
-121 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+121 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
 122 |     loop many.len > 0
     | keyword:loop  variable:many  punctuation:.  field:len  operator:>  number:0
 123 |         total = total + many.del()
@@ -226,20 +226,20 @@
     | builtin-fn:show  punctuation:(  variable:many  punctuation:.  field:len  punctuation:)
 130 |     ; Through a pointer, a field, and an item of another slice.
     | comment:; Through a pointer, a field, and an item of another slice.
-131 |     bind bag = new Bag(Bag { items: new [int]() at r }) at r
-    | keyword:bind  variable:bag  operator:=  keyword:new  type:Bag  punctuation:(  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
+131 |     fixed bag = new Bag(Bag { items: new [int]() at r }) at r
+    | keyword:fixed  variable:bag  operator:=  keyword:new  type:Bag  punctuation:(  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
 132 |     fill(r, bag, 4)
     | task:fill  punctuation:(  region:r  punctuation:,  variable:bag  punctuation:,  number:4  punctuation:)
 133 |     show(bag^.items.del(1))
     | builtin-fn:show  punctuation:(  variable:bag  operator:^  punctuation:.  field:items  punctuation:.  field:del  punctuation:(  number:1  punctuation:)  punctuation:)
-134 |     hold kept = Bag { items: new [int]([1]) at r }
-    | keyword:hold  variable:kept  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}
+134 |     flex kept = Bag { items: new [int]([1]) at r }
+    | keyword:flex  variable:kept  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}
 135 |     kept.items.add(2)
     | variable:kept  punctuation:.  field:items  punctuation:.  field:add  punctuation:(  number:2  punctuation:)
 136 |     show(kept.items.len)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  field:items  punctuation:.  field:len  punctuation:)
-137 |     hold rows = new [[int]]([new [int]() at r#2]) at r
-    | keyword:hold  variable:rows  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:[  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+137 |     flex rows = new [[int]]([new [int]() at r#2]) at r
+    | keyword:flex  variable:rows  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:[  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
 138 |     rows[1].add(5)
     | variable:rows  punctuation:[  number:1  punctuation:]  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
 139 |     rows[1].add(0, 4)
@@ -250,22 +250,22 @@
     | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:0  punctuation:]  punctuation:.  field:len  punctuation:)
 143 |     ; Items of other types.
     | comment:; Items of other types.
-144 |     hold names = new [text]() at r
-    | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+144 |     flex names = new [text]() at r
+    | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 145 |     names.add("b")
     | variable:names  punctuation:.  field:add  punctuation:(  string:"b"  punctuation:)
 146 |     names.add(0, "a")
     | variable:names  punctuation:.  field:add  punctuation:(  number:0  punctuation:,  string:"a"  punctuation:)
 147 |     show(names.del(0))
     | builtin-fn:show  punctuation:(  variable:names  punctuation:.  field:del  punctuation:(  number:0  punctuation:)  punctuation:)
-148 |     hold points = new [Point]() at r
-    | keyword:hold  variable:points  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+148 |     flex points = new [Point]() at r
+    | keyword:flex  variable:points  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 149 |     points.add(Point { x: 1, y: 2 })
     | variable:points  punctuation:.  field:add  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)
 150 |     show(points.del().y)
     | builtin-fn:show  punctuation:(  variable:points  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:.  field:y  punctuation:)
-151 |     hold maybes = new [maybe int]() at r
-    | keyword:hold  variable:maybes  operator:=  keyword:new  punctuation:[  keyword:maybe  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+151 |     flex maybes = new [maybe int]() at r
+    | keyword:flex  variable:maybes  operator:=  keyword:new  punctuation:[  keyword:maybe  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 152 |     maybes.add(none)
     | variable:maybes  punctuation:.  field:add  punctuation:(  keyword:none  punctuation:)
 153 |     maybes.add(3)
@@ -276,8 +276,8 @@
     | builtin-fn:show  punctuation:(  variable:maybes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
 157 |     ; In conditions: the right side of 'and' runs only when needed.
     | comment:; In conditions: the right side of 'and' runs only when needed.
-158 |     hold left = new [int]([1, 2]) at r
-    | keyword:hold  variable:left  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+158 |     flex left = new [int]([1, 2]) at r
+    | keyword:flex  variable:left  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)  keyword:at  region:r
 159 |     when left.len > 5 and left.del() == 2
     | keyword:when  variable:left  punctuation:.  field:len  operator:>  number:5  keyword:and  variable:left  punctuation:.  field:del  punctuation:(  punctuation:)  operator:==  number:2
 160 |         show(0)
@@ -294,8 +294,8 @@
     | keyword:fi
 167 |     ; Adding while walking: the walk counts the items it started with.
     | comment:; Adding while walking: the walk counts the items it started with.
-168 |     hold walked = new [int]([1, 2]) at r
-    | keyword:hold  variable:walked  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+168 |     flex walked = new [int]([1, 2]) at r
+    | keyword:flex  variable:walked  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)  keyword:at  region:r
 169 |     each w in walked
     | keyword:each  variable:w  keyword:in  variable:walked
 170 |         walked.add(w * 10)
@@ -310,8 +310,8 @@
     | keyword:each  variable:pass  keyword:in  number:0  operator:..  number:3
 176 |         region scratch
     | keyword:region  region:scratch
-177 |         hold temporary = new [int]() at scratch
-    | keyword:hold  variable:temporary  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:scratch
+177 |         flex temporary = new [int]() at scratch
+    | keyword:flex  variable:temporary  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:scratch
 178 |         temporary.add(pass)
     | variable:temporary  punctuation:.  field:add  punctuation:(  variable:pass  punctuation:)
 179 |         show(temporary.del())
@@ -322,12 +322,12 @@
     | comment:; Taking the last item out gives its space back to that slice, even when a
 183 |     ; copy made before still counts the item: the copy sees the next add.
     | comment:; copy made before still counts the item: the copy sees the next add.
-184 |     hold older = new [int]([1, 2, 3]) at r
-    | keyword:hold  variable:older  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+184 |     flex older = new [int]([1, 2, 3]) at r
+    | keyword:flex  variable:older  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
 185 |     older.add(4)
     | variable:older  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
-186 |     hold newer = older
-    | keyword:hold  variable:newer  operator:=  variable:older
+186 |     flex newer = older
+    | keyword:flex  variable:newer  operator:=  variable:older
 187 |     _ = newer.del()
     | keyword:_  operator:=  variable:newer  punctuation:.  field:del  punctuation:(  punctuation:)
 188 |     newer.add(5)
@@ -336,24 +336,24 @@
     | builtin-fn:show  punctuation:(  variable:older  punctuation:[  number:3  punctuation:]  punctuation:)
 191 |     ; Changes without a value among values taken in order.
     | comment:; Changes without a value among values taken in order.
-192 |     hold taken = 0
-    | keyword:hold  variable:taken  operator:=  number:0
+192 |     flex taken = 0
+    | keyword:flex  variable:taken  operator:=  number:0
 193 |     _, taken = older.add(6), older.del()
     | keyword:_  punctuation:,  variable:taken  operator:=  variable:older  punctuation:.  field:add  punctuation:(  number:6  punctuation:)  punctuation:,  variable:older  punctuation:.  field:del  punctuation:(  punctuation:)
 194 |     show(taken)
     | builtin-fn:show  punctuation:(  variable:taken  punctuation:)
-195 |     bind _, again = older.add(7), older.del()
-    | keyword:bind  keyword:_  punctuation:,  variable:again  operator:=  variable:older  punctuation:.  field:add  punctuation:(  number:7  punctuation:)  punctuation:,  variable:older  punctuation:.  field:del  punctuation:(  punctuation:)
+195 |     fixed _, again = older.add(7), older.del()
+    | keyword:fixed  keyword:_  punctuation:,  variable:again  operator:=  variable:older  punctuation:.  field:add  punctuation:(  number:7  punctuation:)  punctuation:,  variable:older  punctuation:.  field:del  punctuation:(  punctuation:)
 196 |     show(again)
     | builtin-fn:show  punctuation:(  variable:again  punctuation:)
 198 |     ; Dropped values, and plan B values as arguments.
     | comment:; Dropped values, and plan B values as arguments.
 199 |     _ = xs.del()
     | keyword:_  operator:=  variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)
-200 |     bind _ = copy.del()
-    | keyword:bind  keyword:_  operator:=  variable:copy  punctuation:.  field:del  punctuation:(  punctuation:)
-201 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+200 |     fixed _ = copy.del()
+    | keyword:fixed  keyword:_  operator:=  variable:copy  punctuation:.  field:del  punctuation:(  punctuation:)
+201 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
 202 |     xs.add(missing { 42 })
     | variable:xs  punctuation:.  field:add  punctuation:(  variable:missing  punctuation:{  number:42  punctuation:}  punctuation:)
 203 |     show(xs.del())
@@ -366,8 +366,8 @@
     | builtin-fn:show  punctuation:(  task:evens  punctuation:(  region:r  punctuation:,  number:7  punctuation:)  punctuation:.  field:len  punctuation:)
 209 |     ; An item set to a value that moves the slice's items is found after it.
     | comment:; An item set to a value that moves the slice's items is found after it.
-210 |     hold moved = [1, 2, ...] at r
-    | keyword:hold  variable:moved  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+210 |     flex moved = [1, 2, ...] at r
+    | keyword:flex  variable:moved  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
 211 |     moved[0] = grow(&moved, r)
     | variable:moved  punctuation:[  number:0  punctuation:]  operator:=  task:grow  punctuation:(  operator:&  variable:moved  punctuation:,  region:r  punctuation:)
 212 |     moved[1] += grow(&moved, r)

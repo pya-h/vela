@@ -4,7 +4,7 @@ shape Point
 fi
 
 task main()
-    bind p = Point { x: 1 }
+    fixed p = Point { x: 1 }
     match p
     case _
         show(1)

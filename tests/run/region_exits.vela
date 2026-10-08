@@ -18,11 +18,11 @@ fi
 
 task from_condition(limit: int) -> int
     region outer
-    bind total = new int(0) at outer
-    hold j = 1
+    fixed total = new int(0) at outer
+    flex j = 1
     loop pick(j) {
         region c
-        bind pc = new int(j) at c
+        fixed pc = new int(j) at c
         when pc^ > limit
             <- total^
         fi
@@ -35,13 +35,13 @@ fi
 
 task from_and(n: int) -> int
     region a
-    bind pa = new int(n) at a
+    fixed pa = new int(n) at a
     match fails(pa^)
     case {v}
         <- v
     case failure msg
         region d
-        bind pd = new text(msg) at d
+        fixed pd = new text(msg) at d
         when pd^ == "four" and pick(pa^ / 4) { <- 1000 } > 0
             <- 1
         fi
@@ -57,10 +57,10 @@ task main()
     show(from_and(12))
     each k in 0..1000
         region per
-        bind p = new int(k) at per
+        fixed p = new int(k) at per
         show(pick(p^) { fails(p^) { failure e
             region inner
-            bind q = new int(0) at inner
+            fixed q = new int(0) at inner
             when k > 10
                 <-
             fi

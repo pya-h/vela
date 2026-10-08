@@ -27,16 +27,16 @@ fi
 task main()
     CHECK
     region r
-    bind pair = (\"Ada\", 36)
-    bind nested: (int, (float, text)) = (1, (2.5, \"deep\"))
-    bind quotient, remainder = divide(17, 5)
-    bind (whole, (part, word)) = nested
-    bind line = scan(\"\") at r { \"\" }
-    bind kept = named(r, line)
-    bind age = pair.1
-    bind deep = nested.1.1
+    fixed pair = (\"Ada\", 36)
+    fixed nested: (int, (float, text)) = (1, (2.5, \"deep\"))
+    fixed quotient, remainder = divide(17, 5)
+    fixed (whole, (part, word)) = nested
+    fixed line = scan(\"\") at r { \"\" }
+    fixed kept = named(r, line)
+    fixed age = pair.1
+    fixed deep = nested.1.1
     show(age + quotient + remainder + whole)
-    hold found: maybe (text, int) = none
+    flex found: maybe (text, int) = none
     when found is {(who, years)}
         show(who)
         show(years)
@@ -49,7 +49,7 @@ task main()
             show(why)
             show(bad)
     fi
-    when pair is hold (person, count)
+    when pair is flex (person, count)
         count = count + 1
         show(person)
         show(count)
@@ -119,7 +119,7 @@ fn items_and_tuple_types_are_colored() {
         let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
         analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
     };
-    assert_eq!(class_at("1\n    bind deep"), Some(TokenClass::Field));
+    assert_eq!(class_at("1\n    fixed deep"), Some(TokenClass::Field));
     assert_eq!(class_at("float, text)) ="), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("text)) ="), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("word)) = nested"), Some(TokenClass::Variable));
@@ -127,7 +127,7 @@ fn items_and_tuple_types_are_colored() {
 
 #[test]
 fn changing_an_item_is_reported() {
-    let source = program(true, "hold changing = (1, 2)\n    changing.0 = 5");
+    let source = program(true, "flex changing = (1, 2)\n    changing.0 = 5");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("a tuple's items never change"), "{}", diagnostic.message);
@@ -164,15 +164,15 @@ fn completion_offers_types_inside_a_tuple_type() {
     for checks in [true, false] {
         let labels = |marked: &str| completions(marked).into_iter().map(|item| item.label).collect::<Vec<_>>();
         let types = ["int".to_string(), "float".to_string(), "bool".to_string(), "text".to_string(), "unit".to_string(), "char".to_string(), "maybe".to_string()];
-        assert_eq!(labels(&program(checks, "bind typed: (int, @@) = (1, 2)")), types, "checks: {}", checks);
-        assert_eq!(labels(&program(checks, "bind typed: (@@) = (1, 2)")), types, "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "fixed typed: (int, @@) = (1, 2)")), types, "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "fixed typed: (@@) = (1, 2)")), types, "checks: {}", checks);
         // A parameter, a field, and a result take items of their own.
         assert_eq!(labels("task f(t: (int, @@))\nfi\n"), types);
         assert_eq!(labels("shape Holder\n    t: (int, @@)\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "Holder", "maybe"]);
         assert_eq!(labels("task f() -> (int, @@)\nfi\n"), types);
         // A name of a binding, and one of a parameter, are still being declared,
         // and a parameter may be one the task changes.
-        assert!(labels(&program(checks, "bind one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
         assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["hold", "hold&", "bind", "bind&"]);
     }
 }
@@ -203,13 +203,13 @@ task risky(n: int) -> int ~ text
 fi
 
 task kept(v: maybe (int ~ text)) -> int
-    bind inner = v { <- -1 }
+    fixed inner = v { <- -1 }
     <- inner { -2 }
 fi
 
 task main()
-    bind held: maybe (int ~ text) = risky(1)
-    bind plain: (int) = 2
+    fixed held: maybe (int ~ text) = risky(1)
+    fixed plain: (int) = 2
     show(kept(held), plain)
 fi
 ";

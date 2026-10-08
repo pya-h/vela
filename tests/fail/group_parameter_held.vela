@@ -1,5 +1,5 @@
 ; error: 3:36: a group's values are read as copies the task can't change, so 'args' can't be 'hold'; a task value given them takes them as places where it takes places, as 'next: (P...) -> R' given a task taking 'hold& n: int'
 ; A group's values are given as values.
-task f<P...>(g: (P...) -> nothing, hold args: P...)
+task f<P...>(g: (P...) -> nothing, flex args: P...)
     g(args...)
 fi

@@ -2,8 +2,8 @@
 ; The last line fails only with LoopResult.Manual written there.
 include std/loops {LoopResult}
 task main()
-    bind e: LoopResult<bool, bool> = LoopResult.Broke(none)
-    bind q = each a in 0..2
+    fixed e: LoopResult<bool, bool> = LoopResult.Broke(none)
+    fixed q = each a in 0..2
         when a == 1
             fail e
         else

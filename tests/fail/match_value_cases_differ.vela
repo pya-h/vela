@@ -5,8 +5,8 @@ kind Shape
 fi
 
 task main()
-    bind s = Circle(1.0)
-    bind mixed = match s
+    fixed s = Circle(1.0)
+    fixed mixed = match s
     case Circle r = 1
     case Rect w h = "two"
     fi

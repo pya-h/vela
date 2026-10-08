@@ -1,7 +1,7 @@
-; error: 4:19: expected type int, got maybe int; extract its value first, as in 'x { … }' or 'when x is {value}'
+; error: 4:20: expected type int, got maybe int; extract its value first, as in 'x { … }' or 'when x is {value}'
 task main()
-    bind r: maybe int = 3
-    bind n: int = match r
+    fixed r: maybe int = 3
+    fixed n: int = match r
     case {value} = value
     case none = none
     fi

@@ -1,6 +1,6 @@
-; error: 4:34: a lambda's parameters have no values to fall back on: a lambda is called through its type, which names every value; a task's parameters can have them
+; error: 4:35: a lambda's parameters have no values to fall back on: a lambda is called through its type, which names every value; a task's parameters can have them
 ; A lambda is called through its type, which names every value.
 task main()
-    bind add = (a: int, b: int = 1) -> int <- a + b fi
+    fixed add = (a: int, b: int = 1) -> int <- a + b fi
     show(add(1, 2))
 fi

@@ -16,16 +16,16 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  11 |     region r
     | keyword:region  region:r
- 12 |     bind n: ^int@r = new int(42) at r
-    | keyword:bind  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:r
+ 12 |     fixed n: ^int@r = new int(42) at r
+    | keyword:fixed  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:r
  13 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
  14 |     n^ = n^ + 1
     | variable:n  operator:^  operator:=  variable:n  operator:^  operator:+  number:1
  15 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
- 17 |     bind p = new@r Point(Point { x: 3, y: 4 })
-    | keyword:bind  variable:p  operator:=  keyword:new  operator:@  region:r  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
+ 17 |     fixed p = new@r Point(Point { x: 3, y: 4 })
+    | keyword:fixed  variable:p  operator:=  keyword:new  operator:@  region:r  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
  18 |     show(p^.x * p^.y)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  operator:*  variable:p  operator:^  punctuation:.  field:y  punctuation:)
  19 | fi

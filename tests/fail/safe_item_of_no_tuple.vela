@@ -1,6 +1,6 @@
 ; error: 5:12: '.#0' reads an item of a tuple in a maybe, but this value is int
 ; '.#' reads a tuple's item in a maybe.
 task main()
-    bind n = 5
+    fixed n = 5
     show(n.#0)
 fi

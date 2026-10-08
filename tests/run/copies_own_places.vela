@@ -10,25 +10,25 @@ shape Mid
     c: int
     d: int
 
-    same(bind& o: Mid) -> bool
+    same(fixed& o: Mid) -> bool
         <- &.this == &o
     fi
 fi
 
-task plain(a: Mid, bind& b: Mid) -> bool
+task plain(a: Mid, fixed& b: Mid) -> bool
     <- &a == &b
 fi
 
-task pair(p: (int, int), bind& q: (int, int)) -> bool
+task pair(p: (int, int), fixed& q: (int, int)) -> bool
     <- &p == &q
 fi
 
 task main()
-    hold w = Mid { a: 1, b: 2, c: 3, d: 4 }
+    flex w = Mid { a: 1, b: 2, c: 3, d: 4 }
     show(plain(w, &w))
     show(w.same(&w))
-    hold t = (1, 2)
+    flex t = (1, 2)
     show(pair(t, &t))
-    bind& v = &w
+    fixed& v = &w
     show(&v == &w)
 fi

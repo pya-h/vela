@@ -1,9 +1,9 @@
-; error: 6:32: region 'r' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, 'r: region'; a lambda that keeps what it uses names the region it keeps it in, '[@r](…)'
+; error: 6:33: region 'r' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, 'r: region'; a lambda that keeps what it uses names the region it keeps it in, '[@r](…)'
 ; A lambda allocates in no region of the task around it unless it keeps what it uses there.
 task main()
     region r
-    bind f = (x: int) -> nothing
-        bind p = new int(x) at r
+    fixed f = (x: int) -> nothing
+        fixed p = new int(x) at r
         show(p^)
     fi
     f(1)

@@ -1,8 +1,8 @@
-; error: 5:14: 'x' is already defined at 3:10
+; error: 5:15: 'x' is already defined at 3:11
 task main()
-    bind x = 1
+    fixed x = 1
     when true
-        bind x = x + 1
+        fixed x = x + 1
         show(x)
     fi
 fi

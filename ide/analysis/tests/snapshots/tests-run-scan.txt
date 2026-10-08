@@ -32,18 +32,18 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  21 |     region r
     | keyword:region  region:r
- 22 |     bind name = ask(r, "Name? ")
-    | keyword:bind  variable:name  operator:=  task:ask  punctuation:(  region:r  punctuation:,  string:"Name? "  punctuation:)
+ 22 |     fixed name = ask(r, "Name? ")
+    | keyword:fixed  variable:name  operator:=  task:ask  punctuation:(  region:r  punctuation:,  string:"Name? "  punctuation:)
  23 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
- 24 |     bind person: Person@r = Person { name: name, age: 36 }
-    | keyword:bind  variable:person  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:name  punctuation:,  field:age  punctuation::  number:36  punctuation:}
+ 24 |     fixed person: Person@r = Person { name: name, age: 36 }
+    | keyword:fixed  variable:person  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:name  punctuation:,  field:age  punctuation::  number:36  punctuation:}
  25 |     show(person.name == "Ada")
     | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  operator:==  string:"Ada"  punctuation:)
  27 |     ; A Windows line break, and a line of nothing.
     | comment:; A Windows line break, and a line of nothing.
- 28 |     bind windows = scan("")@r { "none" }
-    | keyword:bind  variable:windows  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:"none"  punctuation:}
+ 28 |     fixed windows = scan("")@r { "none" }
+    | keyword:fixed  variable:windows  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:"none"  punctuation:}
  29 |     show(windows == "crlf")
     | builtin-fn:show  punctuation:(  variable:windows  operator:==  string:"crlf"  punctuation:)
  30 |     match scan("") at r
@@ -62,22 +62,22 @@
     | comment:; A line longer than any buffer, and one holding a zero byte, which is one
  38 |     ; of its bytes.
     | comment:; of its bytes.
- 39 |     bind long = scan("") at r { "" }
-    | keyword:bind  variable:long  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
+ 39 |     fixed long = scan("") at r { "" }
+    | keyword:fixed  variable:long  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
  40 |     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
     | builtin-fn:show  punctuation:(  variable:long  operator:==  string:"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"  punctuation:)
  41 |     show(long.len)
     | builtin-fn:show  punctuation:(  variable:long  punctuation:.  field:len  punctuation:)
- 42 |     bind zero = scan("") at r { "" }
-    | keyword:bind  variable:zero  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
+ 42 |     fixed zero = scan("") at r { "" }
+    | keyword:fixed  variable:zero  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
  43 |     show(zero == "ab\0cd")
     | builtin-fn:show  punctuation:(  variable:zero  operator:==  string:"ab  escape:\0  string:cd"  punctuation:)
  44 |     show(zero.len)
     | builtin-fn:show  punctuation:(  variable:zero  punctuation:.  field:len  punctuation:)
  46 |     ; A prompt in a region, arguments read left to right, and lines dropped.
     | comment:; A prompt in a region, arguments read left to right, and lines dropped.
- 47 |     hold prompt = new [text]() at r
-    | keyword:hold  variable:prompt  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 47 |     flex prompt = new [text]() at r
+    | keyword:flex  variable:prompt  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  48 |     prompt.add("Two lines: ")
     | variable:prompt  punctuation:.  field:add  punctuation:(  string:"Two lines: "  punctuation:)
  49 |     both(scan(prompt[0]) at r, scan("")@r)
@@ -88,14 +88,14 @@
     | builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:""  punctuation:}
  53 |     ; Every line left, each in a region freed on its pass.
     | comment:; Every line left, each in a region freed on its pass.
- 54 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
+ 54 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
  55 |     endless
     | keyword:endless
  56 |         region line_memory
     | keyword:region  region:line_memory
- 57 |         bind line = scan("") at line_memory { "" }
-    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
+ 57 |         fixed line = scan("") at line_memory { "" }
+    | keyword:fixed  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
  58 |         when line == ""
     | keyword:when  variable:line  operator:==  string:""
  59 |             show(count)

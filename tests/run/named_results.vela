@@ -21,7 +21,7 @@ task score(hits: int, misses: int) -> total: int
 fi                               ; reaching the end sends total
 
 task collatz(start: int) -> steps: int, peak: int
-    hold n = start
+    flex n = start
     steps, peak <- 0, start
     loop n != 1
         when n % 2 == 0
@@ -82,7 +82,7 @@ task summed(n: int) -> sum: int, made: int
     region scratch
     sum, made <- 0, 0
     each i in 0..n
-        bind node = new Node(Node { value: i * i, next: none }) at scratch
+        fixed node = new Node(Node { value: i * i, next: none }) at scratch
         sum, made <- sum + node^.value, made + 1
     fi
 fi
@@ -97,7 +97,7 @@ task main()
     show(score(10, 1))
     show(score(1, 100))
 
-    bind steps, peak = collatz(27)
+    fixed steps, peak = collatz(27)
     show(steps)
     show(peak)
 
@@ -110,17 +110,17 @@ task main()
     show(brightness(Dimmed(42)))
 
     region r
-    bind list, count = build(r, 4)
+    fixed list, count = build(r, 4)
     show(count)
-    hold current = list
+    flex current = list
     loop current is {node}
         show(node^.value)
         current = node^.next
     fi
 
-    bind sum, made = summed(4)
+    fixed sum, made = summed(4)
     show(sum)
     show(made)
-    bind again, _ = twice(4)
+    fixed again, _ = twice(4)
     show(again)
 fi

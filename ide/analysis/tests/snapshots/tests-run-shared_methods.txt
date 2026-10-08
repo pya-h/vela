@@ -64,8 +64,8 @@
     | keyword:fi
  42 |     shared pair(r: region, a: int, b: int) -> Node@r
     | keyword:shared  method:pair  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Node  operator:@  region:r
- 43 |         bind last = new Node(Node.single(r, b)) at r
-    | keyword:bind  variable:last  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:.  method:single  punctuation:(  region:r  punctuation:,  parameter:b  punctuation:)  punctuation:)  keyword:at  region:r
+ 43 |         fixed last = new Node(Node.single(r, b)) at r
+    | keyword:fixed  variable:last  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:.  method:single  punctuation:(  region:r  punctuation:,  parameter:b  punctuation:)  punctuation:)  keyword:at  region:r
  44 |         <- Node { value: a, next: last }
     | keyword:<-  type:Node  punctuation:{  field:value  punctuation::  parameter:a  punctuation:,  field:next  punctuation::  variable:last  punctuation:}
  45 |     fi
@@ -106,24 +106,24 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  67 |     region r
     | keyword:region  region:r
- 68 |     bind p = Point.new(1, 2)
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 68 |     fixed p = Point.new(1, 2)
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
  69 |     show(p, " ", Point.origin().moved(3), " ", Point.made, " ", Point.label(r, 4))
     | builtin-fn:show  punctuation:(  variable:p  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  method:origin  punctuation:(  punctuation:)  punctuation:.  method:moved  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:made  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  method:label  punctuation:(  region:r  punctuation:,  number:4  punctuation:)  punctuation:)
- 70 |     bind list = Node.pair(r, 1, 2)
-    | keyword:bind  variable:list  operator:=  type:Node  punctuation:.  method:pair  punctuation:(  region:r  punctuation:,  number:1  punctuation:,  number:2  punctuation:)
- 71 |     bind second = list.next { <- }
-    | keyword:bind  variable:second  operator:=  variable:list  punctuation:.  field:next  punctuation:{  keyword:<-  punctuation:}
+ 70 |     fixed list = Node.pair(r, 1, 2)
+    | keyword:fixed  variable:list  operator:=  type:Node  punctuation:.  method:pair  punctuation:(  region:r  punctuation:,  number:1  punctuation:,  number:2  punctuation:)
+ 71 |     fixed second = list.next { <- }
+    | keyword:fixed  variable:second  operator:=  variable:list  punctuation:.  field:next  punctuation:{  keyword:<-  punctuation:}
  72 |     show(list.value, " ", second^.value)
     | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:value  punctuation:,  string:" "  punctuation:,  variable:second  operator:^  punctuation:.  field:value  punctuation:)
  73 |     show(Light.start(), " ", Light.start().next())
     | builtin-fn:show  punctuation:(  type:Light  punctuation:.  method:start  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Light  punctuation:.  method:start  punctuation:(  punctuation:)  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:)
  74 |     ; Another module's, brought in by name and under another name.
     | comment:; Another module's, brought in by name and under another name.
- 75 |     bind cheap = Item.new("pen", -2)
-    | keyword:bind  variable:cheap  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"pen"  punctuation:,  operator:-  number:2  punctuation:)
- 76 |     bind dear = Item.new("lamp", 30)
-    | keyword:bind  variable:dear  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"lamp"  punctuation:,  number:30  punctuation:)
+ 75 |     fixed cheap = Item.new("pen", -2)
+    | keyword:fixed  variable:cheap  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"pen"  punctuation:,  operator:-  number:2  punctuation:)
+ 76 |     fixed dear = Item.new("lamp", 30)
+    | keyword:fixed  variable:dear  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"lamp"  punctuation:,  number:30  punctuation:)
  77 |     show(cheap.price, " ", Item.made, " ", Fit.of(dear.price), " ", Fit.of(cheap.price))
     | builtin-fn:show  punctuation:(  variable:cheap  punctuation:.  field:price  punctuation:,  string:" "  punctuation:,  type:Item  punctuation:.  field:made  punctuation:,  string:" "  punctuation:,  type:Fit  punctuation:.  method:of  punctuation:(  variable:dear  punctuation:.  field:price  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Fit  punctuation:.  method:of  punctuation:(  variable:cheap  punctuation:.  field:price  punctuation:)  punctuation:)
  78 | fi

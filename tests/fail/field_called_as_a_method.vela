@@ -4,6 +4,6 @@ shape Point
 fi
 
 task main()
-    bind p = Point { x: 1 }
+    fixed p = Point { x: 1 }
     show(p.x())
 fi

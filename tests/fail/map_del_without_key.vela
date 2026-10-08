@@ -1,6 +1,6 @@
 ; error: 5:12: 'del' takes the key to take out of the map, as in 'm.del(k)', got 0 arguments
 task main()
     region r
-    hold m = ["a": 1] at r
+    flex m = ["a": 1] at r
     show(m.del())
 fi

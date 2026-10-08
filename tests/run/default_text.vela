@@ -92,7 +92,7 @@ fi
 
 task main()
     region r
-    bind p = Point { x: 1, y: -2 }
+    fixed p = Point { x: 1, y: -2 }
     show(p)
     show(Person { name: "Ada \"the first\"", age: 36, home: p })
     show(Marker {}, " ", Only {})
@@ -101,18 +101,18 @@ task main()
     show([Figure.Dot, Figure.Circle(1.0)], " ", (p, Mood.Calm))
     ; Another module's shape and kind by their own names.
     show(parts.Crate { size: 2 }, " ", parts.Weather.Rain(4), " ", parts.Weather.Sun)
-    bind first = new Node(Node { value: 1 }) at r
+    fixed first = new Node(Node { value: 1 }) at r
     show(first^.value, " ", first^.next)
-    bind leaf: Tree@r = Tree { value: 2 }
+    fixed leaf: Tree@r = Tree { value: 2 }
     show(Tree { value: 1, kids: new [Tree]([leaf, leaf]) at r })
     ; str, and text holding values, write the same.
-    bind t = p.str() at r
+    fixed t = p.str() at r
     show(t, " ", t.len, " ", "{p} and {Figure.Dot}" at r)
     show(Figure.Rect(1.0, 2.0).str() at r)
     ; Its own str wins, alone and inside others.
     show(Money { cents: 250 }, " ", Price { item: "tea", cost: Money { cents: 199 } }, " ", [Light.Red, Light.Green])
     show([Tag<int> { value: 1 }, Tag<int> { value: 2 }], " ", (Tag<text> { value: "a" }, 1))
-    bind mtag: maybe Tag<float> = Tag<float> { value: 1.5 }
+    fixed mtag: maybe Tag<float> = Tag<float> { value: 1.5 }
     show(mtag, " ", [mtag].str() at r)
     ; A type given to a task that writes it.
     show(told(r, p), " ", told(r, Mood.Calm), " ", told(r, Light.Green))

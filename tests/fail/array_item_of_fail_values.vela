@@ -4,5 +4,5 @@ task pick(n: int) -> float ~ int
 fi
 
 task main()
-    bind v = pick(1) { 0.0 }
+    fixed v = pick(1) { 0.0 }
 fi

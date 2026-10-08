@@ -13,8 +13,8 @@ fi
 
 task main()
     region r
-    bind n = 5
-    bind name = "Ada"
+    fixed n = 5
+    fixed name = "Ada"
 
     ; One value is what it always was.
     show(n)
@@ -31,15 +31,15 @@ task main()
     show("")
 
     ; A `maybe` writes its value, or `none`.
-    bind missing: maybe int = none
-    bind here: maybe int = 7
+    fixed missing: maybe int = none
+    fixed here: maybe int = 7
     show("missing: ", missing, ", here: ", here)
-    bind line: maybe text@r = scan("") at r
+    fixed line: maybe text@r = scan("") at r
     show("read: ", line)
 
     ; Values worked out where they are read: fields, items, parts, joins, text
     ; holding values, a plan B, and a call.
-    bind xs = [10, 20, 30]
+    fixed xs = [10, 20, 30]
     show("first ", xs[0], " of ", xs.len)
     show("part ", name[0..1], ", joined ", "x" + "y" at r, ", held ", "{n}" at r)
     show("plan B ", missing { 9 }, ", call ", noisy("inner", 3))

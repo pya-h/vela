@@ -1,5 +1,5 @@
-; error: 4:19: a reference names a place for as long as its block lasts, so it names a variable, a field or an item of one, or what a pointer points to, and not a value made here
+; error: 4:20: a reference names a place for as long as its block lasts, so it names a variable, a field or an item of one, or what a pointer points to, and not a value made here
 task main()
-    hold x = 1
-    bind& y = &(x + 1)
+    flex x = 1
+    fixed& y = &(x + 1)
 fi

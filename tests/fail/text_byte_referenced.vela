@@ -1,6 +1,6 @@
 ; error: 4:24: 'hold& first' names a place to change it, so it needs a place that can change, and text never does
 task main()
-    hold word = "hello"
-    hold& first = &word[0]
+    flex word = "hello"
+    flex& first = &word[0]
     show(first)
 fi

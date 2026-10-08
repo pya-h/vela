@@ -1,4 +1,4 @@
 ; error: 3:12: a shared field is 'hold' or 'read', not both: 'hold' lets any code that sees it change it, and 'read' only the methods of its shape
 shape Point
-    shared hold read made: int = 0
+    shared flex read made: int = 0
 fi

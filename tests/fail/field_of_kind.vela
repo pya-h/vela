@@ -4,6 +4,6 @@ kind Shape
 fi
 
 task main()
-    bind s = Circle(1.0)
+    fixed s = Circle(1.0)
     show(s.radius)
 fi

@@ -1,6 +1,6 @@
 ; A source file with CRLF line endings.
 
 task main()
-    bind word = "crlf"
+    fixed word = "crlf"
     show(word)
 fi

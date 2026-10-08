@@ -2,8 +2,8 @@
     | comment:; NaN and infinity print the same way under every C compiler.
   2 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  3 |     bind zero = 0.0
-    | keyword:bind  variable:zero  operator:=  number:0.0
+  3 |     fixed zero = 0.0
+    | keyword:fixed  variable:zero  operator:=  number:0.0
   4 |     show(zero / zero)
     | builtin-fn:show  punctuation:(  variable:zero  operator:/  variable:zero  punctuation:)
   5 |     show(1.0 / zero)

@@ -1,5 +1,5 @@
 ; error: 4:5: the number 'int' gives is unused; only a task call can be used as a statement
 task main()
-    bind ok = true
+    fixed ok = true
     int(ok)
 fi

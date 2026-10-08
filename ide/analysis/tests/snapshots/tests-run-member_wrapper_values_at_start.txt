@@ -54,8 +54,8 @@
     | keyword:fi
  28 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 29 |     bind c = C { n: 1 }
-    | keyword:bind  variable:c  operator:=  type:C  punctuation:{  field:n  punctuation::  number:1  punctuation:}
+ 29 |     fixed c = C { n: 1 }
+    | keyword:fixed  variable:c  operator:=  type:C  punctuation:{  field:n  punctuation::  number:1  punctuation:}
  30 |     show(c.get(3))
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:get  punctuation:(  number:3  punctuation:)  punctuation:)
  31 |     show(c.get(9))

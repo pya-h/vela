@@ -1,6 +1,6 @@
 ; error: 4:20: expected type unit, got int; turn it into a unit with 'unit(x)', which stops the program when it isn't from 0 to 255
 task main()
-    bind n = 4
-    hold b: unit = n
+    fixed n = 4
+    flex b: unit = n
     show(b)
 fi

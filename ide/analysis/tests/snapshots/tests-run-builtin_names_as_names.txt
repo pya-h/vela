@@ -54,18 +54,18 @@
     | keyword:fi
  34 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 35 |     bind show = 3
-    | keyword:bind  variable:show  operator:=  number:3
- 36 |     hold bool = Box { nothing: show, show: "shown", TooLarge: false }
-    | keyword:hold  variable:bool  operator:=  type:Box  punctuation:{  field:nothing  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:,  field:TooLarge  punctuation::  keyword:false  punctuation:}
+ 35 |     fixed show = 3
+    | keyword:fixed  variable:show  operator:=  number:3
+ 36 |     flex bool = Box { nothing: show, show: "shown", TooLarge: false }
+    | keyword:flex  variable:bool  operator:=  type:Box  punctuation:{  field:nothing  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:,  field:TooLarge  punctuation::  keyword:false  punctuation:}
  37 |     bool.nothing = twice(bool.nothing, 1)
     | variable:bool  punctuation:.  field:nothing  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:nothing  punctuation:,  number:1  punctuation:)
  38 |     show(bool.nothing)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:nothing  punctuation:)
  39 |     show(bool.show)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
- 40 |     bind l = Light.Red()
-    | keyword:bind  variable:l  operator:=  type:Light  punctuation:.  variant:Red  punctuation:(  punctuation:)
+ 40 |     fixed l = Light.Red()
+    | keyword:fixed  variable:l  operator:=  type:Light  punctuation:.  variant:Red  punctuation:(  punctuation:)
  41 |     when l is Light.Red
     | keyword:when  variable:l  keyword:is  type:Light  punctuation:.  variant:Red
  42 |         show("red")
@@ -82,8 +82,8 @@
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"x"  punctuation:)  punctuation:{  operator:-  number:2  punctuation:}  punctuation:)
  48 |     ; A variable named like a builtin type, beside a scan that names that type.
     | comment:; A variable named like a builtin type, beside a scan that names that type.
- 49 |     bind int = 3
-    | keyword:bind  variable:int  operator:=  number:3
+ 49 |     fixed int = 3
+    | keyword:fixed  variable:int  operator:=  number:3
  50 |     show(int + scan("", int) { 0 })
     | builtin-fn:show  punctuation:(  variable:int  operator:+  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  51 |     show(ignoring(9))

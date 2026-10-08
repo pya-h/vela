@@ -1,6 +1,6 @@
-; error: 3:14: expected an expression, got 'block'
+; error: 3:15: expected an expression, got 'block'
 task main()
-    bind v = block
+    fixed v = block
         1
     fi
 fi

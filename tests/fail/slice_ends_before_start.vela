@@ -1,6 +1,6 @@
 ; error: 5:17: slice 2..1 ends before it starts
 task main()
     region r
-    bind items = new [int]([0#3]) at r
+    fixed items = new [int]([0#3]) at r
     show(items[2..1].len)
 fi

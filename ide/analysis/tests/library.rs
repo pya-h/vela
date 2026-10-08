@@ -14,9 +14,9 @@ const MAIN: &str = "\
 include std/files => disk (File)
 
 task main()
-    bind here = File { path: \"notes.txt\" }
+    fixed here = File { path: \"notes.txt\" }
     show(here.exists())
-    bind there = disk.File { path: \"other.txt\" }
+    fixed there = disk.File { path: \"other.txt\" }
     show(there.path)
     @@
 fi
@@ -43,7 +43,7 @@ fn labels(marked: &str) -> Vec<String> {
 #[test]
 fn the_library_needs_no_file_from_the_editor() {
     let source = main_with("show(1)").replace("include std/files => disk (File)\n", "include std/files {File}\n");
-    let source = source.replace("    bind there = disk.File { path: \"other.txt\" }\n    show(there.path)\n", "");
+    let source = source.replace("    fixed there = disk.File { path: \"other.txt\" }\n    show(there.path)\n", "");
     let none = HashMap::new();
     let analysis = Analysis::with_modules(&source, "app/main.vela", &none);
     assert_eq!(analysis.missing_modules(), Vec::<String>::new());
@@ -85,7 +85,7 @@ fn completion_offers_the_library() {
 
 #[test]
 fn native_is_a_word_only_before_task() {
-    let source = "native task size(path: text) -> int\n\ntask main()\n    bind native = 1\n    show(native)\nfi\n";
+    let source = "native task size(path: text) -> int\n\ntask main()\n    fixed native = 1\n    show(native)\nfi\n";
     let analysis = Analysis::new(source);
     let class = |offset: usize| analysis.tokens().into_iter().find(|t| t.from == offset).unwrap().class;
     assert_eq!(class(0), TokenClass::Keyword);
@@ -99,9 +99,9 @@ const MATH: &str = "\
 include std/math (P)
 
 task main()
-    bind angle = P / 2.0
-    bind rise = math.sin(angle)
-    bind grown = math.e ** 2.0
+    fixed angle = P / 2.0
+    fixed rise = math.sin(angle)
+    fixed grown = math.e ** 2.0
     show(rise, grown, math.log(100.0, 10.0))
     @@
 fi

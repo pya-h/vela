@@ -1,6 +1,6 @@
 ; error: 4:20: a task's type writes a region it takes as '@r', named so that what it sends can live there, as in '(@r, int) -> [int]@r'
 ; A task type writes a region it takes as @r, named, never as region.
 task main()
-    hold f: maybe (region) -> int = none
+    flex f: maybe (region) -> int = none
     show(f)
 fi

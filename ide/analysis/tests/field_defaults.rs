@@ -23,9 +23,9 @@ fi
 
 task main()
     CHECK
-    hold job = Job { name: \"sweep\" }
-    bind tries = job.tries
-    bind note = job.note
+    flex job = Job { name: \"sweep\" }
+    fixed tries = job.tries
+    fixed note = job.note
     @@
 fi
 ";
@@ -71,12 +71,12 @@ fn a_field_that_falls_back_on_a_value_has_its_type_alone() {
 fn a_literal_completes_the_fields_it_must_give() {
     for checks in [true, false] {
         // The whole literal offers only the field with no value to fall back on.
-        let items = completions(&program(checks, "hold other = Jo@@"));
+        let items = completions(&program(checks, "flex other = Jo@@"));
         let job = items.iter().find(|item| item.label == "Job").unwrap_or_else(|| panic!("no Job: {:?}", items));
         assert_eq!(job.snippet.as_deref(), Some("Job { name: ${name} }"), "checks: {}", checks);
         // Inside one, every field not given yet is still offered, since a
         // literal may write what it would otherwise fall back on.
-        let inside = completions(&program(checks, "hold other = Job { @@ }"));
+        let inside = completions(&program(checks, "flex other = Job { @@ }"));
         let offered: Vec<(&str, &str)> = inside.iter().map(|item| (item.label.as_str(), item.detail.as_str())).collect();
         assert_eq!(offered, [("name", "text"), ("tries", "int"), ("note", "maybe text"), ("state", "State")], "checks: {}", checks);
     }
@@ -91,7 +91,7 @@ shape Counters
 fi
 
 task main()
-    bind counted = Coun@@
+    fixed counted = Coun@@
 fi
 ";
     let items = completions(source);

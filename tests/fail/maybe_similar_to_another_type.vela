@@ -1,5 +1,5 @@
 ; error: 4:12: '~=' compares maybe int with int, maybe int, or none, not with text
 task main()
-    bind m: maybe int = 1
+    fixed m: maybe int = 1
     show(m ~= "1")
 fi

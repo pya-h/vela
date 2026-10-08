@@ -6,9 +6,9 @@ task main()
     show(2147483647 + 1)
     show(-2147483647 - 2)
     show(-1000000 * -1000000)
-    bind big = 3 * 1000000000
+    fixed big = 3 * 1000000000
     show(big)
-    hold n = 2
+    flex n = 2
     show(1000000 * 1000000 * n)
     show(n * 1000000 * 1000000)
     each i in 0..65536 * 65536 - 4294967295

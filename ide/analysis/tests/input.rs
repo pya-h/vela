@@ -11,9 +11,9 @@ const PROGRAM: &str = "\
 task main()
     CHECK
     region lines
-    bind asked = scan(\"Name: \") at lines
-    bind short = scan(\"\")@lines
-    bind name = scan(\"Name: \") at lines { \"nobody\" }
+    fixed asked = scan(\"Name: \") at lines
+    fixed short = scan(\"\")@lines
+    fixed name = scan(\"Name: \") at lines { \"nobody\" }
     show(name)
     @@
 fi
@@ -65,7 +65,7 @@ fn scan_has_a_hover_and_a_snippet_that_names_the_region() {
     assert_eq!(code, "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float ~ InputError");
     assert!(doc.starts_with("Shows the prompt, then reads one line"), "{}", doc);
     assert!(doc.contains("names no region"), "{}", doc);
-    let items = completions(&program(true, "bind again = sc@@"));
+    let items = completions(&program(true, "fixed again = sc@@"));
     let scan = items.iter().find(|item| item.label == "scan").expect("scan is offered");
     assert_eq!(scan.snippet.as_deref(), Some("scan(${prompt}) at ${region}"));
 }
@@ -73,9 +73,9 @@ fn scan_has_a_hover_and_a_snippet_that_names_the_region() {
 #[test]
 fn completion_continues_a_scan_with_its_region() {
     for checks in [true, false] {
-        assert!(labels(&program(checks, "bind again = scan(\"x\") @@")).contains(&"at".to_string()), "checks: {}", checks);
-        assert!(labels(&program(checks, "bind again = scan(\"x\") at @@")).contains(&"lines".to_string()), "checks: {}", checks);
-        assert!(labels(&program(checks, "bind again = scan(\"x\")@ @@")).contains(&"lines".to_string()), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed again = scan(\"x\") @@")).contains(&"at".to_string()), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed again = scan(\"x\") at @@")).contains(&"lines".to_string()), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed again = scan(\"x\")@ @@")).contains(&"lines".to_string()), "checks: {}", checks);
     }
 }
 
@@ -83,18 +83,18 @@ fn completion_continues_a_scan_with_its_region() {
 fn at_is_offered_only_where_a_region_can_follow() {
     for checks in [true, false] {
         let offered = |code: &str| labels(&program(checks, code)).contains(&"at".to_string());
-        assert!(offered("bind p = new int(1) @@"), "checks: {}", checks);
-        assert!(offered("bind p = new [int]([1, 2]) @@"), "checks: {}", checks);
+        assert!(offered("fixed p = new int(1) @@"), "checks: {}", checks);
+        assert!(offered("fixed p = new [int]([1, 2]) @@"), "checks: {}", checks);
         assert!(!offered("show(scan(\"x\")@lines) @@"), "checks: {}", checks);
-        assert!(!offered("bind same = scan(\"x\")@lines == scan(\"y\")@lines @@"), "checks: {}", checks);
-        assert!(!offered("bind p = new@lines int(1) @@"), "checks: {}", checks);
+        assert!(!offered("fixed same = scan(\"x\")@lines == scan(\"y\")@lines @@"), "checks: {}", checks);
+        assert!(!offered("fixed p = new@lines int(1) @@"), "checks: {}", checks);
         assert!(!offered("show(named(1)) @@"), "checks: {}", checks);
     }
 }
 
 #[test]
 fn scan_called_is_the_builtin_even_beside_a_variable_named_scan() {
-    let source = program(true, "hold scan = 3\n    show(scan)\n    bind again = scan(\"x\") at lines");
+    let source = program(true, "flex scan = 3\n    show(scan)\n    fixed again = scan(\"x\") at lines");
     let byte = source.rfind("scan(").expect("a call");
     let hover = Analysis::new(&source).hover(LineIndex::new(&source).utf16_of(byte)).expect("a hover");
     assert_eq!(hover.code, "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float ~ InputError");
@@ -102,7 +102,7 @@ fn scan_called_is_the_builtin_even_beside_a_variable_named_scan() {
 
 #[test]
 fn a_scan_without_a_region_is_reported() {
-    let source = program(true, "bind lost = scan(\"x\")");
+    let source = program(true, "fixed lost = scan(\"x\")");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("'scan' keeps the line it reads in a region"), "{}", diagnostic.message);

@@ -1,4 +1,4 @@
-; error: 11:14: a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold
+; error: 11:15: a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold
 task half(n: int) -> maybe int
     when n % 2 == 0
         <- n / 2
@@ -6,8 +6,8 @@ task half(n: int) -> maybe int
     <- none
 fi
 task main()
-    bind m = half(4)
-    bind n = half(6)
-    bind v = when m is {x} and x > 0 x fi
+    fixed m = half(4)
+    fixed n = half(6)
+    fixed v = when m is {x} and x > 0 x fi
     show(v)
 fi

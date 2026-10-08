@@ -8,6 +8,6 @@ fi
 
 task main()
     region r
-    bind names: [text]@r = new [text](["ada"]) at r
+    fixed names: [text]@r = new [text](["ada"]) at r
     show(first<text>(names))
 fi

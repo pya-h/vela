@@ -13,6 +13,6 @@ shape Point
 fi
 
 task main()
-    bind p = Point.new(1)
+    fixed p = Point.new(1)
     show(p.new(2))
 fi

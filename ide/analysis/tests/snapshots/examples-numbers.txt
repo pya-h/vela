@@ -54,20 +54,20 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  31 |     from_text()
     | task:from_text  punctuation:(  punctuation:)
- 33 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
- 34 |     hold refused = 0
-    | keyword:hold  variable:refused  operator:=  number:0
- 35 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 36 |     hold largest = 0
-    | keyword:hold  variable:largest  operator:=  number:0
+ 33 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 34 |     flex refused = 0
+    | keyword:flex  variable:refused  operator:=  number:0
+ 35 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 36 |     flex largest = 0
+    | keyword:flex  variable:largest  operator:=  number:0
  37 |     ; The squares add up to how far the numbers spread from zero.
     | comment:; The squares add up to how far the numbers spread from zero.
- 38 |     hold squares = 0.0
-    | keyword:hold  variable:squares  operator:=  number:0.0
- 39 |     hold reading = true
-    | keyword:hold  variable:reading  operator:=  keyword:true
+ 38 |     flex squares = 0.0
+    | keyword:flex  variable:squares  operator:=  number:0.0
+ 39 |     flex reading = true
+    | keyword:flex  variable:reading  operator:=  keyword:true
  40 |     loop reading
     | keyword:loop  variable:reading
  41 |         match scan("> ", int)

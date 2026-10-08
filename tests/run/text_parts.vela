@@ -6,7 +6,7 @@ shape Person
 fi
 
 task first_word(line: text@r) -> text@r
-    hold i = 0
+    flex i = 0
     loop i < line.len
         when line[i..i + 1] == " "
             <- line[0..i]
@@ -17,29 +17,29 @@ task first_word(line: text@r) -> text@r
 fi
 
 task main()
-    bind name = "Ada Lovelace"
+    fixed name = "Ada Lovelace"
     show(name[0..3])
     show(name[4..name.len])
     show(name[4..12][0..4])
     show(name[3..3] == "")
     show(name[0..name.len] == name)
     ; A part of text of the program is text of the program.
-    bind short: text = name[0..3]
+    fixed short: text = name[0..3]
     show(short.len)
     ; Whole characters, however many bytes each takes.
-    bind word = "café ✓"
+    fixed word = "café ✓"
     show(word[0..3])
     show(word[3..5])
     show(word[6..9])
     show(word[3..5].len)
     ; A part of text in a region is in that region.
     region r
-    bind line = "Grace Hopper".copy() at r
+    fixed line = "Grace Hopper".copy() at r
     show(first_word(line))
     show(first_word("single"))
-    bind person = Person { name: line[6..12] }
+    fixed person = Person { name: line[6..12] }
     show(person.name)
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add(line[0..5])
     show(names[0])
     show(names[0][1..3] < "s")

@@ -1,6 +1,6 @@
 ; error: 5:15: a map has no parts: '[…]' takes one key, as in 'm[k]'
 task main()
     region r
-    bind m = ["a": 1] at r
+    fixed m = ["a": 1] at r
     show(m["a".."b"])
 fi

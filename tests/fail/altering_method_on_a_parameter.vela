@@ -12,6 +12,6 @@ task bump(c: Counter)
 fi
 
 task main()
-    hold c = Counter { count: 0 }
+    flex c = Counter { count: 0 }
     bump(c)
 fi

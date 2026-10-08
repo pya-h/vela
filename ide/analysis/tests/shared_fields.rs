@@ -13,9 +13,9 @@ const PROGRAM: &str = "\
 shape Meter
     count: int = 0
     shared start: int = 7
-    shared hold made: int = 0
+    shared flex made: int = 0
     shared read seen: int = 0
-    priv shared hold secret: int = 1
+    priv shared flex secret: int = 1
 
     alters tick()
         .count = .count + Meter.start
@@ -25,10 +25,10 @@ fi
 
 task main()
     CHECK
-    hold meter = Meter {}
+    flex meter = Meter {}
     meter.tick()
     Meter.made = Meter.made + 1
-    bind counted = Meter.made
+    fixed counted = Meter.made
     @@
 fi
 ";
@@ -96,7 +96,7 @@ fn the_words_are_keywords_and_the_names_fields() {
         analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
     };
     assert_eq!(class_at("shared start"), Some(TokenClass::Keyword));
-    assert_eq!(class_at("hold made"), Some(TokenClass::Keyword));
+    assert_eq!(class_at("flex made"), Some(TokenClass::Keyword));
     assert_eq!(class_at("read seen"), Some(TokenClass::Keyword));
     assert_eq!(class_at("start: int"), Some(TokenClass::Field));
     assert_eq!(class_at("seen: int"), Some(TokenClass::Field));
@@ -120,9 +120,9 @@ fn the_shapes_name_completes_its_shared_fields_and_a_value_never_does() {
 #[test]
 fn a_literal_never_offers_a_shared_field() {
     for checks in [true, false] {
-        let inside = completions(&program(checks, "hold other = Meter { @@ }"));
+        let inside = completions(&program(checks, "flex other = Meter { @@ }"));
         assert_eq!(labels(&inside), ["count"], "checks: {}", checks);
-        let items = completions(&program(checks, "hold other = Me@@"));
+        let items = completions(&program(checks, "flex other = Me@@"));
         let meter = items.iter().find(|item| item.label == "Meter").unwrap_or_else(|| panic!("no Meter: {:?}", items));
         assert_eq!(meter.snippet.as_deref(), Some("Meter {}"), "checks: {}", checks);
     }

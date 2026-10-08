@@ -3,13 +3,13 @@
 task lvl<P..., T>(f: (@a, P...) -> text@a, r: region, args: P...) -> text@r
     <- f(r, args...)
 fi
-task mk(r: region, hold& c: int) -> text@r
+task mk(r: region, flex& c: int) -> text@r
     c = c + 1
     <- "{c}" at r
 fi
 task main()
     region kept
-    hold c = 1
+    flex c = 1
     show(lvl(mk, kept, &c))
     show(c)
 fi

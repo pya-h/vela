@@ -2,7 +2,7 @@
 ; Taking the last item out of a slice that has none left.
 task main()
     region r
-    hold items = new [int]() at r
+    flex items = new [int]() at r
     items.add(5)
     show(items.del())
     show(items.len)

@@ -1,6 +1,6 @@
 ; error: 3:24: unknown region 'r'; declare it with 'region r'
 task main()
-    hold p: maybe ^int@r = none
+    flex p: maybe ^int@r = none
     when true
         region r
         p = new int(1) at r

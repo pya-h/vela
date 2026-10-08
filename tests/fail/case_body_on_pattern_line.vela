@@ -1,6 +1,6 @@
 ; error: 5:14: expected the end of the line, got identifier 'show'
 task main()
-    bind m: maybe int = 1
+    fixed m: maybe int = 1
     match m
     case {a} show(a)
     case none

@@ -4,6 +4,6 @@ shape Point
 fi
 
 task main()
-    hold t = (Point { x: 1 }, 2)
+    flex t = (Point { x: 1 }, 2)
     t.0.x = 5
 fi

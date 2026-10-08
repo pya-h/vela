@@ -1,10 +1,10 @@
-; error: 7:32: '.x' names a member of the value a method is called on, and a lambda takes nothing from the method around it; give the value as a parameter
+; error: 7:33: '.x' names a member of the value a method is called on, and a lambda takes nothing from the method around it; give the value as a parameter
 ; A lambda written in a method has no value it is called on.
 shape P
     x: int
 
     get() -> int
-        bind f = () -> int <- .x fi
+        fixed f = () -> int <- .x fi
         <- f()
     fi
 fi

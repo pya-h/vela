@@ -17,7 +17,7 @@ task logged(next: (int, int) -> Point, name: text, x: int, y: int) -> Point
 fi
 
 task made(f: (int, int) -> Point)
-    bind point = f(0, 0)
+    fixed point = f(0, 0)
     show("made ", point)
 fi
 
@@ -50,7 +50,7 @@ shape Point
 fi
 
 shape Local
-    shared hold seen: int = 0
+    shared flex seen: int = 0
 
     shared tally(next: (int) -> int, n: int) -> int
         Local.seen = Local.seen + 1
@@ -79,7 +79,7 @@ task tripled(n: int) -> int
 fi
 
 shape Hooks
-    shared hold making: (int, int) -> Point = Point.new
+    shared flex making: (int, int) -> Point = Point.new
 fi
 
 task apply(f: (int, int) -> Point) -> Point
@@ -88,18 +88,18 @@ fi
 
 task main()
     show("main starts")
-    bind p = Point.new(1, 2)
+    fixed p = Point.new(1, 2)
     show(p, " ", p.sum())
-    bind light = Light.pick(1)
+    fixed light = Light.pick(1)
     show(tripled(2), " ", light, " ", Local.seen)
     show(routes.Step.up(1), " ", routes.Routes.count, " ", routes.Meter.calls)
     ; A shared method as a value goes through its wrappers as a call does.
-    bind make = Point.new
+    fixed make = Point.new
     show(make(3, 4))
     show(apply(Point.new))
     show(Hooks.making(7, 8))
-    bind up = routes.Step.up
-    bind pick = Light.pick
-    bind picked = pick(0)
+    fixed up = routes.Step.up
+    fixed pick = Light.pick
+    fixed picked = pick(0)
     show(up(9), " ", picked, " ", Local.seen)
 fi

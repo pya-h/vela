@@ -1,9 +1,9 @@
-; error: 8:21: kind 'Light' takes no types, so '< … >' has nothing to name; write 'Light.On'
+; error: 8:22: kind 'Light' takes no types, so '< … >' has nothing to name; write 'Light.On'
 kind Light
     On
     Off
 fi
 
 task main()
-    bind on = Light<int>.On
+    fixed on = Light<int>.On
 fi

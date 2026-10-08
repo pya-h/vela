@@ -1,6 +1,6 @@
 ; error: 5:23: unknown region 'q'; declare it with 'region q'
 task main()
     region r
-    bind n = 5
+    fixed n = 5
     show("n = {n}" at q)
 fi

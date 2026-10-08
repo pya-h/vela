@@ -1,6 +1,6 @@
 ; trap: remainder of division by zero at 5:17 in task 'main'
 task main()
-    hold n = 3
+    flex n = 3
     endless
         show(10 % n)
         n = n - 1

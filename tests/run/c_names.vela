@@ -34,11 +34,11 @@ task describe(j: Jump)
 fi
 
 task main()
-    bind char = 1
-    hold unsigned = char + 1
+    fixed char = 1
+    flex unsigned = char + 1
     unsigned = unsigned * 10
     show(unsigned)
-    bind r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
+    fixed r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
     show(r.default)
     show(r.int)
     show(r.stdout)
@@ -51,12 +51,12 @@ task main()
     each NULL in 0..2
         show(NULL)
     fi
-    bind vela_x = 5
+    fixed vela_x = 5
     show(vela_x)
     region free
-    bind boxed = new Record(r) at free
+    fixed boxed = new Record(r) at free
     show(boxed^.stdout)
     region static
-    bind message = new@static text("boxed text")
+    fixed message = new@static text("boxed text")
     show(message^)
 fi

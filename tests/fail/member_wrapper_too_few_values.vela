@@ -11,6 +11,6 @@ shape C
     fi
 fi
 task main()
-    bind c = C { n: 1 }
+    fixed c = C { n: 1 }
     show(c.get(3))
 fi

@@ -1,6 +1,6 @@
 ; error: 6:18: 'i' is a variable, not the name of a loop around this; a loop is named before its word, as in 'outer => each x in xs'
 task main()
-    hold i = 0
+    flex i = 0
     loop i < 3
         i++
         continue i

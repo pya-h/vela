@@ -1,7 +1,7 @@
 ; error: 6:12: expected type ^int@r, got ^int@s; a value can't move to another region: a pointer into one region is never stored in another
 task main()
     region r
-    hold xs = new [^int]() at r
+    flex xs = new [^int]() at r
     region s
     xs.add(new int(1) at s)
 fi

@@ -9,17 +9,17 @@ use vela_analysis::{Analysis, LineIndex, TokenClass};
 const PROGRAM: &str = "\
 task main()
     CHECK
-    hold n = 3
-    hold b: unit = 2
-    bind exact = n ** 2
-    bind fraction = n ** n
-    bind by_unit = n ** b
-    bind small = b ** 3
-    bind root = 2.0 ** 0.5
-    bind mixed = 9 ** 0.5
-    bind chained = 2 * n ** 2
-    bind grouped = n ** (1 + 1)
-    bind inverse = n ** -1
+    flex n = 3
+    flex b: unit = 2
+    fixed exact = n ** 2
+    fixed fraction = n ** n
+    fixed by_unit = n ** b
+    fixed small = b ** 3
+    fixed root = 2.0 ** 0.5
+    fixed mixed = 9 ** 0.5
+    fixed chained = 2 * n ** 2
+    fixed grouped = n ** (1 + 1)
+    fixed inverse = n ** -1
     show(exact, fraction, by_unit, small, root, mixed, chained, grouped, inverse)
 fi
 ";

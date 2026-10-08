@@ -114,7 +114,7 @@ fn c_compiler_failures_keep_the_generated_c() {
 
 #[test]
 fn partial_front_end_keeps_the_types_found_around_an_error() {
-    let source = "task main()\n    bind x = 1.5\n    show(missing)\n    bind y = true\nfi\n";
+    let source = "task main()\n    fixed x = 1.5\n    show(missing)\n    fixed y = true\nfi\n";
     let partial = driver::front_end_partial(source);
     assert_eq!(partial.errors.first().cloned(), driver::front_end(source).err());
     let items = partial.items.unwrap();
@@ -137,7 +137,7 @@ fn partial_front_end_keeps_the_types_found_around_an_error() {
 fn every_mistake_is_reported_once_in_source_order() {
     // One in a declaration, one in each task body, and one that the first would
     // have hidden: the checker reports them all, in the order they are written.
-    let source = "task twice(n: Nope) -> int\n    <- n\nfi\n\ntask main()\n    bind a = twice(2)\n    show(missing)\n    show(a, gone)\nfi\n";
+    let source = "task twice(n: Nope) -> int\n    <- n\nfi\n\ntask main()\n    fixed a = twice(2)\n    show(missing)\n    show(a, gone)\nfi\n";
     let partial = driver::front_end_partial(source);
     let found: Vec<(usize, usize, &str)> =
         partial.errors.iter().map(|error| (error.span.unwrap().line, error.span.unwrap().col, error.message.as_str())).collect();
@@ -164,15 +164,15 @@ fn an_else_when_chain_has_no_limit_on_its_arms() {
     // with a pattern, and as a value; and its C is flat, not nested.
     let arms = 5000;
     let plain: String = (0..arms).map(|i| format!("    else when n == {}\n        show({})\n", i, i)).collect();
-    let source = format!("task main()\n    bind n = 3\n    when n < 0\n        show(-1)\n{}    else\n        show(0)\n    fi\nfi\n", plain);
+    let source = format!("task main()\n    fixed n = 3\n    when n < 0\n        show(-1)\n{}    else\n        show(0)\n    fi\nfi\n", plain);
     let flat = |c: String| c.lines().map(|line| line.len() - line.trim_start().len()).max().unwrap_or(0) < 40;
     // A C compiler nests an `else if` chain, so a long one is flat too.
     assert!(flat(driver::generate_c(&source).unwrap()), "the C of a long chain stays flat");
     let matched: String = (0..arms).map(|i| format!("    else when m is {{v}} and v == {}\n        show(v)\n", i)).collect();
-    let source = format!("task main()\n    bind m: maybe int = 3\n    when m is none\n        show(-1)\n{}    fi\nfi\n", matched);
+    let source = format!("task main()\n    fixed m: maybe int = 3\n    when m is none\n        show(-1)\n{}    fi\nfi\n", matched);
     assert!(flat(driver::generate_c(&source).unwrap()), "the C of a chain stays flat");
     let valued: String = (0..arms).map(|i| format!("    else when n == {}\n        {}\n", i, i)).collect();
-    let source = format!("task main()\n    bind n = 3\n    bind k = when n < 0\n        -1\n{}    else\n        0\n    fi\n    show(k)\nfi\n", valued);
+    let source = format!("task main()\n    fixed n = 3\n    fixed k = when n < 0\n        -1\n{}    else\n        0\n    fi\n    show(k)\nfi\n", valued);
     driver::generate_c(&source).unwrap();
 }
 
@@ -212,7 +212,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("tuples", program(format!("{}1{}", "(".repeat(deep), ", 1)".repeat(deep)))),
         ("tuple types", format!("task f(p: {}int{})\nfi\n", "(".repeat(deep), ", int)".repeat(deep))),
         ("tuple items", program(format!("t{}", ".0".repeat(deep)))),
-        ("unpacked names", format!("task main()\n    bind {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
+        ("unpacked names", format!("task main()\n    fixed {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
         ("unpacked places", format!("task main()\n    {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
         ("nested lambdas", program(format!("{}1{}", "(x: int) -> int <- ".repeat(deep), " fi".repeat(deep)))),
     ];
@@ -237,7 +237,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // Plan Bs nest three levels each (the postfix value, the block, and the
     // statement's expression inside it).
     let plan_bs = format!(
-        "task main()\n    bind m: maybe int = none\n    show({}1{})\nfi\n",
+        "task main()\n    fixed m: maybe int = none\n    show({}1{})\nfi\n",
         "m {\n".repeat(near / 3),
         "\n}".repeat(near / 3)
     );
@@ -254,13 +254,13 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // An array literal counts two levels (itself, and its values); nested
     // just below the limit, arrays are checked and generated, and so is a
     // chain of indexes as long.
-    let arrays = format!("task main()\n    bind a = {}1{}\n    show(a{}.len)\nfi\n", "[".repeat(near / 2 - 1), "]".repeat(near / 2 - 1), "[0]".repeat(near / 2 - 2));
+    let arrays = format!("task main()\n    fixed a = {}1{}\n    show(a{}.len)\nfi\n", "[".repeat(near / 2 - 1), "]".repeat(near / 2 - 1), "[0]".repeat(near / 2 - 2));
     driver::generate_c(&arrays).unwrap();
     let indexes = format!("task f(a: {}int{})\n    show(a{})\nfi\n", "[".repeat(near), "#1]".repeat(near), "[0]".repeat(near));
     driver::generate_c(&indexes).unwrap();
     // A change to a slice counts two levels (its slice, and its arguments),
     // and each writes its prelude before the one outside it.
-    let dels = format!("task main()\n    region r\n    hold xs = new [int]([0#1]) at r\n    show({}0{})\nfi\n", "xs.del(".repeat(near / 2 - 1), ")".repeat(near / 2 - 1));
+    let dels = format!("task main()\n    region r\n    flex xs = new [int]([0#1]) at r\n    show({}0{})\nfi\n", "xs.del(".repeat(near / 2 - 1), ")".repeat(near / 2 - 1));
     driver::generate_c(&dels).unwrap();
     // A prompt read by another `scan`, through a plan B: each nests a scan, a
     // plan B, and its block.
@@ -268,7 +268,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
     driver::generate_c(&scans).unwrap();
     // Tuples in tuples, read back item by item, and unpacked into names.
     let tuples = format!(
-        "task main()\n    bind t = {}1{}\n    show(t{})\n    bind {}a{} = t\n    show(a)\nfi\n",
+        "task main()\n    fixed t = {}1{}\n    show(t{})\n    fixed {}a{} = t\n    show(a)\nfi\n",
         "(".repeat(near / 2 - 1),
         ", 1)".repeat(near / 2 - 1),
         ".0".repeat(near / 2 - 1),
@@ -278,7 +278,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
     driver::generate_c(&tuples).unwrap();
     // A copy of a copy, each in the region, named with `@` since a copy goes on
     // from the one before it: every one counts a level.
-    let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy()@r".repeat(near));
+    let copies = format!("task main()\n    region r\n    fixed line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy()@r".repeat(near));
     driver::generate_c(&copies).unwrap();
     let fails = format!("task f() -> int ~ text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
     assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");
@@ -340,7 +340,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
 
 #[test]
 fn a_warning_in_a_module_names_the_file_of_the_use_that_gave_its_types() {
-    let main = "include compare\n\nshape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1 }\n    show(compare.same(p, p))\nfi\n";
+    let main = "include compare\n\nshape P\n    x: int\nfi\n\ntask main()\n    fixed p = P { x: 1 }\n    show(compare.same(p, p))\nfi\n";
     let files = [("app/compare.vela", "task same<T: same>(a: T, b: T) -> bool\n    <- a == b\nfi\n")];
     let asked = std::cell::RefCell::new(Vec::new());
     let warnings = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().1;
@@ -399,7 +399,7 @@ fn a_module_that_cannot_be_read_says_why() {
 #[test]
 fn a_name_the_file_cant_write_is_told_apart_from_one_it_can() {
     // `maker` returns `c.Thing` of `c.vela`; main names the module `x.vela` `c`.
-    let main = "include maker\ninclude x => c\n\ntask main()\n    bind thing: c.Thing = maker.make()\nfi\n";
+    let main = "include maker\ninclude x => c\n\ntask main()\n    fixed thing: c.Thing = maker.make()\nfi\n";
     let files = [
         ("c.vela", "shape Thing\n    v: int\nfi\n"),
         ("x.vela", "shape Thing\n    w: int\nfi\n"),

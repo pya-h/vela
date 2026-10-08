@@ -5,6 +5,6 @@ task sq(n: int) -> int
 fi
 
 task main()
-    bind f = sq
+    fixed f = sq
     show(f(1, 2))
 fi

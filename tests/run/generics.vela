@@ -13,7 +13,7 @@ task first<T>(xs: [T]@r) -> maybe T
 fi
 
 task last<T>(xs: [T]@r) -> maybe T
-    hold seen: maybe T = none
+    flex seen: maybe T = none
     each v in xs
         seen = v
     fi
@@ -68,7 +68,7 @@ fi
 
 ; The region a generic task is given is where it builds.
 task listOf<T>(r: region, a: T, b: T) -> [T]@r
-    hold made: [T]@r = new [T]() at r
+    flex made: [T]@r = new [T]() at r
     made.add(a)
     made.add(b)
     <- made
@@ -77,7 +77,7 @@ fi
 ; A copy of a value of the type the task takes goes into a region the header
 ; keeps that type in (`[T]@r` here), so a use may give any type.
 task copiedInto<T>(r: region, xs: [T]@r) -> [T]@r
-    hold made: [T]@r = new [T]() at r
+    flex made: [T]@r = new [T]() at r
     each v in xs
         made.add(v.copy() at r)
     fi
@@ -102,8 +102,8 @@ fi
 
 task main()
     region r
-    bind ns: [int]@r = new [int]([4, 5, 6]) at r
-    bind names: [text@r]@r = new [text](["ada", "bo"]) at r
+    fixed ns: [int]@r = new [int]([4, 5, 6]) at r
+    fixed names: [text@r]@r = new [text](["ada", "bo"]) at r
 
     ; The type comes from the arguments.
     show(first(ns))
@@ -115,9 +115,9 @@ task main()
     show(first<text@r>(names))
 
     ; Or from the place the value goes, including through a plan B.
-    bind nothingYet: maybe int = empty()
+    fixed nothingYet: maybe int = empty()
     show(nothingYet)
-    bind fallback: text = empty() { "nothing there" }
+    fixed fallback: text = empty() { "nothing there" }
     show(fallback)
 
     ; A word says what the body may do with the values.
@@ -129,40 +129,40 @@ task main()
     show(alike("a", "b"))
 
     ; Two types at once, and results that are both of one type.
-    bind pair: (int, text) = pairUp(1, "two")
+    fixed pair: (int, text) = pairUp(1, "two")
     show(pair.0)
     show(pair.1)
-    bind a, b = twoOf(true)
+    fixed a, b = twoOf(true)
     show(a)
     show(b)
 
     ; Shapes, kinds, tuples, slices, and pointers are types like any other.
-    bind place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
+    fixed place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
     show(place.x)
-    bind shade = middle(Shade.Light, Shade.Dark(7))
+    fixed shade = middle(Shade.Light, Shade.Dark(7))
     match shade
         case Light
             show(0)
         case Dark level
             show(level)
     fi
-    bind both = second((1, "one"), (2, "two"))
+    fixed both = second((1, "one"), (2, "two"))
     show(both.1)
-    bind rows = second<[int]@r>(ns, ns)
+    fixed rows = second<[int]@r>(ns, ns)
     show(rows.len)
-    bind held: ^int@r = new int(9) at r
+    fixed held: ^int@r = new int(9) at r
     show(second(held, held)^)
     show(countDown("still here", 3))
 
     ; A slice built in the region the task is given, and a copy made there.
-    bind made = listOf(r, 10, 20)
+    fixed made = listOf(r, 10, 20)
     show(made[0] + made[1])
-    bind words = listOf(r, "one".copy() at r, "two".copy() at r)
+    fixed words = listOf(r, "one".copy() at r, "two".copy() at r)
     show(words[1])
     show(kept(r, 3))
     show(kept(r, "a literal is in no region"))
-    bind copies = copiedInto(r, names)
+    fixed copies = copiedInto(r, names)
     show(copies[0])
-    bind alsoCopies = copiedInto(r, ns)
+    fixed alsoCopies = copiedInto(r, ns)
     show(alsoCopies[2])
 fi

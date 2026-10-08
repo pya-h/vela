@@ -4,8 +4,8 @@ task risky(n: int) -> int ~ text
 fi
 
 task main()
-    bind m: maybe int = 3
-    bind picked = when m == none
+    fixed m: maybe int = 3
+    fixed picked = when m == none
         risky(1)
     else
         m

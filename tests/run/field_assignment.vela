@@ -1,4 +1,4 @@
-; Assigning to fields of hold variables, nested fields, and through pointers.
+; Assigning to fields of flex variables, nested fields, and through pointers.
 
 shape Point
     x: int
@@ -11,17 +11,17 @@ shape Line
 fi
 
 task main()
-    hold line = Line { from: Point { x: 0, y: 0 }, to: Point { x: 1, y: 1 } }
+    flex line = Line { from: Point { x: 0, y: 0 }, to: Point { x: 1, y: 1 } }
     line.to.x = 5
     show(line.to.x)
 
     region r
-    bind p = new Point(Point { x: 1, y: 2 }) at r
+    fixed p = new Point(Point { x: 1, y: 2 }) at r
     p^.x = 9
     p^ = Point { x: p^.x + 1, y: 0 }
     show(p^.x)
 
-    bind lp = new Line(line) at r
+    fixed lp = new Line(line) at r
     lp^.from.y = 7
     show(lp^.from.y)
 fi

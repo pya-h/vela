@@ -1,6 +1,6 @@
-; error: 3:16: a plan B must end with a value of type int, or send with '<-' on every path
+; error: 3:17: a plan B must end with a value of type int, or send with '<-' on every path
 task pick(m: maybe int, stop: bool) -> int
-    bind n = m {
+    fixed n = m {
         when stop
             <- 0
         fi

@@ -9,11 +9,11 @@ fi
 
 task main()
     region r
-    bind n: ^int@r = new int(42) at r
+    fixed n: ^int@r = new int(42) at r
     show(n^)
     n^ = n^ + 1
     show(n^)
 
-    bind p = new@r Point(Point { x: 3, y: 4 })
+    fixed p = new@r Point(Point { x: 3, y: 4 })
     show(p^.x * p^.y)
 fi

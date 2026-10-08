@@ -16,7 +16,7 @@ fi
 
 ; The largest item, or none when there are none.
 task largest<T: ordered>(xs: [T]@r) -> maybe T
-    hold top: maybe T = none
+    flex top: maybe T = none
     each v in xs
         when top is {best}
             when v > best
@@ -31,7 +31,7 @@ fi
 
 ; How many items equal a value.
 task countOf<T: same>(xs: [T]@r, wanted: T) -> int
-    hold seen = 0
+    flex seen = 0
     each v in xs
         when v == wanted
             seen++
@@ -53,7 +53,7 @@ fi
 ; type the task takes goes into a region the header keeps that type in, `[T]@r`
 ; here, so this works for text as well as numbers.
 task copyOf<T>(r: region, xs: [T]@r) -> [T]@r
-    hold made: [T]@r = new [T]() at r
+    flex made: [T]@r = new [T]() at r
     each v in xs
         made.add(v.copy() at r)
     fi
@@ -91,12 +91,12 @@ fi
 
 task main()
     region r
-    hold scores = new [int]() at r
+    flex scores = new [int]() at r
     scores.add(91)
     scores.add(78)
     scores.add(91)
 
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add("Ada".copy() at r)
     names.add("Bo".copy() at r)
 
@@ -114,23 +114,23 @@ task main()
 
     ; Nothing in the arguments says what an empty answer holds, so the place the
     ; value goes does.
-    bind none_yet: maybe int = first(new [int]() at r)
+    fixed none_yet: maybe int = first(new [int]() at r)
     show(none_yet)
 
-    bind copies = copyOf(r, names)
+    fixed copies = copyOf(r, names)
     show(copies[1])
 
-    bind entry: (text@r, int) = pairUp(names[0], scores[0])
+    fixed entry: (text@r, int) = pairUp(names[0], scores[0])
     show(entry.0)
     show(entry.1)
 
     ; A shape given types: written out, or worked out from the values given.
-    bind best: Labelled<int> = Labelled<int> { label: "best score", value: 91 }
+    fixed best: Labelled<int> = Labelled<int> { label: "best score", value: 91 }
     show(best.label)
     show(best.value)
-    bind named: Labelled<text>@r = Labelled { label: "best name", value: names[0] }
+    fixed named: Labelled<text>@r = Labelled { label: "best name", value: names[0] }
     tellName(named)
-    hold labelled = new [Labelled<int>]() at r
+    flex labelled = new [Labelled<int>]() at r
     labelled.add(Labelled { label: "first", value: scores[0] })
     labelled.add(Labelled { label: "second", value: scores[1] })
     tellEach(labelled)

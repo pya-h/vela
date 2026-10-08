@@ -1,11 +1,11 @@
 ; error: 10:15: 'x' is given the place itself, to change, so it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'hold' variable, change it, and put it back
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 
 task main()
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     xs.add(1)
     sample(&xs[0])
 fi

@@ -1,9 +1,9 @@
-; error: 8:16: kind 'Option' takes 1 type, so name it, as in 'Option<T>'
+; error: 8:17: kind 'Option' takes 1 type, so name it, as in 'Option<T>'
 kind Option<T>
     Some(value: T)
     None
 fi
 
 task main()
-    bind lost: Option = Option<int>.None
+    fixed lost: Option = Option<int>.None
 fi

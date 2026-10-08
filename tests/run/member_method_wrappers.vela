@@ -29,7 +29,7 @@ shape Account
     read balance: int
     priv limit: int = 100
 
-    alters checked(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+    alters checked(next: (flex& Account@a, int) -> bool, amount: int) -> bool
         when amount > .balance or amount > .limit
             show("refused ", amount, " for ", .owner)
             <- false
@@ -80,7 +80,7 @@ shape Pad
 
     $(named)
     rows(r: region, n: int) -> [int]@r
-        hold made = new [int]() at r
+        flex made = new [int]() at r
         each i in 0..n
             made.add(i * .size)
         fi
@@ -99,7 +99,7 @@ kind Light
 
     $(.turned)
     next_one() -> Light
-        bind turned = match .this
+        fixed turned = match .this
             case Light.Red = Light.Green
             case Light.Green = Light.Red
         fi
@@ -113,12 +113,12 @@ kind Light
 fi
 
 task main()
-    hold a = Account { owner: "Ada", balance: 5 }
+    flex a = Account { owner: "Ada", balance: 5 }
     a.deposit(10)
     show(a.withdraw(3))
     show(a.withdraw(90))
     show(a.total())
-    bind p = Pad { size: 3 }
+    fixed p = Pad { size: 3 }
     show(p.area())
     show(p.both())
     region kept

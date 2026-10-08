@@ -18,19 +18,19 @@ kind Mood
     Loud(level: int)
 fi
 
-; A place given to a `hold&` parameter is the caller's own.
-task where(r: region, hold& p: Point) -> text@r
+; A place given to a `flex&` parameter is the caller's own.
+task where(r: region, flex& p: Point) -> text@r
     <- (&p).str() at r
 fi
 
 ; In a task that takes types, a place of the type given.
-task spot<T>(r: region, hold& a: T) -> text@r
+task spot<T>(r: region, flex& a: T) -> text@r
     <- "{&a}" at r
 fi
 
-; A place that is only read, turned into text: a `bind&` parameter, and a
+; A place that is only read, turned into text: a `fixed&` parameter, and a
 ; part of it.
-task read(r: region, bind& p: Point) -> text@r
+task read(r: region, fixed& p: Point) -> text@r
     <- "{&p}" + text(&p.x)@r + (&p.y).str()@r at r
 fi
 
@@ -44,40 +44,40 @@ fi
 
 task main()
     region r
-    hold p = Point { x: 1, y: 2 }
-    bind q = p
-    hold& also = &p
-    bind& seen = &p
+    flex p = Point { x: 1, y: 2 }
+    fixed q = p
+    flex& also = &p
+    fixed& seen = &p
     ; A place is itself, a copy is another place, and a reference is the place
     ; it names.
     show(&p == &p, " ", &p == &q, " ", &p == &also, " ", &seen == &p, " ", &p != &q)
     ; Kinds, text, arrays and their items, and fields compare where they are
     ; too, whatever they hold.
-    bind k1 = Mood.Loud(1)
-    bind k2 = k1
-    bind t1 = "hi"
-    bind t2 = "hi"
-    bind xs = [1, 2, 3]
+    fixed k1 = Mood.Loud(1)
+    fixed k2 = k1
+    fixed t1 = "hi"
+    fixed t2 = "hi"
+    fixed xs = [1, 2, 3]
     show(&k1 == &k2, " ", &k1 == &k1, " ", &t1 == &t2, " ", &xs[0] == &xs[1], " ", &xs[1] == &xs[1], " ", &p.x == &also.x)
     ; A pointer points at the place it was made for, and a pointer variable is
     ; a place of its own; a shared field is one place for the whole program.
-    bind ptr = new Point(p) at r
-    bind other = new Point(p) at r
+    fixed ptr = new Point(p) at r
+    fixed other = new Point(p) at r
     show(&ptr^ == ptr, " ", ptr == &ptr^, " ", &p == ptr, " ", &ptr == &other, " ", &Point.made == &Point.made)
     ; The same address, however it is written as text.
-    bind a = "{&p}" at r
-    bind b = (&p).str() at r
-    bind c = where(r, &p)
-    bind d = text(&also) at r
+    fixed a = "{&p}" at r
+    fixed b = (&p).str() at r
+    fixed c = where(r, &p)
+    fixed d = text(&also) at r
     show(a == b, " ", b == c, " ", c == d, " ", p.here(r) == a, " ", a[0..2], " ", int(a) { 0 } > 0)
     ; A slice's items are places in its region.
-    hold items = new [int]([5, 6]) at r
+    flex items = new [int]([5, 6]) at r
     show(&items[0] == &items[0], " ", &items[0] == &items[1], " ", "{&items[1]}" at r != "{&items[0]}" at r)
-    hold mood = Mood.Calm
+    flex mood = Mood.Calm
     show(spot(r, &p) == a, " ", spot(r, &mood) == "{&mood}" at r, " ", spot(r, &mood) == a)
     ; Read only, and read in order beside a call.
-    bind& looked = &p
+    fixed& looked = &p
     show(read(r, &p).len > 6, " ", "{&looked}" at r == a)
-    bind pair = [p, q]
+    fixed pair = [p, q]
     show(&pair[zero()] == &pair[zero()], " ", &p == make(r), " ", &make(r)^ == &make(r)^)
 fi

@@ -10,8 +10,8 @@
     | keyword:fi
   8 | task add(a: int, b: int) -> int
     | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  9 |     bind total = a + b
-    | keyword:bind  variable:total  operator:=  parameter:a  operator:+  parameter:b
+  9 |     fixed total = a + b
+    | keyword:fixed  variable:total  operator:=  parameter:a  operator:+  parameter:b
  10 |     <- total
     | keyword:<-  variable:total
  11 | fi

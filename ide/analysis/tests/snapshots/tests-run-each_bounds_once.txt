@@ -10,8 +10,8 @@
     | keyword:fi
   8 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  9 |     hold count = 3
-    | keyword:hold  variable:count  operator:=  number:3
+  9 |     flex count = 3
+    | keyword:flex  variable:count  operator:=  number:3
  10 |     each i in 0..count
     | keyword:each  variable:i  keyword:in  number:0  operator:..  variable:count
  11 |         count = count - 1

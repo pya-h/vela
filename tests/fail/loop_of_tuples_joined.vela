@@ -1,7 +1,7 @@
 ; error: 5:15: a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead
 ; Every part always matches, so joined they do too.
 task main()
-    bind t = (1, 2)
+    fixed t = (1, 2)
     loop t is (a, b) and t is (c, d)
         show(a, b, c, d)
     fi

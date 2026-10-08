@@ -4,6 +4,6 @@ task log_all<P...: shown>(args: P...)
     show(args...)
 fi
 task main()
-    hold k = 1
+    flex k = 1
     log_all(&k)
 fi

@@ -5,6 +5,6 @@ task apply(f: (int) -> int) -> int
 fi
 task main()
     region r
-    bind k = 2
+    fixed k = 2
     show(apply([@r](x: int) -> int <- x * k fi))
 fi

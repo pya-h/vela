@@ -1,8 +1,8 @@
-; error: 6:21: this lambda keeps 'n' as 'hold& n', to change it, so it needs a place that can change, and 'n' never does (declared at 4:10); a value declared with 'hold' can
-; A lambda keeps as 'hold&' only a place that can change.
+; error: 6:22: this lambda keeps 'n' as 'hold& n', to change it, so it needs a place that can change, and 'n' never does (declared at 4:11); a value declared with 'hold' can
+; A lambda keeps as 'flex&' only a place that can change.
 task main()
-    bind n = 1
+    fixed n = 1
     region r
-    bind f = [hold& n, @r]() -> nothing n = 2 fi
+    fixed f = [flex& n, @r]() -> nothing n = 2 fi
     f()
 fi

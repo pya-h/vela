@@ -10,7 +10,7 @@
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
 
 const PROGRAM: &str = "\
-task countdown(hold n: int, step: int) -> int
+task countdown(flex n: int, step: int) -> int
     CHECK
     loop n > 0
         n = n - step
@@ -18,14 +18,14 @@ task countdown(hold n: int, step: int) -> int
     <- n
 fi
 
-task swap(hold& a: int, hold& b: int)
+task swap(flex& a: int, flex& b: int)
     a, b = b, a
 fi
 
 task main()
     show(countdown(10, 3))
-    hold x = 1
-    hold y = 2
+    flex x = 1
+    flex y = 2
     swap(&x, &y)
     show(x)
 fi
@@ -70,7 +70,7 @@ fn a_hold_parameter_is_a_parameter_whose_hover_says_it_changes() {
             let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
             analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
         };
-        assert_eq!(class_at("hold n"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("flex n"), Some(TokenClass::Keyword), "{}", when);
         assert_eq!(class_at("n: int"), Some(TokenClass::Parameter), "{}", when);
         assert_eq!(class_at("n - step"), Some(TokenClass::Parameter), "{}", when);
     }
@@ -89,8 +89,8 @@ fn a_parameter_list_offers_hold() {
         assert_eq!(labels, ["hold", "hold&", "bind", "bind&"], "{:?}", marked);
     }
     // Not after the word, where the parameter's name goes.
-    assert!(completions("task f(hold @@)\nfi\n").is_empty());
-    assert!(completions("task f(hold& @@)\nfi\n").is_empty());
+    assert!(completions("task f(flex @@)\nfi\n").is_empty());
+    assert!(completions("task f(flex& @@)\nfi\n").is_empty());
     // At a call, what follows '&' is a place: the variables.
     let at_call: Vec<String> = completions(&program(true).replace("swap(&x, &y)", "swap(&x, &@@)")).into_iter().map(|item| item.label).collect();
     assert!(at_call.contains(&"y".to_string()), "{:?}", at_call);
@@ -132,7 +132,7 @@ fn a_hold_ref_parameter_is_the_callers_place() {
             let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
             analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
         };
-        assert_eq!(class_at("hold& a"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("flex& a"), Some(TokenClass::Keyword), "{}", when);
         assert_eq!(class_at("& a"), Some(TokenClass::Keyword), "{}", when);
         assert_eq!(class_at("&x"), Some(TokenClass::Operator), "{}", when);
         assert_eq!(class_at("x, &y"), Some(TokenClass::Variable), "{}", when);
@@ -154,12 +154,12 @@ fi
 
 task main()
     CHECK
-    hold x = 1
-    hold& y = &x
+    flex x = 1
+    flex& y = &x
     y = 5
-    bind& seen = &x
-    hold c = Counter {}
-    hold& n = &c.n
+    fixed& seen = &x
+    flex c = Counter {}
+    flex& n = &c.n
     n = 2
     show(seen, n)
 fi
@@ -187,8 +187,8 @@ fn a_local_reference_hovers_with_its_word_and_type() {
         assert_eq!(class_at("y = 5"), Some(TokenClass::Variable), "{}", when);
     }
     // Nothing is offered for the name being declared.
-    assert!(completions("task main()\n    hold x = 1\n    hold& @@\nfi\n").is_empty());
-    assert!(completions("task main()\n    hold x = 1\n    bind& @@\nfi\n").is_empty());
+    assert!(completions("task main()\n    flex x = 1\n    flex& @@\nfi\n").is_empty());
+    assert!(completions("task main()\n    flex x = 1\n    fixed& @@\nfi\n").is_empty());
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn a_reference_that_only_reads_is_reported_where_it_is_changed() {
 
 #[test]
 fn bind_and_bind_ref_parameters_are_parameters_whose_hover_says_how_they_are_given() {
-    let base = "shape Point\n    x: int\nfi\n\ntask look(bind& p: Point, bind q: Point) -> bool\n    CHECK\n    <- p == q\nfi\n\ntask main()\n    bind a = Point { x: 1 }\n    show(look(&a, a))\nfi\n";
+    let base = "shape Point\n    x: int\nfi\n\ntask look(fixed& p: Point, fixed q: Point) -> bool\n    CHECK\n    <- p == q\nfi\n\ntask main()\n    fixed a = Point { x: 1 }\n    show(look(&a, a))\nfi\n";
     for checks in [true, false] {
         let source = base.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
         if checks {
@@ -219,9 +219,9 @@ fn bind_and_bind_ref_parameters_are_parameters_whose_hover_says_how_they_are_giv
             let byte = source.find(needle).unwrap();
             analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
         };
-        assert_eq!(class_at("bind& p"), Some(TokenClass::Keyword));
+        assert_eq!(class_at("fixed& p"), Some(TokenClass::Keyword));
         assert_eq!(class_at("& p"), Some(TokenClass::Keyword));
-        assert_eq!(class_at("bind q"), Some(TokenClass::Keyword));
+        assert_eq!(class_at("fixed q"), Some(TokenClass::Keyword));
         assert_eq!(class_at("p == q"), Some(TokenClass::Parameter));
     }
     // A value given without '&' is reported.

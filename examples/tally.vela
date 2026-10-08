@@ -11,45 +11,45 @@ task scorer(r: region, rule: Rule) -> [@r](int) -> int
     <- [@r](hits: int) -> int <- hits * rule.points fi
 fi
 
-task turns(r: region) -> [hold @r]() -> int
-    hold played = 0
-    <- [hold @r]() -> int
+task turns(r: region) -> [flex @r]() -> int
+    flex played = 0
+    <- [flex @r]() -> int
         played = played + 1
         <- played
     fi
 fi
 
-task play(hold& next_turn: [hold @r]() -> int, score: [@r](int) -> int, hits: int) -> int
-    bind turn = next_turn()
+task play(flex& next_turn: [flex @r]() -> int, score: [@r](int) -> int, hits: int) -> int
+    fixed turn = next_turn()
     show("turn ", turn, ": ", hits, " hits")
     <- score(hits)
 fi
 
 task main()
     region game
-    bind rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
-    hold scorers = new [[@game](int) -> int]() at game
+    fixed rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
+    flex scorers = new [[@game](int) -> int]() at game
     each rule in rules
         scorers.add(scorer(game, rule))
     fi
-    hold next_turn = turns(game)
-    hold total = 0
-    hold best = 0
+    flex next_turn = turns(game)
+    flex total = 0
+    flex best = 0
     ; Declared after 'best', so the lambda keeping it ends first.
     region round
-    bind note = [hold& best, @round](score: int) -> nothing
+    fixed note = [flex& best, @round](score: int) -> nothing
         when score > best
             best = score
         fi
     fi
     each hits in [2, 0, 4]
-        bind score = play(&next_turn, scorers[0], hits)
+        fixed score = play(&next_turn, scorers[0], hits)
         note(score)
         total = total + score
     fi
     show("goals: ", total, ", best turn: ", best)
-    bind bonus = 10
-    bind assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
-    bind assisted = play(&next_turn, assists, 5)
+    fixed bonus = 10
+    fixed assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
+    fixed assisted = play(&next_turn, assists, 5)
     show("assists: ", assisted)
 fi

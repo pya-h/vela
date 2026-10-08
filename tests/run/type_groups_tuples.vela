@@ -6,7 +6,7 @@
 ; `each v in args` gives each value in turn, of its own type, `P`.
 
 task described<P...: frozen & shown>(args: P...)
-    bind t = (args...) {
+    fixed t = (args...) {
         failure one
         when one is {v}
             show("one value: ", v)
@@ -35,10 +35,10 @@ task counted<P...: frozen>(args: P...) -> text
 fi
 
 task listed<P...: shown>(args: P...)
-    hold n = 0
+    flex n = 0
     each v in args
         n++
-        bind kept: P = v
+        fixed kept: P = v
         show(n, ". ", kept, " (", v.type, ")")
     fi
 fi
@@ -52,8 +52,8 @@ task main()
     listed(1, "two", 3.5, true)
     listed()
     ; A tuple of known length read in a maybe: none past its end.
-    bind pair = (1, "a")
+    fixed pair = (1, "a")
     show(pair.#0, " ", pair.#1)
-    bind past: maybe int = pair.#5
+    fixed past: maybe int = pair.#5
     show(past, " ", pair.#0 { 0 })
 fi

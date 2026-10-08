@@ -27,8 +27,8 @@ fi
 
 ; Only reads, so it names the region without taking it.
 task sum(list: maybe ^Node@r) -> int
-    hold total = 0
-    hold current = list
+    flex total = 0
+    flex current = list
     loop current is {node}
         total = total + node^.value
         current = node^.next
@@ -65,10 +65,10 @@ fi
 ; A `<-` from inside nested blocks frees the task's regions first.
 task early(n: int) -> int
     region outer
-    bind a = new int(n) at outer
+    fixed a = new int(n) at outer
     each i in 0..3
         region inner
-        bind b = new int(i) at inner
+        fixed b = new int(i) at inner
         when b^ == 1
             <- a^ + b^
         fi
@@ -82,7 +82,7 @@ fi
 
 task checked(r: region, n: int) -> ^Node@r ~ text
     region scratch
-    bind temporary = new int(n) at scratch
+    fixed temporary = new int(n) at scratch
     when temporary^ < 0
         <- fail "negative"
     fi
@@ -91,7 +91,7 @@ fi
 
 task save(n: int) -> nothing ~ text
     region scratch
-    bind copy = new int(n) at scratch
+    fixed copy = new int(n) at scratch
     when copy^ > 9
         <- fail "too big"
     fi
@@ -100,7 +100,7 @@ fi
 
 task main()
     region lists
-    hold list: maybe ^Node@lists = none
+    flex list: maybe ^Node@lists = none
     each i in 0..200000
         list = push(lists, list, i)
     fi
@@ -108,10 +108,10 @@ task main()
     show(sum(none))
 
     ; A region inside a loop is new, and freed, on every pass.
-    hold total = 0
+    flex total = 0
     each round in 0..1000
         region pass
-        hold pieces: maybe ^Node@pass = none
+        flex pieces: maybe ^Node@pass = none
         each j in 0..100
             pieces = push(pass, pieces, 1)
         fi
@@ -123,16 +123,16 @@ task main()
     show(count(build(trees, 10)))
     show(count(Leaf(5)))
 
-    bind pair = twice(lists, 21)
+    fixed pair = twice(lists, 21)
     show(pair.first^ + pair.second^)
 
     show(early(40))
 
     ; A plan B's block can use its own region, and give a value from it.
-    bind missing: maybe int = none
-    bind rescued = missing {
+    fixed missing: maybe int = none
+    fixed rescued = missing {
         region rescue
-        bind spare = new int(99) at rescue
+        fixed spare = new int(99) at rescue
         spare^
     }
     show(rescued)
@@ -142,10 +142,10 @@ task main()
         show(node^.value)
     case failure reason
         region report
-        bind message = new text(reason) at report
+        fixed message = new text(reason) at report
         show(message^)
     fi
-    bind good = checked(lists, 7) { <- }
+    fixed good = checked(lists, 7) { <- }
     show(good^.value)
     save(3) { failure e
         show(e)
@@ -156,23 +156,23 @@ task main()
 
     ; A literal without pointers takes the region of the binding's type, and
     ; can then hold pointers into it.
-    hold head: Node@lists = Node { value: 1, next: none }
+    flex head: Node@lists = Node { value: 1, next: none }
     head.next = push(lists, none, 2)
     show(sum(head.next) + head.value)
-    bind maybe_pair: maybe Pair@lists = pair
+    fixed maybe_pair: maybe Pair@lists = pair
     when maybe_pair is {p}
         show(p.first^)
     fi
 
     ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
-    bind fallback: ^Node@lists = first(none) { good }
+    fixed fallback: ^Node@lists = first(none) { good }
     show(fallback^.value)
     ; Pointers into different regions compare, and are never equal.
     show(good == new Node(Node { value: 7, next: none }) at trees)
 
     ; A pointer to a pointer lives in one region too.
-    bind inner = new int(8) at trees
-    bind outer = new ^int(inner) at trees
+    fixed inner = new int(8) at trees
+    fixed outer = new ^int(inner) at trees
     outer^^ = outer^^ + 1
     show(inner^)
 fi

@@ -1,6 +1,6 @@
 ; error: 4:9: the last line of a loop that gives a value fails only with 'LoopResult.Manual(…)', which 'include std/loops {LoopResult}' brings in; 'break = v' stops it with a value
 task main()
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         when x > 1
             fail "no"
         else

@@ -9,29 +9,29 @@ include module_parts/shapes/geometry => geo
 task main()
     show(describe(Color.Blue))
     show(describe(Color.Mix(3)))
-    bind c: Color = Color.Red
+    fixed c: Color = Color.Red
     match c
     case Color.Red
         show("red")
     case _
         show("other")
     fi
-    bind f = geo.Figure.Square(2.0)
+    fixed f = geo.Figure.Square(2.0)
     when f is geo.Figure.Square side
         show(side)
     fi
-    hold spot: maybe geo.Point = none
+    flex spot: maybe geo.Point = none
     spot = geo.Point { x: 1.5, y: 2.5 }
     when spot is {p}
         show(p.y)
     fi
     region r
-    bind boxed = new geo.Point(geo.Point { x: 4.0, y: 0.0 }) at r
+    fixed boxed = new geo.Point(geo.Point { x: 4.0, y: 0.0 }) at r
     show(boxed^.x)
-    hold head: geo.Node@r = geo.Node { value: 1, next: none }
+    flex head: geo.Node@r = geo.Node { value: 1, next: none }
     head.next = new@r geo.Node(geo.Node { value: 2, next: none })
     show(head.next { boxed2(r) }^.value)
-    bind corners: [geo.Point#2] = [geo.Point { x: 0.0, y: 0.0 }#2]
+    fixed corners: [geo.Point#2] = [geo.Point { x: 0.0, y: 0.0 }#2]
     show(corners.len)
 fi
 

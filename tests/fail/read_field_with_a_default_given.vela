@@ -2,6 +2,6 @@
 include modules/meter {Meter}
 
 task main()
-    hold meter = Meter { label: "door", count: 3 }
+    flex meter = Meter { label: "door", count: 3 }
     show(meter.count)
 fi

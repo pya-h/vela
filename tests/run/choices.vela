@@ -24,7 +24,7 @@ fi
 task describe(s: Shape) -> text
     <- match s
     case Circle r
-        bind size = r * 2.0
+        fixed size = r * 2.0
         when size > 10.0
             "a wide circle"
         else when size > 2.0
@@ -61,19 +61,19 @@ task none_or_leave(n: int) -> int
 fi
 
 task main()
-    bind circle = Circle(2.0)
+    fixed circle = Circle(2.0)
     show(area(circle), " ", area(Rect(2.0, 3.0)))
     show(describe(circle), ", ", describe(Circle(0.5)), ", ", describe(Rect(1.0, 1.0)))
     show(label(200), " ", label(5))
 
     ; A case that gives `none` makes the whole a maybe, and one that gives a
     ; failure makes it a `T ~ E`.
-    bind half = match Ok(8)
+    fixed half = match Ok(8)
     case Ok value = value / 2
     case Missing = none
     fi
     show(half)
-    bind checked = match Ok(-1)
+    fixed checked = match Ok(-1)
     case Ok value
         when value < 0
             fail "negative"
@@ -86,7 +86,7 @@ task main()
 
     ; A branch may leave the task instead of giving a value, and a value may be
     ; used anywhere: in an argument, or in a larger expression.
-    bind doubled = 1 + match Ok(20)
+    fixed doubled = 1 + match Ok(20)
     case Ok value = value
     case Missing
         show("no value")
@@ -97,7 +97,7 @@ task main()
     ; In a region: the value a branch gives goes where the whole one does, and a
     ; literal lasts, so it fits beside text of a region.
     region kept default
-    bind note = when doubled > 10
+    fixed note = when doubled > 10
         "big: " + doubled.str()
     else
         "small"
@@ -106,8 +106,8 @@ task main()
 
     ; A plan B's block gives its value the same way, so a `when` or a `match` on
     ; its last line gives it through their branches.
-    bind first: maybe int = none
-    bind fallback = first {
+    fixed first: maybe int = none
+    fixed fallback = first {
         when doubled > 10
             doubled
         else
@@ -134,7 +134,7 @@ task main()
     ; A branch inside a branch settles a type of its own, which the branches
     ; around it may widen: here the case giving `none` makes the whole a maybe,
     ; so the inner `when` gives a maybe int too.
-    bind inner = match Ok(3)
+    fixed inner = match Ok(3)
     case Ok value
         when value > 2
             value
@@ -161,13 +161,13 @@ task main()
 
     ; Branches that all give `none`, or all give a failure: the type comes from
     ; the place the value goes, and each branch becomes part of it.
-    bind empty: maybe int = when doubled > 10
+    fixed empty: maybe int = when doubled > 10
         none
     else
         none
     fi
     show(empty)
-    bind failed: int ~ text = match Ok(1)
+    fixed failed: int ~ text = match Ok(1)
     case Ok value = fail "first"
     case Missing = fail "second"
     fi

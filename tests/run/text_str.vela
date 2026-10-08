@@ -39,15 +39,15 @@ task main()
     show((0.0 / 0.0).str() at r)
     show(true.str() at r)
     show(text(false) at r)
-    bind word = "word"
+    fixed word = "word"
     show(word.str() at r == word)
     show(text(word) at r)
-    bind n = 9223372036854775807
+    fixed n = 9223372036854775807
     show(n.str() at r)
     show(text(-n - 1) at r)
     show((n.str() at r).len)
     show("n = " + n.str()@r at r)
-    bind p = Point { x: 3, y: -4 }
+    fixed p = Point { x: 3, y: -4 }
     show(p.str() at r)
     show(text(p) at r)
     show(p.str(r).len)
@@ -56,10 +56,10 @@ task main()
     show(labelled("ok", true, r))
     show(labelled("name", "Ada", r))
     ; Text a region holds, kept in another region.
-    hold kept = new [text]() at r
+    flex kept = new [text]() at r
     loop kept.len < 3
         region pass
-        bind shown = (kept.len * 10).str() at pass
+        fixed shown = (kept.len * 10).str() at pass
         kept.add(shown.str() at r)
     fi
     show(kept[0] + kept[1] + kept[2] at r)

@@ -1,6 +1,6 @@
 ; error: 5:10: '+=' changes one place, so each goes on a line of its own, as in 'a += …'
 task main()
-    hold a = 1
-    hold b = 2
+    flex a = 1
+    flex b = 2
     a, b += 1
 fi

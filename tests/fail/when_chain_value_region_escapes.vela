@@ -6,8 +6,8 @@ shape Note
 fi
 
 task main()
-    bind n = 2
-    bind escaped = when n == 0
+    fixed n = 2
+    fixed escaped = when n == 0
         none
     else when n == 1
         none

@@ -1,13 +1,13 @@
   2 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  3 |     bind x: maybe int = 1
-    | keyword:bind  variable:x  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:1
-  4 |     bind a = x { 10 }
-    | keyword:bind  variable:a  operator:=  variable:x  punctuation:{  number:10  punctuation:}
+  3 |     fixed x: maybe int = 1
+    | keyword:fixed  variable:x  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:1
+  4 |     fixed a = x { 10 }
+    | keyword:fixed  variable:a  operator:=  variable:x  punctuation:{  number:10  punctuation:}
   5 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
-  6 |     bind y = x { <- }  ; if its none then end program
-    | keyword:bind  variable:y  operator:=  variable:x  punctuation:{  keyword:<-  punctuation:}  comment:; if its none then end program
+  6 |     fixed y = x { <- }  ; if its none then end program
+    | keyword:fixed  variable:y  operator:=  variable:x  punctuation:{  keyword:<-  punctuation:}  comment:; if its none then end program
   7 |     when x is { z }
     | keyword:when  variable:x  keyword:is  punctuation:{  variable:z  punctuation:}
   8 |         show("yeah")
@@ -24,14 +24,14 @@
     | comment:; heap allocated stuff can be changed even if they
  14 |     region r default
     | keyword:region  region:r  keyword:default
- 15 |     bind x2 = new [int]([1,2,3])
-    | keyword:bind  variable:x2  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
+ 15 |     fixed x2 = new [int]([1,2,3])
+    | keyword:fixed  variable:x2  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
  16 |     x2[0] = 2
     | variable:x2  punctuation:[  number:0  punctuation:]  operator:=  number:2
  17 |     show(x2[0])
     | builtin-fn:show  punctuation:(  variable:x2  punctuation:[  number:0  punctuation:]  punctuation:)
- 18 |     bind pnt = new int(1)
-    | keyword:bind  variable:pnt  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)
+ 18 |     fixed pnt = new int(1)
+    | keyword:fixed  variable:pnt  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)
  19 |     pnt^ = 2
     | variable:pnt  operator:^  operator:=  number:2
  20 |     show(pnt^)

@@ -1,6 +1,6 @@
 ; error: 5:15: a unit is raised to a unit's power, as in 'b ** 2' or 'b ** unit(n)'; for an int, write 'int(b) ** n'
 task main()
-    hold b: unit = 3
-    hold n = 2
+    flex b: unit = 3
+    flex n = 2
     show(b ** n)
 fi

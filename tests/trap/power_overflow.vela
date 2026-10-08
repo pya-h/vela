@@ -1,6 +1,6 @@
 ; trap: integer overflow at 5:19 in task 'main'
 task main()
-    hold base = 3
+    flex base = 3
     each n in 38..41
         show(base ** unit(n))
     fi

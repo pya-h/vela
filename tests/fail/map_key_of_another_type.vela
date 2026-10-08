@@ -1,6 +1,6 @@
 ; error: 5:12: expected a key of type text@r, got int
 task main()
     region r
-    bind m = ["a": 1] at r
+    fixed m = ["a": 1] at r
     show(m[1])
 fi

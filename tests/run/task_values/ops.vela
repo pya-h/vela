@@ -12,5 +12,5 @@ fi
 shape Handler
     name: text = "sq"
     run: (int) -> int = sq
-    shared hold chosen: (int) -> int = sq
+    shared flex chosen: (int) -> int = sq
 fi

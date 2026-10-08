@@ -21,12 +21,12 @@ task reported<P...: shown>(next: (@a, P...) -> text@a, r: region, args: P...) ->
 fi
 
 $(audited)
-task deposit(hold& balance: int, amount: int)
+task deposit(flex& balance: int, amount: int)
     balance += amount
 fi
 
 $(audited)
-task withdraw(hold& balance: int, amount: int) -> bool
+task withdraw(flex& balance: int, amount: int) -> bool
     when amount > balance
         <- false
     fi
@@ -45,12 +45,12 @@ task statement(r: region, owner: text, balance: int) -> text@r
 fi
 
 task main()
-    hold balance = 0
+    flex balance = 0
     deposit(&balance, 500)
     when not withdraw(&balance, 900)
         show("refused: only ", balance)
     fi
-    bind cost = fee(250)
+    fixed cost = fee(250)
     deposit(&balance, 0 - cost)
     region page
     show(statement(page, "Ada", balance))

@@ -1,8 +1,8 @@
 ; error: 6:18: a tuple's item read with '.#' is a maybe, so a type test writes its type as one, as in 'is maybe int {x}'
 ; An item read with `.#` is a maybe, so its type is written as one.
 task main()
-    bind t = (1, 2)
-    bind n = 3
+    fixed t = (1, 2)
+    fixed n = 3
     when t.#0 is int {x}
         show(1)
     fi

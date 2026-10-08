@@ -76,7 +76,7 @@ task sq(n: int) -> int
 fi
 
 task main()
-    bind said = sq(2)
+    fixed said = sq(2)
     show(said)
 fi
 ";
@@ -93,7 +93,7 @@ fn a_wrapper_value_worked_out_at_start_hovers_as_written() {
     // the editor still answers about what the file writes.
     let source = "\
 shape Config
-    shared hold depth: int = 2
+    shared flex depth: int = 2
 fi
 
 task logged(next: (int) -> int, times: int, n: int) -> int
@@ -142,7 +142,7 @@ shape Math
 fi
 
 task main()
-    bind f = Math.cube
+    fixed f = Math.cube
     show(f(2))
 fi
 ";
@@ -169,7 +169,7 @@ fi
 shape Account
     read balance: int
 
-    alters guarded(next: (hold& Account, int) -> bool, amount: int) -> bool
+    alters guarded(next: (flex& Account, int) -> bool, amount: int) -> bool
         when amount > .balance
             <- false
         fi
@@ -190,7 +190,7 @@ fi
 
 task main()
     CHECK
-    hold a = Account { balance: 0 }
+    flex a = Account { balance: 0 }
     a.deposit(5)
     show(a.withdraw(3))
 fi
@@ -210,7 +210,7 @@ fn a_method_of_every_value_takes_wrappers_and_a_method_of_its_type_wraps_it() {
         }
         assert_eq!(class_at(&source, "audited)"), Some(TokenClass::Task));
         assert_eq!(class_at(&source, "guarded)"), Some(TokenClass::Method));
-        assert!(hover(&source, "guarded)").starts_with("alters guarded(next: (hold& Account, int) -> bool"), "{}", hover(&source, "guarded)"));
+        assert!(hover(&source, "guarded)").starts_with("alters guarded(next: (flex& Account, int) -> bool"), "{}", hover(&source, "guarded)"));
     }
     // One that only reads the value can't wrap one that alters it.
     let source = ON_METHODS.replace("CHECK", "show(0)").replace("alters guarded(", "guarded(").replace("<- next(&.this, amount)", "<- false");

@@ -4,8 +4,8 @@
     | keyword:shape  type:Tally
   3 |     count: int = 0
     | field:count  punctuation::  type-builtin:int  operator:=  number:0
-  5 |     alters add_into(hold& total: int)
-    | keyword:alters  method:add_into  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+  5 |     alters add_into(flex& total: int)
+    | keyword:alters  method:add_into  punctuation:(  keyword:flex  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
   6 |         total = total + .count
     | parameter:total  operator:=  parameter:total  operator:+  punctuation:.  field:count
   7 |         .count = 0
@@ -14,8 +14,8 @@
     | keyword:fi
   9 | fi
     | keyword:fi
- 11 | task double(hold& n: int)
-    | keyword:task  task:double  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 11 | task double(flex& n: int)
+    | keyword:task  task:double  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
  12 |     n = n * 2
     | parameter:n  operator:=  parameter:n  operator:*  number:2
  13 | fi

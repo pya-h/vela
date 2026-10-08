@@ -1,8 +1,8 @@
-; error: 5:44: expected type int ~ LoopResult<text, bool>, got int ~ LoopResult<int, bool>
+; error: 5:45: expected type int ~ LoopResult<text, bool>, got int ~ LoopResult<int, bool>
 ; The place names B, but the breaks give another type.
 include std/loops {LoopResult}
 task main()
-    bind a: int ~ LoopResult<text, bool> = each x in 0..3
+    fixed a: int ~ LoopResult<text, bool> = each x in 0..3
         when x == 1
             break = 5
         fi

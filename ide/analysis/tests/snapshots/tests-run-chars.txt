@@ -1,5 +1,5 @@
-  1 | ; warning: 35:20: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
-    | comment:; warning: 35:20: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
+  1 | ; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
+    | comment:; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
   2 | ; A char is one byte, written 'a'. A number moves it and the distance between
     | comment:; A char is one byte, written 'a'. A number moves it and the distance between
   3 | ; two is an int; t[i] reads a byte of text as a char, and t.at(i) the same in a
@@ -22,8 +22,8 @@
     | keyword:fi
  13 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 14 |     hold c = 'a'
-    | keyword:hold  variable:c  operator:=  string:'a'
+ 14 |     flex c = 'a'
+    | keyword:flex  variable:c  operator:=  string:'a'
  15 |     c = c + 1
     | variable:c  operator:=  variable:c  operator:+  number:1
  16 |     show(c, " ", c.type, " ", 1 + c, " ", c - 1, " ", 'z' - 'a')
@@ -34,12 +34,12 @@
     | comment:; Escapes, as in text, and a quote.
  19 |     show('\\', '\'', '"', "|", '\t', "|")
     | builtin-fn:show  punctuation:(  string:'  escape:\\  string:'  punctuation:,  string:'  escape:\'  string:'  punctuation:,  string:'"'  punctuation:,  string:"|"  punctuation:,  string:'  escape:\t  string:'  punctuation:,  string:"|"  punctuation:)
- 20 |     bind word = "hello"
-    | keyword:bind  variable:word  operator:=  string:"hello"
+ 20 |     fixed word = "hello"
+    | keyword:fixed  variable:word  operator:=  string:"hello"
  21 |     show(word[1], " ", word.at(0), " ", word.at(5), " ", word.at(-1))
     | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:word  punctuation:.  method:at  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:word  punctuation:.  method:at  punctuation:(  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:word  punctuation:.  method:at  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)
- 22 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 22 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  23 |     loop word.at(i) is {letter}
     | keyword:loop  variable:word  punctuation:.  method:at  punctuation:(  variable:i  punctuation:)  keyword:is  punctuation:{  variable:letter  punctuation:}
  24 |         show(shout(letter))
@@ -54,8 +54,8 @@
     | comment:; other values.
  29 |     show('a' < 'b', " ", c == 'b', " ", c ~= 'b', " ", c <> 'b', " ", ('q', 1))
     | builtin-fn:show  punctuation:(  string:'a'  operator:<  string:'b'  punctuation:,  string:" "  punctuation:,  variable:c  operator:==  string:'b'  punctuation:,  string:" "  punctuation:,  variable:c  operator:~=  string:'b'  punctuation:,  string:" "  punctuation:,  variable:c  operator:<>  string:'b'  punctuation:,  string:" "  punctuation:,  punctuation:(  string:'q'  punctuation:,  number:1  punctuation:)  punctuation:)
- 30 |     bind m: maybe char = 'x'
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:char  operator:=  string:'x'
+ 30 |     fixed m: maybe char = 'x'
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:char  operator:=  string:'x'
  31 |     show(m, " ", m ~= 'x')
     | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  variable:m  operator:~=  string:'x'  punctuation:)
  32 |     region r
@@ -64,12 +64,12 @@
     | builtin-fn:show  punctuation:(  string:"c is {  variable:c  string:}"  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  type-builtin:text  punctuation:(  variable:c  punctuation:)  keyword:at  region:r  punctuation:)
  34 |     ; Text built by hand: warned, once, at the first.
     | comment:; Text built by hand: warned, once, at the first.
- 35 |     bind letters = ['h', 'i', '\n', '\'', '\0', char(200)]
-    | keyword:bind  variable:letters  operator:=  punctuation:[  string:'h'  punctuation:,  string:'i'  punctuation:,  string:'  escape:\n  string:'  punctuation:,  string:'  escape:\'  string:'  punctuation:,  string:'  escape:\0  string:'  punctuation:,  type-builtin:char  punctuation:(  number:200  punctuation:)  punctuation:]
+ 35 |     fixed letters = ['h', 'i', '\n', '\'', '\0', char(200)]
+    | keyword:fixed  variable:letters  operator:=  punctuation:[  string:'h'  punctuation:,  string:'i'  punctuation:,  string:'  escape:\n  string:'  punctuation:,  string:'  escape:\'  string:'  punctuation:,  string:'  escape:\0  string:'  punctuation:,  type-builtin:char  punctuation:(  number:200  punctuation:)  punctuation:]
  36 |     show(letters)
     | builtin-fn:show  punctuation:(  variable:letters  punctuation:)
- 37 |     hold more = new [char]() at r
-    | keyword:hold  variable:more  operator:=  keyword:new  punctuation:[  type-builtin:char  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 37 |     flex more = new [char]() at r
+    | keyword:flex  variable:more  operator:=  keyword:new  punctuation:[  type-builtin:char  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  38 |     more.add('!')
     | variable:more  punctuation:.  field:add  punctuation:(  string:'!'  punctuation:)
  39 |     show(more)

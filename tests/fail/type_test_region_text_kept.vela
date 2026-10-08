@@ -2,7 +2,7 @@
 ; Text a type test takes from a group's item may be in a region of the
 ; caller's, so it can't leave the task.
 task f<P...: frozen & shown>(args: P...) -> text
-    bind t = (args...) { <- "few" }
+    fixed t = (args...) { <- "few" }
     when t.#1 is maybe text {s}
         <- s
     fi
@@ -10,7 +10,7 @@ task f<P...: frozen & shown>(args: P...) -> text
 fi
 
 task main()
-    hold keep = "init"
+    flex keep = "init"
     when true
         region r
         keep = f(1, "ab" + "cd" at r)

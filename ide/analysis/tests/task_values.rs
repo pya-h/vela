@@ -30,12 +30,12 @@ fi
 
 task main()
     CHECK
-    bind value = square
-    bind lettered = head
-    bind applied = apply(square, 2)
-    bind called = value(3)
-    bind picked = pick()(1, 2)
-    hold kept: maybe (int) -> int = none
+    fixed value = square
+    fixed lettered = head
+    fixed applied = apply(square, 2)
+    fixed called = value(3)
+    fixed picked = pick()(1, 2)
+    flex kept: maybe (int) -> int = none
     show(value, lettered, applied, called, picked, kept)
 fi
 ";
@@ -93,11 +93,11 @@ fn a_parameter_after_one_of_a_task_type_is_a_parameter() {
 #[test]
 fn a_task_value_taking_a_place_or_a_region_hovers_with_how_it_takes_them() {
     let program = "\
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 
-task total(bind& p: int) -> int
+task total(fixed& p: int) -> int
     <- p
 fi
 
@@ -111,13 +111,13 @@ fi
 
 task main()
     CHECK
-    bind bumped = bump
-    bind totalled = total
-    bind squared = squares
-    bind kinder = defaulted
-    hold kept: maybe (@s, int) -> [int]@s = none
+    fixed bumped = bump
+    fixed totalled = total
+    fixed squared = squares
+    fixed kinder = defaulted
+    flex kept: maybe (@s, int) -> [int]@s = none
     region q
-    bind made = squared(q, 3)
+    fixed made = squared(q, 3)
     show(bumped, totalled, squared, kinder, kept, made)
 fi
 ";
@@ -147,10 +147,10 @@ fi
 
 task main()
     region q
-    hold t: (text@q, int) = named(q, \"a\")
+    flex t: (text@q, int) = named(q, \"a\")
     show(t.1)
-    bind f = (s: region, n: int) -> [int]@s <- new [int]() at s fi
-    bind made = f(q, 2)
+    fixed f = (s: region, n: int) -> [int]@s <- new [int]() at s fi
+    fixed made = f(q, 2)
     show(made.len)
 fi
 ";
@@ -171,9 +171,9 @@ fi
 
 task main()
     region q
-    bind ys = new [int]() at q
-    bind got = pick(ys)
-    bind kept = pick(q, ys)
+    fixed ys = new [int]() at q
+    fixed got = pick(ys)
+    fixed kept = pick(q, ys)
     show(got.len, kept.len)
 fi
 task g(

@@ -40,8 +40,8 @@
     | comment:; One that alters nothing makes a changed copy through one that does.
  27 |     cleared() -> Tally@this
     | method:cleared  punctuation:(  punctuation:)  operator:->  type:Tally  operator:@  region:this
- 28 |         hold copy = .this
-    | keyword:hold  variable:copy  operator:=  punctuation:.  keyword:this
+ 28 |         flex copy = .this
+    | keyword:flex  variable:copy  operator:=  punctuation:.  keyword:this
  29 |         copy.clear()
     | variable:copy  punctuation:.  method:clear  punctuation:(  punctuation:)
  30 |         <- copy
@@ -78,8 +78,8 @@
     | keyword:fi
  50 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 51 |     hold meter = Meter { label: "door" }
-    | keyword:hold  variable:meter  operator:=  type:Meter  punctuation:{  field:label  punctuation::  string:"door"  punctuation:}
+ 51 |     flex meter = Meter { label: "door" }
+    | keyword:flex  variable:meter  operator:=  type:Meter  punctuation:{  field:label  punctuation::  string:"door"  punctuation:}
  52 |     show(meter.label, " ", meter.count, " ", shown(meter.mode))
     | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  task:shown  punctuation:(  variable:meter  punctuation:.  field:mode  punctuation:)  punctuation:)
  53 |     meter.tick()
@@ -94,12 +94,12 @@
     | variable:meter  punctuation:.  method:reset  punctuation:(  punctuation:)
  58 |     show(meter.label, " ", meter.count, " ", shown(meter.mode))
     | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  task:shown  punctuation:(  variable:meter  punctuation:.  field:mode  punctuation:)  punctuation:)
- 60 |     hold tally = Tally {}
-    | keyword:hold  variable:tally  operator:=  type:Tally  punctuation:{  punctuation:}
+ 60 |     flex tally = Tally {}
+    | keyword:flex  variable:tally  operator:=  type:Tally  punctuation:{  punctuation:}
  61 |     tally.count(3)
     | variable:tally  punctuation:.  method:count  punctuation:(  number:3  punctuation:)
- 62 |     hold other = Tally { note: "other" }
-    | keyword:hold  variable:other  operator:=  type:Tally  punctuation:{  field:note  punctuation::  string:"other"  punctuation:}
+ 62 |     flex other = Tally { note: "other" }
+    | keyword:flex  variable:other  operator:=  type:Tally  punctuation:{  field:note  punctuation::  string:"other"  punctuation:}
  63 |     other.count(4)
     | variable:other  punctuation:.  method:count  punctuation:(  number:4  punctuation:)
  64 |     tally.take(other)
@@ -110,8 +110,8 @@
     | variable:tally  punctuation:.  field:note  operator:=  string:"sum"
  67 |     show(tally.note, " ", tally.total, " ", tally.cleared().total, " ", tally.total)
     | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:note  punctuation:,  string:" "  punctuation:,  variable:tally  punctuation:.  field:total  punctuation:,  string:" "  punctuation:,  variable:tally  punctuation:.  method:cleared  punctuation:(  punctuation:)  punctuation:.  field:total  punctuation:,  string:" "  punctuation:,  variable:tally  punctuation:.  field:total  punctuation:)
- 69 |     hold seat = Seat { holder: none }
-    | keyword:hold  variable:seat  operator:=  type:Seat  punctuation:{  field:holder  punctuation::  keyword:none  punctuation:}
+ 69 |     flex seat = Seat { holder: none }
+    | keyword:flex  variable:seat  operator:=  type:Seat  punctuation:{  field:holder  punctuation::  keyword:none  punctuation:}
  70 |     show(seat.holder { "free" })
     | builtin-fn:show  punctuation:(  variable:seat  punctuation:.  field:holder  punctuation:{  string:"free"  punctuation:}  punctuation:)
  71 |     seat.claim("ana")

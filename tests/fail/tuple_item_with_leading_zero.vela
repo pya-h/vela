@@ -1,5 +1,5 @@
 ; error: 4:12: a tuple's item is written as a plain number, as in '.1', not '.01'
 task main()
-    bind t = (1, 2)
+    fixed t = (1, 2)
     show(t.01)
 fi

@@ -1,6 +1,6 @@
 ; error: 5:26: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 task main()
     region r
-    hold kept = "nothing yet"
+    flex kept = "nothing yet"
     kept = scan("") at r { "" }
 fi

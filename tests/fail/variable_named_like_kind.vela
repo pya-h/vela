@@ -1,9 +1,9 @@
-; error: 8:10: 'Suit' is the name of a kind, so 'Suit.x' would name its variant; choose another name
+; error: 8:11: 'Suit' is the name of a kind, so 'Suit.x' would name its variant; choose another name
 kind Suit
     Hearts
     Spades
 fi
 
 task main()
-    bind Suit = 1
+    fixed Suit = 1
 fi

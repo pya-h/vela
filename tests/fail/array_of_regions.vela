@@ -1,4 +1,4 @@
-; error: 3:19: 'region' is only the type of a task's parameter, as in 'task build(r: region)'
+; error: 3:20: 'region' is only the type of a task's parameter, as in 'task build(r: region)'
 task main()
-    bind values: [region#2] = [1, 2]
+    fixed values: [region#2] = [1, 2]
 fi

@@ -4,7 +4,7 @@
 ; The highest of the readings, and their average.
 task summary(readings: [float#7]) -> high: float, average: float
     high <- readings[0]
-    hold sum = 0.0
+    flex sum = 0.0
     each reading in readings
         sum += reading
         when reading > high
@@ -19,7 +19,7 @@ fi
 ; Sorts the items of a slice in place: a slice writes into the memory it views.
 task sort(items: [int]@r)
     each i in 1..items.len
-        hold j = i
+        flex j = i
         loop j > 0 and items[j - 1] > items[j]
             items[j - 1], items[j] = items[j], items[j - 1]
             j--
@@ -31,12 +31,12 @@ fi
 ; starts empty and grows as they are found.
 task primes(r: region, limit: int) -> [int]@r
     region scratch
-    bind composite = new [bool]([false#limit]) at scratch
-    hold found = new [int]() at r
+    fixed composite = new [bool]([false#limit]) at scratch
+    flex found = new [int]() at r
     each n in 2..limit
         when not composite[n]
             found.add(n)
-            hold multiple = n * n
+            flex multiple = n * n
             loop multiple < limit
                 composite[multiple] = true
                 multiple += n
@@ -48,23 +48,23 @@ task primes(r: region, limit: int) -> [int]@r
 fi
 
 task main()
-    bind week: [float#7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
-    bind high, average = summary(week)
+    fixed week: [float#7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
+    fixed high, average = summary(week)
     show(high)                               ; 24.5
     show(average)                            ; 21.2857
 
     region r
-    bind scores = new [int]([72, 90, 65, 88, 79]) at r
+    fixed scores = new [int]([72, 90, 65, 88, 79]) at r
     sort(scores)
     show(scores[0])                          ; 65
     show(scores[scores.len - 1])             ; 90
     ; A slice, like an array, is written whole: its items in brackets.
     show(scores)                             ; [65, 72, 79, 88, 90]
     ; A part of a slice views the same memory, without copying.
-    bind top = scores[3..5]
+    fixed top = scores[3..5]
     show(top[0] + top[1])                    ; 178
 
-    hold small = primes(r, 30)
+    flex small = primes(r, 30)
     show(small.len)                          ; 10
     show(small.del())                        ; 29, taken out
     small.add(0, 1)                          ; 1 goes first

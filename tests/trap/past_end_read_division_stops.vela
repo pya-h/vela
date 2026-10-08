@@ -6,7 +6,7 @@ task gone(m: maybe int) -> bool
 fi
 
 task main()
-    hold z = 0
+    flex z = 0
     show("before")
     show(gone((10 / z, 1).#5))
 fi

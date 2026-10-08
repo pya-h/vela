@@ -1,4 +1,4 @@
 ; error: 3:10: expected a name, got 'block', which is a reserved word
 task main()
-    hold block = 1
+    flex block = 1
 fi

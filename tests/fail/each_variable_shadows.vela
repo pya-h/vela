@@ -1,6 +1,6 @@
-; error: 4:10: 'i' is already defined at 3:10
+; error: 4:10: 'i' is already defined at 3:11
 task main()
-    bind i = 10
+    fixed i = 10
     each i in 0..3
         show(i)
     fi

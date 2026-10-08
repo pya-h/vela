@@ -1,5 +1,5 @@
-; error: 4:26: 'scan' names its region with 'at', as in 'scan("Name: ") at r' (or 'scan("Name: ")@r'); 'in' counts through a range
+; error: 4:27: 'scan' names its region with 'at', as in 'scan("Name: ") at r' (or 'scan("Name: ")@r'); 'in' counts through a range
 task main()
     region r
-    bind line = scan("") in r
+    fixed line = scan("") in r
 fi

@@ -1,13 +1,13 @@
-; error: 11:43: 'tick' is a '[hold @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'hold' variable or a 'hold&', which 'tick' isn't
-; Calling a [hold @r] lambda changes what it keeps, so it is called through a place that changes.
+; error: 11:45: 'tick' is a '[hold @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'hold' variable or a 'hold&', which 'tick' isn't
+; Calling a [flex @r] lambda changes what it keeps, so it is called through a place that changes.
 task main()
     region r
-    hold c = 0
-    hold tick = [hold @r]() -> int
+    flex c = 0
+    flex tick = [flex @r]() -> int
         c = c + 1
         <- c
     fi
     region s
-    bind f = [bind& tick, @s]() -> int <- tick() fi
+    fixed f = [fixed& tick, @s]() -> int <- tick() fi
     show(f())
 fi

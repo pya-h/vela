@@ -30,18 +30,18 @@
     | builtin-fn:show  punctuation:(  number:0  operator:**  number:0  punctuation:,  string:" "  punctuation:,  number:0  operator:**  number:5  punctuation:,  string:" "  punctuation:,  punctuation:(  operator:-  number:1  punctuation:)  operator:**  number:7  punctuation:,  string:" "  punctuation:,  number:1  operator:**  number:1000000  punctuation:,  string:" "  punctuation:,  number:10  operator:**  number:18  punctuation:)
  19 |     ; An int to the power of an int that may be negative is a float.
     | comment:; An int to the power of an int that may be negative is a float.
- 20 |     hold k = 3
-    | keyword:hold  variable:k  operator:=  number:3
+ 20 |     flex k = 3
+    | keyword:flex  variable:k  operator:=  number:3
  21 |     show(2 ** k, " ", (2 ** k).type, " ", 2 ** -1, " ", 2 ** -k)
     | builtin-fn:show  punctuation:(  number:2  operator:**  variable:k  punctuation:,  string:" "  punctuation:,  punctuation:(  number:2  operator:**  variable:k  punctuation:)  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  number:2  operator:**  operator:-  number:1  punctuation:,  string:" "  punctuation:,  number:2  operator:**  operator:-  variable:k  punctuation:)
  22 |     ; A unit exponent is never negative, so the power is an int.
     | comment:; A unit exponent is never negative, so the power is an int.
- 23 |     hold u: unit = 5
-    | keyword:hold  variable:u  punctuation::  type-builtin:unit  operator:=  number:5
+ 23 |     flex u: unit = 5
+    | keyword:flex  variable:u  punctuation::  type-builtin:unit  operator:=  number:5
  24 |     show(3 ** u, " ", (3 ** u).type, " ", unit(3) ** u, " ", (unit(3) ** u).type)
     | builtin-fn:show  punctuation:(  number:3  operator:**  variable:u  punctuation:,  string:" "  punctuation:,  punctuation:(  number:3  operator:**  variable:u  punctuation:)  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  type-builtin:unit  punctuation:(  number:3  punctuation:)  operator:**  variable:u  punctuation:,  string:" "  punctuation:,  punctuation:(  type-builtin:unit  punctuation:(  number:3  punctuation:)  operator:**  variable:u  punctuation:)  punctuation:.  keyword:type  punctuation:)
- 25 |     hold b: unit = 2
-    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  number:2
+ 25 |     flex b: unit = 2
+    | keyword:flex  variable:b  punctuation::  type-builtin:unit  operator:=  number:2
  26 |     show(b ** 7, " ", (b ** 7).type)
     | builtin-fn:show  punctuation:(  variable:b  operator:**  number:7  punctuation:,  string:" "  punctuation:,  punctuation:(  variable:b  operator:**  number:7  punctuation:)  punctuation:.  keyword:type  punctuation:)
  27 |     ; Floats: C's pow.
@@ -52,8 +52,8 @@
     | builtin-fn:show  punctuation:(  punctuation:(  operator:-  number:8.0  punctuation:)  operator:**  punctuation:(  number:1.0  operator:/  number:3.0  punctuation:)  punctuation:)
  30 |     ; Big exact powers, by squaring.
     | comment:; Big exact powers, by squaring.
- 31 |     hold three = 3
-    | keyword:hold  variable:three  operator:=  number:3
+ 31 |     flex three = 3
+    | keyword:flex  variable:three  operator:=  number:3
  32 |     show(three ** 39)
     | builtin-fn:show  punctuation:(  variable:three  operator:**  number:39  punctuation:)
  33 |     show(KILO, " ", ROOT_TWO, " ", HALF, " ", BYTE)

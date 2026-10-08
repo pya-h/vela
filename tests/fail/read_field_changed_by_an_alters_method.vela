@@ -13,7 +13,7 @@ shape Panel
 fi
 
 task main()
-    hold panel = Panel { counter: Counter {}, cells: [1, 2] }
+    flex panel = Panel { counter: Counter {}, cells: [1, 2] }
     show(panel.counter.n)
     panel.counter.bump()
 fi

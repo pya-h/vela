@@ -34,22 +34,22 @@
     | keyword:fi
  23 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 24 |     hold xs = make()
-    | keyword:hold  variable:xs  operator:=  task:make  punctuation:(  punctuation:)
+ 24 |     flex xs = make()
+    | keyword:flex  variable:xs  operator:=  task:make  punctuation:(  punctuation:)
  25 |     xs[0] = 10
     | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:10
  26 |     show(xs[0] + make()[0])
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  operator:+  task:make  punctuation:(  punctuation:)  punctuation:[  number:0  punctuation:]  punctuation:)
- 28 |     bind points = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
-    | keyword:bind  variable:points  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:]
+ 28 |     fixed points = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+    | keyword:fixed  variable:points  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:]
  29 |     each p in points
     | keyword:each  variable:p  keyword:in  variable:points
  30 |         show(p.x * p.y)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  operator:*  variable:p  punctuation:.  field:y  punctuation:)
  31 |     fi
     | keyword:fi
- 33 |     bind lights = [Red, Dimmed(5), Light.Dimmed(7)]
-    | keyword:bind  variable:lights  operator:=  punctuation:[  variant:Red  punctuation:,  variant:Dimmed  punctuation:(  number:5  punctuation:)  punctuation:,  type:Light  punctuation:.  variant:Dimmed  punctuation:(  number:7  punctuation:)  punctuation:]
+ 33 |     fixed lights = [Red, Dimmed(5), Light.Dimmed(7)]
+    | keyword:fixed  variable:lights  operator:=  punctuation:[  variant:Red  punctuation:,  variant:Dimmed  punctuation:(  number:5  punctuation:)  punctuation:,  type:Light  punctuation:.  variant:Dimmed  punctuation:(  number:7  punctuation:)  punctuation:]
  34 |     each l in lights
     | keyword:each  variable:l  keyword:in  variable:lights
  35 |         match l
@@ -68,12 +68,12 @@
     | keyword:fi
  43 |     region r
     | keyword:region  region:r
- 44 |     bind a = new Node(Node { value: 1, next: none }) at r
-    | keyword:bind  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
- 45 |     bind b = new Node(Node { value: 2, next: a }) at r
-    | keyword:bind  variable:b  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:a  punctuation:}  punctuation:)  keyword:at  region:r
- 46 |     hold ptrs: [^Node#3]@r = [a, b, a]
-    | keyword:hold  variable:ptrs  punctuation::  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  operator:@  region:r  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:,  variable:a  punctuation:]
+ 44 |     fixed a = new Node(Node { value: 1, next: none }) at r
+    | keyword:fixed  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 45 |     fixed b = new Node(Node { value: 2, next: a }) at r
+    | keyword:fixed  variable:b  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:a  punctuation:}  punctuation:)  keyword:at  region:r
+ 46 |     flex ptrs: [^Node#3]@r = [a, b, a]
+    | keyword:flex  variable:ptrs  punctuation::  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  operator:@  region:r  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:,  variable:a  punctuation:]
  47 |     ptrs[2] = b
     | variable:ptrs  punctuation:[  number:2  punctuation:]  operator:=  variable:b
  48 |     each p in ptrs
@@ -82,12 +82,12 @@
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:value  punctuation:)
  50 |     fi
     | keyword:fi
- 51 |     bind boxed = new [^Node#3](ptrs) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  punctuation:(  variable:ptrs  punctuation:)  keyword:at  region:r
+ 51 |     fixed boxed = new [^Node#3](ptrs) at r
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  punctuation:(  variable:ptrs  punctuation:)  keyword:at  region:r
  52 |     show(boxed^[1]^.next { a }^.value)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:[  number:1  punctuation:]  operator:^  punctuation:.  field:next  punctuation:{  variable:a  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
- 54 |     hold words: [text#2] = ["a", "b"]
-    | keyword:hold  variable:words  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:]
+ 54 |     flex words: [text#2] = ["a", "b"]
+    | keyword:flex  variable:words  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:]
  55 |     words[1] = "c"
     | variable:words  punctuation:[  number:1  punctuation:]  operator:=  string:"c"
  56 |     show(words[1])

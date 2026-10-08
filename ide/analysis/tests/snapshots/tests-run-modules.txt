@@ -40,20 +40,20 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  25 |     ; Tasks, shapes, and variants of a module, through its name.
     | comment:; Tasks, shapes, and variants of a module, through its name.
- 26 |     bind square = geometry.Square(3.0)
-    | keyword:bind  variable:square  operator:=  module:geometry  punctuation:.  variant:Square  punctuation:(  number:3.0  punctuation:)
- 27 |     bind circle = geometry.Circle(1.0)
-    | keyword:bind  variable:circle  operator:=  module:geometry  punctuation:.  variant:Circle  punctuation:(  number:1.0  punctuation:)
+ 26 |     fixed square = geometry.Square(3.0)
+    | keyword:fixed  variable:square  operator:=  module:geometry  punctuation:.  variant:Square  punctuation:(  number:3.0  punctuation:)
+ 27 |     fixed circle = geometry.Circle(1.0)
+    | keyword:fixed  variable:circle  operator:=  module:geometry  punctuation:.  variant:Circle  punctuation:(  number:1.0  punctuation:)
  28 |     show(geometry.area(square))
     | builtin-fn:show  punctuation:(  module:geometry  punctuation:.  task:area  punctuation:(  variable:square  punctuation:)  punctuation:)
  29 |     show(geometry.area(circle) > 3.0)
     | builtin-fn:show  punctuation:(  module:geometry  punctuation:.  task:area  punctuation:(  variable:circle  punctuation:)  operator:>  number:3.0  punctuation:)
  30 |     show(area(4))
     | builtin-fn:show  punctuation:(  task:area  punctuation:(  number:4  punctuation:)  punctuation:)
- 31 |     bind origin = geometry.Point { x: 0.0, y: 0.0 }
-    | keyword:bind  variable:origin  operator:=  module:geometry  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:0.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}
- 32 |     bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
-    | keyword:bind  variable:corner  punctuation::  module:geometry  punctuation:.  type:Point  operator:=  module:geometry  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:3.0  punctuation:,  field:y  punctuation::  number:4.0  punctuation:}
+ 31 |     fixed origin = geometry.Point { x: 0.0, y: 0.0 }
+    | keyword:fixed  variable:origin  operator:=  module:geometry  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:0.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}
+ 32 |     fixed corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
+    | keyword:fixed  variable:corner  punctuation::  module:geometry  punctuation:.  type:Point  operator:=  module:geometry  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:3.0  punctuation:,  field:y  punctuation::  number:4.0  punctuation:}
  33 |     show(geometry.distance(origin, corner))
     | builtin-fn:show  punctuation:(  module:geometry  punctuation:.  task:distance  punctuation:(  variable:origin  punctuation:,  variable:corner  punctuation:)  punctuation:)
  34 |     geometry.main()
@@ -84,8 +84,8 @@
     | keyword:fi
  48 |     ; Names brought in with `include m (…)`, and the others still through `m.`.
     | comment:; Names brought in with `include m (…)`, and the others still through `m.`.
- 49 |     bind red: Color = palette.Red
-    | keyword:bind  variable:red  punctuation::  type:Color  operator:=  module:palette  punctuation:.  variant:Red
+ 49 |     fixed red: Color = palette.Red
+    | keyword:fixed  variable:red  punctuation::  type:Color  operator:=  module:palette  punctuation:.  variant:Red
  50 |     show(describe(red))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:red  punctuation:)  punctuation:)
  51 |     show(describe(Custom(10, 20, 30)))
@@ -116,16 +116,16 @@
     | keyword:fi
  65 |     ; A private field, set and read through its module's tasks.
     | comment:; A private field, set and read through its module's tasks.
- 66 |     hold account = bank.open("ada", 100)
-    | keyword:hold  variable:account  operator:=  module:bank  punctuation:.  task:open  punctuation:(  string:"ada"  punctuation:,  number:100  punctuation:)
+ 66 |     flex account = bank.open("ada", 100)
+    | keyword:flex  variable:account  operator:=  module:bank  punctuation:.  task:open  punctuation:(  string:"ada"  punctuation:,  number:100  punctuation:)
  67 |     account = bank.deposit(account, 50)
     | variable:account  operator:=  module:bank  punctuation:.  task:deposit  punctuation:(  variable:account  punctuation:,  number:50  punctuation:)
  68 |     show(account.owner)
     | builtin-fn:show  punctuation:(  variable:account  punctuation:.  field:owner  punctuation:)
  69 |     show(bank.balance(account))
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:balance  punctuation:(  variable:account  punctuation:)  punctuation:)
- 70 |     bind after = bank.withdraw(account, 500) {
-    | keyword:bind  variable:after  operator:=  module:bank  punctuation:.  task:withdraw  punctuation:(  variable:account  punctuation:,  number:500  punctuation:)  punctuation:{
+ 70 |     fixed after = bank.withdraw(account, 500) {
+    | keyword:fixed  variable:after  operator:=  module:bank  punctuation:.  task:withdraw  punctuation:(  variable:account  punctuation:,  number:500  punctuation:)  punctuation:{
  71 |         failure problem
     | keyword:failure  variable:problem
  72 |         show(bank.explain(problem))
@@ -142,16 +142,16 @@
     | comment:; named results.
  79 |     region r
     | keyword:region  region:r
- 80 |     hold top: maybe ^stack.Node@r = none
-    | keyword:hold  variable:top  punctuation::  keyword:maybe  operator:^  module:stack  punctuation:.  type:Node  operator:@  region:r  operator:=  keyword:none
+ 80 |     flex top: maybe ^stack.Node@r = none
+    | keyword:flex  variable:top  punctuation::  keyword:maybe  operator:^  module:stack  punctuation:.  type:Node  operator:@  region:r  operator:=  keyword:none
  81 |     each i in 1..4
     | keyword:each  variable:i  keyword:in  number:1  operator:..  number:4
  82 |         top = stack.push(r, top, i * 10)
     | variable:top  operator:=  module:stack  punctuation:.  task:push  punctuation:(  region:r  punctuation:,  variable:top  punctuation:,  variable:i  operator:*  number:10  punctuation:)
  83 |     fi
     | keyword:fi
- 84 |     bind total, count = stack.sum(top)
-    | keyword:bind  variable:total  punctuation:,  variable:count  operator:=  module:stack  punctuation:.  task:sum  punctuation:(  variable:top  punctuation:)
+ 84 |     fixed total, count = stack.sum(top)
+    | keyword:fixed  variable:total  punctuation:,  variable:count  operator:=  module:stack  punctuation:.  task:sum  punctuation:(  variable:top  punctuation:)
  85 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
  86 |     show(count)
@@ -166,14 +166,14 @@
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:larger  punctuation:<  type-builtin:float  punctuation:>  punctuation:(  number:1.5  punctuation:,  number:0.5  punctuation:)  punctuation:)
  93 |     ; A shape from another module that takes types, built here and there.
     | comment:; A shape from another module that takes types, built here and there.
- 94 |     bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
-    | keyword:bind  variable:tally  punctuation::  module:numbers  punctuation:.  type:Tally  punctuation:<  type-builtin:int  punctuation:>  operator:=  module:numbers  punctuation:.  type:Tally  punctuation:{  field:value  punctuation::  number:5  punctuation:,  field:count  punctuation::  number:2  punctuation:}
+ 94 |     fixed tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
+    | keyword:fixed  variable:tally  punctuation::  module:numbers  punctuation:.  type:Tally  punctuation:<  type-builtin:int  punctuation:>  operator:=  module:numbers  punctuation:.  type:Tally  punctuation:{  field:value  punctuation::  number:5  punctuation:,  field:count  punctuation::  number:2  punctuation:}
  95 |     show(tally.value)
     | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:value  punctuation:)
  96 |     show(tally.count)
     | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:count  punctuation:)
- 97 |     bind counted = numbers.tallyOf(r, "once")
-    | keyword:bind  variable:counted  operator:=  module:numbers  punctuation:.  task:tallyOf  punctuation:(  region:r  punctuation:,  string:"once"  punctuation:)
+ 97 |     fixed counted = numbers.tallyOf(r, "once")
+    | keyword:fixed  variable:counted  operator:=  module:numbers  punctuation:.  task:tallyOf  punctuation:(  region:r  punctuation:,  string:"once"  punctuation:)
  98 |     show(counted.value)
     | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:value  punctuation:)
  99 |     show(counted.count)

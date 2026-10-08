@@ -17,7 +17,7 @@ task add(a: int, b: int) -> int
 fi
 
 task main()
-    bind sum = call(add, 2, 3)
+    fixed sum = call(add, 2, 3)
     show(sum)
 fi
 ";
@@ -65,7 +65,7 @@ task labelled<P...>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
 fi
 
 $(traced)
-task squares(r: region, hold& n: int) -> [int]@r
+task squares(r: region, flex& n: int) -> [int]@r
     n = n + 1
     <- new [int]() at r
 fi
@@ -77,8 +77,8 @@ fi
 
 task main()
     region kept
-    hold k = 3
-    bind made = squares(kept, &k)
+    flex k = 3
+    fixed made = squares(kept, &k)
     show(made, label(1, kept))
 fi
 ";

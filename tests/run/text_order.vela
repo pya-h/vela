@@ -32,9 +32,9 @@ task main()
     show(biggest("pear", "fig"))
     show(biggest(3, 9))
     region r
-    bind read = "kiwi".copy() at r
+    fixed read = "kiwi".copy() at r
     show(read > "kiwano")
-    hold best = Best { value: "m" }
+    flex best = Best { value: "m" }
     best.offer("x")
     best.offer("c")
     show(best.value)

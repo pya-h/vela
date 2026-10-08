@@ -10,7 +10,7 @@
     | keyword:shape  type:Stepper
   8 |     by: (int) -> int = (n: int) -> int <- n * 10 fi
     | field:by  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:*  number:10  keyword:fi
-  9 |     shared hold next: (int) -> int = (n: int) -> int <- n - 1 fi
-    | keyword:shared  keyword:hold  field:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:-  number:1  keyword:fi
+  9 |     shared flex next: (int) -> int = (n: int) -> int <- n - 1 fi
+    | keyword:shared  keyword:flex  field:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:-  number:1  keyword:fi
  10 | fi
     | keyword:fi

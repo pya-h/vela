@@ -2,7 +2,7 @@
 include std/files {File, FileMode}
 
 task main()
-    hold notes = File { path: "notes.txt" }
+    flex notes = File { path: "notes.txt" }
     notes.open(FileMode.Read) { failure e
         show("could not open")
     }

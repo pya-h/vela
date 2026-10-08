@@ -80,40 +80,40 @@ task main()
     region r
 
     ; The types are written, or the values say which they are.
-    bind written: Box<int> = Box<int> { value: 1 }
+    fixed written: Box<int> = Box<int> { value: 1 }
     show(written.value)
-    bind worked = Box { value: 2.5 }
+    fixed worked = Box { value: 2.5 }
     show(worked.value)
-    bind empty: Box<maybe int> = Box<maybe int> { value: none }
+    fixed empty: Box<maybe int> = Box<maybe int> { value: none }
     show(empty.value)
 
     ; The shape made for one set of types serves every region: the text of a
     ; `Box<text>` is in the region of the box.
-    bind here: Box<text>@r = Box { value: "in a region".copy() at r }
+    fixed here: Box<text>@r = Box { value: "in a region".copy() at r }
     show(here.value)
-    bind lasting: Box<text> = Box { value: "as long as the program" }
+    fixed lasting: Box<text> = Box { value: "as long as the program" }
     show(lasting.value)
 
     ; Two types at once, with the words they must allow.
-    bind pair: Pair<int, text> = Pair { left: 3, right: "three" }
+    fixed pair: Pair<int, text> = Pair { left: 3, right: "three" }
     show(pair.left)
     show(pair.right)
 
     ; A shape given types holds what any field holds.
-    hold items = new [int]() at r
+    flex items = new [int]() at r
     items.add(4)
     items.add(5)
-    bind holder: Holder<int>@r = Holder { items: items, label: "counts" }
+    fixed holder: Holder<int>@r = Holder { items: items, label: "counts" }
     show(holder.label)
     show(holder.items[1])
-    bind nested = Box { value: Box { value: 6 } }
+    fixed nested = Box { value: Box { value: 6 } }
     show(nested.value.value)
-    bind tuple: Box<(int, bool)> = Box { value: (7, true) }
+    fixed tuple: Box<(int, bool)> = Box { value: (7, true) }
     show(tuple.value.0)
 
     ; A field naming the shape again, behind a pointer.
-    bind tail: ^Node<int>@r = new Node<int>(Node { value: 9, next: none }) at r
-    bind head: ^Node<int>@r = new Node<int>(Node { value: 8, next: tail }) at r
+    fixed tail: ^Node<int>@r = new Node<int>(Node { value: 9, next: none }) at r
+    fixed head: ^Node<int>@r = new Node<int>(Node { value: 8, next: tail }) at r
     show(head^.value)
     when head^.next is {second}
         show(second^.value)
@@ -122,43 +122,43 @@ task main()
     ; Tasks that take types, with values of shapes given types.
     tell(Shown { value: "shown" })
     tell(Shown { value: 10 })
-    bind made = boxOf(r, 11)
+    fixed made = boxOf(r, 11)
     show(made.value)
-    bind text_box = boxOf(r, "boxed".copy() at r)
+    fixed text_box = boxOf(r, "boxed".copy() at r)
     show(text_box.value)
     show(valueOf(made))
-    bind boxes: [Box<int>]@r = new [Box<int>]([Box { value: 12 }, Box { value: 13 }]) at r
+    fixed boxes: [Box<int>]@r = new [Box<int>]([Box { value: 12 }, Box { value: 13 }]) at r
     show(firstOf(boxes))
     each b in boxes
         show(b.value)
     fi
 
-    bind swapped = swap(written, here)
+    fixed swapped = swap(written, here)
     show(swapped.0.value)
     show(swapped.1.value)
 
     ; A header that takes no types naming a shape made for its types, and a
     ; shape given types given to another.
     show(textOf(here))
-    bind deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
+    fixed deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
     show(deep.value.value)
-    bind paired: Pair<Box<text>, int>@r = Pair { left: Box { value: "on the left".copy() at r }, right: 16 }
+    fixed paired: Pair<Box<text>, int>@r = Pair { left: Box { value: "on the left".copy() at r }, right: 16 }
     show(leftText(paired))
     show(paired.right)
 
     ; A kind's payload, a `maybe`, and a copy into another region.
-    bind holding = Holding.Number(Box { value: 14 })
+    fixed holding = Holding.Number(Box { value: 14 })
     match holding
         case Nothing
             show(0)
         case Number box
             show(box.value)
     fi
-    bind maybe_box: maybe Box<int> = Box { value: 15 }
+    fixed maybe_box: maybe Box<int> = Box { value: 15 }
     when maybe_box is {inner}
         show(inner.value)
     fi
     region other
-    bind copied: Box<text>@other = here.copy() at other
+    fixed copied: Box<text>@other = here.copy() at other
     show(copied.value)
 fi

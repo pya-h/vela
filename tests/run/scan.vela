@@ -19,13 +19,13 @@ fi
 
 task main()
     region r
-    bind name = ask(r, "Name? ")
+    fixed name = ask(r, "Name? ")
     show(name)
-    bind person: Person@r = Person { name: name, age: 36 }
+    fixed person: Person@r = Person { name: name, age: 36 }
     show(person.name == "Ada")
 
     ; A Windows line break, and a line of nothing.
-    bind windows = scan("")@r { "none" }
+    fixed windows = scan("")@r { "none" }
     show(windows == "crlf")
     match scan("") at r
         case {line}
@@ -36,25 +36,25 @@ task main()
 
     ; A line longer than any buffer, and one holding a zero byte, which is one
     ; of its bytes.
-    bind long = scan("") at r { "" }
+    fixed long = scan("") at r { "" }
     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
     show(long.len)
-    bind zero = scan("") at r { "" }
+    fixed zero = scan("") at r { "" }
     show(zero == "ab\0cd")
     show(zero.len)
 
     ; A prompt in a region, arguments read left to right, and lines dropped.
-    hold prompt = new [text]() at r
+    flex prompt = new [text]() at r
     prompt.add("Two lines: ")
     both(scan(prompt[0]) at r, scan("")@r)
     scan("skipped ")@r
     scan("")@r { "" }
 
     ; Every line left, each in a region freed on its pass.
-    hold count = 0
+    flex count = 0
     endless
         region line_memory
-        bind line = scan("") at line_memory { "" }
+        fixed line = scan("") at line_memory { "" }
         when line == ""
             show(count)
             <-

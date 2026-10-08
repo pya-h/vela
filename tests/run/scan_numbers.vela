@@ -28,7 +28,7 @@ fi
 ; A task may forward the error it was given, and send one of its own: an age
 ; read from input, refusing one no person has.
 task age() -> int ~ InputError
-    bind years = scan("age? ", int) {
+    fixed years = scan("age? ", int) {
         failure e
         <- fail e
     }
@@ -45,7 +45,7 @@ fi
 
 ; Nothing more to read is an error this task sends itself.
 task twice() -> int ~ InputError
-    bind n = scan("", int) {
+    fixed n = scan("", int) {
         failure e
         <- fail Ended
     }
@@ -89,11 +89,11 @@ task main()
 
     ; A value of either kind is a value like any other: a shape holds one, an
     ; array holds several, and a maybe holds one or none.
-    bind kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
+    fixed kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
     show("line ", kept.line, ": ", why(kept.why))
-    bind ends = [InputError.Ended#2]
+    fixed ends = [InputError.Ended#2]
     show(why(ends[1]))
-    hold last: maybe InputError = none
+    flex last: maybe InputError = none
     last = NoNumber(ParseError.NotANumber)
     when last is {e}
         show(why(e))
@@ -111,8 +111,8 @@ task main()
 
     ; Every line left, added up until the input ends; a line may hold a number
     ; in another base, as code writes one.
-    hold total = 0
-    hold reading = true
+    flex total = 0
+    flex reading = true
     loop reading
         match scan("", int)
         case {value}

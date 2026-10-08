@@ -43,7 +43,7 @@ task main()
     show(level(Green))
     show(level(Dimmed(30, "dusk")))
 
-    bind lights: maybe Light = Dimmed(5, "evening")
+    fixed lights: maybe Light = Dimmed(5, "evening")
     when lights is {light}
         when light is Dimmed amount why
             show(amount)
@@ -53,8 +53,8 @@ task main()
         fi
     fi
 
-    hold count = 0
-    bind current: maybe int = none
+    flex count = 0
+    fixed current: maybe int = none
     loop current is {n}
         count = count + n
     fi

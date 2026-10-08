@@ -8,7 +8,7 @@
 include wrapper_start_values/labels (logged)
 
 shape Config
-    shared hold depth: int = 2
+    shared flex depth: int = 2
 fi
 
 #TIMES = 3
@@ -19,7 +19,7 @@ task count_to(n: int) -> int
 fi
 
 task repeated(next: (int) -> int, times: int, n: int) -> int
-    hold result = n
+    flex result = n
     each turn in 0..times
         result = next(result)
     fi
@@ -27,7 +27,7 @@ task repeated(next: (int) -> int, times: int, n: int) -> int
 fi
 
 task capped(next: (int) -> int, most: maybe int, n: int) -> int
-    bind got = next(n)
+    fixed got = next(n)
     when most is {top} and got > top
         <- top
     fi
@@ -82,7 +82,7 @@ fi
 ; `third` then, whatever main makes it later, so `plus_five`'s value is 2 and
 ; doesn't reach `plus_five`, though main and its startup decorator name it.
 shape Hooks
-    shared hold pick: (int) -> int = third
+    shared flex pick: (int) -> int = third
 fi
 
 task third(n: int) -> int

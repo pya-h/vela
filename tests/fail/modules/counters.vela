@@ -3,7 +3,7 @@
 shape Counter
     n: int = 0
     shared read made: int = 0
-    shared hold open: int = 0
+    shared flex open: int = 0
     shared limit: int = 3
-    priv shared hold secret: int = 1
+    priv shared flex secret: int = 1
 fi

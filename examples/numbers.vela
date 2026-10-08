@@ -30,13 +30,13 @@ fi
 task main()
     from_text()
 
-    hold count = 0
-    hold refused = 0
-    hold total = 0
-    hold largest = 0
+    flex count = 0
+    flex refused = 0
+    flex total = 0
+    flex largest = 0
     ; The squares add up to how far the numbers spread from zero.
-    hold squares = 0.0
-    hold reading = true
+    flex squares = 0.0
+    flex reading = true
     loop reading
         match scan("> ", int)
         case {value}

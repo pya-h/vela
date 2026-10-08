@@ -1,6 +1,6 @@
 ; error: 3:9: only a parameter can be 'hold', not a variant's value
 kind Shape
-    Dot(hold size: int)
+    Dot(flex size: int)
 fi
 
 task main()

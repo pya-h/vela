@@ -12,10 +12,10 @@
 task line(name: text, cents: int, width: int = WIDTH, fill: text = ".")
     ; The line is made in a region of its own, freed when it is shown.
     region work default
-    bind units = cents / 100
-    bind part = cents % 100
-    bind price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
-    hold out: text@work = name
+    fixed units = cents / 100
+    fixed part = cents % 100
+    fixed price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
+    flex out: text@work = name
     each i in 0..width - name.len - price.len
         out = out + fill
     fi
@@ -25,7 +25,7 @@ fi
 ; A line of `fill` across the receipt.
 task rule(width: int = WIDTH, fill: text = "-")
     region work default
-    hold out: text@work = ""
+    flex out: text@work = ""
     each i in 0..width
         out = out + fill
     fi
@@ -43,9 +43,9 @@ task sale(cents: int) -> int
 fi
 
 task main()
-    bind tea = priced(450)
-    bind bread = priced(320, sale)
-    bind jam = priced(1299)
+    fixed tea = priced(450)
+    fixed bread = priced(320, sale)
+    fixed jam = priced(1299)
     line("tea", tea)
     line("bread", bread)
     line("jam", jam)

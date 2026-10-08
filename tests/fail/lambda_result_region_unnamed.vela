@@ -1,7 +1,7 @@
-; error: 4:31: the result lives in region 'q', which the lambda isn't given; take it as a parameter, as in '(q: region) -> …'
+; error: 4:32: the result lives in region 'q', which the lambda isn't given; take it as a parameter, as in '(q: region) -> …'
 ; A lambda result lives in a region it is given or one its parameters name.
 task main()
-    bind g = (n: int) -> text@q
+    fixed g = (n: int) -> text@q
         region z
         <- n.str() at z
     fi

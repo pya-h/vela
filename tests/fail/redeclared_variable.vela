@@ -1,5 +1,5 @@
-; error: 4:10: 'x' is already defined at 3:10
+; error: 4:10: 'x' is already defined at 3:11
 task main()
-    bind x = 1
-    hold x = 2
+    fixed x = 1
+    flex x = 2
 fi

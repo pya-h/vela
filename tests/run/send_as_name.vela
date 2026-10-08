@@ -13,8 +13,8 @@ task report(n: int)
 fi
 
 task main()
-    hold sent = send(1)
-    bind send_count = sent
+    flex sent = send(1)
+    fixed send_count = sent
     show(send_count)
     report(-5)
     report(3)

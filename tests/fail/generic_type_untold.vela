@@ -1,9 +1,9 @@
-; error: 7:14: can't tell which type 'T' is for this call of 'empty', since no argument and nothing this value goes into names one; write it, as in 'empty<int>(…)'
+; error: 7:15: can't tell which type 'T' is for this call of 'empty', since no argument and nothing this value goes into names one; write it, as in 'empty<int>(…)'
 task empty<T>() -> maybe T
     <- none
 fi
 
 task main()
-    bind x = empty()
+    fixed x = empty()
     show(1)
 fi

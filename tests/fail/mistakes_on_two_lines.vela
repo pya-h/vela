@@ -2,7 +2,7 @@
 ; error: 6:10: unknown variable 'second'
 task main()
     show(first)
-    bind ok = 1
+    fixed ok = 1
     show(second)
     show(ok)
 fi

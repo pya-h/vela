@@ -24,10 +24,10 @@
     | comment:; warning: 95:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'generic' is given Point, at 112:62): Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: T' for the caller's place, 'bind a: T' for a copy of its own, or compare items with '~='
  13 | ; warning: 95:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'generic' is given Point, at 112:62): Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: T' for the caller's place, 'bind b: T' for a copy of its own, or compare items with '~='
     | comment:; warning: 95:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'generic' is given Point, at 112:62): Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: T' for the caller's place, 'bind b: T' for a copy of its own, or compare items with '~='
- 14 | ; warning: 101:21: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given Point, at 113:34): Point takes 16 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
-    | comment:; warning: 101:21: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given Point, at 113:34): Point takes 16 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
- 15 | ; warning: 101:21: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given int, at 113:10): int takes 8 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
-    | comment:; warning: 101:21: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given int, at 113:10): int takes 8 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
+ 14 | ; warning: 101:22: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given Point, at 113:34): Point takes 16 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
+    | comment:; warning: 101:22: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given Point, at 113:34): Point takes 16 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
+ 15 | ; warning: 101:22: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given int, at 113:10): int takes 8 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
+    | comment:; warning: 101:22: '&v' is where the place is, and 'v' is a parameter, given as the compiler chose (where 'mixed' is given int, at 113:10): int takes 8 bytes, so 'v' is a copy, a place of its own, never the caller's; write 'bind& v: T' for the caller's place, or 'bind v: T' for a copy of its own
  16 | ; warning: 102:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
     | comment:; warning: 102:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
  17 | ; warning: 102:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
@@ -38,8 +38,8 @@
     | comment:; large value where the caller keeps it. What reads where it is, `==` on an
  20 | ; array, a shape, or a tuple, and `&x`, is warned about, with the way the
     | comment:; array, a shape, or a tuple, and `&x`, is warned about, with the way the
- 21 | ; compiler went; `bind x` and `bind& x` say which is meant, and are silent.
-    | comment:; compiler went; `bind x` and `bind& x` say which is meant, and are silent.
+ 21 | ; compiler went; `fixed x` and `fixed& x` say which is meant, and are silent.
+    | comment:; compiler went; `fixed x` and `fixed& x` say which is meant, and are silent.
  23 | shape Point
     | keyword:shape  type:Point
  24 |     x: int
@@ -98,8 +98,8 @@
     | keyword:fi
  56 | ; Warned: where the caller keeps it.
     | comment:; Warned: where the caller keeps it.
- 57 | task large(a: Wide, bind& b: Wide) -> bool
-    | keyword:task  task:large  punctuation:(  parameter:a  punctuation::  type:Wide  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Wide  punctuation:)  operator:->  type-builtin:bool
+ 57 | task large(a: Wide, fixed& b: Wide) -> bool
+    | keyword:task  task:large  punctuation:(  parameter:a  punctuation::  type:Wide  punctuation:,  keyword:fixed  keyword:&  parameter:b  punctuation::  type:Wide  punctuation:)  operator:->  type-builtin:bool
  58 |     <- a == b
     | keyword:<-  parameter:a  operator:==  parameter:b
  59 | fi
@@ -110,8 +110,8 @@
     | comment:; parameter, alike whichever way it was given, and an item of a slice, which
  63 | ; is a place of its own.
     | comment:; is a place of its own.
- 64 | task parts(r: region, line: Line, pair: (int, int), bind& p: Point, s: [Point]@r) -> bool
-    | keyword:task  task:parts  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type:Line  punctuation:,  parameter:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:,  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:,  parameter:s  punctuation::  punctuation:[  type:Point  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 64 | task parts(r: region, line: Line, pair: (int, int), fixed& p: Point, s: [Point]@r) -> bool
+    | keyword:task  task:parts  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type:Line  punctuation:,  parameter:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:,  keyword:fixed  keyword:&  parameter:p  punctuation::  type:Point  punctuation:,  parameter:s  punctuation::  punctuation:[  type:Point  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
  65 |     show((&pair).str() at r == "")
     | builtin-fn:show  punctuation:(  punctuation:(  operator:&  parameter:pair  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:==  string:""  punctuation:)
  66 |     <- line.from == p or line.from == line.to or &line.from == &line.to or s[0] == s[1]
@@ -150,8 +150,8 @@
     | keyword:fi
  88 | ; Silent: each says how it is given, and a pointer's place is its own.
     | comment:; Silent: each says how it is given, and a pointer's place is its own.
- 89 | task said(bind a: Point, bind& b: Point, hold c: Point, p: ^Point@r) -> bool
-    | keyword:task  task:said  punctuation:(  keyword:bind  parameter:a  punctuation::  type:Point  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Point  punctuation:,  keyword:hold  parameter:c  punctuation::  type:Point  punctuation:,  parameter:p  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 89 | task said(fixed a: Point, fixed& b: Point, flex c: Point, p: ^Point@r) -> bool
+    | keyword:task  task:said  punctuation:(  keyword:fixed  parameter:a  punctuation::  type:Point  punctuation:,  keyword:fixed  keyword:&  parameter:b  punctuation::  type:Point  punctuation:,  keyword:flex  parameter:c  punctuation::  type:Point  punctuation:,  parameter:p  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
  90 |     <- a == b or b == c or p^ == p^ or &c == &c
     | keyword:<-  parameter:a  operator:==  parameter:b  keyword:or  parameter:b  operator:==  parameter:c  keyword:or  parameter:p  operator:^  operator:==  parameter:p  operator:^  keyword:or  operator:&  parameter:c  operator:==  operator:&  parameter:c
  91 | fi
@@ -170,8 +170,8 @@
     | comment:; 'v' with each use.
 100 | task mixed<T>(r: region, a: Point, b: Point, v: T) -> bool
     | keyword:task  task:mixed  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type:Point  punctuation:,  parameter:b  punctuation::  type:Point  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
-101 |     bind shown = "{&v}" at r
-    | keyword:bind  variable:shown  operator:=  string:"{  operator:&  parameter:v  string:}"  keyword:at  region:r
+101 |     fixed shown = "{&v}" at r
+    | keyword:fixed  variable:shown  operator:=  string:"{  operator:&  parameter:v  string:}"  keyword:at  region:r
 102 |     <- a == b and shown.len > 0
     | keyword:<-  parameter:a  operator:==  parameter:b  keyword:and  variable:shown  punctuation:.  field:len  operator:>  number:0
 103 | fi
@@ -180,22 +180,22 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
 106 |     region r
     | keyword:region  region:r
-107 |     bind p = Point { x: 1, y: 2 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
-108 |     bind w = Wide { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
-    | keyword:bind  variable:w  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+107 |     fixed p = Point { x: 1, y: 2 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+108 |     fixed w = Wide { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:fixed  variable:w  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
 109 |     show(small(p, p), " ", large(w, &w), " ", p.same_as(p))
     | builtin-fn:show  punctuation:(  task:small  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:large  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:same_as  punctuation:(  variable:p  punctuation:)  punctuation:)
-110 |     bind line = Line { from: p, to: p }
-    | keyword:bind  variable:line  operator:=  type:Line  punctuation:{  field:from  punctuation::  variable:p  punctuation:,  field:to  punctuation::  variable:p  punctuation:}
-111 |     bind shown = parts(r, line, (1, 2), &p, new [Point]([p, p]) at r)
-    | keyword:bind  variable:shown  operator:=  task:parts  punctuation:(  region:r  punctuation:,  variable:line  punctuation:,  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:,  operator:&  variable:p  punctuation:,  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:[  variable:p  punctuation:,  variable:p  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:)
+110 |     fixed line = Line { from: p, to: p }
+    | keyword:fixed  variable:line  operator:=  type:Line  punctuation:{  field:from  punctuation::  variable:p  punctuation:,  field:to  punctuation::  variable:p  punctuation:}
+111 |     fixed shown = parts(r, line, (1, 2), &p, new [Point]([p, p]) at r)
+    | keyword:fixed  variable:shown  operator:=  task:parts  punctuation:(  region:r  punctuation:,  variable:line  punctuation:,  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:,  operator:&  variable:p  punctuation:,  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:[  variable:p  punctuation:,  variable:p  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:)
 112 |     show(shown, " ", said(p, &p, p, new Point(p) at r), " ", generic(p, p), " ", generic(1, 1))
     | builtin-fn:show  punctuation:(  variable:shown  punctuation:,  string:" "  punctuation:,  task:said  punctuation:(  variable:p  punctuation:,  operator:&  variable:p  punctuation:,  variable:p  punctuation:,  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  task:generic  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:generic  punctuation:(  number:1  punctuation:,  number:1  punctuation:)  punctuation:)
 113 |     show(mixed(r, p, p, 1), " ", mixed(r, p, p, p))
     | builtin-fn:show  punctuation:(  task:mixed  punctuation:(  region:r  punctuation:,  variable:p  punctuation:,  variable:p  punctuation:,  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:mixed  punctuation:(  region:r  punctuation:,  variable:p  punctuation:,  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:)
-114 |     bind pin = Pin { to: new int(1) at r }
-    | keyword:bind  variable:pin  operator:=  type:Pin  punctuation:{  field:to  punctuation::  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r  punctuation:}
+114 |     fixed pin = Pin { to: new int(1) at r }
+    | keyword:fixed  variable:pin  operator:=  type:Pin  punctuation:{  field:to  punctuation::  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r  punctuation:}
 115 |     show(pins(pin, pin), " ", marks(Mark.Blank, Mark.Blank), " ", marks(Mark.Dot(p), Mark.Dot(p)))
     | builtin-fn:show  punctuation:(  task:pins  punctuation:(  variable:pin  punctuation:,  variable:pin  punctuation:)  punctuation:,  string:" "  punctuation:,  task:marks  punctuation:(  type:Mark  punctuation:.  variant:Blank  punctuation:,  type:Mark  punctuation:.  variant:Blank  punctuation:)  punctuation:,  string:" "  punctuation:,  task:marks  punctuation:(  type:Mark  punctuation:.  variant:Dot  punctuation:(  variable:p  punctuation:)  punctuation:,  type:Mark  punctuation:.  variant:Dot  punctuation:(  variable:p  punctuation:)  punctuation:)  punctuation:)
 116 | fi

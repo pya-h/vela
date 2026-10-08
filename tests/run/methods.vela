@@ -22,7 +22,7 @@ shape Counter
     fi
 
     alters by(n: int)
-        hold left = n
+        flex left = n
         loop left > 0
             .step()
             left = left - 1
@@ -69,7 +69,7 @@ shape Point
         when .x >= goal
             <- 0
         fi
-        bind next = Point { x: .x + 1, y: .y }
+        fixed next = Point { x: .x + 1, y: .y }
         <- 1 + next.stepsTo(goal)
     fi
 fi
@@ -117,7 +117,7 @@ shape Bag
 fi
 
 task main()
-    hold c: Counter = Counter { label: "clicks", count: 0 }
+    flex c: Counter = Counter { label: "clicks", count: 0 }
     c.step()
     show(c.total())
     c.by(5)
@@ -127,12 +127,12 @@ task main()
     c.reset()
     show(c.total())
 
-    ; A method that changes nothing is called on anything, a `bind` too.
-    bind steady = Counter { label: "once", count: 1 }
+    ; A method that changes nothing is called on anything, a `fixed` too.
+    fixed steady = Counter { label: "once", count: 1 }
     show(steady.total())
     show(steady.nameOf())
 
-    hold p = Point { x: 3, y: 4 }
+    flex p = Point { x: 3, y: 4 }
     show(p.lengthSquared())
     p.shift(1, 1)
     show(p.lengthSquared())
@@ -140,14 +140,14 @@ task main()
 
     region r
     ; Through a pointer, which is where a task changes a value of its own.
-    hold q = new Point(Point { x: 1, y: 1 }) at r
+    flex q = new Point(Point { x: 1, y: 1 }) at r
     q^.shift(2, 2)
     show(q^.lengthSquared())
 
-    ; A field of a `hold`, and an item of a slice, are places that can change.
-    hold items = new [Point]() at r
+    ; A field of a `flex`, and an item of a slice, are places that can change.
+    flex items = new [Point]() at r
     items.add(Point { x: 6, y: 8 })
-    hold row = Row { here: Point { x: 1, y: 2 }, items: items }
+    flex row = Row { here: Point { x: 1, y: 2 }, items: items }
     show(row.firstLength())
     row.here.shift(10, 0)
     show(row.here.lengthSquared())
@@ -158,19 +158,19 @@ task main()
     ; A method on the value a call sends.
     show(made().total())
 
-    bind bag = Bag { items: items_of(r) }
+    fixed bag = Bag { items: items_of(r) }
     show(bag.firstOf())
-    bind empty = Bag { items: new [int]() at r }
+    fixed empty = Bag { items: new [int]() at r }
     show(empty.firstOf())
 
     ; The text a method sends is in the region the value is in.
-    hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
-    bind held: text@r = named.nameOf()
+    flex named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
+    fixed held: text@r = named.nameOf()
     show(held)
     named.step()
     show(named.total())
 
-    hold holder: Holder@r = Holder { held: q }
+    flex holder: Holder@r = Holder { held: q }
     holder.keep(new Point(Point { x: 0, y: 5 }) at r)
     show(holder.heldLength())
 fi
@@ -180,7 +180,7 @@ task made() -> Counter
 fi
 
 task items_of(r: region) -> [int]@r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     xs.add(41)
     <- xs
 fi

@@ -1,5 +1,5 @@
 ; error: 4:18: expected type int, got float
 task main()
-    bind name = "Ada"
+    fixed name = "Ada"
     show(name[0..1.5])
 fi

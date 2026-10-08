@@ -1,8 +1,8 @@
-; trap: division by zero at 6:39 in a lambda
+; trap: division by zero at 6:40 in a lambda
 ; A stop in a lambda says where it is, since a lambda has no name.
 task main()
     region r
-    bind zero = 0
-    bind f = [@r](x: int) -> int <- x / zero fi
+    fixed zero = 0
+    fixed f = [@r](x: int) -> int <- x / zero fi
     show(f(1))
 fi

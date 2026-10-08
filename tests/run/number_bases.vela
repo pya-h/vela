@@ -6,7 +6,7 @@ task read(written: text) -> int
 fi
 
 task why(read: int ~ ParseError) -> text
-    bind problem = match read
+    fixed problem = match read
         case {n} = ParseError.NotANumber   ; every read given here fails
         case failure e = e
     fi
@@ -21,7 +21,7 @@ task main()
     show(0o17, " ", 0o7_5_5, " ", 0b101, " ", 0b1010_0101)
     show(0x7fff_ffff_ffff_ffff, " ", -0x10, " ", 0x0 + 0o0 + 0b0)
     ; A number in another base is an int like any other.
-    bind mask = 0b1111
+    fixed mask = 0b1111
     show(mask * 0x10 + 0o1)
     ; Text is read the same way, with a sign before the base.
     show(read("0x1F"), " ", read("0XaB"), " ", read("0xAb"), " ", read("-0b11"), " ", read("0o17"))

@@ -32,8 +32,8 @@
     | keyword:fi
  21 | task first_or_stop(m: maybe int) -> int
     | keyword:task  task:first_or_stop  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 22 |     bind n = m {
-    | keyword:bind  variable:n  operator:=  parameter:m  punctuation:{
+ 22 |     fixed n = m {
+    | keyword:fixed  variable:n  operator:=  parameter:m  punctuation:{
  23 |         show("stopping")
     | builtin-fn:show  punctuation:(  string:"stopping"  punctuation:)
  24 |         <- -1
@@ -48,8 +48,8 @@
     | keyword:fi
  30 | task report(m: maybe int)
     | keyword:task  task:report  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)
- 31 |     bind n = m { <- }
-    | keyword:bind  variable:n  operator:=  parameter:m  punctuation:{  keyword:<-  punctuation:}
+ 31 |     fixed n = m { <- }
+    | keyword:fixed  variable:n  operator:=  parameter:m  punctuation:{  keyword:<-  punctuation:}
  32 |     show(n)
     | builtin-fn:show  punctuation:(  variable:n  punctuation:)
  33 | fi
@@ -80,10 +80,10 @@
     | keyword:fi
  49 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 50 |     bind some: maybe float = 2.5
-    | keyword:bind  variable:some  punctuation::  keyword:maybe  type-builtin:float  operator:=  number:2.5
- 51 |     bind nothing: maybe float = none
-    | keyword:bind  variable:nothing  punctuation::  keyword:maybe  type-builtin:float  operator:=  keyword:none
+ 50 |     fixed some: maybe float = 2.5
+    | keyword:fixed  variable:some  punctuation::  keyword:maybe  type-builtin:float  operator:=  number:2.5
+ 51 |     fixed nothing: maybe float = none
+    | keyword:fixed  variable:nothing  punctuation::  keyword:maybe  type-builtin:float  operator:=  keyword:none
  52 |     show(some { 0.0 })
     | builtin-fn:show  punctuation:(  variable:some  punctuation:{  number:0.0  punctuation:}  punctuation:)
  53 |     show(nothing { 0.0 })
@@ -92,12 +92,12 @@
     | builtin-fn:show  punctuation:(  variable:nothing  punctuation:{  number:1.0  punctuation:}  operator:*  number:2.2  punctuation:)
  55 |     show(-some { 1.0 })
     | builtin-fn:show  punctuation:(  operator:-  variable:some  punctuation:{  number:1.0  punctuation:}  punctuation:)
- 57 |     bind port = noisy("port", none) {
-    | keyword:bind  variable:port  operator:=  task:noisy  punctuation:(  string:"port"  punctuation:,  keyword:none  punctuation:)  punctuation:{
+ 57 |     fixed port = noisy("port", none) {
+    | keyword:fixed  variable:port  operator:=  task:noisy  punctuation:(  string:"port"  punctuation:,  keyword:none  punctuation:)  punctuation:{
  58 |         show("no port set")
     | builtin-fn:show  punctuation:(  string:"no port set"  punctuation:)
- 59 |         bind base = 8000
-    | keyword:bind  variable:base  operator:=  number:8000
+ 59 |         fixed base = 8000
+    | keyword:fixed  variable:base  operator:=  number:8000
  60 |         base + 80
     | variable:base  operator:+  number:80
  61 |     }
@@ -114,24 +114,24 @@
     | task:report  punctuation:(  keyword:none  punctuation:)
  69 |     ; Nested: fall back to a second maybe.
     | comment:; Nested: fall back to a second maybe.
- 70 |     bind backup: maybe int = 7
-    | keyword:bind  variable:backup  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:7
+ 70 |     fixed backup: maybe int = 7
+    | keyword:fixed  variable:backup  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:7
  71 |     show(noisy("a", none) { backup { 0 } })
     | builtin-fn:show  punctuation:(  task:noisy  punctuation:(  string:"a"  punctuation:,  keyword:none  punctuation:)  punctuation:{  variable:backup  punctuation:{  number:0  punctuation:}  punctuation:}  punctuation:)
  73 |     ; Left to right, even across a plan B.
     | comment:; Left to right, even across a plan B.
  74 |     show(noisy("left", 1) { 0 } + noisy("right", none) { 2 })
     | builtin-fn:show  punctuation:(  task:noisy  punctuation:(  string:"left"  punctuation:,  number:1  punctuation:)  punctuation:{  number:0  punctuation:}  operator:+  task:noisy  punctuation:(  string:"right"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:2  punctuation:}  punctuation:)
- 75 |     bind pair = Pair { left: noisy("l", none) { 3 }, right: noisy("r", 4) { 0 } }
-    | keyword:bind  variable:pair  operator:=  type:Pair  punctuation:{  field:left  punctuation::  task:noisy  punctuation:(  string:"l"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:3  punctuation:}  punctuation:,  field:right  punctuation::  task:noisy  punctuation:(  string:"r"  punctuation:,  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:}
+ 75 |     fixed pair = Pair { left: noisy("l", none) { 3 }, right: noisy("r", 4) { 0 } }
+    | keyword:fixed  variable:pair  operator:=  type:Pair  punctuation:{  field:left  punctuation::  task:noisy  punctuation:(  string:"l"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:3  punctuation:}  punctuation:,  field:right  punctuation::  task:noisy  punctuation:(  string:"r"  punctuation:,  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:}
  76 |     show(pair.left * pair.right)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:left  operator:*  variable:pair  punctuation:.  field:right  punctuation:)
  78 |     ; A variable changed by a plan B is read before the plan B runs.
     | comment:; A variable changed by a plan B is read before the plan B runs.
- 79 |     hold n = 1
-    | keyword:hold  variable:n  operator:=  number:1
- 80 |     bind total = n + noisy("change", none) {
-    | keyword:bind  variable:total  operator:=  variable:n  operator:+  task:noisy  punctuation:(  string:"change"  punctuation:,  keyword:none  punctuation:)  punctuation:{
+ 79 |     flex n = 1
+    | keyword:flex  variable:n  operator:=  number:1
+ 80 |     fixed total = n + noisy("change", none) {
+    | keyword:fixed  variable:total  operator:=  variable:n  operator:+  task:noisy  punctuation:(  string:"change"  punctuation:,  keyword:none  punctuation:)  punctuation:{
  81 |         n = 100
     | variable:n  operator:=  number:100
  82 |         5
@@ -152,10 +152,10 @@
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  string:"and"  punctuation:,  keyword:true  punctuation:)  keyword:and  task:noisy  punctuation:(  string:"runs"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:1  punctuation:}  operator:==  number:1  punctuation:)
  92 |     ; A loop condition runs its plan B on every pass.
     | comment:; A loop condition runs its plan B on every pass.
- 93 |     hold left: maybe int = 3
-    | keyword:hold  variable:left  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
- 94 |     hold passes = 0
-    | keyword:hold  variable:passes  operator:=  number:0
+ 93 |     flex left: maybe int = 3
+    | keyword:flex  variable:left  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
+ 94 |     flex passes = 0
+    | keyword:flex  variable:passes  operator:=  number:0
  95 |     loop left { 0 } > 0
     | keyword:loop  variable:left  punctuation:{  number:0  punctuation:}  operator:>  number:0
  96 |         passes = passes + 1
@@ -180,16 +180,16 @@
     | builtin-fn:show  punctuation:(  variable:i  punctuation:)
 107 |     fi
     | keyword:fi
-108 |     hold cell = Pair { left: 0, right: 0 }
-    | keyword:hold  variable:cell  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:0  punctuation:,  field:right  punctuation::  number:0  punctuation:}
+108 |     flex cell = Pair { left: 0, right: 0 }
+    | keyword:flex  variable:cell  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:0  punctuation:,  field:right  punctuation::  number:0  punctuation:}
 109 |     cell.left = noisy("assign", none) { 11 }
     | variable:cell  punctuation:.  field:left  operator:=  task:noisy  punctuation:(  string:"assign"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:11  punctuation:}
 110 |     show(cell.left)
     | builtin-fn:show  punctuation:(  variable:cell  punctuation:.  field:left  punctuation:)
 111 |     region r
     | keyword:region  region:r
-112 |     bind boxed = new int(1) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
+112 |     fixed boxed = new int(1) at r
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
 113 |     boxed^ = noisy("through", 12) { 0 }
     | variable:boxed  operator:^  operator:=  task:noisy  punctuation:(  string:"through"  punctuation:,  number:12  punctuation:)  punctuation:{  number:0  punctuation:}
 114 |     show(boxed^)

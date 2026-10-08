@@ -1,5 +1,5 @@
 ; error: 4:14: 'int' takes an int, a unit, a char, a float, a bool, or text, but this value is maybe float; the value in this maybe float must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
-    bind here: maybe float = 2.5
+    fixed here: maybe float = 2.5
     show(int(here))
 fi

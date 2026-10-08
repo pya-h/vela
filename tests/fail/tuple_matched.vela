@@ -1,6 +1,6 @@
 ; error: 4:11: match requires a kind, a maybe, or a 'T ~ E' value, got (int, int); take a tuple apart with 'bind', as in 'bind (a, b) = t'
 task main()
-    bind pair = (1, 2)
+    fixed pair = (1, 2)
     match pair
         case (a, b)
             show(a + b)

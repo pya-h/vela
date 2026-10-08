@@ -6,7 +6,7 @@ task limit() -> int
 fi
 
 task main()
-    hold count = 3
+    flex count = 3
     each i in 0..count
         count = count - 1
         show(i)

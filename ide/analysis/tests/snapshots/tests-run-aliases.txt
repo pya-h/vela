@@ -42,14 +42,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  26 |     ; The module under another name, and a part of it under another name.
     | comment:; The module under another name, and a part of it under another name.
- 27 |     bind tea: Product = Product { name: "tea", cents: 250 }
-    | keyword:bind  variable:tea  punctuation::  type:Product  operator:=  type:Product  punctuation:{  field:name  punctuation::  string:"tea"  punctuation:,  field:cents  punctuation::  number:250  punctuation:}
+ 27 |     fixed tea: Product = Product { name: "tea", cents: 250 }
+    | keyword:fixed  variable:tea  punctuation::  type:Product  operator:=  type:Product  punctuation:{  field:name  punctuation::  string:"tea"  punctuation:,  field:cents  punctuation::  number:250  punctuation:}
  28 |     show(price_of(tea, shop.Size.Small))
     | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:tea  punctuation:,  module:shop  punctuation:.  type:Size  punctuation:.  variant:Small  punctuation:)  punctuation:)
  29 |     show(price_of(tea, shop.Size.Large(50)))
     | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:tea  punctuation:,  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  punctuation:(  number:50  punctuation:)  punctuation:)  punctuation:)
- 30 |     bind big = shop.Size.Large(75)
-    | keyword:bind  variable:big  operator:=  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  punctuation:(  number:75  punctuation:)
+ 30 |     fixed big = shop.Size.Large(75)
+    | keyword:fixed  variable:big  operator:=  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  punctuation:(  number:75  punctuation:)
  31 |     match big
     | keyword:match  variable:big
  32 |     case shop.Size.Large extra
@@ -66,8 +66,8 @@
     | comment:; Parts alone, one of them a kind under another name, whose variants are
  39 |     ; named through it.
     | comment:; named through it.
- 40 |     bind tank = Fuel.Tank(40)
-    | keyword:bind  variable:tank  operator:=  type:Fuel  punctuation:.  variant:Tank  punctuation:(  number:40  punctuation:)
+ 40 |     fixed tank = Fuel.Tank(40)
+    | keyword:fixed  variable:tank  operator:=  type:Fuel  punctuation:.  variant:Tank  punctuation:(  number:40  punctuation:)
  41 |     when tank is Fuel.Tank liters
     | keyword:when  variable:tank  keyword:is  type:Fuel  punctuation:.  variant:Tank  variable:liters
  42 |         show(fuel_price(liters))

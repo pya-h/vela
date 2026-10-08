@@ -4,6 +4,6 @@ shape Vec
 fi
 
 task main()
-    bind v = Vec { x: 2.0 }
+    fixed v = Vec { x: 2.0 }
     show(v.x * 2)
 fi

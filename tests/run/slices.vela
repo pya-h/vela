@@ -2,7 +2,7 @@
 ; with a count. `new [T](…) at r` makes one from `[v#n]` (n known only as the
 ; program runs), an array, or another slice, copying the items; `xs[a..b]`
 ; slices a slice, or an array in a region, without copying. Items are written
-; through a slice even when it is a `bind`, as through a pointer. (tests/runtime.rs
+; through a slice even when it is a `fixed`, as through a pointer. (tests/runtime.rs
 ; also runs this under sanitizers.)
 
 shape Node
@@ -17,7 +17,7 @@ fi
 
 ; Only reads, so it names the region without taking it.
 task sum(xs: [int]@r) -> int
-    hold total = 0
+    flex total = 0
     each x in xs
         total = total + x
     fi
@@ -26,7 +26,7 @@ fi
 
 ; Allocates, so it takes the region.
 task squares(r: region, n: int) -> [int]@r
-    bind out = new [int]([0#n]) at r
+    fixed out = new [int]([0#n]) at r
     each i in 0..n
         out[i] = i * i
     fi
@@ -34,8 +34,8 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 task chain(r: region, n: int) -> [^Node]@r
-    bind first = new Node(Node { value: 0, next: none }) at r
-    bind nodes = new [^Node]([first#n]) at r
+    fixed first = new Node(Node { value: 0, next: none }) at r
+    fixed nodes = new [^Node]([first#n]) at r
     each i in 1..n
         nodes[i] = new Node(Node { value: i, next: nodes[i - 1] }) at r
     fi
@@ -44,43 +44,43 @@ fi
 
 task main()
     region r
-    hold count = 2
+    flex count = 2
     count = count + 3
-    bind zeros = new [int]([0#count]) at r
+    fixed zeros = new [int]([0#count]) at r
     show(zeros.len)
     show(sum(squares(r, 4)))
 
-    ; A `bind` slice's items can be written; every view of them sees it.
-    bind view = zeros[1..4]
+    ; A `fixed` slice's items can be written; every view of them sees it.
+    fixed view = zeros[1..4]
     view[0] = 7
     show(zeros[1])
-    bind inner = view[1..3]
+    fixed inner = view[1..3]
     inner[1] = 9
     show(zeros[3])
     show(view.len + inner.len)
     show(zeros[2..2].len)
 
     ; Copies: from an array, and from a slice, into their own memory.
-    bind scores = [90, 72, 85, 60]
-    bind copied = new [int](scores) at r
-    bind again = new [int](copied[2..4]) at r
+    fixed scores = [90, 72, 85, 60]
+    fixed copied = new [int](scores) at r
+    fixed again = new [int](copied[2..4]) at r
     again[0] = 1
     show(copied[2])
     show(sum(again))
 
     ; An array in a region, reached through a pointer, can be sliced.
-    bind boxed = new [int#4](scores) at r
-    bind middle = boxed^[1..3]
+    fixed boxed = new [int#4](scores) at r
+    fixed middle = boxed^[1..3]
     middle[0] = 0
     show(boxed^[1])
 
     ; Slices in a shape, of pointers, and in a maybe.
-    bind buffer = Buffer { items: new [int]([5#3]) at r, used: 1 }
+    fixed buffer = Buffer { items: new [int]([5#3]) at r, used: 1 }
     buffer.items[2] = 6
     show(sum(buffer.items))
-    bind nodes = chain(r, 3)
+    fixed nodes = chain(r, 3)
     show(nodes[2]^.next { nodes[0] }^.value)
-    hold found: maybe [int]@r = none
+    flex found: maybe [int]@r = none
     found = zeros
     when found is {xs}
         show(xs.len)
@@ -89,12 +89,12 @@ task main()
     ; A region declared in a block frees its slices when the block ends.
     each round in 0..2
         region scratch
-        bind temporary = new [text](["a"#round + 1]) at scratch
+        fixed temporary = new [text](["a"#round + 1]) at scratch
         show(temporary.len)
     fi
 
     ; Nothing to go through.
-    bind none_left = new [int]([0#0]) at r
+    fixed none_left = new [int]([0#0]) at r
     each x in none_left
         show(x)
     fi

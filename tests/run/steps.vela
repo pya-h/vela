@@ -15,7 +15,7 @@ fi
 
 task main()
     region r
-    hold x = 5
+    flex x = 5
     x++
     x++
     x--
@@ -28,7 +28,7 @@ task main()
     x = 3
     x **= 4
     show(x)
-    hold f = 1.5
+    flex f = 1.5
     f += 1.0
     f *= 2.0
     f **= 2
@@ -36,41 +36,41 @@ task main()
     f -= 0.5
     show(f)
     ; A char counts to the next one.
-    hold c = 'a'
+    flex c = 'a'
     c++
     c += 2
     c--
     show(c)
     ; A number written out is a unit beside a unit.
-    hold b: unit = 250
+    flex b: unit = 250
     b++
     b += 2
     show(b)
     ; Items, fields, pointers, and a map's values are places too.
-    hold xs = [1, 2, 3]
+    flex xs = [1, 2, 3]
     xs[1] += 40
     xs[0]++
-    hold i = 2
+    flex i = 2
     xs[i] *= 10
     show(xs)
-    hold k = Counter {}
+    flex k = Counter {}
     k.hits++
     k.hits += 5
     show(k.hits)
-    hold p = new int(3) at r
+    flex p = new int(3) at r
     p^ += 4
     show(p^)
-    hold words = ["a": 1] at r
+    flex words = ["a": 1] at r
     words["a"] += 9
     words["a"]++
     show(words)
-    hold t: text@r = "ab" + "c" at r
+    flex t: text@r = "ab" + "c" at r
     t += "de"
     t += "{x}!"
     show(t)
     ; A place may convert a number, which is no task; text joined with '+'
     ; goes in part by part.
-    hold small: unit = 1
+    flex small: unit = 1
     xs[int(small)] += 10
     xs[int(small)]++
     show(xs)
@@ -78,13 +78,13 @@ task main()
     t += "h{x}" + "i"
     show(t)
     ; A count in a loop.
-    hold total = 0
+    flex total = 0
     each n in 1..5
         total += n
     fi
     show(total)
     ; A step ends a block or a plan B on one line, as an assignment does.
-    hold misses = 0
+    flex misses = 0
     check(-1) { misses++ }
     check(1) { misses++ }
     when misses > 0 misses += 10 else misses-- fi

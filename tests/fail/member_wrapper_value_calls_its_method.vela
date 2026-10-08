@@ -11,7 +11,7 @@ shape C
     fi
 fi
 task probe() -> int
-    bind c = C { n: 1 }
+    fixed c = C { n: 1 }
     <- c.get(1)
 fi
 task main()

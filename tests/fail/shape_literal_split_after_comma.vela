@@ -1,10 +1,10 @@
-; error: 8:23: a shape literal is written on one line, as in 'P { x: 1, y: 2 }'
+; error: 8:24: a shape literal is written on one line, as in 'P { x: 1, y: 2 }'
 shape P
     x: int
     y: int
 fi
 
 task main()
-    bind p = P { x: 1,
+    fixed p = P { x: 1,
         y: 2 }
 fi

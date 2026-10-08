@@ -31,10 +31,10 @@ fi
 ; The first letter of each word, as new text: the task takes the region to
 ; build it in, and the letters are parts of the name, joined there.
 task initials(name: text@r, r: region) -> text@r
-    hold letters = "".copy() at r
-    hold start = true
+    flex letters = "".copy() at r
+    flex start = true
     each i in 0..name.len
-        bind letter = name[i..i + 1]
+        fixed letter = name[i..i + 1]
         when name[i] == ' '
             start = true
         else
@@ -52,7 +52,7 @@ task main()
     region r
 
     ; Length is bytes, not characters: a letter outside ASCII takes more.
-    bind name = "Ada Lovelace"
+    fixed name = "Ada Lovelace"
     show(name.len)
     show("café".len)
 
@@ -73,7 +73,7 @@ task main()
     show(initials(name, r))
     show(42.str() at r)
     show(text(2.5) at r)
-    bind card = Card { name: "Ada", wins: 3 }
+    fixed card = Card { name: "Ada", wins: 3 }
     show(card.str() at r)
     show(card)
     show("{card} has {card.wins * 2} points" at r)
@@ -81,10 +81,10 @@ task main()
 
     ; A loop that builds text again and again can build in a region of its own,
     ; freed on every pass, and copy out only what it keeps.
-    hold longest = "".copy() at r
+    flex longest = "".copy() at r
     each word in ["one", "three", "two"]
         region pass
-        bind padded = "[{word}]" at pass
+        fixed padded = "[{word}]" at pass
         when padded.len > longest.len
             longest = padded.copy() at r
         fi

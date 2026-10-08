@@ -6,7 +6,7 @@ task logged(next: (int) -> int, label: text, n: int) -> int
 fi
 
 $(logged("a"))
-task put(hold& n: int) -> int
+task put(flex& n: int) -> int
     n = 1
     <- n
 fi

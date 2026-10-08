@@ -27,9 +27,9 @@ task look(n: int) -> maybe int ~ text
 fi
 
 task main()
-    bind m: maybe int = none
-    bind k: maybe int = 4
-    bind w = wrap(m)
+    fixed m: maybe int = none
+    fixed k: maybe int = 4
+    fixed w = wrap(m)
     show(w, " ", w.type, " ", w == none)
     show(wrap(wrap(m)), " ", wrap(wrap(m)).type)
     ; A maybe beside the maybe that holds it: the one it holds is wrapped.
@@ -38,12 +38,12 @@ task main()
     show(quiet(look(3)), " ", quiet(look(9)), " ", quiet(look(-1)))
     show(maybe_again(wrap(k)), " ", maybe_again(wrap(m)))
     ; A plan B on a maybe of a maybe gives what it holds.
-    bind held = wrap(k) { none }
+    fixed held = wrap(k) { none }
     show(held, " ", held.type)
     when w is { inner }
         show("inner ", inner)
     fi
-    bind r = tryit(look(9))
+    fixed r = tryit(look(9))
     show(r.type)
     match r
         case {inner}

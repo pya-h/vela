@@ -8,7 +8,7 @@ include shop/cart
 include shop/prices {Item => Product, price_of}
 
 task main()
-    hold basket = cart.empty()
+    flex basket = cart.empty()
     basket = cart.add(basket, Product.Apple, 6)
     basket = cart.add(basket, Product.Bread, 1)
     basket = cart.add(basket, Product.Cheese(600), 1)
@@ -16,7 +16,7 @@ task main()
     show(cart.total(basket))                 ; 1690 cents
     
     ; Item came in as Product; its variants are named through it.
-    bind snack: Product = Product.Cheese(100)
+    fixed snack: Product = Product.Cheese(100)
     show(price_of(snack))                    ; 300
 
     ; `basket.total` would be an error here: the field is private to cart.vela,

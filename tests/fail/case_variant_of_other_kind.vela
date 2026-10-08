@@ -9,7 +9,7 @@ kind Shape
 fi
 
 task main()
-    bind light = Red
+    fixed light = Red
     match light
     case Circle r
         show(r)

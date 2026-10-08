@@ -1,6 +1,6 @@
 ; error: 4:9: a byte of text can't be assigned, since text never changes; build other text instead, as in 't = t[0..2] + "x" at r'
 task main()
-    hold word = "hello"
+    flex word = "hello"
     word[0] = 'j'
     show(word)
 fi

@@ -1,9 +1,9 @@
-; error: 7:14: shape 'Shown' takes a type that is 'shown' as 'T', and int ~ ParseError can't be shown
+; error: 7:15: shape 'Shown' takes a type that is 'shown' as 'T', and int ~ ParseError can't be shown
 shape Shown<T: shown>
     value: T
 fi
 
 task main()
-    bind b = Shown { value: int("1") }
+    fixed b = Shown { value: int("1") }
     show(1)
 fi

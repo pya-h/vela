@@ -2,8 +2,8 @@
 ; A [@r] lambda never changes the copies it keeps.
 task main()
     region r
-    hold n = 1
-    bind f = [@r]() -> int
+    flex n = 1
+    fixed f = [@r]() -> int
         n = n + 1
         <- n
     fi

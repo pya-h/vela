@@ -36,10 +36,10 @@
     | keyword:fi
  22 | ; Writes the list's first items, emptying the file first. The task opens its
     | comment:; Writes the list's first items, emptying the file first. The task opens its
- 23 | ; own copy of the File, which `hold` lets it change.
-    | comment:; own copy of the File, which `hold` lets it change.
- 24 | task start(hold file: File@r) -> nothing ~ FileError
-    | keyword:task  task:start  punctuation:(  keyword:hold  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:FileError
+ 23 | ; own copy of the File, which `flex` lets it change.
+    | comment:; own copy of the File, which `flex` lets it change.
+ 24 | task start(flex file: File@r) -> nothing ~ FileError
+    | keyword:task  task:start  punctuation:(  keyword:flex  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:FileError
  25 |     region w
     | keyword:region  region:w
  26 |     file.open(FileMode.Write) at w { failure e
@@ -66,8 +66,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  38 |     region r
     | keyword:region  region:r
- 39 |     hold list = File { path: "shopping.txt" }
-    | keyword:hold  variable:list  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"shopping.txt"  punctuation:}
+ 39 |     flex list = File { path: "shopping.txt" }
+    | keyword:flex  variable:list  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"shopping.txt"  punctuation:}
  40 |     start(list) { failure e
     | task:start  punctuation:(  variable:list  punctuation:)  punctuation:{  keyword:failure  variable:e
  41 |         show("could not start the list: ", said(e))
@@ -106,8 +106,8 @@
     | builtin-fn:show  punctuation:(  string:"could not read: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
  60 |     }
     | punctuation:}
- 61 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
+ 61 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
  62 |     loop list.line() at r { none } is {item}
     | keyword:loop  variable:list  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:none  punctuation:}  keyword:is  punctuation:{  variable:item  punctuation:}
  63 |         count++

@@ -1,10 +1,10 @@
 ; error: 18:7: task 'f' changes 'value 1', the place it is given, so the call marks that place with '&', as in '&c'
 ; A call of a task value marks a place it gives, as a named call does.
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 
-task both(hold& a: int, bind& b: int)
+task both(flex& a: int, fixed& b: int)
     a = b
 fi
 
@@ -13,7 +13,7 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 task main()
-    hold c = 1
-    bind f = bump
+    flex c = 1
+    fixed f = bump
     f(c)
 fi

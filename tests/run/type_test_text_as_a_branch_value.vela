@@ -1,9 +1,9 @@
 ; Text a type test takes from an item may be what a when gives, inside the branch
 ; that took it.
 task f<P...: frozen & shown>(args: P...)
-    bind t = (args...) { <- }
+    fixed t = (args...) { <- }
     when t.#1 is maybe text {s}
-        bind shown = when s.len > 2
+        fixed shown = when s.len > 2
             s
         else
             "short"
@@ -12,7 +12,7 @@ task f<P...: frozen & shown>(args: P...)
     else
         show("no text")
     fi
-    bind first = when t.#1 is maybe text {s}
+    fixed first = when t.#1 is maybe text {s}
         s
     else
         "none"

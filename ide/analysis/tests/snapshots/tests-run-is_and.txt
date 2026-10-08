@@ -56,8 +56,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  34 |     ; The user's example: a count read, and one that can't be negative.
     | comment:; The user's example: a count read, and one that can't be negative.
- 35 |     bind b = scan("count: ", int) { none }
-    | keyword:bind  variable:b  operator:=  builtin-fn:scan  punctuation:(  string:"count: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 35 |     fixed b = scan("count: ", int) { none }
+    | keyword:fixed  variable:b  operator:=  builtin-fn:scan  punctuation:(  string:"count: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
  36 |     when b is { inside } and inside < 0
     | keyword:when  variable:b  keyword:is  punctuation:{  variable:inside  punctuation:}  keyword:and  variable:inside  operator:<  number:0
  37 |         show("Invalid count")
@@ -68,8 +68,8 @@
     | builtin-fn:show  punctuation:(  task:sign  punctuation:(  operator:-  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  keyword:none  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:5  punctuation:)  punctuation:)
  40 |     ; A bool before the 'is', and two 'is' parts with a test between them.
     | comment:; A bool before the 'is', and two 'is' parts with a test between them.
- 41 |     bind wide = true
-    | keyword:bind  variable:wide  operator:=  keyword:true
+ 41 |     fixed wide = true
+    | keyword:fixed  variable:wide  operator:=  keyword:true
  42 |     when wide and half(8) is { h } and half(h) is { q } and h > q
     | keyword:when  variable:wide  keyword:and  task:half  punctuation:(  number:8  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  task:half  punctuation:(  variable:h  punctuation:)  keyword:is  punctuation:{  variable:q  punctuation:}  keyword:and  variable:h  operator:>  variable:q
  43 |         show(h, " ", q)
@@ -106,24 +106,24 @@
     | keyword:fi
  59 |     ; A variant, a failure, and a tuple beside a test.
     | comment:; A variant, a failure, and a tuple beside a test.
- 60 |     bind s = Shape.Square(4)
-    | keyword:bind  variable:s  operator:=  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)
+ 60 |     fixed s = Shape.Square(4)
+    | keyword:fixed  variable:s  operator:=  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)
  61 |     when s is Square side and side > 3
     | keyword:when  variable:s  keyword:is  variant:Square  variable:side  keyword:and  variable:side  operator:>  number:3
  62 |         show("big square ", side)
     | builtin-fn:show  punctuation:(  string:"big square "  punctuation:,  variable:side  punctuation:)
  63 |     fi
     | keyword:fi
- 64 |     bind parsed = int("x")
-    | keyword:bind  variable:parsed  operator:=  type-builtin:int  punctuation:(  string:"x"  punctuation:)
+ 64 |     fixed parsed = int("x")
+    | keyword:fixed  variable:parsed  operator:=  type-builtin:int  punctuation:(  string:"x"  punctuation:)
  65 |     when parsed is failure e and wide
     | keyword:when  variable:parsed  keyword:is  keyword:failure  variable:e  keyword:and  variable:wide
  66 |         show("failed: ", e)
     | builtin-fn:show  punctuation:(  string:"failed: "  punctuation:,  variable:e  punctuation:)
  67 |     fi
     | keyword:fi
- 68 |     bind t = (1, 2)
-    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 68 |     fixed t = (1, 2)
+    | keyword:fixed  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
  69 |     when t is (a, c) and a < c
     | keyword:when  variable:t  keyword:is  punctuation:(  variable:a  punctuation:,  variable:c  punctuation:)  keyword:and  variable:a  operator:<  variable:c
  70 |         show("ordered ", a, c)
@@ -136,12 +136,12 @@
     | keyword:fi
  74 |     ; As a value, through an 'else when', and in a loop.
     | comment:; As a value, through an 'else when', and in a loop.
- 75 |     bind word = when b is { n } and n > 100 "big" else when b is { n } and n > 0 "small" else "none" fi
-    | keyword:bind  variable:word  operator:=  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:100  string:"big"  keyword:else  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:0  string:"small"  keyword:else  string:"none"  keyword:fi
+ 75 |     fixed word = when b is { n } and n > 100 "big" else when b is { n } and n > 0 "small" else "none" fi
+    | keyword:fixed  variable:word  operator:=  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:100  string:"big"  keyword:else  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:0  string:"small"  keyword:else  string:"none"  keyword:fi
  76 |     show(word)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:)
- 77 |     hold i = 10
-    | keyword:hold  variable:i  operator:=  number:10
+ 77 |     flex i = 10
+    | keyword:flex  variable:i  operator:=  number:10
  78 |     loop half(i) is { h } and h > 1
     | keyword:loop  task:half  punctuation:(  variable:i  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  variable:h  operator:>  number:1
  79 |         show("half ", h)

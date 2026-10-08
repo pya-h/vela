@@ -48,14 +48,14 @@
     | keyword:shared  field:mood  punctuation::  type:Mood  operator:=  type:Mood  punctuation:.  variant:Loud
  30 |     shared spare: maybe int = none
     | keyword:shared  field:spare  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 31 |     shared hold made: int = 0
-    | keyword:shared  keyword:hold  field:made  punctuation::  type-builtin:int  operator:=  number:0
+ 31 |     shared flex made: int = 0
+    | keyword:shared  keyword:flex  field:made  punctuation::  type-builtin:int  operator:=  number:0
  32 |     shared read seen: int = 0
     | keyword:shared  keyword:read  field:seen  punctuation::  type-builtin:int  operator:=  number:0
- 33 |     shared hold origin: Spot = Spot { x: 0, y: 0 }
-    | keyword:shared  keyword:hold  field:origin  punctuation::  type:Spot  operator:=  type:Spot  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
- 34 |     shared hold big: [int#20] = [0#20]
-    | keyword:shared  keyword:hold  field:big  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:20  punctuation:]  operator:=  punctuation:[  number:0  punctuation:#  number:20  punctuation:]
+ 33 |     shared flex origin: Spot = Spot { x: 0, y: 0 }
+    | keyword:shared  keyword:flex  field:origin  punctuation::  type:Spot  operator:=  type:Spot  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
+ 34 |     shared flex big: [int#20] = [0#20]
+    | keyword:shared  keyword:flex  field:big  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:20  punctuation:]  operator:=  punctuation:[  number:0  punctuation:#  number:20  punctuation:]
  36 |     alters look()
     | keyword:alters  method:look  punctuation:(  punctuation:)
  37 |         Point.seen = Point.seen + 1
@@ -70,12 +70,12 @@
     | comment:; Another shape's first value may name these too.
  43 | shape Grid
     | keyword:shape  type:Grid
- 44 |     shared hold side: int = Point.start
-    | keyword:shared  keyword:hold  field:side  punctuation::  type-builtin:int  operator:=  type:Point  punctuation:.  field:start
+ 44 |     shared flex side: int = Point.start
+    | keyword:shared  keyword:flex  field:side  punctuation::  type-builtin:int  operator:=  type:Point  punctuation:.  field:start
  45 | fi
     | keyword:fi
- 47 | task bump(hold& n: int)
-    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 47 | task bump(flex& n: int)
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
  48 |     n = n + 1
     | parameter:n  operator:=  parameter:n  operator:+  number:1
  49 | fi
@@ -104,24 +104,24 @@
     | builtin-fn:show  punctuation:(  string:"loud"  punctuation:)
  63 |     fi
     | keyword:fi
- 65 |     ; Changed through its name, given to a hold& parameter, and through a reference.
-    | comment:; Changed through its name, given to a hold& parameter, and through a reference.
+ 65 |     ; Changed through its name, given to a flex& parameter, and through a reference.
+    | comment:; Changed through its name, given to a flex& parameter, and through a reference.
  66 |     Point.made = Point.made + 1
     | type:Point  punctuation:.  field:made  operator:=  type:Point  punctuation:.  field:made  operator:+  number:1
  67 |     bump(&Point.made)
     | task:bump  punctuation:(  operator:&  type:Point  punctuation:.  field:made  punctuation:)
- 68 |     hold& r = &Point.made
-    | keyword:hold  keyword:&  variable:r  operator:=  operator:&  type:Point  punctuation:.  field:made
+ 68 |     flex& r = &Point.made
+    | keyword:flex  keyword:&  variable:r  operator:=  operator:&  type:Point  punctuation:.  field:made
  69 |     r = r * 10
     | variable:r  operator:=  variable:r  operator:*  number:10
  70 |     show(Point.made)
     | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:made  punctuation:)
- 71 |     bind& seen_now = &Point.seen
-    | keyword:bind  keyword:&  variable:seen_now  operator:=  operator:&  type:Point  punctuation:.  field:seen
+ 71 |     fixed& seen_now = &Point.seen
+    | keyword:fixed  keyword:&  variable:seen_now  operator:=  operator:&  type:Point  punctuation:.  field:seen
  73 |     ; A method changes a read-only shared field of its own shape.
     | comment:; A method changes a read-only shared field of its own shape.
- 74 |     hold p = Point { x: 1 }
-    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}
+ 74 |     flex p = Point { x: 1 }
+    | keyword:flex  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}
  75 |     p.look()
     | variable:p  punctuation:.  method:look  punctuation:(  punctuation:)
  76 |     p.look()
@@ -162,8 +162,8 @@
     | keyword:fi
  99 |     ; Another file's shared fields, read and changed as that file allows.
     | comment:; Another file's shared fields, read and changed as that file allows.
-100 |     hold t = tally.Tally {}
-    | keyword:hold  variable:t  operator:=  module:tally  punctuation:.  type:Tally  punctuation:{  punctuation:}
+100 |     flex t = tally.Tally {}
+    | keyword:flex  variable:t  operator:=  module:tally  punctuation:.  type:Tally  punctuation:{  punctuation:}
 101 |     t.tick()
     | variable:t  punctuation:.  method:tick  punctuation:(  punctuation:)
 102 |     t.tick()

@@ -46,8 +46,8 @@ fn untyped_expression() {
 #[test]
 fn untyped_binding() {
     assert_internal_error(
-        "task main()\n    bind x = 1\nfi\n",
-        "binding 'x' has no type (at 2:10)",
+        "task main()\n    fixed x = 1\nfi\n",
+        "binding 'x' has no type (at 2:11)",
     );
 }
 
@@ -55,7 +55,7 @@ fn untyped_binding() {
 fn show_with_a_type_it_cannot_write() {
     // The checker refuses a value that can fail given to `show`; give a
     // checked call one afterwards, as a checker bug would.
-    let mut items = parse("task main()\n    region r\n    bind xs = int(\"1\")\n    show(1, 2)\nfi\n");
+    let mut items = parse("task main()\n    region r\n    fixed xs = int(\"1\")\n    show(1, 2)\nfi\n");
     let mut checker = Checker::new();
     checker.check_file(&mut items);
     assert!(checker.errors().is_empty(), "{:?}", checker.errors());
@@ -98,7 +98,7 @@ fn the_region_of_a_show_read_outside_one() {
 fn variant_with_wrong_argument_count() {
     // The checker resolves `Circle(1.0)` into a constructor; give that node an
     // extra argument afterwards, as a checker bug would.
-    let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    bind c = Circle(1.0)\nfi\n");
+    let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    fixed c = Circle(1.0)\nfi\n");
     let mut checker = Checker::new();
     checker.check_file(&mut items);
     assert!(checker.errors().is_empty(), "{:?}", checker.errors());
@@ -112,7 +112,7 @@ fn variant_with_wrong_argument_count() {
     assert_eq!(err.span, None);
     assert_eq!(
         err.message,
-        "internal compiler error: variant 'Circle' called with 2 arguments (expected 1) (at 6:14)"
+        "internal compiler error: variant 'Circle' called with 2 arguments (expected 1) (at 6:15)"
     );
 }
 
@@ -128,7 +128,7 @@ fn match_on_unchecked_value() {
 fn value_list_that_does_not_fit_its_names() {
     // The checker counts the values a list of names receives; only one call
     // may give several of them.
-    assert_internal_error("task main()\n    bind a, b = 1, 2, 3\nfi\n", "3 values received by 2 names (at 2:10)");
+    assert_internal_error("task main()\n    fixed a, b = 1, 2, 3\nfi\n", "3 values received by 2 names (at 2:11)");
 }
 
 #[test]

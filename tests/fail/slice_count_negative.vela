@@ -1,5 +1,5 @@
-; error: 4:31: count -1 is negative
+; error: 4:32: count -1 is negative
 task main()
     region r
-    bind items = new [int]([0#-1]) at r
+    fixed items = new [int]([0#-1]) at r
 fi

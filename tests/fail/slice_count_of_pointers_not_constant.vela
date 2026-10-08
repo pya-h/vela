@@ -1,6 +1,6 @@
-; error: 5:38: an array's count is known before the program runs, as in '[0#8]'; for a count known only as it runs, make a slice in a region, as in 'new [^int]([…#n]) at r'
+; error: 5:39: an array's count is known before the program runs, as in '[0#8]'; for a count known only as it runs, make a slice in a region, as in 'new [^int]([…#n]) at r'
 task main()
     region r
-    hold n = 2
-    bind pointers = [new int(1) at r#n]
+    flex n = 2
+    fixed pointers = [new int(1) at r#n]
 fi

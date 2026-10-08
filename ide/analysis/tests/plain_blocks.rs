@@ -12,13 +12,13 @@ use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
 const PROGRAM: &str = "\
 task main()
     CHECK
-    hold total = 0
+    flex total = 0
     block
-        hold inner = 2
+        flex inner = 2
         total = total + inner
     fi
     block
-        bind inner = \"text\"
+        fixed inner = \"text\"
         show(inner)
     fi
     @@

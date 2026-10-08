@@ -32,8 +32,8 @@
     | keyword:fi
  19 | task total(m: [text: int]@r) -> int
     | keyword:task  task:total  punctuation:(  parameter:m  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 20 |     hold sum = 0
-    | keyword:hold  variable:sum  operator:=  number:0
+ 20 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
  21 |     each _, v in m
     | keyword:each  keyword:_  punctuation:,  variable:v  keyword:in  parameter:m
  22 |         sum = sum + v
@@ -60,8 +60,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  34 |     region r
     | keyword:region  region:r
- 35 |     hold ages = new [text: int](["ana": 31, "bo": 25]) at r
-    | keyword:hold  variable:ages  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  string:"ana"  punctuation::  number:31  punctuation:,  string:"bo"  punctuation::  number:25  punctuation:]  punctuation:)  keyword:at  region:r
+ 35 |     flex ages = new [text: int](["ana": 31, "bo": 25]) at r
+    | keyword:flex  variable:ages  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  string:"ana"  punctuation::  number:31  punctuation:,  string:"bo"  punctuation::  number:25  punctuation:]  punctuation:)  keyword:at  region:r
  36 |     ages["cy"] = 40
     | variable:ages  punctuation:[  string:"cy"  punctuation:]  operator:=  number:40
  37 |     ages["ana"] = 32
@@ -90,22 +90,22 @@
     | keyword:fi
  49 |     show(ages.keys at r, " ", ages.values at r)
     | builtin-fn:show  punctuation:(  variable:ages  punctuation:.  field:keys  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:ages  punctuation:.  field:values  keyword:at  region:r  punctuation:)
- 50 |     hold sizes = new [:float]([width: 1.5, height: 2.0, "full size": 3.0]) at r
-    | keyword:hold  variable:sizes  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  punctuation:(  punctuation:[  string:width  punctuation::  number:1.5  punctuation:,  string:height  punctuation::  number:2.0  punctuation:,  string:"full size"  punctuation::  number:3.0  punctuation:]  punctuation:)  keyword:at  region:r
+ 50 |     flex sizes = new [:float]([width: 1.5, height: 2.0, "full size": 3.0]) at r
+    | keyword:flex  variable:sizes  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  punctuation:(  punctuation:[  string:width  punctuation::  number:1.5  punctuation:,  string:height  punctuation::  number:2.0  punctuation:,  string:"full size"  punctuation::  number:3.0  punctuation:]  punctuation:)  keyword:at  region:r
  51 |     show(sizes, " ", sizes.type)
     | builtin-fn:show  punctuation:(  variable:sizes  punctuation:,  string:" "  punctuation:,  variable:sizes  punctuation:.  keyword:type  punctuation:)
  52 |     show(new [text: int]() at r, " ", ["a": 1, "b": 2]@r)
     | builtin-fn:show  punctuation:(  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  punctuation:[  string:"a"  punctuation::  number:1  punctuation:,  string:"b"  punctuation::  number:2  punctuation:]  operator:@  region:r  punctuation:)
- 53 |     hold copy = ages.copy() at r
-    | keyword:hold  variable:copy  operator:=  variable:ages  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 53 |     flex copy = ages.copy() at r
+    | keyword:flex  variable:copy  operator:=  variable:ages  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  54 |     copy["new"] = 1
     | variable:copy  punctuation:[  string:"new"  punctuation:]  operator:=  number:1
  55 |     show(ages.len, " ", copy.len, " ", ages == copy, " ", ages == ages, " ", ages ~= ages.copy() at r)
     | builtin-fn:show  punctuation:(  variable:ages  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:copy  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:ages  operator:==  variable:copy  punctuation:,  string:" "  punctuation:,  variable:ages  operator:==  variable:ages  punctuation:,  string:" "  punctuation:,  variable:ages  operator:~=  variable:ages  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  56 |     ; Taking keys out and adding others keeps the table the same size.
     | comment:; Taking keys out and adding others keeps the table the same size.
- 57 |     hold big = new [int: int]() at r
-    | keyword:hold  variable:big  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 57 |     flex big = new [int: int]() at r
+    | keyword:flex  variable:big  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  58 |     each i in 0..1000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:1000
  59 |         big[i] = i * i
@@ -120,28 +120,28 @@
     | keyword:fi
  64 |     show(big, " ", big.len)
     | builtin-fn:show  punctuation:(  variable:big  punctuation:,  string:" "  punctuation:,  variable:big  punctuation:.  field:len  punctuation:)
- 65 |     hold grid = new [(int, int): char]() at r
-    | keyword:hold  variable:grid  operator:=  keyword:new  punctuation:[  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation::  type-builtin:char  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 65 |     flex grid = new [(int, int): char]() at r
+    | keyword:flex  variable:grid  operator:=  keyword:new  punctuation:[  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation::  type-builtin:char  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  66 |     grid[(1, 2)] = 'x'
     | variable:grid  punctuation:[  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:]  operator:=  string:'x'
  67 |     show(grid[(1, 2)], " ", grid[#(2, 1)])
     | builtin-fn:show  punctuation:(  variable:grid  punctuation:[  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:[  punctuation:#  punctuation:(  number:2  punctuation:,  number:1  punctuation:)  punctuation:]  punctuation:)
  68 |     region p
     | keyword:region  region:p
- 69 |     bind points = new [^int: text]() at p
-    | keyword:bind  variable:points  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:p
+ 69 |     fixed points = new [^int: text]() at p
+    | keyword:fixed  variable:points  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:p
  70 |     show(points.len)
     | builtin-fn:show  punctuation:(  variable:points  punctuation:.  field:len  punctuation:)
- 71 |     hold places = new [text: Point]() at r
-    | keyword:hold  variable:places  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 71 |     flex places = new [text: Point]() at r
+    | keyword:flex  variable:places  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  72 |     places["home"] = Point { x: 1, y: 2 }
     | variable:places  punctuation:[  string:"home"  punctuation:]  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
  73 |     places["home"].x = 5
     | variable:places  punctuation:[  string:"home"  punctuation:]  punctuation:.  field:x  operator:=  number:5
  74 |     show(places, " ", "{places}" at r)
     | builtin-fn:show  punctuation:(  variable:places  punctuation:,  string:" "  punctuation:,  string:"{  variable:places  string:}"  keyword:at  region:r  punctuation:)
- 75 |     hold inv = Inventory { counts: new [text: int]() at r }
-    | keyword:hold  variable:inv  operator:=  type:Inventory  punctuation:{  field:counts  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 75 |     flex inv = Inventory { counts: new [text: int]() at r }
+    | keyword:flex  variable:inv  operator:=  type:Inventory  punctuation:{  field:counts  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
  76 |     inv.bump("apple")
     | variable:inv  punctuation:.  method:bump  punctuation:(  string:"apple"  punctuation:)
  77 |     inv.bump("apple")
@@ -150,32 +150,32 @@
     | variable:inv  punctuation:.  method:bump  punctuation:(  string:"pear"  punctuation:)
  79 |     show(inv, " ", total(inv.counts), " ", first(inv.counts))
     | builtin-fn:show  punctuation:(  variable:inv  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:inv  punctuation:.  field:counts  punctuation:)  punctuation:,  string:" "  punctuation:,  task:first  punctuation:(  variable:inv  punctuation:.  field:counts  punctuation:)  punctuation:)
- 80 |     hold a = ["x": 1, "y": 2] at r
-    | keyword:hold  variable:a  operator:=  punctuation:[  string:"x"  punctuation::  number:1  punctuation:,  string:"y"  punctuation::  number:2  punctuation:]  keyword:at  region:r
- 81 |     hold b = a
-    | keyword:hold  variable:b  operator:=  variable:a
+ 80 |     flex a = ["x": 1, "y": 2] at r
+    | keyword:flex  variable:a  operator:=  punctuation:[  string:"x"  punctuation::  number:1  punctuation:,  string:"y"  punctuation::  number:2  punctuation:]  keyword:at  region:r
+ 81 |     flex b = a
+    | keyword:flex  variable:b  operator:=  variable:a
  82 |     b["z"] = 3
     | variable:b  punctuation:[  string:"z"  punctuation:]  operator:=  number:3
  83 |     show(a.len, " ", a == b, " ", ["y": 2, "x": 1] at r ~= ["x": 1, "y": 2] at r)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:a  operator:==  variable:b  punctuation:,  string:" "  punctuation:,  punctuation:[  string:"y"  punctuation::  number:2  punctuation:,  string:"x"  punctuation::  number:1  punctuation:]  keyword:at  region:r  operator:~=  punctuation:[  string:"x"  punctuation::  number:1  punctuation:,  string:"y"  punctuation::  number:2  punctuation:]  keyword:at  region:r  punctuation:)
- 84 |     hold lists = new [int: [int]]() at r
-    | keyword:hold  variable:lists  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 84 |     flex lists = new [int: [int]]() at r
+    | keyword:flex  variable:lists  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  85 |     lists[1] = [1, 2, ...] at r
     | variable:lists  punctuation:[  number:1  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
  86 |     lists[1].add(3)
     | variable:lists  punctuation:[  number:1  punctuation:]  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
  87 |     show(lists)
     | builtin-fn:show  punctuation:(  variable:lists  punctuation:)
- 88 |     hold nested = new [text: [text: int]]() at r
-    | keyword:hold  variable:nested  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 88 |     flex nested = new [text: [text: int]]() at r
+    | keyword:flex  variable:nested  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  89 |     nested["in"] = ["k": 1] at r
     | variable:nested  punctuation:[  string:"in"  punctuation:]  operator:=  punctuation:[  string:"k"  punctuation::  number:1  punctuation:]  keyword:at  region:r
  90 |     nested["in"]["j"] = 2
     | variable:nested  punctuation:[  string:"in"  punctuation:]  punctuation:[  string:"j"  punctuation:]  operator:=  number:2
  91 |     show(nested)
     | builtin-fn:show  punctuation:(  variable:nested  punctuation:)
- 92 |     hold live = ["a": 1] at r
-    | keyword:hold  variable:live  operator:=  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  keyword:at  region:r
+ 92 |     flex live = ["a": 1] at r
+    | keyword:flex  variable:live  operator:=  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  keyword:at  region:r
  93 |     each k, v in &live
     | keyword:each  variable:k  punctuation:,  variable:v  keyword:in  operator:&  variable:live
  94 |         when v < 3
@@ -188,30 +188,30 @@
     | keyword:fi
  98 |     show(live)
     | builtin-fn:show  punctuation:(  variable:live  punctuation:)
- 99 |     bind keep = [a, b] 
-    | keyword:bind  variable:keep  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:]
+ 99 |     fixed keep = [a, b] 
+    | keyword:fixed  variable:keep  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:]
 100 |     show(keep[0] == keep[1])
     | builtin-fn:show  punctuation:(  variable:keep  punctuation:[  number:0  punctuation:]  operator:==  variable:keep  punctuation:[  number:1  punctuation:]  punctuation:)
-101 |     hold copies = [a, a, ...] at r
-    | keyword:hold  variable:copies  operator:=  punctuation:[  variable:a  punctuation:,  variable:a  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+101 |     flex copies = [a, a, ...] at r
+    | keyword:flex  variable:copies  operator:=  punctuation:[  variable:a  punctuation:,  variable:a  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
 102 |     region s
     | keyword:region  region:s
-103 |     bind moved = copies.copy() at s
-    | keyword:bind  variable:moved  operator:=  variable:copies  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:s
+103 |     fixed moved = copies.copy() at s
+    | keyword:fixed  variable:moved  operator:=  variable:copies  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:s
 104 |     moved[0]["w"] = 9
     | variable:moved  punctuation:[  number:0  punctuation:]  punctuation:[  string:"w"  punctuation:]  operator:=  number:9
 105 |     show(moved[1].has("w"), " ", a.has("w"))
     | builtin-fn:show  punctuation:(  variable:moved  punctuation:[  number:1  punctuation:]  punctuation:.  field:has  punctuation:(  string:"w"  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  field:has  punctuation:(  string:"w"  punctuation:)  punctuation:)
-106 |     hold many = new [int: int]() at r
-    | keyword:hold  variable:many  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+106 |     flex many = new [int: int]() at r
+    | keyword:flex  variable:many  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 107 |     each i in 0..200000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:200000
 108 |         many[i * 7] = i
     | variable:many  punctuation:[  variable:i  operator:*  number:7  punctuation:]  operator:=  variable:i
 109 |     fi
     | keyword:fi
-110 |     hold found = 0
-    | keyword:hold  variable:found  operator:=  number:0
+110 |     flex found = 0
+    | keyword:flex  variable:found  operator:=  number:0
 111 |     each i in 0..200000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:200000
 112 |         found = found + many[#i * 7] { 0 }

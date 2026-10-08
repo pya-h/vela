@@ -11,13 +11,13 @@ shape Counter
     fi
 fi
 
-task advance(hold& spot: int)
+task advance(flex& spot: int)
     spot += 2
 fi
 
 task joined<T: shown>(r: region, xs: [T]@r) -> text@r
-    hold out: text@r = ""
-    loop hold i = 0 || i < xs.len || i++
+    flex out: text@r = ""
+    loop flex i = 0 || i < xs.len || i++
         out += "{xs[i]} " at r
     fi
     <- out
@@ -26,26 +26,26 @@ fi
 task main()
     region r
 
-    ; A name of its own, and several of them, after 'hold' and 'bind'.
-    loop hold i = 0 || i < 3 || i++
+    ; A name of its own, and several of them, after 'flex' and 'fixed'.
+    loop flex i = 0 || i < 3 || i++
         show("i ", i)
     fi
-    hold total = 0
-    loop hold i = 1, j = 10, bind limit = 7 || i < j and i < limit || i++, j--
+    flex total = 0
+    loop flex i = 1, j = 10, fixed limit = 7 || i < j and i < limit || i++, j--
         total += i * j
     fi
     show("total ", total)
 
     ; Names already declared come first; the step may swap and call.
-    hold k = 0
-    hold calls = 0
-    loop k = 1, calls = 0, hold a = 0, b = 1 || b < 30 || a, b = b, a + b, calls++
+    flex k = 0
+    flex calls = 0
+    loop k = 1, calls = 0, flex a = 0, b = 1 || b < 30 || a, b = b, a + b, calls++
         show("fib ", b)
     fi
     show("k ", k, " calls ", calls)
 
     ; 'continue' runs the step, 'break' doesn't.
-    hold last = 0
+    flex last = 0
     loop last = 0 || last < 10 || last++
         when last % 2 == 1
             continue
@@ -58,40 +58,40 @@ task main()
     show("last ", last)
 
     ; A part may be empty; the last '||' may be left out.
-    hold m = 0
+    flex m = 0
     loop || m < 3 || m++
         show("m ", m)
     fi
-    loop hold w = 0 || w < 2
+    loop flex w = 0 || w < 2
         show("w ", w)
         w++
     fi
-    loop hold pos = 0 || pos < 7 || advance(&pos)
+    loop flex pos = 0 || pos < 7 || advance(&pos)
         show("pos ", pos)
     fi
 
     ; A pattern, and parts joined with 'and', as any loop takes them.
-    bind words = ["ox", "elk", "yak", "zebra", "eel"]
-    loop hold n = 0 || words[#n] is {word} and word.len < 4 || n++
+    fixed words = ["ox", "elk", "yak", "zebra", "eel"]
+    loop flex n = 0 || words[#n] is {word} and word.len < 4 || n++
         show("word ", word)
     fi
 
     ; A step of any statement, a 'when' too, and the regions of a pass.
-    loop hold s = 0 || s < 6 || s++, when s == 3 s++ fi
+    loop flex s = 0 || s < 6 || s++, when s == 3 s++ fi
         region pass
-        bind label = "s{s}" at pass
+        fixed label = "s{s}" at pass
         show(label)
     fi
-    hold c = Counter { n: 0 }
+    flex c = Counter { n: 0 }
     loop || c.n < 3 || c.bump()
         show("c ", c.n)
     fi
     show(joined(r, [1, 2, 3, ...] at r), joined(r, ["a", "b", ...] at r))
 
     ; 'endless', named, stopped from inside.
-    hold e = 0
+    flex e = 0
     outer => endless
-        loop hold inner = 0 || || inner++
+        loop flex inner = 0 || || inner++
             e++
             when e > 7
                 break outer
@@ -107,7 +107,7 @@ task main()
     loop || ||
         break
     fi
-    hold t = 0
+    flex t = 0
     loop true
         t++
         when t == 2

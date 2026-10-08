@@ -2,6 +2,6 @@
 include modules/machine {Machine}
 
 task main()
-    hold m = Machine { name: "press", used: 3 }
+    flex m = Machine { name: "press", used: 3 }
     show(m.name)
 fi

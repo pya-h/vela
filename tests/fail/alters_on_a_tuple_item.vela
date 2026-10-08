@@ -8,6 +8,6 @@ shape P
 fi
 
 task main()
-    hold t = (1, P { n: 1 })
+    flex t = (1, P { n: 1 })
     t.1.inc()
 fi

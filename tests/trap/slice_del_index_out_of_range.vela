@@ -2,8 +2,8 @@
 ; Taking out an item past the last: an index of the items there are.
 task main()
     region r
-    hold items = new [int]([1, 2, 3]) at r
-    hold i = 2
+    flex items = new [int]([1, 2, 3]) at r
+    flex i = 2
     show(items.del(i))
     show(items.del(i + 1))
 fi

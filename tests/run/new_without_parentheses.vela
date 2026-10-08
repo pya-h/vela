@@ -17,7 +17,7 @@ shape Tally<T>
 fi
 
 task total(xs: [int]@r) -> int
-    hold sum = 0
+    flex sum = 0
     each x in xs
         sum = sum + x
     fi
@@ -28,19 +28,19 @@ task main()
     region r default
     region s
 
-    hold numbers = new [int]
+    flex numbers = new [int]
     numbers.add(4)
     numbers.add(5)
-    hold prices = new [:float] at s
+    flex prices = new [:float] at s
     prices["tea"] = 2.5
-    hold seen = new@s [text: bool]
+    flex seen = new@s [text: bool]
     seen["a"] = true
     show(numbers.len, " ", prices.len, " ", seen.len, " ", total(numbers))
 
-    bind p = new Point
-    bind q = new Point() at s
-    bind label = new@s Label
-    bind tally = new Tally<text>
+    fixed p = new Point
+    fixed q = new Point() at s
+    fixed label = new@s Label
+    fixed tally = new Tally<text>
     show(p^.x + q^.y, " ", label^.name, " ", label^.spot.x, " ", label^.spot.y, " ", tally^.count)
 
     ; Still a value of its own inside a call or a list.

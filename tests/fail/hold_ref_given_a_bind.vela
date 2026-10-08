@@ -1,9 +1,9 @@
-; error: 8:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'a' never does (declared at 7:10); a value declared with 'hold' can
-task sample(hold& x: int)
+; error: 8:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'a' never does (declared at 7:11); a value declared with 'hold' can
+task sample(flex& x: int)
     x = 10
 fi
 
 task main()
-    bind a = 1
+    fixed a = 1
     sample(&a)
 fi

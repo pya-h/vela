@@ -26,12 +26,12 @@ task open(b: Box<int>) -> int
 fi
 
 task count<P...: frozen & shown>(args: P...) -> int
-    hold n = 0
+    flex n = 0
     each v in args
         show(v)
         n++
     fi
-    bind t = (args...) { failure one
+    fixed t = (args...) { failure one
         <- n
     }
     show(t.#1)
@@ -49,7 +49,7 @@ task main()
     show([none, Option.None, Option.Some(1)])
     show(Either.Left(1) == Either.Right("x"), " ", Either.Left(2) == Either<int, text>.Left(2))
     region r
-    bind t = "x".copy() at r
-    bind sides = [Either.Right(t), Either.Left(1)]
+    fixed t = "x".copy() at r
+    fixed sides = [Either.Right(t), Either.Left(1)]
     show(sides)
 fi

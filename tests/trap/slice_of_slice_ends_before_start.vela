@@ -1,8 +1,8 @@
 ; trap: slice 3..2 ends before it starts at 7:15 in task 'main'
 task main()
     region r
-    bind items = new [int]([0#4]) at r
-    hold i = 3
+    fixed items = new [int]([0#4]) at r
+    flex i = 3
     show(items[i..3].len)
     show(items[i..2].len)
 fi

@@ -1,9 +1,9 @@
 ; error: 8:12: 'x' is given as 'from' too, and the call changes it through 'into'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
-task set(from: int, hold& into: int)
+task set(from: int, flex& into: int)
     into = from
 fi
 
 task main()
-    hold x = 1
+    flex x = 1
     set(x, &x)
 fi

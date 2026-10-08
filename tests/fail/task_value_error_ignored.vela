@@ -5,6 +5,6 @@ task safe(n: int) -> int ~ text
 fi
 
 task main()
-    bind f = safe
+    fixed f = safe
     f(2)
 fi

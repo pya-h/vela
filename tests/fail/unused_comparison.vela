@@ -1,6 +1,6 @@
 ; error: 4:7: the result of '==' is unused; use '=' to assign
 task main()
-    hold x = 1
+    flex x = 1
     x == 2
     show(x)
 fi

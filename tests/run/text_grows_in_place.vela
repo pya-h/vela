@@ -2,18 +2,18 @@
 ; made from it before stays as it was.
 task main()
     region r
-    hold t: text@r = "" + "" at r
+    flex t: text@r = "" + "" at r
     each i in 0..3000
         t += "x"
     fi
-    hold u = t + "!" at r
+    flex u = t + "!" at r
     t += "y"
-    hold v = t + "z" at r
+    flex v = t + "z" at r
     t += "{t.len}"
     show(t.len, " ", u.len, " ", v.len)
     show(u[2998..3001], " ", v[2999..3002], " ", t[2999..3005])
     ; Itself joined to itself.
-    hold w: text@r = "ab" + "" at r
+    flex w: text@r = "ab" + "" at r
     w += w
     w += w
     show(w)

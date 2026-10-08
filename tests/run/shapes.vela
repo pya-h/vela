@@ -10,7 +10,7 @@ task sum(p: Point) -> int
 fi
 
 task main()
-    hold p = Point { x: 1, y: 2 }
+    flex p = Point { x: 1, y: 2 }
     show(p.x)
     p.y = 40
     show(sum(p))

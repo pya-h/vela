@@ -28,10 +28,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  19 |     region r
     | keyword:region  region:r
- 20 |     bind ada = Person { first: "Ada", last: "Lovelace" }
-    | keyword:bind  variable:ada  operator:=  type:Person  punctuation:{  field:first  punctuation::  string:"Ada"  punctuation:,  field:last  punctuation::  string:"Lovelace"  punctuation:}
- 21 |     bind name = full(ada, r)
-    | keyword:bind  variable:name  operator:=  task:full  punctuation:(  variable:ada  punctuation:,  region:r  punctuation:)
+ 20 |     fixed ada = Person { first: "Ada", last: "Lovelace" }
+    | keyword:fixed  variable:ada  operator:=  type:Person  punctuation:{  field:first  punctuation::  string:"Ada"  punctuation:,  field:last  punctuation::  string:"Lovelace"  punctuation:}
+ 21 |     fixed name = full(ada, r)
+    | keyword:fixed  variable:name  operator:=  task:full  punctuation:(  variable:ada  punctuation:,  region:r  punctuation:)
  22 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
  23 |     show(name.len)
@@ -52,8 +52,8 @@
     | builtin-fn:show  punctuation:(  string:"caf"  operator:+  string:"é ✓"  keyword:at  region:r  punctuation:)
  31 |     ; Joined text can be joined again, and compared and cut like any text.
     | comment:; Joined text can be joined again, and compared and cut like any text.
- 32 |     hold line = "" + "" at r
-    | keyword:hold  variable:line  operator:=  string:""  operator:+  string:""  keyword:at  region:r
+ 32 |     flex line = "" + "" at r
+    | keyword:flex  variable:line  operator:=  string:""  operator:+  string:""  keyword:at  region:r
  33 |     each word in ["one", "two", "three"]
     | keyword:each  variable:word  keyword:in  punctuation:[  string:"one"  punctuation:,  string:"two"  punctuation:,  string:"three"  punctuation:]
  34 |         line = line + word + "," at r
@@ -68,14 +68,14 @@
     | builtin-fn:show  punctuation:(  variable:line  operator:<  string:"p"  operator:+  string:""  keyword:at  region:r  punctuation:)
  39 |     ; Text in a region inside a loop, freed on every pass.
     | comment:; Text in a region inside a loop, freed on every pass.
- 40 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
+ 40 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
  41 |     loop count < 2
     | keyword:loop  variable:count  operator:<  number:2
  42 |         region pass
     | keyword:region  region:pass
- 43 |         bind greeting = "hi " + name at pass
-    | keyword:bind  variable:greeting  operator:=  string:"hi "  operator:+  variable:name  keyword:at  region:pass
+ 43 |         fixed greeting = "hi " + name at pass
+    | keyword:fixed  variable:greeting  operator:=  string:"hi "  operator:+  variable:name  keyword:at  region:pass
  44 |         show(greeting)
     | builtin-fn:show  punctuation:(  variable:greeting  punctuation:)
  45 |         count = count + 1
@@ -84,8 +84,8 @@
     | keyword:fi
  47 |     ; A slice of joined text.
     | comment:; A slice of joined text.
- 48 |     hold names = new [text]() at r
-    | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 48 |     flex names = new [text]() at r
+    | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  49 |     names.add("x" + "y" at r)
     | variable:names  punctuation:.  field:add  punctuation:(  string:"x"  operator:+  string:"y"  keyword:at  region:r  punctuation:)
  50 |     names.add(names[0] + names[0] at r)
@@ -94,8 +94,8 @@
     | builtin-fn:show  punctuation:(  variable:names  punctuation:[  number:1  punctuation:]  punctuation:)
  52 |     ; A join is one operand of whatever is around it.
     | comment:; A join is one operand of whatever is around it.
- 53 |     bind a = "x"
-    | keyword:bind  variable:a  operator:=  string:"x"
+ 53 |     fixed a = "x"
+    | keyword:fixed  variable:a  operator:=  string:"x"
  54 |     show(a + "y" at r == "xy")
     | builtin-fn:show  punctuation:(  variable:a  operator:+  string:"y"  keyword:at  region:r  operator:==  string:"xy"  punctuation:)
  55 |     when a + a at r < "xz" and a + "" at r == a
@@ -108,12 +108,12 @@
     | builtin-fn:show  punctuation:(  punctuation:(  variable:a  operator:+  variable:a  punctuation:)  operator:@  region:r  punctuation:[  number:0  operator:..  number:1  punctuation:]  punctuation:)
  59 |     show((a + "!")@r.len)
     | builtin-fn:show  punctuation:(  punctuation:(  variable:a  operator:+  string:"!"  punctuation:)  operator:@  region:r  punctuation:.  type:len  punctuation:)
- 60 |     bind pair = (a + "1" at r, a + "2" at r)
-    | keyword:bind  variable:pair  operator:=  punctuation:(  variable:a  operator:+  string:"1"  keyword:at  region:r  punctuation:,  variable:a  operator:+  string:"2"  keyword:at  region:r  punctuation:)
+ 60 |     fixed pair = (a + "1" at r, a + "2" at r)
+    | keyword:fixed  variable:pair  operator:=  punctuation:(  variable:a  operator:+  string:"1"  keyword:at  region:r  punctuation:,  variable:a  operator:+  string:"2"  keyword:at  region:r  punctuation:)
  61 |     show(pair.1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)
- 62 |     bind found: maybe text@r = a + "m" at r
-    | keyword:bind  variable:found  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  variable:a  operator:+  string:"m"  keyword:at  region:r
+ 62 |     fixed found: maybe text@r = a + "m" at r
+    | keyword:fixed  variable:found  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  variable:a  operator:+  string:"m"  keyword:at  region:r
  63 |     show(found { "none" })
     | builtin-fn:show  punctuation:(  variable:found  punctuation:{  string:"none"  punctuation:}  punctuation:)
  64 | fi

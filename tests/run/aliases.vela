@@ -24,10 +24,10 @@ fi
 
 task main()
     ; The module under another name, and a part of it under another name.
-    bind tea: Product = Product { name: "tea", cents: 250 }
+    fixed tea: Product = Product { name: "tea", cents: 250 }
     show(price_of(tea, shop.Size.Small))
     show(price_of(tea, shop.Size.Large(50)))
-    bind big = shop.Size.Large(75)
+    fixed big = shop.Size.Large(75)
     match big
     case shop.Size.Large extra
         show(extra)
@@ -37,7 +37,7 @@ task main()
 
     ; Parts alone, one of them a kind under another name, whose variants are
     ; named through it.
-    bind tank = Fuel.Tank(40)
+    fixed tank = Fuel.Tank(40)
     when tank is Fuel.Tank liters
         show(fuel_price(liters))
     fi

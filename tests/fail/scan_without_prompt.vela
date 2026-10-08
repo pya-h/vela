@@ -1,5 +1,5 @@
-; error: 4:17: 'scan' takes the prompt it shows, and the type of a number to read, as in 'scan("Name: ") at r' or 'scan("Age: ", int)'
+; error: 4:18: 'scan' takes the prompt it shows, and the type of a number to read, as in 'scan("Name: ") at r' or 'scan("Age: ", int)'
 task main()
     region r
-    bind line = scan() at r
+    fixed line = scan() at r
 fi

@@ -1,6 +1,6 @@
 ; error: 15:15: this task value takes value 1 of the group as a value, and another task value the call gives takes it as a place, 'hold&', so the call can't give it to both; give task values taking it the same way
 ; Two task values taking the same value of a group, one as a place and one as a value.
-task put(hold& n: int)
+task put(flex& n: int)
     n = n * 10
 fi
 task val(n: int)
@@ -11,7 +11,7 @@ task both<P...>(f: (P...) -> nothing, g: (P...) -> nothing, args: P...)
     g(args...)
 fi
 task main()
-    hold k = 3
+    flex k = 3
     both(put, val, &k)
     show(k)
 fi

@@ -1,6 +1,6 @@
 ; error: 4:19: an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside
 task main()
-    bind m: maybe int = 1
+    fixed m: maybe int = 1
     when m is {n} or true
         show(n)
     fi

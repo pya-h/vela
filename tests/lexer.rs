@@ -297,13 +297,13 @@ fn underscores_between_digits_are_ignored() {
 #[test]
 fn crlf_line_ends_read_like_lf() {
     // Positions don't count the `\r`, so errors point where they would in an LF file.
-    let tokens = highlight("bind x =\r\nfi ; done\r\n");
+    let tokens = highlight("fixed x =\r\nfi ; done\r\n");
     let newline = &tokens[3];
-    assert_eq!((newline.kind.clone(), newline.start), (token(Token::Newline), Span::new(1, 9)));
+    assert_eq!((newline.kind.clone(), newline.start), (token(Token::Newline), Span::new(1, 10)));
     assert_eq!(tokens[4].start, Span::new(2, 1));
     // A comment stops before the `\r`.
     assert_eq!(tokens[5].kind, LexKind::Comment);
-    assert_eq!(tokens[5].range, 13..19);
+    assert_eq!(tokens[5].range, 14..20);
     // A backslash at the end of a CRLF line is reported like one at the end of an LF line.
     assert_eq!(kinds("\"a\\\r\nb\"")[0], invalid(1, 3, "invalid escape: '\\' at the end of a line"));
     // Text ends on its line, whichever line end the file uses.

@@ -28,8 +28,8 @@
     | keyword:fi
  19 | task total(xs: [int]@r) -> int
     | keyword:task  task:total  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 20 |     hold sum = 0
-    | keyword:hold  variable:sum  operator:=  number:0
+ 20 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
  21 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
  22 |         sum = sum + x
@@ -46,30 +46,30 @@
     | keyword:region  region:r  keyword:default
  29 |     region s
     | keyword:region  region:s
- 31 |     hold numbers = new [int]
-    | keyword:hold  variable:numbers  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]
+ 31 |     flex numbers = new [int]
+    | keyword:flex  variable:numbers  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]
  32 |     numbers.add(4)
     | variable:numbers  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
  33 |     numbers.add(5)
     | variable:numbers  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
- 34 |     hold prices = new [:float] at s
-    | keyword:hold  variable:prices  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  keyword:at  region:s
+ 34 |     flex prices = new [:float] at s
+    | keyword:flex  variable:prices  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  keyword:at  region:s
  35 |     prices["tea"] = 2.5
     | variable:prices  punctuation:[  string:"tea"  punctuation:]  operator:=  number:2.5
- 36 |     hold seen = new@s [text: bool]
-    | keyword:hold  variable:seen  operator:=  keyword:new  operator:@  region:s  punctuation:[  type-builtin:text  punctuation::  type-builtin:bool  punctuation:]
+ 36 |     flex seen = new@s [text: bool]
+    | keyword:flex  variable:seen  operator:=  keyword:new  operator:@  region:s  punctuation:[  type-builtin:text  punctuation::  type-builtin:bool  punctuation:]
  37 |     seen["a"] = true
     | variable:seen  punctuation:[  string:"a"  punctuation:]  operator:=  keyword:true
  38 |     show(numbers.len, " ", prices.len, " ", seen.len, " ", total(numbers))
     | builtin-fn:show  punctuation:(  variable:numbers  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:prices  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:seen  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:numbers  punctuation:)  punctuation:)
- 40 |     bind p = new Point
-    | keyword:bind  variable:p  operator:=  keyword:new  type:Point
- 41 |     bind q = new Point() at s
-    | keyword:bind  variable:q  operator:=  keyword:new  type:Point  punctuation:(  punctuation:)  keyword:at  region:s
- 42 |     bind label = new@s Label
-    | keyword:bind  variable:label  operator:=  keyword:new  operator:@  region:s  type:Label
- 43 |     bind tally = new Tally<text>
-    | keyword:bind  variable:tally  operator:=  keyword:new  type:Tally  punctuation:<  type-builtin:text  punctuation:>
+ 40 |     fixed p = new Point
+    | keyword:fixed  variable:p  operator:=  keyword:new  type:Point
+ 41 |     fixed q = new Point() at s
+    | keyword:fixed  variable:q  operator:=  keyword:new  type:Point  punctuation:(  punctuation:)  keyword:at  region:s
+ 42 |     fixed label = new@s Label
+    | keyword:fixed  variable:label  operator:=  keyword:new  operator:@  region:s  type:Label
+ 43 |     fixed tally = new Tally<text>
+    | keyword:fixed  variable:tally  operator:=  keyword:new  type:Tally  punctuation:<  type-builtin:text  punctuation:>
  44 |     show(p^.x + q^.y, " ", label^.name, " ", label^.spot.x, " ", label^.spot.y, " ", tally^.count)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  operator:+  variable:q  operator:^  punctuation:.  field:y  punctuation:,  string:" "  punctuation:,  variable:label  operator:^  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:label  operator:^  punctuation:.  field:spot  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:label  operator:^  punctuation:.  field:spot  punctuation:.  field:y  punctuation:,  string:" "  punctuation:,  variable:tally  operator:^  punctuation:.  field:count  punctuation:)
  46 |     ; Still a value of its own inside a call or a list.

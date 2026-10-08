@@ -14,12 +14,12 @@ fi
 
 task main()
     region r
-    bind xs, n = evens(r, 7)
+    fixed xs, n = evens(r, 7)
     show(xs.len == n)
     each x in xs
         show(x)
     fi
-    hold total: float = 0.0
+    flex total: float = 0.0
     total = total + 1.5
     show(total)
 fi

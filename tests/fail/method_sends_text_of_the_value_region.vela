@@ -8,9 +8,9 @@ shape Box<T>
 fi
 
 task main()
-    hold kept: text = "safe"
+    flex kept: text = "safe"
     region r
-    bind b: Box<text>@r = Box { value: "in a region".copy() at r }
+    fixed b: Box<text>@r = Box { value: "in a region".copy() at r }
     kept = b.valueOf()
     show(kept)
 fi

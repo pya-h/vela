@@ -1,8 +1,8 @@
 ; error: 6:18: a type alone after 'is' tests the type of a tuple's item, which a '?' asks for, as in 't.#5? is maybe int'; or name the value, as in 'is maybe int x' or 'is maybe int {x}'
 ; A type alone after `is` needs the `?` that asks for it.
 task main()
-    bind t = (1, 2)
-    bind n = 3
+    fixed t = (1, 2)
+    fixed n = 3
     when t.#5 is maybe int
         show(1)
     fi

@@ -7,8 +7,8 @@ task same(n: int) -> int
 fi
 
 task main()
-    bind largest = same(9223372036854775807)
-    bind smallest = same(-9223372036854775807 - 1)
+    fixed largest = same(9223372036854775807)
+    fixed smallest = same(-9223372036854775807 - 1)
     show(largest - 1 + 1)
     show(smallest + 1 - 1)
     show(largest + smallest)

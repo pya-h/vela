@@ -1,4 +1,4 @@
-; error: 9:27: a method takes no types of its own yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so 'Some' is given none; call it as 'Some(…)'
+; error: 9:28: a method takes no types of its own yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so 'Some' is given none; call it as 'Some(…)'
 ; The types of a kind are written after the kind's name.
 kind Option<T>
     Some(value: T)
@@ -6,5 +6,5 @@ kind Option<T>
 fi
 
 task main()
-    bind one = Option.Some<int>(1)
+    fixed one = Option.Some<int>(1)
 fi

@@ -5,7 +5,7 @@ shape S
     b: bool
 fi
 task main()
-    bind s = S { a: true, b: false }
+    fixed s = S { a: true, b: false }
     loop s.a || s.b
         show(1)
     fi

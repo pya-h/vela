@@ -33,21 +33,21 @@ task value(r: Reading) -> int
 fi
 
 task main()
-    bind unused = 1
-    hold overwritten = 2
+    fixed unused = 1
+    flex overwritten = 2
     overwritten = 3
-    hold moved = Point { x: 1, y: 2 }
+    flex moved = Point { x: 1, y: 2 }
     moved.x = 10
     region scratch
-    bind boxed = new int(4) at scratch
+    fixed boxed = new int(4) at scratch
     boxed^ = 5
     unused_region(scratch, boxed, scratch)
-    bind later = 6
+    fixed later = 6
     when true
         show(later)
-        bind inner = 7
+        fixed inner = 7
     else
-        bind inner = 8
+        fixed inner = 8
         show(inner)
     fi
     ignore(Point { x: 0, y: 0 })

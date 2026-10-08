@@ -12,6 +12,6 @@ task main()
     show(same("ab\0x", "ab\0y"))
     show(same("ab\0x", "ab\0x"))
     show(same("ab", "ab\0"))
-    bind word = "hello"
+    fixed word = "hello"
     show(word == "hello")
 fi

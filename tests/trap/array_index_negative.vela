@@ -1,7 +1,7 @@
 ; trap: index -1 is out of range 0..3 at 6:14 in task 'main'
 task main()
-    bind days = [1, 2, 3]
-    hold i = 0
+    fixed days = [1, 2, 3]
+    flex i = 0
     i = i - 1
     show(days[i])
 fi

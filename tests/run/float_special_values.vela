@@ -1,6 +1,6 @@
 ; NaN and infinity print the same way under every C compiler.
 task main()
-    bind zero = 0.0
+    fixed zero = 0.0
     show(zero / zero)
     show(1.0 / zero)
     show(-1.0 / zero)

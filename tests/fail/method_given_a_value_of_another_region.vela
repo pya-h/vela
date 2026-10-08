@@ -13,7 +13,7 @@ fi
 
 task main()
     region r
-    hold h: Holder@r = Holder { held: new Node(Node { value: 1 }) at r }
+    flex h: Holder@r = Holder { held: new Node(Node { value: 1 }) at r }
     region s
     h.keep(new Node(Node { value: 9 }) at s)
 fi

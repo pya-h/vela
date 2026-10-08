@@ -1,6 +1,6 @@
 ; error: 5:5: 'add' changes 'xs', which is immutable; keep the slice in a 'hold' variable to change it
 task main()
     region r
-    bind xs = new [int]() at r
+    fixed xs = new [int]() at r
     xs.add(1)
 fi

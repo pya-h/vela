@@ -18,16 +18,16 @@
     | keyword:fi
  12 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 13 |     bind xs = [1, 2, 3]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
- 14 |     bind far = 5
-    | keyword:bind  variable:far  operator:=  number:5
+ 13 |     fixed xs = [1, 2, 3]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 14 |     fixed far = 5
+    | keyword:fixed  variable:far  operator:=  number:5
  15 |     show(xs[#far], " ", xs[#0], " ", xs[#-1], " ", three()[#2], " ", [Point { x: 1 }][#0])
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  punctuation:#  variable:far  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  punctuation:#  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  punctuation:#  operator:-  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  task:three  punctuation:(  punctuation:)  punctuation:[  punctuation:#  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:]  punctuation:[  punctuation:#  number:0  punctuation:]  punctuation:)
  16 |     ; A loop needs no length: it ends at the first none.
     | comment:; A loop needs no length: it ends at the first none.
- 17 |     hold j = 0
-    | keyword:hold  variable:j  operator:=  number:0
+ 17 |     flex j = 0
+    | keyword:flex  variable:j  operator:=  number:0
  18 |     loop xs[#j] is {item}
     | keyword:loop  variable:xs  punctuation:[  punctuation:#  variable:j  punctuation:]  keyword:is  punctuation:{  variable:item  punctuation:}
  19 |         show(item)
@@ -46,8 +46,8 @@
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  punctuation:#  number:9  punctuation:]  punctuation:{  number:0  punctuation:}  operator:+  variable:xs  punctuation:[  punctuation:#  number:2  punctuation:]  punctuation:{  number:0  punctuation:}  punctuation:)
  26 |     region r
     | keyword:region  region:r
- 27 |     hold grown = new [int](xs) at r
-    | keyword:hold  variable:grown  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  variable:xs  punctuation:)  keyword:at  region:r
+ 27 |     flex grown = new [int](xs) at r
+    | keyword:flex  variable:grown  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  variable:xs  punctuation:)  keyword:at  region:r
  28 |     grown.add(4)
     | variable:grown  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
  29 |     show(grown[#3], " ", grown[#4], " ", grown[1..3][#1])
@@ -58,14 +58,14 @@
     | builtin-fn:show  punctuation:(  string:"hey"  punctuation:[  punctuation:#  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  string:"hey"  punctuation:[  punctuation:#  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  string:"hey"  punctuation:[  punctuation:#  number:1  punctuation:]  operator:~=  string:"hey"  punctuation:.  method:at  punctuation:(  number:1  punctuation:)  punctuation:)
  32 |     ; A maybe of a pointer, and a maybe holding a maybe.
     | comment:; A maybe of a pointer, and a maybe holding a maybe.
- 33 |     hold boxes = new [^int]() at r
-    | keyword:hold  variable:boxes  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 33 |     flex boxes = new [^int]() at r
+    | keyword:flex  variable:boxes  operator:=  keyword:new  punctuation:[  operator:^  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  34 |     boxes.add(new int(5) at r)
     | variable:boxes  punctuation:.  field:add  punctuation:(  keyword:new  type-builtin:int  punctuation:(  number:5  punctuation:)  keyword:at  region:r  punctuation:)
  35 |     show(boxes[#0] { new int(0) at r }^, " ", boxes[#1] == none)
     | builtin-fn:show  punctuation:(  variable:boxes  punctuation:[  punctuation:#  number:0  punctuation:]  punctuation:{  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:r  punctuation:}  operator:^  punctuation:,  string:" "  punctuation:,  variable:boxes  punctuation:[  punctuation:#  number:1  punctuation:]  operator:==  keyword:none  punctuation:)
- 36 |     bind maybes: [maybe int#2] = [1, none]
-    | keyword:bind  variable:maybes  punctuation::  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]
+ 36 |     fixed maybes: [maybe int#2] = [1, none]
+    | keyword:fixed  variable:maybes  punctuation::  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]
  37 |     show(maybes[#0], " ", maybes[#1], " ", maybes[#2])
     | builtin-fn:show  punctuation:(  variable:maybes  punctuation:[  punctuation:#  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:maybes  punctuation:[  punctuation:#  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:maybes  punctuation:[  punctuation:#  number:2  punctuation:]  punctuation:)
  38 | fi

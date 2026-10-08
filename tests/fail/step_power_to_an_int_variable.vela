@@ -1,6 +1,6 @@
 ; error: 5:7: expected type int, got float: an int raised to an int that may be negative is a float; raise it to a unit, as in 'n ** unit(k)', or to a constant 0 or more, as in 'n ** 2', for an int
 task main()
-    hold x = 2
-    hold k = 3
+    flex x = 2
+    flex k = 3
     x **= k
 fi

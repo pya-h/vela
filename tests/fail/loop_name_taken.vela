@@ -1,11 +1,11 @@
-; error: 8:14: 'outer' is already the name of a loop around this, at 6:5
+; error: 8:15: 'outer' is already the name of a loop around this, at 6:5
 ; error: 10:5: 'count' is already defined at 5:10
 ; A loop's name is a name in scope like any other.
 task main()
-    hold count = 0
+    flex count = 0
     outer => loop count < 3
         count++
-        bind outer = 2
+        fixed outer = 2
     fi
     count => each i in 0..2
         show(i)

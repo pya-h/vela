@@ -1,7 +1,7 @@
 ; error: 5:15: a tuple's items always match, so this 'when' always holds and the arms after it would never run; take the tuple apart with 'bind' instead
 ; A tuple pattern always holds, so the arms after it would never run.
 task main()
-    bind t = (1, 2)
+    fixed t = (1, 2)
     when t is (a, b)
         show(a, b)
     else when true

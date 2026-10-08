@@ -40,10 +40,10 @@
     | keyword:fi
  25 | task distance(a: Point, b: Point) -> float
     | keyword:task  task:distance  punctuation:(  parameter:a  punctuation::  type:Point  punctuation:,  parameter:b  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:float
- 26 |     bind dx = a.x - b.x
-    | keyword:bind  variable:dx  operator:=  parameter:a  punctuation:.  field:x  operator:-  parameter:b  punctuation:.  field:x
- 27 |     bind dy = a.y - b.y
-    | keyword:bind  variable:dy  operator:=  parameter:a  punctuation:.  field:y  operator:-  parameter:b  punctuation:.  field:y
+ 26 |     fixed dx = a.x - b.x
+    | keyword:fixed  variable:dx  operator:=  parameter:a  punctuation:.  field:x  operator:-  parameter:b  punctuation:.  field:x
+ 27 |     fixed dy = a.y - b.y
+    | keyword:fixed  variable:dy  operator:=  parameter:a  punctuation:.  field:y  operator:-  parameter:b  punctuation:.  field:y
  28 |     <- root(dx * dx + dy * dy)
     | keyword:<-  task:root  punctuation:(  variable:dx  operator:*  variable:dx  operator:+  variable:dy  operator:*  variable:dy  punctuation:)
  29 | fi
@@ -66,8 +66,8 @@
     | comment:; Newton's method: Vela has no math library yet.
  41 | priv task root(n: float) -> float
     | keyword:priv  keyword:task  task:root  punctuation:(  parameter:n  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
- 42 |     hold guess = n
-    | keyword:hold  variable:guess  operator:=  parameter:n
+ 42 |     flex guess = n
+    | keyword:flex  variable:guess  operator:=  parameter:n
  43 |     each step in 0..30
     | keyword:each  variable:step  keyword:in  number:0  operator:..  number:30
  44 |         when guess > 0.0

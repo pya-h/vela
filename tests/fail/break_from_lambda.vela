@@ -1,7 +1,7 @@
 ; error: 6:23: 'outer' names a loop around this lambda, and a lambda's body is a task of its own, so it can't stop that loop; only the loops inside the lambda can be named here
 task main()
     outer => each i in 0..3
-        bind f = (x: int) -> int
+        fixed f = (x: int) -> int
             each j in 0..2
                 break outer
             fi

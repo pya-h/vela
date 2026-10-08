@@ -22,8 +22,8 @@
     | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab  escape:\0  string:x"  punctuation:,  string:"ab  escape:\0  string:x"  punctuation:)  punctuation:)
  14 |     show(same("ab", "ab\0"))
     | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab"  punctuation:,  string:"ab  escape:\0  string:"  punctuation:)  punctuation:)
- 15 |     bind word = "hello"
-    | keyword:bind  variable:word  operator:=  string:"hello"
+ 15 |     fixed word = "hello"
+    | keyword:fixed  variable:word  operator:=  string:"hello"
  16 |     show(word == "hello")
     | builtin-fn:show  punctuation:(  variable:word  operator:==  string:"hello"  punctuation:)
  17 | fi

@@ -6,13 +6,13 @@ task twice(b: unit) -> unit
 fi
 
 task main()
-    hold b: unit = 200
+    flex b: unit = 200
     b = b + 55
     show(b)
     show(twice(100))
-    bind m: maybe unit = 7
+    fixed m: maybe unit = 7
     show(m, " ", m ~= 7)
-    bind xs: [unit#3] = [1, 2, 3]
+    fixed xs: [unit#3] = [1, 2, 3]
     show(xs, " ", xs ~= [1, 2, 3])
     ; Conversions: to an int or a float always, to a unit when it fits.
     show(int(b) + 1, " ", float(b), " ", unit(3.9), " ", unit(true), " ", unit(40) + 2)

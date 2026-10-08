@@ -54,8 +54,8 @@
     | comment:; for `None`, from what the task sends.
  34 | task find(items: [Item#4], name: text) -> Option<int>
     | keyword:task  task:find  punctuation:(  parameter:items  punctuation::  punctuation:[  type:Item  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:int  punctuation:>
- 35 |     hold place = 0
-    | keyword:hold  variable:place  operator:=  number:0
+ 35 |     flex place = 0
+    | keyword:flex  variable:place  operator:=  number:0
  36 |     each item in items
     | keyword:each  variable:item  keyword:in  parameter:items
  37 |         when item.name == name
@@ -72,10 +72,10 @@
     | keyword:<-  type:Option  punctuation:.  variant:None
  43 | fi
     | keyword:fi
- 45 | task take(hold& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
-    | keyword:task  task:take  punctuation:(  keyword:hold  keyword:&  parameter:items  punctuation::  punctuation:[  type:Item  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:want  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Outcome  punctuation:<  type-builtin:int  punctuation:,  type:Problem  punctuation:>
- 46 |     bind spot = match find(items, name)
-    | keyword:bind  variable:spot  operator:=  keyword:match  task:find  punctuation:(  parameter:items  punctuation:,  parameter:name  punctuation:)
+ 45 | task take(flex& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
+    | keyword:task  task:take  punctuation:(  keyword:flex  keyword:&  parameter:items  punctuation::  punctuation:[  type:Item  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:want  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Outcome  punctuation:<  type-builtin:int  punctuation:,  type:Problem  punctuation:>
+ 46 |     fixed spot = match find(items, name)
+    | keyword:fixed  variable:spot  operator:=  keyword:match  task:find  punctuation:(  parameter:items  punctuation:,  parameter:name  punctuation:)
  47 |     case Some found = found
     | keyword:case  variant:Some  variable:found  operator:=  variable:found
  48 |     case None
@@ -84,8 +84,8 @@
     | keyword:<-  type:Outcome  punctuation:.  variant:Failed  punctuation:(  type:Problem  punctuation:.  variant:Unknown  punctuation:(  parameter:name  punctuation:)  punctuation:)
  50 |     fi
     | keyword:fi
- 51 |     bind have = items[spot].count
-    | keyword:bind  variable:have  operator:=  parameter:items  punctuation:[  variable:spot  punctuation:]  punctuation:.  field:count
+ 51 |     fixed have = items[spot].count
+    | keyword:fixed  variable:have  operator:=  parameter:items  punctuation:[  variable:spot  punctuation:]  punctuation:.  field:count
  52 |     when have < want
     | keyword:when  variable:have  operator:<  parameter:want
  53 |         <- Outcome.Failed(Problem.Short(have, want))
@@ -126,16 +126,16 @@
     | keyword:fi
  73 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 74 |     bind bolts = Item { name: "bolts", count: 40 }
-    | keyword:bind  variable:bolts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"bolts"  punctuation:,  field:count  punctuation::  number:40  punctuation:}
- 75 |     bind nuts = Item { name: "nuts", count: 25 }
-    | keyword:bind  variable:nuts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"nuts"  punctuation:,  field:count  punctuation::  number:25  punctuation:}
- 76 |     bind washers = Item { name: "washers", count: 3 }
-    | keyword:bind  variable:washers  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"washers"  punctuation:,  field:count  punctuation::  number:3  punctuation:}
- 77 |     bind springs = Item { name: "springs", count: 0 }
-    | keyword:bind  variable:springs  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"springs"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
- 78 |     hold items = [bolts, nuts, washers, springs]
-    | keyword:hold  variable:items  operator:=  punctuation:[  variable:bolts  punctuation:,  variable:nuts  punctuation:,  variable:washers  punctuation:,  variable:springs  punctuation:]
+ 74 |     fixed bolts = Item { name: "bolts", count: 40 }
+    | keyword:fixed  variable:bolts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"bolts"  punctuation:,  field:count  punctuation::  number:40  punctuation:}
+ 75 |     fixed nuts = Item { name: "nuts", count: 25 }
+    | keyword:fixed  variable:nuts  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"nuts"  punctuation:,  field:count  punctuation::  number:25  punctuation:}
+ 76 |     fixed washers = Item { name: "washers", count: 3 }
+    | keyword:fixed  variable:washers  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"washers"  punctuation:,  field:count  punctuation::  number:3  punctuation:}
+ 77 |     fixed springs = Item { name: "springs", count: 0 }
+    | keyword:fixed  variable:springs  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"springs"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
+ 78 |     flex items = [bolts, nuts, washers, springs]
+    | keyword:flex  variable:items  operator:=  punctuation:[  variable:bolts  punctuation:,  variable:nuts  punctuation:,  variable:washers  punctuation:,  variable:springs  punctuation:]
  79 |     show("nuts are at ", find(items, "nuts").orElse(-1), ", gears at ", find(items, "gears").orElse(-1))
     | builtin-fn:show  punctuation:(  string:"nuts are at "  punctuation:,  task:find  punctuation:(  variable:items  punctuation:,  string:"nuts"  punctuation:)  punctuation:.  method:orElse  punctuation:(  operator:-  number:1  punctuation:)  punctuation:,  string:", gears at "  punctuation:,  task:find  punctuation:(  variable:items  punctuation:,  string:"gears"  punctuation:)  punctuation:.  method:orElse  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)
  80 |     report("bolts", take(&items, "bolts", 15))

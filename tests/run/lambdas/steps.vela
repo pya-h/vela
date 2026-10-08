@@ -6,5 +6,5 @@ fi
 
 shape Stepper
     by: (int) -> int = (n: int) -> int <- n * 10 fi
-    shared hold next: (int) -> int = (n: int) -> int <- n - 1 fi
+    shared flex next: (int) -> int = (n: int) -> int <- n - 1 fi
 fi

@@ -1,7 +1,7 @@
 ; error: 5:9: the last line of a plan B gives its value, but this has none; expected a value of type int
 task main()
-    bind m: maybe int = none
-    bind n = m {
+    fixed m: maybe int = none
+    fixed n = m {
         show("none")
     }
     show(n)

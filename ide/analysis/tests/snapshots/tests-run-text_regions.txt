@@ -72,8 +72,8 @@
     | comment:; value in `r` holds is `text@r`, even when it was a literal.
  43 | task named(r: region, name: text) -> text@r
     | keyword:task  task:named  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 44 |     bind boxed = new text(name) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:text  punctuation:(  parameter:name  punctuation:)  keyword:at  region:r
+ 44 |     fixed boxed = new text(name) at r
+    | keyword:fixed  variable:boxed  operator:=  keyword:new  type-builtin:text  punctuation:(  parameter:name  punctuation:)  keyword:at  region:r
  45 |     <- boxed^
     | keyword:<-  variable:boxed  operator:^
  46 | fi
@@ -98,10 +98,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  59 |     region r
     | keyword:region  region:r
- 60 |     bind lasting = "Ada"
-    | keyword:bind  variable:lasting  operator:=  string:"Ada"
- 61 |     bind kept = named(r, lasting)
-    | keyword:bind  variable:kept  operator:=  task:named  punctuation:(  region:r  punctuation:,  variable:lasting  punctuation:)
+ 60 |     fixed lasting = "Ada"
+    | keyword:fixed  variable:lasting  operator:=  string:"Ada"
+ 61 |     fixed kept = named(r, lasting)
+    | keyword:fixed  variable:kept  operator:=  task:named  punctuation:(  region:r  punctuation:,  variable:lasting  punctuation:)
  62 |     show(kept)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:)
  63 |     show(kept == lasting)
@@ -112,20 +112,20 @@
     | builtin-fn:show  punctuation:(  task:longer  punctuation:(  string:"x"  punctuation:,  string:"x"  punctuation:)  punctuation:)
  67 |     ; A shape holding text: none of a region, or text of one.
     | comment:; A shape holding text: none of a region, or text of one.
- 68 |     bind plain = Person { name: "Cy", age: 3 }
-    | keyword:bind  variable:plain  operator:=  type:Person  punctuation:{  field:name  punctuation::  string:"Cy"  punctuation:,  field:age  punctuation::  number:3  punctuation:}
- 69 |     bind held: Person@r = Person { name: kept, age: 36 }
-    | keyword:bind  variable:held  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:kept  punctuation:,  field:age  punctuation::  number:36  punctuation:}
- 70 |     bind inferred = Person { name: kept, age: 1 }
-    | keyword:bind  variable:inferred  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:kept  punctuation:,  field:age  punctuation::  number:1  punctuation:}
+ 68 |     fixed plain = Person { name: "Cy", age: 3 }
+    | keyword:fixed  variable:plain  operator:=  type:Person  punctuation:{  field:name  punctuation::  string:"Cy"  punctuation:,  field:age  punctuation::  number:3  punctuation:}
+ 69 |     fixed held: Person@r = Person { name: kept, age: 36 }
+    | keyword:fixed  variable:held  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:kept  punctuation:,  field:age  punctuation::  number:36  punctuation:}
+ 70 |     fixed inferred = Person { name: kept, age: 1 }
+    | keyword:fixed  variable:inferred  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:kept  punctuation:,  field:age  punctuation::  number:1  punctuation:}
  71 |     greet(plain)
     | task:greet  punctuation:(  variable:plain  punctuation:)
  72 |     greet(held)
     | task:greet  punctuation:(  variable:held  punctuation:)
  73 |     show(inferred.age)
     | builtin-fn:show  punctuation:(  variable:inferred  punctuation:.  field:age  punctuation:)
- 74 |     hold people = new [Person]() at r
-    | keyword:hold  variable:people  operator:=  keyword:new  punctuation:[  type:Person  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 74 |     flex people = new [Person]() at r
+    | keyword:flex  variable:people  operator:=  keyword:new  punctuation:[  type:Person  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  75 |     people.add(plain)
     | variable:people  punctuation:.  field:add  punctuation:(  variable:plain  punctuation:)
  76 |     people.add(held)
@@ -138,8 +138,8 @@
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  punctuation:[  variable:kept  punctuation:,  string:"Bob"  punctuation:]  punctuation:,  number:1  punctuation:)  punctuation:)
  82 |     ; Text in slices and pointers is in their region.
     | comment:; Text in slices and pointers is in their region.
- 83 |     hold names = new [text]() at r
-    | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 83 |     flex names = new [text]() at r
+    | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  84 |     names.add(lasting)
     | variable:names  punctuation:.  field:add  punctuation:(  variable:lasting  punctuation:)
  85 |     names.add(kept)
@@ -148,20 +148,20 @@
     | variable:names  punctuation:.  field:add  punctuation:(  string:"Eve"  punctuation:)
  87 |     show(names.del(0))
     | builtin-fn:show  punctuation:(  variable:names  punctuation:.  field:del  punctuation:(  number:0  punctuation:)  punctuation:)
- 88 |     bind first = names[0]
-    | keyword:bind  variable:first  operator:=  variable:names  punctuation:[  number:0  punctuation:]
+ 88 |     fixed first = names[0]
+    | keyword:fixed  variable:first  operator:=  variable:names  punctuation:[  number:0  punctuation:]
  89 |     show(first)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:)
- 90 |     bind note = new text("note") at r
-    | keyword:bind  variable:note  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"note"  punctuation:)  keyword:at  region:r
+ 90 |     fixed note = new text("note") at r
+    | keyword:fixed  variable:note  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"note"  punctuation:)  keyword:at  region:r
  91 |     note^ = lasting
     | variable:note  operator:^  operator:=  variable:lasting
  92 |     show(note^)
     | builtin-fn:show  punctuation:(  variable:note  operator:^  punctuation:)
  94 |     ; A shape holding pointers holds its text in its region.
     | comment:; A shape holding pointers holds its text in its region.
- 95 |     bind job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
-    | keyword:bind  variable:job  operator:=  keyword:new  type:Task  punctuation:(  type:Task  punctuation:{  field:title  punctuation::  string:"write"  punctuation:,  field:status  punctuation::  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:,  field:owner  punctuation::  variable:held  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 95 |     fixed job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
+    | keyword:fixed  variable:job  operator:=  keyword:new  type:Task  punctuation:(  type:Task  punctuation:{  field:title  punctuation::  string:"write"  punctuation:,  field:status  punctuation::  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:,  field:owner  punctuation::  variable:held  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  96 |     show(describe(job^.status))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:job  operator:^  punctuation:.  field:status  punctuation:)  punctuation:)
  97 |     show(describe(Status.Todo))
@@ -186,18 +186,18 @@
     | keyword:fi
 108 |     ; maybe and errors of text of a region.
     | comment:; maybe and errors of text of a region.
-109 |     hold found: maybe text@r = none
-    | keyword:hold  variable:found  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  keyword:none
+109 |     flex found: maybe text@r = none
+    | keyword:flex  variable:found  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  keyword:none
 110 |     found = kept
     | variable:found  operator:=  variable:kept
 111 |     show(found)
     | builtin-fn:show  punctuation:(  variable:found  punctuation:)
-112 |     bind fallback = found { "missing" }
-    | keyword:bind  variable:fallback  operator:=  variable:found  punctuation:{  string:"missing"  punctuation:}
+112 |     fixed fallback = found { "missing" }
+    | keyword:fixed  variable:fallback  operator:=  variable:found  punctuation:{  string:"missing"  punctuation:}
 113 |     show(fallback)
     | builtin-fn:show  punctuation:(  variable:fallback  punctuation:)
-114 |     bind reasons = [Status.Todo, Status.Blocked(kept)]
-    | keyword:bind  variable:reasons  operator:=  punctuation:[  type:Status  punctuation:.  variant:Todo  punctuation:,  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:]
+114 |     fixed reasons = [Status.Todo, Status.Blocked(kept)]
+    | keyword:fixed  variable:reasons  operator:=  punctuation:[  type:Status  punctuation:.  variant:Todo  punctuation:,  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:]
 115 |     show(describe(reasons[1]))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:reasons  punctuation:[  number:1  punctuation:]  punctuation:)  punctuation:)
 116 | fi

@@ -20,12 +20,12 @@
     | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:hits  operator:*  parameter:rule  punctuation:.  field:points  keyword:fi
  12 | fi
     | keyword:fi
- 14 | task turns(r: region) -> [hold @r]() -> int
-    | keyword:task  task:turns  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 15 |     hold played = 0
-    | keyword:hold  variable:played  operator:=  number:0
- 16 |     <- [hold @r]() -> int
-    | keyword:<-  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 14 | task turns(r: region) -> [flex @r]() -> int
+    | keyword:task  task:turns  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 15 |     flex played = 0
+    | keyword:flex  variable:played  operator:=  number:0
+ 16 |     <- [flex @r]() -> int
+    | keyword:<-  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
  17 |         played = played + 1
     | variable:played  operator:=  variable:played  operator:+  number:1
  18 |         <- played
@@ -34,10 +34,10 @@
     | keyword:fi
  20 | fi
     | keyword:fi
- 22 | task play(hold& next_turn: [hold @r]() -> int, score: [@r](int) -> int, hits: int) -> int
-    | keyword:task  task:play  punctuation:(  keyword:hold  keyword:&  parameter:next_turn  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:score  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 23 |     bind turn = next_turn()
-    | keyword:bind  variable:turn  operator:=  parameter:next_turn  punctuation:(  punctuation:)
+ 22 | task play(flex& next_turn: [flex @r]() -> int, score: [@r](int) -> int, hits: int) -> int
+    | keyword:task  task:play  punctuation:(  keyword:flex  keyword:&  parameter:next_turn  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:score  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 23 |     fixed turn = next_turn()
+    | keyword:fixed  variable:turn  operator:=  parameter:next_turn  punctuation:(  punctuation:)
  24 |     show("turn ", turn, ": ", hits, " hits")
     | builtin-fn:show  punctuation:(  string:"turn "  punctuation:,  variable:turn  punctuation:,  string:": "  punctuation:,  parameter:hits  punctuation:,  string:" hits"  punctuation:)
  25 |     <- score(hits)
@@ -48,28 +48,28 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  29 |     region game
     | keyword:region  region:game
- 30 |     bind rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
-    | keyword:bind  variable:rules  operator:=  punctuation:[  type:Rule  punctuation:{  field:name  punctuation::  string:"goal"  punctuation:,  field:points  punctuation::  number:3  punctuation:}  punctuation:,  type:Rule  punctuation:{  field:name  punctuation::  string:"assist"  punctuation:,  field:points  punctuation::  number:1  punctuation:}  punctuation:]
- 31 |     hold scorers = new [[@game](int) -> int]() at game
-    | keyword:hold  variable:scorers  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:game
+ 30 |     fixed rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
+    | keyword:fixed  variable:rules  operator:=  punctuation:[  type:Rule  punctuation:{  field:name  punctuation::  string:"goal"  punctuation:,  field:points  punctuation::  number:3  punctuation:}  punctuation:,  type:Rule  punctuation:{  field:name  punctuation::  string:"assist"  punctuation:,  field:points  punctuation::  number:1  punctuation:}  punctuation:]
+ 31 |     flex scorers = new [[@game](int) -> int]() at game
+    | keyword:flex  variable:scorers  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:game
  32 |     each rule in rules
     | keyword:each  variable:rule  keyword:in  variable:rules
  33 |         scorers.add(scorer(game, rule))
     | variable:scorers  punctuation:.  field:add  punctuation:(  task:scorer  punctuation:(  region:game  punctuation:,  variable:rule  punctuation:)  punctuation:)
  34 |     fi
     | keyword:fi
- 35 |     hold next_turn = turns(game)
-    | keyword:hold  variable:next_turn  operator:=  task:turns  punctuation:(  region:game  punctuation:)
- 36 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 37 |     hold best = 0
-    | keyword:hold  variable:best  operator:=  number:0
+ 35 |     flex next_turn = turns(game)
+    | keyword:flex  variable:next_turn  operator:=  task:turns  punctuation:(  region:game  punctuation:)
+ 36 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 37 |     flex best = 0
+    | keyword:flex  variable:best  operator:=  number:0
  38 |     ; Declared after 'best', so the lambda keeping it ends first.
     | comment:; Declared after 'best', so the lambda keeping it ends first.
  39 |     region round
     | keyword:region  region:round
- 40 |     bind note = [hold& best, @round](score: int) -> nothing
-    | keyword:bind  variable:note  operator:=  punctuation:[  keyword:hold  keyword:&  variable:best  punctuation:,  operator:@  region:round  punctuation:]  punctuation:(  parameter:score  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+ 40 |     fixed note = [flex& best, @round](score: int) -> nothing
+    | keyword:fixed  variable:note  operator:=  punctuation:[  keyword:flex  keyword:&  variable:best  punctuation:,  operator:@  region:round  punctuation:]  punctuation:(  parameter:score  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
  41 |         when score > best
     | keyword:when  parameter:score  operator:>  variable:best
  42 |             best = score
@@ -80,8 +80,8 @@
     | keyword:fi
  45 |     each hits in [2, 0, 4]
     | keyword:each  variable:hits  keyword:in  punctuation:[  number:2  punctuation:,  number:0  punctuation:,  number:4  punctuation:]
- 46 |         bind score = play(&next_turn, scorers[0], hits)
-    | keyword:bind  variable:score  operator:=  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:scorers  punctuation:[  number:0  punctuation:]  punctuation:,  variable:hits  punctuation:)
+ 46 |         fixed score = play(&next_turn, scorers[0], hits)
+    | keyword:fixed  variable:score  operator:=  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:scorers  punctuation:[  number:0  punctuation:]  punctuation:,  variable:hits  punctuation:)
  47 |         note(score)
     | variable:note  punctuation:(  variable:score  punctuation:)
  48 |         total = total + score
@@ -90,12 +90,12 @@
     | keyword:fi
  50 |     show("goals: ", total, ", best turn: ", best)
     | builtin-fn:show  punctuation:(  string:"goals: "  punctuation:,  variable:total  punctuation:,  string:", best turn: "  punctuation:,  variable:best  punctuation:)
- 51 |     bind bonus = 10
-    | keyword:bind  variable:bonus  operator:=  number:10
- 52 |     bind assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
-    | keyword:bind  variable:assists  operator:=  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:scorers  punctuation:[  number:1  punctuation:]  punctuation:(  parameter:hits  punctuation:)  operator:+  variable:bonus  keyword:fi
- 53 |     bind assisted = play(&next_turn, assists, 5)
-    | keyword:bind  variable:assisted  operator:=  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:assists  punctuation:,  number:5  punctuation:)
+ 51 |     fixed bonus = 10
+    | keyword:fixed  variable:bonus  operator:=  number:10
+ 52 |     fixed assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
+    | keyword:fixed  variable:assists  operator:=  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:scorers  punctuation:[  number:1  punctuation:]  punctuation:(  parameter:hits  punctuation:)  operator:+  variable:bonus  keyword:fi
+ 53 |     fixed assisted = play(&next_turn, assists, 5)
+    | keyword:fixed  variable:assisted  operator:=  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:assists  punctuation:,  number:5  punctuation:)
  54 |     show("assists: ", assisted)
     | builtin-fn:show  punctuation:(  string:"assists: "  punctuation:,  variable:assisted  punctuation:)
  55 | fi

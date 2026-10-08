@@ -12,8 +12,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   8 |     region r
     | keyword:region  region:r
-  9 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+  9 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  10 |     each i in 0..4
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:4
  11 |         xs.add(i)
@@ -50,8 +50,8 @@
     | builtin-fn:show  punctuation:(  string:"left "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
  27 |     ; An item added is gone through too
     | comment:; An item added is gone through too
- 28 |     hold ys = new [int]([1]) at r
-    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:]  punctuation:)  keyword:at  region:r
+ 28 |     flex ys = new [int]([1]) at r
+    | keyword:flex  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:]  punctuation:)  keyword:at  region:r
  29 |     each v in &ys
     | keyword:each  variable:v  keyword:in  operator:&  variable:ys
  30 |         when v < 5
@@ -66,8 +66,8 @@
     | keyword:fi
  35 |     ; An array's items as they are now
     | comment:; An array's items as they are now
- 36 |     hold arr = [1, 2, 3]
-    | keyword:hold  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 36 |     flex arr = [1, 2, 3]
+    | keyword:flex  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  37 |     each v in &arr
     | keyword:each  variable:v  keyword:in  operator:&  variable:arr
  38 |         when v == 1
@@ -80,8 +80,8 @@
     | builtin-fn:show  punctuation:(  variable:v  punctuation:)
  42 |     fi
     | keyword:fi
- 43 |     bind b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
-    | keyword:bind  variable:b  operator:=  keyword:new  type:Bag  punctuation:(  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
+ 43 |     fixed b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
+    | keyword:fixed  variable:b  operator:=  keyword:new  type:Bag  punctuation:(  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
  44 |     each v in &b^.items
     | keyword:each  variable:v  keyword:in  operator:&  variable:b  operator:^  punctuation:.  field:items
  45 |         show(v)

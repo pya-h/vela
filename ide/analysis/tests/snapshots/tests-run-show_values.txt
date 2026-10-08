@@ -22,10 +22,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  15 |     region r
     | keyword:region  region:r
- 16 |     bind n = 5
-    | keyword:bind  variable:n  operator:=  number:5
- 17 |     bind name = "Ada"
-    | keyword:bind  variable:name  operator:=  string:"Ada"
+ 16 |     fixed n = 5
+    | keyword:fixed  variable:n  operator:=  number:5
+ 17 |     fixed name = "Ada"
+    | keyword:fixed  variable:name  operator:=  string:"Ada"
  19 |     ; One value is what it always was.
     | comment:; One value is what it always was.
  20 |     show(n)
@@ -50,22 +50,22 @@
     | builtin-fn:show  punctuation:(  string:""  punctuation:)
  33 |     ; A `maybe` writes its value, or `none`.
     | comment:; A `maybe` writes its value, or `none`.
- 34 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 35 |     bind here: maybe int = 7
-    | keyword:bind  variable:here  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:7
+ 34 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 35 |     fixed here: maybe int = 7
+    | keyword:fixed  variable:here  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:7
  36 |     show("missing: ", missing, ", here: ", here)
     | builtin-fn:show  punctuation:(  string:"missing: "  punctuation:,  variable:missing  punctuation:,  string:", here: "  punctuation:,  variable:here  punctuation:)
- 37 |     bind line: maybe text@r = scan("") at r
-    | keyword:bind  variable:line  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r
+ 37 |     fixed line: maybe text@r = scan("") at r
+    | keyword:fixed  variable:line  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r
  38 |     show("read: ", line)
     | builtin-fn:show  punctuation:(  string:"read: "  punctuation:,  variable:line  punctuation:)
  40 |     ; Values worked out where they are read: fields, items, parts, joins, text
     | comment:; Values worked out where they are read: fields, items, parts, joins, text
  41 |     ; holding values, a plan B, and a call.
     | comment:; holding values, a plan B, and a call.
- 42 |     bind xs = [10, 20, 30]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
+ 42 |     fixed xs = [10, 20, 30]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
  43 |     show("first ", xs[0], " of ", xs.len)
     | builtin-fn:show  punctuation:(  string:"first "  punctuation:,  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:,  string:" of "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
  44 |     show("part ", name[0..1], ", joined ", "x" + "y" at r, ", held ", "{n}" at r)

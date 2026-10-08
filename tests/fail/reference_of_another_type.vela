@@ -1,5 +1,5 @@
 ; error: 4:14: 'y' names a place of type int, and a reference is of its place's type exactly, since what either writes the other reads
 task main()
-    hold x = 1
-    hold& y: maybe int = &x
+    flex x = 1
+    flex& y: maybe int = &x
 fi

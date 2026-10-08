@@ -20,26 +20,26 @@ fi
 
 task main()
     region r
-    bind some: maybe int = 10
-    bind nothing: maybe int = none
+    fixed some: maybe int = 10
+    fixed nothing: maybe int = none
     show(some ~= 10, " ", 10 ~= some, " ", some ~= 11, " ", nothing ~= 10, " ", 10 ~= nothing)
     show(some <> 10, " ", some <> 11, " ", nothing <> 10, " ", 3 <> nothing)
     when some ~= 10
         show("ok")
     fi
     ; Text in any region, a float, a bool.
-    bind name: maybe text@r = "ab" + "c" at r
-    bind rate: maybe float = 0.5
-    bind on: maybe bool = none
+    fixed name: maybe text@r = "ab" + "c" at r
+    fixed rate: maybe float = 0.5
+    fixed on: maybe bool = none
     show(name ~= "abc", " ", "abd" ~= name, " ", rate ~= 0.5, " ", on ~= true, " ", on <> false)
     ; A shape and a tuple item by item, a kind by its variant and what it carries.
-    bind p: maybe Point = Point { x: 1, y: 2 }
-    bind t: maybe (int, text) = (1, "a")
-    bind light: maybe Light = Light.Dim(3)
+    fixed p: maybe Point = Point { x: 1, y: 2 }
+    fixed t: maybe (int, text) = (1, "a")
+    fixed light: maybe Light = Light.Dim(3)
     show(p ~= Point { x: 1, y: 2 }, " ", t ~= (1, "b"), " ", light ~= Light.Dim(3), " ", Light.Red ~= light)
     ; A pointer by the address it holds.
-    bind first = new int(1) at r
-    bind held: maybe ^int@r = first
+    fixed first = new int(1) at r
+    fixed held: maybe ^int@r = first
     show(held ~= first, " ", held ~= new int(1) at r)
     ; In a task that takes a type.
     show(holds(some, 10), " ", holds(nothing, 10), " ", holds(p, Point { x: 1, y: 2 }), " ", holds(name, "abc"))

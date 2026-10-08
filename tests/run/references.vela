@@ -1,7 +1,7 @@
-; A local reference is another name for a place: `hold& y = &x` changes it, so a
-; change to either is a change to both, and `bind& y = &x` only reads it, as it
+; A local reference is another name for a place: `flex& y = &x` changes it, so a
+; change to either is a change to both, and `fixed& y = &x` only reads it, as it
 ; is when read. A reference is of its place's type, is never pointed elsewhere,
-; and a copy of one, `hold z = y`, is a copy of what it names.
+; and a copy of one, `flex z = y`, is a copy of what it names.
 
 shape Counter
     n: int = 0
@@ -12,18 +12,18 @@ shape Counter
 
     ; A method names a part of its own value.
     alters bump_by(k: int)
-        hold& count = &.n
+        flex& count = &.n
         count = count + k
     fi
 fi
 
-task add_hundred(hold& x: int)
+task add_hundred(flex& x: int)
     x = x + 100
 fi
 
 task main()
-    hold x = 1
-    hold& y = &x
+    flex x = 1
+    flex& y = &x
     y = 5
     show(x)
     x = 7
@@ -31,20 +31,20 @@ task main()
 
     ; One that reads a value that never changes, and one that reads what a
     ; variable holds now.
-    bind a = 3
-    bind& b = &a
-    bind& seen = &x
+    fixed a = 3
+    fixed& b = &a
+    fixed& seen = &x
     x = 11
     show(b, " ", seen)
 
     ; A field, a whole shape, and its alters methods through it; a reference
-    ; is given on to a hold& parameter as the place it names.
-    hold c = Counter {}
-    hold& n = &c.n
+    ; is given on to a flex& parameter as the place it names.
+    flex c = Counter {}
+    flex& n = &c.n
     c.tick()
     n = n + 10
     show(c.n, " ", n)
-    hold& cc = &c
+    flex& cc = &c
     cc.tick()
     cc.bump_by(3)
     add_hundred(&cc.n)
@@ -52,40 +52,40 @@ task main()
 
     ; A slice kept in a variable, an array's item, and a reference to another.
     region r
-    hold xs = new [int]() at r
-    hold& ys = &xs
+    flex xs = new [int]() at r
+    flex& ys = &xs
     ys.add(4)
     ys.add(5)
     show(xs.len)
-    hold arr = [1, 2, 3]
-    hold& mid = &arr[1]
+    flex arr = [1, 2, 3]
+    flex& mid = &arr[1]
     mid = 20
-    hold& again = &y
+    flex& again = &y
     again = 9
     show(arr[1], " ", x)
 
     ; What a pointer points to.
-    hold p = new Counter(Counter {}) at r
-    hold& pn = &p^.n
+    flex p = new Counter(Counter {}) at r
+    flex& pn = &p^.n
     pn = 42
     show(p^.n)
 
     ; A reference that reads a pointer.
-    bind& pointer = &p
+    fixed& pointer = &p
     show(pointer^.n)
 
     ; A copy is a copy.
-    hold z = y
+    flex z = y
     z = 0
     show(x, " ", z)
 
     ; Each block has its own names: a reference in one, a variable in another.
     each i in 0..2
         when i == 0
-            hold& first = &arr[0]
+            flex& first = &arr[0]
             first = 50
         else
-            hold first = 1
+            flex first = 1
             show(first)
         fi
     fi

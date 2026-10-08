@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use vela_analysis::Analysis;
 use vela_analysis_wasm::{analyses_made, handle, vela_alloc, vela_free_response, vela_handle};
 
-const SOURCE: &str = "task main()\n    bind x = 1\n    show(x)\nfi\n";
+const SOURCE: &str = "task main()\n    fixed x = 1\n    show(x)\nfi\n";
 
 fn request(value: Value) -> Value {
     serde_json::from_str(&handle(&value.to_string())).unwrap()
@@ -21,9 +21,9 @@ fn answers_each_query_in_order() {
             { "kind": "tokens" },
             { "kind": "diagnostics" },
             { "kind": "outline" },
-            { "kind": "definition", "offset": 36 },
+            { "kind": "definition", "offset": 37 },
             { "kind": "complete", "offset": 16 },
-            { "kind": "hover", "offset": 21 },
+            { "kind": "hover", "offset": 22 },
         ]
     }));
     let analysis = Analysis::new(SOURCE);
@@ -32,7 +32,7 @@ fn answers_each_query_in_order() {
     assert_eq!(results[0], serde_json::to_value(analysis.tokens()).unwrap());
     assert_eq!(results[1], json!([]));
     assert_eq!(results[2], serde_json::to_value(analysis.outline()).unwrap());
-    assert_eq!(results[3], json!({ "from": 21, "to": 22 }));
+    assert_eq!(results[3], json!({ "from": 22, "to": 23 }));
     assert_eq!(results[4], serde_json::to_value(analysis.complete(16)).unwrap());
     assert_eq!(results[5]["code"], "bind x: int");
 }

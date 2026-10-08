@@ -21,9 +21,9 @@ fi
 
 task main()
     CHECK
-    hold meter = Meter { label: \"door\" }
+    flex meter = Meter { label: \"door\" }
     meter.tick()
-    bind counted = meter.count
+    fixed counted = meter.count
     @@
 fi
 ";
@@ -85,7 +85,7 @@ task read(n: int) -> int
 fi
 
 task main()
-    bind b = Book { title: \"x\" }
+    fixed b = Book { title: \"x\" }
     show(read(b.read))
 fi
 ";
@@ -105,12 +105,12 @@ fi
 #[test]
 fn a_literal_completes_what_it_may_give() {
     for checks in [true, false] {
-        let items = completions(&program(checks, "hold other = Me@@"));
+        let items = completions(&program(checks, "flex other = Me@@"));
         let meter = items.iter().find(|item| item.label == "Meter").unwrap_or_else(|| panic!("no Meter: {:?}", items));
         assert_eq!(meter.snippet.as_deref(), Some("Meter { label: ${label} }"), "checks: {}", checks);
         // Inside one, a read field with no value to fall back on is offered, and
         // one that falls back on a value is given by no literal.
-        let inside = completions(&program(checks, "hold other = Meter { @@ }"));
+        let inside = completions(&program(checks, "flex other = Meter { @@ }"));
         let offered: Vec<&str> = inside.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(offered, ["label", "note"], "checks: {}", checks);
     }

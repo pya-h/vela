@@ -1,4 +1,4 @@
-; error: 14:16: 'name' is a method of every value of 'K', so it is called on a value, as in 'k.name(…)'; only a shared method is a value, named on its type
+; error: 14:17: 'name' is a method of every value of 'K', so it is called on a value, as in 'k.name(…)'; only a shared method is a value, named on its type
 ; A kind's method of every value is called on a value; only a shared method
 ; is a value, named on its kind.
 kind K
@@ -11,5 +11,5 @@ kind K
 fi
 
 task main()
-    bind f = K.name
+    fixed f = K.name
 fi

@@ -1,6 +1,6 @@
 ; error: 4:15: '( … )' takes the items of a tuple, but this value is int
 task main()
-    bind n = 1
+    fixed n = 1
     when n is (a, b)
         show(a)
     fi

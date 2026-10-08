@@ -5,7 +5,7 @@ task w<P..., R>(next: (@a, P...) -> R, q: region, args: P...) -> R
     <- next(tmp, args...)
 fi
 $(w)
-task fill(r: region, hold& xs: [int]@r, n: int) -> int
+task fill(r: region, flex& xs: [int]@r, n: int) -> int
     each i in 0..n
         xs.add(i)
     fi
@@ -13,13 +13,13 @@ task fill(r: region, hold& xs: [int]@r, n: int) -> int
 fi
 task main()
     region kept
-    hold xs = new [int]() at kept
+    flex xs = new [int]() at kept
     show(fill(kept, &xs, 1000))
-    hold ys = new [int]() at kept
+    flex ys = new [int]() at kept
     each i in 0..1000
         ys.add(7)
     fi
-    hold zs = new [text]() at kept
+    flex zs = new [text]() at kept
     each i in 0..1000
         zs.add("abcdefgh{i}" at kept)
     fi

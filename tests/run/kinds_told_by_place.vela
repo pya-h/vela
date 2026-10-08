@@ -53,26 +53,26 @@ shape P
 
     ; Two comparisons, the second with the field of this.
     around(a: int, b: int, c: int) -> bool
-        bind both = (a < b, c > .x)
+        fixed both = (a < b, c > .x)
         <- both.0 and both.1
     fi
 fi
 
 task main()
-    bind h = Holder { o: Option.Some(3), later: none }
+    fixed h = Holder { o: Option.Some(3), later: none }
     show(valueOr(h.o, 0), " ", h.later, " ", Wrap.W(Option.None), " ", Wrap.Nothing)
     show(Pair.Both(Box.Held(1), 2))
 
-    bind a: Option<int> = Option.Some(1)
+    fixed a: Option<int> = Option.Some(1)
     show(alike(a, Option.Some(1)), " ", alike(a, Option.None), " ", same(a, a), " ", same(Option.Some("x"), Option.Some("y")))
 
-    hold x: Option<int> = Option.Some(1)
+    flex x: Option<int> = Option.Some(1)
     x = match x
     case Some _ = Option.None
     case None = Option.None
     fi
-    bind q: maybe Option<int> = when true Option.None else none fi
-    bind t: (Option<int>, int) = (Option.None, 1)
+    fixed q: maybe Option<int> = when true Option.None else none fi
+    fixed t: (Option<int>, int) = (Option.None, 1)
     show(pick(true), " ", x, " ", q, " ", t, " ", firstOf(true))
 
     show(P { x: 1 }.around(1, 2, 3), " ", P { x: 5 }.around(1, 2, 3))

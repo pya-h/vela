@@ -14,8 +14,8 @@
     | keyword:include  module:shop  operator:/  module:prices  punctuation:{  type:Item  operator:=>  type:Product  punctuation:,  task:price_of  punctuation:}
  10 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 11 |     hold basket = cart.empty()
-    | keyword:hold  variable:basket  operator:=  module:cart  punctuation:.  task:empty  punctuation:(  punctuation:)
+ 11 |     flex basket = cart.empty()
+    | keyword:flex  variable:basket  operator:=  module:cart  punctuation:.  task:empty  punctuation:(  punctuation:)
  12 |     basket = cart.add(basket, Product.Apple, 6)
     | variable:basket  operator:=  module:cart  punctuation:.  task:add  punctuation:(  variable:basket  punctuation:,  type:Product  punctuation:.  variant:Apple  punctuation:,  number:6  punctuation:)
  13 |     basket = cart.add(basket, Product.Bread, 1)
@@ -28,8 +28,8 @@
     | builtin-fn:show  punctuation:(  module:cart  punctuation:.  task:total  punctuation:(  variable:basket  punctuation:)  punctuation:)  comment:; 1690 cents
  18 |     ; Item came in as Product; its variants are named through it.
     | comment:; Item came in as Product; its variants are named through it.
- 19 |     bind snack: Product = Product.Cheese(100)
-    | keyword:bind  variable:snack  punctuation::  type:Product  operator:=  type:Product  punctuation:.  variant:Cheese  punctuation:(  number:100  punctuation:)
+ 19 |     fixed snack: Product = Product.Cheese(100)
+    | keyword:fixed  variable:snack  punctuation::  type:Product  operator:=  type:Product  punctuation:.  variant:Cheese  punctuation:(  number:100  punctuation:)
  20 |     show(price_of(snack))                    ; 300
     | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:snack  punctuation:)  punctuation:)  comment:; 300
  22 |     ; `basket.total` would be an error here: the field is private to cart.vela,

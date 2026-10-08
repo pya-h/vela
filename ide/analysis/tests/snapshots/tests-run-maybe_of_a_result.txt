@@ -44,12 +44,12 @@
     | keyword:fi
  26 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 27 |     bind ys = [1, fail "no", none]
-    | keyword:bind  variable:ys  operator:=  punctuation:[  number:1  punctuation:,  keyword:fail  string:"no"  punctuation:,  keyword:none  punctuation:]
- 28 |     bind x: maybe (int ~ text) = fail "x"
-    | keyword:bind  variable:x  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  keyword:fail  string:"x"
- 29 |     bind y: maybe (int ~ text) = 5
-    | keyword:bind  variable:y  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  number:5
+ 27 |     fixed ys = [1, fail "no", none]
+    | keyword:fixed  variable:ys  operator:=  punctuation:[  number:1  punctuation:,  keyword:fail  string:"no"  punctuation:,  keyword:none  punctuation:]
+ 28 |     fixed x: maybe (int ~ text) = fail "x"
+    | keyword:fixed  variable:x  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  keyword:fail  string:"x"
+ 29 |     fixed y: maybe (int ~ text) = 5
+    | keyword:fixed  variable:y  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  number:5
  30 |     show(describe(f(0)), " ", describe(f(-1)), " ", describe(f(2)))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:f  punctuation:(  number:0  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:describe  punctuation:(  task:f  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:describe  punctuation:(  task:f  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
  31 |     show(describe(x), " ", describe(y), " ", ys.len)

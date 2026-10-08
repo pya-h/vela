@@ -20,8 +20,8 @@ task said(error: FileError) -> text
 fi
 
 ; Writes the list's first items, emptying the file first. The task opens its
-; own copy of the File, which `hold` lets it change.
-task start(hold file: File@r) -> nothing ~ FileError
+; own copy of the File, which `flex` lets it change.
+task start(flex file: File@r) -> nothing ~ FileError
     region w
     file.open(FileMode.Write) at w { failure e
         <- fail e
@@ -36,7 +36,7 @@ fi
 
 task main()
     region r
-    hold list = File { path: "shopping.txt" }
+    flex list = File { path: "shopping.txt" }
     start(list) { failure e
         show("could not start the list: ", said(e))
     }
@@ -58,7 +58,7 @@ task main()
     list.open(FileMode.Read) at r { failure e
         show("could not read: ", said(e))
     }
-    hold count = 0
+    flex count = 0
     loop list.line() at r { none } is {item}
         count++
         show(count, ". ", item)

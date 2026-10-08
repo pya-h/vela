@@ -14,7 +14,7 @@ fi
 
 ; In a loop through a group's values, written out for each use.
 task some<P...: shown>(args: P...) -> int
-    hold seen = 0
+    flex seen = 0
     each v in args
         seen++
         when seen == 2
@@ -40,8 +40,8 @@ task firsts<P...: shown>(args: P...)
 fi
 
 task find<T: same>(xs: [T#3], want: T) -> maybe int
-    hold found: maybe int = none
-    hold i = 0
+    flex found: maybe int = none
+    flex i = 0
     each x in xs
         when x == want
             found = i
@@ -69,7 +69,7 @@ task total(steps: [Step#5]) -> sum: int
 fi
 
 task main()
-    hold i = 0
+    flex i = 0
     loop i < 10
         i++
         when i == 3
@@ -102,28 +102,28 @@ task main()
 
     ; A plan B may stop the loop, and a region of the pass is freed first.
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     xs.add(1)
     xs.add(2)
     xs.add(3)
     each x in xs
         region s
-        hold t = new [int]() at s
+        flex t = new [int]() at s
         t.add(x)
         when x == 2
             continue
         fi
-        bind y = xs[#x] { break }
+        fixed y = xs[#x] { break }
         show("x ", x, " ", y, " ", t[0])
     fi
 
     ; Regions of blocks inside the pass are freed too.
-    hold k = 0
+    flex k = 0
     loop k < 5
         k++
         block
             region q
-            bind z = new [int]() at q
+            fixed z = new [int]() at q
             when k == 2
                 continue
             fi
@@ -135,7 +135,7 @@ task main()
     fi
 
     ; A map, and a place as it is at each pass.
-    hold m = new [text: int]() at r
+    flex m = new [text: int]() at r
     m["a"] = 1
     m["b"] = 2
     m["c"] = 3
@@ -145,7 +145,7 @@ task main()
         fi
         show(key, v)
     fi
-    hold ys = [5, 6, 7, 8]
+    flex ys = [5, 6, 7, 8]
     each y in &ys
         when y == 7
             break
@@ -154,15 +154,15 @@ task main()
     fi
 
     ; In a loop's condition, it stops that loop.
-    hold j = 0
+    flex j = 0
     loop ys[#j] { break } > 0
         j++
     fi
     show("j ", j)
 
     ; A loop over a pattern, joined with 'and'.
-    hold n = 0
-    hold mm: maybe int = 3
+    flex n = 0
+    flex mm: maybe int = 3
     loop mm is {v} and v < 10
         n++
         mm = v + 1
@@ -176,7 +176,7 @@ task main()
     show("n ", n, " ", mm)
 
     ; A branch of a value may stop the loop instead of giving one.
-    bind ps = [Point { x: 1 }, Point { x: 2 }]
+    fixed ps = [Point { x: 1 }, Point { x: 2 }]
     each p in 0..5
         show(ps[#p] { break })
     fi
@@ -184,7 +184,7 @@ task main()
         show(when p > 1 break else p * 10 fi)
     fi
     each st in [Step.Go(1), Step.Skip, Step.Go(3), Step.Halt, Step.Go(9)]
-        bind w = match st
+        fixed w = match st
         case Go g = g * 2
         case Skip
             continue
@@ -195,9 +195,9 @@ task main()
     fi
 
     ; A plan B whose last line is a when that stops or goes on in every branch.
-    bind few = [1, 2, 3]
+    fixed few = [1, 2, 3]
     each slot in 0..6
-        bind v = few[#slot] {
+        fixed v = few[#slot] {
             when slot == 4
                 break
             else

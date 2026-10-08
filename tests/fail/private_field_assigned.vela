@@ -2,6 +2,6 @@
 include modules/library
 
 task main()
-    hold card = library.card("ada")
+    flex card = library.card("ada")
     card.pin = 0
 fi

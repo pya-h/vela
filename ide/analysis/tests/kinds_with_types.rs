@@ -26,10 +26,10 @@ kind Either<A, B>
 fi
 
 task main()
-    bind some = Option.Some(1)
-    bind empty: Option<text> = Option.None
-    bind written = Option<float>.None
-    bind either = Either<int, text>.Right(\"r\")
+    fixed some = Option.Some(1)
+    fixed empty: Option<text> = Option.None
+    fixed written = Option<float>.None
+    fixed either = Either<int, text>.Right(\"r\")
     match some
     case Some v
         show(v)
@@ -100,14 +100,14 @@ fn the_types_a_kind_takes_and_is_given_are_colored_as_types() {
         assert_eq!(class(&source, "T)"), TokenClass::Type, "{}", when);
         assert_eq!(class(&source, "float>.None"), TokenClass::TypeBuiltin, "{}", when);
         assert_eq!(class(&source, "Option<float>"), TokenClass::Type, "{}", when);
-        assert_eq!(class(&source, "None\n    bind either"), TokenClass::Variant, "{}", when);
+        assert_eq!(class(&source, "None\n    fixed either"), TokenClass::Variant, "{}", when);
         assert_eq!(class(&source, "Right("), TokenClass::Variant, "{}", when);
     }
 }
 
 #[test]
 fn a_variant_whose_types_nothing_tells_is_reported() {
-    let source = program("checked").replace("show(some.isSome())", "bind lost = Option.None");
+    let source = program("checked").replace("show(some.isSome())", "fixed lost = Option.None");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("cannot infer the type of 'lost'"), "{}", diagnostic.message);
@@ -138,7 +138,7 @@ fn the_types_a_kind_takes_are_offered_inside_it() {
 #[test]
 fn a_variant_given_types_and_what_a_case_binds_of_one_read_the_same_whether_or_not_the_file_checks() {
     for when in WHEN {
-        let source = program(when).replace("bind either = Either<int, text>.Right(\"r\")", "bind either = Either<int, text>.Right(\"r\")\n    match either\n    case Left l\n        show(l)\n    case Right r\n        show(r)\n    fi");
+        let source = program(when).replace("fixed either = Either<int, text>.Right(\"r\")", "fixed either = Either<int, text>.Right(\"r\")\n    match either\n    case Left l\n        show(l)\n    case Right r\n        show(r)\n    fi");
         assert_eq!(hover(&source, "written ="), "bind written: Option<float>", "{}", when);
         assert_eq!(hover(&source, "either ="), "bind either: Either<int, text>", "{}", when);
         assert_eq!(hover(&source, "l\n        show(l)"), "l: int", "{}", when);
@@ -148,7 +148,7 @@ fn a_variant_given_types_and_what_a_case_binds_of_one_read_the_same_whether_or_n
 
 #[test]
 fn comparisons_beside_a_comma_are_no_types() {
-    let source = "shape P\n    x: int\n\n    t(a: int, b: int, c: int) -> bool\n        bind t = (a < b, c > .x)\n        <- t.0\n    fi\nfi\n\ntask main()\n    show(P { x: 1 }.t(1, 2, 3))\nfi\n";
+    let source = "shape P\n    x: int\n\n    t(a: int, b: int, c: int) -> bool\n        fixed t = (a < b, c > .x)\n        <- t.0\n    fi\nfi\n\ntask main()\n    show(P { x: 1 }.t(1, 2, 3))\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(class(source, "b, c"), TokenClass::Parameter);
     assert_eq!(class(source, "c >"), TokenClass::Parameter);

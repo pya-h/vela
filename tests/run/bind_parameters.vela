@@ -1,8 +1,8 @@
 ; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'bind& a: Wide' for the caller's place, or 'bind a: Wide' for a copy of its own
 ; How a parameter is given, written before its name: nothing lets the compiler
-; choose (a copy, or where the caller keeps a large value), `bind x` is always
-; a copy, and `bind& x` is the caller's place, only read, which a call gives
-; as `&a`. `hold x` and `hold& x` are the ones a task changes.
+; choose (a copy, or where the caller keeps a large value), `fixed x` is always
+; a copy, and `fixed& x` is the caller's place, only read, which a call gives
+; as `&a`. `flex x` and `flex& x` are the ones a task changes.
 
 ; Nine ints: large enough that the compiler reads a plain parameter where the
 ; caller keeps it.
@@ -19,7 +19,7 @@ shape Wide
 
     ; A part of the value a method changes can't be read by it as well, but
     ; another place can.
-    alters grow(bind& by: Wide)
+    alters grow(fixed& by: Wide)
         .a = .a + by.a
     fi
 fi
@@ -29,86 +29,86 @@ shape Point
     y: int
 fi
 
-; `==` compares shapes by where they are, so two `bind&`s given one place are
+; `==` compares shapes by where they are, so two `fixed&`s given one place are
 ; equal, and two copies never are.
-task one(bind& a: Point, bind& b: Point) -> bool
+task one(fixed& a: Point, fixed& b: Point) -> bool
     <- a == b
 fi
 
-task copies(bind a: Point, bind b: Point) -> bool
+task copies(fixed a: Point, fixed b: Point) -> bool
     <- a == b
 fi
 
 ; A strict copy is a place of its own; a plain large parameter is where the
 ; caller keeps it, as the compiler chose.
-task copied(bind a: Wide, bind& b: Wide) -> bool
+task copied(fixed a: Wide, fixed& b: Wide) -> bool
     <- &a == &b
 fi
 
-task chosen(a: Wide, bind& b: Wide) -> bool
+task chosen(a: Wide, fixed& b: Wide) -> bool
     <- &a == &b
 fi
 
-; A `hold` is a copy of the task's own as well, even one it never changes.
-task held(hold a: Wide, bind& b: Wide) -> bool
+; A `flex` is a copy of the task's own as well, even one it never changes.
+task held(flex a: Wide, fixed& b: Wide) -> bool
     <- &a == &b
 fi
 
 ; An array read where it is, never copied.
-task sum(bind& xs: [int#3], bind start: int) -> int
-    hold total = start
+task sum(fixed& xs: [int#3], fixed start: int) -> int
+    flex total = start
     each x in xs
         total = total + x
     fi
     <- total
 fi
 
-; A `bind&` passes its place on to another.
-task onward(bind& p: Point) -> bool
+; A `fixed&` passes its place on to another.
+task onward(fixed& p: Point) -> bool
     <- one(&p, &p)
 fi
 
-task written(r: region, bind& p: Point) -> text@r
+task written(r: region, fixed& p: Point) -> text@r
     <- "{p.x},{p.y}" at r
 fi
 
 ; In a task that takes types, any place of the type given.
-task same_place<T: same>(bind& a: T, bind& b: T) -> bool
+task same_place<T: same>(fixed& a: T, fixed& b: T) -> bool
     <- a == b
 fi
 
 ; A pointer only read: it stays, and what it points to is its own place, which
 ; the task may change through it.
-task nudge(bind& spot: ^Point@r) -> int
+task nudge(fixed& spot: ^Point@r) -> int
     spot^.x = spot^.x + 1
     <- spot^.x
 fi
 
-task open(bind& m: maybe ^Point@r) -> int
-    bind spot = m { <- 0 }
+task open(fixed& m: maybe ^Point@r) -> int
+    fixed spot = m { <- 0 }
     <- spot^.x
 fi
 
-task kept<T>(bind& a: T) -> T
+task kept<T>(fixed& a: T) -> T
     <- a
 fi
 
 task main()
     region r
-    bind p = Point { x: 1, y: 2 }
-    hold q = p
+    fixed p = Point { x: 1, y: 2 }
+    flex q = p
     show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
-    hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
-    bind other = w
+    flex w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
+    fixed other = w
     show(copied(w, &w), " ", chosen(w, &w), " ", held(w, &w))
     w.grow(&other)
     w.grow(&other)
     show(w.a)
-    bind xs = [1, 2, 3]
+    fixed xs = [1, 2, 3]
     show(sum(&xs, 10))
     ; What a pointer points to, and a field, are places too.
-    bind ptr = new Point(p) at r
+    fixed ptr = new Point(p) at r
     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
-    hold held: maybe ^Point@r = ptr
+    flex held: maybe ^Point@r = ptr
     show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
 fi

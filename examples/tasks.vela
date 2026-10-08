@@ -13,7 +13,7 @@ fi
 
 ; How many times a counted task has run.
 shape Runs
-    shared hold count: int = 0
+    shared flex count: int = 0
 fi
 
 ; Counts each call of the task it wraps, whatever the task takes.
@@ -40,7 +40,7 @@ fi
 
 ; How many of the numbers pass a rule.
 task count(xs: [int]@r, keep: (int) -> bool) -> int
-    hold n = 0
+    flex n = 0
     each x in xs
         when keep(x)
             n++
@@ -51,7 +51,7 @@ fi
 
 ; Each number changed by a task, into a new slice.
 task mapped(xs: [int]@r, change: (int) -> int, out: region) -> [int]@out
-    hold ys = new [int]() at out
+    flex ys = new [int]() at out
     each x in xs
         ys.add(change(x))
     fi
@@ -60,18 +60,18 @@ fi
 
 task main()
     region r
-    bind xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
-    bind even = Rule { name: "even", check: is_even }
-    bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
-    bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
-    bind rules = [even, big, odd]
+    fixed xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
+    fixed even = Rule { name: "even", check: is_even }
+    fixed big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
+    fixed odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
+    fixed rules = [even, big, odd]
     each rule in rules
         show(rule.name, ": ", count(xs, rule.check))
     fi
-    bind doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
+    fixed doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
     show(doubled)
-    bind squared = mapped(xs, (x: int) -> int
-        bind y = x * x
+    fixed squared = mapped(xs, (x: int) -> int
+        fixed y = x * x
         <- y
     fi, r)
     show(squared)

@@ -1,6 +1,6 @@
-task counter(r: region, start: int) -> [hold @r]() -> int
-    hold n = start
-    <- [hold @r]() -> int
+task counter(r: region, start: int) -> [flex @r]() -> int
+    flex n = start
+    <- [flex @r]() -> int
         n = n + 1
         <- n
     fi

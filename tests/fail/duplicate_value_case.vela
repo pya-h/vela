@@ -1,6 +1,6 @@
 ; error: 7:10: duplicate case '{…}'
 task main()
-    bind m: maybe int = 1
+    fixed m: maybe int = 1
     match m
     case {n}
         show(n)

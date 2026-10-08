@@ -12,11 +12,11 @@ const PROGRAM: &str = "\
 task main()
     CHECK
     region r
-    hold xs = [1, 2, ...] at r
-    bind names = [\"ada\", ...]@r
-    bind firsts = xs[0]
+    flex xs = [1, 2, ...] at r
+    fixed names = [\"ada\", ...]@r
+    fixed firsts = xs[0]
     region kept default
-    bind kept_values = [1.5, ...]
+    fixed kept_values = [1.5, ...]
     @@
 fi
 ";

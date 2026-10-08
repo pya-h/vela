@@ -1,5 +1,5 @@
-; error: 4:21: a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [int](xs) at r', or keep the array in a region with 'new [int#3](…) at r'
+; error: 4:22: a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [int](xs) at r', or keep the array in a region with 'new [int#3](…) at r'
 task main()
-    bind days = [1, 2, 3]
-    bind part = days[0..2]
+    fixed days = [1, 2, 3]
+    fixed part = days[0..2]
 fi

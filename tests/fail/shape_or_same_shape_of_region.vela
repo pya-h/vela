@@ -5,6 +5,6 @@ fi
 
 task main()
     region r
-    hold x: Person ~ Person@r = Person { name: "a" }
+    flex x: Person ~ Person@r = Person { name: "a" }
     show(x { "b" }.name)
 fi

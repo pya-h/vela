@@ -55,10 +55,10 @@ fi
 ; The values are computed before the regions of the block are freed.
 task counted(n: int) -> int, int
     region r
-    hold total = 0
-    hold count = 0
+    flex total = 0
+    flex count = 0
     each i in 0..n
-        bind node = new Node(Node { value: i, next: none }) at r
+        fixed node = new Node(Node { value: i, next: none }) at r
         total = total + node^.value
         count = count + 1
     fi
@@ -66,38 +66,38 @@ task counted(n: int) -> int, int
 fi
 
 task main()
-    bind q, r = divmod(17, 5)
+    fixed q, r = divmod(17, 5)
     show(q)
     show(r)
 
     ; `_` drops a result.
-    bind whole, _ = divmod(9, 4)
+    fixed whole, _ = divmod(9, 4)
     show(whole)
 
-    bind m, ok = find(3)
+    fixed m, ok = find(3)
     show(m)
     show(ok)
-    bind empty, missing = find(-1)
+    fixed empty, missing = find(-1)
     show(empty)
     show(missing)
 
-    bind value, result = pair(4)
+    fixed value, result = pair(4)
     show(value)
     show(result { 0 })
-    bind other, failed = pair(-2)
+    fixed other, failed = pair(-2)
     show(other)
     show(failed { failure e
         show("handled")
         -1
     })
 
-    bind a, b = forward(20, 6)
+    fixed a, b = forward(20, 6)
     show(a)
     show(b)
 
     ; Assigning a list, and swapping.
-    hold x = 1
-    hold y = 2
+    flex x = 1
+    flex y = 2
     x, y = y, x
     show(x)
     show(y)
@@ -108,23 +108,23 @@ task main()
     show(y)
 
     ; A plain list of values, and one with a plan B in it.
-    bind first, second = risky(3) { 0 }, risky(-3) { 8 }
+    fixed first, second = risky(3) { 0 }, risky(-3) { 8 }
     show(first)
     show(second)
 
     region nodes
-    bind node, doubled, positive = build(nodes, 21)
+    fixed node, doubled, positive = build(nodes, 21)
     show(node^.value)
     show(doubled)
     show(positive)
 
-    bind total, count = counted(5)
+    fixed total, count = counted(5)
     show(total)
     show(count)
 
     ; A field and a variable in one assignment.
-    hold spot = Point { x: 0, y: 0 }
-    hold last = 0
+    flex spot = Point { x: 0, y: 0 }
+    flex last = 0
     spot.x, last = divmod(31, 4)
     show(spot.x)
     show(last)
@@ -132,7 +132,7 @@ task main()
     show(spot.x)
 
     ; A task that sends nothing, received by '_': it runs in its place.
-    bind _, after = show(1), 2
+    fixed _, after = show(1), 2
     show(after)
     _, last = show(3), 4
     show(last)

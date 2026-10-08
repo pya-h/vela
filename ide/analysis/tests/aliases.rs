@@ -16,10 +16,10 @@ include fuel/prices {Size => Fuel, price_of => fuel_price}
 
 task main()
     CHECK
-    bind tea: Product = Product { name: \"tea\", cents: 250 }
-    bind big = shop.Size.Large(75)
-    bind tank = Fuel.Tank(40)
-    bind can = Fuel.Small
+    fixed tea: Product = Product { name: \"tea\", cents: 250 }
+    fixed big = shop.Size.Large(75)
+    fixed tank = Fuel.Tank(40)
+    fixed can = Fuel.Small
     when tank is Fuel.Tank liters
         show(fuel_price(liters))
     fi
@@ -179,9 +179,9 @@ fn completion_offers_names_as_the_file_writes_them() {
 #[test]
 fn messages_name_things_as_the_file_writes_them() {
     let messages = |code: &str| analysis(&program(true, code)).diagnostics().into_iter().map(|d| d.message).collect::<Vec<_>>();
-    assert_eq!(messages("bind n: int = tea"), ["expected type int, got Product"]);
-    assert_eq!(messages("bind n: int = tank"), ["expected type int, got Fuel"]);
-    assert_eq!(messages("bind n: int = big"), ["expected type int, got shop.Size"]);
+    assert_eq!(messages("fixed n: int = tea"), ["expected type int, got Product"]);
+    assert_eq!(messages("fixed n: int = tank"), ["expected type int, got Fuel"]);
+    assert_eq!(messages("fixed n: int = big"), ["expected type int, got shop.Size"]);
     assert_eq!(messages("show(Item)"), ["unknown variable 'Item'; it is brought in as 'Product' at 1:38"]);
     // A name before a dot that is neither a module nor a kind is a value with a
     // method, so an unknown one is reported as the value it would be.

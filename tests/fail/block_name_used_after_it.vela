@@ -1,7 +1,7 @@
 ; error: 7:10: unknown variable 'inner'
 task main()
     block
-        hold inner = 1
+        flex inner = 1
         show(inner)
     fi
     show(inner)

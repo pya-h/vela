@@ -7,6 +7,6 @@ shape Label
 fi
 
 task main()
-    hold label = Label { words: "hi" }
+    flex label = Label { words: "hi" }
     label.grow()
 fi

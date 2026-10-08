@@ -1,5 +1,5 @@
-; error: 3:23: expected 2 values, got 3
+; error: 3:24: expected 2 values, got 3
 task main()
-    bind a, b = 1, 2, 3
+    fixed a, b = 1, 2, 3
     show(a + b)
 fi

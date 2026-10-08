@@ -11,10 +11,10 @@ fi
 
 task main()
     region r
-    hold d = Dir { name: "a", subs: new [Dir]() at r }
+    flex d = Dir { name: "a", subs: new [Dir]() at r }
     d.subs.add(Dir { name: "b", subs: new [Dir]() at r })
     show(d.subs.len, " ", d.subs[0].name)
-    hold kids = new [Tree]() at r
+    flex kids = new [Tree]() at r
     kids.add(Node(new [Tree]() at r))
     show(Node(kids))
 fi

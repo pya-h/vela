@@ -1,4 +1,4 @@
-; error: 3:29: unknown region 'lines'; declare it with 'region lines'
+; error: 3:30: unknown region 'lines'; declare it with 'region lines'
 task main()
-    bind line = scan("") at lines
+    fixed line = scan("") at lines
 fi

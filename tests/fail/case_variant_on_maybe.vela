@@ -4,7 +4,7 @@ kind Light
 fi
 
 task main()
-    bind m: maybe int = 1
+    fixed m: maybe int = 1
     match m
     case Red
         show(0)

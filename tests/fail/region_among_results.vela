@@ -5,6 +5,6 @@ fi
 
 task main()
     region r
-    bind n, other = build(r)
+    fixed n, other = build(r)
     show(n)
 fi

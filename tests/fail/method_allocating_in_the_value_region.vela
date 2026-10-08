@@ -13,6 +13,6 @@ fi
 
 task main()
     region r
-    hold h: Holder@r = Holder { held: new Node(Node { value: 0 }) at r }
+    flex h: Holder@r = Holder { held: new Node(Node { value: 0 }) at r }
     h.renew(1)
 fi

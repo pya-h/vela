@@ -24,8 +24,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  16 |     region r
     | keyword:region  region:r
- 17 |     bind n = 7
-    | keyword:bind  variable:n  operator:=  number:7
+ 17 |     fixed n = 7
+    | keyword:fixed  variable:n  operator:=  number:7
  19 |     ; An int as a float, which never fails.
     | comment:; An int as a float, which never fails.
  20 |     show(float(n))
@@ -64,18 +64,18 @@
     | builtin-fn:show  punctuation:(  task:half  punctuation:(  type-builtin:int  punctuation:(  number:5.9  punctuation:)  punctuation:)  punctuation:)
  42 |     ; Both edges of an int, which a float holds exactly.
     | comment:; Both edges of an int, which a float holds exactly.
- 43 |     bind biggest = 9223372036854775807
-    | keyword:bind  variable:biggest  operator:=  number:9223372036854775807
- 44 |     bind smallest = -9223372036854775807 - 1
-    | keyword:bind  variable:smallest  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
+ 43 |     fixed biggest = 9223372036854775807
+    | keyword:fixed  variable:biggest  operator:=  number:9223372036854775807
+ 44 |     fixed smallest = -9223372036854775807 - 1
+    | keyword:fixed  variable:smallest  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
  45 |     show(int(float(smallest)) == smallest)
     | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  type-builtin:float  punctuation:(  variable:smallest  punctuation:)  punctuation:)  operator:==  variable:smallest  punctuation:)
  46 |     show(float(biggest) > 9000000000000000000.0)
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:biggest  punctuation:)  operator:>  number:9000000000000000000.0  punctuation:)
  48 |     ; A float that is a whole number already, and one that is not.
     | comment:; A float that is a whole number already, and one that is not.
- 49 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+ 49 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
  50 |     each v in [0.5, 1.5, 2.5, 3.5]
     | keyword:each  variable:v  keyword:in  punctuation:[  number:0.5  punctuation:,  number:1.5  punctuation:,  number:2.5  punctuation:,  number:3.5  punctuation:]
  51 |         total = total + int(v)
@@ -88,10 +88,10 @@
     | comment:; In a task that takes types, where the value is shown and the bool counted.
  56 |     ; One call to a line: which side of a '+' runs first isn't defined.
     | comment:; One call to a line: which side of a '+' runs first isn't defined.
- 57 |     bind said = counted("a", true)
-    | keyword:bind  variable:said  operator:=  task:counted  punctuation:(  string:"a"  punctuation:,  keyword:true  punctuation:)
- 58 |     bind quiet = counted(2, false)
-    | keyword:bind  variable:quiet  operator:=  task:counted  punctuation:(  number:2  punctuation:,  keyword:false  punctuation:)
+ 57 |     fixed said = counted("a", true)
+    | keyword:fixed  variable:said  operator:=  task:counted  punctuation:(  string:"a"  punctuation:,  keyword:true  punctuation:)
+ 58 |     fixed quiet = counted(2, false)
+    | keyword:fixed  variable:quiet  operator:=  task:counted  punctuation:(  number:2  punctuation:,  keyword:false  punctuation:)
  59 |     show(said + quiet)
     | builtin-fn:show  punctuation:(  variable:said  operator:+  variable:quiet  punctuation:)
  60 | fi

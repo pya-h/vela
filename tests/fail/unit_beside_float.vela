@@ -1,5 +1,5 @@
 ; error: 4:14: a float and a unit don't mix in arithmetic: turn one into the other first, as in 'float(b) + x' or 'b + unit(x)'
 task main()
-    bind b: unit = 2
+    fixed b: unit = 2
     show(b + 1.5)
 fi

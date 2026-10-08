@@ -1,8 +1,8 @@
-; error: 7:14: 'Shape' is a kind, not a shape; create its values with its variants
+; error: 7:15: 'Shape' is a kind, not a shape; create its values with its variants
 kind Shape
     Circle(radius: float)
 fi
 
 task main()
-    bind s = Shape { radius: 1.0 }
+    fixed s = Shape { radius: 1.0 }
 fi

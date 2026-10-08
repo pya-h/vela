@@ -2,11 +2,11 @@
 shape Point
     x: int
 
-    alters grow(bind& by: Point)
+    alters grow(fixed& by: Point)
         .x = .x + by.x
     fi
 fi
 
-task f(bind& p: Point)
+task f(fixed& p: Point)
     p = Point { x: 2 }
 fi

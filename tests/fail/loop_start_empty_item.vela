@@ -1,6 +1,6 @@
 ; error: 3:22: an item of a loop's start is missing between two ','s
 task main()
-    loop hold i = 0, , j = 1 || i < j || i++
+    loop flex i = 0, , j = 1 || i < j || i++
         show(i)
     fi
 fi

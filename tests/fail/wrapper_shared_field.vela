@@ -4,7 +4,7 @@ task around(next: (int) -> int, n: int) -> int
     <- next(n)
 fi
 shape X
-    shared hold hook: ((int) -> int, int) -> int = around
+    shared flex hook: ((int) -> int, int) -> int = around
 fi
 $(X.hook)
 task one(n: int) -> int

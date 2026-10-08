@@ -21,7 +21,7 @@ fi
 
 ; A chain with no final `else`: nothing runs when no condition holds.
 task counted(n: int) -> int
-    hold seen = 0
+    flex seen = 0
     when n > 10
         seen = 3
     else when n > 5
@@ -48,7 +48,7 @@ task main()
     show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
 
     ; A pattern in a chain: its names are visible only in its own block.
-    hold light: Light = Dimmed(4)
+    flex light: Light = Dimmed(4)
     when light is On
         show("on")
     else when light is Dimmed level
@@ -70,7 +70,7 @@ task main()
 
     ; A chain inside a loop, with a region in one of its blocks.
     region kept default
-    hold i = 0
+    flex i = 0
     loop i < 3
         when i == 0
             show("zero")
@@ -84,7 +84,7 @@ task main()
 
     ; A read past a tuple's end works the tuple out, in the arm it is written
     ; in, only when that arm is reached, and not after an 'and' that failed.
-    bind k = 3
+    fixed k = 3
     when k > 5
         show("never")
     else when k > 4

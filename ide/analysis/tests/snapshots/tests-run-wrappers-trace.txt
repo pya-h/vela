@@ -6,8 +6,8 @@
     | keyword:task  task:traced  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   5 |     show("> ", label, "(", n, ")")
     | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:label  punctuation:,  string:"("  punctuation:,  parameter:n  punctuation:,  string:")"  punctuation:)
-  6 |     bind result = next(n)
-    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
+  6 |     fixed result = next(n)
+    | keyword:fixed  variable:result  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
   7 |     show("< ", label, " = ", result)
     | builtin-fn:show  punctuation:(  string:"< "  punctuation:,  parameter:label  punctuation:,  string:" = "  punctuation:,  variable:result  punctuation:)
   8 |     <- result

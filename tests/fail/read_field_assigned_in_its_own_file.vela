@@ -6,7 +6,7 @@ shape Tally
 fi
 
 task main()
-    hold tally = Tally {}
+    flex tally = Tally {}
     show(tally.total)
     ; The line below is the mistake.
     tally.total = 5

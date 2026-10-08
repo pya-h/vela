@@ -3,6 +3,6 @@ include std/files {File, FileMode}
 
 task main()
     region r
-    hold notes = File { path: "notes.txt" }
+    flex notes = File { path: "notes.txt" }
     notes.write("lost")
 fi

@@ -1,9 +1,9 @@
 ; trap: text 0..4 cuts through a character at byte 4 at 8:14 in task 'main'
 ; "é" takes two bytes, 3 and 4, so a part may end at 3 or 5 but not at 4.
 task main()
-    bind word = "café"
+    fixed word = "café"
     show(word[0..3])
     show(word[0..5])
-    hold end = 4
+    flex end = 4
     show(word[0..end])
 fi

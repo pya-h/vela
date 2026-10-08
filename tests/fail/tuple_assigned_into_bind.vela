@@ -1,5 +1,5 @@
 ; error: 4:5: cannot assign to immutable variable 'x'
 task main()
-    bind x = 0
+    fixed x = 0
     x, _ = (1, 2)
 fi

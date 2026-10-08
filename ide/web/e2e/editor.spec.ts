@@ -95,7 +95,7 @@ test("quick open and go to a declaration", async ({ page, studio }) => {
 });
 
 const REGIONS =
-  "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask push(r: region, list: maybe ^Node@r) -> ^Node@r\n    <- new Node(Node { value: 1, next: list }) at r\nfi\n\ntask main()\n    region nodes\n    bind first = push(nodes, none)\n    show(first^.value)\nfi\n";
+  "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask push(r: region, list: maybe ^Node@r) -> ^Node@r\n    <- new Node(Node { value: 1, next: list }) at r\nfi\n\ntask main()\n    region nodes\n    fixed first = push(nodes, none)\n    show(first^.value)\nfi\n";
 
 test("regions: highlighting, hover, and completion of region names", async ({ page, studio }) => {
   studio.write("regions.vela", REGIONS);
@@ -110,29 +110,29 @@ test("regions: highlighting, hover, and completion of region names", async ({ pa
   // After the `at` of a `new`, the regions it can allocate in.
   await cursorAtEndOf(page, 13);
   await page.keyboard.press("Enter");
-  await page.keyboard.type("bind two = new int(2) at ");
+  await page.keyboard.type("fixed two = new int(2) at ");
   await page.keyboard.press("Control+Space");
   const popup = page.locator(".cm-tooltip-autocomplete");
   const nodesOption = popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: /^nodes$/ }) });
   await expect(nodesOption).toBeVisible();
   await nodesOption.click();
-  expect(await lineText(page, 14)).toBe("    bind two = new int(2) at nodes");
+  expect(await lineText(page, 14)).toBe("    fixed two = new int(2) at nodes");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 
   // In a call, a region parameter's argument offers only regions.
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
-  await page.keyboard.type("bind three = push(");
+  await page.keyboard.type("fixed three = push(");
   await page.keyboard.press("Control+Space");
   await expect(nodesOption).toBeVisible();
   await expect(popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: /^first$/ }) })).toHaveCount(0);
   await nodesOption.click();
   await page.keyboard.type(", none");
-  expect(await lineText(page, 15)).toBe("    bind three = push(nodes, none)");
+  expect(await lineText(page, 15)).toBe("    fixed three = push(nodes, none)");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 });
 
-const MAYBE = "task find(n: int) -> maybe int\n    when n > 0\n        <- n\n    fi\n    <- none\nfi\n\ntask main()\n    bind m = find(2)\n    show(m)\nfi\n";
+const MAYBE = "task find(n: int) -> maybe int\n    when n > 0\n        <- n\n    fi\n    <- none\nfi\n\ntask main()\n    fixed m = find(2)\n    show(m)\nfi\n";
 
 test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ page, studio }) => {
   studio.write("maybe.vela", MAYBE);
@@ -158,7 +158,7 @@ test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ 
   // A plan B's block is indented, and its `}` lines up with the line that opened it.
   await page.keyboard.press("Home");
   await page.keyboard.press("Shift+End");
-  await page.keyboard.type("bind n = m {");
+  await page.keyboard.type("fixed n = m {");
   await page.keyboard.press("Enter");
   await page.keyboard.type("0");
   expect(await lineText(page, 12)).toBe("        0");
@@ -202,7 +202,7 @@ test("named results: highlighting, hover, and setting them", async ({ page, stud
 });
 
 const RESULTS =
-  "task divmod(a: int, b: int) -> int, int\n    <- a / b, a % b\nfi\n\ntask main()\n    bind q, r = divmod(17, 5)\n    show(q)\n    show(r)\nfi\n";
+  "task divmod(a: int, b: int) -> int, int\n    <- a / b, a % b\nfi\n\ntask main()\n    fixed q, r = divmod(17, 5)\n    show(q)\n    show(r)\nfi\n";
 
 test("several results: highlighting, hover, and completion of the names", async ({ page, studio }) => {
   studio.write("results.vela", RESULTS);
@@ -231,11 +231,11 @@ test("several results: highlighting, hover, and completion of the names", async 
 
   await cursorAtEndOf(page, 8);
   await page.keyboard.press("Enter");
-  await page.keyboard.type("bind a, ");
+  await page.keyboard.type("fixed a, ");
   await page.keyboard.press("Control+Space");
   await expect(popup).toHaveCount(0);
   await page.keyboard.type("b = divmod(9, 4)");
-  expect(await lineText(page, 9)).toBe("    bind a, b = divmod(9, 4)");
+  expect(await lineText(page, 9)).toBe("    fixed a, b = divmod(9, 4)");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 });
 

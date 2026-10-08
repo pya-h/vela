@@ -4,7 +4,7 @@ task f(a: bool, b: bool)
 fi
 
 task main()
-    bind i = 1
-    bind n = 5
+    fixed i = 1
+    fixed n = 5
     f(i < n, n > (i - 1))
 fi

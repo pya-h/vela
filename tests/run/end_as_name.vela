@@ -4,7 +4,7 @@ task last(end: int) -> int
 fi
 
 task main()
-    hold end = 5
+    flex end = 5
     end = end + 1
     show(end)
     show(last(end))

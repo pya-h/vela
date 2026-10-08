@@ -24,10 +24,10 @@
     | keyword:fi
  15 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 16 |     hold sent = send(1)
-    | keyword:hold  variable:sent  operator:=  task:send  punctuation:(  number:1  punctuation:)
- 17 |     bind send_count = sent
-    | keyword:bind  variable:send_count  operator:=  variable:sent
+ 16 |     flex sent = send(1)
+    | keyword:flex  variable:sent  operator:=  task:send  punctuation:(  number:1  punctuation:)
+ 17 |     fixed send_count = sent
+    | keyword:fixed  variable:send_count  operator:=  variable:sent
  18 |     show(send_count)
     | builtin-fn:show  punctuation:(  variable:send_count  punctuation:)
  19 |     report(-5)

@@ -2,12 +2,12 @@
 shape Counter
     n: int = 0
 
-    alters give(hold& x: int)
+    alters give(flex& x: int)
         x = .n
     fi
 fi
 
 task main()
-    hold c = Counter {}
+    flex c = Counter {}
     c.give(&c.n)
 fi

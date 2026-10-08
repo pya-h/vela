@@ -7,13 +7,13 @@
 ; `default` makes the region this task is given the one its allocations use, so
 ; only what goes somewhere else names a region.
 task read_notes(r: region default) -> [text]@r
-    hold notes = new [text]()
-    hold reading = true
+    flex notes = new [text]()
+    flex reading = true
     loop reading
         ; Freed at the end of every pass, with the line read into it. Inside this
         ; block it is the default, so the line needs no `at line_memory`.
         region line_memory default
-        bind line = scan("note> ") { "" }
+        fixed line = scan("note> ") { "" }
         when line == ""
             reading = false
         else
@@ -28,11 +28,11 @@ fi
 task main()
     ; Written out, as it always could be: a region is named where memory goes.
     region kept
-    bind name = scan("Your name: ") at kept { "stranger" }
+    fixed name = scan("Your name: ") at kept { "stranger" }
     show("Hello, ", name, "!")
-    hold notes = read_notes(kept)
+    flex notes = read_notes(kept)
     show(notes.len, " notes, last first")
-    hold number = notes.len
+    flex number = notes.len
     loop notes.len > 0
         ; `show` writes each value in turn, so a line printed once needs no text
         ; of its own, and no region to hold it.

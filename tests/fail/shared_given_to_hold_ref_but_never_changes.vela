@@ -3,7 +3,7 @@ shape Point
     shared start: int = 7
 fi
 
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 

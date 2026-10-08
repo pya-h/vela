@@ -80,8 +80,8 @@ shape Chain<T: frozen>
 fi
 
 task lengthOf<T: frozen>(chain: ^Chain<T>@r) -> int
-    hold steps = 1
-    hold here = chain
+    flex steps = 1
+    flex here = chain
     loop here^.tailOf() is {next}
         here = next
         steps = steps + 1
@@ -90,7 +90,7 @@ task lengthOf<T: frozen>(chain: ^Chain<T>@r) -> int
 fi
 
 task main()
-    hold n: Box<int> = Box { value: 7 }
+    flex n: Box<int> = Box { value: 7 }
     n.tell()
     show(n.valueOf())
     n.put(9)
@@ -98,35 +98,35 @@ task main()
     n.twice(11)
 
     region r
-    hold t: Box<text>@r = Box { value: "boxed".copy() at r }
+    flex t: Box<text>@r = Box { value: "boxed".copy() at r }
     t.tell()
     show(t.valueOf())
     t.put("again".copy() at r)
     t.tell()
 
     ; The text a method of a made shape sends is in the region the value is in.
-    bind held: text@r = t.valueOf()
+    fixed held: text@r = t.valueOf()
     show(held)
 
-    hold p: Pair<int, text>@r = Pair { left: 1, right: "one".copy() at r }
+    flex p: Pair<int, text>@r = Pair { left: 1, right: "one".copy() at r }
     p.tellBoth()
     show(p.leftOf())
     p.swapIn(2, "two".copy() at r)
     p.tellBoth()
 
     ; A shape given a shape given types, each with its own methods.
-    hold deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
+    flex deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
     show(deep.itemOf().valueOf())
     deep.item.put(5)
     show(deep.itemOf().valueOf())
     deep.set(Box { value: 6 })
     deep.itemOf().tell()
 
-    ; A method that changes nothing is called on a `bind` too.
-    bind steady: Box<bool> = Box { value: true }
+    ; A method that changes nothing is called on a `fixed` too.
+    fixed steady: Box<bool> = Box { value: true }
     show(steady.valueOf())
 
-    hold chain = new Chain<int>(Chain { head: 1, next: none }) at r
+    flex chain = new Chain<int>(Chain { head: 1, next: none }) at r
     chain = new Chain<int>(Chain { head: 2, next: chain }) at r
     show(chain^.headOf())
     show(lengthOf(chain))
@@ -134,7 +134,7 @@ task main()
     show(lengthOf(chain))
 
     ; A slice of made shapes, each item a place that can change.
-    hold boxes = new [Box<int>]() at r
+    flex boxes = new [Box<int>]() at r
     boxes.add(Box { value: 20 })
     boxes[0].put(21)
     boxes[0].tell()

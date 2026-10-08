@@ -74,8 +74,8 @@
     | builtin-fn:show  punctuation:(  task:level  punctuation:(  variant:Green  punctuation:)  punctuation:)
  44 |     show(level(Dimmed(30, "dusk")))
     | builtin-fn:show  punctuation:(  task:level  punctuation:(  variant:Dimmed  punctuation:(  number:30  punctuation:,  string:"dusk"  punctuation:)  punctuation:)  punctuation:)
- 46 |     bind lights: maybe Light = Dimmed(5, "evening")
-    | keyword:bind  variable:lights  punctuation::  keyword:maybe  type:Light  operator:=  variant:Dimmed  punctuation:(  number:5  punctuation:,  string:"evening"  punctuation:)
+ 46 |     fixed lights: maybe Light = Dimmed(5, "evening")
+    | keyword:fixed  variable:lights  punctuation::  keyword:maybe  type:Light  operator:=  variant:Dimmed  punctuation:(  number:5  punctuation:,  string:"evening"  punctuation:)
  47 |     when lights is {light}
     | keyword:when  variable:lights  keyword:is  punctuation:{  variable:light  punctuation:}
  48 |         when light is Dimmed amount why
@@ -92,10 +92,10 @@
     | keyword:fi
  54 |     fi
     | keyword:fi
- 56 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
- 57 |     bind current: maybe int = none
-    | keyword:bind  variable:current  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 56 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 57 |     fixed current: maybe int = none
+    | keyword:fixed  variable:current  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  58 |     loop current is {n}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:n  punctuation:}
  59 |         count = count + n

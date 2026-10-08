@@ -3,10 +3,10 @@
 
 task main()
     region outer
-    hold keep = new [text: int]() at outer
+    flex keep = new [text: int]() at outer
     when true
         region inner
-        hold m = new [text: int]() at inner
+        flex m = new [text: int]() at inner
         m["a long key that is copied".copy() at inner] = 1
         keep = new [text: int](m) at outer
     fi

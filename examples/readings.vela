@@ -23,8 +23,8 @@ fi
 ; The last reading above the floor, stopping at a broken sensor (a value
 ; below zero), and failing on purpose when the last reading is too high.
 task last_above(readings: [Reading]@r, floor: int) -> int ~ LoopResult<int, text>
-    bind found = loop hold i = 0 || i < readings.len || i++
-        bind reading = readings[i]
+    fixed found = loop flex i = 0 || i < readings.len || i++
+        fixed reading = readings[i]
         when reading.value < 0
             break = i
         fi
@@ -38,11 +38,11 @@ fi
 
 task main()
     region r
-    bind day = [Reading { sensor: "north", value: 12 }, Reading { sensor: "east", value: 40 }, Reading { sensor: "west", value: 31 }, ...] at r
-    bind night = [Reading { sensor: "north", value: 50 }, Reading { sensor: "east", value: 3 }, ...] at r
-    bind faulty = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: -1 }, Reading { sensor: "west", value: 70 }, ...] at r
-    bind spike = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: 950 }, ...] at r
-    bind empty = new [Reading]() at r
+    fixed day = [Reading { sensor: "north", value: 12 }, Reading { sensor: "east", value: 40 }, Reading { sensor: "west", value: 31 }, ...] at r
+    fixed night = [Reading { sensor: "north", value: 50 }, Reading { sensor: "east", value: 3 }, ...] at r
+    fixed faulty = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: -1 }, Reading { sensor: "west", value: 70 }, ...] at r
+    fixed spike = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: 950 }, ...] at r
+    fixed empty = new [Reading]() at r
 
     each readings in [day, night, faulty, spike, empty]
         match last_above(readings, 10)
@@ -54,7 +54,7 @@ task main()
     fi
 
     ; The sum of the readings, as the value of a loop in three parts.
-    bind sum = loop hold i = 0, total = 0 || i < day.len || i++
+    fixed sum = loop flex i = 0, total = 0 || i < day.len || i++
         total += day[i].value
         total
     fi

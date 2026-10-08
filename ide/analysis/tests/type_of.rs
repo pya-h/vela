@@ -15,9 +15,9 @@ fi
 
 task main()
     CHECK
-    bind xs = [0x1F, 0o17, 0b101]
-    bind p = Point { x: 0xff_ff }
-    bind word = xs.type
+    fixed xs = [0x1F, 0o17, 0b101]
+    fixed p = Point { x: 0xff_ff }
+    fixed word = xs.type
     @@
 fi
 ";
@@ -88,7 +88,7 @@ fn mistakes_with_either_are_reported() {
     let cases = [
         ("show(0X1F)", "invalid number '0X1F': its base is written in lowercase, as in '0x1F'"),
         ("show(0b12)", "invalid number '0b12': '2' is not a binary digit (0 or 1)"),
-        ("bind type = 1", "expected a name, got 'type', which is a reserved word; every value has '.type', its type as code writes it, so nothing else takes the name"),
+        ("fixed type = 1", "expected a name, got 'type', which is a reserved word; every value has '.type', its type as code writes it, so nothing else takes the name"),
         ("show(p.type())", "'type' is the type of a value, read without '(…)', as in 'x.type'"),
     ];
     for (code, message) in cases {

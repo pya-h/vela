@@ -1,5 +1,5 @@
-; error: 4:27: expected type [int]@r, got none; a slice can't be none, so use 'maybe [int]@r'
+; error: 4:28: expected type [int]@r, got none; a slice can't be none, so use 'maybe [int]@r'
 task main()
     region r
-    bind items: [int]@r = none
+    fixed items: [int]@r = none
 fi

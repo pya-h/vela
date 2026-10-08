@@ -1,6 +1,6 @@
 ; error: 3:49: an item of a loop's start or step ends on the loop's line, so a 'when' or 'match' in it closes with 'fi' there; for more, put them in the loop's body
 task main()
-    loop hold i = 0 || i < 3 || i++, when i == 1
+    loop flex i = 0 || i < 3 || i++, when i == 1
         show(i)
     fi
     fi

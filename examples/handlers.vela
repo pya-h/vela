@@ -1,17 +1,17 @@
 ; Handlers kept as values: each takes the running total as a place it may
 ; change, so a table of them can be run in turn, and one that builds text is
 ; given the region to build it in. A task type says how each parameter is
-; given: 'hold& int' for a place the task changes, '@r' for a region.
+; given: 'flex& int' for a place the task changes, '@r' for a region.
 
-task add_ten(hold& total: int)
+task add_ten(flex& total: int)
     total = total + 10
 fi
 
-task halve(hold& total: int)
+task halve(flex& total: int)
     total = total / 2
 fi
 
-task square(hold& total: int)
+task square(flex& total: int)
     total = total * total
 fi
 
@@ -21,18 +21,18 @@ task report(r: region, total: int) -> text@r
 fi
 
 ; Logs each step: a wrapper gives the place on to the step it wraps.
-task logged(next: (hold& int) -> nothing, hold& total: int)
-    bind before = total
+task logged(next: (flex& int) -> nothing, flex& total: int)
+    fixed before = total
     next(&total)
     show(before, " -> ", total)
 fi
 
 $(logged)
-task double(hold& total: int)
+task double(flex& total: int)
     total = total * 2
 fi
 
-task run_all(steps: [(hold& int) -> nothing]@s, hold& total: int)
+task run_all(steps: [(flex& int) -> nothing]@s, flex& total: int)
     each step in steps
         step(&total)
     fi
@@ -40,9 +40,9 @@ fi
 
 task main()
     region r
-    bind steps = [add_ten, double, halve, square, ...] at r
-    hold total = 1
+    fixed steps = [add_ten, double, halve, square, ...] at r
+    flex total = 1
     run_all(steps, &total)
-    bind describe: (@s, int) -> text@s = report
+    fixed describe: (@s, int) -> text@s = report
     show(describe(r, total))
 fi

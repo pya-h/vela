@@ -1,10 +1,10 @@
-; error: 7:18: unknown variable 'nothing'
+; error: 7:19: unknown variable 'nothing'
 ; error: 8:27: unknown region 'nowhere'; declare it with 'region nowhere'
 task main()
     region work
     show(1)
     show(2)
-    bind value = nothing
+    fixed value = nothing
     show(value.shown() at nowhere)
     show(value.shown()@work)
     value.reset()

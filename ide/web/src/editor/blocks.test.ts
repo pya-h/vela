@@ -51,22 +51,22 @@ describe("indentation", () => {
   it("reads a match or a when used as a value as opening its block", () => {
     // The opener may sit after an `=`, or inside a call, and `else when` opens
     // nothing, since one `fi` closes its chain.
-    expect(opener("    bind area = match s", WORDS)).toBe("match");
-    expect(opener("    bind found = each x in xs", WORDS)).toBe("each");
-    expect(opener("    show(loop hold i = 0 || i < 3 || i++", WORDS)).toBe("loop");
+    expect(opener("    fixed area = match s", WORDS)).toBe("match");
+    expect(opener("    fixed found = each x in xs", WORDS)).toBe("each");
+    expect(opener("    show(loop flex i = 0 || i < 3 || i++", WORDS)).toBe("loop");
     expect(opener("    show(when ok", WORDS)).toBe("when");
-    expect(opener("    bind label = when n > 0", WORDS)).toBe("when");
+    expect(opener("    fixed label = when n > 0", WORDS)).toBe("when");
     expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  ; match", WORDS)]).toEqual([null, null, null]);
     // A match's cases line up with the line the `match` is on, wherever in it.
-    expect(indentOfLast("task main()\n    bind area = match s\n")).toBe(4);
-    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r\n")).toBe(8);
-    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r\n        1.0\n    case")).toBe(4);
-    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r = 1.0\n    fi")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed area = match s\n")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r\n        1.0\n    case")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r = 1.0\n    fi")).toBe(4);
     // A when used as a value indents its branch, and its else lines up with it.
-    expect(indentOfLast("task main()\n    bind label = when n > 0\n")).toBe(8);
-    expect(indentOfLast('task main()\n    bind label = when n > 0\n        "yes"\n        else')).toBe(4);
+    expect(indentOfLast("task main()\n    fixed label = when n > 0\n")).toBe(8);
+    expect(indentOfLast('task main()\n    fixed label = when n > 0\n        "yes"\n        else')).toBe(4);
     // Folding covers the whole value, up to the fi that closes it.
-    const lines = ["task main()", "    bind area = match s", "    case Circle r = 1.0", "    case Rect w h = 2.0", "    fi", "    show(area)", "fi"];
+    const lines = ["task main()", "    fixed area = match s", "    case Circle r = 1.0", "    case Rect w h = 2.0", "    fi", "    show(area)", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(6);
   });
@@ -75,7 +75,7 @@ describe("indentation", () => {
     expect(opener("    outer => each a in 0..4", WORDS)).toBe("each");
     expect(opener("    inner => loop n < 5", WORDS)).toBe("loop");
     expect(opener("    outer => endless", WORDS)).toBe("endless");
-    expect(opener("    loop hold i = 0 || i < 9 || i++", WORDS)).toBe("loop");
+    expect(opener("    loop flex i = 0 || i < 9 || i++", WORDS)).toBe("loop");
     expect(indentOfLast("task main()\n    endless\n")).toBe(8);
     expect(opener("include std/text => t", WORDS)).toBeNull();
     expect(indentOfLast("task main()\n    outer => each a in 0..4\n")).toBe(8);
@@ -89,12 +89,12 @@ describe("indentation", () => {
     // line closes it there, as a one-line plan B's `}` does: what follows is
     // outside it, and the block around it still ends at its own `fi`.
     expect(opener('    when 1 > 0 show("a") fi', WORDS)).toBeNull();
-    expect(opener("    bind x = when c 1 else 2 fi", WORDS)).toBeNull();
-    expect(opener("    bind x = match s case A = 1 case B = 2 fi", WORDS)).toBeNull();
+    expect(opener("    fixed x = when c 1 else 2 fi", WORDS)).toBeNull();
+    expect(opener("    fixed x = match s case A = 1 case B = 2 fi", WORDS)).toBeNull();
     // A line whose inner block closes still opens its own.
     expect(opener("    each i in 0..3 when x fi", WORDS)).toBe("each");
     expect(indentOfLast('task main()\n    when 1 > 0 show("a") fi\n')).toBe(4);
-    expect(indentOfLast("task main()\n    bind x = when c 1 else 2 fi\n")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed x = when c 1 else 2 fi\n")).toBe(4);
     const lines = ["task main()", '    when 1 > 0 show("a") fi', "    show(1)", "fi"];
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(3);
     expect(closingLine(lines, lines.length, 1, WORDS)).toBeNull();
@@ -125,62 +125,62 @@ describe("indentation", () => {
 
 describe("plan B braces", () => {
   it("indents after a line ending with { and lines } up with it", () => {
-    expect(indentOfLast("task main()\n    bind n = m {\n")).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = m {  ; no value\n")).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)\n        }")).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m {\n        bind k = j {\n            0\n        }\n        k\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed n = m {  ; no value\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed n = m {\n        show(1)\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m {\n        fixed k = j {\n            0\n        }\n        k\n        }")).toBe(4);
     // After the closing line, the block's level again.
-    expect(indentOfLast("task main()\n    bind n = m {\n        0\n    }\n")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m {\n        0\n    }\n")).toBe(4);
     // A brace in a comment or a one-line plan B opens nothing.
     expect(indentOfLast("task main()\n    ; a {\n")).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m { 0 }\n")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m { 0 }\n")).toBe(4);
     // Nor does one in a trailing comment or a string.
     expect(indentOfLast("task main()\n    show(1)  ; see {\n")).toBe(4);
     expect(indentOfLast('task main()\n    show("use { ; like this")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\" {")\n')).toBe(4);
-    expect(indentOfLast('task main()\n    bind n = m {  ; "quoted" {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    fixed n = m {  ; "quoted" {\n')).toBe(8);
     // Values in a string may hold strings, and braces, of their own.
-    expect(indentOfLast('task main()\n    bind n = m("{";"}") {\n')).toBe(8);
-    expect(indentOfLast('task main()\n    bind n = m("{k { 0 }} {f("}")}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    fixed n = m("{";"}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    fixed n = m("{k { 0 }} {f("}")}") {\n')).toBe(8);
     expect(indentOfLast('task main()\n    show("{n} {")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\{ {n}")\n')).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)  ; uses {\n        0\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m {\n        show(1)  ; uses {\n        0\n        }")).toBe(4);
     // A line closing one plan B and opening another.
-    expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n")).toBe(8);
-    expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed x = a {\n        0\n    } + b {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
   });
 
   it("reads a char as a value, never a comment, a brace, or a string", () => {
     // A `;`, a `{`, or a `"` between single quotes is a char.
-    expect(indentOfLast("task main()\n    bind n = m(';') {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed n = m(';') {\n")).toBe(8);
     expect(indentOfLast("task main()\n    show('{')\n")).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m('\"') {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    fixed n = m('\"') {\n")).toBe(8);
     // Its escaped quote doesn't end it, and a char inside a string's value is read too.
     expect(indentOfLast("task main()\n    show('\\'', '{')\n")).toBe(4);
-    expect(indentOfLast('task main()\n    bind n = m("{f(\'}\')}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    fixed n = m("{f(\'}\')}") {\n')).toBe(8);
   });
 
   it("reads a { naming the plan B's failure as opening its block", () => {
-    expect(indentOfLast('task main()\n    bind n = parse("x") { failure e\n')).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = parse(t) { failure _  ; ignored\n")).toBe(8);
-    expect(indentOfLast("task main()\n    when ok\n        bind n = parse(t) { failure e\n            show(e)\n            }")).toBe(8);
+    expect(indentOfLast('task main()\n    fixed n = parse("x") { failure e\n')).toBe(8);
+    expect(indentOfLast("task main()\n    fixed n = parse(t) { failure _  ; ignored\n")).toBe(8);
+    expect(indentOfLast("task main()\n    when ok\n        fixed n = parse(t) { failure e\n            show(e)\n            }")).toBe(8);
     const lines = ["task main()", "    save(3) { failure problem", "        show(problem)", "    }", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(3);
     // A name closed on the same line is a one-line plan B, and a line ending in
     // `failure e` without `{` opens nothing. `fail` never names, so it opens nothing either.
-    expect(indentOfLast("task main()\n    bind n = m { failure e }\n")).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m { failure e }\n")).toBe(4);
     expect(indentOfLast("task main()\n    <- fail e\n")).toBe(4);
-    expect(indentOfLast('task main()\n    bind n = m { failure "no" \n')).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m { fail e\n")).toBe(4);
+    expect(indentOfLast('task main()\n    fixed n = m { failure "no" \n')).toBe(4);
+    expect(indentOfLast("task main()\n    fixed n = m { fail e\n")).toBe(4);
     expect(closingLine(["task main()", "    x { failure e }", "fi"], 3, 1, WORDS)).toBeNull();
   });
 
   it("folds a plan B up to its }", () => {
-    const lines = ["task main()", "    bind n = m {", "        bind k = j {", "            0", "        }", "        k", "    }", "fi"];
+    const lines = ["task main()", "    fixed n = m {", "        fixed k = j {", "            0", "        }", "        k", "    }", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(6);
     expect(closingLine(lines, lines.length, 2, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(7);
-    const chained = ["task main()", "    bind n = m {", "        bind x = a {", "            0", "        } + b {  ; see {", "            1", "        }", "        x", "    }", "fi"];
+    const chained = ["task main()", "    fixed n = m {", "        fixed x = a {", "            0", "        } + b {  ; see {", "            1", "        }", "        x", "    }", "fi"];
     expect(closingLine(chained, chained.length, 1, WORDS)).toBe(8);
     expect(closingLine(chained, chained.length, 2, WORDS)).toBe(4);
     expect(closingLine(chained, chained.length, 4, WORDS)).toBe(6);

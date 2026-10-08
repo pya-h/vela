@@ -1,8 +1,8 @@
 ; trap: slice 0..4 is out of range 0..3 at 6:17 in task 'main'
 task main()
     region r
-    bind xs = new [int]([1, 2, 3]) at r
-    hold e = 4
+    fixed xs = new [int]([1, 2, 3]) at r
+    flex e = 4
     each x in xs[0..e]
         show(x)
     fi

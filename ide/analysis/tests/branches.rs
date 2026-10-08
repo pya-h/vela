@@ -37,8 +37,8 @@ kind Light
 fi
 
 task main()
-    hold light: Light = Dimmed(4)
-    bind score = 70
+    flex light: Light = Dimmed(4)
+    fixed score = 70
     when score >= 90
         show(\"top\")
     else when light is Dimmed level
@@ -89,8 +89,8 @@ fn a_when_on_a_line_of_its_own_inside_an_else_is_a_block_of_its_own() {
     // name it binds is gone after it and the enclosing names are back.
     let source = "\
 task main()
-    bind a: maybe int = none
-    bind b: maybe int = 7
+    fixed a: maybe int = none
+    fixed b: maybe int = 7
     when a is {x}
         show(x)
     else
@@ -116,12 +116,12 @@ kind Reading
 fi
 
 task main()
-    bind r = Ok(8)
-    bind half = match r
+    fixed r = Ok(8)
+    fixed half = match r
     case Ok value = value / 2
     case Missing = none
     fi
-    bind label = match r
+    fixed label = match r
     case Ok value
         when value > 5
             \"high\"
@@ -161,12 +161,12 @@ fn a_value_a_case_gives_is_read_as_a_value_not_a_pattern() {
 
 #[test]
 fn completion_offers_a_match_and_a_when_where_a_value_goes() {
-    let items = labels("task main()\n    bind x = @@\nfi\n");
+    let items = labels("task main()\n    fixed x = @@\nfi\n");
     assert!(items.contains(&"match".to_string()), "{:?}", items);
     assert!(items.contains(&"when".to_string()), "{:?}", items);
     assert!(items.contains(&"match … = value".to_string()), "{:?}", items);
     // Inside a case's value, the names visible there, including the pattern's.
-    let inside = labels("kind K\n    Ok(v: int)\nfi\n\ntask main()\n    bind k = Ok(1)\n    bind n = match k\n    case Ok v = @@\n    fi\n    show(n)\nfi\n");
+    let inside = labels("kind K\n    Ok(v: int)\nfi\n\ntask main()\n    fixed k = Ok(1)\n    fixed n = match k\n    case Ok v = @@\n    fi\n    show(n)\nfi\n");
     assert!(inside.contains(&"v".to_string()), "{:?}", inside);
 }
 
@@ -174,7 +174,7 @@ fn completion_offers_a_match_and_a_when_where_a_value_goes() {
 fn a_loop_is_not_offered_a_when() {
     // A `loop` takes its condition directly, which the parser insists on, so the
     // word that would open a value there is left out; a `match` still fits.
-    let items = labels("task main()\n    hold k = 0\n    loop @@\nfi\n");
+    let items = labels("task main()\n    flex k = 0\n    loop @@\nfi\n");
     assert!(!items.contains(&"when".to_string()), "{:?}", items);
     assert!(!items.contains(&"when … else".to_string()), "{:?}", items);
     assert!(items.contains(&"match".to_string()), "{:?}", items);
@@ -183,7 +183,7 @@ fn a_loop_is_not_offered_a_when() {
 #[test]
 fn a_half_typed_value_still_highlights_and_says_what_it_can() {
     // Studio reads a file that does not check from its tokens alone.
-    let source = "task main()\n    bind n = match missing\n    case Ok v = v\n    fi\n    show(n)\nfi\n";
+    let source = "task main()\n    fixed n = match missing\n    case Ok v = v\n    fi\n    show(n)\nfi\n";
     assert!(!Analysis::new(source).diagnostics().is_empty());
     assert_eq!(class_at(source, "match missing", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "case", 0), TokenClass::Keyword);

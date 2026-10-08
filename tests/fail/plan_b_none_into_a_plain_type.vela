@@ -1,6 +1,6 @@
-; error: 4:36: this plan B can give none, so the whole is maybe int, with no value when the plan B runs, but int is expected here; make the plan B give a value of type int, or expect maybe int
+; error: 4:37: this plan B can give none, so the whole is maybe int, with no value when the plan B runs, but int is expected here; make the plan B give a value of type int, or expect maybe int
 ; A plan B giving none makes a maybe, which has no value when it runs.
 task main()
-    bind n: int = scan("n: ", int) { none }
+    fixed n: int = scan("n: ", int) { none }
     show(n)
 fi

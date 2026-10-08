@@ -14,9 +14,9 @@ include shapes/geometry
 include palette (Color, describe)
 
 task main()
-    bind square = geometry.Square(3.0)
+    fixed square = geometry.Square(3.0)
     show(geometry.area(square))
-    bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
+    fixed corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
     show(corner.x)
     match square
     case Square side
@@ -24,9 +24,9 @@ task main()
     case Circle radius
         show(radius)
     fi
-    bind red: Color = palette.Red
+    fixed red: Color = palette.Red
     show(describe(red))
-    bind size = geometry.measure(square)
+    fixed size = geometry.measure(square)
     @@
 fi
 ";
@@ -245,7 +245,7 @@ fn completion_offers_what_modules_declare() {
     }
     assert!(!members.iter().any(|name| name == "pi" || name == "square" || name == "x"), "{:?}", members);
     // Where a type is written, only its shapes and kinds.
-    assert_eq!(labels(&main_with("bind p: geometry.@@ = corner")), ["Point", "Measure", "Figure"]);
+    assert_eq!(labels(&main_with("fixed p: geometry.@@ = corner")), ["Point", "Measure", "Figure"]);
     // In an `include` line's parentheses, the names a module declares.
     let listed = labels(&MAIN.replace("include palette (Color, describe)", "include palette (Color, @@)"));
     assert_eq!(listed, ["Color", "Red", "Blue", "describe"]);
@@ -257,7 +257,7 @@ fn completion_offers_what_modules_declare() {
         assert!(values.contains(&name.to_string()), "{} in {:?}", name, values);
     }
     assert!(!values.iter().any(|name| name == "area" || name == "Point"), "{:?}", values);
-    let types = labels(&main_with("bind c: @@ = red"));
+    let types = labels(&main_with("fixed c: @@ = red"));
     assert!(types.contains(&"Color".to_string()) && types.contains(&"geometry".to_string()) && !types.contains(&"Point".to_string()), "{:?}", types);
 
     // Fields of another module's shape, except private ones.
@@ -319,7 +319,7 @@ fn a_private_kind_and_its_variants_are_hidden_from_other_files() {
     let members = labels(&main_with("show(geometry.@@)"));
     assert!(members.contains(&"Figure".to_string()) && members.contains(&"Circle".to_string()), "{:?}", members);
     assert!(!members.iter().any(|name| name == "Secret" || name == "Hidden"), "{:?}", members);
-    assert!(!labels(&main_with("bind s: geometry.@@ = square")).contains(&"Secret".to_string()));
+    assert!(!labels(&main_with("fixed s: geometry.@@ = square")).contains(&"Secret".to_string()));
 }
 
 #[test]
@@ -336,7 +336,7 @@ fn a_shape_with_a_private_field_is_not_offered_as_a_literal_in_another_file() {
     let values = items(&brought.replace("    @@\n", "    show(@@)\n"));
     assert_eq!(values.iter().find(|item| item.label == "Size").map(|item| item.snippet.clone()), Some(None));
     // In a literal, only the fields another file sees.
-    assert_eq!(labels(&main_with("bind m = geometry.Measure { @@ }")), ["size"]);
+    assert_eq!(labels(&main_with("fixed m = geometry.Measure { @@ }")), ["size"]);
 }
 
 /// `MAIN` with a task above `main` that sends another module's type or an error.
@@ -366,7 +366,7 @@ fn another_modules_type_goes_on_with_its_error_type() {
 /// names use aren't names this file can write.
 fn braces_program(checks: bool, code: &str) -> String {
     let first = if checks { "show(0)" } else { "show(unknown)" };
-    format!("include shapes/geometry {{measure, Circle}}\n\ntask main()\n    {}\n    bind size = measure(Circle(1.0))\n    {}\nfi\n", first, code)
+    format!("include shapes/geometry {{measure, Circle}}\n\ntask main()\n    {}\n    fixed size = measure(Circle(1.0))\n    {}\nfi\n", first, code)
 }
 
 #[test]
@@ -384,7 +384,7 @@ fn types_a_file_cant_write_are_spelled_with_their_module_path() {
         assert_eq!(circle.code, "Circle(radius: float)");
         assert_eq!(circle.doc, "A variant of kind shapes/geometry.Figure. From module shapes/geometry (app/shapes/geometry.vela).");
     }
-    let wrong = braces_program(true, "bind n: int = Circle(2.0)");
+    let wrong = braces_program(true, "fixed n: int = Circle(2.0)");
     let messages: Vec<String> = Analysis::with_modules(&wrong, "app/main.vela", &sources).diagnostics().into_iter().map(|d| d.message).collect();
     assert_eq!(messages, ["expected type int, got shapes/geometry.Figure"]);
 }
@@ -398,7 +398,7 @@ fi
 
 task main()
     CHECK
-    bind figure = geometry.Square(2.0)
+    fixed figure = geometry.Square(2.0)
     match figure
     case Circle radius
         show(radius)

@@ -1,6 +1,6 @@
-; error: 4:25: expected type maybe int, got maybe text
+; error: 4:26: expected type maybe int, got maybe text
 task main()
-    bind word: maybe text = "a"
-    bind n = int("4") { word }
+    fixed word: maybe text = "a"
+    fixed n = int("4") { word }
     show(n)
 fi

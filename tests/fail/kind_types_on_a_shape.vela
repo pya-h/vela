@@ -1,8 +1,8 @@
-; error: 7:14: 'Box' is a shape, so its values are written 'Box<…> { … }'
+; error: 7:15: 'Box' is a shape, so its values are written 'Box<…> { … }'
 shape Box<T>
     value: T
 fi
 
 task main()
-    bind b = Box<int>.Some
+    fixed b = Box<int>.Some
 fi

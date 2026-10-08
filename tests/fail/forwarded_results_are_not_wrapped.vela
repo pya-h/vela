@@ -8,7 +8,7 @@ task maybes() -> maybe int, int
 fi
 
 task main()
-    bind a, b = maybes()
+    fixed a, b = maybes()
     show(a)
     show(b)
 fi

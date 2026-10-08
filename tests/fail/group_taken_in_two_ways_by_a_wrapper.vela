@@ -8,11 +8,11 @@ task val(n: int)
     show("val ", n)
 fi
 $(w(val))
-task put(hold& n: int)
+task put(flex& n: int)
     n = n + 1
 fi
 task main()
-    hold k = 3
+    flex k = 3
     put(&k)
     show(k)
 fi

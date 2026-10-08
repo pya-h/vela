@@ -20,11 +20,11 @@ shape Pair
 fi
 
 task main()
-    bind m: maybe int = none
+    fixed m: maybe int = none
     show(add(say("left", m { 1 }), say("right", 2)))
     show(say("left", m { 1 }) + say("right", 2))
     show(three(say("a", 1), say("b", m { 2 }), say("c", 3)))
-    bind p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
+    fixed p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
     show(p.first + p.second)
     show(say("text", 1) == m { say("fallback", 1) })
 fi

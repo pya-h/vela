@@ -21,16 +21,16 @@ task make() -> [int#3]
 fi
 
 task main()
-    hold xs = make()
+    flex xs = make()
     xs[0] = 10
     show(xs[0] + make()[0])
 
-    bind points = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+    fixed points = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
     each p in points
         show(p.x * p.y)
     fi
 
-    bind lights = [Red, Dimmed(5), Light.Dimmed(7)]
+    fixed lights = [Red, Dimmed(5), Light.Dimmed(7)]
     each l in lights
         match l
         case Red
@@ -41,17 +41,17 @@ task main()
     fi
 
     region r
-    bind a = new Node(Node { value: 1, next: none }) at r
-    bind b = new Node(Node { value: 2, next: a }) at r
-    hold ptrs: [^Node#3]@r = [a, b, a]
+    fixed a = new Node(Node { value: 1, next: none }) at r
+    fixed b = new Node(Node { value: 2, next: a }) at r
+    flex ptrs: [^Node#3]@r = [a, b, a]
     ptrs[2] = b
     each p in ptrs
         show(p^.value)
     fi
-    bind boxed = new [^Node#3](ptrs) at r
+    fixed boxed = new [^Node#3](ptrs) at r
     show(boxed^[1]^.next { a }^.value)
 
-    hold words: [text#2] = ["a", "b"]
+    flex words: [text#2] = ["a", "b"]
     words[1] = "c"
     show(words[1])
 fi

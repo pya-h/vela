@@ -4,6 +4,6 @@ task divmod(a: int, b: int) -> int,
 fi
 
 task main()
-    bind q, r = divmod(9, 2)
+    fixed q, r = divmod(9, 2)
     show(q + r)
 fi

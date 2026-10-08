@@ -66,8 +66,8 @@
     | task:check  punctuation:(  string:"a"  punctuation:,  string:"b"  punctuation:)
  40 |     show(larger(3, 7), " ", larger("fig", "pear"))
     | builtin-fn:show  punctuation:(  task:larger  punctuation:(  number:3  punctuation:,  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:larger  punctuation:(  string:"fig"  punctuation:,  string:"pear"  punctuation:)  punctuation:)
- 41 |     bind pair = twice(4)
-    | keyword:bind  variable:pair  operator:=  task:twice  punctuation:(  number:4  punctuation:)
+ 41 |     fixed pair = twice(4)
+    | keyword:fixed  variable:pair  operator:=  task:twice  punctuation:(  number:4  punctuation:)
  42 |     show(pair.0 + pair.1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  operator:+  variable:pair  punctuation:.  field:1  punctuation:)
  43 | fi

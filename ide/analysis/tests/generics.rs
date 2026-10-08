@@ -31,8 +31,8 @@ fi
 task main()
     CHECK
     region r
-    bind ns: [int]@r = new [int]([3, 1]) at r
-    bind names: [text]@r = new [text]([\"ada\"]) at r
+    fixed ns: [int]@r = new [int]([3, 1]) at r
+    fixed names: [text]@r = new [text]([\"ada\"]) at r
     show(first(ns))
     show(first<text@r>(names))
     show(biggest(2, 5))
@@ -120,9 +120,9 @@ fn the_types_a_task_takes_and_the_words_for_them_are_colored() {
 #[test]
 fn a_type_a_task_takes_completes_as_a_type_in_its_own_body() {
     let types = ["int", "float", "bool", "text", "unit", "char", "T", "maybe"];
-    assert_eq!(labels("task first<T>(x: T)\n    bind y: @@ = x\nfi\n"), types);
+    assert_eq!(labels("task first<T>(x: T)\n    fixed y: @@ = x\nfi\n"), types);
     // A task that takes no types has none to offer.
-    assert_eq!(labels("task plain(x: int)\n    bind y: @@ = x\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "maybe"]);
+    assert_eq!(labels("task plain(x: int)\n    fixed y: @@ = x\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "maybe"]);
 }
 
 #[test]
@@ -158,7 +158,7 @@ task empty<T>() -> maybe T
 fi
 
 task main()
-    bind x = empty()
+    fixed x = empty()
     show(1)
 fi
 ";
@@ -201,9 +201,9 @@ fi
 
 task main()
     region r
-    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }
-    bind count = Box<int> { value: 2 }
-    bind pair: Pair<int, text> = Pair { left: 1, right: \"one\" }
+    fixed kept: Box<text>@r = Box { value: \"ada\".copy() at r }
+    fixed count = Box<int> { value: 2 }
+    fixed pair: Pair<int, text> = Pair { left: 1, right: \"one\" }
     show(valueOf(count))
     show(kept.value)
     show(pair.right)
@@ -264,8 +264,8 @@ fn the_types_a_shape_is_given_are_colored_as_types() {
 fn completion_offers_types_where_a_shape_is_given_them() {
     let types = ["int", "float", "bool", "text", "unit", "char", "Box", "Pair", "maybe"];
     // In a written type, and in a literal.
-    assert_eq!(labels(&shapes("bind other: Box<@@> = count")), types);
-    assert_eq!(labels(&shapes("bind other = Box<@@> { value: 1 }")), types);
+    assert_eq!(labels(&shapes("fixed other: Box<@@> = count")), types);
+    assert_eq!(labels(&shapes("fixed other = Box<@@> { value: 1 }")), types);
     // A type the shape takes is a type inside its own fields.
     assert_eq!(labels("shape Box<T>\n    value: @@\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "T", "Box", "maybe"]);
     // The words a type can be asked to allow, and nothing where a name is
@@ -276,14 +276,14 @@ fn completion_offers_types_where_a_shape_is_given_them() {
 
 #[test]
 fn a_shape_used_without_the_types_it_takes_is_reported() {
-    let diagnostics = Analysis::new(&shapes("bind plain: Box = count")).diagnostics();
+    let diagnostics = Analysis::new(&shapes("fixed plain: Box = count")).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(diagnostic.message, "shape 'Box' takes 1 type, so name it, as in 'Box<T>'");
 }
 
 #[test]
 fn a_literal_whose_types_nothing_names_is_reported() {
-    let diagnostics = Analysis::new(&shapes("bind empty = Box { value: none }")).diagnostics();
+    let diagnostics = Analysis::new(&shapes("fixed empty = Box { value: none }")).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("can't tell which type 'T' is for this 'Box'"), "{}", diagnostic.message);
 }
@@ -313,8 +313,8 @@ fi
 
 task main()
     region r
-    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }
-    bind paired: Pair<Box<text>, int>@r = Pair { left: kept, right: 1 }
+    fixed kept: Box<text>@r = Box { value: \"ada\".copy() at r }
+    fixed paired: Pair<Box<text>, int>@r = Pair { left: kept, right: 1 }
     show(textOf(kept))
     show(leftText(paired))
 fi
@@ -328,7 +328,7 @@ fi
 
 #[test]
 fn similarity_is_an_operator_giving_a_bool_and_its_word_has_a_hover() {
-    let source = "task alike<T: similar & shown>(a: T, b: T) -> bool\n    bind same_items = a ~= b\n    bind apart = a <> b\n    show(a)\n    <- same_items and not apart\nfi\n";
+    let source = "task alike<T: similar & shown>(a: T, b: T) -> bool\n    fixed same_items = a ~= b\n    fixed apart = a <> b\n    show(a)\n    <- same_items and not apart\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(class_at_in(source, "~= b"), Some(TokenClass::Operator));
     assert_eq!(class_at_in(source, "<> b"), Some(TokenClass::Operator));

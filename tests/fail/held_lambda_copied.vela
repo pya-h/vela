@@ -1,12 +1,12 @@
 ; error: 10:14: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, 'f(…)', or give it as a place, '&f', to a 'hold& f: [hold @r]() -> int' parameter
-; A [hold @r] lambda is never copied.
+; A [flex @r] lambda is never copied.
 task main()
     region r
-    hold n = 0
-    hold f = [hold @r]() -> int
+    flex n = 0
+    flex f = [flex @r]() -> int
         n = n + 1
         <- n
     fi
-    hold g = f
+    flex g = f
     show(g())
 fi

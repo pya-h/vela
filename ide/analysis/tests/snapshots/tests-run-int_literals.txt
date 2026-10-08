@@ -12,12 +12,12 @@
     | builtin-fn:show  punctuation:(  operator:-  number:2147483647  operator:-  number:2  punctuation:)
   8 |     show(-1000000 * -1000000)
     | builtin-fn:show  punctuation:(  operator:-  number:1000000  operator:*  operator:-  number:1000000  punctuation:)
-  9 |     bind big = 3 * 1000000000
-    | keyword:bind  variable:big  operator:=  number:3  operator:*  number:1000000000
+  9 |     fixed big = 3 * 1000000000
+    | keyword:fixed  variable:big  operator:=  number:3  operator:*  number:1000000000
  10 |     show(big)
     | builtin-fn:show  punctuation:(  variable:big  punctuation:)
- 11 |     hold n = 2
-    | keyword:hold  variable:n  operator:=  number:2
+ 11 |     flex n = 2
+    | keyword:flex  variable:n  operator:=  number:2
  12 |     show(1000000 * 1000000 * n)
     | builtin-fn:show  punctuation:(  number:1000000  operator:*  number:1000000  operator:*  variable:n  punctuation:)
  13 |     show(n * 1000000 * 1000000)

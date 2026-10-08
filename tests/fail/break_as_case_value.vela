@@ -6,7 +6,7 @@ fi
 
 task main()
     each k in [K.A, K.B]
-        bind w = match k
+        fixed w = match k
         case A = 1
         case B = break
         fi

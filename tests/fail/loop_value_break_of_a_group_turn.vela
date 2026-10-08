@@ -1,7 +1,7 @@
 ; error: 6:23: this 'break' gives the loop around the loop through the group's values a value of type P, which each value of the group makes another type; give it a value of one type, as in 'v.str() at r'
 ; A turn of each over a group is written out per value, each its own type.
 task firsts<P...: shown>(args: P...)
-    bind r = each k in 0..2
+    fixed r = each k in 0..2
         each v in args
             break r = v
         fi

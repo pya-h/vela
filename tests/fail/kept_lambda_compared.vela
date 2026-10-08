@@ -2,6 +2,6 @@
 ; Lambdas that keep what they use aren't compared.
 task main()
     region r
-    bind a = [@r](x: int) -> int <- x fi
+    fixed a = [@r](x: int) -> int <- x fi
     show(a == a)
 fi

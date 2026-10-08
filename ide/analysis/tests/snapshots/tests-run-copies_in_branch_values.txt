@@ -18,12 +18,12 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  12 |     region r
     | keyword:region  region:r
- 13 |     hold t: text@r = "x".copy() at r
-    | keyword:hold  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"x"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 13 |     flex t: text@r = "x".copy() at r
+    | keyword:flex  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"x"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  14 |     region w
     | keyword:region  region:w
- 15 |     bind a = "abc".copy() at w
-    | keyword:bind  variable:a  operator:=  string:"abc"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:w
+ 15 |     fixed a = "abc".copy() at w
+    | keyword:fixed  variable:a  operator:=  string:"abc"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:w
  16 |     t = when a.len > 2
     | variable:t  operator:=  keyword:when  variable:a  punctuation:.  field:len  operator:>  number:2
  17 |         a.copy()

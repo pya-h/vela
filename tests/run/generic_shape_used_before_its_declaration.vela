@@ -15,7 +15,7 @@ shape C<T>
     inner: maybe A<T>
 fi
 task main()
-    bind b = B { a: A { v: 3 } }
+    fixed b = B { a: A { v: 3 } }
     show(b.a.v)
     show(first(C { w: "hi", inner: none }))
 fi

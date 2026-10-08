@@ -26,8 +26,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  16 |     region r
     | keyword:region  region:r
- 17 |     bind xs, n = evens(r, 7)
-    | keyword:bind  variable:xs  punctuation:,  variable:n  operator:=  task:evens  punctuation:(  region:r  punctuation:,  number:7  punctuation:)
+ 17 |     fixed xs, n = evens(r, 7)
+    | keyword:fixed  variable:xs  punctuation:,  variable:n  operator:=  task:evens  punctuation:(  region:r  punctuation:,  number:7  punctuation:)
  18 |     show(xs.len == n)
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  operator:==  variable:n  punctuation:)
  19 |     each x in xs
@@ -36,8 +36,8 @@
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
  21 |     fi
     | keyword:fi
- 22 |     hold total: float = 0.0
-    | keyword:hold  variable:total  punctuation::  type-builtin:float  operator:=  number:0.0
+ 22 |     flex total: float = 0.0
+    | keyword:flex  variable:total  punctuation::  type-builtin:float  operator:=  number:0.0
  23 |     total = total + 1.5
     | variable:total  operator:=  variable:total  operator:+  number:1.5
  24 |     show(total)

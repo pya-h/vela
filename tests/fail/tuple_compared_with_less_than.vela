@@ -1,5 +1,5 @@
 ; error: 4:15: '<' compares numbers, chars, or text; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'
 task main()
-    bind pair = (1, 2)
+    fixed pair = (1, 2)
     show(pair < (2, 3))
 fi

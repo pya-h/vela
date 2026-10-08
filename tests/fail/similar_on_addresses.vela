@@ -14,9 +14,9 @@ task make() -> Point
 fi
 task main()
     region r
-    hold p = Point { x: 1 }
-    bind xs = [1, 2]
-    bind h: Held = Held.Empty
-    bind e = int("1")
+    flex p = Point { x: 1 }
+    fixed xs = [1, 2]
+    fixed h: Held = Held.Empty
+    fixed e = int("1")
     show(&p ~= &p)
 fi

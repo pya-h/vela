@@ -3,7 +3,7 @@
 shape Counter
     read n: int
 
-    peek(next: (hold& Counter, int) -> nothing, by: int)
+    peek(next: (flex& Counter, int) -> nothing, by: int)
         show(by)
     fi
 

@@ -14,6 +14,6 @@ fi
 
 task main()
     region r
-    bind t = Tag { name: "x" }
+    fixed t = Tag { name: "x" }
     show(t.shown())
 fi

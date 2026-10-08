@@ -5,7 +5,7 @@ task gives(f: (int) -> int) -> int
     <- 5
 fi
 shape X
-    shared hold hook: ((int) -> int) -> int = gives
+    shared flex hook: ((int) -> int) -> int = gives
 fi
 $X.hook
 task one(n: int) -> int

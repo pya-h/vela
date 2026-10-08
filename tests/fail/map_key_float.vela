@@ -1,6 +1,6 @@
-; error: 4:13: a map's key is compared and hashed, so it is an int, a unit, a char, a bool, text, a pointer, or a tuple of them, not a float, which nan makes unequal to itself
+; error: 4:14: a map's key is compared and hashed, so it is an int, a unit, a char, a bool, text, a pointer, or a tuple of them, not a float, which nan makes unequal to itself
 task main()
     region r
-    bind m: [float: int]@r = new [float: int]() at r
+    fixed m: [float: int]@r = new [float: int]() at r
     show(m)
 fi

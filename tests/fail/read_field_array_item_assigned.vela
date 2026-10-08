@@ -8,7 +8,7 @@ shape Panel
 fi
 
 task main()
-    hold panel = Panel { cells: [1, 2] }
+    flex panel = Panel { cells: [1, 2] }
     panel.cells[1] = 5
     show(panel.cells[1])
 fi

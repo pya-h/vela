@@ -1,6 +1,6 @@
 ; error: 5:14: '&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is a length, worked out from the value, with no place of its own
 ; A length is worked out from the value, not kept in it, so it has no place.
 task main()
-    bind xs = [1, 2, 3]
+    fixed xs = [1, 2, 3]
     show(&xs.len)
 fi

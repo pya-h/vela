@@ -1,5 +1,5 @@
-  1 | ; A kept lambda taking a large value as 'hold' or 'bind', which its type
-    | comment:; A kept lambda taking a large value as 'hold' or 'bind', which its type
+  1 | ; A kept lambda taking a large value as 'flex' or 'fixed', which its type
+    | comment:; A kept lambda taking a large value as 'flex' or 'fixed', which its type
   2 | ; takes where the caller keeps it, and region parameters in closure types.
     | comment:; takes where the caller keeps it, and region parameters in closure types.
   3 | shape Big
@@ -34,18 +34,18 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  20 |     region r
     | keyword:region  region:r
- 21 |     bind k = 100
-    | keyword:bind  variable:k  operator:=  number:100
- 22 |     bind f = [@r](b: Big) -> int <- b.a + b.i + k fi
-    | keyword:bind  variable:f  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:b  punctuation:.  field:a  operator:+  parameter:b  punctuation:.  field:i  operator:+  variable:k  keyword:fi
- 23 |     bind b = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
-    | keyword:bind  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+ 21 |     fixed k = 100
+    | keyword:fixed  variable:k  operator:=  number:100
+ 22 |     fixed f = [@r](b: Big) -> int <- b.a + b.i + k fi
+    | keyword:fixed  variable:f  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:b  punctuation:.  field:a  operator:+  parameter:b  punctuation:.  field:i  operator:+  variable:k  keyword:fi
+ 23 |     fixed b = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:fixed  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
  24 |     show(f(b))
     | builtin-fn:show  punctuation:(  variable:f  punctuation:(  variable:b  punctuation:)  punctuation:)
  25 |     show(use(f, b))
     | builtin-fn:show  punctuation:(  task:use  punctuation:(  variable:f  punctuation:,  variable:b  punctuation:)  punctuation:)
- 26 |     hold g = [hold @r](hold q: Big) -> int
-    | keyword:hold  variable:g  operator:=  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  keyword:hold  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 26 |     flex g = [flex @r](flex q: Big) -> int
+    | keyword:flex  variable:g  operator:=  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  keyword:flex  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
  27 |         q.a = q.a + k
     | parameter:q  punctuation:.  field:a  operator:=  parameter:q  punctuation:.  field:a  operator:+  variable:k
  28 |         <- q.a
@@ -54,16 +54,16 @@
     | keyword:fi
  30 |     show(g(b), " ", b.a)
     | builtin-fn:show  punctuation:(  variable:g  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:)
- 31 |     bind h = [@r](bind q: Big) -> int <- q.i + k fi
-    | keyword:bind  variable:h  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  keyword:bind  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:q  punctuation:.  field:i  operator:+  variable:k  keyword:fi
+ 31 |     fixed h = [@r](fixed q: Big) -> int <- q.i + k fi
+    | keyword:fixed  variable:h  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  keyword:fixed  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:q  punctuation:.  field:i  operator:+  variable:k  keyword:fi
  32 |     show(h(b))
     | builtin-fn:show  punctuation:(  variable:h  punctuation:(  variable:b  punctuation:)  punctuation:)
  33 |     region s
     | keyword:region  region:s
- 34 |     bind rows = [@r](z: region, n: int) -> [int]@z
-    | keyword:bind  variable:rows  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  region:z  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:z
- 35 |         hold ys = new [int]() at z
-    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:z
+ 34 |     fixed rows = [@r](z: region, n: int) -> [int]@z
+    | keyword:fixed  variable:rows  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  region:z  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:z
+ 35 |         flex ys = new [int]() at z
+    | keyword:flex  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:z
  36 |         ys.add(n + k)
     | variable:ys  punctuation:.  field:add  punctuation:(  parameter:n  operator:+  variable:k  punctuation:)
  37 |         <- ys

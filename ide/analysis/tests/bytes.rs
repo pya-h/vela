@@ -16,19 +16,19 @@ fi
 
 task main()
     CHECK
-    hold b: unit = 200
-    bind next = b + 1
-    bind wide = int(b)
-    bind n = 7
-    bind cast = unit(n)
-    bind doubled = twice(3)
-    hold c = 'a'
-    bind next_char = c + 1
-    bind apart = 'z' - c
-    bind word = \"hello\"
-    bind first = word[0]
-    bind found = word.at(9)
-    bind quote = '\\''
+    flex b: unit = 200
+    fixed next = b + 1
+    fixed wide = int(b)
+    fixed n = 7
+    fixed cast = unit(n)
+    fixed doubled = twice(3)
+    flex c = 'a'
+    fixed next_char = c + 1
+    fixed apart = 'z' - c
+    fixed word = \"hello\"
+    fixed first = word[0]
+    fixed found = word.at(9)
+    fixed quote = '\\''
     @@
 fi
 ";
@@ -79,7 +79,7 @@ fn units_hover_with_their_type_whether_or_not_the_file_checks() {
 #[test]
 fn unit_is_offered_as_a_type_and_for_a_scan() {
     assert!(labels("task f(a: @@").contains(&"unit".to_string()));
-    let items = completions(&program(true, "bind age = scan(\"Age: \", @@)"));
+    let items = completions(&program(true, "fixed age = scan(\"Age: \", @@)"));
     assert!(items.iter().any(|item| item.label == "unit"), "{:?}", items);
 }
 
@@ -145,7 +145,7 @@ fn nothing_is_offered_inside_a_char() {
 #[test]
 fn a_safe_index_is_a_maybe_of_the_item_whether_or_not_the_file_checks() {
     for checks in [true, false] {
-        let source = program(checks, "bind i = 0\n    bind maybe_letter = word[#1]\n    bind scores = [1, 2]\n    bind maybe_score = scores[#i]");
+        let source = program(checks, "fixed i = 0\n    fixed maybe_letter = word[#1]\n    fixed scores = [1, 2]\n    fixed maybe_score = scores[#i]");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
         assert_eq!(code("maybe_letter ="), "bind maybe_letter: maybe char", "{}", when);

@@ -1,9 +1,9 @@
-; error: 6:21: 'total' is a result of this task, which only '<-' sets, so a lambda doesn't keep it as a place
+; error: 6:22: 'total' is a result of this task, which only '<-' sets, so a lambda doesn't keep it as a place
 ; A result of the task is set only by '<-'.
 task make(r: region) -> total: int
     total <- 1
     region s
-    bind f = [hold& total, @s]() -> nothing total <- 2 fi
+    fixed f = [flex& total, @s]() -> nothing total <- 2 fi
 fi
 task main()
     region r

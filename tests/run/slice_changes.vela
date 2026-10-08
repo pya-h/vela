@@ -20,7 +20,7 @@ kind Step
 fi
 
 ; Adds a hundred items, which moves the slice's items to a bigger block.
-task grow(hold& xs: [int]@r, r: region) -> int
+task grow(flex& xs: [int]@r, r: region) -> int
     each i in 0..100
         xs.add(i)
     fi
@@ -43,7 +43,7 @@ fi
 
 ; A slice kept in a variable of its own can change, and be sent back.
 task evens(r: region, n: int) -> [int]@r
-    hold out = new [int]() at r
+    flex out = new [int]() at r
     each i in 0..n
         when i % 2 == 0
             out.add(i)
@@ -63,7 +63,7 @@ fi
 
 task main()
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     show(xs.len)
     xs.add(1)
     xs.add(3)
@@ -84,17 +84,17 @@ task main()
     show(xs.del() - xs.del())
 
     ; A copy shares the items, but adding to one never writes over the other's.
-    hold copy = xs
+    flex copy = xs
     xs.add(7)
     copy.add(8)
     show(xs[xs.len - 1])
     show(copy[copy.len - 1])
 
     ; A part ending where the slice ends, and one ending before it.
-    hold numbers = new [int]([1, 2, 3, 4]) at r
+    flex numbers = new [int]([1, 2, 3, 4]) at r
     numbers.add(5)
-    hold tail = numbers[3..5]
-    hold head = numbers[0..2]
+    flex tail = numbers[3..5]
+    flex head = numbers[0..2]
     head.add(9)
     tail.add(6)
     show(numbers[2])
@@ -105,20 +105,20 @@ task main()
     show(numbers[5])
 
     ; A slice made from an array in a region, or copied, grows too.
-    bind boxed = new [int#3]([1, 2, 3]) at r
-    hold view = boxed^[0..2]
+    fixed boxed = new [int#3]([1, 2, 3]) at r
+    flex view = boxed^[0..2]
     view.add(10)
     show(boxed^[2])
     show(view[2])
 
     ; Many items, with other allocations in between.
-    hold many = new [int]() at r
-    hold pointers = new [^int]() at r
+    flex many = new [int]() at r
+    flex pointers = new [^int]() at r
     each i in 0..20000
         many.add(i)
         pointers.add(new int(i) at r)
     fi
-    hold total = 0
+    flex total = 0
     loop many.len > 0
         total = total + many.del()
     fi
@@ -128,34 +128,34 @@ task main()
     show(many.len)
 
     ; Through a pointer, a field, and an item of another slice.
-    bind bag = new Bag(Bag { items: new [int]() at r }) at r
+    fixed bag = new Bag(Bag { items: new [int]() at r }) at r
     fill(r, bag, 4)
     show(bag^.items.del(1))
-    hold kept = Bag { items: new [int]([1]) at r }
+    flex kept = Bag { items: new [int]([1]) at r }
     kept.items.add(2)
     show(kept.items.len)
-    hold rows = new [[int]]([new [int]() at r#2]) at r
+    flex rows = new [[int]]([new [int]() at r#2]) at r
     rows[1].add(5)
     rows[1].add(0, 4)
     show(rows[1][0] + rows[1][1])
     show(rows[0].len)
 
     ; Items of other types.
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add("b")
     names.add(0, "a")
     show(names.del(0))
-    hold points = new [Point]() at r
+    flex points = new [Point]() at r
     points.add(Point { x: 1, y: 2 })
     show(points.del().y)
-    hold maybes = new [maybe int]() at r
+    flex maybes = new [maybe int]() at r
     maybes.add(none)
     maybes.add(3)
     show(maybes.del())
     show(maybes.del())
 
     ; In conditions: the right side of 'and' runs only when needed.
-    hold left = new [int]([1, 2]) at r
+    flex left = new [int]([1, 2]) at r
     when left.len > 5 and left.del() == 2
         show(0)
     fi
@@ -165,7 +165,7 @@ task main()
     fi
 
     ; Adding while walking: the walk counts the items it started with.
-    hold walked = new [int]([1, 2]) at r
+    flex walked = new [int]([1, 2]) at r
     each w in walked
         walked.add(w * 10)
     fi
@@ -174,31 +174,31 @@ task main()
     ; A region inside a loop frees what was added on every pass.
     each pass in 0..3
         region scratch
-        hold temporary = new [int]() at scratch
+        flex temporary = new [int]() at scratch
         temporary.add(pass)
         show(temporary.del())
     fi
 
     ; Taking the last item out gives its space back to that slice, even when a
     ; copy made before still counts the item: the copy sees the next add.
-    hold older = new [int]([1, 2, 3]) at r
+    flex older = new [int]([1, 2, 3]) at r
     older.add(4)
-    hold newer = older
+    flex newer = older
     _ = newer.del()
     newer.add(5)
     show(older[3])
 
     ; Changes without a value among values taken in order.
-    hold taken = 0
+    flex taken = 0
     _, taken = older.add(6), older.del()
     show(taken)
-    bind _, again = older.add(7), older.del()
+    fixed _, again = older.add(7), older.del()
     show(again)
 
     ; Dropped values, and plan B values as arguments.
     _ = xs.del()
-    bind _ = copy.del()
-    bind missing: maybe int = none
+    fixed _ = copy.del()
+    fixed missing: maybe int = none
     xs.add(missing { 42 })
     show(xs.del())
 
@@ -207,7 +207,7 @@ task main()
     show(evens(r, 7).len)
 
     ; An item set to a value that moves the slice's items is found after it.
-    hold moved = [1, 2, ...] at r
+    flex moved = [1, 2, ...] at r
     moved[0] = grow(&moved, r)
     moved[1] += grow(&moved, r)
     show(moved[0], " ", moved[1], " ", moved.len)

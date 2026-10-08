@@ -9,7 +9,7 @@ kind RouteError
 fi
 
 shape Routes
-    shared hold count: int = 0
+    shared flex count: int = 0
 fi
 
 task route(f: (int) -> int, path: text) -> nothing ~ RouteError

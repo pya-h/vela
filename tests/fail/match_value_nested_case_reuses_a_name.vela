@@ -5,8 +5,8 @@ kind Reading
 fi
 
 task main()
-    bind value = 3
-    bind chosen = match Ok(value)
+    fixed value = 3
+    fixed chosen = match Ok(value)
     case Ok other
         match Ok(other)
         case Ok other

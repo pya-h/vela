@@ -1,26 +1,26 @@
-; A [hold @r] lambda changes its copies, so it is never copied: it is held in a
-; hold variable, given as a place to a hold& parameter, or named by a reference,
+; A [flex @r] lambda changes its copies, so it is never copied: it is held in a
+; flex variable, given as a place to a flex& parameter, or named by a reference,
 ; and every call through any of them changes the same copies.
-task twice(hold& f: [hold @r]() -> int) -> int
+task twice(flex& f: [flex @r]() -> int) -> int
     <- f() + f()
 fi
 
 task main()
     region r
-    hold seen = 0
-    hold tick = [hold @r]() -> int
+    flex seen = 0
+    flex tick = [flex @r]() -> int
         seen = seen + 1
         <- seen
     fi
     show(twice(&tick), " ", tick())
-    hold& again = &tick
+    flex& again = &tick
     show(again(), " ", tick(), " ", seen)
     ; A lambda that only reads what it keeps goes where one that changes it is expected.
-    bind four = [@r]() -> int <- 4 fi
-    hold held: [hold @r]() -> int = four
+    fixed four = [@r]() -> int <- 4 fi
+    flex held: [flex @r]() -> int = four
     show(twice(&held))
     ; Another lambda may keep it as a place, which it calls where it is.
     region s
-    bind more = [hold& tick, @s]() -> int <- tick() + tick() fi
+    fixed more = [flex& tick, @s]() -> int <- tick() + tick() fi
     show(more(), " ", tick())
 fi

@@ -2,8 +2,8 @@
 ; The copy a lambda keeps of a slice shares its items, not its length.
 task main()
     region r
-    hold xs = new [int]() at r
-    hold f = [hold @r]() -> int
+    flex xs = new [int]() at r
+    flex f = [flex @r]() -> int
         xs.add(1)
         <- xs.len
     fi

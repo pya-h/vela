@@ -9,8 +9,8 @@ use vela_analysis::{Analysis, LineIndex, TokenClass};
 
 const PROGRAM: &str = "\
 task main()
-    hold total = 0
-    loop hold i = 1, j = 10, bind limit = 7 || i < j and i < limit || i++, j--
+    flex total = 0
+    loop flex i = 1, j = 10, fixed limit = 7 || i < j and i < limit || i++, j--
         total += i * j
     fi
     outer => endless
@@ -103,10 +103,10 @@ task sum3(a: int, b: int, c: int) -> int
     <- a + b + c
 fi
 task main()
-    hold p = 1
-    hold q = 2
-    hold yy = 4
-    loop hold i = 0, n = sum3(p, q, 3), a, b = p, yy || i < n || i++
+    flex p = 1
+    flex q = 2
+    flex yy = 4
+    loop flex i = 0, n = sum3(p, q, 3), a, b = p, yy || i < n || i++
         show(i, q, yy, a, b)
     fi
 fi

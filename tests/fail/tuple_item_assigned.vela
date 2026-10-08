@@ -1,6 +1,6 @@
 ; error: 4:7: a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'
 task main()
-    hold t = (1, 2)
+    flex t = (1, 2)
     t.0 = 5
     show(t.0)
 fi

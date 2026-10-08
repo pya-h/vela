@@ -6,8 +6,8 @@ kind Which
 fi
 
 task main()
-    bind c = true
-    bind chosen = match First
+    fixed c = true
+    fixed chosen = match First
     case First
         when c
             1

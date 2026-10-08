@@ -22,8 +22,8 @@
     | keyword:task  task:sum  punctuation:(  parameter:top  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int  punctuation:,  variable:count  punctuation::  type-builtin:int
  16 |     total, count <- 0, 0
     | variable:total  punctuation:,  variable:count  keyword:<-  number:0  punctuation:,  number:0
- 17 |     hold current = top
-    | keyword:hold  variable:current  operator:=  parameter:top
+ 17 |     flex current = top
+    | keyword:flex  variable:current  operator:=  parameter:top
  18 |     loop current is {node}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
  19 |         total, count <- add(total, node^.value), numbers.add(count, 1)

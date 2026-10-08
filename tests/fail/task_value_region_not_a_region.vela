@@ -1,10 +1,10 @@
 ; error: 18:12: 'k' is a variable, not a region
 ; A region a task value takes is a region the caller allocates in.
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 
-task both(hold& a: int, bind& b: int)
+task both(flex& a: int, fixed& b: int)
     a = b
 fi
 
@@ -13,7 +13,7 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 task main()
-    bind g = squares
-    bind k = 3
+    fixed g = squares
+    fixed k = 3
     show(g(k, 3))
 fi

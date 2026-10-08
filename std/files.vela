@@ -58,7 +58,7 @@ shape File
         when is_open(.handle)
             <- fail FileError.AlreadyOpen
         fi
-        bind got = open_handle(.path, mode_code(mode), within)
+        fixed got = open_handle(.path, mode_code(mode), within)
         when got < 0
             <- fail error_of(-got)
         fi
@@ -73,7 +73,7 @@ shape File
             .left_closed()
             <- fail FileError.NotOpen
         fi
-        bind status = close_handle(.handle)
+        fixed status = close_handle(.handle)
         .handle = -1
         .state = FileState.Closed
         when status != 0
@@ -83,7 +83,7 @@ shape File
 
     ; The rest of the file, from where reading is.
     read(into: region) -> text@into ~ FileError
-        bind got = read_rest(.handle, into)
+        fixed got = read_rest(.handle, into)
         when status() != 0
             <- fail error_of(status())
         fi
@@ -92,8 +92,8 @@ shape File
 
     ; The next line, without its line break; none at the end of the file.
     line(into: region) -> maybe text@into ~ FileError
-        bind got = read_line(.handle, into)
-        bind code = status()
+        fixed got = read_line(.handle, into)
+        fixed code = status()
         when code == ended_code()
             <- none
         fi
@@ -105,10 +105,10 @@ shape File
 
     ; The rest of the file, line by line.
     lines(into: region) -> [text@into]@into ~ FileError
-        hold all = new [text]() at into
+        flex all = new [text]() at into
         endless
-            bind got = read_line(.handle, into)
-            bind code = status()
+            fixed got = read_line(.handle, into)
+            fixed code = status()
             when code == ended_code()
                 <- all
             fi
@@ -122,7 +122,7 @@ shape File
 
     ; Writes `t` where writing is.
     write(t: text@p) -> nothing ~ FileError
-        bind status = write_text(.handle, t)
+        fixed status = write_text(.handle, t)
         when status != 0
             <- fail error_of(status)
         fi
@@ -135,7 +135,7 @@ shape File
 
     ; How many bytes the file has: an open one as written so far.
     size() -> int ~ FileError
-        bind got = size_of(.path, .handle)
+        fixed got = size_of(.path, .handle)
         when got < 0
             <- fail error_of(-got)
         fi
@@ -149,7 +149,7 @@ shape File
 
     ; Gives the file another path, on the disk and here.
     alters rename(to: text@this) -> nothing ~ FileError
-        bind status = rename_path(.path, to)
+        fixed status = rename_path(.path, to)
         when status != 0
             <- fail error_of(status)
         fi
@@ -159,14 +159,14 @@ shape File
     ; Deletes the file, closing it first when it is open.
     alters delete() -> nothing ~ FileError
         when is_open(.handle)
-            bind closed = close_handle(.handle)
+            fixed closed = close_handle(.handle)
             .handle = -1
             .state = FileState.Closed
             when closed != 0
                 <- fail error_of(closed)
             fi
         fi
-        bind status = remove_path(.path)
+        fixed status = remove_path(.path)
         when status != 0
             <- fail error_of(status)
         fi
@@ -176,7 +176,7 @@ shape File
 
     ; The path, and what the File says of itself: `notes.txt (open)`.
     str(into: region) -> text@into
-        bind said = match .state
+        fixed said = match .state
         case Idle = "idle"
         case Open = "open"
         case Closed = "closed"

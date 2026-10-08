@@ -1,6 +1,6 @@
-; error: 5:27: kind 'library.Suit' has no variant or shared method 'Clubs'
+; error: 5:28: kind 'library.Suit' has no variant or shared method 'Clubs'
 include modules/library
 
 task main()
-    bind s = library.Suit.Clubs(2)
+    fixed s = library.Suit.Clubs(2)
 fi

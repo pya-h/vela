@@ -2,8 +2,8 @@
 ; Reading a slice's item before its first.
 task main()
     region r
-    bind items = new [int]([5#4]) at r
-    hold i = 0
+    fixed items = new [int]([5#4]) at r
+    flex i = 0
     show(items[i])
     i = i - 1
     show(items[i])

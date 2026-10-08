@@ -5,7 +5,7 @@ include slice_changes/stack (Op)
 
 task main()
     region r
-    bind s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
+    fixed s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
     stack.apply(r, s, stack.Op.add(4))
     stack.apply(r, s, Op.add(5))
     stack.apply(r, s, Op.add(6))

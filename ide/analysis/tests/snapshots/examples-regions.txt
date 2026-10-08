@@ -22,10 +22,10 @@
     | keyword:<-  variant:Leaf  punctuation:(  parameter:seed  operator:%  number:10  punctuation:)
  14 |     fi
     | keyword:fi
- 15 |     bind left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
-    | keyword:bind  variable:left  operator:=  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:3  operator:+  number:1  punctuation:)  keyword:at  region:r  punctuation:)  keyword:at  region:r
- 16 |     bind right = new@r Tree(build(depth - 1, seed * 7 + 2)@r)
-    | keyword:bind  variable:right  operator:=  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:7  operator:+  number:2  punctuation:)  operator:@  region:r  punctuation:)
+ 15 |     fixed left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
+    | keyword:fixed  variable:left  operator:=  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:3  operator:+  number:1  punctuation:)  keyword:at  region:r  punctuation:)  keyword:at  region:r
+ 16 |     fixed right = new@r Tree(build(depth - 1, seed * 7 + 2)@r)
+    | keyword:fixed  variable:right  operator:=  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:7  operator:+  number:2  punctuation:)  operator:@  region:r  punctuation:)
  17 |     <- Branch(left, right)
     | keyword:<-  variant:Branch  punctuation:(  variable:left  punctuation:,  variable:right  punctuation:)
  18 | fi
@@ -66,14 +66,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  39 |     region kept
     | keyword:region  region:kept
- 40 |     hold best: Tree@kept = Leaf(0)
-    | keyword:hold  variable:best  punctuation::  type:Tree  operator:@  region:kept  operator:=  variant:Leaf  punctuation:(  number:0  punctuation:)
+ 40 |     flex best: Tree@kept = Leaf(0)
+    | keyword:flex  variable:best  punctuation::  type:Tree  operator:@  region:kept  operator:=  variant:Leaf  punctuation:(  number:0  punctuation:)
  41 |     each round in 0..5
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:5
  42 |         region pass                      ; empty again, and freed, on every pass
     | keyword:region  region:pass  comment:; empty again, and freed, on every pass
- 43 |         bind candidate = build(6, round) at pass
-    | keyword:bind  variable:candidate  operator:=  task:build  punctuation:(  number:6  punctuation:,  variable:round  punctuation:)  keyword:at  region:pass
+ 43 |         fixed candidate = build(6, round) at pass
+    | keyword:fixed  variable:candidate  operator:=  task:build  punctuation:(  number:6  punctuation:,  variable:round  punctuation:)  keyword:at  region:pass
  44 |         show(total(candidate))
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:candidate  punctuation:)  punctuation:)
  45 |         when total(candidate) > total(best)

@@ -68,10 +68,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  35 |     region r
     | keyword:region  region:r
- 36 |     bind t = "Ada" + "x" at r
-    | keyword:bind  variable:t  operator:=  string:"Ada"  operator:+  string:"x"  keyword:at  region:r
- 37 |     hold a = Account { owner: t, balance: 0 }
-    | keyword:hold  variable:a  operator:=  type:Account  punctuation:{  field:owner  punctuation::  variable:t  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
+ 36 |     fixed t = "Ada" + "x" at r
+    | keyword:fixed  variable:t  operator:=  string:"Ada"  operator:+  string:"x"  keyword:at  region:r
+ 37 |     flex a = Account { owner: t, balance: 0 }
+    | keyword:flex  variable:a  operator:=  type:Account  punctuation:{  field:owner  punctuation::  variable:t  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
  38 |     a.rename("Bo" + "b" at r)
     | variable:a  punctuation:.  method:rename  punctuation:(  string:"Bo"  operator:+  string:"b"  keyword:at  region:r  punctuation:)
  39 |     show(a.name())

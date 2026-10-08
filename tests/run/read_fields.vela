@@ -25,7 +25,7 @@ shape Tally
 
     ; One that alters nothing makes a changed copy through one that does.
     cleared() -> Tally@this
-        hold copy = .this
+        flex copy = .this
         copy.clear()
         <- copy
     fi
@@ -48,7 +48,7 @@ task shown(mode: Mode) -> text
 fi
 
 task main()
-    hold meter = Meter { label: "door" }
+    flex meter = Meter { label: "door" }
     show(meter.label, " ", meter.count, " ", shown(meter.mode))
     meter.tick()
     meter.tick()
@@ -57,16 +57,16 @@ task main()
     meter.reset()
     show(meter.label, " ", meter.count, " ", shown(meter.mode))
 
-    hold tally = Tally {}
+    flex tally = Tally {}
     tally.count(3)
-    hold other = Tally { note: "other" }
+    flex other = Tally { note: "other" }
     other.count(4)
     tally.take(other)
     ; An ordinary field beside it is still assigned by anyone.
     tally.note = "sum"
     show(tally.note, " ", tally.total, " ", tally.cleared().total, " ", tally.total)
 
-    hold seat = Seat { holder: none }
+    flex seat = Seat { holder: none }
     show(seat.holder { "free" })
     seat.claim("ana")
     show(seat.holder { "free" })

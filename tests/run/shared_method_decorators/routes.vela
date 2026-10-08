@@ -5,13 +5,13 @@ shape Routes
 
     shared enroll(f: (int) -> int, name: text)
         Routes.count = Routes.count + 1
-        bind gives = f(3)
+        fixed gives = f(3)
         show(Routes.count, ". ", name, " gives ", gives)
     fi
 fi
 
 shape Meter
-    shared hold calls: int = 0
+    shared flex calls: int = 0
 
     shared counted(next: (int) -> int, n: int) -> int
         Meter.calls = Meter.calls + 1

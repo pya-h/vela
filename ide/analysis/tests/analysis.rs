@@ -53,8 +53,8 @@ kind Light
 fi
 
 task main()
-    bind p = Point { y: 2, x: 1 }
-    bind s = Size { x: 3 }
+    fixed p = Point { y: 2, x: 1 }
+    fixed s = Size { x: 3 }
     show(p.x + s.x)
     show(total(p))
     match Dimmed(4)
@@ -86,7 +86,7 @@ fn definitions_of_declarations_and_uses() {
 
 #[test]
 fn a_files_own_kind_leads_to_its_variants() {
-    let source = SHAPES.replace("    match Dimmed(4)\n", "    bind glow = Light.Dimmed(2)\n    bind off = Light.Red\n    match Dimmed(4)\n");
+    let source = SHAPES.replace("    match Dimmed(4)\n", "    fixed glow = Light.Dimmed(2)\n    fixed off = Light.Red\n    match Dimmed(4)\n");
     let analysis = Analysis::new(&source);
     assert_eq!(analysis.diagnostics(), Vec::new());
     assert_eq!(class_at(&source, "Light.Dimmed", 0), TokenClass::Type);
@@ -135,7 +135,7 @@ fn field_definitions_are_exact_except_on_a_line_with_a_mistake() {
     // The checker goes on after a mistake, so only the line that has one is left
     // without types; there, a field is found by its name when one shape has it.
     let source = format!(
-        "{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing, q.y, q.x)\n    show(q.x)\nfi\n",
+        "{}task broken()\n    fixed q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing, q.y, q.x)\n    show(q.x)\nfi\n",
         SHAPES
     );
     let analysis = Analysis::new(&source);
@@ -157,11 +157,11 @@ fn variables_are_scoped_to_their_blocks() {
     let source = "\
 task main()
     when true
-        bind label = 1
+        fixed label = 1
         show(label)
     else
         show(label)
-        bind label = 2
+        fixed label = 2
         show(label)
     fi
     each i in 0..3
@@ -186,10 +186,10 @@ task parse(t: text) -> int ~ text
 fi
 
 task main()
-    bind m: maybe int = 2
-    bind n = parse(\"x\") {
+    fixed m: maybe int = 2
+    fixed n = parse(\"x\") {
         failure problem
-        bind fallback = 0
+        fixed fallback = 0
         show(problem)
         fallback
     }
@@ -224,9 +224,9 @@ kind Light
 fi
 
 task main()
-    bind m: maybe int = none
-    bind n = m {
-        bind light = Red
+    fixed m: maybe int = none
+    fixed n = m {
+        fixed light = Red
         match light
         case Red
             show(1)
@@ -238,11 +238,11 @@ task main()
         else
             show(4)
         fi
-        bind inside = 5
+        fixed inside = 5
         inside
     }
     show(inside)
-    bind own = m {
+    fixed own = m {
         own
     }
     show(own)
@@ -273,8 +273,8 @@ fi
 
 task main()
     region nodes
-    bind first = push(nodes, none)
-    bind second = new@nodes int(2)
+    fixed first = push(nodes, none)
+    fixed second = new@nodes int(2)
     when true
         region inner
         show(sum(first))
@@ -307,7 +307,7 @@ fn half_typed_code_still_resolves_and_highlights() {
     // The first task is never closed and a string is unterminated.
     let source = "\
 task first(n: int) -> int
-    bind twice = n * 2
+    fixed twice = n * 2
     show(\"not done
     <- twice
 
@@ -352,7 +352,7 @@ fn diagnostics_cover_the_token_the_error_points_at() {
     let escape = "task main()\n    show(\"a\\qb\")\nfi\n";
     let d = &Analysis::new(escape).diagnostics()[0];
     assert_eq!((d.from, d.to), (at(escape, "\\q", 0), at(escape, "\\q", 0) + 1));
-    let eol = "task main()\n    bind x =\nfi\n";
+    let eol = "task main()\n    fixed x =\nfi\n";
     let d = &Analysis::new(eol).diagnostics()[0];
     assert_eq!((d.from, d.to, d.message.as_str()), (at(eol, "=\n", 0) + 1, at(eol, "=\n", 0) + 1, "expected an expression, got end of line"));
 }
@@ -361,7 +361,7 @@ fn diagnostics_cover_the_token_the_error_points_at() {
 fn every_mistake_is_marked_where_it_is() {
     // Three lines with a mistake, in two tasks: each is marked on its own line,
     // and the lines between them are checked as usual.
-    let source = "task twice(n: Nope) -> int\n    <- 2\nfi\n\ntask main()\n    bind ok = 1\n    show(missing)\n    show(ok + 1)\n    show(gone)\nfi\n";
+    let source = "task twice(n: Nope) -> int\n    <- 2\nfi\n\ntask main()\n    fixed ok = 1\n    show(missing)\n    show(ok + 1)\n    show(gone)\nfi\n";
     let analysis = Analysis::new(source);
     let marks: Vec<(Option<usize>, Option<usize>, String)> =
         analysis.diagnostics().into_iter().map(|d| (d.line, d.col, d.message)).collect();
@@ -536,18 +536,18 @@ fn one_of_many(source: &str, nth: usize) -> String {
 
 #[test]
 fn a_call_names_a_task_even_when_a_variable_has_its_name() {
-    let source = "task double(n: int) -> int\n    <- n * 2\nfi\n\ntask main()\n    bind double = double(4)\n    show(double)\nfi\n";
+    let source = "task double(n: int) -> int\n    <- n * 2\nfi\n\ntask main()\n    fixed double = double(4)\n    show(double)\nfi\n";
     assert_eq!(class_at(source, "double(4)", 0), TokenClass::Task);
     assert_definition(source, ("double(4)", 0), ("double(n", 0));
     assert_definition(source, ("double)", 0), ("double =", 0));
     // A variable isn't visible in its own initializer.
-    let source = "task main()\n    bind y = y + 1\nfi\n";
+    let source = "task main()\n    fixed y = y + 1\nfi\n";
     assert_eq!(Analysis::new(source).definition(at(source, "y + 1", 0)), None);
 }
 
 #[test]
 fn hover_works_at_the_end_of_a_name() {
-    let source = "task main()\n    bind t = 1\n    show(t)\nfi\n";
+    let source = "task main()\n    fixed t = 1\n    show(t)\nfi\n";
     let end_of_t = at(source, "t)", 0) + 1;
     let hover = Analysis::new(source).hover(end_of_t).expect("a hover for t");
     assert!(hover.code.contains("t: int"), "{}", hover.code);
@@ -555,7 +555,7 @@ fn hover_works_at_the_end_of_a_name() {
 
 #[test]
 fn an_unclosed_brace_ends_with_its_line() {
-    let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    bind q: int = 2\nfi\n";
+    let source = "shape P\n    x: int\nfi\n\ntask main()\n    fixed p = P { x: 1\n    fixed q: int = 2\nfi\n";
     assert_eq!(class_at(source, "int = 2", 0), TokenClass::TypeBuiltin);
 }
 
@@ -581,10 +581,10 @@ fn very_deep_types_are_analyzed_without_a_crash() {
         let deep = "^".repeat(20_000);
         for source in [
             format!("task f(a: {}int)\n    show(1)\nfi\n", deep),
-            format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", deep),
-            format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", "maybe ".repeat(20_000)),
+            format!("task main()\n    fixed a: {}int = 1\n    show(a)\nfi\n", deep),
+            format!("task main()\n    fixed a: {}int = 1\n    show(a)\nfi\n", "maybe ".repeat(20_000)),
             format!("task f(a: {}int{})\n    show(1)\nfi\n", "[".repeat(20_000), "#2]".repeat(20_000)),
-            format!("task main()\n    bind a: {}int{}@r = 1\n    show(a)\nfi\n", "[".repeat(20_000), "]".repeat(20_000)),
+            format!("task main()\n    fixed a: {}int{}@r = 1\n    show(a)\nfi\n", "[".repeat(20_000), "]".repeat(20_000)),
         ] {
             let analysis = Analysis::new(&source);
             let length = source.encode_utf16().count();
@@ -603,10 +603,10 @@ fn very_deep_types_are_analyzed_without_a_crash() {
 
 #[test]
 fn a_variable_on_a_line_with_an_unclosed_brace_is_visible_on_the_next() {
-    let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    show(p)\nfi\n";
+    let source = "shape P\n    x: int\nfi\n\ntask main()\n    fixed p = P { x: 1\n    show(p)\nfi\n";
     assert_definition(source, ("p)", 0), ("p =", 0));
     // A plan B spanning lines still hides the name inside it.
-    let plan_b = "task main()\n    bind m: maybe int = none\n    bind n = m { failure e\n        n\n    }\n    show(n)\nfi\n";
+    let plan_b = "task main()\n    fixed m: maybe int = none\n    fixed n = m { failure e\n        n\n    }\n    show(n)\nfi\n";
     assert_eq!(Analysis::new(plan_b).definition(at(plan_b, "n\n    }", 0)), None);
     assert_definition(plan_b, ("n)", 0), ("n =", 0));
 }

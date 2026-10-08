@@ -1,7 +1,7 @@
 ; error: 6:9: 'y' names one place for as long as it lasts, and 'y = …' writes a value there, so leave out '&'
 task main()
-    hold x = 1
-    hold z = 2
-    hold& y = &x
+    flex x = 1
+    flex z = 2
+    flex& y = &x
     y = &z
 fi

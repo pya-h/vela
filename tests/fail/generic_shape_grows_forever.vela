@@ -6,6 +6,6 @@ fi
 
 task main()
     region r
-    bind g: Grow<int>@r = Grow { value: 1, next: none }
+    fixed g: Grow<int>@r = Grow { value: 1, next: none }
     show(g.value)
 fi

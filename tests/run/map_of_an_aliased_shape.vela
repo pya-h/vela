@@ -5,7 +5,7 @@ include map_of_an_aliased_shape/geo => g
 
 task main()
     region r
-    hold m: [text: g.Point]@r = ["a": g.Point { x: 1 }] at r
+    flex m: [text: g.Point]@r = ["a": g.Point { x: 1 }] at r
     m["b"] = g.Point { x: 2 }
     show(m)
 fi

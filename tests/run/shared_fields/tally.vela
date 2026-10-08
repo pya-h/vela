@@ -5,8 +5,8 @@ shape Tally
     ; Any file reads it; only the methods of Tally change it.
     shared read made: int = 0
     ; Any file that sees it may change it.
-    shared hold limit: int = 3
-    priv shared hold secret: int = 42
+    shared flex limit: int = 3
+    priv shared flex secret: int = 42
 
     alters tick()
         .n = .n + 1

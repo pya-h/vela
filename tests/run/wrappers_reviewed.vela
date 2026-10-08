@@ -3,7 +3,7 @@
 ; a field naming a wrapped task, and none as a wrapper's own value.
 include modules/kinds_shared {Tally}
 
-task twice(next: (hold& Big) -> int, hold& b: Big) -> int
+task twice(next: (flex& Big) -> int, flex& b: Big) -> int
     next(&b)
     <- next(&b)
 fi
@@ -58,10 +58,10 @@ task echo(t: text) -> text
 fi
 
 task main()
-    hold b = Big { a: [1#20] }
+    flex b = Big { a: [1#20] }
     show(b.bump(), " ", b.a[0])
     show(Point { x: 3 })
-    bind d = Tally.doubled
+    fixed d = Tally.doubled
     show(d(21))
     show(Hooks {}.say(4), " ", Hooks {}.say(-1))
     show(echo("hi"))

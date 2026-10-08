@@ -74,10 +74,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  44 |     region r
     | keyword:region  region:r
- 45 |     bind n = 5
-    | keyword:bind  variable:n  operator:=  number:5
- 46 |     bind name = "Ada"
-    | keyword:bind  variable:name  operator:=  string:"Ada"
+ 45 |     fixed n = 5
+    | keyword:fixed  variable:n  operator:=  number:5
+ 46 |     fixed name = "Ada"
+    | keyword:fixed  variable:name  operator:=  string:"Ada"
  47 |     ; Every kind of value, and a value at either end or alone.
     | comment:; Every kind of value, and a value at either end or alone.
  48 |     show("n = {n}" at r)
@@ -104,8 +104,8 @@
     | builtin-fn:show  punctuation:(  string:"[{  string:"x"  string:}] [{  variable:name  punctuation:[  number:1  operator:..  number:3  punctuation:]  string:}] [{  string:"{  variable:n  string:}{  variable:n  string:}"  string:}]"  keyword:at  region:r  punctuation:)
  59 |     ; A plan B, a call, and a method call inside the braces.
     | comment:; A plan B, a call, and a method call inside the braces.
- 60 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 60 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  61 |     show("got {missing { 7 }}, {twice(twice(n))}, {Point { x: n, y: n }.str() at r}" at r)
     | builtin-fn:show  punctuation:(  string:"got {  variable:missing  punctuation:{  number:7  punctuation:}  string:}, {  task:twice  punctuation:(  task:twice  punctuation:(  variable:n  punctuation:)  punctuation:)  string:}, {  type:Point  punctuation:{  field:x  punctuation::  variable:n  punctuation:,  field:y  punctuation::  variable:n  punctuation:}  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  string:}"  keyword:at  region:r  punctuation:)
  62 |     ; Spaces inside the braces are not part of the text.
@@ -128,8 +128,8 @@
     | builtin-fn:show  punctuation:(  string:"{  variable:n  string:}"  operator:+  string:" and "  operator:+  string:"{  variable:n  operator:+  number:1  string:}"  keyword:at  region:r  punctuation:)
  71 |     ; The result is text like any other.
     | comment:; The result is text like any other.
- 72 |     bind line = "{name}={n}" at r
-    | keyword:bind  variable:line  operator:=  string:"{  variable:name  string:}={  variable:n  string:}"  keyword:at  region:r
+ 72 |     fixed line = "{name}={n}" at r
+    | keyword:fixed  variable:line  operator:=  string:"{  variable:name  string:}={  variable:n  string:}"  keyword:at  region:r
  73 |     show(line.len)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:.  field:len  punctuation:)
  74 |     show(line == "Ada=5")
@@ -144,10 +144,10 @@
     | comment:; Text in another region, kept in `r`.
  79 |     region q
     | keyword:region  region:q
- 80 |     bind other = "{n * 10}" at q
-    | keyword:bind  variable:other  operator:=  string:"{  variable:n  operator:*  number:10  string:}"  keyword:at  region:q
- 81 |     bind kept = "kept {other}" at r
-    | keyword:bind  variable:kept  operator:=  string:"kept {  variable:other  string:}"  keyword:at  region:r
+ 80 |     fixed other = "{n * 10}" at q
+    | keyword:fixed  variable:other  operator:=  string:"{  variable:n  operator:*  number:10  string:}"  keyword:at  region:q
+ 81 |     fixed kept = "kept {other}" at r
+    | keyword:fixed  variable:kept  operator:=  string:"kept {  variable:other  string:}"  keyword:at  region:r
  82 |     show(kept)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:)
  83 |     ; Multi-byte characters around and inside values.
@@ -158,8 +158,8 @@
     | comment:; An error made of text holding values, read with a plan B.
  86 |     show(checked(n, r) { 0 })
     | builtin-fn:show  punctuation:(  task:checked  punctuation:(  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 87 |     bind low = checked(-n, r) { failure e
-    | keyword:bind  variable:low  operator:=  task:checked  punctuation:(  operator:-  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 87 |     fixed low = checked(-n, r) { failure e
+    | keyword:fixed  variable:low  operator:=  task:checked  punctuation:(  operator:-  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
  88 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
  89 |         0

@@ -1,9 +1,9 @@
-; error: 7:31: 'xs' is in region 'q', and this lambda keeps what it uses in 'r', where nothing points into 'q'; copy it into 'r' first, as in 'bind mine = xs.copy() at r', and use that, or keep 'xs' as a place, '[bind& xs, @r]', with 'r' declared after it
+; error: 7:32: 'xs' is in region 'q', and this lambda keeps what it uses in 'r', where nothing points into 'q'; copy it into 'r' first, as in 'bind mine = xs.copy() at r', and use that, or keep 'xs' as a place, '[bind& xs, @r]', with 'r' declared after it
 ; A lambda keeps in its region only what lives there, or in no region.
 task main()
     region r
     region q
-    bind xs = new [int]() at q
-    bind f = [@r]() -> int <- xs.len fi
+    fixed xs = new [int]() at q
+    fixed f = [@r]() -> int <- xs.len fi
     show(f())
 fi

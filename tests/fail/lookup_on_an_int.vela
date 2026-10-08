@@ -1,5 +1,5 @@
 ; error: 4:11: '[#…]' reads an item of an array, a slice, or text, but this value is int
 task main()
-    bind n = 5
+    fixed n = 5
     show(n[#0])
 fi

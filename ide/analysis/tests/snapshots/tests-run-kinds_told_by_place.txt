@@ -84,8 +84,8 @@
     | comment:; Two comparisons, the second with the field of this.
  55 |     around(a: int, b: int, c: int) -> bool
     | method:around  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:,  parameter:c  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
- 56 |         bind both = (a < b, c > .x)
-    | keyword:bind  variable:both  operator:=  punctuation:(  parameter:a  operator:<  parameter:b  punctuation:,  parameter:c  operator:>  punctuation:.  field:x  punctuation:)
+ 56 |         fixed both = (a < b, c > .x)
+    | keyword:fixed  variable:both  operator:=  punctuation:(  parameter:a  operator:<  parameter:b  punctuation:,  parameter:c  operator:>  punctuation:.  field:x  punctuation:)
  57 |         <- both.0 and both.1
     | keyword:<-  variable:both  punctuation:.  field:0  keyword:and  variable:both  punctuation:.  field:1
  58 |     fi
@@ -94,18 +94,18 @@
     | keyword:fi
  61 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 62 |     bind h = Holder { o: Option.Some(3), later: none }
-    | keyword:bind  variable:h  operator:=  type:Holder  punctuation:{  field:o  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:3  punctuation:)  punctuation:,  field:later  punctuation::  keyword:none  punctuation:}
+ 62 |     fixed h = Holder { o: Option.Some(3), later: none }
+    | keyword:fixed  variable:h  operator:=  type:Holder  punctuation:{  field:o  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:3  punctuation:)  punctuation:,  field:later  punctuation::  keyword:none  punctuation:}
  63 |     show(valueOr(h.o, 0), " ", h.later, " ", Wrap.W(Option.None), " ", Wrap.Nothing)
     | builtin-fn:show  punctuation:(  task:valueOr  punctuation:(  variable:h  punctuation:.  field:o  punctuation:,  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:h  punctuation:.  field:later  punctuation:,  string:" "  punctuation:,  type:Wrap  punctuation:.  variant:W  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Wrap  punctuation:.  variant:Nothing  punctuation:)
  64 |     show(Pair.Both(Box.Held(1), 2))
     | builtin-fn:show  punctuation:(  type:Pair  punctuation:.  variant:Both  punctuation:(  type:Box  punctuation:.  variant:Held  punctuation:(  number:1  punctuation:)  punctuation:,  number:2  punctuation:)  punctuation:)
- 66 |     bind a: Option<int> = Option.Some(1)
-    | keyword:bind  variable:a  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
+ 66 |     fixed a: Option<int> = Option.Some(1)
+    | keyword:fixed  variable:a  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
  67 |     show(alike(a, Option.Some(1)), " ", alike(a, Option.None), " ", same(a, a), " ", same(Option.Some("x"), Option.Some("y")))
     | builtin-fn:show  punctuation:(  task:alike  punctuation:(  variable:a  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:alike  punctuation:(  variable:a  punctuation:,  type:Option  punctuation:.  variant:None  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  variable:a  punctuation:,  variable:a  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  string:"x"  punctuation:)  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  string:"y"  punctuation:)  punctuation:)  punctuation:)
- 69 |     hold x: Option<int> = Option.Some(1)
-    | keyword:hold  variable:x  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
+ 69 |     flex x: Option<int> = Option.Some(1)
+    | keyword:flex  variable:x  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
  70 |     x = match x
     | variable:x  operator:=  keyword:match  variable:x
  71 |     case Some _ = Option.None
@@ -114,10 +114,10 @@
     | keyword:case  variant:None  operator:=  type:Option  punctuation:.  variant:None
  73 |     fi
     | keyword:fi
- 74 |     bind q: maybe Option<int> = when true Option.None else none fi
-    | keyword:bind  variable:q  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  keyword:when  keyword:true  type:Option  punctuation:.  variant:None  keyword:else  keyword:none  keyword:fi
- 75 |     bind t: (Option<int>, int) = (Option.None, 1)
-    | keyword:bind  variable:t  punctuation::  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:,  number:1  punctuation:)
+ 74 |     fixed q: maybe Option<int> = when true Option.None else none fi
+    | keyword:fixed  variable:q  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  keyword:when  keyword:true  type:Option  punctuation:.  variant:None  keyword:else  keyword:none  keyword:fi
+ 75 |     fixed t: (Option<int>, int) = (Option.None, 1)
+    | keyword:fixed  variable:t  punctuation::  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:,  number:1  punctuation:)
  76 |     show(pick(true), " ", x, " ", q, " ", t, " ", firstOf(true))
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  keyword:true  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:x  punctuation:,  string:" "  punctuation:,  variable:q  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:,  string:" "  punctuation:,  task:firstOf  punctuation:(  keyword:true  punctuation:)  punctuation:)
  78 |     show(P { x: 1 }.around(1, 2, 3), " ", P { x: 5 }.around(1, 2, 3))

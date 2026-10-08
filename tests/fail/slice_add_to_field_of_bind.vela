@@ -5,6 +5,6 @@ fi
 
 task main()
     region r
-    bind bag = Bag { items: new [int]() at r }
+    fixed bag = Bag { items: new [int]() at r }
     bag.items.add(1)
 fi

@@ -9,7 +9,7 @@ fi
 ; Asks its own types to be shown, so it can give them on to `log`.
 task traced<P...: shown, R: shown>(next: (P...) -> R, args: P...) -> R
     log("calling", args...)
-    bind result = next(args...)
+    fixed result = next(args...)
     log("sent", result)
     <- result
 fi

@@ -1,7 +1,7 @@
-; error: 4:33: cannot assign to immutable variable 'i'
-; A name declared with bind never changes, in a loop as anywhere.
+; error: 4:34: cannot assign to immutable variable 'i'
+; A name declared with fixed never changes, in a loop as anywhere.
 task main()
-    loop bind i = 0 || i < 3 || i++
+    loop fixed i = 0 || i < 3 || i++
         show(i)
     fi
 fi

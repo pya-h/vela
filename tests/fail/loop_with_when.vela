@@ -1,6 +1,6 @@
 ; error: 4:10: a 'loop' takes its condition directly, without 'when'
 task main()
-    hold k = 0
+    flex k = 0
     loop when k < 3
         k = k + 1
     fi

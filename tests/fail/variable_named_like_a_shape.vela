@@ -1,8 +1,8 @@
-; error: 7:10: 'Point' is the name of a shape, so 'Point.x' would name its shared field; choose another name
+; error: 7:11: 'Point' is the name of a shape, so 'Point.x' would name its shared field; choose another name
 shape Point
     x: int
 fi
 
 task main()
-    bind Point = 1
+    fixed Point = 1
 fi

@@ -1,7 +1,7 @@
 ; error: 5:5: 'm[k] = v' changes 'm', which is immutable; keep the map in a 'hold' variable to change it
 task main()
     region r
-    bind m = ["a": 1] at r
+    fixed m = ["a": 1] at r
     m["b"] = 2
     show(m)
 fi

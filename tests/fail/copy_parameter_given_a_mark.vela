@@ -4,6 +4,6 @@ task shown(x: int)
 fi
 
 task main()
-    hold a = 1
+    flex a = 1
     shown(&a)
 fi

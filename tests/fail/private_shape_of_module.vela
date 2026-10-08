@@ -1,6 +1,6 @@
-; error: 5:19: 'Vault' is private to module 'library'
+; error: 5:20: 'Vault' is private to module 'library'
 include modules/library
 
 task main()
-    bind v: maybe library.Vault = none
+    fixed v: maybe library.Vault = none
 fi

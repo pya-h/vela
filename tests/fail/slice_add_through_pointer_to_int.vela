@@ -1,6 +1,6 @@
 ; error: 5:8: 'add' changes a slice, but this value is int
 task main()
     region r
-    bind p = new int(1) at r
+    fixed p = new int(1) at r
     p^.add(2)
 fi

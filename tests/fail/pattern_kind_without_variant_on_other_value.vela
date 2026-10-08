@@ -5,7 +5,7 @@ kind Light
 fi
 
 task main()
-    bind n = 3
+    fixed n = 3
     when n is Light.Blue
         show(1)
     fi

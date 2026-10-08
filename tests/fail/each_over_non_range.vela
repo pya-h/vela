@@ -1,6 +1,6 @@
 ; error: 4:15: each goes through a range, such as 0..n, the items of an array or slice, or a map's keys and values, but this value is int
 task main()
-    bind n = 5
+    fixed n = 5
     each i in n
         show(i)
     fi

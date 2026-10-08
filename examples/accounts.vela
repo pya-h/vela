@@ -21,7 +21,7 @@ shape Account
     read balance: int
     priv limit: int = 300
 
-    alters guarded(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+    alters guarded(next: (flex& Account@a, int) -> bool, amount: int) -> bool
         when amount > .balance
             show("  refused: ", .owner, " holds only ", .balance)
             <- false
@@ -51,7 +51,7 @@ shape Account
 fi
 
 task main()
-    hold ada = Account { owner: "Ada", balance: 0 }
+    flex ada = Account { owner: "Ada", balance: 0 }
     ada.deposit(500)
     show(ada.withdraw(120))
     show(ada.withdraw(400))

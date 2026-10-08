@@ -11,6 +11,6 @@ kind Slot
 fi
 
 task main()
-    bind p = Point { x: 1 }
+    fixed p = Point { x: 1 }
     show(Slot.Filled(p) == Slot.Filled(p))
 fi

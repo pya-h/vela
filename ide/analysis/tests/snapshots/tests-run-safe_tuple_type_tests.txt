@@ -10,8 +10,8 @@
     | comment:; when the program runs; in a task taking a group, each copy decides.
   6 | task plain()
     | keyword:task  task:plain  punctuation:(  punctuation:)
-  7 |     bind t = (1, "two")
-    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+  7 |     fixed t = (1, "two")
+    | keyword:fixed  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
   8 |     when t.#5 is none
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:5  keyword:is  keyword:none
   9 |         show("no 5")
@@ -122,8 +122,8 @@
     | comment:; A shape given types is tested as written.
  64 | task boxes()
     | keyword:task  task:boxes  punctuation:(  punctuation:)
- 65 |     bind t = (Box<int> { value: 3 }, 1)
-    | keyword:bind  variable:t  operator:=  punctuation:(  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:,  number:1  punctuation:)
+ 65 |     fixed t = (Box<int> { value: 3 }, 1)
+    | keyword:fixed  variable:t  operator:=  punctuation:(  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:,  number:1  punctuation:)
  66 |     when t.#0 is maybe Box<int> {b}
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:0  keyword:is  keyword:maybe  variable:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  variable:b  punctuation:}
  67 |         show("box of ", b.value)
@@ -146,8 +146,8 @@
     | comment:; An item holding a `T` is tested in each copy.
  77 | task held<T: shown & frozen>(x: T)
     | keyword:task  task:held  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:&  keyword:frozen  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)
- 78 |     bind t = (x, 1)
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:x  punctuation:,  number:1  punctuation:)
+ 78 |     fixed t = (x, 1)
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:x  punctuation:,  number:1  punctuation:)
  79 |     when t.#0 is maybe int {y}
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:0  keyword:is  keyword:maybe  variable:int  punctuation:{  variable:y  punctuation:}
  80 |         show("held int ", y + 1)
@@ -170,12 +170,12 @@
     | comment:; used inside the task.
  90 | task measured<P...: frozen & shown>(args: P...) -> int
     | keyword:task  task:measured  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
- 91 |     bind t = (args...) { <- 0 }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  number:0  punctuation:}
+ 91 |     fixed t = (args...) { <- 0 }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  number:0  punctuation:}
  92 |     when t.#1 is maybe text {s}
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
- 93 |         bind same = s
-    | keyword:bind  variable:same  operator:=  variable:s
+ 93 |         fixed same = s
+    | keyword:fixed  variable:same  operator:=  variable:s
  94 |         show(same, " is ", s.len, " long")
     | builtin-fn:show  punctuation:(  variable:same  punctuation:,  string:" is "  punctuation:,  variable:s  punctuation:.  field:len  punctuation:,  string:" long"  punctuation:)
  95 |         <- s.len
@@ -188,8 +188,8 @@
     | keyword:fi
 100 | task third<P...: frozen & shown>(args: P...)
     | keyword:task  task:third  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
-101 |     bind t = (args...) {
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
+101 |     fixed t = (args...) {
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
 102 |         show("fewer than two")
     | builtin-fn:show  punctuation:(  string:"fewer than two"  punctuation:)
 103 |         <-
@@ -226,8 +226,8 @@
     | builtin-fn:show  punctuation:(  string:"third float or none: "  punctuation:,  variable:m  punctuation:)
 119 |     fi
     | keyword:fi
-120 |     hold k = 0
-    | keyword:hold  variable:k  operator:=  number:0
+120 |     flex k = 0
+    | keyword:flex  variable:k  operator:=  number:0
 121 |     loop t.#1 is maybe int {v} and k < 2
     | keyword:loop  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:int  punctuation:{  variable:v  punctuation:}  keyword:and  variable:k  operator:<  number:2
 122 |         k += v
@@ -242,8 +242,8 @@
     | comment:; The arms after one each copy knows holds are dropped, tests and all.
 127 | task after_taken<P...: frozen & shown>(args: P...)
     | keyword:task  task:after_taken  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
-128 |     bind t = (args...) { <- }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+128 |     fixed t = (args...) { <- }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 129 |     when args.len == 2
     | keyword:when  parameter:args  punctuation:.  field:len  operator:==  number:2
 130 |         show("two")
@@ -266,8 +266,8 @@
     | comment:; every arm that can run sends needs nothing after them.
 140 | task sent() -> int
     | keyword:task  task:sent  punctuation:(  punctuation:)  operator:->  type-builtin:int
-141 |     bind t = (1, "a")
-    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+141 |     fixed t = (1, "a")
+    | keyword:fixed  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
 142 |     when t.#1? is maybe int
     | keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:?  keyword:is  keyword:maybe  variable:int
 143 |         <- 1
@@ -292,8 +292,8 @@
     | comment:; the parts after it aren't made, so they may read what it guards against.
 154 | task known_arms<P...: frozen & shown>(args: P...)
     | keyword:task  task:known_arms  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
-155 |     bind t = (args...) { <- }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+155 |     fixed t = (args...) { <- }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 156 |     region r
     | keyword:region  region:r
 157 |     when t.#2 is none
@@ -322,8 +322,8 @@
     | builtin-fn:show  punctuation:(  string:"a third longer than two"  punctuation:)
 169 |     fi
     | keyword:fi
-170 |     hold k = 1
-    | keyword:hold  variable:k  operator:=  number:1
+170 |     flex k = 1
+    | keyword:flex  variable:k  operator:=  number:1
 171 |     when k > 0 and args.len > 2
     | keyword:when  variable:k  operator:>  number:0  keyword:and  parameter:args  punctuation:.  field:len  operator:>  number:2
 172 |         show("a third after a check: ", t.2)
@@ -344,8 +344,8 @@
     | task:held  punctuation:(  string:"s"  punctuation:)
 181 |     region r
     | keyword:region  region:r
-182 |     bind made = "ab" + "cd" at r
-    | keyword:bind  variable:made  operator:=  string:"ab"  operator:+  string:"cd"  keyword:at  region:r
+182 |     fixed made = "ab" + "cd" at r
+    | keyword:fixed  variable:made  operator:=  string:"ab"  operator:+  string:"cd"  keyword:at  region:r
 183 |     show(measured(1, made))
     | builtin-fn:show  punctuation:(  task:measured  punctuation:(  number:1  punctuation:,  variable:made  punctuation:)  punctuation:)
 184 |     show(measured(1, 2))

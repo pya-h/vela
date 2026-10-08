@@ -46,12 +46,12 @@
     | keyword:fi
  29 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 30 |     bind m: maybe int = none
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 31 |     bind k: maybe int = 4
-    | keyword:bind  variable:k  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
- 32 |     bind w = wrap(m)
-    | keyword:bind  variable:w  operator:=  task:wrap  punctuation:(  variable:m  punctuation:)
+ 30 |     fixed m: maybe int = none
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 31 |     fixed k: maybe int = 4
+    | keyword:fixed  variable:k  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
+ 32 |     fixed w = wrap(m)
+    | keyword:fixed  variable:w  operator:=  task:wrap  punctuation:(  variable:m  punctuation:)
  33 |     show(w, " ", w.type, " ", w == none)
     | builtin-fn:show  punctuation:(  variable:w  punctuation:,  string:" "  punctuation:,  variable:w  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:w  operator:==  keyword:none  punctuation:)
  34 |     show(wrap(wrap(m)), " ", wrap(wrap(m)).type)
@@ -68,8 +68,8 @@
     | builtin-fn:show  punctuation:(  task:maybe_again  punctuation:(  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:maybe_again  punctuation:(  task:wrap  punctuation:(  variable:m  punctuation:)  punctuation:)  punctuation:)
  40 |     ; A plan B on a maybe of a maybe gives what it holds.
     | comment:; A plan B on a maybe of a maybe gives what it holds.
- 41 |     bind held = wrap(k) { none }
-    | keyword:bind  variable:held  operator:=  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 41 |     fixed held = wrap(k) { none }
+    | keyword:fixed  variable:held  operator:=  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:{  keyword:none  punctuation:}
  42 |     show(held, " ", held.type)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:,  string:" "  punctuation:,  variable:held  punctuation:.  keyword:type  punctuation:)
  43 |     when w is { inner }
@@ -78,8 +78,8 @@
     | builtin-fn:show  punctuation:(  string:"inner "  punctuation:,  variable:inner  punctuation:)
  45 |     fi
     | keyword:fi
- 46 |     bind r = tryit(look(9))
-    | keyword:bind  variable:r  operator:=  task:tryit  punctuation:(  task:look  punctuation:(  number:9  punctuation:)  punctuation:)
+ 46 |     fixed r = tryit(look(9))
+    | keyword:fixed  variable:r  operator:=  task:tryit  punctuation:(  task:look  punctuation:(  number:9  punctuation:)  punctuation:)
  47 |     show(r.type)
     | builtin-fn:show  punctuation:(  variable:r  punctuation:.  keyword:type  punctuation:)
  48 |     match r

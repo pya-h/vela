@@ -1,8 +1,8 @@
 ; error: 8:10: unknown variable 'fallback'
 task main()
-    bind m: maybe int = none
-    bind n = m {
-        bind fallback = 3
+    fixed m: maybe int = none
+    fixed n = m {
+        fixed fallback = 3
         fallback
     }
     show(fallback)

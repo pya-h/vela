@@ -34,26 +34,26 @@
     | builtin-fn:show  punctuation:(  string:"ab  escape:\0  string:cd"  punctuation:.  field:len  punctuation:)
  21 |     show("tab\there".len)
     | builtin-fn:show  punctuation:(  string:"tab  escape:\t  string:here"  punctuation:.  field:len  punctuation:)
- 22 |     bind person = Person { name: "Grace" }
-    | keyword:bind  variable:person  operator:=  type:Person  punctuation:{  field:name  punctuation::  string:"Grace"  punctuation:}
+ 22 |     fixed person = Person { name: "Grace" }
+    | keyword:fixed  variable:person  operator:=  type:Person  punctuation:{  field:name  punctuation::  string:"Grace"  punctuation:}
  23 |     show(person.name.len)
     | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  punctuation:.  field:len  punctuation:)
  24 |     show(longer("Ada", "Grace"))
     | builtin-fn:show  punctuation:(  task:longer  punctuation:(  string:"Ada"  punctuation:,  string:"Grace"  punctuation:)  punctuation:)
  25 |     region r
     | keyword:region  region:r
- 26 |     bind line = ("Lovelace".copy() at r)
-    | keyword:bind  variable:line  operator:=  punctuation:(  string:"Lovelace"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 26 |     fixed line = ("Lovelace".copy() at r)
+    | keyword:fixed  variable:line  operator:=  punctuation:(  string:"Lovelace"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  27 |     show(line.len)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:.  field:len  punctuation:)
- 28 |     hold names = new [text]() at r
-    | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 28 |     flex names = new [text]() at r
+    | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  29 |     names.add("x")
     | variable:names  punctuation:.  field:add  punctuation:(  string:"x"  punctuation:)
  30 |     names.add("yz")
     | variable:names  punctuation:.  field:add  punctuation:(  string:"yz"  punctuation:)
- 31 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+ 31 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
  32 |     each name in names
     | keyword:each  variable:name  keyword:in  variable:names
  33 |         total = total + name.len
@@ -62,8 +62,8 @@
     | keyword:fi
  35 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 36 |     bind maybe_name: maybe text = "Hopper"
-    | keyword:bind  variable:maybe_name  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"Hopper"
+ 36 |     fixed maybe_name: maybe text = "Hopper"
+    | keyword:fixed  variable:maybe_name  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"Hopper"
  37 |     when maybe_name is {found}
     | keyword:when  variable:maybe_name  keyword:is  punctuation:{  variable:found  punctuation:}
  38 |         show(found.len)

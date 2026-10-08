@@ -4,8 +4,8 @@
     | comment:; value. Inside one, `.balance` is a field of the value it is called on and
   3 | ; `.note()` another of its methods. A method that changes the value says
     | comment:; `.note()` another of its methods. A method that changes the value says
-  4 | ; `alters`, and only a place that can change may call it: here a `hold`
-    | comment:; `alters`, and only a place that can change may call it: here a `hold`
+  4 | ; `alters`, and only a place that can change may call it: here a `flex`
+    | comment:; `alters`, and only a place that can change may call it: here a `flex`
   5 | ; variable, and an item of a slice.
     | comment:; variable, and an item of a slice.
   7 | ; A kind has methods too, which read the value as `.this`. A method named `str`
@@ -168,8 +168,8 @@
     | keyword:fi
  99 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-100 |     hold ada = Account { owner: "Ada" }
-    | keyword:hold  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:}
+100 |     flex ada = Account { owner: "Ada" }
+    | keyword:flex  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:}
 101 |     ada.deposit(100)
     | variable:ada  punctuation:.  method:deposit  punctuation:(  number:100  punctuation:)
 102 |     report(ada.withdraw(30))
@@ -188,10 +188,10 @@
     | comment:; A reference is another name for an account: its alters methods change
 110 |     ; the account it names.
     | comment:; the account it names.
-111 |     hold bob = Account.new("Bob")
-    | keyword:hold  variable:bob  operator:=  type:Account  punctuation:.  method:new  punctuation:(  string:"Bob"  punctuation:)
-112 |     hold& current = &bob
-    | keyword:hold  keyword:&  variable:current  operator:=  operator:&  variable:bob
+111 |     flex bob = Account.new("Bob")
+    | keyword:flex  variable:bob  operator:=  type:Account  punctuation:.  method:new  punctuation:(  string:"Bob"  punctuation:)
+112 |     flex& current = &bob
+    | keyword:flex  keyword:&  variable:current  operator:=  operator:&  variable:bob
 113 |     current.deposit(20)
     | variable:current  punctuation:.  method:deposit  punctuation:(  number:20  punctuation:)
 114 |     show(bob)
@@ -200,8 +200,8 @@
     | comment:; An item of a slice is a place that can change.
 117 |     region bank
     | keyword:region  region:bank
-118 |     hold accounts = new [Account]() at bank
-    | keyword:hold  variable:accounts  operator:=  keyword:new  punctuation:[  type:Account  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:bank
+118 |     flex accounts = new [Account]() at bank
+    | keyword:flex  variable:accounts  operator:=  keyword:new  punctuation:[  type:Account  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:bank
 119 |     accounts.add(Account { owner: "Grace", balance: 5 })
     | variable:accounts  punctuation:.  field:add  punctuation:(  type:Account  punctuation:{  field:owner  punctuation::  string:"Grace"  punctuation:,  field:balance  punctuation::  number:5  punctuation:}  punctuation:)
 120 |     accounts[0].deposit(10)
@@ -210,8 +210,8 @@
     | builtin-fn:show  punctuation:(  variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:)
 122 |     show("deposits: ", Account.deposits)
     | builtin-fn:show  punctuation:(  string:"deposits: "  punctuation:,  type:Account  punctuation:.  field:deposits  punctuation:)
-124 |     hold best = Best { value: 3 }
-    | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  number:3  punctuation:}
+124 |     flex best = Best { value: 3 }
+    | keyword:flex  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  number:3  punctuation:}
 125 |     each n in [7, 2, 9, 4]
     | keyword:each  variable:n  keyword:in  punctuation:[  number:7  punctuation:,  number:2  punctuation:,  number:9  punctuation:,  number:4  punctuation:]
 126 |         best.offer(n)

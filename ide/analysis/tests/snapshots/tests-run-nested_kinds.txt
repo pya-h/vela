@@ -60,8 +60,8 @@
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Holding  punctuation:(  variant:Square  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)  punctuation:)
  35 |     show(describe(Empty))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Empty  punctuation:)  punctuation:)
- 36 |     bind b = Box.Holding(Shape.Square(4))
-    | keyword:bind  variable:b  operator:=  type:Box  punctuation:.  variant:Holding  punctuation:(  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)  punctuation:)
+ 36 |     fixed b = Box.Holding(Shape.Square(4))
+    | keyword:fixed  variable:b  operator:=  type:Box  punctuation:.  variant:Holding  punctuation:(  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)  punctuation:)
  37 |     when b is Box.Holding inner
     | keyword:when  variable:b  keyword:is  type:Box  punctuation:.  variant:Holding  variable:inner
  38 |         when inner is Shape.Square s

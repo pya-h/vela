@@ -19,8 +19,8 @@ task main()
         fi
     fi
 
-    hold total = 0
-    hold k = 1
+    flex total = 0
+    flex k = 1
     loop k <= 4
         total = total + k
         k = k + 1

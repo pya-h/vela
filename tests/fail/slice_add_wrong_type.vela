@@ -1,6 +1,6 @@
 ; error: 5:12: expected type int, got text
 task main()
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     xs.add("one")
 fi

@@ -1,7 +1,7 @@
 ; error: 8:5: expected 'fi' to close the 'when' at 5:9, got '}'
 task main()
-    bind m: maybe int = none
-    bind n = m {
+    fixed m: maybe int = none
+    fixed n = m {
         when true
             show(1)
         0

@@ -1,6 +1,6 @@
 ; error: 5:12: 'copy' copies what a value holds in a region, but this value is int, which holds no text, slice, or pointer; use it as it is
 task main()
     region r
-    bind n = 3
+    fixed n = 3
     show(n.copy() at r)
 fi

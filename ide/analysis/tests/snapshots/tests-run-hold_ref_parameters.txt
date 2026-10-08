@@ -1,5 +1,5 @@
-  1 | ; A parameter written `hold& x: T` is the caller's place: every change the task
-    | comment:; A parameter written `hold& x: T` is the caller's place: every change the task
+  1 | ; A parameter written `flex& x: T` is the caller's place: every change the task
+    | comment:; A parameter written `flex& x: T` is the caller's place: every change the task
   2 | ; makes to `x` is a change there. The call marks the place it gives with `&`,
     | comment:; makes to `x` is a change there. The call marks the place it gives with `&`,
   3 | ; so a reader sees at the call what may change.
@@ -18,8 +18,8 @@
     | keyword:fi
  14 |     ; A method takes one too, and gives its own fields.
     | comment:; A method takes one too, and gives its own fields.
- 15 |     alters add_to(hold& total: int)
-    | keyword:alters  method:add_to  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 15 |     alters add_to(flex& total: int)
+    | keyword:alters  method:add_to  punctuation:(  keyword:flex  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
  16 |         total = total + .n
     | parameter:total  operator:=  parameter:total  operator:+  punctuation:.  field:n
  17 |         double(&.n)
@@ -28,14 +28,14 @@
     | keyword:fi
  19 | fi
     | keyword:fi
- 21 | task sample(hold& x: int)
-    | keyword:task  task:sample  punctuation:(  keyword:hold  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)
+ 21 | task sample(flex& x: int)
+    | keyword:task  task:sample  punctuation:(  keyword:flex  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)
  22 |     x = 10
     | parameter:x  operator:=  number:10
  23 | fi
     | keyword:fi
- 25 | task swap(hold& a: int, hold& b: int)
-    | keyword:task  task:swap  punctuation:(  keyword:hold  keyword:&  parameter:a  punctuation::  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:b  punctuation::  type-builtin:int  punctuation:)
+ 25 | task swap(flex& a: int, flex& b: int)
+    | keyword:task  task:swap  punctuation:(  keyword:flex  keyword:&  parameter:a  punctuation::  type-builtin:int  punctuation:,  keyword:flex  keyword:&  parameter:b  punctuation::  type-builtin:int  punctuation:)
  26 |     a, b = b, a
     | parameter:a  punctuation:,  parameter:b  operator:=  parameter:b  punctuation:,  parameter:a
  27 | fi
@@ -44,8 +44,8 @@
     | comment:; A shape: its fields change, its alters methods are called, and a field of it
  30 | ; is given on to another task.
     | comment:; is given on to another task.
- 31 | task bump(hold& c: Counter)
-    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:c  punctuation::  type:Counter  punctuation:)
+ 31 | task bump(flex& c: Counter)
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:c  punctuation::  type:Counter  punctuation:)
  32 |     c.tick()
     | parameter:c  punctuation:.  method:tick  punctuation:(  punctuation:)
  33 |     c.n = c.n + 5
@@ -58,8 +58,8 @@
     | keyword:fi
  38 | ; A slice grows where the caller keeps it.
     | comment:; A slice grows where the caller keeps it.
- 39 | task push_two(hold& xs: [int]@r, r: region)
-    | keyword:task  task:push_two  punctuation:(  keyword:hold  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
+ 39 | task push_two(flex& xs: [int]@r, r: region)
+    | keyword:task  task:push_two  punctuation:(  keyword:flex  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
  40 |     xs.add(1)
     | parameter:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
  41 |     xs.add(2)
@@ -68,14 +68,14 @@
     | keyword:fi
  44 | ; A generic task, and a recursive one, which passes its own place on.
     | comment:; A generic task, and a recursive one, which passes its own place on.
- 45 | task put<T>(hold& place: T, value: T)
-    | keyword:task  task:put  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:hold  keyword:&  parameter:place  punctuation::  type:T  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)
+ 45 | task put<T>(flex& place: T, value: T)
+    | keyword:task  task:put  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:flex  keyword:&  parameter:place  punctuation::  type:T  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)
  46 |     place = value
     | parameter:place  operator:=  parameter:value
  47 | fi
     | keyword:fi
- 49 | task count_down(hold& n: int, hold& steps: int)
-    | keyword:task  task:count_down  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:steps  punctuation::  type-builtin:int  punctuation:)
+ 49 | task count_down(flex& n: int, flex& steps: int)
+    | keyword:task  task:count_down  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:,  keyword:flex  keyword:&  parameter:steps  punctuation::  type-builtin:int  punctuation:)
  50 |     when n > 0
     | keyword:when  parameter:n  operator:>  number:0
  51 |         n = n - 1
@@ -90,104 +90,104 @@
     | keyword:fi
  57 | ; Text whose region the call settles, and a tuple given a new value.
     | comment:; Text whose region the call settles, and a tuple given a new value.
- 58 | task rename(hold& t: text@p, to: text@p)
-    | keyword:task  task:rename  punctuation:(  keyword:hold  keyword:&  parameter:t  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  parameter:to  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)
+ 58 | task rename(flex& t: text@p, to: text@p)
+    | keyword:task  task:rename  punctuation:(  keyword:flex  keyword:&  parameter:t  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  parameter:to  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)
  59 |     t = to
     | parameter:t  operator:=  parameter:to
  60 | fi
     | keyword:fi
- 62 | task widen(hold& ends: (int, int))
-    | keyword:task  task:widen  punctuation:(  keyword:hold  keyword:&  parameter:ends  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)
+ 62 | task widen(flex& ends: (int, int))
+    | keyword:task  task:widen  punctuation:(  keyword:flex  keyword:&  parameter:ends  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)
  63 |     ends = (ends.0 - 1, ends.1 + 1)
     | parameter:ends  operator:=  punctuation:(  parameter:ends  punctuation:.  field:0  operator:-  number:1  punctuation:,  parameter:ends  punctuation:.  field:1  operator:+  number:1  punctuation:)
  64 | fi
     | keyword:fi
  66 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 67 |     hold a = 1
-    | keyword:hold  variable:a  operator:=  number:1
+ 67 |     flex a = 1
+    | keyword:flex  variable:a  operator:=  number:1
  68 |     sample(&a)
     | task:sample  punctuation:(  operator:&  variable:a  punctuation:)
  69 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
- 70 |     hold b = 2
-    | keyword:hold  variable:b  operator:=  number:2
+ 70 |     flex b = 2
+    | keyword:flex  variable:b  operator:=  number:2
  71 |     swap(&a, &b)
     | task:swap  punctuation:(  operator:&  variable:a  punctuation:,  operator:&  variable:b  punctuation:)
  72 |     show(a, " ", b)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:)
- 74 |     hold c = Counter {}
-    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
+ 74 |     flex c = Counter {}
+    | keyword:flex  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
  75 |     bump(&c)
     | task:bump  punctuation:(  operator:&  variable:c  punctuation:)
  76 |     show(c.n)
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:)
- 77 |     hold total = 100
-    | keyword:hold  variable:total  operator:=  number:100
+ 77 |     flex total = 100
+    | keyword:flex  variable:total  operator:=  number:100
  78 |     c.add_to(&total)
     | variable:c  punctuation:.  method:add_to  punctuation:(  operator:&  variable:total  punctuation:)
  79 |     show(total, " ", c.n)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
  81 |     ; Two different fields, and two different items of an array.
     | comment:; Two different fields, and two different items of an array.
- 82 |     hold pair = Counter { n: 3 }
-    | keyword:hold  variable:pair  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:3  punctuation:}
- 83 |     hold other = Counter { n: 4 }
-    | keyword:hold  variable:other  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:4  punctuation:}
+ 82 |     flex pair = Counter { n: 3 }
+    | keyword:flex  variable:pair  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:3  punctuation:}
+ 83 |     flex other = Counter { n: 4 }
+    | keyword:flex  variable:other  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:4  punctuation:}
  84 |     swap(&pair.n, &other.n)
     | task:swap  punctuation:(  operator:&  variable:pair  punctuation:.  field:n  punctuation:,  operator:&  variable:other  punctuation:.  field:n  punctuation:)
- 85 |     hold arr = [1, 2, 3]
-    | keyword:hold  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 85 |     flex arr = [1, 2, 3]
+    | keyword:flex  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  86 |     swap(&arr[0], &arr[2])
     | task:swap  punctuation:(  operator:&  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:,  operator:&  variable:arr  punctuation:[  number:2  punctuation:]  punctuation:)
  87 |     show(pair.n, " ", other.n, " ", arr[0], arr[1], arr[2])
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:other  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:,  variable:arr  punctuation:[  number:1  punctuation:]  punctuation:,  variable:arr  punctuation:[  number:2  punctuation:]  punctuation:)
  89 |     region r
     | keyword:region  region:r
- 90 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 90 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  91 |     push_two(&xs, r)
     | task:push_two  punctuation:(  operator:&  variable:xs  punctuation:,  region:r  punctuation:)
  92 |     show(xs.len)
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  punctuation:)
- 93 |     hold p = new Counter(Counter {}) at r
-    | keyword:hold  variable:p  operator:=  keyword:new  type:Counter  punctuation:(  type:Counter  punctuation:{  punctuation:}  punctuation:)  keyword:at  region:r
+ 93 |     flex p = new Counter(Counter {}) at r
+    | keyword:flex  variable:p  operator:=  keyword:new  type:Counter  punctuation:(  type:Counter  punctuation:{  punctuation:}  punctuation:)  keyword:at  region:r
  94 |     bump(&p^)
     | task:bump  punctuation:(  operator:&  variable:p  operator:^  punctuation:)
  95 |     swap(&p^.n, &a)
     | task:swap  punctuation:(  operator:&  variable:p  operator:^  punctuation:.  field:n  punctuation:,  operator:&  variable:a  punctuation:)
  96 |     show(p^.n, " ", a)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:)
- 98 |     hold word = "x"
-    | keyword:hold  variable:word  operator:=  string:"x"
+ 98 |     flex word = "x"
+    | keyword:flex  variable:word  operator:=  string:"x"
  99 |     put(&word, "y")
     | task:put  punctuation:(  operator:&  variable:word  punctuation:,  string:"y"  punctuation:)
 100 |     put(&a, 5)
     | task:put  punctuation:(  operator:&  variable:a  punctuation:,  number:5  punctuation:)
-101 |     hold steps = 0
-    | keyword:hold  variable:steps  operator:=  number:0
+101 |     flex steps = 0
+    | keyword:flex  variable:steps  operator:=  number:0
 102 |     count_down(&a, &steps)
     | task:count_down  punctuation:(  operator:&  variable:a  punctuation:,  operator:&  variable:steps  punctuation:)
 103 |     show(word, " ", a, " ", steps)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:,  string:" "  punctuation:,  variable:steps  punctuation:)
 104 |     rename(&word, "lasting")
     | task:rename  punctuation:(  operator:&  variable:word  punctuation:,  string:"lasting"  punctuation:)
-105 |     hold made = "made" + "!" at r
-    | keyword:hold  variable:made  operator:=  string:"made"  operator:+  string:"!"  keyword:at  region:r
+105 |     flex made = "made" + "!" at r
+    | keyword:flex  variable:made  operator:=  string:"made"  operator:+  string:"!"  keyword:at  region:r
 106 |     rename(&made, "again" + "?" at r)
     | task:rename  punctuation:(  operator:&  variable:made  punctuation:,  string:"again"  operator:+  string:"?"  keyword:at  region:r  punctuation:)
 107 |     show(word, " ", made)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:,  string:" "  punctuation:,  variable:made  punctuation:)
-108 |     hold ends = (1, 2)
-    | keyword:hold  variable:ends  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+108 |     flex ends = (1, 2)
+    | keyword:flex  variable:ends  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
 109 |     widen(&ends)
     | task:widen  punctuation:(  operator:&  variable:ends  punctuation:)
 110 |     show(ends.0, " ", ends.1)
     | builtin-fn:show  punctuation:(  variable:ends  punctuation:.  field:0  punctuation:,  string:" "  punctuation:,  variable:ends  punctuation:.  field:1  punctuation:)
-112 |     hold tally = Tally { count: 7 }
-    | keyword:hold  variable:tally  operator:=  type:Tally  punctuation:{  field:count  punctuation::  number:7  punctuation:}
-113 |     hold sum = 1
-    | keyword:hold  variable:sum  operator:=  number:1
+112 |     flex tally = Tally { count: 7 }
+    | keyword:flex  variable:tally  operator:=  type:Tally  punctuation:{  field:count  punctuation::  number:7  punctuation:}
+113 |     flex sum = 1
+    | keyword:flex  variable:sum  operator:=  number:1
 114 |     tally.add_into(&sum)
     | variable:tally  punctuation:.  method:add_into  punctuation:(  operator:&  variable:sum  punctuation:)
 115 |     double(&sum)

@@ -7,7 +7,7 @@ task main()
     break
     continue
     each i in 0..3
-        bind f = () -> int
+        fixed f = () -> int
             continue
             <- 1
         fi

@@ -58,7 +58,7 @@ task save_twice(size: int) -> nothing ~ text
 fi
 
 task doubled_or_zero(size: int) -> int
-    bind n = check_size(size) {
+    fixed n = check_size(size) {
         failure e
         show(explain(e))
         <- 0
@@ -70,7 +70,7 @@ task main()
     show(check_size(3) { 0 })
     show(check_size(-1) { 0 })
 
-    bind described = check_size(-500) {
+    fixed described = check_size(-500) {
         failure problem
         show(explain(problem))
         -1
@@ -114,14 +114,14 @@ task main()
         show(message)
     fi
 
-    hold stored: int ~ BadSize = fail Empty
+    flex stored: int ~ BadSize = fail Empty
     show(stored { -1 })
     stored = 8
     show(stored { -1 })
 
     show(lookup("answer") { none } { 0 })
     show(lookup("other") { none })
-    bind missing = lookup("") {
+    fixed missing = lookup("") {
         failure why
         show(why)
         none

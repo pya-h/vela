@@ -8,6 +8,6 @@ shape Counter
 fi
 
 task main()
-    hold c = Counter { count: 0 }
+    flex c = Counter { count: 0 }
     show(c.count)
 fi

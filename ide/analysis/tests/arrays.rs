@@ -14,7 +14,7 @@ shape Point
 fi
 
 task sum(xs: [int]@r) -> int
-    hold total = 0
+    flex total = 0
     each x in xs
         total = total + x
     fi
@@ -23,13 +23,13 @@ fi
 
 task main()
     CHECK
-    bind scores = [90, 72, 85]
+    fixed scores = [90, 72, 85]
     region r
-    bind points = new [Point]([Point { x: 1, y: 2 }#3]) at r
-    bind boxed = new [int#3](scores) at r
-    bind part = points[1..3]
-    bind first = part[0]
-    bind count = scores.len
+    fixed points = new [Point]([Point { x: 1, y: 2 }#3]) at r
+    fixed boxed = new [int#3](scores) at r
+    fixed part = points[1..3]
+    fixed first = part[0]
+    fixed count = scores.len
     each point in points
         show(point.x)
     fi
@@ -113,23 +113,23 @@ fn completion_offers_len_on_arrays_and_len_add_del_and_copy_on_slices() {
 
 #[test]
 fn completion_offers_types_in_brackets_and_nothing_for_a_count() {
-    let types = labels(&program(true, "bind grid: [@@"));
+    let types = labels(&program(true, "fixed grid: [@@"));
     for expected in ["int", "Point", "maybe"] {
         assert!(types.contains(&expected.to_string()), "{:?} in {:?}", expected, types);
     }
     // An array can't hold nothing.
     assert!(!types.contains(&"nothing".to_string()), "{:?}", types);
-    assert!(labels(&program(true, "bind grid: [[@@")).contains(&"float".to_string()));
-    assert_eq!(labels(&program(true, "bind grid: [int#@@")), Vec::<String>::new());
+    assert!(labels(&program(true, "fixed grid: [[@@")).contains(&"float".to_string()));
+    assert_eq!(labels(&program(true, "fixed grid: [int#@@")), Vec::<String>::new());
     // The count of a repeated value is a value.
-    assert!(labels(&program(true, "bind zeros = [0#@@")).contains(&"count".to_string()));
+    assert!(labels(&program(true, "fixed zeros = [0#@@")).contains(&"count".to_string()));
     // An error type goes on after an array type, with `~`.
-    assert!(labels(&program(true, "hold pair: [int#2] @@")).contains(&"~".to_string()));
+    assert!(labels(&program(true, "flex pair: [int#2] @@")).contains(&"~".to_string()));
 }
 
 #[test]
 fn values_in_an_array_inside_a_shape_literal_are_not_its_fields() {
-    let items = labels(&program(true, "bind p = Point { x: [1, @@"));
+    let items = labels(&program(true, "fixed p = Point { x: [1, @@"));
     assert!(!items.contains(&"y".to_string()), "{:?}", items);
     assert!(items.contains(&"scores".to_string()), "{:?}", items);
 }
@@ -139,13 +139,13 @@ fn completion_continues_array_and_slice_expressions() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
         // After a slice made with `new`, the region it goes in.
-        assert!(labels(&program(checks, "bind copy = new [int](scores) @@")).contains(&"at".to_string()), "{}", when);
-        assert!(labels(&program(checks, "bind copy = new [int#3](scores) @@")).contains(&"at".to_string()), "{}", when);
-        assert_eq!(labels(&program(checks, "bind copy = new [int](scores) at @@")), ["r"], "{}", when);
+        assert!(labels(&program(checks, "fixed copy = new [int](scores) @@")).contains(&"at".to_string()), "{}", when);
+        assert!(labels(&program(checks, "fixed copy = new [int#3](scores) @@")).contains(&"at".to_string()), "{}", when);
+        assert_eq!(labels(&program(checks, "fixed copy = new [int](scores) at @@")), ["r"], "{}", when);
         // Once it has one, no second `at`.
-        assert!(!labels(&program(checks, "bind copy = new [int](scores) at r @@")).contains(&"at".to_string()), "{}", when);
+        assert!(!labels(&program(checks, "fixed copy = new [int](scores) at r @@")).contains(&"at".to_string()), "{}", when);
         // Nor after an array literal, which `new` doesn't make.
-        assert!(!labels(&program(checks, "bind copy = [1, 2] @@")).contains(&"at".to_string()), "{}", when);
+        assert!(!labels(&program(checks, "fixed copy = [1, 2] @@")).contains(&"at".to_string()), "{}", when);
         // What `each` goes through is a value: arrays, slices, and counts.
         let values = labels(&program(checks, "each v in @@"));
         for name in ["scores", "points", "part", "count", "sum"] {
@@ -161,7 +161,7 @@ fn completion_continues_array_and_slice_expressions() {
 fn changes_to_a_slice_have_types_hovers_and_snippets() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
-        let code = "hold names = new [text]() at r\n    names.add(\"a\")\n    names.add(0, \"b\")\n    bind taken = names.del(1)\n    hold moving = points\n    bind last = moving.del()\n    show(taken)\n    show(last.x)";
+        let code = "flex names = new [text]() at r\n    names.add(\"a\")\n    names.add(0, \"b\")\n    fixed taken = names.del(1)\n    flex moving = points\n    fixed last = moving.del()\n    show(taken)\n    show(last.x)";
         let source = program(checks, code);
         if checks {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
@@ -170,7 +170,7 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
         assert_eq!(hover(&source, "taken =").0, "bind taken: text@r", "{}", when);
         assert_eq!(hover(&source, "last =").0, "bind last: Point", "{}", when);
     }
-    let source = program(true, "hold names = new [text]() at r\n    names.add(\"a\")\n    show(names.del())");
+    let source = program(true, "flex names = new [text]() at r\n    names.add(\"a\")\n    show(names.del())");
     let (code, doc) = hover(&source, "add(");
     assert_eq!(code, "add(value) or add(index, value)");
     assert!(doc.starts_with("Adds a value to a slice"), "{}", doc);
@@ -186,7 +186,7 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
 
 #[test]
 fn a_variant_named_like_a_change_is_still_a_variant() {
-    let source = "kind Step\n    add(amount: int)\n    del\nfi\n\ntask main()\n    bind a = Step.add(2)\n    bind b = Step.del\n    match a\n        case add n\n            show(n)\n        case del\n            show(0)\n    fi\nfi\n";
+    let source = "kind Step\n    add(amount: int)\n    del\nfi\n\ntask main()\n    fixed a = Step.add(2)\n    fixed b = Step.del\n    match a\n        case add n\n            show(n)\n        case del\n            show(0)\n    fi\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "a =").0, "bind a: Step");
 }

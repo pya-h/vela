@@ -14,14 +14,14 @@ task manhattan(p: Point) -> int
 fi
 
 task main()
-    bind sum = add(3, 4)
+    fixed sum = add(3, 4)
     show(sum)
 
-    bind p = Point { x: 10, y: 20 }
+    fixed p = Point { x: 10, y: 20 }
     show(p.x)
     show(manhattan(p))
 
-    hold i = 0
+    flex i = 0
     loop i < 5
         show(i)
         i++
@@ -38,7 +38,7 @@ task main()
     fi
 
     region numbers
-    bind ptr: ^int@numbers = new int(42) at numbers
+    fixed ptr: ^int@numbers = new int(42) at numbers
     ; Text holding values is new text, so it goes in a region too.
     show("the answer is {ptr^}" at numbers)
 fi

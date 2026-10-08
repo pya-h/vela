@@ -22,12 +22,12 @@
     | keyword:fi
  16 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 17 |     bind p = Point { y: 2, x: 1 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:y  punctuation::  number:2  punctuation:,  field:x  punctuation::  number:1  punctuation:}
+ 17 |     fixed p = Point { y: 2, x: 1 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:y  punctuation::  number:2  punctuation:,  field:x  punctuation::  number:1  punctuation:}
  18 |     describe(Marker {}, p)
     | task:describe  punctuation:(  type:Marker  punctuation:{  punctuation:}  punctuation:,  variable:p  punctuation:)
- 19 |     hold q = Point { x: 10, y: 20 }
-    | keyword:hold  variable:q  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
+ 19 |     flex q = Point { x: 10, y: 20 }
+    | keyword:flex  variable:q  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
  20 |     q = Point { y: q.x, x: q.y }
     | variable:q  operator:=  type:Point  punctuation:{  field:y  punctuation::  variable:q  punctuation:.  field:x  punctuation:,  field:x  punctuation::  variable:q  punctuation:.  field:y  punctuation:}
  21 |     show(q.x)

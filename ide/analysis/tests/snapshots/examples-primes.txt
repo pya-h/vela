@@ -28,10 +28,10 @@
     | keyword:fi
  18 | task primes_below_no_add(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes_below_no_add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 19 |     bind primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
-    | keyword:bind  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:; filled by index; primes_below does the same with add
- 20 |     hold idx = 0
-    | keyword:hold  variable:idx  operator:=  number:0
+ 19 |     fixed primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
+    | keyword:fixed  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:; filled by index; primes_below does the same with add
+ 20 |     flex idx = 0
+    | keyword:flex  variable:idx  operator:=  number:0
  22 |     each i in 2..limit
     | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
  23 |         when is_prime(i)
@@ -50,8 +50,8 @@
     | keyword:fi
  31 | task primes_below(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes_below  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 32 |     hold results: [int]@r = new [int]() at r
-    | keyword:hold  variable:results  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 32 |     flex results: [int]@r = new [int]() at r
+    | keyword:flex  variable:results  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  34 |     each i in 2..limit
     | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
  35 |         when is_prime(i)
@@ -70,8 +70,8 @@
     | keyword:priv  keyword:task  task:main  punctuation:(  punctuation:)
  43 |     region r
     | keyword:region  region:r
- 44 |     bind results = primes_below(r, LIMIT)
-    | keyword:bind  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variant:LIMIT  punctuation:)
+ 44 |     fixed results = primes_below(r, LIMIT)
+    | keyword:fixed  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variant:LIMIT  punctuation:)
  45 |     show("Found: ")
     | builtin-fn:show  punctuation:(  string:"Found: "  punctuation:)
  46 |     show(results.len)
@@ -86,8 +86,8 @@
     | keyword:fi
  51 |     show("-----------------------")
     | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
- 53 |     hold x = results
-    | keyword:hold  variable:x  operator:=  variable:results
+ 53 |     flex x = results
+    | keyword:flex  variable:x  operator:=  variable:results
  54 |     loop x.len > 0
     | keyword:loop  variable:x  punctuation:.  field:len  operator:>  number:0
  55 |         show(x.del())
@@ -108,8 +108,8 @@
     | comment:; each through &y reads y as it is at each pass: every del takes the last
  63 |     ; item off, so the loop meets the end halfway, after 2 to 19
     | comment:; item off, so the loop meets the end halfway, after 2 to 19
- 64 |     hold y = results.copy() at r
-    | keyword:hold  variable:y  operator:=  variable:results  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 64 |     flex y = results.copy() at r
+    | keyword:flex  variable:y  operator:=  variable:results  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  65 |     each p in &y
     | keyword:each  variable:p  keyword:in  operator:&  variable:y
  66 |         show(p)

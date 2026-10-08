@@ -1,6 +1,6 @@
-; error: 5:27: shape 'library.Card' has no shared method 'Hearts'
+; error: 5:28: shape 'library.Card' has no shared method 'Hearts'
 include modules/library
 
 task main()
-    bind c = library.Card.Hearts(1)
+    fixed c = library.Card.Hearts(1)
 fi

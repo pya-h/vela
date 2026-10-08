@@ -2,20 +2,20 @@
 shape Point
     x: int
 
-    alters grow(bind& by: Point)
+    alters grow(fixed& by: Point)
         .x = .x + by.x
     fi
 fi
 
-task look(bind& p: Point) -> int
+task look(fixed& p: Point) -> int
     <- p.x
 fi
 
-task both(bind& a: Point, hold& b: Point)
+task both(fixed& a: Point, flex& b: Point)
     b.x = a.x
 fi
 
-task keep(bind p: Point) -> int
+task keep(fixed p: Point) -> int
     <- p.x
 fi
 
@@ -25,7 +25,7 @@ fi
 
 task main()
     region r
-    hold p = Point { x: 1 }
-    hold s = new [Point]([p]) at r
+    flex p = Point { x: 1 }
+    flex s = new [Point]([p]) at r
     show(look(Point { x: 2 }))
 fi

@@ -10,8 +10,8 @@
     | keyword:#  variant:WIDTH  operator:=  number:6
   8 | task free_run(row: text, from: int) -> int
     | keyword:task  task:free_run  punctuation:(  parameter:row  punctuation::  type-builtin:text  punctuation:,  parameter:from  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  9 |     hold run = 0
-    | keyword:hold  variable:run  operator:=  number:0
+  9 |     flex run = 0
+    | keyword:flex  variable:run  operator:=  number:0
  10 |     each at_seat in from..WIDTH
     | keyword:each  variable:at_seat  keyword:in  parameter:from  operator:..  variant:WIDTH
  11 |         when row[at_seat] != '.'
@@ -30,12 +30,12 @@
     | keyword:fi
  19 | task seat(hall: [text#4], party: int)
     | keyword:task  task:seat  punctuation:(  parameter:hall  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:party  punctuation::  type-builtin:int  punctuation:)
- 20 |     hold placed = false
-    | keyword:hold  variable:placed  operator:=  keyword:false
+ 20 |     flex placed = false
+    | keyword:flex  variable:placed  operator:=  keyword:false
  21 |     rows => each r in 0..4
     | variable:rows  operator:=>  keyword:each  variable:r  keyword:in  number:0  operator:..  number:4
- 22 |         bind row = hall[r]
-    | keyword:bind  variable:row  operator:=  parameter:hall  punctuation:[  variable:r  punctuation:]
+ 22 |         fixed row = hall[r]
+    | keyword:fixed  variable:row  operator:=  parameter:hall  punctuation:[  variable:r  punctuation:]
  23 |         when row[0] == '#'
     | keyword:when  variable:row  punctuation:[  number:0  punctuation:]  operator:==  string:'#'
  24 |             show("row ", r, " is closed")
@@ -70,8 +70,8 @@
     | keyword:fi
  40 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 41 |     bind hall = ["x..x.x", "######", "xx...x", "......"]
-    | keyword:bind  variable:hall  operator:=  punctuation:[  string:"x..x.x"  punctuation:,  string:"######"  punctuation:,  string:"xx...x"  punctuation:,  string:"......"  punctuation:]
+ 41 |     fixed hall = ["x..x.x", "######", "xx...x", "......"]
+    | keyword:fixed  variable:hall  operator:=  punctuation:[  string:"x..x.x"  punctuation:,  string:"######"  punctuation:,  string:"xx...x"  punctuation:,  string:"......"  punctuation:]
  42 |     seat(hall, 2)
     | task:seat  punctuation:(  variable:hall  punctuation:,  number:2  punctuation:)
  43 |     seat(hall, 3)
@@ -86,8 +86,8 @@
     | comment:; maybes, and the loop stops at the first taken one, or past the end,
  49 |     ; where its plan B stops it.
     | comment:; where its plan B stops it.
- 50 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
+ 50 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
  51 |     loop hall[3].at(count) { break } == '.'
     | keyword:loop  variable:hall  punctuation:[  number:3  punctuation:]  punctuation:.  method:at  punctuation:(  variable:count  punctuation:)  punctuation:{  keyword:break  punctuation:}  operator:==  string:'.'
  52 |         count++

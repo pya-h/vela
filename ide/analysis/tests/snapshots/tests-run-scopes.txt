@@ -6,36 +6,36 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     when true
     | keyword:when  keyword:true
-  6 |         bind y = 1
-    | keyword:bind  variable:y  operator:=  number:1
+  6 |         fixed y = 1
+    | keyword:fixed  variable:y  operator:=  number:1
   7 |         show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
   8 |     else
     | keyword:else
-  9 |         bind y = 2
-    | keyword:bind  variable:y  operator:=  number:2
+  9 |         fixed y = 2
+    | keyword:fixed  variable:y  operator:=  number:2
  10 |         show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
  11 |     fi
     | keyword:fi
  13 |     when false
     | keyword:when  keyword:false
- 14 |         bind y = "unused"
-    | keyword:bind  variable:y  operator:=  string:"unused"
+ 14 |         fixed y = "unused"
+    | keyword:fixed  variable:y  operator:=  string:"unused"
  15 |         show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
  16 |     else
     | keyword:else
- 17 |         bind y = 3
-    | keyword:bind  variable:y  operator:=  number:3
+ 17 |         fixed y = 3
+    | keyword:fixed  variable:y  operator:=  number:3
  18 |         show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
  19 |     fi
     | keyword:fi
  21 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
- 22 |         bind square = i * i
-    | keyword:bind  variable:square  operator:=  variable:i  operator:*  variable:i
+ 22 |         fixed square = i * i
+    | keyword:fixed  variable:square  operator:=  variable:i  operator:*  variable:i
  23 |         show(square)
     | builtin-fn:show  punctuation:(  variable:square  punctuation:)
  24 |     fi
@@ -46,12 +46,12 @@
     | builtin-fn:show  punctuation:(  variable:i  punctuation:)
  27 |     fi
     | keyword:fi
- 29 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
+ 29 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
  30 |     loop n < 2
     | keyword:loop  variable:n  operator:<  number:2
- 31 |         bind step = 1
-    | keyword:bind  variable:step  operator:=  number:1
+ 31 |         fixed step = 1
+    | keyword:fixed  variable:step  operator:=  number:1
  32 |         n = n + step
     | variable:n  operator:=  variable:n  operator:+  variable:step
  33 |     fi

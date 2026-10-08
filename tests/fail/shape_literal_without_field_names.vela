@@ -1,10 +1,10 @@
-; error: 8:14: 'Point' is a shape, not a variable; a literal names its fields on one line, as in 'Point { x: … }'
+; error: 8:15: 'Point' is a shape, not a variable; a literal names its fields on one line, as in 'Point { x: … }'
 shape Point
     x: int
 fi
 
 task main()
-    bind x = 1
-    bind p = Point { x }
+    fixed x = 1
+    fixed p = Point { x }
     show(p.x)
 fi

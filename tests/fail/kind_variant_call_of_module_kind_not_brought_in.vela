@@ -1,6 +1,6 @@
-; error: 5:17: unknown variable 'Suit'; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
+; error: 5:18: unknown variable 'Suit'; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
 include modules/library
 
 task main()
-    bind suit = Suit.Spades(2)
+    fixed suit = Suit.Spades(2)
 fi

@@ -28,16 +28,16 @@
     | keyword:fi
  18 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 19 |     bind m: maybe int = none
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 19 |     fixed m: maybe int = none
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  20 |     when m is none
     | keyword:when  variable:m  keyword:is  keyword:none
  21 |         show("none")
     | builtin-fn:show  punctuation:(  string:"none"  punctuation:)
  22 |     fi
     | keyword:fi
- 23 |     bind k: maybe int = 4
-    | keyword:bind  variable:k  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
+ 23 |     fixed k: maybe int = 4
+    | keyword:fixed  variable:k  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
  24 |     when k is {_}
     | keyword:when  variable:k  keyword:is  punctuation:{  keyword:_  punctuation:}
  25 |         show("some")
@@ -54,8 +54,8 @@
     | builtin-fn:show  punctuation:(  string:"not none"  punctuation:)
  31 |     fi
     | keyword:fi
- 32 |     hold s = Walk(3)
-    | keyword:hold  variable:s  operator:=  variant:Walk  punctuation:(  number:3  punctuation:)
+ 32 |     flex s = Walk(3)
+    | keyword:flex  variable:s  operator:=  variant:Walk  punctuation:(  number:3  punctuation:)
  33 |     loop s is Walk n
     | keyword:loop  variable:s  keyword:is  variant:Walk  variable:n
  34 |         show(n)

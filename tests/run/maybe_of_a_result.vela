@@ -24,9 +24,9 @@ task describe(v: maybe (int ~ text)) -> text
 fi
 
 task main()
-    bind ys = [1, fail "no", none]
-    bind x: maybe (int ~ text) = fail "x"
-    bind y: maybe (int ~ text) = 5
+    fixed ys = [1, fail "no", none]
+    fixed x: maybe (int ~ text) = fail "x"
+    fixed y: maybe (int ~ text) = 5
     show(describe(f(0)), " ", describe(f(-1)), " ", describe(f(2)))
     show(describe(x), " ", describe(y), " ", ys.len)
     each v in ys

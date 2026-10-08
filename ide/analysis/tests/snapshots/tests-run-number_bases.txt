@@ -10,8 +10,8 @@
     | keyword:fi
   8 | task why(read: int ~ ParseError) -> text
     | keyword:task  task:why  punctuation:(  parameter:read  punctuation::  type-builtin:int  operator:~  type:ParseError  punctuation:)  operator:->  type-builtin:text
-  9 |     bind problem = match read
-    | keyword:bind  variable:problem  operator:=  keyword:match  parameter:read
+  9 |     fixed problem = match read
+    | keyword:fixed  variable:problem  operator:=  keyword:match  parameter:read
  10 |         case {n} = ParseError.NotANumber   ; every read given here fails
     | keyword:case  punctuation:{  variable:n  punctuation:}  operator:=  type:ParseError  punctuation:.  variant:NotANumber  comment:; every read given here fails
  11 |         case failure e = e
@@ -38,8 +38,8 @@
     | builtin-fn:show  punctuation:(  number:0x7fff_ffff_ffff_ffff  punctuation:,  string:" "  punctuation:,  operator:-  number:0x10  punctuation:,  string:" "  punctuation:,  number:0x0  operator:+  number:0o0  operator:+  number:0b0  punctuation:)
  23 |     ; A number in another base is an int like any other.
     | comment:; A number in another base is an int like any other.
- 24 |     bind mask = 0b1111
-    | keyword:bind  variable:mask  operator:=  number:0b1111
+ 24 |     fixed mask = 0b1111
+    | keyword:fixed  variable:mask  operator:=  number:0b1111
  25 |     show(mask * 0x10 + 0o1)
     | builtin-fn:show  punctuation:(  variable:mask  operator:*  number:0x10  operator:+  number:0o1  punctuation:)
  26 |     ; Text is read the same way, with a sign before the base.

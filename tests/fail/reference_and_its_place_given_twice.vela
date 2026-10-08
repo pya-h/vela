@@ -1,10 +1,10 @@
 ; error: 9:14: 'y' names 'x', which is given as 'a' too, and the call changes it through 'b'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
-task swap(hold& a: int, hold& b: int)
+task swap(flex& a: int, flex& b: int)
     a, b = b, a
 fi
 
 task main()
-    hold x = 1
-    hold& y = &x
+    flex x = 1
+    flex& y = &x
     swap(&x, &y)
 fi

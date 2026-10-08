@@ -1,6 +1,6 @@
-; error: 5:27: expected type Ticket, got int
+; error: 5:28: expected type Ticket, got int
 include modules/library (Card => Ticket, card)
 
 task main()
-    bind ticket: Ticket = 1
+    fixed ticket: Ticket = 1
 fi

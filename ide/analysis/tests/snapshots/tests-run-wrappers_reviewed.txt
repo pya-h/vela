@@ -6,8 +6,8 @@
     | comment:; a field naming a wrapped task, and none as a wrapper's own value.
   4 | include modules/kinds_shared {Tally}
     | keyword:include  module:modules  operator:/  module:kinds_shared  punctuation:{  type:Tally  punctuation:}
-  6 | task twice(next: (hold& Big) -> int, hold& b: Big) -> int
-    | keyword:task  task:twice  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type:Big  punctuation:)  operator:->  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+  6 | task twice(next: (flex& Big) -> int, flex& b: Big) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:flex  keyword:&  type:Big  punctuation:)  operator:->  type-builtin:int  punctuation:,  keyword:flex  keyword:&  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
   7 |     next(&b)
     | parameter:next  punctuation:(  operator:&  parameter:b  punctuation:)
   8 |     <- next(&b)
@@ -94,14 +94,14 @@
     | keyword:fi
  60 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 61 |     hold b = Big { a: [1#20] }
-    | keyword:hold  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  punctuation:[  number:1  punctuation:#  number:20  punctuation:]  punctuation:}
+ 61 |     flex b = Big { a: [1#20] }
+    | keyword:flex  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  punctuation:[  number:1  punctuation:#  number:20  punctuation:]  punctuation:}
  62 |     show(b.bump(), " ", b.a[0])
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  method:bump  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
  63 |     show(Point { x: 3 })
     | builtin-fn:show  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:}  punctuation:)
- 64 |     bind d = Tally.doubled
-    | keyword:bind  variable:d  operator:=  type:Tally  punctuation:.  method:doubled
+ 64 |     fixed d = Tally.doubled
+    | keyword:fixed  variable:d  operator:=  type:Tally  punctuation:.  method:doubled
  65 |     show(d(21))
     | builtin-fn:show  punctuation:(  variable:d  punctuation:(  number:21  punctuation:)  punctuation:)
  66 |     show(Hooks {}.say(4), " ", Hooks {}.say(-1))

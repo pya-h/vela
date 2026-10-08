@@ -2,8 +2,8 @@
 ; Slicing past the end of a slice.
 task main()
     region r
-    bind items = new [int]([1#4]) at r
-    hold end = 4
+    fixed items = new [int]([1#4]) at r
+    flex end = 4
     show(items[2..end].len)
     end = end + 1
     show(items[2..end].len)

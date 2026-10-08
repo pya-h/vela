@@ -16,8 +16,8 @@
     | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
  11 |     log("calling", args...)
     | task:log  punctuation:(  string:"calling"  punctuation:,  parameter:args  keyword:...  punctuation:)
- 12 |     bind result = next(args...)
-    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 12 |     fixed result = next(args...)
+    | keyword:fixed  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
  13 |     log("sent", result)
     | task:log  punctuation:(  string:"sent"  punctuation:,  variable:result  punctuation:)
  14 |     <- result

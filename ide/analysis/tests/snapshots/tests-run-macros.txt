@@ -68,14 +68,14 @@
     | builtin-fn:show  punctuation:(  variant:NAME  punctuation:,  string:" "  punctuation:,  variant:TITLE  punctuation:,  string:" "  punctuation:,  variant:NAME  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variant:TITLE  punctuation:[  number:4  punctuation:]  punctuation:,  string:" "  punctuation:,  variant:FIRST  punctuation:,  string:" "  punctuation:,  variant:NEXT  punctuation:,  string:" "  punctuation:,  variant:BIG  punctuation:)
  40 |     ; An int macro is a unit where one is expected, as a literal is.
     | comment:; An int macro is a unit where one is expected, as a literal is.
- 41 |     hold b: unit = SIZE
-    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  variant:SIZE
+ 41 |     flex b: unit = SIZE
+    | keyword:flex  variable:b  punctuation::  type-builtin:unit  operator:=  variant:SIZE
  42 |     show(b + SMALL, " ", SMALL)
     | builtin-fn:show  punctuation:(  variable:b  operator:+  variant:SMALL  punctuation:,  string:" "  punctuation:,  variant:SMALL  punctuation:)
  43 |     show(UNDER, " ", CUT)
     | builtin-fn:show  punctuation:(  variant:UNDER  punctuation:,  string:" "  punctuation:,  variant:CUT  punctuation:)
- 44 |     bind xs = [0#SIZE]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:0  punctuation:#  variant:SIZE  punctuation:]
+ 44 |     fixed xs = [0#SIZE]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:0  punctuation:#  variant:SIZE  punctuation:]
  45 |     show(xs, " ", xs[LAST])
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  variant:LAST  punctuation:]  punctuation:)
  46 |     each i in 0..SIDE

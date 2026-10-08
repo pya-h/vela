@@ -14,7 +14,7 @@ fi
 
 task main()
     region r
-    bind n = 7
+    fixed n = 7
 
     ; An int as a float, which never fails.
     show(float(n))
@@ -40,13 +40,13 @@ task main()
     show(half(int(5.9)))
 
     ; Both edges of an int, which a float holds exactly.
-    bind biggest = 9223372036854775807
-    bind smallest = -9223372036854775807 - 1
+    fixed biggest = 9223372036854775807
+    fixed smallest = -9223372036854775807 - 1
     show(int(float(smallest)) == smallest)
     show(float(biggest) > 9000000000000000000.0)
 
     ; A float that is a whole number already, and one that is not.
-    hold total = 0
+    flex total = 0
     each v in [0.5, 1.5, 2.5, 3.5]
         total = total + int(v)
     fi
@@ -54,7 +54,7 @@ task main()
 
     ; In a task that takes types, where the value is shown and the bool counted.
     ; One call to a line: which side of a '+' runs first isn't defined.
-    bind said = counted("a", true)
-    bind quiet = counted(2, false)
+    fixed said = counted("a", true)
+    fixed quiet = counted(2, false)
     show(said + quiet)
 fi

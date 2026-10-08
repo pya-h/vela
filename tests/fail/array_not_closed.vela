@@ -1,5 +1,5 @@
-; error: 3:22: expected ']' to close the array at 3:17; an array is written on one line
+; error: 3:23: expected ']' to close the array at 3:18; an array is written on one line
 task main()
-    bind days = [1, 2
+    fixed days = [1, 2
     show(1)
 fi

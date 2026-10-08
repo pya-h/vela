@@ -96,7 +96,7 @@ task alike<T: similar & shown>(a: Option<T>@r, b: Option<T>@r) -> bool
     <- a ~= b
 fi
 
-task replace<T: shown>(hold& o: Option<T>@r, v: T)
+task replace<T: shown>(flex& o: Option<T>@r, v: T)
     o = Option.Some(v)
 fi
 
@@ -125,47 +125,47 @@ task main()
     show(half(8), " ", half(7))
 
     ; From the values, the place, or written.
-    bind some = Option.Some("hi")
-    bind empty_text: Option<text> = Option.None
-    bind written = Option<float>.None
-    bind left: Either<int, text> = Either.Left(3)
-    bind right = Either<int, text>.Right("r")
+    fixed some = Option.Some("hi")
+    fixed empty_text: Option<text> = Option.None
+    fixed written = Option<float>.None
+    fixed left: Either<int, text> = Either.Left(3)
+    fixed right = Either<int, text>.Right("r")
     show(some, " ", empty_text, " ", written, " ", left, " ", right)
     show(some.type, " ", right.type)
 
     ; Beside a value that tells them: in an array, a branch, a comparison.
-    bind many = [Option.Some(1), Option.None, Option.Some(3)]
+    fixed many = [Option.Some(1), Option.None, Option.Some(3)]
     show(many)
-    bind chosen = when some.isSome() Option.Some(1) else Option.None fi
+    fixed chosen = when some.isSome() Option.Some(1) else Option.None fi
     show(chosen, " ", chosen == Option.None, " ", Option.Some(1) ~= chosen)
-    bind nested: Option<Option<int>> = Option.Some(Option.None)
-    bind maybe_one: maybe Option<int> = Option.None
+    fixed nested: Option<Option<int>> = Option.Some(Option.None)
+    fixed maybe_one: maybe Option<int> = Option.None
     show(nested, " ", maybe_one)
 
     ; Methods, and tasks that take types.
     show(first(Option.Some(5), 0), " ", first(Option<int>.None, 9))
     show(wrap(r, "w"), " ", wrap(r, 2.5), " ", wrap(r, 3).orElse(1))
-    bind nothing_yet: Option<int> = empty(r)
+    fixed nothing_yet: Option<int> = empty(r)
     show(nothing_yet.orElse(7), " ", nothing_yet.isSome())
     show(alike(Option.Some(1), Option.Some(1)), " ", alike(Option.Some("a"), Option<text>.None))
-    hold kept: Option<int> = Option.None
+    flex kept: Option<int> = Option.None
     replace(&kept, 5)
     show(kept)
 
     ; Behind pointers, in a region.
-    bind a = new Tree<int>(Tree.Leaf(1)) at r
-    bind b = new Tree<int>(Tree.Leaf(2)) at r
+    fixed a = new Tree<int>(Tree.Leaf(1)) at r
+    fixed b = new Tree<int>(Tree.Leaf(2)) at r
     show(leaves(Tree.Node(a, b)))
 
     show(Ranked.Top(3), " ", Ranked<text>.Rest)
     show(Quiet.Said(1), " ", Quiet<text>.Silent)
-    hold count = Counter.Count(0, "a")
+    flex count = Counter.Count(0, "a")
     count.bump("b")
     count.bump("c")
     show(count)
-    bind held = Holder { value: Option.Some(4) }
+    fixed held = Holder { value: Option.Some(4) }
     show(held.value)
-    bind words = Option.Some("w".copy() at r)
+    fixed words = Option.Some("w".copy() at r)
     show(words)
 
     show(checked(5) { 0 })

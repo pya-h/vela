@@ -1,7 +1,7 @@
 ; error: 4:16: a loop's start declares values for the loop, not references; name the place itself
 task main()
-    hold x = 1
-    loop hold& r = &x || r < 3 || r++
+    flex x = 1
+    loop flex& r = &x || r < 3 || r++
         show(r)
     fi
 fi

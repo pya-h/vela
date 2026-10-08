@@ -1,6 +1,6 @@
 ; error: 5:14: 'int' takes an int, a unit, a char, a float, a bool, or text, but this value is [float]@r
 task main()
     region r
-    bind xs = new [float]() at r
+    fixed xs = new [float]() at r
     show(int(xs))
 fi

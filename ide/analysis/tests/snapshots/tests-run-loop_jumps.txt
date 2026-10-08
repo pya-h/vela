@@ -24,8 +24,8 @@
     | comment:; In a loop through a group's values, written out for each use.
  16 | task some<P...: shown>(args: P...) -> int
     | keyword:task  task:some  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
- 17 |     hold seen = 0
-    | keyword:hold  variable:seen  operator:=  number:0
+ 17 |     flex seen = 0
+    | keyword:flex  variable:seen  operator:=  number:0
  18 |     each v in args
     | keyword:each  variable:v  keyword:in  parameter:args
  19 |         seen++
@@ -72,10 +72,10 @@
     | keyword:fi
  42 | task find<T: same>(xs: [T#3], want: T) -> maybe int
     | keyword:task  task:find  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:want  punctuation::  type:T  punctuation:)  operator:->  keyword:maybe  type-builtin:int
- 43 |     hold found: maybe int = none
-    | keyword:hold  variable:found  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 44 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 43 |     flex found: maybe int = none
+    | keyword:flex  variable:found  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 44 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  45 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
  46 |         when x == want
@@ -126,8 +126,8 @@
     | keyword:fi
  71 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 72 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 72 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  73 |     loop i < 10
     | keyword:loop  variable:i  operator:<  number:10
  74 |         i++
@@ -186,8 +186,8 @@
     | comment:; A plan B may stop the loop, and a region of the pass is freed first.
 104 |     region r
     | keyword:region  region:r
-105 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+105 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 106 |     xs.add(1)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
 107 |     xs.add(2)
@@ -198,8 +198,8 @@
     | keyword:each  variable:x  keyword:in  variable:xs
 110 |         region s
     | keyword:region  region:s
-111 |         hold t = new [int]() at s
-    | keyword:hold  variable:t  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+111 |         flex t = new [int]() at s
+    | keyword:flex  variable:t  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
 112 |         t.add(x)
     | variable:t  punctuation:.  field:add  punctuation:(  variable:x  punctuation:)
 113 |         when x == 2
@@ -208,16 +208,16 @@
     | keyword:continue
 115 |         fi
     | keyword:fi
-116 |         bind y = xs[#x] { break }
-    | keyword:bind  variable:y  operator:=  variable:xs  punctuation:[  punctuation:#  variable:x  punctuation:]  punctuation:{  keyword:break  punctuation:}
+116 |         fixed y = xs[#x] { break }
+    | keyword:fixed  variable:y  operator:=  variable:xs  punctuation:[  punctuation:#  variable:x  punctuation:]  punctuation:{  keyword:break  punctuation:}
 117 |         show("x ", x, " ", y, " ", t[0])
     | builtin-fn:show  punctuation:(  string:"x "  punctuation:,  variable:x  punctuation:,  string:" "  punctuation:,  variable:y  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:[  number:0  punctuation:]  punctuation:)
 118 |     fi
     | keyword:fi
 120 |     ; Regions of blocks inside the pass are freed too.
     | comment:; Regions of blocks inside the pass are freed too.
-121 |     hold k = 0
-    | keyword:hold  variable:k  operator:=  number:0
+121 |     flex k = 0
+    | keyword:flex  variable:k  operator:=  number:0
 122 |     loop k < 5
     | keyword:loop  variable:k  operator:<  number:5
 123 |         k++
@@ -226,8 +226,8 @@
     | keyword:block
 125 |             region q
     | keyword:region  region:q
-126 |             bind z = new [int]() at q
-    | keyword:bind  variable:z  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:q
+126 |             fixed z = new [int]() at q
+    | keyword:fixed  variable:z  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:q
 127 |             when k == 2
     | keyword:when  variable:k  operator:==  number:2
 128 |                 continue
@@ -248,8 +248,8 @@
     | keyword:fi
 137 |     ; A map, and a place as it is at each pass.
     | comment:; A map, and a place as it is at each pass.
-138 |     hold m = new [text: int]() at r
-    | keyword:hold  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+138 |     flex m = new [text: int]() at r
+    | keyword:flex  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 139 |     m["a"] = 1
     | variable:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:1
 140 |     m["b"] = 2
@@ -268,8 +268,8 @@
     | builtin-fn:show  punctuation:(  variable:key  punctuation:,  variable:v  punctuation:)
 147 |     fi
     | keyword:fi
-148 |     hold ys = [5, 6, 7, 8]
-    | keyword:hold  variable:ys  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:]
+148 |     flex ys = [5, 6, 7, 8]
+    | keyword:flex  variable:ys  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:]
 149 |     each y in &ys
     | keyword:each  variable:y  keyword:in  operator:&  variable:ys
 150 |         when y == 7
@@ -284,8 +284,8 @@
     | keyword:fi
 156 |     ; In a loop's condition, it stops that loop.
     | comment:; In a loop's condition, it stops that loop.
-157 |     hold j = 0
-    | keyword:hold  variable:j  operator:=  number:0
+157 |     flex j = 0
+    | keyword:flex  variable:j  operator:=  number:0
 158 |     loop ys[#j] { break } > 0
     | keyword:loop  variable:ys  punctuation:[  punctuation:#  variable:j  punctuation:]  punctuation:{  keyword:break  punctuation:}  operator:>  number:0
 159 |         j++
@@ -296,10 +296,10 @@
     | builtin-fn:show  punctuation:(  string:"j "  punctuation:,  variable:j  punctuation:)
 163 |     ; A loop over a pattern, joined with 'and'.
     | comment:; A loop over a pattern, joined with 'and'.
-164 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
-165 |     hold mm: maybe int = 3
-    | keyword:hold  variable:mm  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
+164 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
+165 |     flex mm: maybe int = 3
+    | keyword:flex  variable:mm  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
 166 |     loop mm is {v} and v < 10
     | keyword:loop  variable:mm  keyword:is  punctuation:{  variable:v  punctuation:}  keyword:and  variable:v  operator:<  number:10
 167 |         n++
@@ -324,8 +324,8 @@
     | builtin-fn:show  punctuation:(  string:"n "  punctuation:,  variable:n  punctuation:,  string:" "  punctuation:,  variable:mm  punctuation:)
 178 |     ; A branch of a value may stop the loop instead of giving one.
     | comment:; A branch of a value may stop the loop instead of giving one.
-179 |     bind ps = [Point { x: 1 }, Point { x: 2 }]
-    | keyword:bind  variable:ps  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:}  punctuation:]
+179 |     fixed ps = [Point { x: 1 }, Point { x: 2 }]
+    | keyword:fixed  variable:ps  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:}  punctuation:]
 180 |     each p in 0..5
     | keyword:each  variable:p  keyword:in  number:0  operator:..  number:5
 181 |         show(ps[#p] { break })
@@ -340,8 +340,8 @@
     | keyword:fi
 186 |     each st in [Step.Go(1), Step.Skip, Step.Go(3), Step.Halt, Step.Go(9)]
     | keyword:each  variable:st  keyword:in  punctuation:[  type:Step  punctuation:.  variant:Go  punctuation:(  number:1  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Skip  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:3  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Halt  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:9  punctuation:)  punctuation:]
-187 |         bind w = match st
-    | keyword:bind  variable:w  operator:=  keyword:match  variable:st
+187 |         fixed w = match st
+    | keyword:fixed  variable:w  operator:=  keyword:match  variable:st
 188 |         case Go g = g * 2
     | keyword:case  variant:Go  variable:g  operator:=  variable:g  operator:*  number:2
 189 |         case Skip
@@ -360,12 +360,12 @@
     | keyword:fi
 197 |     ; A plan B whose last line is a when that stops or goes on in every branch.
     | comment:; A plan B whose last line is a when that stops or goes on in every branch.
-198 |     bind few = [1, 2, 3]
-    | keyword:bind  variable:few  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+198 |     fixed few = [1, 2, 3]
+    | keyword:fixed  variable:few  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
 199 |     each slot in 0..6
     | keyword:each  variable:slot  keyword:in  number:0  operator:..  number:6
-200 |         bind v = few[#slot] {
-    | keyword:bind  variable:v  operator:=  variable:few  punctuation:[  punctuation:#  variable:slot  punctuation:]  punctuation:{
+200 |         fixed v = few[#slot] {
+    | keyword:fixed  variable:v  operator:=  variable:few  punctuation:[  punctuation:#  variable:slot  punctuation:]  punctuation:{
 201 |             when slot == 4
     | keyword:when  variable:slot  operator:==  number:4
 202 |                 break

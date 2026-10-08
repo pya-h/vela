@@ -1,9 +1,9 @@
-; error: 7:13: shape 'Box' takes 1 type, so name it, as in 'Box<T>'
+; error: 7:14: shape 'Box' takes 1 type, so name it, as in 'Box<T>'
 shape Box<T>
     value: T
 fi
 
 task main()
-    bind b: Box = Box { value: 1 }
+    fixed b: Box = Box { value: 1 }
     show(b.value)
 fi

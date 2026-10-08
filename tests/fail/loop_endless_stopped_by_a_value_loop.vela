@@ -2,7 +2,7 @@
 ; A break inside a loop giving a value stops the endless loop around it.
 task f() -> total: int
     outer => endless
-        bind r = each k in 0..3
+        fixed r = each k in 0..3
             when k == 1
                 break outer
             fi

@@ -1,5 +1,5 @@
 ; error: 4:11: '[…]' reads an item of an array or slice, but this value is int
 task main()
-    bind x = 5
+    fixed x = 5
     show(x[0])
 fi

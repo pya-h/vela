@@ -64,8 +64,8 @@
     | keyword:region  region:q
  39 |     said(q, firsts([1, 2, 3]))
     | task:said  punctuation:(  region:q  punctuation:,  task:firsts  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  punctuation:)
- 40 |     bind a: int ~ LoopResult<text, bool> = each x in 0..3
-    | keyword:bind  variable:a  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:bool  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
+ 40 |     fixed a: int ~ LoopResult<text, bool> = each x in 0..3
+    | keyword:fixed  variable:a  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:bool  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
  41 |         when x == 1
     | keyword:when  variable:x  operator:==  number:1
  42 |             break
@@ -78,24 +78,24 @@
     | keyword:fi
  46 |     said(q, a)
     | task:said  punctuation:(  region:q  punctuation:,  variable:a  punctuation:)
- 47 |     bind b: int ~ LoopResult<bool, text> = each x in 0..0
-    | keyword:bind  variable:b  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:0
+ 47 |     fixed b: int ~ LoopResult<bool, text> = each x in 0..0
+    | keyword:fixed  variable:b  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:0
  48 |         x
     | variable:x
  49 |     fi
     | keyword:fi
  50 |     said(q, b)
     | task:said  punctuation:(  region:q  punctuation:,  variable:b  punctuation:)
- 51 |     bind e: int ~ LoopResult<text, int> = each x in 0..2
-    | keyword:bind  variable:e  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
+ 51 |     fixed e: int ~ LoopResult<text, int> = each x in 0..2
+    | keyword:fixed  variable:e  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
  52 |         x
     | variable:x
  53 |     fi
     | keyword:fi
  54 |     said(q, e)
     | task:said  punctuation:(  region:q  punctuation:,  variable:e  punctuation:)
- 55 |     bind c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
-    | keyword:bind  variable:c  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  punctuation:<  type-builtin:int  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
+ 55 |     fixed c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
+    | keyword:fixed  variable:c  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  punctuation:<  type-builtin:int  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
  56 |         when x == 0
     | keyword:when  variable:x  operator:==  number:0
  57 |             Opt.No
@@ -110,10 +110,10 @@
     | keyword:fi
  62 |     said(q, c)
     | task:said  punctuation:(  region:q  punctuation:,  variable:c  punctuation:)
- 63 |     hold d: int ~ LoopResult<text, text> = 0
-    | keyword:hold  variable:d  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:text  punctuation:>  operator:=  number:0
- 64 |     d = loop hold i = 0 || i < 3 || i++
-    | variable:d  operator:=  keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 63 |     flex d: int ~ LoopResult<text, text> = 0
+    | keyword:flex  variable:d  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:text  punctuation:>  operator:=  number:0
+ 64 |     d = loop flex i = 0 || i < 3 || i++
+    | variable:d  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
  65 |         when i == 2
     | keyword:when  variable:i  operator:==  number:2
  66 |             continue

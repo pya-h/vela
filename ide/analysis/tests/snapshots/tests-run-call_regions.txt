@@ -78,8 +78,8 @@
     | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:1  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  task:label  punctuation:(  number:2  punctuation:)  operator:@  region:r  punctuation:,  string:" "  punctuation:,  task:label  punctuation:(  number:3  punctuation:,  region:r  punctuation:)  punctuation:)
  50 |     ; A method, the same way.
     | comment:; A method, the same way.
- 51 |     bind tag = Tag { name: "x" }
-    | keyword:bind  variable:tag  operator:=  type:Tag  punctuation:{  field:name  punctuation::  string:"x"  punctuation:}
+ 51 |     fixed tag = Tag { name: "x" }
+    | keyword:fixed  variable:tag  operator:=  type:Tag  punctuation:{  field:name  punctuation::  string:"x"  punctuation:}
  52 |     show(tag.shown() at r, tag.shown()@r, tag.shown(r))
     | builtin-fn:show  punctuation:(  variable:tag  punctuation:.  method:shown  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  variable:tag  punctuation:.  method:shown  punctuation:(  punctuation:)  operator:@  region:r  punctuation:,  variable:tag  punctuation:.  method:shown  punctuation:(  region:r  punctuation:)  punctuation:)
  53 |     ; After a chain, the region is the whole chain's; a part names its own with
@@ -96,8 +96,8 @@
     | builtin-fn:show  punctuation:(  task:checked  punctuation:(  string:"ok"  punctuation:)  keyword:at  region:r  punctuation:{  string:"fallback"  punctuation:}  punctuation:,  string:" "  punctuation:,  task:checked  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:"fallback"  punctuation:}  punctuation:)
  59 |     ; `-`, `not`, and `fail` make no memory, so the region is the call's.
     | comment:; `-`, `not`, and `fail` make no memory, so the region is the call's.
- 60 |     bind xs = new [int]([1, 2, 3]) at r
-    | keyword:bind  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+ 60 |     fixed xs = new [int]([1, 2, 3]) at r
+    | keyword:fixed  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
  61 |     show(-size(xs) at r)
     | builtin-fn:show  punctuation:(  operator:-  task:size  punctuation:(  variable:xs  punctuation:)  keyword:at  region:r  punctuation:)
  62 |     show(risky() at r { -1 })
@@ -108,16 +108,16 @@
     | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:7  punctuation:)  operator:@  region:r  punctuation:.  type:len  punctuation:,  string:" "  punctuation:,  punctuation:(  task:label  punctuation:(  number:8  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
  65 |     ; A task that takes types, and one of another file.
     | comment:; A task that takes types, and one of another file.
- 66 |     bind twos = filled("two") at r
-    | keyword:bind  variable:twos  operator:=  task:filled  punctuation:(  string:"two"  punctuation:)  keyword:at  region:r
+ 66 |     fixed twos = filled("two") at r
+    | keyword:fixed  variable:twos  operator:=  task:filled  punctuation:(  string:"two"  punctuation:)  keyword:at  region:r
  67 |     show(twos.len, " ", twos[1])
     | builtin-fn:show  punctuation:(  variable:twos  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:twos  punctuation:[  number:1  punctuation:]  punctuation:)
  68 |     ; `str`, `text(…)`, a copy and `scan` read the same way.
     | comment:; `str`, `text(…)`, a copy and `scan` read the same way.
  69 |     show(42.str() at r, " ", text(2.5)@r, " ", 7.str(r))
     | builtin-fn:show  punctuation:(  number:42  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  type-builtin:text  punctuation:(  number:2.5  punctuation:)  operator:@  region:r  punctuation:,  string:" "  punctuation:,  number:7  punctuation:.  field:str  punctuation:(  region:r  punctuation:)  punctuation:)
- 70 |     bind line = scan("") at r { "none" }
-    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:"none"  punctuation:}
+ 70 |     fixed line = scan("") at r { "none" }
+    | keyword:fixed  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:"none"  punctuation:}
  71 |     show(line.copy() at r, " ", line.copy()@r.len)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:r  punctuation:.  type:len  punctuation:)
  72 |     ; With a default region, a call that names none uses it.
@@ -130,8 +130,8 @@
     | comment:; A region given in the parentheses where the task takes one is that one,
  76 |     ; and the region it takes last is still the default.
     | comment:; and the region it takes last is still the default.
- 77 |     bind own = label(10) at r
-    | keyword:bind  variable:own  operator:=  task:label  punctuation:(  number:10  punctuation:)  keyword:at  region:r
+ 77 |     fixed own = label(10) at r
+    | keyword:fixed  variable:own  operator:=  task:label  punctuation:(  number:10  punctuation:)  keyword:at  region:r
  78 |     show(joined(own, r), " ", joined(own, r) at d)
     | builtin-fn:show  punctuation:(  task:joined  punctuation:(  variable:own  punctuation:,  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  task:joined  punctuation:(  variable:own  punctuation:,  region:r  punctuation:)  keyword:at  region:d  punctuation:)
  79 | fi

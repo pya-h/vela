@@ -9,7 +9,7 @@ use vela_analysis::{Analysis, TokenClass};
 const PROGRAM: &str = "\
 task main()
     region r
-    hold x = 1
+    flex x = 1
     x++
     x--
     x += 2
@@ -18,7 +18,7 @@ task main()
     x /= 2
     x %= 5
     x **= 2
-    hold t: text@r = \"a\" + \"b\" at r
+    flex t: text@r = \"a\" + \"b\" at r
     t += \"c\"
     show(x, t)
 fi
@@ -42,7 +42,7 @@ fn each_step_is_one_operator() {
 
 #[test]
 fn a_step_on_a_float_is_an_error_in_the_editor_too() {
-    let source = "task main()\n    hold f = 1.5\n    f++\nfi\n";
+    let source = "task main()\n    flex f = 1.5\n    f++\nfi\n";
     let diagnostics = Analysis::new(source).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
     assert!(diagnostics[0].message.starts_with("'++' counts an int, a unit, or a char by one"), "{:?}", diagnostics);

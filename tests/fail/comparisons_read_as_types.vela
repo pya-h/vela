@@ -1,6 +1,6 @@
-; error: 5:18: 'i' is a value, but 'i < …, … > (…)' reads as a call of 'i' given the types between '<' and '>'; to compare, put the comparison before the ',' in parentheses, as in '(i < …), … > (…)'
+; error: 5:19: 'i' is a value, but 'i < …, … > (…)' reads as a call of 'i' given the types between '<' and '>'; to compare, put the comparison before the ',' in parentheses, as in '(i < …), … > (…)'
 task main()
-    bind i = 1
-    bind n = 5
-    bind both = (i < n, n > (i - 1))
+    fixed i = 1
+    fixed n = 5
+    fixed both = (i < n, n > (i - 1))
 fi

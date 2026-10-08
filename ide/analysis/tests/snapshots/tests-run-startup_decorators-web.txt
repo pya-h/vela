@@ -4,10 +4,10 @@
     | comment:; keep its routes, and a page of its own, registered with a private task.
   4 | shape Pages
     | keyword:shape  type:Pages
-  5 |     shared hold count: int = 0
-    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
-  6 |     shared hold home: maybe (text) -> text = none
-    | keyword:shared  keyword:hold  field:home  punctuation::  keyword:maybe  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:=  keyword:none
+  5 |     shared flex count: int = 0
+    | keyword:shared  keyword:flex  field:count  punctuation::  type-builtin:int  operator:=  number:0
+  6 |     shared flex home: maybe (text) -> text = none
+    | keyword:shared  keyword:flex  field:home  punctuation::  keyword:maybe  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:=  keyword:none
   7 | fi
     | keyword:fi
   9 | ; Keeps the page for `path`; here only "/" is kept.

@@ -1,5 +1,5 @@
-; error: 3:14: 'nothing' is only allowed as a return type
+; error: 3:15: 'nothing' is only allowed as a return type
 task main()
-    bind p: ^nothing = none
+    fixed p: ^nothing = none
     show(1)
 fi

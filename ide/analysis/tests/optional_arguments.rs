@@ -28,10 +28,10 @@ fi
 
 task main()
     FIRST
-    bind b = Box.made(1)
-    bind w = pad(\"a\")
-    bind g = pad
-    bind n = b.grown()
+    fixed b = Box.made(1)
+    fixed w = pad(\"a\")
+    fixed g = pad
+    fixed n = b.grown()
     show(w, n)
     @@
 fi
@@ -39,7 +39,7 @@ fi
 
 /// The first lines `main` may start with: one that checks, one that stops
 /// the checker, and one that stops the parser.
-const FIRSTS: [&str; 3] = ["show(0)", "show(unknown)", "bind = ="];
+const FIRSTS: [&str; 3] = ["show(0)", "show(unknown)", "fixed = ="];
 
 fn program(first: &str, code: &str) -> String {
     PROGRAM.replace("FIRST", first).replace("@@", code)

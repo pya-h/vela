@@ -92,14 +92,14 @@
     | keyword:task  task:counted  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int
  57 |     region r
     | keyword:region  region:r
- 58 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 59 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
+ 58 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 59 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
  60 |     each i in 0..n
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
- 61 |         bind node = new Node(Node { value: i, next: none }) at r
-    | keyword:bind  variable:node  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 61 |         fixed node = new Node(Node { value: i, next: none }) at r
+    | keyword:fixed  variable:node  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  62 |         total = total + node^.value
     | variable:total  operator:=  variable:total  operator:+  variable:node  operator:^  punctuation:.  field:value
  63 |         count = count + 1
@@ -112,38 +112,38 @@
     | keyword:fi
  68 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 69 |     bind q, r = divmod(17, 5)
-    | keyword:bind  variable:q  punctuation:,  variable:r  operator:=  task:divmod  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
+ 69 |     fixed q, r = divmod(17, 5)
+    | keyword:fixed  variable:q  punctuation:,  variable:r  operator:=  task:divmod  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
  70 |     show(q)
     | builtin-fn:show  punctuation:(  variable:q  punctuation:)
  71 |     show(r)
     | builtin-fn:show  punctuation:(  variable:r  punctuation:)
  73 |     ; `_` drops a result.
     | comment:; `_` drops a result.
- 74 |     bind whole, _ = divmod(9, 4)
-    | keyword:bind  variable:whole  punctuation:,  keyword:_  operator:=  task:divmod  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
+ 74 |     fixed whole, _ = divmod(9, 4)
+    | keyword:fixed  variable:whole  punctuation:,  keyword:_  operator:=  task:divmod  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
  75 |     show(whole)
     | builtin-fn:show  punctuation:(  variable:whole  punctuation:)
- 77 |     bind m, ok = find(3)
-    | keyword:bind  variable:m  punctuation:,  variable:ok  operator:=  task:find  punctuation:(  number:3  punctuation:)
+ 77 |     fixed m, ok = find(3)
+    | keyword:fixed  variable:m  punctuation:,  variable:ok  operator:=  task:find  punctuation:(  number:3  punctuation:)
  78 |     show(m)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:)
  79 |     show(ok)
     | builtin-fn:show  punctuation:(  variable:ok  punctuation:)
- 80 |     bind empty, missing = find(-1)
-    | keyword:bind  variable:empty  punctuation:,  variable:missing  operator:=  task:find  punctuation:(  operator:-  number:1  punctuation:)
+ 80 |     fixed empty, missing = find(-1)
+    | keyword:fixed  variable:empty  punctuation:,  variable:missing  operator:=  task:find  punctuation:(  operator:-  number:1  punctuation:)
  81 |     show(empty)
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:)
  82 |     show(missing)
     | builtin-fn:show  punctuation:(  variable:missing  punctuation:)
- 84 |     bind value, result = pair(4)
-    | keyword:bind  variable:value  punctuation:,  variable:result  operator:=  task:pair  punctuation:(  number:4  punctuation:)
+ 84 |     fixed value, result = pair(4)
+    | keyword:fixed  variable:value  punctuation:,  variable:result  operator:=  task:pair  punctuation:(  number:4  punctuation:)
  85 |     show(value)
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
  86 |     show(result { 0 })
     | builtin-fn:show  punctuation:(  variable:result  punctuation:{  number:0  punctuation:}  punctuation:)
- 87 |     bind other, failed = pair(-2)
-    | keyword:bind  variable:other  punctuation:,  variable:failed  operator:=  task:pair  punctuation:(  operator:-  number:2  punctuation:)
+ 87 |     fixed other, failed = pair(-2)
+    | keyword:fixed  variable:other  punctuation:,  variable:failed  operator:=  task:pair  punctuation:(  operator:-  number:2  punctuation:)
  88 |     show(other)
     | builtin-fn:show  punctuation:(  variable:other  punctuation:)
  89 |     show(failed { failure e
@@ -154,18 +154,18 @@
     | operator:-  number:1
  92 |     })
     | punctuation:}  punctuation:)
- 94 |     bind a, b = forward(20, 6)
-    | keyword:bind  variable:a  punctuation:,  variable:b  operator:=  task:forward  punctuation:(  number:20  punctuation:,  number:6  punctuation:)
+ 94 |     fixed a, b = forward(20, 6)
+    | keyword:fixed  variable:a  punctuation:,  variable:b  operator:=  task:forward  punctuation:(  number:20  punctuation:,  number:6  punctuation:)
  95 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
  96 |     show(b)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:)
  98 |     ; Assigning a list, and swapping.
     | comment:; Assigning a list, and swapping.
- 99 |     hold x = 1
-    | keyword:hold  variable:x  operator:=  number:1
-100 |     hold y = 2
-    | keyword:hold  variable:y  operator:=  number:2
+ 99 |     flex x = 1
+    | keyword:flex  variable:x  operator:=  number:1
+100 |     flex y = 2
+    | keyword:flex  variable:y  operator:=  number:2
 101 |     x, y = y, x
     | variable:x  punctuation:,  variable:y  operator:=  variable:y  punctuation:,  variable:x
 102 |     show(x)
@@ -184,34 +184,34 @@
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
 110 |     ; A plain list of values, and one with a plan B in it.
     | comment:; A plain list of values, and one with a plan B in it.
-111 |     bind first, second = risky(3) { 0 }, risky(-3) { 8 }
-    | keyword:bind  variable:first  punctuation:,  variable:second  operator:=  task:risky  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  task:risky  punctuation:(  operator:-  number:3  punctuation:)  punctuation:{  number:8  punctuation:}
+111 |     fixed first, second = risky(3) { 0 }, risky(-3) { 8 }
+    | keyword:fixed  variable:first  punctuation:,  variable:second  operator:=  task:risky  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  task:risky  punctuation:(  operator:-  number:3  punctuation:)  punctuation:{  number:8  punctuation:}
 112 |     show(first)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:)
 113 |     show(second)
     | builtin-fn:show  punctuation:(  variable:second  punctuation:)
 115 |     region nodes
     | keyword:region  region:nodes
-116 |     bind node, doubled, positive = build(nodes, 21)
-    | keyword:bind  variable:node  punctuation:,  variable:doubled  punctuation:,  variable:positive  operator:=  task:build  punctuation:(  region:nodes  punctuation:,  number:21  punctuation:)
+116 |     fixed node, doubled, positive = build(nodes, 21)
+    | keyword:fixed  variable:node  punctuation:,  variable:doubled  punctuation:,  variable:positive  operator:=  task:build  punctuation:(  region:nodes  punctuation:,  number:21  punctuation:)
 117 |     show(node^.value)
     | builtin-fn:show  punctuation:(  variable:node  operator:^  punctuation:.  field:value  punctuation:)
 118 |     show(doubled)
     | builtin-fn:show  punctuation:(  variable:doubled  punctuation:)
 119 |     show(positive)
     | builtin-fn:show  punctuation:(  variable:positive  punctuation:)
-121 |     bind total, count = counted(5)
-    | keyword:bind  variable:total  punctuation:,  variable:count  operator:=  task:counted  punctuation:(  number:5  punctuation:)
+121 |     fixed total, count = counted(5)
+    | keyword:fixed  variable:total  punctuation:,  variable:count  operator:=  task:counted  punctuation:(  number:5  punctuation:)
 122 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
 123 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
 125 |     ; A field and a variable in one assignment.
     | comment:; A field and a variable in one assignment.
-126 |     hold spot = Point { x: 0, y: 0 }
-    | keyword:hold  variable:spot  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
-127 |     hold last = 0
-    | keyword:hold  variable:last  operator:=  number:0
+126 |     flex spot = Point { x: 0, y: 0 }
+    | keyword:flex  variable:spot  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
+127 |     flex last = 0
+    | keyword:flex  variable:last  operator:=  number:0
 128 |     spot.x, last = divmod(31, 4)
     | variable:spot  punctuation:.  field:x  punctuation:,  variable:last  operator:=  task:divmod  punctuation:(  number:31  punctuation:,  number:4  punctuation:)
 129 |     show(spot.x)
@@ -224,8 +224,8 @@
     | builtin-fn:show  punctuation:(  variable:spot  punctuation:.  field:x  punctuation:)
 134 |     ; A task that sends nothing, received by '_': it runs in its place.
     | comment:; A task that sends nothing, received by '_': it runs in its place.
-135 |     bind _, after = show(1), 2
-    | keyword:bind  keyword:_  punctuation:,  variable:after  operator:=  builtin-fn:show  punctuation:(  number:1  punctuation:)  punctuation:,  number:2
+135 |     fixed _, after = show(1), 2
+    | keyword:fixed  keyword:_  punctuation:,  variable:after  operator:=  builtin-fn:show  punctuation:(  number:1  punctuation:)  punctuation:,  number:2
 136 |     show(after)
     | builtin-fn:show  punctuation:(  variable:after  punctuation:)
 137 |     _, last = show(3), 4

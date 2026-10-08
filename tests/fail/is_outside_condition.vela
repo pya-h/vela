@@ -1,5 +1,5 @@
-; error: 4:20: 'is' tests a condition of a 'when' or 'loop', on its own or joined with 'and' outside any parentheses, as in 'when x is {value}' or 'when x is {value} and value > 0'
+; error: 4:21: 'is' tests a condition of a 'when' or 'loop', on its own or joined with 'and' outside any parentheses, as in 'when x is {value}' or 'when x is {value} and value > 0'
 task main()
-    bind m: maybe int = 1
-    bind empty = m is none
+    fixed m: maybe int = 1
+    fixed empty = m is none
 fi

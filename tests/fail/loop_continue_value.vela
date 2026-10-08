@@ -1,6 +1,6 @@
 ; error: 4:18: a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value
 task main()
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         continue = 1
         x
     fi

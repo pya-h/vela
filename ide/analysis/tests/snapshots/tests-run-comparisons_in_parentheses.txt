@@ -10,10 +10,10 @@
     | keyword:fi
   7 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  8 |     bind i = 1
-    | keyword:bind  variable:i  operator:=  number:1
-  9 |     bind n = 5
-    | keyword:bind  variable:n  operator:=  number:5
+  8 |     fixed i = 1
+    | keyword:fixed  variable:i  operator:=  number:1
+  9 |     fixed n = 5
+    | keyword:fixed  variable:n  operator:=  number:5
  10 |     show(((i < n), n > (i - 1)))
     | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  variable:i  operator:<  variable:n  punctuation:)  punctuation:,  variable:n  operator:>  punctuation:(  variable:i  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
  11 |     show((i < n, (n > (i - 1))))

@@ -1,7 +1,7 @@
 ; error: 7:13: expected type ^int@outer, got ^int@r; a value can't move to another region: a pointer into one region is never stored in another
 task main()
     region outer
-    hold p = new int(1) at outer
+    flex p = new int(1) at outer
     block
         region r
         p = new int(2) at r

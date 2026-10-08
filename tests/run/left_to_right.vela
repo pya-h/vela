@@ -10,7 +10,7 @@ shape Counter
     fi
 fi
 
-task bump(hold& x: int) -> int
+task bump(flex& x: int) -> int
     x = x + 100
     <- 0
 fi
@@ -19,31 +19,31 @@ task pair(a: int, b: int) -> int
     <- a * 1000 + b
 fi
 
-task step(hold& x: int) -> bool
+task step(flex& x: int) -> bool
     x = x + 1
     <- x < 2
 fi
 
-task seven(hold& i: int) -> int
+task seven(flex& i: int) -> int
     i = i + 1
     <- 7
 fi
 
 task main()
-    hold n = 1
+    flex n = 1
     show(n + bump(&n), " ", n)
     show(pair(n, bump(&n)), " ", n)
     show(bump(&n) + n, " ", n)
-    hold c = Counter {}
+    flex c = Counter {}
     show(c.n + c.bump(), " ", c.n)
     show(pair(c.n, c.bump()), " ", c.n)
-    hold flag = false
+    flex flag = false
     show(flag or bump(&n) == 0, " ", n)
     show(flag and bump(&n) == 0, " ", n)
 
     ; A loop's condition is read again before every round, change and all.
-    hold k = 0
-    hold rounds = 0
+    flex k = 0
+    flex rounds = 0
     loop k < 300 and bump(&k) == 0
         rounds = rounds + 1
     fi
@@ -52,10 +52,10 @@ task main()
     ; The place given with '&' is found where the argument is read: not at all
     ; when 'and' skips its right side, again each round of a loop, and in the
     ; 'else when' that reaches it.
-    hold arr = [0, 0, 0]
-    hold i = 3
+    flex arr = [0, 0, 0]
+    flex i = 3
     show(i < 3 and step(&arr[i]))
-    hold j = 0
+    flex j = 0
     loop j < 3 and step(&arr[j])
         j = j + 1
     fi
@@ -69,8 +69,8 @@ task main()
     fi
 
     ; An assignment finds its place before the value that changes the index.
-    hold spot = 0
-    hold slots = [0, 0, 0]
+    flex spot = 0
+    flex slots = [0, 0, 0]
     slots[spot] = seven(&spot)
     show(slots[0], slots[1], slots[2], " ", spot)
 fi

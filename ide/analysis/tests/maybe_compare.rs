@@ -17,14 +17,14 @@ fi
 
 task main()
     CHECK
-    bind b = scan(\"enter: \", int) { none }
-    bind m = half(8) { none }
-    bind n = half(8) { 0 }
-    bind k = half(8) {
+    fixed b = scan(\"enter: \", int) { none }
+    fixed m = half(8) { none }
+    fixed n = half(8) { 0 }
+    fixed k = half(8) {
         show(\"odd\")
         none
     }
-    bind j = half(8) {
+    fixed j = half(8) {
         when n > 0
             show(\"none\")
         fi
@@ -76,7 +76,7 @@ fi
 
 task main()
     CHECK
-    bind b = half(8)
+    fixed b = half(8)
     when b is { inside } and inside < 0 and half(inside) is { quarter }
         show(inside, quarter)
     fi

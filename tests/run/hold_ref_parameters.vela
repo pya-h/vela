@@ -1,4 +1,4 @@
-; A parameter written `hold& x: T` is the caller's place: every change the task
+; A parameter written `flex& x: T` is the caller's place: every change the task
 ; makes to `x` is a change there. The call marks the place it gives with `&`,
 ; so a reader sees at the call what may change.
 
@@ -12,23 +12,23 @@ shape Counter
     fi
 
     ; A method takes one too, and gives its own fields.
-    alters add_to(hold& total: int)
+    alters add_to(flex& total: int)
         total = total + .n
         double(&.n)
     fi
 fi
 
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 
-task swap(hold& a: int, hold& b: int)
+task swap(flex& a: int, flex& b: int)
     a, b = b, a
 fi
 
 ; A shape: its fields change, its alters methods are called, and a field of it
 ; is given on to another task.
-task bump(hold& c: Counter)
+task bump(flex& c: Counter)
     c.tick()
     c.n = c.n + 5
     sample(&c.n)
@@ -36,17 +36,17 @@ task bump(hold& c: Counter)
 fi
 
 ; A slice grows where the caller keeps it.
-task push_two(hold& xs: [int]@r, r: region)
+task push_two(flex& xs: [int]@r, r: region)
     xs.add(1)
     xs.add(2)
 fi
 
 ; A generic task, and a recursive one, which passes its own place on.
-task put<T>(hold& place: T, value: T)
+task put<T>(flex& place: T, value: T)
     place = value
 fi
 
-task count_down(hold& n: int, hold& steps: int)
+task count_down(flex& n: int, flex& steps: int)
     when n > 0
         n = n - 1
         steps = steps + 1
@@ -55,62 +55,62 @@ task count_down(hold& n: int, hold& steps: int)
 fi
 
 ; Text whose region the call settles, and a tuple given a new value.
-task rename(hold& t: text@p, to: text@p)
+task rename(flex& t: text@p, to: text@p)
     t = to
 fi
 
-task widen(hold& ends: (int, int))
+task widen(flex& ends: (int, int))
     ends = (ends.0 - 1, ends.1 + 1)
 fi
 
 task main()
-    hold a = 1
+    flex a = 1
     sample(&a)
     show(a)
-    hold b = 2
+    flex b = 2
     swap(&a, &b)
     show(a, " ", b)
 
-    hold c = Counter {}
+    flex c = Counter {}
     bump(&c)
     show(c.n)
-    hold total = 100
+    flex total = 100
     c.add_to(&total)
     show(total, " ", c.n)
 
     ; Two different fields, and two different items of an array.
-    hold pair = Counter { n: 3 }
-    hold other = Counter { n: 4 }
+    flex pair = Counter { n: 3 }
+    flex other = Counter { n: 4 }
     swap(&pair.n, &other.n)
-    hold arr = [1, 2, 3]
+    flex arr = [1, 2, 3]
     swap(&arr[0], &arr[2])
     show(pair.n, " ", other.n, " ", arr[0], arr[1], arr[2])
 
     region r
-    hold xs = new [int]() at r
+    flex xs = new [int]() at r
     push_two(&xs, r)
     show(xs.len)
-    hold p = new Counter(Counter {}) at r
+    flex p = new Counter(Counter {}) at r
     bump(&p^)
     swap(&p^.n, &a)
     show(p^.n, " ", a)
 
-    hold word = "x"
+    flex word = "x"
     put(&word, "y")
     put(&a, 5)
-    hold steps = 0
+    flex steps = 0
     count_down(&a, &steps)
     show(word, " ", a, " ", steps)
     rename(&word, "lasting")
-    hold made = "made" + "!" at r
+    flex made = "made" + "!" at r
     rename(&made, "again" + "?" at r)
     show(word, " ", made)
-    hold ends = (1, 2)
+    flex ends = (1, 2)
     widen(&ends)
     show(ends.0, " ", ends.1)
 
-    hold tally = Tally { count: 7 }
-    hold sum = 1
+    flex tally = Tally { count: 7 }
+    flex sum = 1
     tally.add_into(&sum)
     double(&sum)
     show(sum, " ", tally.count)

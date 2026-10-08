@@ -30,8 +30,8 @@
     | keyword:fi
  20 | task total(xs: [int#4]) -> int
     | keyword:task  task:total  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]  punctuation:)  operator:->  type-builtin:int
- 21 |     hold sum = 0
-    | keyword:hold  variable:sum  operator:=  number:0
+ 21 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
  22 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
  23 |         sum = sum + x
@@ -62,8 +62,8 @@
     | keyword:fi
  39 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 40 |     bind scores: [int#4] = [90, 72, 85, 60]
-    | keyword:bind  variable:scores  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]  operator:=  punctuation:[  number:90  punctuation:,  number:72  punctuation:,  number:85  punctuation:,  number:60  punctuation:]
+ 40 |     fixed scores: [int#4] = [90, 72, 85, 60]
+    | keyword:fixed  variable:scores  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]  operator:=  punctuation:[  number:90  punctuation:,  number:72  punctuation:,  number:85  punctuation:,  number:60  punctuation:]
  41 |     show(scores.len)
     | builtin-fn:show  punctuation:(  variable:scores  punctuation:.  field:len  punctuation:)
  42 |     show(scores[2])
@@ -72,8 +72,8 @@
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:scores  punctuation:)  punctuation:)
  45 |     ; An array is a value: assigning copies it.
     | comment:; An array is a value: assigning copies it.
- 46 |     hold copy = scores
-    | keyword:hold  variable:copy  operator:=  variable:scores
+ 46 |     flex copy = scores
+    | keyword:flex  variable:copy  operator:=  variable:scores
  47 |     copy[0] = 0
     | variable:copy  punctuation:[  number:0  punctuation:]  operator:=  number:0
  48 |     show(scores[0])
@@ -82,8 +82,8 @@
     | builtin-fn:show  punctuation:(  variable:copy  punctuation:[  number:0  punctuation:]  punctuation:)
  51 |     ; Repeated values, nested arrays, and a count computed from constants.
     | comment:; Repeated values, nested arrays, and a count computed from constants.
- 52 |     hold grid = [[0#3]#2 * 1]
-    | keyword:hold  variable:grid  operator:=  punctuation:[  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  punctuation:#  number:2  operator:*  number:1  punctuation:]
+ 52 |     flex grid = [[0#3]#2 * 1]
+    | keyword:flex  variable:grid  operator:=  punctuation:[  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  punctuation:#  number:2  operator:*  number:1  punctuation:]
  53 |     grid[1][2] = 5
     | variable:grid  punctuation:[  number:1  punctuation:]  punctuation:[  number:2  punctuation:]  operator:=  number:5
  54 |     each row in grid
@@ -98,8 +98,8 @@
     | keyword:fi
  60 |     ; `each` goes through the array as it was when the loop started.
     | comment:; `each` goes through the array as it was when the loop started.
- 61 |     hold numbers = [1, 2, 3]
-    | keyword:hold  variable:numbers  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 61 |     flex numbers = [1, 2, 3]
+    | keyword:flex  variable:numbers  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  62 |     each n in numbers
     | keyword:each  variable:n  keyword:in  variable:numbers
  63 |         numbers[2] = 30
@@ -112,16 +112,16 @@
     | builtin-fn:show  punctuation:(  variable:numbers  punctuation:[  number:2  punctuation:]  punctuation:)
  68 |     ; Items that are shapes, and arrays in shapes, kinds, and results.
     | comment:; Items that are shapes, and arrays in shapes, kinds, and results.
- 69 |     hold triangle = Polygon { corners: [Point { x: 0, y: 0 }#3], name: "t" }
-    | keyword:hold  variable:triangle  operator:=  type:Polygon  punctuation:{  field:corners  punctuation::  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:#  number:3  punctuation:]  punctuation:,  field:name  punctuation::  string:"t"  punctuation:}
+ 69 |     flex triangle = Polygon { corners: [Point { x: 0, y: 0 }#3], name: "t" }
+    | keyword:flex  variable:triangle  operator:=  type:Polygon  punctuation:{  field:corners  punctuation::  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:#  number:3  punctuation:]  punctuation:,  field:name  punctuation::  string:"t"  punctuation:}
  70 |     triangle.corners[1].x = 4
     | variable:triangle  punctuation:.  field:corners  punctuation:[  number:1  punctuation:]  punctuation:.  field:x  operator:=  number:4
  71 |     triangle.corners[2] = Point { x: 0, y: 3 }
     | variable:triangle  punctuation:.  field:corners  punctuation:[  number:2  punctuation:]  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:3  punctuation:}
  72 |     show(triangle.corners[1].x + triangle.corners[2].y)
     | builtin-fn:show  punctuation:(  variable:triangle  punctuation:.  field:corners  punctuation:[  number:1  punctuation:]  punctuation:.  field:x  operator:+  variable:triangle  punctuation:.  field:corners  punctuation:[  number:2  punctuation:]  punctuation:.  field:y  punctuation:)
- 73 |     bind reading = Samples([0.5, 1.5])
-    | keyword:bind  variable:reading  operator:=  variant:Samples  punctuation:(  punctuation:[  number:0.5  punctuation:,  number:1.5  punctuation:]  punctuation:)
+ 73 |     fixed reading = Samples([0.5, 1.5])
+    | keyword:fixed  variable:reading  operator:=  variant:Samples  punctuation:(  punctuation:[  number:0.5  punctuation:,  number:1.5  punctuation:]  punctuation:)
  74 |     match reading
     | keyword:match  variable:reading
  75 |     case Missing
@@ -134,24 +134,24 @@
     | builtin-fn:show  punctuation:(  variable:values  punctuation:[  number:0  punctuation:]  operator:+  variable:values  punctuation:[  number:1  punctuation:]  punctuation:)
  79 |     fi
     | keyword:fi
- 80 |     bind front, back = halves(scores)
-    | keyword:bind  variable:front  punctuation:,  variable:back  operator:=  task:halves  punctuation:(  variable:scores  punctuation:)
+ 80 |     fixed front, back = halves(scores)
+    | keyword:fixed  variable:front  punctuation:,  variable:back  operator:=  task:halves  punctuation:(  variable:scores  punctuation:)
  81 |     show(front[1] + back[0])
     | builtin-fn:show  punctuation:(  variable:front  punctuation:[  number:1  punctuation:]  operator:+  variable:back  punctuation:[  number:0  punctuation:]  punctuation:)
  83 |     ; `none` and `fail e` make the items a `maybe` or a `T ~ E`.
     | comment:; `none` and `fail e` make the items a `maybe` or a `T ~ E`.
- 84 |     bind slots = [none, 7, none]
-    | keyword:bind  variable:slots  operator:=  punctuation:[  keyword:none  punctuation:,  number:7  punctuation:,  keyword:none  punctuation:]
+ 84 |     fixed slots = [none, 7, none]
+    | keyword:fixed  variable:slots  operator:=  punctuation:[  keyword:none  punctuation:,  number:7  punctuation:,  keyword:none  punctuation:]
  85 |     show(slots[0])
     | builtin-fn:show  punctuation:(  variable:slots  punctuation:[  number:0  punctuation:]  punctuation:)
  86 |     show(slots[1])
     | builtin-fn:show  punctuation:(  variable:slots  punctuation:[  number:1  punctuation:]  punctuation:)
- 87 |     bind empty: [maybe text#2] = [none#2]
-    | keyword:bind  variable:empty  punctuation::  punctuation:[  keyword:maybe  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  keyword:none  punctuation:#  number:2  punctuation:]
+ 87 |     fixed empty: [maybe text#2] = [none#2]
+    | keyword:fixed  variable:empty  punctuation::  punctuation:[  keyword:maybe  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  keyword:none  punctuation:#  number:2  punctuation:]
  88 |     show(empty[1])
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:[  number:1  punctuation:]  punctuation:)
- 89 |     bind parsed = [parse("one"), fail "skipped"]
-    | keyword:bind  variable:parsed  operator:=  punctuation:[  task:parse  punctuation:(  string:"one"  punctuation:)  punctuation:,  keyword:fail  string:"skipped"  punctuation:]
+ 89 |     fixed parsed = [parse("one"), fail "skipped"]
+    | keyword:fixed  variable:parsed  operator:=  punctuation:[  task:parse  punctuation:(  string:"one"  punctuation:)  punctuation:,  keyword:fail  string:"skipped"  punctuation:]
  90 |     show(parsed[0] { 0 })
     | builtin-fn:show  punctuation:(  variable:parsed  punctuation:[  number:0  punctuation:]  punctuation:{  number:0  punctuation:}  punctuation:)
  91 |     show(parsed[1] { failure problem
@@ -162,8 +162,8 @@
     | operator:-  number:1
  94 |     })
     | punctuation:}  punctuation:)
- 95 |     hold kept: maybe [int#2] = none
-    | keyword:hold  variable:kept  punctuation::  keyword:maybe  punctuation:[  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  keyword:none
+ 95 |     flex kept: maybe [int#2] = none
+    | keyword:flex  variable:kept  punctuation::  keyword:maybe  punctuation:[  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  keyword:none
  96 |     kept = [3, 4]
     | variable:kept  operator:=  punctuation:[  number:3  punctuation:,  number:4  punctuation:]
  97 |     when kept is {pair}
@@ -174,10 +174,10 @@
     | keyword:fi
 101 |     ; The index is computed first, then the value; a plan B runs in its turn.
     | comment:; The index is computed first, then the value; a plan B runs in its turn.
-102 |     hold order = [10, 20, 30]
-    | keyword:hold  variable:order  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
-103 |     hold missing: maybe int = none
-    | keyword:hold  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+102 |     flex order = [10, 20, 30]
+    | keyword:flex  variable:order  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
+103 |     flex missing: maybe int = none
+    | keyword:flex  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
 104 |     order[missing { 2 }] = order[missing { 0 }] + 1
     | variable:order  punctuation:[  variable:missing  punctuation:{  number:2  punctuation:}  punctuation:]  operator:=  variable:order  punctuation:[  variable:missing  punctuation:{  number:0  punctuation:}  punctuation:]  operator:+  number:1
 105 |     show(order[2])

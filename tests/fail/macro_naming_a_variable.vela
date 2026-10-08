@@ -1,6 +1,6 @@
 ; error: 6:10: a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be 'n', which is no macro
 task main()
-    bind n = 3
+    fixed n = 3
 fi
 
 #LIMIT = n * 2

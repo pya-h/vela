@@ -1,5 +1,5 @@
 ; error: 4:15: 'at' takes the index of one byte, as in 't.at(i)', got 2 arguments
 task main()
-    bind word = "hello"
+    fixed word = "hello"
     show(word.at(1, 2))
 fi

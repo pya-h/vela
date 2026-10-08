@@ -10,8 +10,8 @@ fi
 
 task main()
     region r
-    hold xs: [text@r]@r = new [text](["x"]) at r
-    bind s: text@r = "hello".copy() at r
+    flex xs: [text@r]@r = new [text](["x"]) at r
+    fixed s: text@r = "hello".copy() at r
     outer(xs, s)
     show(xs[0])
 fi

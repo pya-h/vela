@@ -4,7 +4,7 @@ shape Tally
 
     ; Not marked alters, so it changes no read field, even of a copy of its own.
     reset() -> Tally
-        hold copy = .this
+        flex copy = .this
         copy.count = 0
         <- copy
     fi

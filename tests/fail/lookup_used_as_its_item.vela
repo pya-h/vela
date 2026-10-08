@@ -1,5 +1,5 @@
 ; error: 4:17: arithmetic requires numeric operands; the value in this maybe int must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
-    bind xs = [1, 2, 3]
+    fixed xs = [1, 2, 3]
     show(xs[#0] + 1)
 fi

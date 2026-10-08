@@ -72,36 +72,36 @@
     | keyword:region  region:r
  48 |     show(1.type, " ", 2.5.type, " ", true.type, " ", "hi".type)
     | builtin-fn:show  punctuation:(  number:1  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  number:2.5  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  keyword:true  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  string:"hi"  punctuation:.  keyword:type  punctuation:)
- 49 |     bind xs = [1, 2, 3]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
- 50 |     bind grid = [[0.5#2]#3]
-    | keyword:bind  variable:grid  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]
+ 49 |     fixed xs = [1, 2, 3]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 50 |     fixed grid = [[0.5#2]#3]
+    | keyword:fixed  variable:grid  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]
  51 |     show(xs.type, " ", grid.type, " ", grid[0].type, " ", xs.len.type)
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:[  number:0  punctuation:]  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:.  keyword:type  punctuation:)
- 52 |     bind items = new [float]() at r
-    | keyword:bind  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:float  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 53 |     bind words = new [text]() at r
-    | keyword:bind  variable:words  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 52 |     fixed items = new [float]() at r
+    | keyword:fixed  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:float  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 53 |     fixed words = new [text]() at r
+    | keyword:fixed  variable:words  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  54 |     show(items.type, " ", words.type, " ", items[0..0].type)
     | builtin-fn:show  punctuation:(  variable:items  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:words  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:items  punctuation:[  number:0  operator:..  number:0  punctuation:]  punctuation:.  keyword:type  punctuation:)
- 55 |     bind p = Point { x: 1, y: 2 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 56 |     bind near = new Point(p) at r
-    | keyword:bind  variable:near  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
- 57 |     bind far = new ^Point(near) at r
-    | keyword:bind  variable:far  operator:=  keyword:new  operator:^  type:Point  punctuation:(  variable:near  punctuation:)  keyword:at  region:r
+ 55 |     fixed p = Point { x: 1, y: 2 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 56 |     fixed near = new Point(p) at r
+    | keyword:fixed  variable:near  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
+ 57 |     fixed far = new ^Point(near) at r
+    | keyword:fixed  variable:far  operator:=  keyword:new  operator:^  type:Point  punctuation:(  variable:near  punctuation:)  keyword:at  region:r
  58 |     show(p.type, " ", near.type, " ", far.type, " ", near^.type, " ", p.x.type)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:near  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:far  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:near  operator:^  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:x  punctuation:.  keyword:type  punctuation:)
- 59 |     bind m: maybe int = none
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 60 |     bind pair = (1, "a")
-    | keyword:bind  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 59 |     fixed m: maybe int = none
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 60 |     fixed pair = (1, "a")
+    | keyword:fixed  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
  61 |     show(m.type, " ", pair.type, " ", pair.1.type, " ", Mood.Loud(2).type)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:2  punctuation:)  punctuation:.  keyword:type  punctuation:)
- 62 |     bind b = Box<int> { value: 3 }
-    | keyword:bind  variable:b  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}
- 63 |     bind nested = Box<Box<text>> { value: Box<text> { value: "x" } }
-    | keyword:bind  variable:nested  operator:=  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  punctuation:{  field:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}
+ 62 |     fixed b = Box<int> { value: 3 }
+    | keyword:fixed  variable:b  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}
+ 63 |     fixed nested = Box<Box<text>> { value: Box<text> { value: "x" } }
+    | keyword:fixed  variable:nested  operator:=  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  punctuation:{  field:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}
  64 |     show(b.type, " ", nested.type, " ", nested.value.type)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  field:value  punctuation:.  keyword:type  punctuation:)
  65 |     ; A shape or kind of another file is its own name.
@@ -110,8 +110,8 @@
     | builtin-fn:show  punctuation:(  module:shapes  punctuation:.  type:Crate  punctuation:{  field:size  punctuation::  number:1  punctuation:}  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  module:shapes  punctuation:.  type:Weather  punctuation:.  variant:Sun  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  module:shapes  punctuation:.  type:Weather  punctuation:.  variant:Rain  punctuation:(  number:2  punctuation:)  punctuation:.  keyword:type  punctuation:)
  67 |     ; Text in a region is text.
     | comment:; Text in a region is text.
- 68 |     bind t = "a" + "b" at r
-    | keyword:bind  variable:t  operator:=  string:"a"  operator:+  string:"b"  keyword:at  region:r
+ 68 |     fixed t = "a" + "b" at r
+    | keyword:fixed  variable:t  operator:=  string:"a"  operator:+  string:"b"  keyword:at  region:r
  69 |     show(t.type)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  keyword:type  punctuation:)
  70 |     ; In a task that takes types, the type each use gives.
@@ -130,8 +130,8 @@
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  punctuation:)  punctuation:.  keyword:type  punctuation:)
  77 |     ; It is text like any other.
     | comment:; It is text like any other.
- 78 |     bind word = xs.type
-    | keyword:bind  variable:word  operator:=  variable:xs  punctuation:.  keyword:type
+ 78 |     fixed word = xs.type
+    | keyword:fixed  variable:word  operator:=  variable:xs  punctuation:.  keyword:type
  79 |     show(word.len, " ", word == "[int#3]")
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:word  operator:==  string:"[int#3]"  punctuation:)
  80 | fi

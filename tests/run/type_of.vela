@@ -46,26 +46,26 @@ fi
 task main()
     region r
     show(1.type, " ", 2.5.type, " ", true.type, " ", "hi".type)
-    bind xs = [1, 2, 3]
-    bind grid = [[0.5#2]#3]
+    fixed xs = [1, 2, 3]
+    fixed grid = [[0.5#2]#3]
     show(xs.type, " ", grid.type, " ", grid[0].type, " ", xs.len.type)
-    bind items = new [float]() at r
-    bind words = new [text]() at r
+    fixed items = new [float]() at r
+    fixed words = new [text]() at r
     show(items.type, " ", words.type, " ", items[0..0].type)
-    bind p = Point { x: 1, y: 2 }
-    bind near = new Point(p) at r
-    bind far = new ^Point(near) at r
+    fixed p = Point { x: 1, y: 2 }
+    fixed near = new Point(p) at r
+    fixed far = new ^Point(near) at r
     show(p.type, " ", near.type, " ", far.type, " ", near^.type, " ", p.x.type)
-    bind m: maybe int = none
-    bind pair = (1, "a")
+    fixed m: maybe int = none
+    fixed pair = (1, "a")
     show(m.type, " ", pair.type, " ", pair.1.type, " ", Mood.Loud(2).type)
-    bind b = Box<int> { value: 3 }
-    bind nested = Box<Box<text>> { value: Box<text> { value: "x" } }
+    fixed b = Box<int> { value: 3 }
+    fixed nested = Box<Box<text>> { value: Box<text> { value: "x" } }
     show(b.type, " ", nested.type, " ", nested.value.type)
     ; A shape or kind of another file is its own name.
     show(shapes.Crate { size: 1 }.type, " ", shapes.Weather.Sun.type, " ", shapes.Weather.Rain(2).type)
     ; Text in a region is text.
-    bind t = "a" + "b" at r
+    fixed t = "a" + "b" at r
     show(t.type)
     ; In a task that takes types, the type each use gives.
     show(named(1), " ", named(xs), " ", named(b), " ", named(near), " ", named(pair))
@@ -75,6 +75,6 @@ task main()
     ; The value itself is never worked out, as C's sizeof.
     show(count().type)
     ; It is text like any other.
-    bind word = xs.type
+    fixed word = xs.type
     show(word.len, " ", word == "[int#3]")
 fi

@@ -3,7 +3,7 @@
 shape S
     x: int
     $reg
-    shared hold n: int = 0
+    shared flex n: int = 0
 fi
 task main()
 fi

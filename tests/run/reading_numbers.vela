@@ -25,7 +25,7 @@ fi
 
 ; A task may forward the error it was given, and send one of its own.
 task age(line: text) -> int ~ ParseError
-    bind years = int(line) {
+    fixed years = int(line) {
         failure e
         <- fail e
     }
@@ -94,11 +94,11 @@ task main()
     fi
 
     ; Read from input: every line that is a number is added up.
-    hold total = 0
-    hold reading = true
+    flex total = 0
+    flex reading = true
     loop reading
         region line_memory
-        bind line = scan("") at line_memory { "" }
+        fixed line = scan("") at line_memory { "" }
         when line == ""
             reading = false
         else

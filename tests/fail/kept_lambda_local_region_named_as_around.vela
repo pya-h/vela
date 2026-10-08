@@ -1,21 +1,21 @@
 ; error: 12:20: 'q' is already a name in the code around this lambda, and a lambda that keeps what it uses reuses none of those names, even ones it doesn't keep; name this one otherwise
-; error: 13:26: '[@q]' keeps what the lambda uses in region 'q', which isn't one here; declare it with 'region q', or take it as a parameter
+; error: 13:27: '[@q]' keeps what the lambda uses in region 'q', which isn't one here; declare it with 'region q', or take it as a parameter
 ; Nor a region declared inside it.
 task main()
     region keep
-    hold out: maybe [@keep]() -> int = none
+    flex out: maybe [@keep]() -> int = none
     block
         region q
-        hold ys = new [int]() at q
+        flex ys = new [int]() at q
         ys.add(41)
         out = [@keep]() -> int
             region q
-            bind inner = [@q]() -> int <- ys[0] fi
+            fixed inner = [@q]() -> int <- ys[0] fi
             <- inner()
         fi
     fi
     region other
-    hold zs = new [int]() at other
+    flex zs = new [int]() at other
     each i in 0..100
         zs.add(-1)
     fi

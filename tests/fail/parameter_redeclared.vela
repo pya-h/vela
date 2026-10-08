@@ -1,6 +1,6 @@
-; error: 3:10: 'n' is already defined at 2:17
+; error: 3:11: 'n' is already defined at 2:17
 task show_twice(n: int)
-    bind n = n * 2
+    fixed n = n * 2
     show(n)
 fi
 

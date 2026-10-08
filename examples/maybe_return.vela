@@ -11,9 +11,9 @@ task itself(x: int) -> int
 fi
 
 task main()
-    bind x: maybe int = oddOrNone(2)
-    bind y: maybe int = itself(1)
-    bind z: int = oddOrNone(3) { 0 }
+    fixed x: maybe int = oddOrNone(2)
+    fixed y: maybe int = itself(1)
+    fixed z: int = oddOrNone(3) { 0 }
     show(x)
     show(y)
 fi

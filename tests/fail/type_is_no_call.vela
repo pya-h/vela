@@ -1,5 +1,5 @@
 ; error: 4:12: 'type' is the type of a value, read without '(…)', as in 'x.type'
 task main()
-    bind x = 1
+    fixed x = 1
     show(x.type())
 fi

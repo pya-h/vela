@@ -30,28 +30,28 @@
     | variant:Loud  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
  19 | fi
     | keyword:fi
- 21 | ; A place given to a `hold&` parameter is the caller's own.
-    | comment:; A place given to a `hold&` parameter is the caller's own.
- 22 | task where(r: region, hold& p: Point) -> text@r
-    | keyword:task  task:where  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:hold  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 21 | ; A place given to a `flex&` parameter is the caller's own.
+    | comment:; A place given to a `flex&` parameter is the caller's own.
+ 22 | task where(r: region, flex& p: Point) -> text@r
+    | keyword:task  task:where  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:flex  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  23 |     <- (&p).str() at r
     | keyword:<-  punctuation:(  operator:&  parameter:p  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
  24 | fi
     | keyword:fi
  26 | ; In a task that takes types, a place of the type given.
     | comment:; In a task that takes types, a place of the type given.
- 27 | task spot<T>(r: region, hold& a: T) -> text@r
-    | keyword:task  task:spot  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:hold  keyword:&  parameter:a  punctuation::  type:T  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 27 | task spot<T>(r: region, flex& a: T) -> text@r
+    | keyword:task  task:spot  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:flex  keyword:&  parameter:a  punctuation::  type:T  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  28 |     <- "{&a}" at r
     | keyword:<-  string:"{  operator:&  parameter:a  string:}"  keyword:at  region:r
  29 | fi
     | keyword:fi
- 31 | ; A place that is only read, turned into text: a `bind&` parameter, and a
-    | comment:; A place that is only read, turned into text: a `bind&` parameter, and a
+ 31 | ; A place that is only read, turned into text: a `fixed&` parameter, and a
+    | comment:; A place that is only read, turned into text: a `fixed&` parameter, and a
  32 | ; part of it.
     | comment:; part of it.
- 33 | task read(r: region, bind& p: Point) -> text@r
-    | keyword:task  task:read  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 33 | task read(r: region, fixed& p: Point) -> text@r
+    | keyword:task  task:read  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:fixed  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  34 |     <- "{&p}" + text(&p.x)@r + (&p.y).str()@r at r
     | keyword:<-  string:"{  operator:&  parameter:p  string:}"  operator:+  type-builtin:text  punctuation:(  operator:&  parameter:p  punctuation:.  field:x  punctuation:)  operator:@  region:r  operator:+  punctuation:(  operator:&  parameter:p  punctuation:.  field:y  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  operator:@  region:r  keyword:at  region:r
  35 | fi
@@ -72,14 +72,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  46 |     region r
     | keyword:region  region:r
- 47 |     hold p = Point { x: 1, y: 2 }
-    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 48 |     bind q = p
-    | keyword:bind  variable:q  operator:=  variable:p
- 49 |     hold& also = &p
-    | keyword:hold  keyword:&  variable:also  operator:=  operator:&  variable:p
- 50 |     bind& seen = &p
-    | keyword:bind  keyword:&  variable:seen  operator:=  operator:&  variable:p
+ 47 |     flex p = Point { x: 1, y: 2 }
+    | keyword:flex  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 48 |     fixed q = p
+    | keyword:fixed  variable:q  operator:=  variable:p
+ 49 |     flex& also = &p
+    | keyword:flex  keyword:&  variable:also  operator:=  operator:&  variable:p
+ 50 |     fixed& seen = &p
+    | keyword:fixed  keyword:&  variable:seen  operator:=  operator:&  variable:p
  51 |     ; A place is itself, a copy is another place, and a reference is the place
     | comment:; A place is itself, a copy is another place, and a reference is the place
  52 |     ; it names.
@@ -90,58 +90,58 @@
     | comment:; Kinds, text, arrays and their items, and fields compare where they are
  55 |     ; too, whatever they hold.
     | comment:; too, whatever they hold.
- 56 |     bind k1 = Mood.Loud(1)
-    | keyword:bind  variable:k1  operator:=  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:1  punctuation:)
- 57 |     bind k2 = k1
-    | keyword:bind  variable:k2  operator:=  variable:k1
- 58 |     bind t1 = "hi"
-    | keyword:bind  variable:t1  operator:=  string:"hi"
- 59 |     bind t2 = "hi"
-    | keyword:bind  variable:t2  operator:=  string:"hi"
- 60 |     bind xs = [1, 2, 3]
-    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 56 |     fixed k1 = Mood.Loud(1)
+    | keyword:fixed  variable:k1  operator:=  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:1  punctuation:)
+ 57 |     fixed k2 = k1
+    | keyword:fixed  variable:k2  operator:=  variable:k1
+ 58 |     fixed t1 = "hi"
+    | keyword:fixed  variable:t1  operator:=  string:"hi"
+ 59 |     fixed t2 = "hi"
+    | keyword:fixed  variable:t2  operator:=  string:"hi"
+ 60 |     fixed xs = [1, 2, 3]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  61 |     show(&k1 == &k2, " ", &k1 == &k1, " ", &t1 == &t2, " ", &xs[0] == &xs[1], " ", &xs[1] == &xs[1], " ", &p.x == &also.x)
     | builtin-fn:show  punctuation:(  operator:&  variable:k1  operator:==  operator:&  variable:k2  punctuation:,  string:" "  punctuation:,  operator:&  variable:k1  operator:==  operator:&  variable:k1  punctuation:,  string:" "  punctuation:,  operator:&  variable:t1  operator:==  operator:&  variable:t2  punctuation:,  string:" "  punctuation:,  operator:&  variable:xs  punctuation:[  number:0  punctuation:]  operator:==  operator:&  variable:xs  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  operator:&  variable:xs  punctuation:[  number:1  punctuation:]  operator:==  operator:&  variable:xs  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  operator:&  variable:p  punctuation:.  field:x  operator:==  operator:&  variable:also  punctuation:.  field:x  punctuation:)
  62 |     ; A pointer points at the place it was made for, and a pointer variable is
     | comment:; A pointer points at the place it was made for, and a pointer variable is
  63 |     ; a place of its own; a shared field is one place for the whole program.
     | comment:; a place of its own; a shared field is one place for the whole program.
- 64 |     bind ptr = new Point(p) at r
-    | keyword:bind  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
- 65 |     bind other = new Point(p) at r
-    | keyword:bind  variable:other  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
+ 64 |     fixed ptr = new Point(p) at r
+    | keyword:fixed  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
+ 65 |     fixed other = new Point(p) at r
+    | keyword:fixed  variable:other  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
  66 |     show(&ptr^ == ptr, " ", ptr == &ptr^, " ", &p == ptr, " ", &ptr == &other, " ", &Point.made == &Point.made)
     | builtin-fn:show  punctuation:(  operator:&  variable:ptr  operator:^  operator:==  variable:ptr  punctuation:,  string:" "  punctuation:,  variable:ptr  operator:==  operator:&  variable:ptr  operator:^  punctuation:,  string:" "  punctuation:,  operator:&  variable:p  operator:==  variable:ptr  punctuation:,  string:" "  punctuation:,  operator:&  variable:ptr  operator:==  operator:&  variable:other  punctuation:,  string:" "  punctuation:,  operator:&  type:Point  punctuation:.  field:made  operator:==  operator:&  type:Point  punctuation:.  field:made  punctuation:)
  67 |     ; The same address, however it is written as text.
     | comment:; The same address, however it is written as text.
- 68 |     bind a = "{&p}" at r
-    | keyword:bind  variable:a  operator:=  string:"{  operator:&  variable:p  string:}"  keyword:at  region:r
- 69 |     bind b = (&p).str() at r
-    | keyword:bind  variable:b  operator:=  punctuation:(  operator:&  variable:p  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
- 70 |     bind c = where(r, &p)
-    | keyword:bind  variable:c  operator:=  task:where  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)
- 71 |     bind d = text(&also) at r
-    | keyword:bind  variable:d  operator:=  type-builtin:text  punctuation:(  operator:&  variable:also  punctuation:)  keyword:at  region:r
+ 68 |     fixed a = "{&p}" at r
+    | keyword:fixed  variable:a  operator:=  string:"{  operator:&  variable:p  string:}"  keyword:at  region:r
+ 69 |     fixed b = (&p).str() at r
+    | keyword:fixed  variable:b  operator:=  punctuation:(  operator:&  variable:p  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+ 70 |     fixed c = where(r, &p)
+    | keyword:fixed  variable:c  operator:=  task:where  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)
+ 71 |     fixed d = text(&also) at r
+    | keyword:fixed  variable:d  operator:=  type-builtin:text  punctuation:(  operator:&  variable:also  punctuation:)  keyword:at  region:r
  72 |     show(a == b, " ", b == c, " ", c == d, " ", p.here(r) == a, " ", a[0..2], " ", int(a) { 0 } > 0)
     | builtin-fn:show  punctuation:(  variable:a  operator:==  variable:b  punctuation:,  string:" "  punctuation:,  variable:b  operator:==  variable:c  punctuation:,  string:" "  punctuation:,  variable:c  operator:==  variable:d  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:here  punctuation:(  region:r  punctuation:)  operator:==  variable:a  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:[  number:0  operator:..  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  variable:a  punctuation:)  punctuation:{  number:0  punctuation:}  operator:>  number:0  punctuation:)
  73 |     ; A slice's items are places in its region.
     | comment:; A slice's items are places in its region.
- 74 |     hold items = new [int]([5, 6]) at r
-    | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:5  punctuation:,  number:6  punctuation:]  punctuation:)  keyword:at  region:r
+ 74 |     flex items = new [int]([5, 6]) at r
+    | keyword:flex  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:5  punctuation:,  number:6  punctuation:]  punctuation:)  keyword:at  region:r
  75 |     show(&items[0] == &items[0], " ", &items[0] == &items[1], " ", "{&items[1]}" at r != "{&items[0]}" at r)
     | builtin-fn:show  punctuation:(  operator:&  variable:items  punctuation:[  number:0  punctuation:]  operator:==  operator:&  variable:items  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  operator:&  variable:items  punctuation:[  number:0  punctuation:]  operator:==  operator:&  variable:items  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  string:"{  operator:&  variable:items  punctuation:[  number:1  punctuation:]  string:}"  keyword:at  region:r  operator:!=  string:"{  operator:&  variable:items  punctuation:[  number:0  punctuation:]  string:}"  keyword:at  region:r  punctuation:)
- 76 |     hold mood = Mood.Calm
-    | keyword:hold  variable:mood  operator:=  type:Mood  punctuation:.  variant:Calm
+ 76 |     flex mood = Mood.Calm
+    | keyword:flex  variable:mood  operator:=  type:Mood  punctuation:.  variant:Calm
  77 |     show(spot(r, &p) == a, " ", spot(r, &mood) == "{&mood}" at r, " ", spot(r, &mood) == a)
     | builtin-fn:show  punctuation:(  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)  operator:==  variable:a  punctuation:,  string:" "  punctuation:,  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:mood  punctuation:)  operator:==  string:"{  operator:&  variable:mood  string:}"  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  task:spot  punctuation:(  region:r  punctuation:,  operator:&  variable:mood  punctuation:)  operator:==  variable:a  punctuation:)
  78 |     ; Read only, and read in order beside a call.
     | comment:; Read only, and read in order beside a call.
- 79 |     bind& looked = &p
-    | keyword:bind  keyword:&  variable:looked  operator:=  operator:&  variable:p
+ 79 |     fixed& looked = &p
+    | keyword:fixed  keyword:&  variable:looked  operator:=  operator:&  variable:p
  80 |     show(read(r, &p).len > 6, " ", "{&looked}" at r == a)
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  region:r  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:.  field:len  operator:>  number:6  punctuation:,  string:" "  punctuation:,  string:"{  operator:&  variable:looked  string:}"  keyword:at  region:r  operator:==  variable:a  punctuation:)
- 81 |     bind pair = [p, q]
-    | keyword:bind  variable:pair  operator:=  punctuation:[  variable:p  punctuation:,  variable:q  punctuation:]
+ 81 |     fixed pair = [p, q]
+    | keyword:fixed  variable:pair  operator:=  punctuation:[  variable:p  punctuation:,  variable:q  punctuation:]
  82 |     show(&pair[zero()] == &pair[zero()], " ", &p == make(r), " ", &make(r)^ == &make(r)^)
     | builtin-fn:show  punctuation:(  operator:&  variable:pair  punctuation:[  task:zero  punctuation:(  punctuation:)  punctuation:]  operator:==  operator:&  variable:pair  punctuation:[  task:zero  punctuation:(  punctuation:)  punctuation:]  punctuation:,  string:" "  punctuation:,  operator:&  variable:p  operator:==  task:make  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  operator:&  task:make  punctuation:(  region:r  punctuation:)  operator:^  operator:==  operator:&  task:make  punctuation:(  region:r  punctuation:)  operator:^  punctuation:)
  83 | fi

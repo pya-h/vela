@@ -43,14 +43,14 @@ fi
 task main()
     CHECK
     region work
-    bind after = label(1) at work
-    bind tight = label(2)@work
-    bind inside = label(3, work)
-    bind tag = tagged(\"x\") at work
-    bind planned = checked(\"ok\") at work { \"none\" }
-    bind counter = Counter { n: 4 }
-    bind method = counter.shown() at work
-    bind chained = \"a\" + label(5)@work at work
+    fixed after = label(1) at work
+    fixed tight = label(2)@work
+    fixed inside = label(3, work)
+    fixed tag = tagged(\"x\") at work
+    fixed planned = checked(\"ok\") at work { \"none\" }
+    fixed counter = Counter { n: 4 }
+    fixed method = counter.shown() at work
+    fixed chained = \"a\" + label(5)@work at work
     @@
 fi
 ";
@@ -95,7 +95,7 @@ fn a_region_after_a_call_is_the_one_it_takes_last_whether_or_not_the_file_checks
 #[test]
 fn the_region_after_a_call_completes_as_a_region() {
     for checks in [true, false] {
-        let labels: Vec<String> = completions(&program(checks, "bind more = label(6) at @@")).into_iter().map(|item| item.label).collect();
+        let labels: Vec<String> = completions(&program(checks, "fixed more = label(6) at @@")).into_iter().map(|item| item.label).collect();
         assert!(labels.contains(&"work".to_string()), "checks: {}: {:?}", checks, labels);
     }
 }
@@ -110,7 +110,7 @@ fn an_at_that_is_not_last_in_a_chain_is_reported() {
 
 #[test]
 fn a_region_given_twice_is_reported() {
-    let source = program(true, "show(\"x\".len)\n    bind n = checked(\"\", work) at work { \"\" }");
+    let source = program(true, "show(\"x\".len)\n    fixed n = checked(\"\", work) at work { \"\" }");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(diagnostic.message, "task 'checked' is given its region in the parentheses already, so this is a second one; name it once");
@@ -139,12 +139,12 @@ task main()
     CHECK
     region r
     region s
-    bind p = new Node(Node { v: 1 }) at s
-    bind xs = new [text]([\"a\"]) at s
-    bind tt = \"a{1}\" at s
-    bind kept = keep(p) at r
-    bind firsts = firsts(xs) at r
-    bind picked = pick(tt)@r
+    fixed p = new Node(Node { v: 1 }) at s
+    fixed xs = new [text]([\"a\"]) at s
+    fixed tt = \"a{1}\" at s
+    fixed kept = keep(p) at r
+    fixed firsts = firsts(xs) at r
+    fixed picked = pick(tt)@r
     show(kept^.v, firsts.len, picked)
 fi
 ";

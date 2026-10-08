@@ -1,7 +1,7 @@
   1 | ; Task values of tasks taking places and regions: a task type says how each
     | comment:; Task values of tasks taking places and regions: a task type says how each
-  2 | ; parameter is given, 'hold& T' and 'bind& T' for the caller's place, and '@r'
-    | comment:; parameter is given, 'hold& T' and 'bind& T' for the caller's place, and '@r'
+  2 | ; parameter is given, 'flex& T' and 'fixed& T' for the caller's place, and '@r'
+    | comment:; parameter is given, 'flex& T' and 'fixed& T' for the caller's place, and '@r'
   3 | ; for a region, named so that what the task sends can live there. A call
     | comment:; for a region, named so that what the task sends can live there. A call
   4 | ; through a value marks places and names regions as a named call does, and
@@ -16,22 +16,22 @@
     | field:y  punctuation::  type-builtin:int
  10 | fi
     | keyword:fi
- 12 | task bump(hold& n: int)
-    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 12 | task bump(flex& n: int)
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
  13 |     n = n + 1
     | parameter:n  operator:=  parameter:n  operator:+  number:1
  14 | fi
     | keyword:fi
- 16 | task total(bind& p: Point) -> int
-    | keyword:task  task:total  punctuation:(  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
+ 16 | task total(fixed& p: Point) -> int
+    | keyword:task  task:total  punctuation:(  keyword:fixed  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
  17 |     <- p.x + p.y
     | keyword:<-  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
  18 | fi
     | keyword:fi
  20 | task squares(r: region, n: int) -> [int]@r
     | keyword:task  task:squares  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 21 |     hold made = new [int]() at r
-    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 21 |     flex made = new [int]() at r
+    | keyword:flex  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  22 |     each i in 1..n + 1
     | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:n  operator:+  number:1
  23 |         made.add(i * i)
@@ -50,8 +50,8 @@
     | keyword:<-  string:"#"  operator:+  parameter:n  punctuation:.  field:str  punctuation:(  punctuation:)  operator:@  region:r  keyword:at  region:r
  31 | fi
     | keyword:fi
- 33 | task twice(f: (hold& int) -> nothing, hold& v: int)
-    | keyword:task  task:twice  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:hold  keyword:&  parameter:v  punctuation::  type-builtin:int  punctuation:)
+ 33 | task twice(f: (flex& int) -> nothing, flex& v: int)
+    | keyword:task  task:twice  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:flex  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:flex  keyword:&  parameter:v  punctuation::  type-builtin:int  punctuation:)
  34 |     f(&v)
     | parameter:f  punctuation:(  operator:&  parameter:v  punctuation:)
  35 |     f(&v)
@@ -64,16 +64,16 @@
     | keyword:shape  type:Counter
  40 |     count: int
     | field:count  punctuation::  type-builtin:int
- 41 |     step: (hold& int) -> nothing
-    | field:step  punctuation::  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+ 41 |     step: (flex& int) -> nothing
+    | field:step  punctuation::  punctuation:(  keyword:flex  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
  42 | fi
     | keyword:fi
  44 | ; A wrapper of a task taking a place gives it on as one, and a wrapper of a
     | comment:; A wrapper of a task taking a place gives it on as one, and a wrapper of a
  45 | ; task taking a region gives that on.
     | comment:; task taking a region gives that on.
- 46 | task logged(next: (hold& int) -> int, hold& n: int) -> int
-    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 46 | task logged(next: (flex& int) -> int, flex& n: int) -> int
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:flex  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  47 |     show("> put ", n)
     | builtin-fn:show  punctuation:(  string:"> put "  punctuation:,  parameter:n  punctuation:)
  48 |     <- next(&n)
@@ -90,8 +90,8 @@
     | keyword:fi
  56 | $(logged)
     | keyword:$  punctuation:(  task:logged  punctuation:)
- 57 | task put(hold& n: int) -> int
-    | keyword:task  task:put  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 57 | task put(flex& n: int) -> int
+    | keyword:task  task:put  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  58 |     n = n * 10
     | parameter:n  operator:=  parameter:n  operator:*  number:10
  59 |     <- n
@@ -102,8 +102,8 @@
     | keyword:$  punctuation:(  task:timed  punctuation:)
  63 | task cubes(r: region, n: int) -> [int]@r
     | keyword:task  task:cubes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 64 |     hold made = new [int]() at r
-    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 64 |     flex made = new [int]() at r
+    | keyword:flex  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  65 |     each i in 1..n + 1
     | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:n  operator:+  number:1
  66 |         made.add(i * i * i)
@@ -116,10 +116,10 @@
     | keyword:fi
  71 | ; A startup decorator given a task that takes a place.
     | comment:; A startup decorator given a task that takes a place.
- 72 | task tried(f: (hold& int) -> nothing)
-    | keyword:task  task:tried  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
- 73 |     hold v = 40
-    | keyword:hold  variable:v  operator:=  number:40
+ 72 | task tried(f: (flex& int) -> nothing)
+    | keyword:task  task:tried  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:flex  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
+ 73 |     flex v = 40
+    | keyword:flex  variable:v  operator:=  number:40
  74 |     f(&v)
     | parameter:f  punctuation:(  operator:&  variable:v  punctuation:)
  75 |     show("tried: ", v)
@@ -128,18 +128,18 @@
     | keyword:fi
  78 | $tried
     | keyword:$  task:tried
- 79 | task step(hold& n: int)
-    | keyword:task  task:step  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 79 | task step(flex& n: int)
+    | keyword:task  task:step  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
  80 |     n = n + 2
     | parameter:n  operator:=  parameter:n  operator:+  number:2
  81 | fi
     | keyword:fi
  83 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 84 |     hold count = 1
-    | keyword:hold  variable:count  operator:=  number:1
- 85 |     bind f = bump
-    | keyword:bind  variable:f  operator:=  task:bump
+ 84 |     flex count = 1
+    | keyword:flex  variable:count  operator:=  number:1
+ 85 |     fixed f = bump
+    | keyword:fixed  variable:f  operator:=  task:bump
  86 |     f(&count)
     | variable:f  punctuation:(  operator:&  variable:count  punctuation:)
  87 |     show(count, " ", f)
@@ -148,32 +148,32 @@
     | task:twice  punctuation:(  task:bump  punctuation:,  operator:&  variable:count  punctuation:)
  89 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
- 90 |     bind p = Point { x: 2, y: 3 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:,  field:y  punctuation::  number:3  punctuation:}
- 91 |     bind t = total
-    | keyword:bind  variable:t  operator:=  task:total
+ 90 |     fixed p = Point { x: 2, y: 3 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:,  field:y  punctuation::  number:3  punctuation:}
+ 91 |     fixed t = total
+    | keyword:fixed  variable:t  operator:=  task:total
  92 |     show(t(&p), " ", t)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:(  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:)
  93 |     region kept
     | keyword:region  region:kept
- 94 |     bind g = squares
-    | keyword:bind  variable:g  operator:=  task:squares
+ 94 |     fixed g = squares
+    | keyword:fixed  variable:g  operator:=  task:squares
  95 |     show(g(kept, 4), " ", g)
     | builtin-fn:show  punctuation:(  variable:g  punctuation:(  region:kept  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:g  punctuation:)
- 96 |     bind l = label
-    | keyword:bind  variable:l  operator:=  task:label
+ 96 |     fixed l = label
+    | keyword:fixed  variable:l  operator:=  task:label
  97 |     show(l(7, kept), " ", l)
     | builtin-fn:show  punctuation:(  variable:l  punctuation:(  number:7  punctuation:,  region:kept  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:l  punctuation:)
- 98 |     hold c = Counter { count: 0, step: step }
-    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  field:count  punctuation::  number:0  punctuation:,  field:step  punctuation::  task:step  punctuation:}
+ 98 |     flex c = Counter { count: 0, step: step }
+    | keyword:flex  variable:c  operator:=  type:Counter  punctuation:{  field:count  punctuation::  number:0  punctuation:,  field:step  punctuation::  task:step  punctuation:}
  99 |     c.step(&c.count)
     | variable:c  punctuation:.  field:step  punctuation:(  operator:&  variable:c  punctuation:.  field:count  punctuation:)
 100 |     show(c.count)
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:count  punctuation:)
 101 |     ; Lambdas take places and regions too.
     | comment:; Lambdas take places and regions too.
-102 |     bind doubled = (hold& v: int) -> nothing
-    | keyword:bind  variable:doubled  operator:=  punctuation:(  keyword:hold  keyword:&  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+102 |     fixed doubled = (flex& v: int) -> nothing
+    | keyword:fixed  variable:doubled  operator:=  punctuation:(  keyword:flex  keyword:&  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
 103 |         v = v * 2
     | parameter:v  operator:=  parameter:v  operator:*  number:2
 104 |     fi
@@ -182,10 +182,10 @@
     | variable:doubled  punctuation:(  operator:&  variable:count  punctuation:)
 106 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
-107 |     bind single = (r: region default, n: int) -> [int]@r
-    | keyword:bind  variable:single  operator:=  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
-108 |         hold xs = new [int]()
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)
+107 |     fixed single = (r: region default, n: int) -> [int]@r
+    | keyword:fixed  variable:single  operator:=  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+108 |         flex xs = new [int]()
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)
 109 |         xs.add(n)
     | variable:xs  punctuation:.  field:add  punctuation:(  parameter:n  punctuation:)
 110 |         <- xs
@@ -194,16 +194,16 @@
     | keyword:fi
 112 |     show(single(kept, 9))
     | builtin-fn:show  punctuation:(  variable:single  punctuation:(  region:kept  punctuation:,  number:9  punctuation:)  punctuation:)
-113 |     hold k = 3
-    | keyword:hold  variable:k  operator:=  number:3
+113 |     flex k = 3
+    | keyword:flex  variable:k  operator:=  number:3
 114 |     show(put(&k), " ", k)
     | builtin-fn:show  punctuation:(  task:put  punctuation:(  operator:&  variable:k  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:k  punctuation:)
-115 |     bind q = put
-    | keyword:bind  variable:q  operator:=  task:put
+115 |     fixed q = put
+    | keyword:fixed  variable:q  operator:=  task:put
 116 |     show(q(&k), " ", k)
     | builtin-fn:show  punctuation:(  variable:q  punctuation:(  operator:&  variable:k  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:k  punctuation:)
-117 |     bind h = cubes
-    | keyword:bind  variable:h  operator:=  task:cubes
+117 |     fixed h = cubes
+    | keyword:fixed  variable:h  operator:=  task:cubes
 118 |     show(h(kept, 3))
     | builtin-fn:show  punctuation:(  variable:h  punctuation:(  region:kept  punctuation:,  number:3  punctuation:)  punctuation:)
 119 | fi

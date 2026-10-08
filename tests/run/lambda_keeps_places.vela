@@ -1,6 +1,6 @@
-; warning: 53:30: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
+; warning: 53:31: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
 ; Lambdas that keep variables as places, named in their list beside the region:
-; hold& changes the variable itself, bind& reads it where it is with no copy.
+; flex& changes the variable itself, fixed& reads it where it is with no copy.
 ; The region is declared after the variable, so the lambda ends first.
 task each_of(xs: [int#3], f: [@r](int) -> nothing)
     each x in xs
@@ -8,36 +8,36 @@ task each_of(xs: [int#3], f: [@r](int) -> nothing)
     fi
 fi
 
-task total_into(hold& sum: int, xs: [int#3])
+task total_into(flex& sum: int, xs: [int#3])
     region r
-    each_of(xs, [hold& sum, @r](x: int) -> nothing sum = sum + x fi)
+    each_of(xs, [flex& sum, @r](x: int) -> nothing sum = sum + x fi)
 fi
 
 task main()
-    hold count = 0
-    bind big = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    flex count = 0
+    fixed big = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     region r
-    bind add = [hold& count, @r](n: int) -> nothing
+    fixed add = [flex& count, @r](n: int) -> nothing
         count = count + n
     fi
-    bind look = [bind& big, @r](k: int) -> int <- big[k] fi
+    fixed look = [fixed& big, @r](k: int) -> int <- big[k] fi
     add(5)
     add(look(9))
     show(count)
-    hold total = 0
+    flex total = 0
     total_into(&total, [1, 2, 3])
     show(total)
-    hold items = new [int]() at r
-    hold steps = 0
+    flex items = new [int]() at r
+    flex steps = 0
     region s
     ; A slice kept as a place grows itself, in its own region.
-    bind push = [hold& items, @s](v: int) -> nothing items.add(v) fi
+    fixed push = [flex& items, @s](v: int) -> nothing items.add(v) fi
     push(4)
     push(5)
     show(items)
-    bind outer = [hold& steps, @s]() -> int
+    fixed outer = [flex& steps, @s]() -> int
         region q
-        bind inner = [hold& steps, @q]() -> nothing steps = steps + 10 fi
+        fixed inner = [flex& steps, @q]() -> nothing steps = steps + 10 fi
         inner()
         steps = steps + 1
         <- steps
@@ -47,10 +47,10 @@ task main()
 fi
 
 task spare()
-    hold n = 1
-    hold m = 2
+    flex n = 1
+    flex m = 2
     region r
-    bind f = [hold& n, hold& m, @r]() -> nothing n = 2 fi
+    fixed f = [flex& n, flex& m, @r]() -> nothing n = 2 fi
     f()
     show(n, " ", m)
 fi

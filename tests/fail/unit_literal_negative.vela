@@ -1,5 +1,5 @@
-; error: 3:26: -1 doesn't fit in a unit, which holds 0 to 255
+; error: 3:27: -1 doesn't fit in a unit, which holds 0 to 255
 task main()
-    bind m: maybe unit = -1
+    fixed m: maybe unit = -1
     show(m)
 fi

@@ -34,8 +34,8 @@
     | keyword:fi
  21 | task check(reading: maybe int) -> int ~ ReadingError
     | keyword:task  task:check  punctuation:(  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadingError
- 22 |     bind value = reading { <- fail Missing }
-    | keyword:bind  variable:value  operator:=  parameter:reading  punctuation:{  keyword:<-  keyword:fail  variant:Missing  punctuation:}
+ 22 |     fixed value = reading { <- fail Missing }
+    | keyword:fixed  variable:value  operator:=  parameter:reading  punctuation:{  keyword:<-  keyword:fail  variant:Missing  punctuation:}
  23 |     ; Alternatives, so one chain: the first condition that holds sends.
     | comment:; Alternatives, so one chain: the first condition that holds sends.
  24 |     when value < -50
@@ -52,14 +52,14 @@
     | keyword:<-  variable:value
  30 | fi
     | keyword:fi
- 32 | ; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
-    | comment:; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+ 32 | ; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `flex&`
+    | comment:; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `flex&`
  33 | ; makes `sum` the caller's own variable, which the call gives as `&total`.
     | comment:; makes `sum` the caller's own variable, which the call gives as `&total`.
- 34 | task add_reading(hold& sum: int, reading: maybe int) -> nothing ~ ReadingError
-    | keyword:task  task:add_reading  punctuation:(  keyword:hold  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:ReadingError
- 35 |     bind value = check(reading) {
-    | keyword:bind  variable:value  operator:=  task:check  punctuation:(  parameter:reading  punctuation:)  punctuation:{
+ 34 | task add_reading(flex& sum: int, reading: maybe int) -> nothing ~ ReadingError
+    | keyword:task  task:add_reading  punctuation:(  keyword:flex  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:ReadingError
+ 35 |     fixed value = check(reading) {
+    | keyword:fixed  variable:value  operator:=  task:check  punctuation:(  parameter:reading  punctuation:)  punctuation:{
  36 |         failure problem
     | keyword:failure  variable:problem
  37 |         <- fail problem
@@ -98,8 +98,8 @@
     | comment:; A plan B gives the value to use instead; `fail e` names the error.
  57 |     show(check(none) { 0 })
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  keyword:none  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 58 |     bind lowest = check(-80) {
-    | keyword:bind  variable:lowest  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{
+ 58 |     fixed lowest = check(-80) {
+    | keyword:fixed  variable:lowest  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{
  59 |         failure problem
     | keyword:failure  variable:problem
  60 |         show(problem)
@@ -112,8 +112,8 @@
     | builtin-fn:show  punctuation:(  variable:lowest  punctuation:)
  65 |     ; An error can't be ignored by accident: an empty plan B ignores it on purpose.
     | comment:; An error can't be ignored by accident: an empty plan B ignores it on purpose.
- 66 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+ 66 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
  67 |     add_reading(&total, 10) { }
     | task:add_reading  punctuation:(  operator:&  variable:total  punctuation:,  number:10  punctuation:)  punctuation:{  punctuation:}
  68 |     add_reading(&total, 70) {
@@ -132,10 +132,10 @@
     | comment:; A plan B giving none keeps the value when there is one: a maybe, which
  76 |     ; `~=` compares with a plain value, false when it is empty.
     | comment:; `~=` compares with a plain value, false when it is empty.
- 77 |     bind kept = check(-80) { none }
-    | keyword:bind  variable:kept  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{  keyword:none  punctuation:}
- 78 |     bind fine = check(30) { none }
-    | keyword:bind  variable:fine  operator:=  task:check  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 77 |     fixed kept = check(-80) { none }
+    | keyword:fixed  variable:kept  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 78 |     fixed fine = check(30) { none }
+    | keyword:fixed  variable:fine  operator:=  task:check  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:none  punctuation:}
  79 |     show(kept, " ", fine, " ", fine ~= 30, " ", kept ~= 30)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:,  string:" "  punctuation:,  variable:fine  punctuation:,  string:" "  punctuation:,  variable:fine  operator:~=  number:30  punctuation:,  string:" "  punctuation:,  variable:kept  operator:~=  number:30  punctuation:)
  81 |     ; An is joined with and: the value, then a test of it.

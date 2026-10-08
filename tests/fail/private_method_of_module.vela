@@ -2,6 +2,6 @@
 include modules/library
 
 task main()
-    bind card = library.card("ada")
+    fixed card = library.card("ada")
     show(card.checked())
 fi

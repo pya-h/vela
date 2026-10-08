@@ -23,7 +23,7 @@ fi
 
 $(traced)
 task squares(r: region, n: int) -> [int]@r
-    hold made = new [int]() at r
+    flex made = new [int]() at r
     each i in 1..n + 1
         made.add(i * i)
     fi
@@ -31,7 +31,7 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 $(labelled)
-task label(n: int, hold& count: int, r: region) -> text@r
+task label(n: int, flex& count: int, r: region) -> text@r
     count++
     <- "n is {n}" at r
 fi
@@ -39,7 +39,7 @@ fi
 task main()
     region kept
     show(squares(kept, 3))
-    hold c = 0
+    flex c = 0
     show(label(5, &c, kept))
     show(label(6, &c) at kept, " ", c)
     framed("(", 1, 2, 3, ")")

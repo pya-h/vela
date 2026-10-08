@@ -31,7 +31,7 @@ fi
 
 ; Ends only by sending, so the task never finishes without a value.
 task first_over(xs: [int]@r, limit: int) -> int
-    hold i = 0
+    flex i = 0
     endless
         when xs[i] > limit
             <- xs[i]
@@ -52,20 +52,20 @@ task main()
     region r
 
     ; The commas of types given part no items.
-    loop hold e = Either<int, text>.Left(3), p: Pair<int, text> = Pair { left: 1, right: "a" }, n = 0 || n < 1 || n++
+    loop flex e = Either<int, text>.Left(3), p: Pair<int, text> = Pair { left: 1, right: "a" }, n = 0 || n < 1 || n++
         show(e, " ", p.left, p.right)
     fi
 
     ; Nor do those of a lambda's call, before its 'fi' or after it.
-    loop hold v = apply((x: int) -> int <- x * 2 fi, 3), j = 0 || j < v || j = apply((x: int) -> int <- x + 2 fi, j)
+    loop flex v = apply((x: int) -> int <- x * 2 fi, 3), j = 0 || j < v || j = apply((x: int) -> int <- x + 2 fi, j)
         show("j ", j)
     fi
-    loop hold i = 0, bind twice = (x: int) -> int <- x * 2 fi || i < 3 || i++
+    loop flex i = 0, fixed twice = (x: int) -> int <- x * 2 fi || i < 3 || i++
         show("twice ", twice(i))
     fi
 
     ; A condition over several lines, and the step after its 'fi'.
-    loop hold k = 0 || match token(k)
+    loop flex k = 0 || match token(k)
     case Num n = n < 5
     case Stop = false
     fi || k++
@@ -73,7 +73,7 @@ task main()
     fi
 
     ; A slice changed in the loop, and results set in it.
-    hold b: Bag@r = Bag { items: [0, ...] at r }
+    flex b: Bag@r = Bag { items: [0, ...] at r }
     loop b.items.len < 3
         b.items.add(1)
     fi

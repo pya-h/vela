@@ -1,6 +1,6 @@
 ; error: 3:50: 'continue' goes to this loop's step, and this is its step; leave it out, or 'break' to stop the loop
 task main()
-    loop hold i = 0 || i < 3 || i++, when i == 1 continue fi
+    loop flex i = 0 || i < 3 || i++, when i == 1 continue fi
         show(i)
     fi
 fi

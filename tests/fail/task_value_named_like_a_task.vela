@@ -5,7 +5,7 @@ task sq(n: int) -> int
 fi
 
 task main()
-    bind other = sq
-    hold sq: (int) -> int = other
+    fixed other = sq
+    flex sq: (int) -> int = other
     show(sq)
 fi

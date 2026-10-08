@@ -6,7 +6,7 @@ fi
 task main()
     region r
     region s
-    bind a = new text("a") at r
-    hold p: Person@s = Person { name: "b" }
+    fixed a = new text("a") at r
+    flex p: Person@s = Person { name: "b" }
     p = Person { name: a^ }
 fi

@@ -4,6 +4,6 @@ shape Bad<T>
 fi
 
 task main()
-    bind b = Bad { inner: 1 }
+    fixed b = Bad { inner: 1 }
     show(1)
 fi

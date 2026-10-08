@@ -1,8 +1,8 @@
-; error: 7:13: a tuple's items never change, so it can't hold 'Node', which holds a pointer, a slice, or an array
+; error: 7:14: a tuple's items never change, so it can't hold 'Node', which holds a pointer, a slice, or an array
 shape Node
     next: maybe ^Node
 fi
 
 task main()
-    bind t: (Node@r, int) = (Node { next: none }, 1)
+    fixed t: (Node@r, int) = (Node { next: none }, 1)
 fi

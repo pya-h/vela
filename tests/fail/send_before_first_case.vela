@@ -4,7 +4,7 @@ kind K
 fi
 
 task main()
-    bind k = A
+    fixed k = A
     match k
     <- 0
     fi

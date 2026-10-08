@@ -9,7 +9,7 @@ task first(list: maybe ^Node@r) -> maybe ^Node@r
 fi
 
 task main()
-    bind p = first(none) {
+    fixed p = first(none) {
         region local
         new Node(Node { value: 5, next: none }) at local
     }

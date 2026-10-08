@@ -5,6 +5,6 @@ task sq(n: int) -> int
 fi
 
 task main()
-    hold m: maybe (int) -> int = sq
+    flex m: maybe (int) -> int = sq
     show(m(2))
 fi

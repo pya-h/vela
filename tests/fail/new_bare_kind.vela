@@ -1,4 +1,4 @@
-; error: 10:22: 'new' needs the value to put in the region, as in 'new Light(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'
+; error: 10:23: 'new' needs the value to put in the region, as in 'new Light(…) at r'; only a slice, a map, or a shape whose fields all fall back on values can be made empty, as in 'new [int] at r' or 'new [text: int] at r'
 ; A kind has no empty value: its values are its variants.
 kind Light
     Red
@@ -7,5 +7,5 @@ fi
 
 task main()
     region r
-    bind light = new Light at r
+    fixed light = new Light at r
 fi

@@ -13,10 +13,10 @@ task made() -> int
 fi
 task main()
     region r
-    hold p = Point { x: 1 }
-    bind n = 1
-    bind t = "abc"
-    bind ptr = new int(1) at r
-    bind m: maybe ^int@r = ptr
+    flex p = Point { x: 1 }
+    fixed n = 1
+    fixed t = "abc"
+    fixed ptr = new int(1) at r
+    fixed m: maybe ^int@r = ptr
     show(&t[0..1])
 fi

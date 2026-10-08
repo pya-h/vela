@@ -32,8 +32,8 @@
     | comment:; Runs the rest of the chain `times` times, and sends the last result.
  22 | task repeated(next: (int) -> int, times: int, n: int) -> int
     | keyword:task  task:repeated  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 23 |     hold last = 0
-    | keyword:hold  variable:last  operator:=  number:0
+ 23 |     flex last = 0
+    | keyword:flex  variable:last  operator:=  number:0
  24 |     each i in 0..times
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:times
  25 |         last = next(n + i)

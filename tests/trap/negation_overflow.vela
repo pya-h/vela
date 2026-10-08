@@ -4,7 +4,7 @@ task opposite(n: int) -> int
 fi
 
 task main()
-    bind largest = 9223372036854775807
+    fixed largest = 9223372036854775807
     show(opposite(largest))
     show(opposite(-largest - 1))
 fi

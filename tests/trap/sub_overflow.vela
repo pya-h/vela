@@ -4,7 +4,7 @@ task below(n: int, by: int) -> int
 fi
 
 task main()
-    bind smallest = -9223372036854775807 - 1
+    fixed smallest = -9223372036854775807 - 1
     show(below(smallest, -1))
     show(below(smallest, 1))
 fi

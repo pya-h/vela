@@ -1,6 +1,6 @@
-; error: 5:23: this expression has no value (its type is 'nothing')
+; error: 5:24: this expression has no value (its type is 'nothing')
 task main()
     region r
-    hold xs = new [int]() at r
-    bind nothing = xs.add(1)
+    flex xs = new [int]() at r
+    fixed nothing = xs.add(1)
 fi

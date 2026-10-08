@@ -38,16 +38,16 @@
     | keyword:fi
  23 | $(audited)
     | keyword:$  punctuation:(  task:audited  punctuation:)
- 24 | task deposit(hold& balance: int, amount: int)
-    | keyword:task  task:deposit  punctuation:(  keyword:hold  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)
+ 24 | task deposit(flex& balance: int, amount: int)
+    | keyword:task  task:deposit  punctuation:(  keyword:flex  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)
  25 |     balance += amount
     | parameter:balance  operator:+=  parameter:amount
  26 | fi
     | keyword:fi
  28 | $(audited)
     | keyword:$  punctuation:(  task:audited  punctuation:)
- 29 | task withdraw(hold& balance: int, amount: int) -> bool
-    | keyword:task  task:withdraw  punctuation:(  keyword:hold  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 29 | task withdraw(flex& balance: int, amount: int) -> bool
+    | keyword:task  task:withdraw  punctuation:(  keyword:flex  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
  30 |     when amount > balance
     | keyword:when  parameter:amount  operator:>  parameter:balance
  31 |         <- false
@@ -78,8 +78,8 @@
     | keyword:fi
  47 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 48 |     hold balance = 0
-    | keyword:hold  variable:balance  operator:=  number:0
+ 48 |     flex balance = 0
+    | keyword:flex  variable:balance  operator:=  number:0
  49 |     deposit(&balance, 500)
     | task:deposit  punctuation:(  operator:&  variable:balance  punctuation:,  number:500  punctuation:)
  50 |     when not withdraw(&balance, 900)
@@ -88,8 +88,8 @@
     | builtin-fn:show  punctuation:(  string:"refused: only "  punctuation:,  variable:balance  punctuation:)
  52 |     fi
     | keyword:fi
- 53 |     bind cost = fee(250)
-    | keyword:bind  variable:cost  operator:=  task:fee  punctuation:(  number:250  punctuation:)
+ 53 |     fixed cost = fee(250)
+    | keyword:fixed  variable:cost  operator:=  task:fee  punctuation:(  number:250  punctuation:)
  54 |     deposit(&balance, 0 - cost)
     | task:deposit  punctuation:(  operator:&  variable:balance  punctuation:,  number:0  operator:-  variable:cost  punctuation:)
  55 |     region page

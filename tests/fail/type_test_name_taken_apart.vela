@@ -1,8 +1,8 @@
 ; error: 6:35: the read is a maybe, so one name takes it; to take the item apart, write it in braces, as in 'is maybe (int, text) {(a, b)}'
 ; The read is a maybe, so one name takes it.
 task main()
-    bind t = (1, 2)
-    bind n = 3
+    fixed t = (1, 2)
+    fixed n = 3
     when t.#0 is maybe (int, int) (a, b)
         show(1)
     fi

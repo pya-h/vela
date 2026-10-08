@@ -48,51 +48,51 @@ fi
 task main()
     region r
     ; A shape: one place, a copy, and a reference to the first.
-    hold p = Point { x: 1, y: 2 }
-    bind q = p
-    hold& also = &p
+    flex p = Point { x: 1, y: 2 }
+    fixed q = p
+    flex& also = &p
     show(p == p, " ", p == q, " ", p == also, " ", p != q)
     show(p ~= q, " ", p <> q, " ", p ~= Point { x: 1, y: 2 }, " ", p ~= Point { x: 1, y: 2, note: "m" })
     ; Tuples and arrays, nested too.
-    bind t = (1, "a")
-    bind u = (1, "a")
+    fixed t = (1, "a")
+    fixed u = (1, "a")
     show(t == t, " ", t == u, " ", t ~= u, " ", t <> (1, "b"))
-    bind xs = [1, 2]
-    bind ys = [1, 2]
+    fixed xs = [1, 2]
+    fixed ys = [1, 2]
     show(xs == ys, " ", xs ~= ys, " ", [[1, 2], [3, 4]] ~= [[1, 2], [3, 4]], " ", [[1, 2], [3, 4]] <> [[1, 2], [3, 5]])
     ; A slice by its view: the same items, and as many of them.
-    bind s = new [int]([1, 2, 3]) at r
-    bind view = s
-    bind copied = new [int](s) at r
+    fixed s = new [int]([1, 2, 3]) at r
+    fixed view = s
+    fixed copied = new [int](s) at r
     show(s == view, " ", s == copied, " ", s[0..2] == s[0..2], " ", s[0..2] == s[0..3], " ", s ~= copied, " ", s[1..3] ~= copied[1..3])
     ; A kind by value, what it carries by its own rule.
-    bind loud = Mood.Loud(1, "x")
+    fixed loud = Mood.Loud(1, "x")
     show(loud == Mood.Loud(1, "x"), " ", loud == Mood.Calm, " ", Mood.Calm == Mood.Calm, " ", loud != Mood.Loud(2, "x"))
-    bind h1: Held@r = Held.Pair(p)
-    bind h2: Held@r = h1
+    fixed h1: Held@r = Held.Pair(p)
+    fixed h2: Held@r = h1
     show(h1 == h1, " ", h1 == h2, " ", h1 ~= h2, " ", Listed.Nums(s) ~= Listed.Nums(copied))
-    bind c1: Held@r = Held.Count(4)
-    bind c2: Held@r = Held.Count(4)
+    fixed c1: Held@r = Held.Count(4)
+    fixed c2: Held@r = Held.Count(4)
     show(Listed.Nums(s) == Listed.Nums(view), " ", Listed.Nums(s) == Listed.Nums(copied), " ", Listed.Tally(4) == Listed.Tally(4), " ", c1 == c2, " ", c1 ~= c2, " ", Held.Empty ~= Held.Empty)
     ; A maybe: similar when both are empty or both hold similar values.
-    bind some: maybe int = 3
-    bind nothing: maybe int = none
+    fixed some: maybe int = 3
+    fixed nothing: maybe int = none
     show(some ~= nothing, " ", nothing ~= none, " ", none ~= nothing, " ", some <> none)
     ; A pointer by the address it holds, what it points to by its own rule.
-    bind first = new int(1) at r
-    bind second = new int(1) at r
+    fixed first = new int(1) at r
+    fixed second = new int(1) at r
     show(first ~= second, " ", first^ ~= second^, " ", "ab" ~= "ab", " ", 1.5 <> 2.5)
     ; In a task that takes types, each by its own rule. A small parameter is
     ; a copy, a place of its own, so two shapes given to 'same' are never one
     ; place; 'alike' compares their items.
     show(same(p, q), " ", same(p, also), " ", same(3, 3), " ", alike(p, q), " ", alike([t, u], [u, t]))
     ; A kind carrying a maybe of a shape, and maybes tested for none.
-    bind slot = Slot.Filled(p)
-    bind moods: maybe Mood = none
-    bind views: maybe [int]@r = none
+    fixed slot = Slot.Filled(p)
+    fixed moods: maybe Mood = none
+    fixed views: maybe [int]@r = none
     show(slot == slot, " ", slot ~= Slot.Filled(q), " ", moods == none, " ", views != none)
     ; A value compared with itself, which C would call always true.
-    bind n = 4
-    bind f = 0.5
+    fixed n = 4
+    fixed f = 0.5
     show(n == n, " ", n ~= n, " ", f == f, " ", n < n, " ", first == first, " ", first ~= first, " ", &n == &n, " ", xs == xs)
 fi

@@ -40,12 +40,12 @@
     | keyword:fi
  25 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 26 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+ 26 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
  27 |     block
     | keyword:block
- 28 |         hold step = 2
-    | keyword:hold  variable:step  operator:=  number:2
+ 28 |         flex step = 2
+    | keyword:flex  variable:step  operator:=  number:2
  29 |         total = total + step
     | variable:total  operator:=  variable:total  operator:+  variable:step
  30 |     fi
@@ -54,16 +54,16 @@
     | comment:; Another block may use the same name for something else.
  32 |     block
     | keyword:block
- 33 |         bind step = "three"
-    | keyword:bind  variable:step  operator:=  string:"three"
+ 33 |         fixed step = "three"
+    | keyword:fixed  variable:step  operator:=  string:"three"
  34 |         total = total + step.len
     | variable:total  operator:=  variable:total  operator:+  variable:step  punctuation:.  field:len
  35 |     fi
     | keyword:fi
  36 |     show(total, " ", sign(-3), " ", sign(4))
     | builtin-fn:show  punctuation:(  variable:total  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  operator:-  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:4  punctuation:)  punctuation:)
- 37 |     bind half, rest = halves(7)
-    | keyword:bind  variable:half  punctuation:,  variable:rest  operator:=  task:halves  punctuation:(  number:7  punctuation:)
+ 37 |     fixed half, rest = halves(7)
+    | keyword:fixed  variable:half  punctuation:,  variable:rest  operator:=  task:halves  punctuation:(  number:7  punctuation:)
  38 |     show(half, " ", rest)
     | builtin-fn:show  punctuation:(  variable:half  punctuation:,  string:" "  punctuation:,  variable:rest  punctuation:)
  40 |     ; Blocks nest, each with a default region of its own, and one in a loop
@@ -76,14 +76,14 @@
     | keyword:block
  44 |             region r default
     | keyword:region  region:r  keyword:default
- 45 |             bind kept = new int(i * 10)
-    | keyword:bind  variable:kept  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  operator:*  number:10  punctuation:)
+ 45 |             fixed kept = new int(i * 10)
+    | keyword:fixed  variable:kept  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  operator:*  number:10  punctuation:)
  46 |             block
     | keyword:block
  47 |                 region inner default
     | keyword:region  region:inner  keyword:default
- 48 |                 bind more = new int(kept^ + 1)
-    | keyword:bind  variable:more  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:kept  operator:^  operator:+  number:1  punctuation:)
+ 48 |                 fixed more = new int(kept^ + 1)
+    | keyword:fixed  variable:more  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:kept  operator:^  operator:+  number:1  punctuation:)
  49 |                 total = total + more^
     | variable:total  operator:=  variable:total  operator:+  variable:more  operator:^
  50 |             fi
@@ -98,8 +98,8 @@
     | comment:; A reference made in a block names its place until the block ends.
  56 |     block
     | keyword:block
- 57 |         hold& t = &total
-    | keyword:hold  keyword:&  variable:t  operator:=  operator:&  variable:total
+ 57 |         flex& t = &total
+    | keyword:flex  keyword:&  variable:t  operator:=  operator:&  variable:total
  58 |         t = 0
     | variable:t  operator:=  number:0
  59 |     fi
@@ -108,8 +108,8 @@
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
  62 |     ; A file opened in a block's region is closed at its fi.
     | comment:; A file opened in a block's region is closed at its fi.
- 63 |     hold notes = File { path: "notes.txt" }
-    | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 63 |     flex notes = File { path: "notes.txt" }
+    | keyword:flex  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  64 |     block
     | keyword:block
  65 |         region r
@@ -128,8 +128,8 @@
     | keyword:fi
  72 |     region later
     | keyword:region  region:later
- 73 |     bind after = notes.line() at later { failure e
-    | keyword:bind  variable:after  operator:=  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:later  punctuation:{  keyword:failure  variable:e
+ 73 |     fixed after = notes.line() at later { failure e
+    | keyword:fixed  variable:after  operator:=  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:later  punctuation:{  keyword:failure  variable:e
  74 |         show("closed at the block's fi")
     | builtin-fn:show  punctuation:(  string:"closed at the block's fi"  punctuation:)
  75 |         none

@@ -1,6 +1,6 @@
-; error: 3:14: a loop that never ends by itself gives no value, since no pass of it is the final one; give it a condition, as in 'loop i < n', and stop it early with 'break = v'
+; error: 3:15: a loop that never ends by itself gives no value, since no pass of it is the final one; give it a condition, as in 'loop i < n', and stop it early with 'break = v'
 task main()
-    bind r = endless
+    fixed r = endless
         break = 1
         2
     fi

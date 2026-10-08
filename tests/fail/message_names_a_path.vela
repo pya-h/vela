@@ -1,6 +1,6 @@
-; error: 5:23: expected type int, got modules/library.Card
+; error: 5:24: expected type int, got modules/library.Card
 include modules/library {card}
 
 task main()
-    bind count: int = card("ada")
+    fixed count: int = card("ada")
 fi

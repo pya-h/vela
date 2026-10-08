@@ -9,6 +9,6 @@ shape Box
 fi
 
 task main()
-    bind b = Box {}
+    fixed b = Box {}
     show(b.grown())
 fi

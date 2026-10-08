@@ -6,8 +6,8 @@ task half(n: int) -> maybe int
     <- none
 fi
 task main()
-    bind m = half(4)
-    bind n = half(6)
+    fixed m = half(4)
+    fixed n = half(6)
     when m is {x} and x
         show(x)
     fi

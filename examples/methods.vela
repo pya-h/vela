@@ -1,7 +1,7 @@
 ; Methods of a shape: written in its block below its fields, and called on a
 ; value. Inside one, `.balance` is a field of the value it is called on and
 ; `.note()` another of its methods. A method that changes the value says
-; `alters`, and only a place that can change may call it: here a `hold`
+; `alters`, and only a place that can change may call it: here a `flex`
 ; variable, and an item of a slice.
 
 ; A kind has methods too, which read the value as `.this`. A method named `str`
@@ -97,7 +97,7 @@ task report(result: nothing ~ Refusal)
 fi
 
 task main()
-    hold ada = Account { owner: "Ada" }
+    flex ada = Account { owner: "Ada" }
     ada.deposit(100)
     report(ada.withdraw(30))
     report(ada.withdraw(500))
@@ -108,20 +108,20 @@ task main()
 
     ; A reference is another name for an account: its alters methods change
     ; the account it names.
-    hold bob = Account.new("Bob")
-    hold& current = &bob
+    flex bob = Account.new("Bob")
+    flex& current = &bob
     current.deposit(20)
     show(bob)
 
     ; An item of a slice is a place that can change.
     region bank
-    hold accounts = new [Account]() at bank
+    flex accounts = new [Account]() at bank
     accounts.add(Account { owner: "Grace", balance: 5 })
     accounts[0].deposit(10)
     show(accounts[0])
     show("deposits: ", Account.deposits)
 
-    hold best = Best { value: 3 }
+    flex best = Best { value: 3 }
     each n in [7, 2, 9, 4]
         best.offer(n)
     fi

@@ -22,18 +22,18 @@
     | keyword:fi
  16 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 17 |     bind sum = add(3, 4)
-    | keyword:bind  variable:sum  operator:=  task:add  punctuation:(  number:3  punctuation:,  number:4  punctuation:)
+ 17 |     fixed sum = add(3, 4)
+    | keyword:fixed  variable:sum  operator:=  task:add  punctuation:(  number:3  punctuation:,  number:4  punctuation:)
  18 |     show(sum)
     | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
- 20 |     bind p = Point { x: 10, y: 20 }
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
+ 20 |     fixed p = Point { x: 10, y: 20 }
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
  21 |     show(p.x)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:)
  22 |     show(manhattan(p))
     | builtin-fn:show  punctuation:(  task:manhattan  punctuation:(  variable:p  punctuation:)  punctuation:)
- 24 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 24 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  25 |     loop i < 5
     | keyword:loop  variable:i  operator:<  number:5
  26 |         show(i)
@@ -60,8 +60,8 @@
     | keyword:fi
  40 |     region numbers
     | keyword:region  region:numbers
- 41 |     bind ptr: ^int@numbers = new int(42) at numbers
-    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:numbers
+ 41 |     fixed ptr: ^int@numbers = new int(42) at numbers
+    | keyword:fixed  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:numbers
  42 |     ; Text holding values is new text, so it goes in a region too.
     | comment:; Text holding values is new text, so it goes in a region too.
  43 |     show("the answer is {ptr^}" at numbers)

@@ -1,9 +1,9 @@
-; error: 7:17: 'divmod' sends 2 values; receive them with 'bind a, b = …'
+; error: 7:18: 'divmod' sends 2 values; receive them with 'bind a, b = …'
 task divmod(a: int, b: int) -> int, int
     <- a / b, a % b
 fi
 
 task main()
-    bind pair = divmod(17, 5)
+    fixed pair = divmod(17, 5)
     show(pair)
 fi

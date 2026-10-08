@@ -20,13 +20,13 @@ fi
 task main()
     FIRST
     region r default
-    bind a = new [text]
-    bind b = new [text: int] at r
-    bind c = new@r [int]
-    bind p = new Point
-    bind q = new Point at r
-    bind made = new [text: int]() at r
-    bind names = new@r [:int]()
+    fixed a = new [text]
+    fixed b = new [text: int] at r
+    fixed c = new@r [int]
+    fixed p = new Point
+    fixed q = new Point at r
+    fixed made = new [text: int]() at r
+    fixed names = new@r [:int]()
     show(a.len, b.len, c.len, p^.x, q^.x, made.len, names.len)
     @@
 fi
@@ -34,7 +34,7 @@ fi
 
 /// The first lines `main` may start with: one that checks, one that stops
 /// the checker, and one that stops the parser.
-const FIRSTS: [&str; 3] = ["show(0)", "show(unknown)", "bind = ="];
+const FIRSTS: [&str; 3] = ["show(0)", "show(unknown)", "fixed = ="];
 
 fn program(first: &str, code: &str) -> String {
     PROGRAM.replace("FIRST", first).replace("@@", code)
@@ -78,15 +78,15 @@ fn hover_shows_what_a_new_without_parentheses_makes() {
 #[test]
 fn completion_offers_the_region_after_a_new_without_parentheses() {
     for first in FIRSTS {
-        for code in ["bind z = new [int] @@", "bind z = new Point @@", "bind z = new [text: int] @@", "bind z = new Box<int> @@", "bind z = new [:int]() @@"] {
+        for code in ["fixed z = new [int] @@", "fixed z = new Point @@", "fixed z = new [text: int] @@", "fixed z = new Box<int> @@", "fixed z = new [:int]() @@"] {
             let items = labels(&program(first, code));
             assert!(items.contains(&"at".to_string()), "{} in {:?} ({})", code, items, first);
             // Not the `~` that goes on a written type: a `new` makes no error.
             assert!(!items.contains(&"~".to_string()), "{} in {:?} ({})", code, items, first);
         }
-        assert_eq!(labels(&program(first, "bind z = new [int] at @@")), ["r"], "{}", first);
+        assert_eq!(labels(&program(first, "fixed z = new [int] at @@")), ["r"], "{}", first);
         // A region named already, after the type or after `new@`.
-        for code in ["bind z = new Point at r @@", "bind z = new@r [int] @@"] {
+        for code in ["fixed z = new Point at r @@", "fixed z = new@r [int] @@"] {
             assert!(!labels(&program(first, code)).contains(&"at".to_string()), "{} ({})", code, first);
         }
         // A value after a `new` in a list is a value of its own.

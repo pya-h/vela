@@ -19,21 +19,21 @@ task main()
     show("✓".len)
     show("ab\0cd".len)
     show("tab\there".len)
-    bind person = Person { name: "Grace" }
+    fixed person = Person { name: "Grace" }
     show(person.name.len)
     show(longer("Ada", "Grace"))
     region r
-    bind line = ("Lovelace".copy() at r)
+    fixed line = ("Lovelace".copy() at r)
     show(line.len)
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add("x")
     names.add("yz")
-    hold total = 0
+    flex total = 0
     each name in names
         total = total + name.len
     fi
     show(total)
-    bind maybe_name: maybe text = "Hopper"
+    fixed maybe_name: maybe text = "Hopper"
     when maybe_name is {found}
         show(found.len)
     fi

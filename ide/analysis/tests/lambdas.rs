@@ -14,13 +14,13 @@ fi
 
 task main()
     CHECK
-    bind double = (x: int) -> int <- x * 2 fi
-    bind squared = apply((n: int) -> int
-        bind kept = n
+    fixed double = (x: int) -> int <- x * 2 fi
+    fixed squared = apply((n: int) -> int
+        fixed kept = n
         <- kept * n
     fi, 3)
-    bind say = (t: text) -> nothing show(t) fi
-    bind after = double(4)
+    fixed say = (t: text) -> nothing show(t) fi
+    fixed after = double(4)
     show(double, squared, after)
     say(\"hi\")
 fi
@@ -114,7 +114,7 @@ shape Box
     fi
 
     get() -> int
-        hold t: (() -> int, int) = (one, 1)
+        flex t: (() -> int, int) = (one, 1)
         <- .v
     fi
 
@@ -128,7 +128,7 @@ task both() -> int, () -> int
 fi
 
 task main()
-    bind b = Box { v: 2 }
+    fixed b = Box { v: 2 }
     show(b.get(), b.last())
 fi
 ";

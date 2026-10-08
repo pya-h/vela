@@ -1,9 +1,9 @@
-; error: 7:20: shape 'Point' takes no types, so '< … >' has nothing to name; write 'int' alone
+; error: 7:21: shape 'Point' takes no types, so '< … >' has nothing to name; write 'int' alone
 shape Point
     x: int
 fi
 
 task main()
-    bind p = Point<int> { x: 1 }
+    fixed p = Point<int> { x: 1 }
     show(p.x)
 fi

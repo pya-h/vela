@@ -60,12 +60,12 @@
     | builtin-fn:show  punctuation:(  task:biggest  punctuation:(  number:3  punctuation:,  number:9  punctuation:)  punctuation:)
  34 |     region r
     | keyword:region  region:r
- 35 |     bind read = "kiwi".copy() at r
-    | keyword:bind  variable:read  operator:=  string:"kiwi"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 35 |     fixed read = "kiwi".copy() at r
+    | keyword:fixed  variable:read  operator:=  string:"kiwi"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  36 |     show(read > "kiwano")
     | builtin-fn:show  punctuation:(  variable:read  operator:>  string:"kiwano"  punctuation:)
- 37 |     hold best = Best { value: "m" }
-    | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  string:"m"  punctuation:}
+ 37 |     flex best = Best { value: "m" }
+    | keyword:flex  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  string:"m"  punctuation:}
  38 |     best.offer("x")
     | variable:best  punctuation:.  method:offer  punctuation:(  string:"x"  punctuation:)
  39 |     best.offer("c")

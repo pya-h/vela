@@ -8,6 +8,6 @@ shape Line
 fi
 
 task main()
-    bind line = Line { from: Point { x: 1 } }
+    fixed line = Line { from: Point { x: 1 } }
     line.from.x = 5
 fi

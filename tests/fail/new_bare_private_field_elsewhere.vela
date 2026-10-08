@@ -1,9 +1,9 @@
-; error: 8:18: 'Pin' can't be built outside its file, since its field 'code' is private and falls back on no value; a task of its module can build it, or that field can name the value it falls back on
+; error: 8:19: 'Pin' can't be built outside its file, since its field 'code' is private and falls back on no value; a task of its module can build it, or that field can name the value it falls back on
 ; A shape whose private field falls back on no value is built only in its own
 ; file, with or without '( )'.
 include modules/pinned (Pin)
 
 task main()
     region r
-    bind p = new Pin at r
+    fixed p = new Pin at r
 fi

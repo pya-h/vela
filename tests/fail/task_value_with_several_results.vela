@@ -1,10 +1,10 @@
-; error: 8:14: task 'two' sends several values, so it can't be a value yet; a task value sends one value or nothing
+; error: 8:15: task 'two' sends several values, so it can't be a value yet; a task value sends one value or nothing
 ; A task that sends several values can't be a value yet.
 task two() -> int, int
     <- 1, 2
 fi
 
 task main()
-    bind f = two
+    fixed f = two
     show(f)
 fi

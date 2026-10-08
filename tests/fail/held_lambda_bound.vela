@@ -1,9 +1,9 @@
-; error: 6:10: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is held in a 'hold' variable: 'hold f = …'
-; A [hold @r] lambda is held in a hold variable.
+; error: 6:11: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is held in a 'hold' variable: 'hold f = …'
+; A [flex @r] lambda is held in a flex variable.
 task main()
     region r
-    hold n = 0
-    bind f = [hold @r]() -> int
+    flex n = 0
+    fixed f = [flex @r]() -> int
         n = n + 1
         <- n
     fi

@@ -1,6 +1,6 @@
-; error: 4:37: unknown variable 'zz'
+; error: 4:38: unknown variable 'zz'
 ; A name no code has is unknown, in a lambda too.
 task main()
-    bind f = (x: int) -> int <- x + zz fi
+    fixed f = (x: int) -> int <- x + zz fi
     show(f(1))
 fi

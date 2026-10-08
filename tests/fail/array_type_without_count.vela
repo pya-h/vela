@@ -1,4 +1,4 @@
-; error: 3:21: expected '#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r', got integer 3
+; error: 3:22: expected '#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r', got integer 3
 task main()
-    bind days: [int 3] = [1, 2, 3]
+    fixed days: [int 3] = [1, 2, 3]
 fi

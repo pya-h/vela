@@ -2,7 +2,7 @@
 ; A call of a task held as a value may reach any task named as a value where the program starts, a shared field's
 ; first value among them, so this value may call its own task.
 shape Hooks
-    shared hold run: (int) -> int = sq
+    shared flex run: (int) -> int = sq
 fi
 
 task logged(next: (int) -> int, label: text, n: int) -> int

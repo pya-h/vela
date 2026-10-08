@@ -180,14 +180,14 @@
     | task:area  punctuation:(  type:Spot  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:,  string:"one"  punctuation:)
 110 |     show(pick([4, 5, ...]) { 0 }, " ", pick([4, 5, ...], 9) { 0 }, " ", pick([4, 5, ...], 9, 6) { 0 })
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:,  number:9  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:,  number:9  punctuation:,  number:6  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
-111 |     bind c = Counter.starting()
-    | keyword:bind  variable:c  operator:=  type:Counter  punctuation:.  method:starting  punctuation:(  punctuation:)
+111 |     fixed c = Counter.starting()
+    | keyword:fixed  variable:c  operator:=  type:Counter  punctuation:.  method:starting  punctuation:(  punctuation:)
 112 |     show(c.n, " ", c.bumped().n, " ", c.bumped(5).n, " ", Counter.starting(3).bumped().n)
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:bumped  punctuation:(  punctuation:)  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:bumped  punctuation:(  number:5  punctuation:)  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  type:Counter  punctuation:.  method:starting  punctuation:(  number:3  punctuation:)  punctuation:.  method:bumped  punctuation:(  punctuation:)  punctuation:.  field:n  punctuation:)
-113 |     bind small = square()
-    | keyword:bind  variable:small  operator:=  task:square  punctuation:(  punctuation:)
-114 |     bind big = square(4)
-    | keyword:bind  variable:big  operator:=  task:square  punctuation:(  number:4  punctuation:)
+113 |     fixed small = square()
+    | keyword:fixed  variable:small  operator:=  task:square  punctuation:(  punctuation:)
+114 |     fixed big = square(4)
+    | keyword:fixed  variable:big  operator:=  task:square  punctuation:(  number:4  punctuation:)
 115 |     show(small, " ", big)
     | builtin-fn:show  punctuation:(  variable:small  punctuation:,  string:" "  punctuation:,  variable:big  punctuation:)
 116 |     ; Another file's defaults, which name its private parts.
@@ -196,8 +196,8 @@
     | builtin-fn:show  punctuation:(  task:run  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:run  punctuation:(  number:1  punctuation:,  task:double  punctuation:)  punctuation:,  string:" "  punctuation:,  task:run  punctuation:(  number:1  punctuation:,  task:double  punctuation:,  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Box  punctuation:{  punctuation:}  punctuation:.  method:grown  punctuation:(  punctuation:)  punctuation:.  field:v  punctuation:)
 118 |     ; A task named as a value takes every value, as its type says.
     | comment:; A task named as a value takes every value, as its type says.
-119 |     bind f = pad
-    | keyword:bind  variable:f  operator:=  task:pad
+119 |     fixed f = pad
+    | keyword:fixed  variable:f  operator:=  task:pad
 120 |     f("e", 2, '+', Side.Left)
     | variable:f  punctuation:(  string:"e"  punctuation:,  number:2  punctuation:,  string:'+'  punctuation:,  type:Side  punctuation:.  variant:Left  punctuation:)
 121 |     show(math.log(1000.0), " ", math.log(8.0, 2.0))

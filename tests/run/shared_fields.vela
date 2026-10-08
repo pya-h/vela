@@ -28,10 +28,10 @@ shape Point
     shared pair: (int, text) = (1, "one")
     shared mood: Mood = Mood.Loud
     shared spare: maybe int = none
-    shared hold made: int = 0
+    shared flex made: int = 0
     shared read seen: int = 0
-    shared hold origin: Spot = Spot { x: 0, y: 0 }
-    shared hold big: [int#20] = [0#20]
+    shared flex origin: Spot = Spot { x: 0, y: 0 }
+    shared flex big: [int#20] = [0#20]
 
     alters look()
         Point.seen = Point.seen + 1
@@ -41,10 +41,10 @@ fi
 
 ; Another shape's first value may name these too.
 shape Grid
-    shared hold side: int = Point.start
+    shared flex side: int = Point.start
 fi
 
-task bump(hold& n: int)
+task bump(flex& n: int)
     n = n + 1
 fi
 
@@ -62,16 +62,16 @@ task main()
         show("loud")
     fi
 
-    ; Changed through its name, given to a hold& parameter, and through a reference.
+    ; Changed through its name, given to a flex& parameter, and through a reference.
     Point.made = Point.made + 1
     bump(&Point.made)
-    hold& r = &Point.made
+    flex& r = &Point.made
     r = r * 10
     show(Point.made)
-    bind& seen_now = &Point.seen
+    fixed& seen_now = &Point.seen
 
     ; A method changes a read-only shared field of its own shape.
-    hold p = Point { x: 1 }
+    flex p = Point { x: 1 }
     p.look()
     p.look()
     show(p.x, " ", p.y, " ", Point.seen, " ", seen_now)
@@ -97,7 +97,7 @@ task main()
     fi
 
     ; Another file's shared fields, read and changed as that file allows.
-    hold t = tally.Tally {}
+    flex t = tally.Tally {}
     t.tick()
     t.tick()
     tally.Tally.limit = tally.Tally.limit + 1

@@ -1,6 +1,6 @@
 ; error: 4:15: a 'break' takes the name of the loop it stops, when that is not the innermost, as in 'break outer', and the value it gives after '=', as in 'break = v'
 task main()
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         break 5
     fi
 fi

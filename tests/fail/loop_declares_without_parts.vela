@@ -1,6 +1,6 @@
 ; error: 3:10: a loop declares names of its own in its start, which '||' ends before its condition, as in 'loop hold i = 0 || i < 10 || i++'
 task main()
-    loop hold i = 0 i < 3
+    loop flex i = 0 i < 3
         show(i)
     fi
 fi

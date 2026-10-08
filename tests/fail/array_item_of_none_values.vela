@@ -1,4 +1,4 @@
-; error: 3:37: cannot tell the type of this item from none or 'fail …'; give the array a type first
+; error: 3:38: cannot tell the type of this item from none or 'fail …'; give the array a type first
 task main()
-    bind m: maybe int = [none, none][1]
+    fixed m: maybe int = [none, none][1]
 fi

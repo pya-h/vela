@@ -1,9 +1,9 @@
-; error: 8:24: expected type ^Point@r, got ^int@r
+; error: 8:25: expected type ^Point@r, got ^int@r
 shape Point
     x: int
 fi
 
 task main()
     region r
-    bind p: ^Point@r = new int(1) at r
+    fixed p: ^Point@r = new int(1) at r
 fi

@@ -1,6 +1,6 @@
 ; error: 4:15: each goes through a range, such as 0..n, the items of an array or slice, or a map's keys and values, but this value is maybe [int#2]; the value in this maybe [int#2] must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
-    bind kept: maybe [int#2] = [1, 2]
+    fixed kept: maybe [int#2] = [1, 2]
     each x in kept
         show(x)
     fi

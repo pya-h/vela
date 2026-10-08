@@ -3,6 +3,6 @@ kind Read
     Number(n: int ~ ParseError)
 fi
 task main()
-    bind m: maybe Read = none
+    fixed m: maybe Read = none
     show(m ~= Read.Number(int("1")))
 fi

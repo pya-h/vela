@@ -13,12 +13,12 @@ task found(t: (int, int)) -> int
 fi
 
 task main()
-    bind t = (1, "two")
-    bind n = t.#5 { 0 }
+    fixed t = (1, "two")
+    fixed n = t.#5 { 0 }
     show(n + 1)
     show(t.#5)
     show(t.#5 { "none here" })
-    bind m: maybe int = t.#2
+    fixed m: maybe int = t.#2
     show(m)
     ; The tuple is still worked out, for what it does.
     show(pair().#3 { 7 })

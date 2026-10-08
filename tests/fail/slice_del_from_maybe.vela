@@ -1,6 +1,6 @@
 ; error: 5:13: 'del' changes a slice, but this value is maybe [int]@r; the value in this maybe [int]@r must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
     region r
-    hold xs: maybe [int]@r = none
+    flex xs: maybe [int]@r = none
     show(xs.del())
 fi

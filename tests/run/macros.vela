@@ -38,10 +38,10 @@ task main()
     show(SIZE, " ", LAST, " ", LOWEST, " ", WHOLE, " ", AREA)
     show(NAME, " ", TITLE, " ", NAME.len, " ", TITLE[4], " ", FIRST, " ", NEXT, " ", BIG)
     ; An int macro is a unit where one is expected, as a literal is.
-    hold b: unit = SIZE
+    flex b: unit = SIZE
     show(b + SMALL, " ", SMALL)
     show(UNDER, " ", CUT)
-    bind xs = [0#SIZE]
+    fixed xs = [0#SIZE]
     show(xs, " ", xs[LAST])
     each i in 0..SIDE
         show(i)

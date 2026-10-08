@@ -34,12 +34,12 @@ fi
 
 task main()
     region points
-    bind p = Point { x: 1, y: 2 }
-    bind line = Line { start: p, finish: new Point(p) at points }
-    bind figure = Circle(1.0)
-    hold total = 0
+    fixed p = Point { x: 1, y: 2 }
+    fixed line = Line { start: p, finish: new Point(p) at points }
+    fixed figure = Circle(1.0)
+    flex total = 0
     when total > 0
-        bind hidden = 1
+        fixed hidden = 1
         show(hidden)
     fi
     @@
@@ -138,14 +138,14 @@ fn the_program_used_by_these_tests_compiles() {
 
 #[test]
 fn expressions_offer_values() {
-    assert_offers(&in_main("bind q = @@"), &["p", "total", "area", "Circle", "Dot", "true", "none", "new", "show"], &["bind", "q", "hidden", "int"]);
-    assert_eq!(item(&in_main("bind q = @@"), "Circle").snippet.as_deref(), Some("Circle(${radius})"));
-    assert_eq!(item(&in_main("bind q = @@"), "Dot").snippet, None);
-    assert_eq!(item(&in_main("bind q = @@"), "Rectangle").detail, "Shape (width: float, height: float)");
+    assert_offers(&in_main("fixed q = @@"), &["p", "total", "area", "Circle", "Dot", "true", "none", "new", "show"], &["bind", "q", "hidden", "int"]);
+    assert_eq!(item(&in_main("fixed q = @@"), "Circle").snippet.as_deref(), Some("Circle(${radius})"));
+    assert_eq!(item(&in_main("fixed q = @@"), "Dot").snippet, None);
+    assert_eq!(item(&in_main("fixed q = @@"), "Rectangle").detail, "Shape (width: float, height: float)");
     // A variable is not visible in its own initializer.
-    assert_offers(&in_main("bind q = 1\n    bind r = @@"), &["q"], &["r"]);
+    assert_offers(&in_main("fixed q = 1\n    fixed r = @@"), &["q"], &["r"]);
     // A shape is offered as a literal with its fields.
-    assert_eq!(item(&in_main("bind q = @@"), "Point").snippet.as_deref(), Some("Point { x: ${x}, y: ${y} }"));
+    assert_eq!(item(&in_main("fixed q = @@"), "Point").snippet.as_deref(), Some("Point { x: ${x}, y: ${y} }"));
 }
 
 #[test]
@@ -156,14 +156,14 @@ fn nothing_is_offered_inside_text_ending_in_an_escaped_quote() {
 
 #[test]
 fn statement_items_start_a_line_even_after_invalid_text() {
-    assert_offers(&in_main("bind s = 1 @ @@"), &[], &["bind", "when"]);
+    assert_offers(&in_main("fixed s = 1 @ @@"), &[], &["bind", "when"]);
 }
 
 #[test]
 fn types_are_offered_where_a_type_is_written() {
-    assert_offers(&in_main("bind q: @@"), &["int", "text", "Point", "Shape"], &["nothing", "p", "bind"]);
-    assert_offers(&in_main("bind q: ^@@"), &["int", "Point"], &["p"]);
-    assert_offers(&in_main("bind q = new @@"), &["Point"], &["p"]);
+    assert_offers(&in_main("fixed q: @@"), &["int", "text", "Point", "Shape"], &["nothing", "p", "bind"]);
+    assert_offers(&in_main("fixed q: ^@@"), &["int", "Point"], &["p"]);
+    assert_offers(&in_main("fixed q = new @@"), &["Point"], &["p"]);
     assert_offers("task f(a: @@", &["int", "float"], &["nothing"]);
     assert_offers("task f() -> @@", &["nothing", "int"], &[]);
     assert_offers("shape S\n    field: @@", &["float", "S"], &[]);
@@ -189,7 +189,7 @@ fn fields_follow_the_type_of_the_value() {
 #[test]
 fn fields_still_complete_when_the_rest_of_the_file_is_broken() {
     // The line after the cursor doesn't parse, so no compiler types are available.
-    let broken = |code: &str| PROGRAM.replace("    @@\n", &format!("    {}\n    bind broken = (\n", code));
+    let broken = |code: &str| PROGRAM.replace("    @@\n", &format!("    {}\n    fixed broken = (\n", code));
     assert_offers(&broken("show(p.@@)"), &["x", "y"], &[]);
     assert_offers(&broken("show(line.start.@@)"), &["x", "y"], &[]);
     assert_eq!(item(&broken("show(line.finish.@@)"), "y").apply.as_deref(), Some("^.y"));
@@ -219,7 +219,7 @@ fn case_offers_the_variants_not_yet_matched() {
 fn case_snippets_never_link_fields_of_different_variants() {
     // Snippet fields with the same name are edited together, so a payload
     // field name shared by two variants must get two field names.
-    let source = "kind Reading\n    Exact(value: int)\n    Between(value: int, high: int)\n    Missing\nfi\ntask main()\n    bind r = Exact(1)\n    @@\nfi\n";
+    let source = "kind Reading\n    Exact(value: int)\n    Between(value: int, high: int)\n    Missing\nfi\ntask main()\n    fixed r = Exact(1)\n    @@\nfi\n";
     assert_eq!(
         item(source, "match r").snippet.as_deref(),
         Some("match r\ncase Exact ${value}\n\t\ncase Between ${value2} ${high}\n\t\ncase Missing\n\t${}\nfi")
@@ -232,10 +232,10 @@ fn case_snippets_never_link_fields_of_different_variants() {
 
 #[test]
 fn shape_literals_offer_the_missing_fields() {
-    assert_offers(&in_main("bind q = Point { x: 1, @@ }"), &["y"], &["x", "p"]);
-    assert_eq!(item(&in_main("bind q = Point { @@"), "x").snippet.as_deref(), Some("x: ${}"));
+    assert_offers(&in_main("fixed q = Point { x: 1, @@ }"), &["y"], &["x", "p"]);
+    assert_eq!(item(&in_main("fixed q = Point { @@"), "x").snippet.as_deref(), Some("x: ${}"));
     // A value after the colon is an expression.
-    assert_offers(&in_main("bind q = Point { x: @@ }"), &["p", "total"], &["y"]);
+    assert_offers(&in_main("fixed q = Point { x: @@ }"), &["p", "total"], &["y"]);
 }
 
 #[test]
@@ -244,9 +244,9 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         in_main("; a comm@@ent"),
         in_main("show(\"hel@@lo\")"),
         in_main("show(\"unfinished @@"),
-        in_main("bind @@"),
+        in_main("fixed @@"),
         "task @@".to_string(),
-        "task f(hold @@".to_string(),
+        "task f(flex @@".to_string(),
         "kind K\n    V(@@".to_string(),
         in_main("each @@"),
     ] {
@@ -305,7 +305,7 @@ fn show_takes_several_values() {
     // A value after a comma completes like the first one, and the file checks.
     assert_offers(&in_main("show(\"total: \", @@)"), &["total", "p", "area", "true"], &["fi", "task"]);
     assert_offers(&in_main("show(total, @@)"), &["p", "line", "show"], &["else"]);
-    let checked = "task main()\n    bind n = 1\n    show(\"n = \", n, \"!\")\n    show()\nfi\n";
+    let checked = "task main()\n    fixed n = 1\n    show(\"n = \", n, \"!\")\n    show()\nfi\n";
     assert_eq!(Analysis::new(checked).diagnostics(), Vec::new());
 }
 
@@ -315,7 +315,7 @@ fn a_value_shown_by_its_own_str_keeps_its_type_in_the_editor() {
     // where the value is written. The editor asks about the value there, so a
     // member of it completes as it does anywhere else, and not as a member of
     // the text the call gives.
-    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    region r\n    hold cards = new [Card]() at r\n    cards.add(Card { name: \"Ada\" })\n    show(cards[0])\nfi\n";
+    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    region r\n    flex cards = new [Card]() at r\n    cards.add(Card { name: \"Ada\" })\n    show(cards[0])\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_offers(&source.replace("show(cards[0])", "show(cards[0].@@)"), &["name", "str", "copy"], &["len"]);
     assert_eq!(hover(source, "cards[0])", 0).code, "hold cards: [Card]@r");
@@ -326,7 +326,7 @@ fn show_takes_a_value_with_its_own_str() {
     // A shape with a `str` of its own is a value `show` writes, and the name in
     // the call still hovers as what it is, although the checker has turned the
     // value into the call of that method.
-    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    bind card = Card { name: \"Ada\" }\n    show(\"top: \", card)\nfi\n";
+    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    fixed card = Card { name: \"Ada\" }\n    show(\"top: \", card)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "card)", 0).code, "bind card: Card");
     assert_eq!(hover(source, "str(r", 0).code, "str(r: region) -> text@r");
@@ -342,7 +342,7 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     assert!(hover(source, "NotANumber", 0).doc.contains("no number at all"), "{:?}", hover(source, "NotANumber", 0).doc);
     assert!(hover(source, "TooLarge", 0).doc.contains("not one the type holds"), "{:?}", hover(source, "TooLarge", 0).doc);
     // The type a reading gives, and the kind where an error type goes.
-    let bound = "task main()\n    bind n = int(\"42\")\n    show(n { 0 })\nfi\n";
+    let bound = "task main()\n    fixed n = int(\"42\")\n    show(n { 0 })\nfi\n";
     assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
     assert_eq!(hover(bound, "n =", 0).code, "bind n: int ~ ParseError");
     assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["nothing"]);
@@ -365,18 +365,18 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
     // the source while the file doesn't check.
     for checks in [true, false] {
         let shown = if checks { "show(age { 0 })" } else { "show(unknown)" };
-        let bound = format!("task main()\n    bind age = scan(\"Age: \", int)\n    bind size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
+        let bound = format!("task main()\n    fixed age = scan(\"Age: \", int)\n    fixed size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
         assert_eq!(Analysis::new(&bound).diagnostics().is_empty(), checks);
         assert_eq!(hover(&bound, "age =", 0).code, "bind age: int ~ InputError", "checks: {}", checks);
         assert_eq!(hover(&bound, "size =", 0).code, "bind size: float ~ InputError", "checks: {}", checks);
     }
     // The two types this form reads, offered after the prompt, and the kind
     // where an error type goes.
-    assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float", "unit"]);
+    assert_eq!(labels(&in_main("fixed age = scan(\"Age: \", @@)")), ["int", "float", "unit"]);
     assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["nothing"]);
     // A region follows a line read, and never a number read.
-    assert_offers(&in_main("bind line = scan(\"Name: \") @@"), &["at"], &[]);
-    assert_offers(&in_main("bind age = scan(\"Age: \", int) @@"), &[], &["at"]);
+    assert_offers(&in_main("fixed line = scan(\"Name: \") @@"), &["at"], &[]);
+    assert_offers(&in_main("fixed age = scan(\"Age: \", int) @@"), &[], &["at"]);
 }
 
 #[test]
@@ -396,7 +396,7 @@ fn the_cases_of_a_kind_no_file_declares_are_offered() {
     assert_eq!(pattern.detail, "InputError (why: ParseError)");
     let value = item("task f() -> int ~ ParseError\n    <- fail ParseError.@@\nfi\n", "NotANumber");
     assert_eq!(value.detail, "ParseError");
-    assert_eq!(item(&of("bind e2 = InputError.@@"), "NoNumber").snippet.as_deref(), Some("NoNumber(${why})"));
+    assert_eq!(item(&of("fixed e2 = InputError.@@"), "NoNumber").snippet.as_deref(), Some("NoNumber(${why})"));
     // The match with every case, offered for a value of one.
     assert_eq!(
         item(&of("@@"), "match e").snippet.as_deref(),
@@ -408,7 +408,7 @@ fn the_cases_of_a_kind_no_file_declares_are_offered() {
 fn hover_reads_declared_types_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",
-        "    show(missing)\n    bind q = Point { x: 1, y: 2 }\n    bind far = line.finish\n    bind made = origin()\n    bind c = Circle(2.0)\n    show(q)\n",
+        "    show(missing)\n    fixed q = Point { x: 1, y: 2 }\n    fixed far = line.finish\n    fixed made = origin()\n    fixed c = Circle(2.0)\n    show(q)\n",
     );
     assert_eq!(hover(&source, "q =", 0).code, "bind q: Point");
     assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point@points");
@@ -430,13 +430,13 @@ fi
 task main()
     CHECK
     region r
-    bind leaf = new Tree(Tree.Leaf) at r
-    bind branch = Tree.Branch(leaf, leaf)
-    bind bare = Branch(leaf, leaf)
-    bind lone = new Node(Node { value: 1, next: none }) at r
-    bind linked = Node { value: 2, next: lone }
-    bind following = linked.next
-    bind count = linked.value
+    fixed leaf = new Tree(Tree.Leaf) at r
+    fixed branch = Tree.Branch(leaf, leaf)
+    fixed bare = Branch(leaf, leaf)
+    fixed lone = new Node(Node { value: 1, next: none }) at r
+    fixed linked = Node { value: 2, next: lone }
+    fixed following = linked.next
+    fixed count = linked.value
     match branch
     case Branch left right
         show(1)
@@ -467,12 +467,12 @@ fn values_holding_pointers_are_in_the_region_of_their_parts_whether_or_not_the_f
 fn a_value_turned_into_a_number_reads_as_that_number() {
     // `int(x)` and `float(x)` are calls named by the type they give, so the
     // editor reads them as that number, whether or not the file checks.
-    let source = "task main()\n    bind n = 7\n    bind f = float(n)\n    bind w = int(2.9)\n    bind c = int(n > 3)\nfi\n";
+    let source = "task main()\n    fixed n = 7\n    fixed f = float(n)\n    fixed w = int(2.9)\n    fixed c = int(n > 3)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "f =", 0).code, "bind f: float");
     assert_eq!(hover(source, "w =", 0).code, "bind w: int");
     assert_eq!(hover(source, "c =", 0).code, "bind c: int");
-    let broken = source.replace("    bind c =", "    show(missing)\n    bind c =");
+    let broken = source.replace("    fixed c =", "    show(missing)\n    fixed c =");
     assert_eq!(hover(&broken, "f =", 0).code, "bind f: float");
     assert_eq!(hover(&broken, "w =", 0).code, "bind w: int");
     // Hovering the name of the call says what it does.
@@ -483,8 +483,8 @@ fn a_value_turned_into_a_number_reads_as_that_number() {
 fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",
-        "    show(missing)\n    bind less = total < 2\n    bind wrapped = (total == 1)\n    bind both = not less and wrapped\n    \
-         bind mixed = float(1) + 2.5\n    bind whole = 2 * total - -(total % 3)\n    bind inner = (total)\n    bind unknown = total + missing\n    bind crossed = 1 + 2.5\n",
+        "    show(missing)\n    fixed less = total < 2\n    fixed wrapped = (total == 1)\n    fixed both = not less and wrapped\n    \
+         fixed mixed = float(1) + 2.5\n    fixed whole = 2 * total - -(total % 3)\n    fixed inner = (total)\n    fixed unknown = total + missing\n    fixed crossed = 1 + 2.5\n",
     );
     for (needle, code) in [
         ("less =", "bind less: bool"),
@@ -513,9 +513,9 @@ task parse(t: text) -> int ~ Problem
 fi
 
 task main()
-    bind m: maybe int = none
-    bind r = parse(\"1\")
-    hold total = 0
+    fixed m: maybe int = none
+    fixed r = parse(\"1\")
+    flex total = 0
     @@
 fi
 ";
@@ -526,13 +526,13 @@ fn in_outcomes(code: &str) -> String {
 
 #[test]
 fn types_offer_maybe_and_error_types() {
-    assert_offers(&in_outcomes("bind x: @@"), &["maybe", "int", "Problem"], &["nothing", "m"]);
+    assert_offers(&in_outcomes("fixed x: @@"), &["maybe", "int", "Problem"], &["nothing", "m"]);
     // After `maybe`, another type, but not `maybe` or `nothing` again.
-    assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "nothing"]);
-    assert_offers(&in_outcomes("bind x: maybe ^@@"), &["int"], &["m"]);
+    assert_offers(&in_outcomes("fixed x: maybe @@"), &["int", "Problem"], &["maybe", "nothing"]);
+    assert_offers(&in_outcomes("fixed x: maybe ^@@"), &["int"], &["m"]);
     // After `or` in a type, the error type, which is never nothing or a maybe.
     assert_offers("task f() -> int ~ @@\nfi\n", &["text"], &["nothing", "maybe"]);
-    assert_offers(&in_outcomes("bind x: int ~ @@"), &["Problem"], &["m", "total"]);
+    assert_offers(&in_outcomes("fixed x: int ~ @@"), &["Problem"], &["m", "total"]);
     // `or` between values is still an expression.
     assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
 }
@@ -555,8 +555,8 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
         in_outcomes("when m is {@@"),
         in_outcomes("when r is failure @@"),
         in_outcomes("when parse(\"2\") is Bad @@"),
-        in_outcomes("bind n = r { failure @@"),
-        in_outcomes("bind n = r {\n        failure @@"),
+        in_outcomes("fixed n = r { failure @@"),
+        in_outcomes("fixed n = r {\n        failure @@"),
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
@@ -567,15 +567,15 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
 
 #[test]
 fn plan_b_blocks_offer_values_and_statements() {
-    assert_offers(&in_outcomes("bind n = m { @@"), &["total", "m", "fail", "none"], &[]);
-    assert_offers(&in_outcomes("bind n = m {\n        @@"), &["bind", "total", "when"], &[]);
+    assert_offers(&in_outcomes("fixed n = m { @@"), &["total", "m", "fail", "none"], &[]);
+    assert_offers(&in_outcomes("fixed n = m {\n        @@"), &["bind", "total", "when"], &[]);
     // `}` closes a plan B, not `fi`, and only its first line may name the failure.
-    let marked = in_outcomes("when total > 0\n        bind n = r {\n            @@");
+    let marked = in_outcomes("when total > 0\n        fixed n = r {\n            @@");
     assert_offers(&marked, &["failure", "bind"], &["fi", "else"]);
     assert_eq!(item(&marked, "failure").snippet.as_deref(), Some("failure ${e}"));
-    assert_offers(&in_outcomes("bind n = r {\n        failure e\n        @@"), &["bind"], &["failure", "fi"]);
+    assert_offers(&in_outcomes("fixed n = r {\n        failure e\n        @@"), &["bind"], &["failure", "fi"]);
     // After the plan B closes, the blocks around it continue.
-    assert_offers(&in_outcomes("when total > 0\n        bind n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["failure"]);
+    assert_offers(&in_outcomes("when total > 0\n        fixed n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["failure"]);
     assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
     assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase failure ${e}\n\t${}\nfi"));
 }
@@ -584,7 +584,7 @@ fn plan_b_blocks_offer_values_and_statements() {
 fn hover_describes_maybe_and_error_names() {
     let source = OUTCOMES.replace(
         "    @@\n",
-        "    bind n = r {\n        failure problem\n        show(0)\n        0\n    }\n    when m is {value}\n        show(value + n)\n    fi\n",
+        "    fixed n = r {\n        failure problem\n        show(0)\n        0\n    }\n    when m is {value}\n        show(value + n)\n    fi\n",
     );
     assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("failure problem: Problem".to_string(), "The failure this plan B handles.".to_string()));
     assert_eq!(code_and_doc(hover(&source, "value + n", 0)), ("value: int".to_string(), "Bound by an is condition.".to_string()));
@@ -605,7 +605,7 @@ fn hover_describes_maybe_and_error_names() {
 fn hover_reads_maybe_and_error_names_when_the_file_doesnt_check() {
     let source = OUTCOMES.replace(
         "    @@\n",
-        "    show(missing)\n    bind a = m { 0 }\n    bind b = r {\n        failure problem\n        0\n    }\n    \
+        "    show(missing)\n    fixed a = m { 0 }\n    fixed b = r {\n        failure problem\n        0\n    }\n    \
          when m is {value}\n        show(value)\n    fi\n    when r is failure wrong\n        show(1)\n    fi\n    \
          match r\n    case {got}\n        show(got)\n    case failure bad\n        show(1)\n    fi\n",
     );
@@ -638,27 +638,27 @@ fi
 
 task main()
     region nodes
-    bind first = push(nodes, none)
+    fixed first = push(nodes, none)
 fi
 ";
 
 #[test]
 fn regions_are_offered_where_a_region_is_named() {
-    let in_main = |code: &str| REGIONS.replace("    @@\n", "    <- 0\n").replace("    bind first = push(nodes, none)\n", &format!("    bind first = push(nodes, none)\n    {}\n", code));
+    let in_main = |code: &str| REGIONS.replace("    @@\n", "    <- 0\n").replace("    fixed first = push(nodes, none)\n", &format!("    fixed first = push(nodes, none)\n    {}\n", code));
     // After `@` in a type, every visible region.
-    assert_offers(&in_main("hold later: maybe ^Node@ @@"), &["nodes"], &["first", "int"]);
+    assert_offers(&in_main("flex later: maybe ^Node@ @@"), &["nodes"], &["first", "int"]);
     // `new` allocates, so a region a task only names in its types isn't offered.
-    assert_offers(&in_main("bind two = new int(2) at @@"), &["nodes"], &["first"]);
-    assert_offers(&in_main("bind two = new@ @@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("fixed two = new int(2) at @@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("fixed two = new@ @@"), &["nodes"], &["first"]);
     let in_sum = |code: &str| REGIONS.replace("    @@\n", &format!("    {}\n", code));
-    assert_offers(&in_sum("bind p: maybe ^int@ @@"), &["s"], &[]);
-    assert_offers(&in_sum("bind p = new int(1) at @@"), &[], &["s"]);
-    assert_eq!(item(&in_sum("bind p: maybe ^int@ @@"), "s").detail, "region, named in the task's types");
+    assert_offers(&in_sum("fixed p: maybe ^int@ @@"), &["s"], &[]);
+    assert_offers(&in_sum("fixed p = new int(1) at @@"), &[], &["s"]);
+    assert_eq!(item(&in_sum("fixed p: maybe ^int@ @@"), "s").detail, "region, named in the task's types");
     // In a header, the regions named so far on its line.
     assert_offers("task link(a: ^int@left, b: ^int@ @@", &["left"], &[]);
     // A parameter's type can be `region`; a statement can declare one.
     assert_offers("task make(r: @@", &["region", "int"], &[]);
-    assert_offers(&in_main("bind x: @@"), &["int"], &["region"]);
+    assert_offers(&in_main("fixed x: @@"), &["int"], &["region"]);
     assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … at"]);
     // A region is a value only as the argument for a region parameter, and there
     // only the regions the caller can allocate in are offered.
@@ -667,11 +667,11 @@ fn regions_are_offered_where_a_region_is_named() {
     assert_offers(&in_main("show(sum(push(nodes, @@"), &["first"], &["nodes"]);
     assert_offers(&in_main("show(@@"), &["first"], &["nodes"]);
     assert_offers(&in_main("show(sum(@@"), &["first"], &["nodes"]);
-    assert_offers(&in_sum("bind p = push(@@"), &[], &["s", "list"]);
+    assert_offers(&in_sum("fixed p = push(@@"), &[], &["s", "list"]);
     // A task the file doesn't declare may take one.
     assert_offers(&in_main("later(@@"), &["first", "nodes"], &[]);
-    assert_offers(&in_main("bind y = @@"), &["first", "new … at"], &["nodes"]);
-    assert_eq!(item(&in_main("bind y = @@"), "new … at").snippet.as_deref(), Some("new ${T}(${value}) at ${r}"));
+    assert_offers(&in_main("fixed y = @@"), &["first", "new … at"], &["nodes"]);
+    assert_eq!(item(&in_main("fixed y = @@"), "new … at").snippet.as_deref(), Some("new ${T}(${value}) at ${r}"));
     assert_eq!(labels(&in_main("region @@")), Vec::<String>::new());
 }
 
@@ -687,7 +687,7 @@ fn hover_describes_regions() {
     assert_eq!(hover(&source, "new Node", 0).code, "new T(value) at r");
     assert_eq!(hover(&source, "first =", 0).code, "bind first: ^Node@nodes");
     // While the file doesn't check, written types still show their regions.
-    let broken = source.replace("    <- 0\n", "    <- missing\n").replace("bind first = push(nodes, none)", "bind first: maybe ^Node@nodes = none\n    bind two = new@nodes int(2)");
+    let broken = source.replace("    <- 0\n", "    <- missing\n").replace("fixed first = push(nodes, none)", "fixed first: maybe ^Node@nodes = none\n    fixed two = new@nodes int(2)");
     assert_eq!(hover(&broken, "first:", 0).code, "bind first: maybe ^Node@nodes");
     assert_eq!(hover(&broken, "two =", 0).code, "bind two: ^int@nodes");
     assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
@@ -714,9 +714,9 @@ fi
 
 task main()
     region nodes
-    bind a = push(nodes, none)
-    bind b = push(nodes, first(a) { a })
-    bind c = first(none) { a }
+    fixed a = push(nodes, none)
+    fixed b = push(nodes, first(a) { a })
+    fixed c = first(none) { a }
     when first(none) is {n}
         show(n^.value)
     fi
@@ -754,28 +754,28 @@ fn results_serialize_to_the_json_the_editor_reads() {
 fn types_follow_a_region_and_error_types_follow_a_regional_type() {
     let regions = "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask main()\n    region nodes\n    @@\nfi\n";
     let in_regions = |code: &str| regions.replace("    @@\n", &format!("    {}\n", code));
-    assert_offers(&in_regions("bind two = new@nodes @@"), &["int", "Node", "maybe"], &["main", "show", "true"]);
+    assert_offers(&in_regions("fixed two = new@nodes @@"), &["int", "Node", "maybe"], &["main", "show", "true"]);
     assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r ~ @@", &["text", "Node"], &["nothing", "maybe", "f"]);
 }
 
 #[test]
 fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
-    let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { failure e\n            @@\n        }\n    fi\nfi\n";
+    let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        fixed r = parse(\"x\") { failure e\n            @@\n        }\n    fi\nfi\n";
     assert_offers(source, &["show", "e"], &["fi", "else"]);
     // While the file doesn't check, the binding still has the value's type, not the error's.
-    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { failure e\n        0\n    }\n    show(r)\nfi\n";
+    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    fixed r = parse(\"x\") { failure e\n        0\n    }\n    show(r)\nfi\n";
     assert_eq!(hover(broken, "r = parse", 0).code, "bind r: int");
 }
 
 #[test]
 fn only_a_value_that_can_fail_has_an_error_to_name() {
-    let source = "task main()\n    bind m: maybe int = none\n    bind n = m {\n        @@\n    }\nfi\n";
+    let source = "task main()\n    fixed m: maybe int = none\n    fixed n = m {\n        @@\n    }\nfi\n";
     assert_offers(source, &["show"], &["fail", "failure"]);
-    let failing = "task get() -> int ~ text\n    <- 1\nfi\ntask main()\n    bind n = get() {\n        @@\n    }\nfi\n";
+    let failing = "task get() -> int ~ text\n    <- 1\nfi\ntask main()\n    fixed n = get() {\n        @@\n    }\nfi\n";
     // The noun names the failure a plan B handles; the verb belongs where a value goes.
     assert_offers(failing, &["failure"], &["fail"]);
     // `fail` as a value only where some type can hold an error.
-    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["fail"]);
+    assert_offers("task main()\n    fixed x = @@\nfi\n", &["true"], &["fail"]);
 }
 
 #[test]
@@ -787,33 +787,33 @@ fn a_case_binding_of_a_kind_in_a_region_keeps_the_region() {
 #[test]
 fn block_words_fit_where_they_are() {
     // Right after `match`, only a case.
-    let matching = "kind K\n    A(v: int)\n    B\nfi\ntask main()\n    bind k = A(1)\n    match k\n    @@\nfi\n";
+    let matching = "kind K\n    A(v: int)\n    B\nfi\ntask main()\n    fixed k = A(1)\n    match k\n    @@\nfi\n";
     assert_eq!(labels(matching), vec!["case".to_string()]);
     // A `when` has one `else`.
     let second_else = "task main()\n    when true\n        show(1)\n    else\n        @@\n    fi\nfi\n";
     assert_offers(second_else, &["fi", "show"], &["else"]);
     // A maybe's cases include `_`.
-    let maybe = "task main()\n    bind m: maybe int = 1\n    match m\n    case {v}\n        show(v)\n    case @@\n    fi\nfi\n";
+    let maybe = "task main()\n    fixed m: maybe int = 1\n    match m\n    case {v}\n        show(v)\n    case @@\n    fi\nfi\n";
     assert_offers(maybe, &["none", "_"], &["{value}"]);
 }
 
 #[test]
 fn after_a_finished_value_only_words_that_continue_it() {
-    let in_task = |code: &str| format!("task main()\n    region r\n    bind m: maybe int = 1\n    {}\nfi\n", code);
+    let in_task = |code: &str| format!("task main()\n    region r\n    fixed m: maybe int = 1\n    {}\nfi\n", code);
     assert_offers(&in_task("when m @@"), &["is", "and", "or"], &["m", "show", "new"]);
     assert_offers(&in_task("each i @@"), &["in"], &["and", "m"]);
-    assert_offers(&in_task("bind p = new int(1) @@"), &["at", "and"], &["m", "in"]);
+    assert_offers(&in_task("fixed p = new int(1) @@"), &["at", "and"], &["m", "in"]);
     // After a written type, only the `~` that gives it an error side.
     assert_offers("task f() -> int @@", &["~"], &["and", "is", "or"]);
     // Right after an operator, values again.
-    assert_offers(&in_task("bind x = 1 + @@"), &["m"], &["and"]);
+    assert_offers(&in_task("fixed x = 1 + @@"), &["m"], &["and"]);
 }
 
 #[test]
 fn new_is_offered_only_where_a_region_can_be_allocated_in() {
-    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["new", "new … at"]);
-    assert_offers("task main()\n    region r\n    bind x = @@\nfi\n", &["new", "new … at"], &[]);
-    assert_offers("task f(list: maybe ^int@r)\n    bind x = @@\nfi\n", &["list"], &["new", "new … at"]);
+    assert_offers("task main()\n    fixed x = @@\nfi\n", &["true"], &["new", "new … at"]);
+    assert_offers("task main()\n    region r\n    fixed x = @@\nfi\n", &["new", "new … at"], &[]);
+    assert_offers("task f(list: maybe ^int@r)\n    fixed x = @@\nfi\n", &["list"], &["new", "new … at"]);
 }
 
 #[test]
@@ -830,10 +830,10 @@ task divmod(a: int, b: int) -> int, int
 fi
 
 task main()
-    bind q, r = divmod(17, 5)
-    hold x = 0
-    hold y = 0
-    bind first, second = 1.5, true
+    fixed q, r = divmod(17, 5)
+    flex x = 0
+    flex y = 0
+    fixed first, second = 1.5, true
     @@
 fi
 ";
@@ -868,8 +868,8 @@ fn several_results_are_typed_and_completed() {
     assert_offers("task f(a: int, @@", &[], &["int", "a"]);
 
     // Another name after a comma in a `bind`, then values after the `=`.
-    assert_offers(&in_results("bind a, @@"), &[], &["int", "q", "divmod"]);
-    assert_offers(&in_results("hold a, b = 1, @@"), &["q", "divmod", "true"], &["bind"]);
+    assert_offers(&in_results("fixed a, @@"), &[], &["int", "q", "divmod"]);
+    assert_offers(&in_results("flex a, b = 1, @@"), &["q", "divmod", "true"], &["bind"]);
     assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["bind"]);
     assert_offers(&in_results("<- 1, @@"), &["q", "divmod"], &["bind"]);
 }
@@ -913,7 +913,7 @@ fn named_results_are_names_of_the_task() {
     assert_eq!(hover(regional, "count <- none", 0).code, "result count: int");
 
     // A named result's type is the task's result type, as a call gives it.
-    let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    bind s, p = pair()\n    show(missing)\nfi\n";
+    let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    fixed s, p = pair()\n    show(missing)\nfi\n";
     assert_eq!(hover(broken, "s, p = pair", 0).code, "bind s: int");
     assert_eq!(hover(broken, "p = pair", 0).code, "bind p: int");
 

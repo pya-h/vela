@@ -60,9 +60,9 @@ fi
 
 task main()
     CHECK
-    hold c = Counter { label: \"clicks\", count: 0 }
+    flex c = Counter { label: \"clicks\", count: 0 }
     c.step(2)
-    hold light = Red
+    flex light = Red
     light.flip()
     show(light.shown())
     @@
@@ -203,7 +203,7 @@ fn methods_their_words_and_their_parameters_are_colored() {
 
 #[test]
 fn a_word_called_alters_or_this_elsewhere_is_a_name() {
-    let source = "task main()\n    bind alters = 1\n    bind this = alters + 1\n    show(this)\nfi\n";
+    let source = "task main()\n    fixed alters = 1\n    fixed this = alters + 1\n    show(this)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(class_at(source, "alters = 1", 0), TokenClass::Variable);
     assert_eq!(class_at(source, "this)", 0), TokenClass::Variable);
@@ -254,7 +254,7 @@ fn a_member_of_the_value_has_its_type_inside_a_method() {
         let source = program(checks, "show(1)");
         assert_eq!(hover(&source, "count = .count", 0).0, "count: int");
         // `.label` is a member of the value, which lives in `@this`.
-        let marked = in_step(checks, "bind name = .label\n        show(name.@@)");
+        let marked = in_step(checks, "fixed name = .label\n        show(name.@@)");
         assert_offers(&marked, &["copy"], &["count"]);
     }
 }
@@ -274,7 +274,7 @@ fn completion_after_a_values_dot_offers_its_fields_and_methods() {
         // A kind's value has its methods, not its variants.
         assert_offers(&program(checks, "light.@@"), &["flip", "shown"], &["Red", "Green"]);
         // A pointer's members are reached through `^`.
-        let items = completions(&program(checks, "region r\n    bind p = new Counter(c) at r\n    p.@@"));
+        let items = completions(&program(checks, "region r\n    fixed p = new Counter(c) at r\n    p.@@"));
         let step = items.iter().find(|item| item.label == "step").unwrap();
         assert_eq!(step.snippet.as_deref(), Some("^.step(${by})"));
     }
@@ -332,7 +332,7 @@ const USER: &str = "\
 include library
 
 task main()
-    bind card = library.Card { owner: \"ada\" }
+    fixed card = library.Card { owner: \"ada\" }
     show(card.ownerOf())
     @@
 fi

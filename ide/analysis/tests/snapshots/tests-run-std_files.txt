@@ -36,8 +36,8 @@
     | keyword:region  region:r
  22 |     ; A File is made from its path, and asked about.
     | comment:; A File is made from its path, and asked about.
- 23 |     bind here = File { path: "paths.vela" }
-    | keyword:bind  variable:here  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela"  punctuation:}
+ 23 |     fixed here = File { path: "paths.vela" }
+    | keyword:fixed  variable:here  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela"  punctuation:}
  24 |     show(here.path, " ", here.exists())
     | builtin-fn:show  punctuation:(  variable:here  punctuation:.  field:path  punctuation:,  string:" "  punctuation:,  variable:here  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
  25 |     show(File { path: "no such file" }.exists())
@@ -56,8 +56,8 @@
     | builtin-fn:show  punctuation:(  task:readable  punctuation:(  string:"paths.vela"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:readable  punctuation:(  string:""  punctuation:)  punctuation:)
  33 |     ; Written, then added to, then read back.
     | comment:; Written, then added to, then read back.
- 34 |     hold notes = File { path: "notes.txt" }
-    | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 34 |     flex notes = File { path: "notes.txt" }
+    | keyword:flex  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  35 |     show(notes.str() at r)
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  36 |     notes.open(FileMode.Write) at r { failure e
@@ -108,8 +108,8 @@
     | punctuation:}
  59 |     show(notes.line() at r { "failed" }, " ", notes.ended())
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:notes  punctuation:.  method:ended  punctuation:(  punctuation:)  punctuation:)
- 60 |     bind rest = notes.lines() at r { failure e
-    | keyword:bind  variable:rest  operator:=  variable:notes  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 60 |     fixed rest = notes.lines() at r { failure e
+    | keyword:fixed  variable:rest  operator:=  variable:notes  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  61 |         new [text]([why(e)]) at r
     | keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  task:why  punctuation:(  variable:e  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
  62 |     }
@@ -126,16 +126,16 @@
     | punctuation:}
  69 |     ; The whole of a file at once, and lines ended the Windows way.
     | comment:; The whole of a file at once, and lines ended the Windows way.
- 70 |     hold windows = File { path: "windows.txt" }
-    | keyword:hold  variable:windows  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"windows.txt"  punctuation:}
+ 70 |     flex windows = File { path: "windows.txt" }
+    | keyword:flex  variable:windows  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"windows.txt"  punctuation:}
  71 |     windows.open(FileMode.Read) at r { failure e
     | variable:windows  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  72 |         show(why(e))
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  73 |     }
     | punctuation:}
- 74 |     bind lines = windows.lines() at r { failure e
-    | keyword:bind  variable:lines  operator:=  variable:windows  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 74 |     fixed lines = windows.lines() at r { failure e
+    | keyword:fixed  variable:lines  operator:=  variable:windows  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  75 |         new [text]([why(e)]) at r
     | keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  task:why  punctuation:(  variable:e  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
  76 |     }
@@ -164,8 +164,8 @@
     | punctuation:}
  89 |     ; Read and written through one opening.
     | comment:; Read and written through one opening.
- 90 |     hold both = File { path: "notes.txt" }
-    | keyword:hold  variable:both  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 90 |     flex both = File { path: "notes.txt" }
+    | keyword:flex  variable:both  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  91 |     both.open(FileMode.ReadWrite) at r { failure e
     | variable:both  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:ReadWrite  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  92 |         show(why(e))
@@ -210,8 +210,8 @@
     | punctuation:}
 113 |     ; What goes wrong.
     | comment:; What goes wrong.
-114 |     hold wrong = File { path: "notes.txt" }
-    | keyword:hold  variable:wrong  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+114 |     flex wrong = File { path: "notes.txt" }
+    | keyword:flex  variable:wrong  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
 115 |     wrong.open(FileMode.Read) at r { failure e
     | variable:wrong  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
 116 |         show(why(e))
@@ -266,8 +266,8 @@
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
 141 |     }
     | punctuation:}
-142 |     hold missing = File { path: "missing.txt" }
-    | keyword:hold  variable:missing  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"missing.txt"  punctuation:}
+142 |     flex missing = File { path: "missing.txt" }
+    | keyword:flex  variable:missing  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"missing.txt"  punctuation:}
 143 |     missing.open(FileMode.Read) at r { failure e
     | variable:missing  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
 144 |         show(why(e))
@@ -290,8 +290,8 @@
     | comment:; A region that ends closes the file opened in it; the File kept outside
 154 |     ; it still says what its methods left it, and finds it closed.
     | comment:; it still says what its methods left it, and finds it closed.
-155 |     hold kept = File { path: "empty.txt" }
-    | keyword:hold  variable:kept  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
+155 |     flex kept = File { path: "empty.txt" }
+    | keyword:flex  variable:kept  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
 156 |     each pass in 0..2
     | keyword:each  variable:pass  keyword:in  number:0  operator:..  number:2
 157 |         region round
@@ -318,16 +318,16 @@
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 169 |     ; A copy closes the file for both.
     | comment:; A copy closes the file for both.
-170 |     hold first = File { path: "empty.txt" }
-    | keyword:hold  variable:first  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
+170 |     flex first = File { path: "empty.txt" }
+    | keyword:flex  variable:first  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
 171 |     first.open(FileMode.Read) at r { failure e
     | variable:first  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
 172 |         show(why(e))
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
 173 |     }
     | punctuation:}
-174 |     hold second = first
-    | keyword:hold  variable:second  operator:=  variable:first
+174 |     flex second = first
+    | keyword:flex  variable:second  operator:=  variable:first
 175 |     second.close() { failure e
     | variable:second  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
 176 |         show(why(e))
@@ -342,8 +342,8 @@
     | punctuation:}  punctuation:)
 182 |     ; Renamed, then deleted.
     | comment:; Renamed, then deleted.
-183 |     hold moved = File { path: "notes.txt" }
-    | keyword:hold  variable:moved  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+183 |     flex moved = File { path: "notes.txt" }
+    | keyword:flex  variable:moved  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
 184 |     moved.rename("moved.txt") { failure e
     | variable:moved  punctuation:.  method:rename  punctuation:(  string:"moved.txt"  punctuation:)  punctuation:{  keyword:failure  variable:e
 185 |         show(why(e))

@@ -1,8 +1,8 @@
 ; trap: integer overflow at 7:23 in task 'main'
 ; The one quotient that doesn't fit: the smallest int divided by -1.
 task main()
-    bind smallest = -9223372036854775807 - 1
-    hold divisor = -2
+    fixed smallest = -9223372036854775807 - 1
+    flex divisor = -2
     loop divisor < 0
         show(smallest / divisor)
         divisor = divisor + 1

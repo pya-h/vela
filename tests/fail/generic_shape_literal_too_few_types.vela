@@ -1,10 +1,10 @@
-; error: 8:19: shape 'Pair' takes 2 types, so name all of them, as in 'Pair<A, B> { … }'
+; error: 8:20: shape 'Pair' takes 2 types, so name all of them, as in 'Pair<A, B> { … }'
 shape Pair<A: frozen, B: frozen>
     left: A
     right: B
 fi
 
 task main()
-    bind p = Pair<int> { left: 1, right: "two" }
+    fixed p = Pair<int> { left: 1, right: "two" }
     show(p.left)
 fi

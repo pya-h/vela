@@ -1,4 +1,4 @@
-; error: 13:16: 'area' is a method of every value of 'C', so it is called on a value, as in 'p.area(…)'; only a shared method is a value, named on its type
+; error: 13:17: 'area' is a method of every value of 'C', so it is called on a value, as in 'p.area(…)'; only a shared method is a value, named on its type
 ; A shape's method of every value is called on a value; only a shared method
 ; is a value, named on its shape.
 shape C
@@ -10,5 +10,5 @@ shape C
 fi
 
 task main()
-    bind f = C.area
+    fixed f = C.area
 fi

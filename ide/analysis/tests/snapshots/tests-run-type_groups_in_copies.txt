@@ -28,12 +28,12 @@
     | keyword:fi
  17 | task last<P...: frozen & shown>(args: P...)
     | keyword:task  task:last  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
- 18 |     bind t = (args...) { <- }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+ 18 |     fixed t = (args...) { <- }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
  19 |     region r
     | keyword:region  region:r
- 20 |     bind s = when args.len > 2
-    | keyword:bind  variable:s  operator:=  keyword:when  parameter:args  punctuation:.  field:len  operator:>  number:2
+ 20 |     fixed s = when args.len > 2
+    | keyword:fixed  variable:s  operator:=  keyword:when  parameter:args  punctuation:.  field:len  operator:>  number:2
  21 |         t.2.str() at r
     | variable:t  punctuation:.  field:2  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
  22 |     else when args.len == 2
@@ -56,8 +56,8 @@
     | comment:; only that arm guards against.
  32 | task guarded<P...: frozen & shown>(args: P...)
     | keyword:task  task:guarded  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
- 33 |     bind t = (args...) { <- }
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+ 33 |     fixed t = (args...) { <- }
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
  34 |     region r
     | keyword:region  region:r
  35 |     when args.len < 3
@@ -82,12 +82,12 @@
     | keyword:region  region:r
  46 |     each v in args
     | keyword:each  variable:v  keyword:in  parameter:args
- 47 |         bind b = Box<P> { v: v }
-    | keyword:bind  variable:b  operator:=  type:Box  punctuation:<  type:P  punctuation:>  punctuation:{  field:v  punctuation::  variable:v  punctuation:}
- 48 |         bind p = new P(v) at r
-    | keyword:bind  variable:p  operator:=  keyword:new  type:P  punctuation:(  variable:v  punctuation:)  keyword:at  region:r
- 49 |         hold xs = new [P]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type:P  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 47 |         fixed b = Box<P> { v: v }
+    | keyword:fixed  variable:b  operator:=  type:Box  punctuation:<  type:P  punctuation:>  punctuation:{  field:v  punctuation::  variable:v  punctuation:}
+ 48 |         fixed p = new P(v) at r
+    | keyword:fixed  variable:p  operator:=  keyword:new  type:P  punctuation:(  variable:v  punctuation:)  keyword:at  region:r
+ 49 |         flex xs = new [P]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type:P  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  50 |         xs.add(v)
     | variable:xs  punctuation:.  field:add  punctuation:(  variable:v  punctuation:)
  51 |         show(b.v, " ", p^, " ", xs.len)
@@ -98,20 +98,20 @@
     | keyword:fi
  55 | task kept<P...: frozen & shown>(args: P...)
     | keyword:task  task:kept  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
- 56 |     bind t = (args...) {
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
+ 56 |     fixed t = (args...) {
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
  57 |         show("fewer than two")
     | builtin-fn:show  punctuation:(  string:"fewer than two"  punctuation:)
  58 |         <-
     | keyword:<-
  59 |     }
     | punctuation:}
- 60 |     bind b = Box { v: t }
-    | keyword:bind  variable:b  operator:=  type:Box  punctuation:{  field:v  punctuation::  variable:t  punctuation:}
+ 60 |     fixed b = Box { v: t }
+    | keyword:fixed  variable:b  operator:=  type:Box  punctuation:{  field:v  punctuation::  variable:t  punctuation:}
  61 |     region r
     | keyword:region  region:r
- 62 |     bind m = ["all": t] at r
-    | keyword:bind  variable:m  operator:=  punctuation:[  string:"all"  punctuation::  type:t  punctuation:]  keyword:at  region:r
+ 62 |     fixed m = ["all": t] at r
+    | keyword:fixed  variable:m  operator:=  punctuation:[  string:"all"  punctuation::  type:t  punctuation:]  keyword:at  region:r
  63 |     show(b.v, " ", m.len)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:.  field:len  punctuation:)
  64 | fi

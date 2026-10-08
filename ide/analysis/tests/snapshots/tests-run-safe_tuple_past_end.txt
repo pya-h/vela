@@ -24,18 +24,18 @@
     | keyword:fi
  15 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 16 |     bind t = (1, "two")
-    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
- 17 |     bind n = t.#5 { 0 }
-    | keyword:bind  variable:n  operator:=  variable:t  punctuation:.  punctuation:#  number:5  punctuation:{  number:0  punctuation:}
+ 16 |     fixed t = (1, "two")
+    | keyword:fixed  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+ 17 |     fixed n = t.#5 { 0 }
+    | keyword:fixed  variable:n  operator:=  variable:t  punctuation:.  punctuation:#  number:5  punctuation:{  number:0  punctuation:}
  18 |     show(n + 1)
     | builtin-fn:show  punctuation:(  variable:n  operator:+  number:1  punctuation:)
  19 |     show(t.#5)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:5  punctuation:)
  20 |     show(t.#5 { "none here" })
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:5  punctuation:{  string:"none here"  punctuation:}  punctuation:)
- 21 |     bind m: maybe int = t.#2
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:t  punctuation:.  punctuation:#  number:2
+ 21 |     fixed m: maybe int = t.#2
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:t  punctuation:.  punctuation:#  number:2
  22 |     show(m)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:)
  23 |     ; The tuple is still worked out, for what it does.

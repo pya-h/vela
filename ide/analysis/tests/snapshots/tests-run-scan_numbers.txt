@@ -52,8 +52,8 @@
     | comment:; read from input, refusing one no person has.
  30 | task age() -> int ~ InputError
     | keyword:task  task:age  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
- 31 |     bind years = scan("age? ", int) {
-    | keyword:bind  variable:years  operator:=  builtin-fn:scan  punctuation:(  string:"age? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
+ 31 |     fixed years = scan("age? ", int) {
+    | keyword:fixed  variable:years  operator:=  builtin-fn:scan  punctuation:(  string:"age? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
  32 |         failure e
     | keyword:failure  variable:e
  33 |         <- fail e
@@ -84,8 +84,8 @@
     | comment:; Nothing more to read is an error this task sends itself.
  47 | task twice() -> int ~ InputError
     | keyword:task  task:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
- 48 |     bind n = scan("", int) {
-    | keyword:bind  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
+ 48 |     fixed n = scan("", int) {
+    | keyword:fixed  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
  49 |         failure e
     | keyword:failure  variable:e
  50 |         <- fail Ended
@@ -162,16 +162,16 @@
     | comment:; A value of either kind is a value like any other: a shape holds one, an
  91 |     ; array holds several, and a maybe holds one or none.
     | comment:; array holds several, and a maybe holds one or none.
- 92 |     bind kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
-    | keyword:bind  variable:kept  operator:=  type:Refused  punctuation:{  field:why  punctuation::  type:InputError  punctuation:.  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:TooLarge  punctuation:)  punctuation:,  field:line  punctuation::  number:3  punctuation:}
+ 92 |     fixed kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
+    | keyword:fixed  variable:kept  operator:=  type:Refused  punctuation:{  field:why  punctuation::  type:InputError  punctuation:.  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:TooLarge  punctuation:)  punctuation:,  field:line  punctuation::  number:3  punctuation:}
  93 |     show("line ", kept.line, ": ", why(kept.why))
     | builtin-fn:show  punctuation:(  string:"line "  punctuation:,  variable:kept  punctuation:.  field:line  punctuation:,  string:": "  punctuation:,  task:why  punctuation:(  variable:kept  punctuation:.  field:why  punctuation:)  punctuation:)
- 94 |     bind ends = [InputError.Ended#2]
-    | keyword:bind  variable:ends  operator:=  punctuation:[  type:InputError  punctuation:.  variant:Ended  punctuation:#  number:2  punctuation:]
+ 94 |     fixed ends = [InputError.Ended#2]
+    | keyword:fixed  variable:ends  operator:=  punctuation:[  type:InputError  punctuation:.  variant:Ended  punctuation:#  number:2  punctuation:]
  95 |     show(why(ends[1]))
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:ends  punctuation:[  number:1  punctuation:]  punctuation:)  punctuation:)
- 96 |     hold last: maybe InputError = none
-    | keyword:hold  variable:last  punctuation::  keyword:maybe  type:InputError  operator:=  keyword:none
+ 96 |     flex last: maybe InputError = none
+    | keyword:flex  variable:last  punctuation::  keyword:maybe  type:InputError  operator:=  keyword:none
  97 |     last = NoNumber(ParseError.NotANumber)
     | variable:last  operator:=  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:NotANumber  punctuation:)
  98 |     when last is {e}
@@ -202,10 +202,10 @@
     | comment:; Every line left, added up until the input ends; a line may hold a number
 113 |     ; in another base, as code writes one.
     | comment:; in another base, as code writes one.
-114 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
-115 |     hold reading = true
-    | keyword:hold  variable:reading  operator:=  keyword:true
+114 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+115 |     flex reading = true
+    | keyword:flex  variable:reading  operator:=  keyword:true
 116 |     loop reading
     | keyword:loop  variable:reading
 117 |         match scan("", int)

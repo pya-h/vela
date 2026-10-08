@@ -8,6 +8,6 @@ task two(n: int) -> int, int
     <- n, n * 2
 fi
 task main()
-    bind a, b = two(3)
+    fixed a, b = two(3)
     show(a, " ", b)
 fi

@@ -2,14 +2,14 @@
     | comment:; Lambdas that keep what they use, [@r](…): a copy of each variable of the code
   2 | ; around them they use, kept in r when they are made, read where it is kept;
     | comment:; around them they use, kept in r when they are made, read where it is kept;
-  3 | ; [hold @r] changes its copies, and the variables never change through them.
-    | comment:; [hold @r] changes its copies, and the variables never change through them.
-  4 | task counter(r: region, start: int) -> [hold @r]() -> int
-    | keyword:task  task:counter  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
-  5 |     hold n = start
-    | keyword:hold  variable:n  operator:=  parameter:start
-  6 |     <- [hold @r]() -> int
-    | keyword:<-  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  3 | ; [flex @r] changes its copies, and the variables never change through them.
+    | comment:; [flex @r] changes its copies, and the variables never change through them.
+  4 | task counter(r: region, start: int) -> [flex @r]() -> int
+    | keyword:task  task:counter  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  5 |     flex n = start
+    | keyword:flex  variable:n  operator:=  parameter:start
+  6 |     <- [flex @r]() -> int
+    | keyword:<-  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
   7 |         n = n + 1
     | variable:n  operator:=  variable:n  operator:+  number:1
   8 |         <- n
@@ -18,8 +18,8 @@
     | keyword:fi
  10 | fi
     | keyword:fi
- 12 | task adder(r: region, hold& total: int) -> [@r](int) -> int
-    | keyword:task  task:adder  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 12 | task adder(r: region, flex& total: int) -> [@r](int) -> int
+    | keyword:task  task:adder  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:flex  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  13 |     <- [@r](n: int) -> int <- n + total fi
     | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:+  parameter:total  keyword:fi
  14 | fi
@@ -54,8 +54,8 @@
     | field:n  punctuation::  type-builtin:int
  34 |     maker(r: region) -> [@r]() -> int
     | method:maker  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 35 |         bind k = .n
-    | keyword:bind  variable:k  operator:=  punctuation:.  field:n
+ 35 |         fixed k = .n
+    | keyword:fixed  variable:k  operator:=  punctuation:.  field:n
  36 |         <- [@r]() -> int <- k fi
     | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:k  keyword:fi
  37 |     fi
@@ -66,46 +66,46 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  41 |     region r
     | keyword:region  region:r
- 42 |     hold next = counter(r, 10)
-    | keyword:hold  variable:next  operator:=  task:counter  punctuation:(  region:r  punctuation:,  number:10  punctuation:)
+ 42 |     flex next = counter(r, 10)
+    | keyword:flex  variable:next  operator:=  task:counter  punctuation:(  region:r  punctuation:,  number:10  punctuation:)
  43 |     show(next(), " ", next(), " ", next())
     | builtin-fn:show  punctuation:(  variable:next  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:next  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:next  punctuation:(  punctuation:)  punctuation:)
- 44 |     hold total = 5
-    | keyword:hold  variable:total  operator:=  number:5
- 45 |     bind add = adder(r, &total)
-    | keyword:bind  variable:add  operator:=  task:adder  punctuation:(  region:r  punctuation:,  operator:&  variable:total  punctuation:)
+ 44 |     flex total = 5
+    | keyword:flex  variable:total  operator:=  number:5
+ 45 |     fixed add = adder(r, &total)
+    | keyword:fixed  variable:add  operator:=  task:adder  punctuation:(  region:r  punctuation:,  operator:&  variable:total  punctuation:)
  46 |     total = 100
     | variable:total  operator:=  number:100
  47 |     show(add(1), " ", total)
     | builtin-fn:show  punctuation:(  variable:add  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:total  punctuation:)
- 48 |     bind hi = greeter(r, "Ada")
-    | keyword:bind  variable:hi  operator:=  task:greeter  punctuation:(  region:r  punctuation:,  string:"Ada"  punctuation:)
+ 48 |     fixed hi = greeter(r, "Ada")
+    | keyword:fixed  variable:hi  operator:=  task:greeter  punctuation:(  region:r  punctuation:,  string:"Ada"  punctuation:)
  49 |     show(hi("hello"))
     | builtin-fn:show  punctuation:(  variable:hi  punctuation:(  string:"hello"  punctuation:)  punctuation:)
- 50 |     bind step = 3
-    | keyword:bind  variable:step  operator:=  number:3
- 51 |     bind plus = [@r](x: int) -> int <- x + step fi
-    | keyword:bind  variable:plus  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  variable:step  keyword:fi
+ 50 |     fixed step = 3
+    | keyword:fixed  variable:step  operator:=  number:3
+ 51 |     fixed plus = [@r](x: int) -> int <- x + step fi
+    | keyword:fixed  variable:plus  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  variable:step  keyword:fi
  52 |     show(plus(1), " ", apply(plus, 5), " ", twice(plus, 1))
     | builtin-fn:show  punctuation:(  variable:plus  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  variable:plus  punctuation:,  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  task:twice  punctuation:(  variable:plus  punctuation:,  number:1  punctuation:)  punctuation:)
  53 |     ; A task, or a task value, goes where a lambda that keeps is expected.
     | comment:; A task, or a task value, goes where a lambda that keeps is expected.
- 54 |     bind plain = (x: int) -> int <- x - 1 fi
-    | keyword:bind  variable:plain  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:-  number:1  keyword:fi
- 55 |     bind kept: [@r](int) -> int = plain
-    | keyword:bind  variable:kept  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  variable:plain
+ 54 |     fixed plain = (x: int) -> int <- x - 1 fi
+    | keyword:fixed  variable:plain  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:-  number:1  keyword:fi
+ 55 |     fixed kept: [@r](int) -> int = plain
+    | keyword:fixed  variable:kept  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  variable:plain
  56 |     show(apply(double, 4), " ", kept(1), " ", apply(kept, 10), " ", apply((x: int) -> int <- x * 3 fi, 2))
     | builtin-fn:show  punctuation:(  task:apply  punctuation:(  task:double  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  variable:kept  punctuation:,  number:10  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:3  keyword:fi  punctuation:,  number:2  punctuation:)  punctuation:)
  57 |     ; What lives in r is used where it is: a change to an item is seen.
     | comment:; What lives in r is used where it is: a change to an item is seen.
- 58 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 58 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  59 |     xs.add(1)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
  60 |     xs.add(2)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:2  punctuation:)
- 61 |     hold scale = [hold @r]() -> int
-    | keyword:hold  variable:scale  operator:=  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 61 |     flex scale = [flex @r]() -> int
+    | keyword:flex  variable:scale  operator:=  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
  62 |         xs[0] = xs[0] * 10
     | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  variable:xs  punctuation:[  number:0  punctuation:]  operator:*  number:10
  63 |         <- xs[0]
@@ -114,8 +114,8 @@
     | keyword:fi
  65 |     show(scale(), " ", scale(), " ", xs[0], " ", xs.len)
     | builtin-fn:show  punctuation:(  variable:scale  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:scale  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
- 66 |     hold fs = new [[@r]() -> int]() at r
-    | keyword:hold  variable:fs  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 66 |     flex fs = new [[@r]() -> int]() at r
+    | keyword:flex  variable:fs  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  67 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
  68 |         fs.add([@r]() -> int <- i * step fi)
@@ -128,8 +128,8 @@
     | builtin-fn:show  punctuation:(  variable:f  punctuation:(  punctuation:)  punctuation:)
  72 |     fi
     | keyword:fi
- 73 |     hold later: maybe [@r]() -> int = none
-    | keyword:hold  variable:later  punctuation::  keyword:maybe  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  keyword:none
+ 73 |     flex later: maybe [@r]() -> int = none
+    | keyword:flex  variable:later  punctuation::  keyword:maybe  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  keyword:none
  74 |     later = [@r]() -> int <- step + 1 fi
     | variable:later  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:step  operator:+  number:1  keyword:fi
  75 |     when later is {f}
@@ -138,20 +138,20 @@
     | builtin-fn:show  punctuation:(  variable:f  punctuation:(  punctuation:)  punctuation:)
  77 |     fi
     | keyword:fi
- 78 |     bind outer = [@r](n: int) -> int
-    | keyword:bind  variable:outer  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 79 |         bind inner = [@r](m: int) -> int <- m + n + step fi
-    | keyword:bind  variable:inner  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:m  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:m  operator:+  parameter:n  operator:+  variable:step  keyword:fi
+ 78 |     fixed outer = [@r](n: int) -> int
+    | keyword:fixed  variable:outer  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 79 |         fixed inner = [@r](m: int) -> int <- m + n + step fi
+    | keyword:fixed  variable:inner  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:m  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:m  operator:+  parameter:n  operator:+  variable:step  keyword:fi
  80 |         <- inner(1)
     | keyword:<-  variable:inner  punctuation:(  number:1  punctuation:)
  81 |     fi
     | keyword:fi
  82 |     show(outer(10))
     | builtin-fn:show  punctuation:(  variable:outer  punctuation:(  number:10  punctuation:)  punctuation:)
- 83 |     bind made = [@r](n: int) -> [int]@r
-    | keyword:bind  variable:made  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 84 |         hold ys = new [int]() at r
-    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 83 |     fixed made = [@r](n: int) -> [int]@r
+    | keyword:fixed  variable:made  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 84 |         flex ys = new [int]() at r
+    | keyword:flex  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  85 |         ys.add(n)
     | variable:ys  punctuation:.  field:add  punctuation:(  parameter:n  punctuation:)
  86 |         ys.add(xs.len)

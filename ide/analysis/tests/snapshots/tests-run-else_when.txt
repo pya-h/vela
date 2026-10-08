@@ -38,8 +38,8 @@
     | comment:; A chain with no final `else`: nothing runs when no condition holds.
  23 | task counted(n: int) -> int
     | keyword:task  task:counted  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 24 |     hold seen = 0
-    | keyword:hold  variable:seen  operator:=  number:0
+ 24 |     flex seen = 0
+    | keyword:flex  variable:seen  operator:=  number:0
  25 |     when n > 10
     | keyword:when  parameter:n  operator:>  number:10
  26 |         seen = 3
@@ -84,8 +84,8 @@
     | builtin-fn:show  punctuation:(  task:counted  punctuation:(  number:20  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:0  punctuation:)  punctuation:)
  50 |     ; A pattern in a chain: its names are visible only in its own block.
     | comment:; A pattern in a chain: its names are visible only in its own block.
- 51 |     hold light: Light = Dimmed(4)
-    | keyword:hold  variable:light  punctuation::  type:Light  operator:=  variant:Dimmed  punctuation:(  number:4  punctuation:)
+ 51 |     flex light: Light = Dimmed(4)
+    | keyword:flex  variable:light  punctuation::  type:Light  operator:=  variant:Dimmed  punctuation:(  number:4  punctuation:)
  52 |     when light is On
     | keyword:when  variable:light  keyword:is  variant:On
  53 |         show("on")
@@ -124,8 +124,8 @@
     | comment:; A chain inside a loop, with a region in one of its blocks.
  72 |     region kept default
     | keyword:region  region:kept  keyword:default
- 73 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 73 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  74 |     loop i < 3
     | keyword:loop  variable:i  operator:<  number:3
  75 |         when i == 0
@@ -150,8 +150,8 @@
     | comment:; A read past a tuple's end works the tuple out, in the arm it is written
  86 |     ; in, only when that arm is reached, and not after an 'and' that failed.
     | comment:; in, only when that arm is reached, and not after an 'and' that failed.
- 87 |     bind k = 3
-    | keyword:bind  variable:k  operator:=  number:3
+ 87 |     fixed k = 3
+    | keyword:fixed  variable:k  operator:=  number:3
  88 |     when k > 5
     | keyword:when  variable:k  operator:>  number:5
  89 |         show("never")

@@ -10,7 +10,7 @@ fi
 
 task main()
     region r
-    bind n, node = build(1)
+    fixed n, node = build(1)
     show(n)
     show(node^.value)
 fi

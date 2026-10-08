@@ -16,8 +16,8 @@
     | keyword:fi
  11 | fi
     | keyword:fi
- 13 | task bump(hold& x: int) -> int
-    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 13 | task bump(flex& x: int) -> int
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  14 |     x = x + 100
     | parameter:x  operator:=  parameter:x  operator:+  number:100
  15 |     <- 0
@@ -30,16 +30,16 @@
     | keyword:<-  parameter:a  operator:*  number:1000  operator:+  parameter:b
  20 | fi
     | keyword:fi
- 22 | task step(hold& x: int) -> bool
-    | keyword:task  task:step  punctuation:(  keyword:hold  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 22 | task step(flex& x: int) -> bool
+    | keyword:task  task:step  punctuation:(  keyword:flex  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
  23 |     x = x + 1
     | parameter:x  operator:=  parameter:x  operator:+  number:1
  24 |     <- x < 2
     | keyword:<-  parameter:x  operator:<  number:2
  25 | fi
     | keyword:fi
- 27 | task seven(hold& i: int) -> int
-    | keyword:task  task:seven  punctuation:(  keyword:hold  keyword:&  parameter:i  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 27 | task seven(flex& i: int) -> int
+    | keyword:task  task:seven  punctuation:(  keyword:flex  keyword:&  parameter:i  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  28 |     i = i + 1
     | parameter:i  operator:=  parameter:i  operator:+  number:1
  29 |     <- 7
@@ -48,32 +48,32 @@
     | keyword:fi
  32 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 33 |     hold n = 1
-    | keyword:hold  variable:n  operator:=  number:1
+ 33 |     flex n = 1
+    | keyword:flex  variable:n  operator:=  number:1
  34 |     show(n + bump(&n), " ", n)
     | builtin-fn:show  punctuation:(  variable:n  operator:+  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
  35 |     show(pair(n, bump(&n)), " ", n)
     | builtin-fn:show  punctuation:(  task:pair  punctuation:(  variable:n  punctuation:,  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
  36 |     show(bump(&n) + n, " ", n)
     | builtin-fn:show  punctuation:(  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  operator:+  variable:n  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
- 37 |     hold c = Counter {}
-    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
+ 37 |     flex c = Counter {}
+    | keyword:flex  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
  38 |     show(c.n + c.bump(), " ", c.n)
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  operator:+  variable:c  punctuation:.  method:bump  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
  39 |     show(pair(c.n, c.bump()), " ", c.n)
     | builtin-fn:show  punctuation:(  task:pair  punctuation:(  variable:c  punctuation:.  field:n  punctuation:,  variable:c  punctuation:.  method:bump  punctuation:(  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
- 40 |     hold flag = false
-    | keyword:hold  variable:flag  operator:=  keyword:false
+ 40 |     flex flag = false
+    | keyword:flex  variable:flag  operator:=  keyword:false
  41 |     show(flag or bump(&n) == 0, " ", n)
     | builtin-fn:show  punctuation:(  variable:flag  keyword:or  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  operator:==  number:0  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
  42 |     show(flag and bump(&n) == 0, " ", n)
     | builtin-fn:show  punctuation:(  variable:flag  keyword:and  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  operator:==  number:0  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
  44 |     ; A loop's condition is read again before every round, change and all.
     | comment:; A loop's condition is read again before every round, change and all.
- 45 |     hold k = 0
-    | keyword:hold  variable:k  operator:=  number:0
- 46 |     hold rounds = 0
-    | keyword:hold  variable:rounds  operator:=  number:0
+ 45 |     flex k = 0
+    | keyword:flex  variable:k  operator:=  number:0
+ 46 |     flex rounds = 0
+    | keyword:flex  variable:rounds  operator:=  number:0
  47 |     loop k < 300 and bump(&k) == 0
     | keyword:loop  variable:k  operator:<  number:300  keyword:and  task:bump  punctuation:(  operator:&  variable:k  punctuation:)  operator:==  number:0
  48 |         rounds = rounds + 1
@@ -88,14 +88,14 @@
     | comment:; when 'and' skips its right side, again each round of a loop, and in the
  54 |     ; 'else when' that reaches it.
     | comment:; 'else when' that reaches it.
- 55 |     hold arr = [0, 0, 0]
-    | keyword:hold  variable:arr  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
- 56 |     hold i = 3
-    | keyword:hold  variable:i  operator:=  number:3
+ 55 |     flex arr = [0, 0, 0]
+    | keyword:flex  variable:arr  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
+ 56 |     flex i = 3
+    | keyword:flex  variable:i  operator:=  number:3
  57 |     show(i < 3 and step(&arr[i]))
     | builtin-fn:show  punctuation:(  variable:i  operator:<  number:3  keyword:and  task:step  punctuation:(  operator:&  variable:arr  punctuation:[  variable:i  punctuation:]  punctuation:)  punctuation:)
- 58 |     hold j = 0
-    | keyword:hold  variable:j  operator:=  number:0
+ 58 |     flex j = 0
+    | keyword:flex  variable:j  operator:=  number:0
  59 |     loop j < 3 and step(&arr[j])
     | keyword:loop  variable:j  operator:<  number:3  keyword:and  task:step  punctuation:(  operator:&  variable:arr  punctuation:[  variable:j  punctuation:]  punctuation:)
  60 |         j = j + 1
@@ -120,10 +120,10 @@
     | keyword:fi
  71 |     ; An assignment finds its place before the value that changes the index.
     | comment:; An assignment finds its place before the value that changes the index.
- 72 |     hold spot = 0
-    | keyword:hold  variable:spot  operator:=  number:0
- 73 |     hold slots = [0, 0, 0]
-    | keyword:hold  variable:slots  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
+ 72 |     flex spot = 0
+    | keyword:flex  variable:spot  operator:=  number:0
+ 73 |     flex slots = [0, 0, 0]
+    | keyword:flex  variable:slots  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
  74 |     slots[spot] = seven(&spot)
     | variable:slots  punctuation:[  variable:spot  punctuation:]  operator:=  task:seven  punctuation:(  operator:&  variable:spot  punctuation:)
  75 |     show(slots[0], slots[1], slots[2], " ", spot)

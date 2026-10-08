@@ -10,9 +10,9 @@ fi
 
 task main()
     region r
-    hold t: text@r = "x".copy() at r
+    flex t: text@r = "x".copy() at r
     region w
-    bind a = "abc".copy() at w
+    fixed a = "abc".copy() at w
     t = when a.len > 2
         a.copy()
     else

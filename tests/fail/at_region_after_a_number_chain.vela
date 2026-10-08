@@ -5,6 +5,6 @@ fi
 
 task main()
     region work
-    bind xs = new [int]([1, 2]) at work
+    fixed xs = new [int]([1, 2]) at work
     show(1 + count(xs) at work)
 fi

@@ -50,8 +50,8 @@
     | comment:; Ends only by sending, so the task never finishes without a value.
  33 | task first_over(xs: [int]@r, limit: int) -> int
     | keyword:task  task:first_over  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 34 |     hold i = 0
-    | keyword:hold  variable:i  operator:=  number:0
+ 34 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
  35 |     endless
     | keyword:endless
  36 |         when xs[i] > limit
@@ -86,30 +86,30 @@
     | keyword:region  region:r
  54 |     ; The commas of types given part no items.
     | comment:; The commas of types given part no items.
- 55 |     loop hold e = Either<int, text>.Left(3), p: Pair<int, text> = Pair { left: 1, right: "a" }, n = 0 || n < 1 || n++
-    | keyword:loop  keyword:hold  variable:e  operator:=  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Left  punctuation:(  number:3  punctuation:)  punctuation:,  variable:p  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:1  punctuation:,  field:right  punctuation::  string:"a"  punctuation:}  punctuation:,  variable:n  operator:=  number:0  operator:||  variable:n  operator:<  number:1  operator:||  variable:n  operator:++
+ 55 |     loop flex e = Either<int, text>.Left(3), p: Pair<int, text> = Pair { left: 1, right: "a" }, n = 0 || n < 1 || n++
+    | keyword:loop  keyword:flex  variable:e  operator:=  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Left  punctuation:(  number:3  punctuation:)  punctuation:,  variable:p  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:1  punctuation:,  field:right  punctuation::  string:"a"  punctuation:}  punctuation:,  variable:n  operator:=  number:0  operator:||  variable:n  operator:<  number:1  operator:||  variable:n  operator:++
  56 |         show(e, " ", p.left, p.right)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:left  punctuation:,  variable:p  punctuation:.  field:right  punctuation:)
  57 |     fi
     | keyword:fi
  59 |     ; Nor do those of a lambda's call, before its 'fi' or after it.
     | comment:; Nor do those of a lambda's call, before its 'fi' or after it.
- 60 |     loop hold v = apply((x: int) -> int <- x * 2 fi, 3), j = 0 || j < v || j = apply((x: int) -> int <- x + 2 fi, j)
-    | keyword:loop  keyword:hold  variable:v  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  number:3  punctuation:)  punctuation:,  variable:j  operator:=  number:0  operator:||  variable:j  operator:<  variable:v  operator:||  variable:j  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  number:2  keyword:fi  punctuation:,  variable:j  punctuation:)
+ 60 |     loop flex v = apply((x: int) -> int <- x * 2 fi, 3), j = 0 || j < v || j = apply((x: int) -> int <- x + 2 fi, j)
+    | keyword:loop  keyword:flex  variable:v  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  number:3  punctuation:)  punctuation:,  variable:j  operator:=  number:0  operator:||  variable:j  operator:<  variable:v  operator:||  variable:j  operator:=  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  number:2  keyword:fi  punctuation:,  variable:j  punctuation:)
  61 |         show("j ", j)
     | builtin-fn:show  punctuation:(  string:"j "  punctuation:,  variable:j  punctuation:)
  62 |     fi
     | keyword:fi
- 63 |     loop hold i = 0, bind twice = (x: int) -> int <- x * 2 fi || i < 3 || i++
-    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  keyword:bind  variable:twice  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 63 |     loop flex i = 0, fixed twice = (x: int) -> int <- x * 2 fi || i < 3 || i++
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  keyword:fixed  variable:twice  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
  64 |         show("twice ", twice(i))
     | builtin-fn:show  punctuation:(  string:"twice "  punctuation:,  variable:twice  punctuation:(  variable:i  punctuation:)  punctuation:)
  65 |     fi
     | keyword:fi
  67 |     ; A condition over several lines, and the step after its 'fi'.
     | comment:; A condition over several lines, and the step after its 'fi'.
- 68 |     loop hold k = 0 || match token(k)
-    | keyword:loop  keyword:hold  variable:k  operator:=  number:0  operator:||  keyword:match  task:token  punctuation:(  variable:k  punctuation:)
+ 68 |     loop flex k = 0 || match token(k)
+    | keyword:loop  keyword:flex  variable:k  operator:=  number:0  operator:||  keyword:match  task:token  punctuation:(  variable:k  punctuation:)
  69 |     case Num n = n < 5
     | keyword:case  variant:Num  variable:n  operator:=  variable:n  operator:<  number:5
  70 |     case Stop = false
@@ -122,8 +122,8 @@
     | keyword:fi
  75 |     ; A slice changed in the loop, and results set in it.
     | comment:; A slice changed in the loop, and results set in it.
- 76 |     hold b: Bag@r = Bag { items: [0, ...] at r }
-    | keyword:hold  variable:b  punctuation::  type:Bag  operator:@  region:r  operator:=  type:Bag  punctuation:{  field:items  punctuation::  punctuation:[  number:0  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:}
+ 76 |     flex b: Bag@r = Bag { items: [0, ...] at r }
+    | keyword:flex  variable:b  punctuation::  type:Bag  operator:@  region:r  operator:=  type:Bag  punctuation:{  field:items  punctuation::  punctuation:[  number:0  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:}
  77 |     loop b.items.len < 3
     | keyword:loop  variable:b  punctuation:.  field:items  punctuation:.  field:len  operator:<  number:3
  78 |         b.items.add(1)

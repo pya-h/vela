@@ -1,4 +1,4 @@
-; error: 3:14: invalid number '1.5e3'
+; error: 3:15: invalid number '1.5e3'
 task main()
-    bind x = 1.5e3
+    fixed x = 1.5e3
 fi

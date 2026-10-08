@@ -1,9 +1,9 @@
-; error: 8:28: 'made' is a shared field of 'Point', one value for the whole program rather than part of each value, so no literal gives it; it is 'Point.made'
+; error: 8:29: 'made' is a shared field of 'Point', one value for the whole program rather than part of each value, so no literal gives it; it is 'Point.made'
 shape Point
     x: int
     shared made: int = 0
 fi
 
 task main()
-    bind p = Point { x: 1, made: 2 }
+    fixed p = Point { x: 1, made: 2 }
 fi

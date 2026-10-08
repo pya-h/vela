@@ -1,9 +1,9 @@
-; error: 8:14: variant 'Circle' expects 1 argument, got 0
+; error: 8:15: variant 'Circle' expects 1 argument, got 0
 kind Shape
     Circle(radius: float)
     Dot
 fi
 
 task main()
-    bind s = Circle
+    fixed s = Circle
 fi

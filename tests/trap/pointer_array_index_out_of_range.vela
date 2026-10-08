@@ -1,8 +1,8 @@
 ; trap: index 3 is out of range 0..3 at 8:16 in task 'main'
 task main()
     region r
-    bind boxed = new [int#3]([1, 2, 3]) at r
-    hold i = 2
+    fixed boxed = new [int#3]([1, 2, 3]) at r
+    flex i = 2
     show(boxed^[i])
     i = i + 1
     show(boxed^[i])

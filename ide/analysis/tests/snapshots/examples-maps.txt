@@ -14,18 +14,18 @@
     | comment:; made in the region the task is given, holds them there too.
   9 | task count_words(line: text@r, r: region) -> [text: int]@r
     | keyword:task  task:count_words  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  variable:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r
- 10 |     hold counts: [text: int]@r = new [text: int]() at r
-    | keyword:hold  variable:counts  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 11 |     hold start = 0
-    | keyword:hold  variable:start  operator:=  number:0
+ 10 |     flex counts: [text: int]@r = new [text: int]() at r
+    | keyword:flex  variable:counts  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 11 |     flex start = 0
+    | keyword:flex  variable:start  operator:=  number:0
  12 |     each i in 0..line.len + 1
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:line  punctuation:.  field:len  operator:+  number:1
  13 |         when i == line.len or line[#i] ~= ' '
     | keyword:when  variable:i  operator:==  parameter:line  punctuation:.  field:len  keyword:or  parameter:line  punctuation:[  punctuation:#  variable:i  punctuation:]  operator:~=  string:' '
  14 |             when i > start
     | keyword:when  variable:i  operator:>  variable:start
- 15 |                 bind word = line[start..i]
-    | keyword:bind  variable:word  operator:=  parameter:line  punctuation:[  variable:start  operator:..  variable:i  punctuation:]
+ 15 |                 fixed word = line[start..i]
+    | keyword:fixed  variable:word  operator:=  parameter:line  punctuation:[  variable:start  operator:..  variable:i  punctuation:]
  16 |                 counts[word] = counts[#word] { 0 } + 1
     | variable:counts  punctuation:[  variable:word  punctuation:]  operator:=  variable:counts  punctuation:[  punctuation:#  variable:word  punctuation:]  punctuation:{  number:0  punctuation:}  operator:+  number:1
  17 |             fi
@@ -44,8 +44,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  25 |     region r
     | keyword:region  region:r
- 26 |     bind counts = count_words("the cat and the dog and the bird".copy() at r, r)
-    | keyword:bind  variable:counts  operator:=  task:count_words  punctuation:(  string:"the cat and the dog and the bird"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 26 |     fixed counts = count_words("the cat and the dog and the bird".copy() at r, r)
+    | keyword:fixed  variable:counts  operator:=  task:count_words  punctuation:(  string:"the cat and the dog and the bird"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  region:r  punctuation:)
  27 |     each word, n in counts
     | keyword:each  variable:word  punctuation:,  variable:n  keyword:in  variable:counts
  28 |         show(word, ": ", n)
@@ -56,8 +56,8 @@
     | builtin-fn:show  punctuation:(  variable:counts  punctuation:.  field:len  punctuation:,  string:" words, 'the' "  punctuation:,  variable:counts  punctuation:[  string:"the"  punctuation:]  punctuation:,  string:" times, 'cow' "  punctuation:,  variable:counts  punctuation:[  punctuation:#  string:"cow"  punctuation:]  punctuation:{  number:0  punctuation:}  punctuation:,  string:" times"  punctuation:)
  31 |     ; A map written by its pairs, with names as its text keys.
     | comment:; A map written by its pairs, with names as its text keys.
- 32 |     hold prices = new [:float]([apple: 0.5, pear: 0.75]) at r
-    | keyword:hold  variable:prices  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  punctuation:(  punctuation:[  string:apple  punctuation::  number:0.5  punctuation:,  string:pear  punctuation::  number:0.75  punctuation:]  punctuation:)  keyword:at  region:r
+ 32 |     flex prices = new [:float]([apple: 0.5, pear: 0.75]) at r
+    | keyword:flex  variable:prices  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:float  punctuation:]  punctuation:(  punctuation:[  string:apple  punctuation::  number:0.5  punctuation:,  string:pear  punctuation::  number:0.75  punctuation:]  punctuation:)  keyword:at  region:r
  33 |     prices["plum"] = 1.25
     | variable:prices  punctuation:[  string:"plum"  punctuation:]  operator:=  number:1.25
  34 |     show(prices)

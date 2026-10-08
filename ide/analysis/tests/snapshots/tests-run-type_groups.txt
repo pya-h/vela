@@ -44,8 +44,8 @@
     | comment:; Counts the calls of any task, in a shared field.
  27 | shape Calls
     | keyword:shape  type:Calls
- 28 |     shared hold count: int = 0
-    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 28 |     shared flex count: int = 0
+    | keyword:shared  keyword:flex  field:count  punctuation::  type-builtin:int  operator:=  number:0
  29 | fi
     | keyword:fi
  31 | task counted<P..., R>(next: (P...) -> R, args: P...) -> R
@@ -70,8 +70,8 @@
     | keyword:fi
  44 | ; A large value, and a copy the task may change, given through a group.
     | comment:; A large value, and a copy the task may change, given through a group.
- 45 | task sum(x: Big, hold y: Big) -> int
-    | keyword:task  task:sum  punctuation:(  parameter:x  punctuation::  type:Big  punctuation:,  keyword:hold  parameter:y  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 45 | task sum(x: Big, flex y: Big) -> int
+    | keyword:task  task:sum  punctuation:(  parameter:x  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:y  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
  46 |     y.a = y.a + 10
     | parameter:y  punctuation:.  field:a  operator:=  parameter:y  punctuation:.  field:a  operator:+  number:10
  47 |     <- x.a + y.a
@@ -130,8 +130,8 @@
     | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:add  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
  81 |     show(call(seven))
     | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:seven  punctuation:)  punctuation:)
- 82 |     bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
-    | keyword:bind  variable:big  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+ 82 |     fixed big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:fixed  variable:big  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
  83 |     show(call(sum, big, big))
     | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:sum  punctuation:,  variable:big  punctuation:,  variable:big  punctuation:)  punctuation:)
  84 |     show(twice(inc, 5))

@@ -1,6 +1,6 @@
 ; trap: 256 does not fit in a unit at 6:7 in task 'main'
 task main()
-    hold b: unit = 254
+    flex b: unit = 254
     b++
     show(b)
     b += 1

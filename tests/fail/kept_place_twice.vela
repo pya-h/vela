@@ -1,7 +1,7 @@
-; error: 6:30: 'n' is already in this lambda's list; each place is kept once
+; error: 6:31: 'n' is already in this lambda's list; each place is kept once
 ; A variable is kept as a place once.
 task main()
-    hold n = 1
+    flex n = 1
     region r
-    bind f = [hold& n, hold& n, @r]() -> nothing n = 2 fi
+    fixed f = [flex& n, flex& n, @r]() -> nothing n = 2 fi
 fi

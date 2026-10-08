@@ -1,11 +1,11 @@
-; error: 9:39: can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'
+; error: 9:40: can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'
 shape Person
     name: text
 fi
 
 task main()
     region r
-    bind line = scan("") at r { "" }
-    bind person = Person { name: line.copy() }
+    fixed line = scan("") at r { "" }
+    fixed person = Person { name: line.copy() }
     show(person.name)
 fi

@@ -5,8 +5,8 @@ fi
 
 task main()
     region r
-    hold outer: int ~ Problem = 0
-    bind line = scan("") at r { "" }
+    flex outer: int ~ Problem = 0
+    fixed line = scan("") at r { "" }
     outer = fail Bad(line)
     show(1)
 fi

@@ -1,6 +1,6 @@
 ; error: 5:7: '*=' works on numbers; text is only joined, with '+='
 task main()
     region r
-    hold t: text@r = "a" + "b" at r
+    flex t: text@r = "a" + "b" at r
     t *= 2
 fi

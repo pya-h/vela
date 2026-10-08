@@ -132,66 +132,66 @@
     | keyword:region  region:r
  82 |     ; The types are written, or the values say which they are.
     | comment:; The types are written, or the values say which they are.
- 83 |     bind written: Box<int> = Box<int> { value: 1 }
-    | keyword:bind  variable:written  punctuation::  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:1  punctuation:}
+ 83 |     fixed written: Box<int> = Box<int> { value: 1 }
+    | keyword:fixed  variable:written  punctuation::  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:1  punctuation:}
  84 |     show(written.value)
     | builtin-fn:show  punctuation:(  variable:written  punctuation:.  field:value  punctuation:)
- 85 |     bind worked = Box { value: 2.5 }
-    | keyword:bind  variable:worked  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:2.5  punctuation:}
+ 85 |     fixed worked = Box { value: 2.5 }
+    | keyword:fixed  variable:worked  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:2.5  punctuation:}
  86 |     show(worked.value)
     | builtin-fn:show  punctuation:(  variable:worked  punctuation:.  field:value  punctuation:)
- 87 |     bind empty: Box<maybe int> = Box<maybe int> { value: none }
-    | keyword:bind  variable:empty  punctuation::  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  keyword:none  punctuation:}
+ 87 |     fixed empty: Box<maybe int> = Box<maybe int> { value: none }
+    | keyword:fixed  variable:empty  punctuation::  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  keyword:none  punctuation:}
  88 |     show(empty.value)
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  field:value  punctuation:)
  90 |     ; The shape made for one set of types serves every region: the text of a
     | comment:; The shape made for one set of types serves every region: the text of a
  91 |     ; `Box<text>` is in the region of the box.
     | comment:; `Box<text>` is in the region of the box.
- 92 |     bind here: Box<text>@r = Box { value: "in a region".copy() at r }
-    | keyword:bind  variable:here  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 92 |     fixed here: Box<text>@r = Box { value: "in a region".copy() at r }
+    | keyword:fixed  variable:here  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
  93 |     show(here.value)
     | builtin-fn:show  punctuation:(  variable:here  punctuation:.  field:value  punctuation:)
- 94 |     bind lasting: Box<text> = Box { value: "as long as the program" }
-    | keyword:bind  variable:lasting  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"as long as the program"  punctuation:}
+ 94 |     fixed lasting: Box<text> = Box { value: "as long as the program" }
+    | keyword:fixed  variable:lasting  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"as long as the program"  punctuation:}
  95 |     show(lasting.value)
     | builtin-fn:show  punctuation:(  variable:lasting  punctuation:.  field:value  punctuation:)
  97 |     ; Two types at once, with the words they must allow.
     | comment:; Two types at once, with the words they must allow.
- 98 |     bind pair: Pair<int, text> = Pair { left: 3, right: "three" }
-    | keyword:bind  variable:pair  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:3  punctuation:,  field:right  punctuation::  string:"three"  punctuation:}
+ 98 |     fixed pair: Pair<int, text> = Pair { left: 3, right: "three" }
+    | keyword:fixed  variable:pair  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:3  punctuation:,  field:right  punctuation::  string:"three"  punctuation:}
  99 |     show(pair.left)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:left  punctuation:)
 100 |     show(pair.right)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:right  punctuation:)
 102 |     ; A shape given types holds what any field holds.
     | comment:; A shape given types holds what any field holds.
-103 |     hold items = new [int]() at r
-    | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+103 |     flex items = new [int]() at r
+    | keyword:flex  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 104 |     items.add(4)
     | variable:items  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
 105 |     items.add(5)
     | variable:items  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
-106 |     bind holder: Holder<int>@r = Holder { items: items, label: "counts" }
-    | keyword:bind  variable:holder  punctuation::  type:Holder  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:items  punctuation::  variable:items  punctuation:,  field:label  punctuation::  string:"counts"  punctuation:}
+106 |     fixed holder: Holder<int>@r = Holder { items: items, label: "counts" }
+    | keyword:fixed  variable:holder  punctuation::  type:Holder  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:items  punctuation::  variable:items  punctuation:,  field:label  punctuation::  string:"counts"  punctuation:}
 107 |     show(holder.label)
     | builtin-fn:show  punctuation:(  variable:holder  punctuation:.  field:label  punctuation:)
 108 |     show(holder.items[1])
     | builtin-fn:show  punctuation:(  variable:holder  punctuation:.  field:items  punctuation:[  number:1  punctuation:]  punctuation:)
-109 |     bind nested = Box { value: Box { value: 6 } }
-    | keyword:bind  variable:nested  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:6  punctuation:}  punctuation:}
+109 |     fixed nested = Box { value: Box { value: 6 } }
+    | keyword:fixed  variable:nested  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:6  punctuation:}  punctuation:}
 110 |     show(nested.value.value)
     | builtin-fn:show  punctuation:(  variable:nested  punctuation:.  field:value  punctuation:.  field:value  punctuation:)
-111 |     bind tuple: Box<(int, bool)> = Box { value: (7, true) }
-    | keyword:bind  variable:tuple  punctuation::  type:Box  punctuation:<  punctuation:(  type-builtin:int  punctuation:,  type-builtin:bool  punctuation:)  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  punctuation:(  number:7  punctuation:,  keyword:true  punctuation:)  punctuation:}
+111 |     fixed tuple: Box<(int, bool)> = Box { value: (7, true) }
+    | keyword:fixed  variable:tuple  punctuation::  type:Box  punctuation:<  punctuation:(  type-builtin:int  punctuation:,  type-builtin:bool  punctuation:)  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  punctuation:(  number:7  punctuation:,  keyword:true  punctuation:)  punctuation:}
 112 |     show(tuple.value.0)
     | builtin-fn:show  punctuation:(  variable:tuple  punctuation:.  field:value  punctuation:.  field:0  punctuation:)
 114 |     ; A field naming the shape again, behind a pointer.
     | comment:; A field naming the shape again, behind a pointer.
-115 |     bind tail: ^Node<int>@r = new Node<int>(Node { value: 9, next: none }) at r
-    | keyword:bind  variable:tail  punctuation::  operator:^  type:Node  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  keyword:new  type:Node  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:9  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
-116 |     bind head: ^Node<int>@r = new Node<int>(Node { value: 8, next: tail }) at r
-    | keyword:bind  variable:head  punctuation::  operator:^  type:Node  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  keyword:new  type:Node  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:8  punctuation:,  field:next  punctuation::  variable:tail  punctuation:}  punctuation:)  keyword:at  region:r
+115 |     fixed tail: ^Node<int>@r = new Node<int>(Node { value: 9, next: none }) at r
+    | keyword:fixed  variable:tail  punctuation::  operator:^  type:Node  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  keyword:new  type:Node  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:9  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+116 |     fixed head: ^Node<int>@r = new Node<int>(Node { value: 8, next: tail }) at r
+    | keyword:fixed  variable:head  punctuation::  operator:^  type:Node  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  keyword:new  type:Node  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:8  punctuation:,  field:next  punctuation::  variable:tail  punctuation:}  punctuation:)  keyword:at  region:r
 117 |     show(head^.value)
     | builtin-fn:show  punctuation:(  variable:head  operator:^  punctuation:.  field:value  punctuation:)
 118 |     when head^.next is {second}
@@ -206,18 +206,18 @@
     | task:tell  punctuation:(  type:Shown  punctuation:{  field:value  punctuation::  string:"shown"  punctuation:}  punctuation:)
 124 |     tell(Shown { value: 10 })
     | task:tell  punctuation:(  type:Shown  punctuation:{  field:value  punctuation::  number:10  punctuation:}  punctuation:)
-125 |     bind made = boxOf(r, 11)
-    | keyword:bind  variable:made  operator:=  task:boxOf  punctuation:(  region:r  punctuation:,  number:11  punctuation:)
+125 |     fixed made = boxOf(r, 11)
+    | keyword:fixed  variable:made  operator:=  task:boxOf  punctuation:(  region:r  punctuation:,  number:11  punctuation:)
 126 |     show(made.value)
     | builtin-fn:show  punctuation:(  variable:made  punctuation:.  field:value  punctuation:)
-127 |     bind text_box = boxOf(r, "boxed".copy() at r)
-    | keyword:bind  variable:text_box  operator:=  task:boxOf  punctuation:(  region:r  punctuation:,  string:"boxed"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+127 |     fixed text_box = boxOf(r, "boxed".copy() at r)
+    | keyword:fixed  variable:text_box  operator:=  task:boxOf  punctuation:(  region:r  punctuation:,  string:"boxed"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 128 |     show(text_box.value)
     | builtin-fn:show  punctuation:(  variable:text_box  punctuation:.  field:value  punctuation:)
 129 |     show(valueOf(made))
     | builtin-fn:show  punctuation:(  task:valueOf  punctuation:(  variable:made  punctuation:)  punctuation:)
-130 |     bind boxes: [Box<int>]@r = new [Box<int>]([Box { value: 12 }, Box { value: 13 }]) at r
-    | keyword:bind  variable:boxes  punctuation::  punctuation:[  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  punctuation:(  punctuation:[  type:Box  punctuation:{  field:value  punctuation::  number:12  punctuation:}  punctuation:,  type:Box  punctuation:{  field:value  punctuation::  number:13  punctuation:}  punctuation:]  punctuation:)  keyword:at  region:r
+130 |     fixed boxes: [Box<int>]@r = new [Box<int>]([Box { value: 12 }, Box { value: 13 }]) at r
+    | keyword:fixed  variable:boxes  punctuation::  punctuation:[  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  punctuation:(  punctuation:[  type:Box  punctuation:{  field:value  punctuation::  number:12  punctuation:}  punctuation:,  type:Box  punctuation:{  field:value  punctuation::  number:13  punctuation:}  punctuation:]  punctuation:)  keyword:at  region:r
 131 |     show(firstOf(boxes))
     | builtin-fn:show  punctuation:(  task:firstOf  punctuation:(  variable:boxes  punctuation:)  punctuation:)
 132 |     each b in boxes
@@ -226,8 +226,8 @@
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:value  punctuation:)
 134 |     fi
     | keyword:fi
-136 |     bind swapped = swap(written, here)
-    | keyword:bind  variable:swapped  operator:=  task:swap  punctuation:(  variable:written  punctuation:,  variable:here  punctuation:)
+136 |     fixed swapped = swap(written, here)
+    | keyword:fixed  variable:swapped  operator:=  task:swap  punctuation:(  variable:written  punctuation:,  variable:here  punctuation:)
 137 |     show(swapped.0.value)
     | builtin-fn:show  punctuation:(  variable:swapped  punctuation:.  field:0  punctuation:.  field:value  punctuation:)
 138 |     show(swapped.1.value)
@@ -238,20 +238,20 @@
     | comment:; shape given types given to another.
 142 |     show(textOf(here))
     | builtin-fn:show  punctuation:(  task:textOf  punctuation:(  variable:here  punctuation:)  punctuation:)
-143 |     bind deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
-    | keyword:bind  variable:deep  punctuation::  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"two boxes deep"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:}
+143 |     fixed deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
+    | keyword:fixed  variable:deep  punctuation::  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"two boxes deep"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:}
 144 |     show(deep.value.value)
     | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  field:value  punctuation:.  field:value  punctuation:)
-145 |     bind paired: Pair<Box<text>, int>@r = Pair { left: Box { value: "on the left".copy() at r }, right: 16 }
-    | keyword:bind  variable:paired  punctuation::  type:Pair  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:,  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  type:Pair  punctuation:{  field:left  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"on the left"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:,  field:right  punctuation::  number:16  punctuation:}
+145 |     fixed paired: Pair<Box<text>, int>@r = Pair { left: Box { value: "on the left".copy() at r }, right: 16 }
+    | keyword:fixed  variable:paired  punctuation::  type:Pair  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:,  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  type:Pair  punctuation:{  field:left  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"on the left"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:,  field:right  punctuation::  number:16  punctuation:}
 146 |     show(leftText(paired))
     | builtin-fn:show  punctuation:(  task:leftText  punctuation:(  variable:paired  punctuation:)  punctuation:)
 147 |     show(paired.right)
     | builtin-fn:show  punctuation:(  variable:paired  punctuation:.  field:right  punctuation:)
 149 |     ; A kind's payload, a `maybe`, and a copy into another region.
     | comment:; A kind's payload, a `maybe`, and a copy into another region.
-150 |     bind holding = Holding.Number(Box { value: 14 })
-    | keyword:bind  variable:holding  operator:=  type:Holding  punctuation:.  variant:Number  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:14  punctuation:}  punctuation:)
+150 |     fixed holding = Holding.Number(Box { value: 14 })
+    | keyword:fixed  variable:holding  operator:=  type:Holding  punctuation:.  variant:Number  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:14  punctuation:}  punctuation:)
 151 |     match holding
     | keyword:match  variable:holding
 152 |         case Nothing
@@ -264,8 +264,8 @@
     | builtin-fn:show  punctuation:(  variable:box  punctuation:.  field:value  punctuation:)
 156 |     fi
     | keyword:fi
-157 |     bind maybe_box: maybe Box<int> = Box { value: 15 }
-    | keyword:bind  variable:maybe_box  punctuation::  keyword:maybe  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:15  punctuation:}
+157 |     fixed maybe_box: maybe Box<int> = Box { value: 15 }
+    | keyword:fixed  variable:maybe_box  punctuation::  keyword:maybe  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:15  punctuation:}
 158 |     when maybe_box is {inner}
     | keyword:when  variable:maybe_box  keyword:is  punctuation:{  variable:inner  punctuation:}
 159 |         show(inner.value)
@@ -274,8 +274,8 @@
     | keyword:fi
 161 |     region other
     | keyword:region  region:other
-162 |     bind copied: Box<text>@other = here.copy() at other
-    | keyword:bind  variable:copied  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:other  operator:=  variable:here  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:other
+162 |     fixed copied: Box<text>@other = here.copy() at other
+    | keyword:fixed  variable:copied  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:other  operator:=  variable:here  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:other
 163 |     show(copied.value)
     | builtin-fn:show  punctuation:(  variable:copied  punctuation:.  field:value  punctuation:)
 164 | fi

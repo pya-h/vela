@@ -1,7 +1,7 @@
-; error: 4:42: expected type maybe int, got int; a tuple's items are taken as they are, so an item doesn't become a maybe int on the way
+; error: 4:43: expected type maybe int, got int; a tuple's items are taken as they are, so an item doesn't become a maybe int on the way
 task main()
-    bind pair = (1, 2)
-    bind first: maybe int, second: int = pair
+    fixed pair = (1, 2)
+    fixed first: maybe int, second: int = pair
     show(first { 0 })
     show(second)
 fi

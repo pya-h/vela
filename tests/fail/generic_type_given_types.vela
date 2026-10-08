@@ -1,6 +1,6 @@
-; error: 3:13: 'T' is a type this declaration takes, so it takes no types of its own
+; error: 3:14: 'T' is a type this declaration takes, so it takes no types of its own
 task first<T>(x: T) -> T
-    bind y: T<int> = x
+    fixed y: T<int> = x
     <- y
 fi
 

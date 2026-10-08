@@ -1,6 +1,6 @@
 ; error: 5:9: expected '=': a list of names takes the values of an assignment, as in 'a, b = divmod(17, 5)'
 task main()
-    hold a = 1
-    hold b = 2
+    flex a = 1
+    flex b = 2
     a, b
 fi

@@ -32,7 +32,7 @@ fi
 ; The place of the item called `name`: its types come from the value, or,
 ; for `None`, from what the task sends.
 task find(items: [Item#4], name: text) -> Option<int>
-    hold place = 0
+    flex place = 0
     each item in items
         when item.name == name
             <- Option.Some(place)
@@ -42,13 +42,13 @@ task find(items: [Item#4], name: text) -> Option<int>
     <- Option.None
 fi
 
-task take(hold& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
-    bind spot = match find(items, name)
+task take(flex& items: [Item#4], name: text, want: int) -> Outcome<int, Problem>
+    fixed spot = match find(items, name)
     case Some found = found
     case None
         <- Outcome.Failed(Problem.Unknown(name))
     fi
-    bind have = items[spot].count
+    fixed have = items[spot].count
     when have < want
         <- Outcome.Failed(Problem.Short(have, want))
     fi
@@ -71,11 +71,11 @@ task report(name: text, outcome: Outcome<int, Problem>)
 fi
 
 task main()
-    bind bolts = Item { name: "bolts", count: 40 }
-    bind nuts = Item { name: "nuts", count: 25 }
-    bind washers = Item { name: "washers", count: 3 }
-    bind springs = Item { name: "springs", count: 0 }
-    hold items = [bolts, nuts, washers, springs]
+    fixed bolts = Item { name: "bolts", count: 40 }
+    fixed nuts = Item { name: "nuts", count: 25 }
+    fixed washers = Item { name: "washers", count: 3 }
+    fixed springs = Item { name: "springs", count: 0 }
+    flex items = [bolts, nuts, washers, springs]
     show("nuts are at ", find(items, "nuts").orElse(-1), ", gears at ", find(items, "gears").orElse(-1))
     report("bolts", take(&items, "bolts", 15))
     report("washers", take(&items, "washers", 5))

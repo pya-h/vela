@@ -2,21 +2,21 @@
 ; loop condition, and not at all when `and` doesn't need its value.
 
 task main()
-    hold count = 0
-    bind m: maybe int = none
+    flex count = 0
+    fixed m: maybe int = none
     loop m {
         region r
-        bind p = new int(count) at r
+        fixed p = new int(count) at r
         p^
     } < 3
         count = count + 1
     fi
     show(count)
 
-    bind b: maybe bool = none
+    fixed b: maybe bool = none
     show(false and b {
         region unused
-        bind flag = new bool(true) at unused
+        fixed flag = new bool(true) at unused
         show("not shown")
         flag^
     })

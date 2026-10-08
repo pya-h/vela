@@ -19,7 +19,7 @@ kind ReadingError
 fi
 
 task check(reading: maybe int) -> int ~ ReadingError
-    bind value = reading { <- fail Missing }
+    fixed value = reading { <- fail Missing }
     ; Alternatives, so one chain: the first condition that holds sends.
     when value < -50
         <- fail TooCold(value)
@@ -29,10 +29,10 @@ task check(reading: maybe int) -> int ~ ReadingError
     <- value
 fi
 
-; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `flex&`
 ; makes `sum` the caller's own variable, which the call gives as `&total`.
-task add_reading(hold& sum: int, reading: maybe int) -> nothing ~ ReadingError
-    bind value = check(reading) {
+task add_reading(flex& sum: int, reading: maybe int) -> nothing ~ ReadingError
+    fixed value = check(reading) {
         failure problem
         <- fail problem
     }
@@ -55,7 +55,7 @@ task main()
 
     ; A plan B gives the value to use instead; `fail e` names the error.
     show(check(none) { 0 })
-    bind lowest = check(-80) {
+    fixed lowest = check(-80) {
         failure problem
         show(problem)
         -50
@@ -63,7 +63,7 @@ task main()
     show(lowest)
 
     ; An error can't be ignored by accident: an empty plan B ignores it on purpose.
-    hold total = 0
+    flex total = 0
     add_reading(&total, 10) { }
     add_reading(&total, 70) {
         failure problem
@@ -74,8 +74,8 @@ task main()
 
     ; A plan B giving none keeps the value when there is one: a maybe, which
     ; `~=` compares with a plain value, false when it is empty.
-    bind kept = check(-80) { none }
-    bind fine = check(30) { none }
+    fixed kept = check(-80) { none }
+    fixed fine = check(30) { none }
     show(kept, " ", fine, " ", fine ~= 30, " ", kept ~= 30)
 
     ; An is joined with and: the value, then a test of it.

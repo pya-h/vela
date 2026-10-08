@@ -1,5 +1,5 @@
 ; error: 4:14: 'hold y' takes a copy, so leave out '&'; 'hold& y = &…' is another name for the place
 task main()
-    hold x = 1
-    hold y = &x
+    flex x = 1
+    flex y = &x
 fi

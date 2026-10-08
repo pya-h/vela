@@ -1,8 +1,8 @@
-; error: 5:31: 'total' is a result of the task around this lambda, which a lambda doesn't keep; keep a variable of it first, as in 'bind kept = total', and use that
+; error: 5:32: 'total' is a result of the task around this lambda, which a lambda doesn't keep; keep a variable of it first, as in 'bind kept = total', and use that
 ; A lambda keeps variables of the code around it, not the results of its task.
 task make(r: region) -> total: int
     total <- 3
-    bind f = [@r]() -> int <- total fi
+    fixed f = [@r]() -> int <- total fi
     total <- f()
 fi
 task main()

@@ -32,16 +32,16 @@
     | keyword:fi
  22 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 23 |     bind m: maybe int = none
-    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 23 |     fixed m: maybe int = none
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  24 |     show(add(say("left", m { 1 }), say("right", 2)))
     | builtin-fn:show  punctuation:(  task:add  punctuation:(  task:say  punctuation:(  string:"left"  punctuation:,  variable:m  punctuation:{  number:1  punctuation:}  punctuation:)  punctuation:,  task:say  punctuation:(  string:"right"  punctuation:,  number:2  punctuation:)  punctuation:)  punctuation:)
  25 |     show(say("left", m { 1 }) + say("right", 2))
     | builtin-fn:show  punctuation:(  task:say  punctuation:(  string:"left"  punctuation:,  variable:m  punctuation:{  number:1  punctuation:}  punctuation:)  operator:+  task:say  punctuation:(  string:"right"  punctuation:,  number:2  punctuation:)  punctuation:)
  26 |     show(three(say("a", 1), say("b", m { 2 }), say("c", 3)))
     | builtin-fn:show  punctuation:(  task:three  punctuation:(  task:say  punctuation:(  string:"a"  punctuation:,  number:1  punctuation:)  punctuation:,  task:say  punctuation:(  string:"b"  punctuation:,  variable:m  punctuation:{  number:2  punctuation:}  punctuation:)  punctuation:,  task:say  punctuation:(  string:"c"  punctuation:,  number:3  punctuation:)  punctuation:)  punctuation:)
- 27 |     bind p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
-    | keyword:bind  variable:p  operator:=  type:Pair  punctuation:{  field:first  punctuation::  task:say  punctuation:(  string:"first"  punctuation:,  variable:m  punctuation:{  number:4  punctuation:}  punctuation:)  punctuation:,  field:second  punctuation::  task:say  punctuation:(  string:"second"  punctuation:,  number:5  punctuation:)  punctuation:}
+ 27 |     fixed p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
+    | keyword:fixed  variable:p  operator:=  type:Pair  punctuation:{  field:first  punctuation::  task:say  punctuation:(  string:"first"  punctuation:,  variable:m  punctuation:{  number:4  punctuation:}  punctuation:)  punctuation:,  field:second  punctuation::  task:say  punctuation:(  string:"second"  punctuation:,  number:5  punctuation:)  punctuation:}
  28 |     show(p.first + p.second)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:first  operator:+  variable:p  punctuation:.  field:second  punctuation:)
  29 |     show(say("text", 1) == m { say("fallback", 1) })

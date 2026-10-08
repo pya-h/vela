@@ -1,5 +1,5 @@
 ; trap: 256 does not fit in a char at 4:10 in task 'main'
 task main()
-    bind n = 256
+    fixed n = 256
     show(char(n))
 fi

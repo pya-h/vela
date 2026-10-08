@@ -2,7 +2,7 @@
 include modules/meter {Meter => Gauge}
 
 task main()
-    hold gauge = Gauge { label: "door" }
+    flex gauge = Gauge { label: "door" }
     gauge.count = 5
     show(gauge.count)
 fi

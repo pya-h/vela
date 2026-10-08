@@ -1,5 +1,5 @@
 ; error: 4:13: '&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is a maybe that '[#…]' or 'at' made here, with no place of its own
 task main()
-    bind xs = [1, 2, 3]
+    fixed xs = [1, 2, 3]
     show(&xs[#0])
 fi

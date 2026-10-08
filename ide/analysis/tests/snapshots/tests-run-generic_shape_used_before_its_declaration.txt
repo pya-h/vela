@@ -30,8 +30,8 @@
     | keyword:fi
  17 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 18 |     bind b = B { a: A { v: 3 } }
-    | keyword:bind  variable:b  operator:=  type:B  punctuation:{  field:a  punctuation::  type:A  punctuation:{  field:v  punctuation::  number:3  punctuation:}  punctuation:}
+ 18 |     fixed b = B { a: A { v: 3 } }
+    | keyword:fixed  variable:b  operator:=  type:B  punctuation:{  field:a  punctuation::  type:A  punctuation:{  field:v  punctuation::  number:3  punctuation:}  punctuation:}
  19 |     show(b.a.v)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:a  punctuation:.  field:v  punctuation:)
  20 |     show(first(C { w: "hi", inner: none }))

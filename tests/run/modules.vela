@@ -23,13 +23,13 @@ fi
 
 task main()
     ; Tasks, shapes, and variants of a module, through its name.
-    bind square = geometry.Square(3.0)
-    bind circle = geometry.Circle(1.0)
+    fixed square = geometry.Square(3.0)
+    fixed circle = geometry.Circle(1.0)
     show(geometry.area(square))
     show(geometry.area(circle) > 3.0)
     show(area(4))
-    bind origin = geometry.Point { x: 0.0, y: 0.0 }
-    bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
+    fixed origin = geometry.Point { x: 0.0, y: 0.0 }
+    fixed corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
     show(geometry.distance(origin, corner))
     geometry.main()
     ; A case names a variant alone: the value's kind says whose it is.
@@ -46,7 +46,7 @@ task main()
     fi
 
     ; Names brought in with `include m (…)`, and the others still through `m.`.
-    bind red: Color = palette.Red
+    fixed red: Color = palette.Red
     show(describe(red))
     show(describe(Custom(10, 20, 30)))
     show(describe(palette.Blue))
@@ -63,11 +63,11 @@ task main()
     fi
 
     ; A private field, set and read through its module's tasks.
-    hold account = bank.open("ada", 100)
+    flex account = bank.open("ada", 100)
     account = bank.deposit(account, 50)
     show(account.owner)
     show(bank.balance(account))
-    bind after = bank.withdraw(account, 500) {
+    fixed after = bank.withdraw(account, 500) {
         failure problem
         show(bank.explain(problem))
         account
@@ -77,11 +77,11 @@ task main()
     ; A module in a folder, which includes another through `..`, with regions and
     ; named results.
     region r
-    hold top: maybe ^stack.Node@r = none
+    flex top: maybe ^stack.Node@r = none
     each i in 1..4
         top = stack.push(r, top, i * 10)
     fi
-    bind total, count = stack.sum(top)
+    fixed total, count = stack.sum(top)
     show(total)
     show(count)
 
@@ -91,10 +91,10 @@ task main()
     show(numbers.larger<float>(1.5, 0.5))
 
     ; A shape from another module that takes types, built here and there.
-    bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
+    fixed tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
     show(tally.value)
     show(tally.count)
-    bind counted = numbers.tallyOf(r, "once")
+    fixed counted = numbers.tallyOf(r, "once")
     show(counted.value)
     show(counted.count)
 

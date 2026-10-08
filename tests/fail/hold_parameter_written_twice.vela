@@ -1,5 +1,5 @@
 ; error: 2:13: 'hold' is already written here: a parameter is written with one of 'hold', 'hold&', 'bind', and 'bind&', or none
-task f(hold hold n: int)
+task f(flex flex n: int)
 fi
 
 task main()

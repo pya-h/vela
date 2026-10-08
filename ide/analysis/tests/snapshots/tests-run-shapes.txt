@@ -16,8 +16,8 @@
     | keyword:fi
  12 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 13 |     hold p = Point { x: 1, y: 2 }
-    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 13 |     flex p = Point { x: 1, y: 2 }
+    | keyword:flex  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
  14 |     show(p.x)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:)
  15 |     p.y = 40

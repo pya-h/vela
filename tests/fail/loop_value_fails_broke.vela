@@ -1,7 +1,7 @@
 ; error: 6:29: 'Broke' says what the loop did, so its last line fails only with 'LoopResult.Manual(…)'; 'break = v' stops it with a value
 include std/loops {LoopResult}
 task main()
-    bind r = each x in 0..3
+    fixed r = each x in 0..3
         when x > 1
             fail LoopResult.Broke(none)
         else

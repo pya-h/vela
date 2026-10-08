@@ -77,18 +77,18 @@ task main()
         show("failed ", e)
     fi
 
-    bind chosen: Either<int, text> = when true Either.Right("x") else Either.Left(1) fi
+    fixed chosen: Either<int, text> = when true Either.Right("x") else Either.Left(1) fi
     takes(when false Either.Right("y") else Either.Left(2) fi)
-    bind typed: [Either<int, text>#2] = [Either.Right("a"), Either.Left(1)]
-    bind both = [Either.Left(1), Either.Right("b")]
+    fixed typed: [Either<int, text>#2] = [Either.Right("a"), Either.Left(1)]
+    fixed both = [Either.Left(1), Either.Right("b")]
     show(chosen, " ", typed, " ", both, " ", swap(chosen))
 
     show(pair(r, "a", Option.Some("b")), " ", pair(r, 1, Option.None))
-    bind h = Holder { q: Quiet<int>.Silent, v: Option.None }
-    bind g = Holder { v: Option.Some(1), q: Quiet.Silent }
+    fixed h = Holder { q: Quiet<int>.Silent, v: Option.None }
+    fixed g = Holder { v: Option.Some(1), q: Quiet.Silent }
     show(h.v, " ", g.v, " ", holder(r, "z").v)
 
     ; A task value is written with the kinds as they are written.
-    bind convert: (Option<int>) -> Option<bool> = positive_of
+    fixed convert: (Option<int>) -> Option<bool> = positive_of
     show(convert, " ", convert(Option.Some(5)))
 fi

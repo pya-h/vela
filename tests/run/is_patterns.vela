@@ -16,11 +16,11 @@ task next(s: Step) -> Step
 fi
 
 task main()
-    bind m: maybe int = none
+    fixed m: maybe int = none
     when m is none
         show("none")
     fi
-    bind k: maybe int = 4
+    fixed k: maybe int = 4
     when k is {_}
         show("some")
     fi
@@ -29,7 +29,7 @@ task main()
     else
         show("not none")
     fi
-    hold s = Walk(3)
+    flex s = Walk(3)
     loop s is Walk n
         show(n)
         s = next(s)

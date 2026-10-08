@@ -1,5 +1,5 @@
 ; error: 4:15: type text has no field 'size'; how many bytes it has is '.len'
 task main()
-    bind name = "Ada"
+    fixed name = "Ada"
     show(name.size)
 fi

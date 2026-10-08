@@ -46,10 +46,10 @@
     | comment:; Only reads, so it names the region without taking it.
  29 | task sum(list: maybe ^Node@r) -> int
     | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 30 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 31 |     hold current = list
-    | keyword:hold  variable:current  operator:=  parameter:list
+ 30 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 31 |     flex current = list
+    | keyword:flex  variable:current  operator:=  parameter:list
  32 |     loop current is {node}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
  33 |         total = total + node^.value
@@ -112,14 +112,14 @@
     | keyword:task  task:early  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  67 |     region outer
     | keyword:region  region:outer
- 68 |     bind a = new int(n) at outer
-    | keyword:bind  variable:a  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:outer
+ 68 |     fixed a = new int(n) at outer
+    | keyword:fixed  variable:a  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:outer
  69 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
  70 |         region inner
     | keyword:region  region:inner
- 71 |         bind b = new int(i) at inner
-    | keyword:bind  variable:b  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:at  region:inner
+ 71 |         fixed b = new int(i) at inner
+    | keyword:fixed  variable:b  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:at  region:inner
  72 |         when b^ == 1
     | keyword:when  variable:b  operator:^  operator:==  number:1
  73 |             <- a^ + b^
@@ -142,8 +142,8 @@
     | keyword:task  task:checked  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r  operator:~  type-builtin:text
  84 |     region scratch
     | keyword:region  region:scratch
- 85 |     bind temporary = new int(n) at scratch
-    | keyword:bind  variable:temporary  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
+ 85 |     fixed temporary = new int(n) at scratch
+    | keyword:fixed  variable:temporary  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
  86 |     when temporary^ < 0
     | keyword:when  variable:temporary  operator:^  operator:<  number:0
  87 |         <- fail "negative"
@@ -158,8 +158,8 @@
     | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
  93 |     region scratch
     | keyword:region  region:scratch
- 94 |     bind copy = new int(n) at scratch
-    | keyword:bind  variable:copy  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
+ 94 |     fixed copy = new int(n) at scratch
+    | keyword:fixed  variable:copy  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
  95 |     when copy^ > 9
     | keyword:when  variable:copy  operator:^  operator:>  number:9
  96 |         <- fail "too big"
@@ -174,8 +174,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
 102 |     region lists
     | keyword:region  region:lists
-103 |     hold list: maybe ^Node@lists = none
-    | keyword:hold  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:lists  operator:=  keyword:none
+103 |     flex list: maybe ^Node@lists = none
+    | keyword:flex  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:lists  operator:=  keyword:none
 104 |     each i in 0..200000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:200000
 105 |         list = push(lists, list, i)
@@ -188,14 +188,14 @@
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  keyword:none  punctuation:)  punctuation:)
 110 |     ; A region inside a loop is new, and freed, on every pass.
     | comment:; A region inside a loop is new, and freed, on every pass.
-111 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
+111 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
 112 |     each round in 0..1000
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:1000
 113 |         region pass
     | keyword:region  region:pass
-114 |         hold pieces: maybe ^Node@pass = none
-    | keyword:hold  variable:pieces  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:pass  operator:=  keyword:none
+114 |         flex pieces: maybe ^Node@pass = none
+    | keyword:flex  variable:pieces  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:pass  operator:=  keyword:none
 115 |         each j in 0..100
     | keyword:each  variable:j  keyword:in  number:0  operator:..  number:100
 116 |             pieces = push(pass, pieces, 1)
@@ -214,22 +214,22 @@
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  task:build  punctuation:(  region:trees  punctuation:,  number:10  punctuation:)  punctuation:)  punctuation:)
 124 |     show(count(Leaf(5)))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  variant:Leaf  punctuation:(  number:5  punctuation:)  punctuation:)  punctuation:)
-126 |     bind pair = twice(lists, 21)
-    | keyword:bind  variable:pair  operator:=  task:twice  punctuation:(  region:lists  punctuation:,  number:21  punctuation:)
+126 |     fixed pair = twice(lists, 21)
+    | keyword:fixed  variable:pair  operator:=  task:twice  punctuation:(  region:lists  punctuation:,  number:21  punctuation:)
 127 |     show(pair.first^ + pair.second^)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:first  operator:^  operator:+  variable:pair  punctuation:.  field:second  operator:^  punctuation:)
 129 |     show(early(40))
     | builtin-fn:show  punctuation:(  task:early  punctuation:(  number:40  punctuation:)  punctuation:)
 131 |     ; A plan B's block can use its own region, and give a value from it.
     | comment:; A plan B's block can use its own region, and give a value from it.
-132 |     bind missing: maybe int = none
-    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
-133 |     bind rescued = missing {
-    | keyword:bind  variable:rescued  operator:=  variable:missing  punctuation:{
+132 |     fixed missing: maybe int = none
+    | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+133 |     fixed rescued = missing {
+    | keyword:fixed  variable:rescued  operator:=  variable:missing  punctuation:{
 134 |         region rescue
     | keyword:region  region:rescue
-135 |         bind spare = new int(99) at rescue
-    | keyword:bind  variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:99  punctuation:)  keyword:at  region:rescue
+135 |         fixed spare = new int(99) at rescue
+    | keyword:fixed  variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:99  punctuation:)  keyword:at  region:rescue
 136 |         spare^
     | variable:spare  operator:^
 137 |     }
@@ -246,14 +246,14 @@
     | keyword:case  keyword:failure  variable:reason
 144 |         region report
     | keyword:region  region:report
-145 |         bind message = new text(reason) at report
-    | keyword:bind  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:reason  punctuation:)  keyword:at  region:report
+145 |         fixed message = new text(reason) at report
+    | keyword:fixed  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:reason  punctuation:)  keyword:at  region:report
 146 |         show(message^)
     | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
 147 |     fi
     | keyword:fi
-148 |     bind good = checked(lists, 7) { <- }
-    | keyword:bind  variable:good  operator:=  task:checked  punctuation:(  region:lists  punctuation:,  number:7  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+148 |     fixed good = checked(lists, 7) { <- }
+    | keyword:fixed  variable:good  operator:=  task:checked  punctuation:(  region:lists  punctuation:,  number:7  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 149 |     show(good^.value)
     | builtin-fn:show  punctuation:(  variable:good  operator:^  punctuation:.  field:value  punctuation:)
 150 |     save(3) { failure e
@@ -272,14 +272,14 @@
     | comment:; A literal without pointers takes the region of the binding's type, and
 158 |     ; can then hold pointers into it.
     | comment:; can then hold pointers into it.
-159 |     hold head: Node@lists = Node { value: 1, next: none }
-    | keyword:hold  variable:head  punctuation::  type:Node  operator:@  region:lists  operator:=  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
+159 |     flex head: Node@lists = Node { value: 1, next: none }
+    | keyword:flex  variable:head  punctuation::  type:Node  operator:@  region:lists  operator:=  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
 160 |     head.next = push(lists, none, 2)
     | variable:head  punctuation:.  field:next  operator:=  task:push  punctuation:(  region:lists  punctuation:,  keyword:none  punctuation:,  number:2  punctuation:)
 161 |     show(sum(head.next) + head.value)
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:head  punctuation:.  field:next  punctuation:)  operator:+  variable:head  punctuation:.  field:value  punctuation:)
-162 |     bind maybe_pair: maybe Pair@lists = pair
-    | keyword:bind  variable:maybe_pair  punctuation::  keyword:maybe  type:Pair  operator:@  region:lists  operator:=  variable:pair
+162 |     fixed maybe_pair: maybe Pair@lists = pair
+    | keyword:fixed  variable:maybe_pair  punctuation::  keyword:maybe  type:Pair  operator:@  region:lists  operator:=  variable:pair
 163 |     when maybe_pair is {p}
     | keyword:when  variable:maybe_pair  keyword:is  punctuation:{  variable:p  punctuation:}
 164 |         show(p.first^)
@@ -288,8 +288,8 @@
     | keyword:fi
 167 |     ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
     | comment:; `first(none)` holds no pointer, so its plan B takes the fallback's region.
-168 |     bind fallback: ^Node@lists = first(none) { good }
-    | keyword:bind  variable:fallback  punctuation::  operator:^  type:Node  operator:@  region:lists  operator:=  task:first  punctuation:(  keyword:none  punctuation:)  punctuation:{  variable:good  punctuation:}
+168 |     fixed fallback: ^Node@lists = first(none) { good }
+    | keyword:fixed  variable:fallback  punctuation::  operator:^  type:Node  operator:@  region:lists  operator:=  task:first  punctuation:(  keyword:none  punctuation:)  punctuation:{  variable:good  punctuation:}
 169 |     show(fallback^.value)
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
 170 |     ; Pointers into different regions compare, and are never equal.
@@ -298,10 +298,10 @@
     | builtin-fn:show  punctuation:(  variable:good  operator:==  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:trees  punctuation:)
 173 |     ; A pointer to a pointer lives in one region too.
     | comment:; A pointer to a pointer lives in one region too.
-174 |     bind inner = new int(8) at trees
-    | keyword:bind  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
-175 |     bind outer = new ^int(inner) at trees
-    | keyword:bind  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
+174 |     fixed inner = new int(8) at trees
+    | keyword:fixed  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
+175 |     fixed outer = new ^int(inner) at trees
+    | keyword:fixed  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
 176 |     outer^^ = outer^^ + 1
     | variable:outer  operator:^  operator:^  operator:=  variable:outer  operator:^  operator:^  operator:+  number:1
 177 |     show(inner^)

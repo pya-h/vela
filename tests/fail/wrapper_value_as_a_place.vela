@@ -1,11 +1,11 @@
 ; error: 13:11: wrapper 'counted' takes this as a place, with 'hold&', but a wrapper's own values are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper
 ; A wrapper's own value is worked out once, where the program starts, so it
-; is no place a 'hold&' parameter changes.
+; is no place a 'flex&' parameter changes.
 shape Stats
-    shared hold calls: int = 0
+    shared flex calls: int = 0
 fi
 
-task counted(next: (int) -> int, hold& c: int, n: int) -> int
+task counted(next: (int) -> int, flex& c: int, n: int) -> int
     c = c + 1
     <- next(n)
 fi

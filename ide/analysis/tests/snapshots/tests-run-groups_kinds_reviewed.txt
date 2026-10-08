@@ -44,8 +44,8 @@
     | keyword:fi
  28 | task count<P...: frozen & shown>(args: P...) -> int
     | keyword:task  task:count  punctuation:<  type:P  keyword:...  punctuation::  keyword:frozen  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
- 29 |     hold n = 0
-    | keyword:hold  variable:n  operator:=  number:0
+ 29 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
  30 |     each v in args
     | keyword:each  variable:v  keyword:in  parameter:args
  31 |         show(v)
@@ -54,8 +54,8 @@
     | variable:n  operator:++
  33 |     fi
     | keyword:fi
- 34 |     bind t = (args...) { failure one
-    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:failure  variable:one
+ 34 |     fixed t = (args...) { failure one
+    | keyword:fixed  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:failure  variable:one
  35 |         <- n
     | keyword:<-  variable:n
  36 |     }
@@ -86,10 +86,10 @@
     | builtin-fn:show  punctuation:(  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  operator:==  type:Either  punctuation:.  variant:Right  punctuation:(  string:"x"  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:2  punctuation:)  operator:==  type:Either  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  punctuation:.  variant:Left  punctuation:(  number:2  punctuation:)  punctuation:)
  51 |     region r
     | keyword:region  region:r
- 52 |     bind t = "x".copy() at r
-    | keyword:bind  variable:t  operator:=  string:"x"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
- 53 |     bind sides = [Either.Right(t), Either.Left(1)]
-    | keyword:bind  variable:sides  operator:=  punctuation:[  type:Either  punctuation:.  variant:Right  punctuation:(  variable:t  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:]
+ 52 |     fixed t = "x".copy() at r
+    | keyword:fixed  variable:t  operator:=  string:"x"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 53 |     fixed sides = [Either.Right(t), Either.Left(1)]
+    | keyword:fixed  variable:sides  operator:=  punctuation:[  type:Either  punctuation:.  variant:Right  punctuation:(  variable:t  punctuation:)  punctuation:,  type:Either  punctuation:.  variant:Left  punctuation:(  number:1  punctuation:)  punctuation:]
  54 |     show(sides)
     | builtin-fn:show  punctuation:(  variable:sides  punctuation:)
  55 | fi

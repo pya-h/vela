@@ -42,8 +42,8 @@ fi
 
 task main()
     region r
-    bind n = 5
-    bind name = "Ada"
+    fixed n = 5
+    fixed name = "Ada"
     ; Every kind of value, and a value at either end or alone.
     show("n = {n}" at r)
     show("{n}" at r)
@@ -57,7 +57,7 @@ task main()
     ; Values that are text: literals, parts, and text holding values itself.
     show("[{"x"}] [{name[1..3]}] [{"{n}{n}"}]" at r)
     ; A plan B, a call, and a method call inside the braces.
-    bind missing: maybe int = none
+    fixed missing: maybe int = none
     show("got {missing { 7 }}, {twice(twice(n))}, {Point { x: n, y: n }.str() at r}" at r)
     ; Spaces inside the braces are not part of the text.
     show("a { n } b" at r)
@@ -69,7 +69,7 @@ task main()
     show(("{n}" + "!")@r)
     show("{n}" + " and " + "{n + 1}" at r)
     ; The result is text like any other.
-    bind line = "{name}={n}" at r
+    fixed line = "{name}={n}" at r
     show(line.len)
     show(line == "Ada=5")
     show("{n}" at r < "6")
@@ -77,14 +77,14 @@ task main()
     show(labelled("name", name, r))
     ; Text in another region, kept in `r`.
     region q
-    bind other = "{n * 10}" at q
-    bind kept = "kept {other}" at r
+    fixed other = "{n * 10}" at q
+    fixed kept = "kept {other}" at r
     show(kept)
     ; Multi-byte characters around and inside values.
     show("café {"é"} ☕ {n}" at r)
     ; An error made of text holding values, read with a plan B.
     show(checked(n, r) { 0 })
-    bind low = checked(-n, r) { failure e
+    fixed low = checked(-n, r) { failure e
         show(e)
         0
     }

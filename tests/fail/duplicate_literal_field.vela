@@ -1,10 +1,10 @@
-; error: 8:34: field 'x' is already given at 8:22
+; error: 8:35: field 'x' is already given at 8:23
 shape Point
     x: int
     y: int
 fi
 
 task main()
-    bind p = Point { x: 1, y: 2, x: 3 }
+    fixed p = Point { x: 1, y: 2, x: 3 }
     show(p.x)
 fi

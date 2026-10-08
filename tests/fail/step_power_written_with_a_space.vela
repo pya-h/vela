@@ -1,6 +1,6 @@
 ; error: 4:10: expected an expression, got '='; '**=' is one symbol, written without a space, as in 'x **= 2'
 task main()
-    hold x = 3
+    flex x = 3
     x ** = 2
     show(x)
 fi

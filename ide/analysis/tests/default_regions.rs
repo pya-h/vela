@@ -17,7 +17,7 @@ shape Card
 fi
 
 task grow(r: region default, upto: int) -> [int]@r
-    hold made = new [int]()
+    flex made = new [int]()
     each n in 1..upto
         made.add(n)
     fi
@@ -26,13 +26,13 @@ fi
 
 task main()
     region kept default
-    bind squares = grow(kept, 3)
-    bind p = new int(7)
-    bind greeting = \"Hello, \" + \"Ada\"
-    bind shown = p^.str()
+    fixed squares = grow(kept, 3)
+    fixed p = new int(7)
+    fixed greeting = \"Hello, \" + \"Ada\"
+    fixed shown = p^.str()
     each round in 0..2
         region pass default
-        bind line = \"pass \" + round.str()
+        fixed line = \"pass \" + round.str()
         show(line)
     fi
     show(squares.len, greeting, shown)
@@ -86,7 +86,7 @@ fn the_word_is_a_keyword_where_it_marks_a_default_region() {
     let source = program("show(1)");
     assert_eq!(class_at(&source, "default) -> text@r"), TokenClass::Keyword);
     assert_eq!(class_at(&source, "default, upto"), TokenClass::Keyword);
-    assert_eq!(class_at(&source, "default\n    bind squares"), TokenClass::Keyword);
+    assert_eq!(class_at(&source, "default\n    fixed squares"), TokenClass::Keyword);
     // The region it marks is still a region, and the name it declares is one too.
     assert_eq!(class_at(&source, "kept default"), TokenClass::Region);
     assert_eq!(class_at(&source, "pass default"), TokenClass::Region);
@@ -99,7 +99,7 @@ fn the_word_is_a_keyword_where_it_marks_a_default_region() {
 #[test]
 fn the_word_has_a_hover_of_its_own() {
     let source = program("show(1)");
-    let (code, doc) = hover(&source, "default\n    bind squares");
+    let (code, doc) = hover(&source, "default\n    fixed squares");
     assert_eq!(code, "region r default");
     assert!(doc.starts_with("Makes r the block's default region"), "{}", doc);
 }
@@ -110,13 +110,13 @@ fn completion_offers_the_word_after_a_region_name_and_after_a_region_type() {
     assert!(labels("task keep(r: region @@) -> int\n    <- 1\nfi\n").contains(&"default".to_string()));
     // Not where a region's name is being declared, nor anywhere else.
     assert!(!labels("task main()\n    region @@\nfi\n").contains(&"default".to_string()));
-    assert!(!labels("task main()\n    region r\n    bind x = @@\nfi\n").contains(&"default".to_string()));
+    assert!(!labels("task main()\n    region r\n    fixed x = @@\nfi\n").contains(&"default".to_string()));
 }
 
 #[test]
 fn a_file_that_does_not_check_still_highlights_the_word() {
     // Studio reads a half-typed file from its tokens alone.
-    let source = "task main()\n    region r default\n    bind p = new int(missing)\nfi\n";
+    let source = "task main()\n    region r default\n    fixed p = new int(missing)\nfi\n";
     assert!(!Analysis::new(source).diagnostics().is_empty());
     assert_eq!(class_at(source, "default"), TokenClass::Keyword);
     assert_eq!(class_at(source, "r default"), TokenClass::Region);

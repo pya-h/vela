@@ -14,8 +14,8 @@
     | keyword:include  module:wrapper_start_values  operator:/  module:labels  punctuation:(  task:logged  punctuation:)
  10 | shape Config
     | keyword:shape  type:Config
- 11 |     shared hold depth: int = 2
-    | keyword:shared  keyword:hold  field:depth  punctuation::  type-builtin:int  operator:=  number:2
+ 11 |     shared flex depth: int = 2
+    | keyword:shared  keyword:flex  field:depth  punctuation::  type-builtin:int  operator:=  number:2
  12 | fi
     | keyword:fi
  14 | #TIMES = 3
@@ -30,8 +30,8 @@
     | keyword:fi
  21 | task repeated(next: (int) -> int, times: int, n: int) -> int
     | keyword:task  task:repeated  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 22 |     hold result = n
-    | keyword:hold  variable:result  operator:=  parameter:n
+ 22 |     flex result = n
+    | keyword:flex  variable:result  operator:=  parameter:n
  23 |     each turn in 0..times
     | keyword:each  variable:turn  keyword:in  number:0  operator:..  parameter:times
  24 |         result = next(result)
@@ -44,8 +44,8 @@
     | keyword:fi
  29 | task capped(next: (int) -> int, most: maybe int, n: int) -> int
     | keyword:task  task:capped  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:most  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 30 |     bind got = next(n)
-    | keyword:bind  variable:got  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 30 |     fixed got = next(n)
+    | keyword:fixed  variable:got  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
  31 |     when most is {top} and got > top
     | keyword:when  parameter:most  keyword:is  punctuation:{  variable:top  punctuation:}  keyword:and  variable:got  operator:>  variable:top
  32 |         <- top
@@ -136,8 +136,8 @@
     | comment:; doesn't reach `plus_five`, though main and its startup decorator name it.
  84 | shape Hooks
     | keyword:shape  type:Hooks
- 85 |     shared hold pick: (int) -> int = third
-    | keyword:shared  keyword:hold  field:pick  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:third
+ 85 |     shared flex pick: (int) -> int = third
+    | keyword:shared  keyword:flex  field:pick  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:third
  86 | fi
     | keyword:fi
  88 | task third(n: int) -> int

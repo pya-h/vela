@@ -56,14 +56,14 @@
     | comment:; build it in, and the letters are parts of the name, joined there.
  33 | task initials(name: text@r, r: region) -> text@r
     | keyword:task  task:initials  punctuation:(  parameter:name  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 34 |     hold letters = "".copy() at r
-    | keyword:hold  variable:letters  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
- 35 |     hold start = true
-    | keyword:hold  variable:start  operator:=  keyword:true
+ 34 |     flex letters = "".copy() at r
+    | keyword:flex  variable:letters  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 35 |     flex start = true
+    | keyword:flex  variable:start  operator:=  keyword:true
  36 |     each i in 0..name.len
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:name  punctuation:.  field:len
- 37 |         bind letter = name[i..i + 1]
-    | keyword:bind  variable:letter  operator:=  parameter:name  punctuation:[  variable:i  operator:..  variable:i  operator:+  number:1  punctuation:]
+ 37 |         fixed letter = name[i..i + 1]
+    | keyword:fixed  variable:letter  operator:=  parameter:name  punctuation:[  variable:i  operator:..  variable:i  operator:+  number:1  punctuation:]
  38 |         when name[i] == ' '
     | keyword:when  parameter:name  punctuation:[  variable:i  punctuation:]  operator:==  string:' '
  39 |             start = true
@@ -94,8 +94,8 @@
     | keyword:region  region:r
  54 |     ; Length is bytes, not characters: a letter outside ASCII takes more.
     | comment:; Length is bytes, not characters: a letter outside ASCII takes more.
- 55 |     bind name = "Ada Lovelace"
-    | keyword:bind  variable:name  operator:=  string:"Ada Lovelace"
+ 55 |     fixed name = "Ada Lovelace"
+    | keyword:fixed  variable:name  operator:=  string:"Ada Lovelace"
  56 |     show(name.len)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:.  field:len  punctuation:)
  57 |     show("café".len)
@@ -130,8 +130,8 @@
     | builtin-fn:show  punctuation:(  number:42  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  75 |     show(text(2.5) at r)
     | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  number:2.5  punctuation:)  keyword:at  region:r  punctuation:)
- 76 |     bind card = Card { name: "Ada", wins: 3 }
-    | keyword:bind  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
+ 76 |     fixed card = Card { name: "Ada", wins: 3 }
+    | keyword:fixed  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
  77 |     show(card.str() at r)
     | builtin-fn:show  punctuation:(  variable:card  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
  78 |     show(card)
@@ -144,14 +144,14 @@
     | comment:; A loop that builds text again and again can build in a region of its own,
  83 |     ; freed on every pass, and copy out only what it keeps.
     | comment:; freed on every pass, and copy out only what it keeps.
- 84 |     hold longest = "".copy() at r
-    | keyword:hold  variable:longest  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 84 |     flex longest = "".copy() at r
+    | keyword:flex  variable:longest  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  85 |     each word in ["one", "three", "two"]
     | keyword:each  variable:word  keyword:in  punctuation:[  string:"one"  punctuation:,  string:"three"  punctuation:,  string:"two"  punctuation:]
  86 |         region pass
     | keyword:region  region:pass
- 87 |         bind padded = "[{word}]" at pass
-    | keyword:bind  variable:padded  operator:=  string:"[{  variable:word  string:}]"  keyword:at  region:pass
+ 87 |         fixed padded = "[{word}]" at pass
+    | keyword:fixed  variable:padded  operator:=  string:"[{  variable:word  string:}]"  keyword:at  region:pass
  88 |         when padded.len > longest.len
     | keyword:when  variable:padded  punctuation:.  field:len  operator:>  variable:longest  punctuation:.  field:len
  89 |             longest = padded.copy() at r

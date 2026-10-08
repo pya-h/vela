@@ -5,7 +5,7 @@ task logged(next: (@a, @b, int) -> [int]@b, a: region, b: region, n: int) -> [in
 fi
 $(logged)
 task cubes(s: region, r: region, n: int) -> [int]@s
-    hold made = new [int]() at s
+    flex made = new [int]() at s
     made.add(n)
     <- made
 fi

@@ -1,6 +1,6 @@
 ; error: 3:27: 'n' is the caller's place, 'hold&', which a call names with '&'; a place has no value to fall back on
 ; A place is the caller's, named with '&', and has no value to fall back on.
-task count(hold& n: int = 0)
+task count(flex& n: int = 0)
     n = n + 1
 fi
 

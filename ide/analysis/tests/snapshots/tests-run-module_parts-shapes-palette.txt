@@ -30,8 +30,8 @@
     | keyword:fi
  20 | task describe(c: Color) -> text
     | keyword:task  task:describe  punctuation:(  parameter:c  punctuation::  type:Color  punctuation:)  operator:->  type-builtin:text
- 21 |     bind s = swatch(c)
-    | keyword:bind  variable:s  operator:=  task:swatch  punctuation:(  parameter:c  punctuation:)
+ 21 |     fixed s = swatch(c)
+    | keyword:fixed  variable:s  operator:=  task:swatch  punctuation:(  parameter:c  punctuation:)
  22 |     match s.tone
     | keyword:match  variable:s  punctuation:.  field:tone
  23 |     case Warm

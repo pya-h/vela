@@ -40,10 +40,10 @@
     | comment:; below zero), and failing on purpose when the last reading is too high.
  25 | task last_above(readings: [Reading]@r, floor: int) -> int ~ LoopResult<int, text>
     | keyword:task  task:last_above  punctuation:(  parameter:readings  punctuation::  punctuation:[  type:Reading  punctuation:]  operator:@  region:r  punctuation:,  parameter:floor  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>
- 26 |     bind found = loop hold i = 0 || i < readings.len || i++
-    | keyword:bind  variable:found  operator:=  keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:readings  punctuation:.  field:len  operator:||  variable:i  operator:++
- 27 |         bind reading = readings[i]
-    | keyword:bind  variable:reading  operator:=  parameter:readings  punctuation:[  variable:i  punctuation:]
+ 26 |     fixed found = loop flex i = 0 || i < readings.len || i++
+    | keyword:fixed  variable:found  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:readings  punctuation:.  field:len  operator:||  variable:i  operator:++
+ 27 |         fixed reading = readings[i]
+    | keyword:fixed  variable:reading  operator:=  parameter:readings  punctuation:[  variable:i  punctuation:]
  28 |         when reading.value < 0
     | keyword:when  variable:reading  punctuation:.  field:value  operator:<  number:0
  29 |             break = i
@@ -68,16 +68,16 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  40 |     region r
     | keyword:region  region:r
- 41 |     bind day = [Reading { sensor: "north", value: 12 }, Reading { sensor: "east", value: 40 }, Reading { sensor: "west", value: 31 }, ...] at r
-    | keyword:bind  variable:day  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:12  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:40  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"west"  punctuation:,  field:value  punctuation::  number:31  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 42 |     bind night = [Reading { sensor: "north", value: 50 }, Reading { sensor: "east", value: 3 }, ...] at r
-    | keyword:bind  variable:night  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:50  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:3  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 43 |     bind faulty = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: -1 }, Reading { sensor: "west", value: 70 }, ...] at r
-    | keyword:bind  variable:faulty  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:22  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  operator:-  number:1  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"west"  punctuation:,  field:value  punctuation::  number:70  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 44 |     bind spike = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: 950 }, ...] at r
-    | keyword:bind  variable:spike  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:22  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:950  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 45 |     bind empty = new [Reading]() at r
-    | keyword:bind  variable:empty  operator:=  keyword:new  punctuation:[  type:Reading  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 41 |     fixed day = [Reading { sensor: "north", value: 12 }, Reading { sensor: "east", value: 40 }, Reading { sensor: "west", value: 31 }, ...] at r
+    | keyword:fixed  variable:day  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:12  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:40  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"west"  punctuation:,  field:value  punctuation::  number:31  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 42 |     fixed night = [Reading { sensor: "north", value: 50 }, Reading { sensor: "east", value: 3 }, ...] at r
+    | keyword:fixed  variable:night  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:50  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:3  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 43 |     fixed faulty = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: -1 }, Reading { sensor: "west", value: 70 }, ...] at r
+    | keyword:fixed  variable:faulty  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:22  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  operator:-  number:1  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"west"  punctuation:,  field:value  punctuation::  number:70  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 44 |     fixed spike = [Reading { sensor: "north", value: 22 }, Reading { sensor: "east", value: 950 }, ...] at r
+    | keyword:fixed  variable:spike  operator:=  punctuation:[  type:Reading  punctuation:{  field:sensor  punctuation::  string:"north"  punctuation:,  field:value  punctuation::  number:22  punctuation:}  punctuation:,  type:Reading  punctuation:{  field:sensor  punctuation::  string:"east"  punctuation:,  field:value  punctuation::  number:950  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 45 |     fixed empty = new [Reading]() at r
+    | keyword:fixed  variable:empty  operator:=  keyword:new  punctuation:[  type:Reading  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  47 |     each readings in [day, night, faulty, spike, empty]
     | keyword:each  variable:readings  keyword:in  punctuation:[  variable:day  punctuation:,  variable:night  punctuation:,  variable:faulty  punctuation:,  variable:spike  punctuation:,  variable:empty  punctuation:]
  48 |         match last_above(readings, 10)
@@ -96,8 +96,8 @@
     | keyword:fi
  56 |     ; The sum of the readings, as the value of a loop in three parts.
     | comment:; The sum of the readings, as the value of a loop in three parts.
- 57 |     bind sum = loop hold i = 0, total = 0 || i < day.len || i++
-    | keyword:bind  variable:sum  operator:=  keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  variable:total  operator:=  number:0  operator:||  variable:i  operator:<  variable:day  punctuation:.  field:len  operator:||  variable:i  operator:++
+ 57 |     fixed sum = loop flex i = 0, total = 0 || i < day.len || i++
+    | keyword:fixed  variable:sum  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  variable:total  operator:=  number:0  operator:||  variable:i  operator:<  variable:day  punctuation:.  field:len  operator:||  variable:i  operator:++
  58 |         total += day[i].value
     | variable:total  operator:+=  variable:day  punctuation:[  variable:i  punctuation:]  punctuation:.  field:value
  59 |         total

@@ -1,6 +1,6 @@
 ; error: 5:7: 'add' changes the slice where it is kept, so it can't change a part taken of one; keep the part in a variable first, as in 'hold part = xs[a..b]'
 task main()
     region r
-    hold xs = new [int]([1, 2, 3]) at r
+    flex xs = new [int]([1, 2, 3]) at r
     xs[0..2].add(1)
 fi

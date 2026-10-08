@@ -18,7 +18,7 @@ priv shape Swatch
 fi
 
 task describe(c: Color) -> text
-    bind s = swatch(c)
+    fixed s = swatch(c)
     match s.tone
     case Warm
         <- "warm"

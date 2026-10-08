@@ -1,6 +1,6 @@
 ; error: 5:14: '<>' compares maybe text with text, maybe text, or none, not with float
 ; The plain value may come first, and is still of the type the maybe holds.
 task main()
-    bind m: maybe text = "a"
+    fixed m: maybe text = "a"
     show(2.5 <> m)
 fi

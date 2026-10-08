@@ -34,10 +34,10 @@
     | keyword:fi
  20 |     fi
     | keyword:fi
- 22 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 23 |     hold k = 1
-    | keyword:hold  variable:k  operator:=  number:1
+ 22 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 23 |     flex k = 1
+    | keyword:flex  variable:k  operator:=  number:1
  24 |     loop k <= 4
     | keyword:loop  variable:k  operator:<=  number:4
  25 |         total = total + k

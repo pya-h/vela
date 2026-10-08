@@ -8,8 +8,8 @@ shape Node
 fi
 
 task sum(list: maybe ^Node@r) -> int
-    hold total = 0
-    hold current = list
+    flex total = 0
+    flex current = list
     loop current is {node}
         total = total + node^.value
         current = node^.next
@@ -18,7 +18,7 @@ task sum(list: maybe ^Node@r) -> int
 fi
 
 task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
-    hold current = list
+    flex current = list
     loop current is {node}
         when node^.value == wanted
             <- node
@@ -29,7 +29,7 @@ task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
 fi
 
 task last(list: ^Node@r) -> ^Node@r
-    hold current = list
+    flex current = list
     loop current^.next is {next}
         current = next
     fi
@@ -38,12 +38,12 @@ fi
 
 task main()
     region nodes
-    bind empty: maybe ^Node@nodes = none
+    fixed empty: maybe ^Node@nodes = none
     show(empty == none)
     show(sum(empty))
-    bind third = new Node(Node { value: 3, next: none }) at nodes
-    bind second = new Node(Node { value: 2, next: third }) at nodes
-    bind first = new Node(Node { value: 1, next: second }) at nodes
+    fixed third = new Node(Node { value: 3, next: none }) at nodes
+    fixed second = new Node(Node { value: 2, next: third }) at nodes
+    fixed first = new Node(Node { value: 1, next: second }) at nodes
     show(sum(first))
     show(last(first)^.value)
 
@@ -60,10 +60,10 @@ task main()
         show("not found")
     fi
 
-    bind fallback = find(first, 9) { third }
+    fixed fallback = find(first, 9) { third }
     show(fallback^.value)
 
-    hold spare: maybe ^int@nodes = none
+    flex spare: maybe ^int@nodes = none
     spare = new int(7) at nodes
     when spare is {p}
         show(p^)

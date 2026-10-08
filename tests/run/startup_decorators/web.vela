@@ -2,8 +2,8 @@
 ; keep its routes, and a page of its own, registered with a private task.
 
 shape Pages
-    shared hold count: int = 0
-    shared hold home: maybe (text) -> text = none
+    shared flex count: int = 0
+    shared flex home: maybe (text) -> text = none
 fi
 
 ; Keeps the page for `path`; here only "/" is kept.

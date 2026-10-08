@@ -1,6 +1,6 @@
-; error: 5:14: unknown task 'card'; module 'modules/library' has one: list it in 'include modules/library {…}'
+; error: 5:15: unknown task 'card'; module 'modules/library' has one: list it in 'include modules/library {…}'
 include modules/library {greet}
 
 task main()
-    bind c = card("ada")
+    fixed c = card("ada")
 fi

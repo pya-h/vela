@@ -9,8 +9,8 @@ kind Which
 fi
 
 task main()
-    bind w = First
-    bind escaped = match w
+    fixed w = First
+    fixed escaped = match w
     case _
         region inner
         new Note(Note { title: "x" }) at inner

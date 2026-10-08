@@ -28,8 +28,8 @@
     | keyword:fi
  19 | task made(f: (int, int) -> Point)
     | keyword:task  task:made  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  punctuation:)
- 20 |     bind point = f(0, 0)
-    | keyword:bind  variable:point  operator:=  parameter:f  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
+ 20 |     fixed point = f(0, 0)
+    | keyword:fixed  variable:point  operator:=  parameter:f  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
  21 |     show("made ", point)
     | builtin-fn:show  punctuation:(  string:"made "  punctuation:,  variable:point  punctuation:)
  22 | fi
@@ -82,8 +82,8 @@
     | keyword:fi
  52 | shape Local
     | keyword:shape  type:Local
- 53 |     shared hold seen: int = 0
-    | keyword:shared  keyword:hold  field:seen  punctuation::  type-builtin:int  operator:=  number:0
+ 53 |     shared flex seen: int = 0
+    | keyword:shared  keyword:flex  field:seen  punctuation::  type-builtin:int  operator:=  number:0
  55 |     shared tally(next: (int) -> int, n: int) -> int
     | keyword:shared  method:tally  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  56 |         Local.seen = Local.seen + 1
@@ -128,8 +128,8 @@
     | keyword:fi
  81 | shape Hooks
     | keyword:shape  type:Hooks
- 82 |     shared hold making: (int, int) -> Point = Point.new
-    | keyword:shared  keyword:hold  field:making  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  operator:=  type:Point  punctuation:.  method:new
+ 82 |     shared flex making: (int, int) -> Point = Point.new
+    | keyword:shared  keyword:flex  field:making  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  operator:=  type:Point  punctuation:.  method:new
  83 | fi
     | keyword:fi
  85 | task apply(f: (int, int) -> Point) -> Point
@@ -142,32 +142,32 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  90 |     show("main starts")
     | builtin-fn:show  punctuation:(  string:"main starts"  punctuation:)
- 91 |     bind p = Point.new(1, 2)
-    | keyword:bind  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 91 |     fixed p = Point.new(1, 2)
+    | keyword:fixed  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
  92 |     show(p, " ", p.sum())
     | builtin-fn:show  punctuation:(  variable:p  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:sum  punctuation:(  punctuation:)  punctuation:)
- 93 |     bind light = Light.pick(1)
-    | keyword:bind  variable:light  operator:=  type:Light  punctuation:.  method:pick  punctuation:(  number:1  punctuation:)
+ 93 |     fixed light = Light.pick(1)
+    | keyword:fixed  variable:light  operator:=  type:Light  punctuation:.  method:pick  punctuation:(  number:1  punctuation:)
  94 |     show(tripled(2), " ", light, " ", Local.seen)
     | builtin-fn:show  punctuation:(  task:tripled  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:light  punctuation:,  string:" "  punctuation:,  type:Local  punctuation:.  field:seen  punctuation:)
  95 |     show(routes.Step.up(1), " ", routes.Routes.count, " ", routes.Meter.calls)
     | builtin-fn:show  punctuation:(  module:routes  punctuation:.  type:Step  punctuation:.  method:up  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  module:routes  punctuation:.  type:Routes  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  module:routes  punctuation:.  type:Meter  punctuation:.  field:calls  punctuation:)
  96 |     ; A shared method as a value goes through its wrappers as a call does.
     | comment:; A shared method as a value goes through its wrappers as a call does.
- 97 |     bind make = Point.new
-    | keyword:bind  variable:make  operator:=  type:Point  punctuation:.  method:new
+ 97 |     fixed make = Point.new
+    | keyword:fixed  variable:make  operator:=  type:Point  punctuation:.  method:new
  98 |     show(make(3, 4))
     | builtin-fn:show  punctuation:(  variable:make  punctuation:(  number:3  punctuation:,  number:4  punctuation:)  punctuation:)
  99 |     show(apply(Point.new))
     | builtin-fn:show  punctuation:(  task:apply  punctuation:(  type:Point  punctuation:.  method:new  punctuation:)  punctuation:)
 100 |     show(Hooks.making(7, 8))
     | builtin-fn:show  punctuation:(  type:Hooks  punctuation:.  method:making  punctuation:(  number:7  punctuation:,  number:8  punctuation:)  punctuation:)
-101 |     bind up = routes.Step.up
-    | keyword:bind  variable:up  operator:=  module:routes  punctuation:.  type:Step  punctuation:.  method:up
-102 |     bind pick = Light.pick
-    | keyword:bind  variable:pick  operator:=  type:Light  punctuation:.  method:pick
-103 |     bind picked = pick(0)
-    | keyword:bind  variable:picked  operator:=  variable:pick  punctuation:(  number:0  punctuation:)
+101 |     fixed up = routes.Step.up
+    | keyword:fixed  variable:up  operator:=  module:routes  punctuation:.  type:Step  punctuation:.  method:up
+102 |     fixed pick = Light.pick
+    | keyword:fixed  variable:pick  operator:=  type:Light  punctuation:.  method:pick
+103 |     fixed picked = pick(0)
+    | keyword:fixed  variable:picked  operator:=  variable:pick  punctuation:(  number:0  punctuation:)
 104 |     show(up(9), " ", picked, " ", Local.seen)
     | builtin-fn:show  punctuation:(  variable:up  punctuation:(  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:picked  punctuation:,  string:" "  punctuation:,  type:Local  punctuation:.  field:seen  punctuation:)
 105 | fi

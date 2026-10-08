@@ -1,8 +1,8 @@
 ; error: 6:19: '?' asks for the type of a tuple's item, so a type alone follows 'is', as in 't.#5? is maybe int'; to take the value, leave the '?' out
 ; After `?`, a type alone follows `is`.
 task main()
-    bind t = (1, 2)
-    bind n = 3
+    fixed t = (1, 2)
+    fixed n = 3
     when t.#5? is maybe int x
         show(1)
     fi

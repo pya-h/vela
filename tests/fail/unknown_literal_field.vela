@@ -1,10 +1,10 @@
-; error: 8:34: shape 'Point' has no field 'z'
+; error: 8:35: shape 'Point' has no field 'z'
 shape Point
     x: int
     y: int
 fi
 
 task main()
-    bind p = Point { x: 1, y: 2, z: 3 }
+    fixed p = Point { x: 1, y: 2, z: 3 }
     show(p.x)
 fi

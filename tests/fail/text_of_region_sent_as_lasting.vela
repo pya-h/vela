@@ -1,7 +1,7 @@
 ; error: 5:13: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 task make() -> text
     region r
-    bind boxed = new text("short-lived") at r
+    fixed boxed = new text("short-lived") at r
     <- boxed^
 fi
 

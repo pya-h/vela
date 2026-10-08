@@ -32,12 +32,12 @@ task read(t: text) -> int ~ ParseError
 fi
 
 task main()
-    bind show = 3
-    hold bool = Box { nothing: show, show: "shown", TooLarge: false }
+    fixed show = 3
+    flex bool = Box { nothing: show, show: "shown", TooLarge: false }
     bool.nothing = twice(bool.nothing, 1)
     show(bool.nothing)
     show(bool.show)
-    bind l = Light.Red()
+    fixed l = Light.Red()
     when l is Light.Red
         show("red")
     fi
@@ -46,7 +46,7 @@ task main()
     show(bool.TooLarge)
     show(read("x") { -2 })
     ; A variable named like a builtin type, beside a scan that names that type.
-    bind int = 3
+    fixed int = 3
     show(int + scan("", int) { 0 })
     show(ignoring(9))
 fi

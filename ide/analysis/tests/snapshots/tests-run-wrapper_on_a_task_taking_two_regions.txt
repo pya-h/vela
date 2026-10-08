@@ -12,8 +12,8 @@
     | keyword:$  punctuation:(  task:logged  punctuation:)
   7 | task cubes(s: region, r: region, n: int) -> [int]@s
     | keyword:task  task:cubes  punctuation:(  region:s  punctuation::  keyword:region  punctuation:,  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:s
-  8 |     hold made = new [int]() at s
-    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+  8 |     flex made = new [int]() at s
+    | keyword:flex  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
   9 |     made.add(n)
     | variable:made  punctuation:.  field:add  punctuation:(  parameter:n  punctuation:)
  10 |     <- made
@@ -24,8 +24,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  13 |     region outer
     | keyword:region  region:outer
- 14 |     hold keep = new [int]() at outer
-    | keyword:hold  variable:keep  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
+ 14 |     flex keep = new [int]() at outer
+    | keyword:flex  variable:keep  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
  15 |     block
     | keyword:block
  16 |         region inner
@@ -36,8 +36,8 @@
     | keyword:fi
  19 |     region other
     | keyword:region  region:other
- 20 |     hold junk = new [int]() at other
-    | keyword:hold  variable:junk  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:other
+ 20 |     flex junk = new [int]() at other
+    | keyword:flex  variable:junk  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:other
  21 |     each i in 0..1000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:1000
  22 |         junk.add(i)

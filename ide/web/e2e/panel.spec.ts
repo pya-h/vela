@@ -3,7 +3,7 @@
 
 import { cursorAtEndOf, expect, launch, lineText, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
-const FOREVER = "task main()\n    hold n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
+const FOREVER = "task main()\n    flex n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
 
 test("runs the saved file and shows how it ended", async ({ page, studio }) => {
   await launch(page, studio);

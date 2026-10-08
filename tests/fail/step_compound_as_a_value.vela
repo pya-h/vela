@@ -1,6 +1,6 @@
 ; error: 5:11: expected an expression, got '+='; '+=' changes a place, on a line of its own, as in 'x += 2', and gives no value
 task main()
-    hold x = 1
-    hold y = 0
+    flex x = 1
+    flex y = 0
     y = x += 1
 fi

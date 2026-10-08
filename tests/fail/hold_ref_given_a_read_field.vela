@@ -3,11 +3,11 @@ shape Meter
     read count: int = 0
 fi
 
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 
 task main()
-    hold m = Meter {}
+    flex m = Meter {}
     sample(&m.count)
 fi

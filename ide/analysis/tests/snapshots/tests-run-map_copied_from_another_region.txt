@@ -6,14 +6,14 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     region outer
     | keyword:region  region:outer
-  6 |     hold keep = new [text: int]() at outer
-    | keyword:hold  variable:keep  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
+  6 |     flex keep = new [text: int]() at outer
+    | keyword:flex  variable:keep  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
   7 |     when true
     | keyword:when  keyword:true
   8 |         region inner
     | keyword:region  region:inner
-  9 |         hold m = new [text: int]() at inner
-    | keyword:hold  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:inner
+  9 |         flex m = new [text: int]() at inner
+    | keyword:flex  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:inner
  10 |         m["a long key that is copied".copy() at inner] = 1
     | variable:m  punctuation:[  string:"a long key that is copied"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:inner  punctuation:]  operator:=  number:1
  11 |         keep = new [text: int](m) at outer

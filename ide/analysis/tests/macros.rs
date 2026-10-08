@@ -20,9 +20,9 @@ priv #NAME = \"vela\"
 
 task main()
     CHECK
-    bind area = P * 2.0
-    bind twice = SIZE * 2
-    bind limit = consts.LIMIT
+    fixed area = P * 2.0
+    fixed twice = SIZE * 2
+    fixed limit = consts.LIMIT
     @@
 fi
 ";
@@ -99,17 +99,17 @@ fn a_macro_is_colored_as_a_value_that_never_changes() {
     };
     assert_eq!(class_at("#P"), Some(TokenClass::Keyword));
     // `#` in an array's count is punctuation.
-    let counted = "task main()\n    bind xs = [0#3]\n    show(xs[#1])\nfi\n";
+    let counted = "task main()\n    fixed xs = [0#3]\n    show(xs[#1])\nfi\n";
     let hashes: Vec<TokenClass> = Analysis::new(counted).tokens().into_iter().filter(|t| &counted[t.from..t.to] == "#").map(|t| t.class).collect();
     assert_eq!(hashes, [TokenClass::Punctuation, TokenClass::Punctuation]);
     // Nor is a comment written as other languages write one a macro.
     let noted = "task main()\nfi\n# the count\n";
     assert!(Analysis::new(noted).outline().iter().all(|item| item.kind != SymbolKind::Macro));
     assert_eq!(class_at("P = 3"), Some(TokenClass::Variant));
-    assert_eq!(class_at("P * 2.0\n    bind"), Some(TokenClass::Variant));
+    assert_eq!(class_at("P * 2.0\n    fixed"), Some(TokenClass::Variant));
     assert_eq!(class_at("LIMIT\n"), Some(TokenClass::Variant));
     // A variable named `macro` is only a variable.
-    let plain = "task main()\n    bind macro = 1\n    show(macro)\nfi\n";
+    let plain = "task main()\n    fixed macro = 1\n    show(macro)\nfi\n";
     let classes: Vec<TokenClass> = Analysis::new(plain).tokens().into_iter().filter(|t| &plain[t.from..t.to] == "macro").map(|t| t.class).collect();
     assert_eq!(classes, [TokenClass::Variable, TokenClass::Variable]);
 }
@@ -172,7 +172,7 @@ fn an_indented_macro_outside_every_task_is_still_a_macro() {
 
 #[test]
 fn values_made_of_macros_have_types_when_the_file_does_not_parse() {
-    let source = "#N = 2\n#TAU = N * 3\ntask main()\n    bind z = N\n    bind w = N + 1\n    show(z, w)\nfi\ntask g(\n";
+    let source = "#N = 2\n#TAU = N * 3\ntask main()\n    fixed z = N\n    fixed w = N + 1\n    show(z, w)\nfi\ntask g(\n";
     let analysis = Analysis::new(source);
     let hover = |needle: &str| {
         let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));

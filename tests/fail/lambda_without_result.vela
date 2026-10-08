@@ -1,5 +1,5 @@
-; error: 4:23: a lambda names what it sends after '->', or 'nothing', as in '(x: int) -> int'
+; error: 4:24: a lambda names what it sends after '->', or 'nothing', as in '(x: int) -> int'
 ; A lambda always names what it sends, or nothing.
 task main()
-    bind f = (x: int) -> fi
+    fixed f = (x: int) -> fi
 fi

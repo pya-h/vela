@@ -38,16 +38,16 @@
     | keyword:fi
  24 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 25 |     bind x = save(5)
-    | keyword:bind  variable:x  operator:=  task:save  punctuation:(  number:5  punctuation:)
+ 25 |     fixed x = save(5)
+    | keyword:fixed  variable:x  operator:=  task:save  punctuation:(  number:5  punctuation:)
  26 |     show(take(x))
     | builtin-fn:show  punctuation:(  task:take  punctuation:(  variable:x  punctuation:)  punctuation:)
- 27 |     bind s = Saved { result: save(0) }
-    | keyword:bind  variable:s  operator:=  type:Saved  punctuation:{  field:result  punctuation::  task:save  punctuation:(  number:0  punctuation:)  punctuation:}
+ 27 |     fixed s = Saved { result: save(0) }
+    | keyword:fixed  variable:s  operator:=  type:Saved  punctuation:{  field:result  punctuation::  task:save  punctuation:(  number:0  punctuation:)  punctuation:}
  28 |     show(take(s.result))
     | builtin-fn:show  punctuation:(  task:take  punctuation:(  variable:s  punctuation:.  field:result  punctuation:)  punctuation:)
- 29 |     hold y: nothing ~ text = save(0)
-    | keyword:hold  variable:y  punctuation::  type-builtin:nothing  operator:~  type-builtin:text  operator:=  task:save  punctuation:(  number:0  punctuation:)
+ 29 |     flex y: nothing ~ text = save(0)
+    | keyword:flex  variable:y  punctuation::  type-builtin:nothing  operator:~  type-builtin:text  operator:=  task:save  punctuation:(  number:0  punctuation:)
  30 |     y = fail "z"
     | variable:y  operator:=  keyword:fail  string:"z"
  31 |     show(take(y))

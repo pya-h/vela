@@ -1,5 +1,5 @@
 ; error: 7:12: task 'sample' changes 'x', the place it is given, so it takes a place that can change, marked with '&', as in '&a', and this is a value made here
-task sample(hold& x: int)
+task sample(flex& x: int)
     x = 10
 fi
 

@@ -6,6 +6,6 @@ fi
 
 task main()
     region r
-    bind f = sq
+    fixed f = sq
     show(f(2) at r)
 fi

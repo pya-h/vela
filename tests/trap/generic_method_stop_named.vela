@@ -8,7 +8,7 @@ shape Box<T>
 fi
 
 task main()
-    bind b = Box<int> { v: 1 }
+    fixed b = Box<int> { v: 1 }
     show(b.get(5))
     show(b.get(0))
 fi

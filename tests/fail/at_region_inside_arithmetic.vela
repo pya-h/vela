@@ -10,6 +10,6 @@ fi
 
 task main()
     region r
-    bind xs = new [int]([1]) at r
+    fixed xs = new [int]([1]) at r
     show(2 * count(xs) at r)
 fi

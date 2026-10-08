@@ -140,8 +140,8 @@
     | keyword:fi
  82 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 83 |     hold light = Red
-    | keyword:hold  variable:light  operator:=  variant:Red
+ 83 |     flex light = Red
+    | keyword:flex  variable:light  operator:=  variant:Red
  84 |     light.tell()
     | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  85 |     light.flip()
@@ -166,10 +166,10 @@
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Amber  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
  96 |     show(light.sameAs(Red))
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
- 98 |     ; A method that changes nothing is called on a `bind` too.
-    | comment:; A method that changes nothing is called on a `bind` too.
- 99 |     bind steady = Green
-    | keyword:bind  variable:steady  operator:=  variant:Green
+ 98 |     ; A method that changes nothing is called on a `fixed` too.
+    | comment:; A method that changes nothing is called on a `fixed` too.
+ 99 |     fixed steady = Green
+    | keyword:fixed  variable:steady  operator:=  variant:Green
 100 |     show(steady.label())
     | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 101 |     ; And on a variant as it is written.
@@ -180,8 +180,8 @@
     | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 105 |     region r
     | keyword:region  region:r
-106 |     hold word: Label@r = Word("a word".copy() at r)
-    | keyword:hold  variable:word  punctuation::  type:Label  operator:@  region:r  operator:=  variant:Word  punctuation:(  string:"a word"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+106 |     flex word: Label@r = Word("a word".copy() at r)
+    | keyword:flex  variable:word  punctuation::  type:Label  operator:@  region:r  operator:=  variant:Word  punctuation:(  string:"a word"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 107 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
 108 |     word.clear()
@@ -190,8 +190,8 @@
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
 111 |     ; Through a pointer into a region.
     | comment:; Through a pointer into a region.
-112 |     hold here = new Light(Red) at r
-    | keyword:hold  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
+112 |     flex here = new Light(Red) at r
+    | keyword:flex  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
 113 |     here^.flip()
     | variable:here  operator:^  punctuation:.  method:flip  punctuation:(  punctuation:)
 114 |     here^.tell()

@@ -1,6 +1,6 @@
-; error: 5:13: 'library.Card' names nothing: 'library' is neither a module this file includes nor a shape or a kind this file sees; module 'modules/library' is included as 'lib'
+; error: 5:14: 'library.Card' names nothing: 'library' is neither a module this file includes nor a shape or a kind this file sees; module 'modules/library' is included as 'lib'
 include modules/library => lib
 
 task main()
-    bind c: library.Card = lib.card("ann")
+    fixed c: library.Card = lib.card("ann")
 fi

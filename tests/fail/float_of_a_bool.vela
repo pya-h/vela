@@ -1,5 +1,5 @@
 ; error: 4:16: 'float' takes an int, a unit, a float, or text, but this value is bool; a bool becomes a number with 'int', as in 'float(int(ok))'
 task main()
-    bind ok = true
+    fixed ok = true
     show(float(ok))
 fi

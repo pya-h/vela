@@ -36,8 +36,8 @@ task first_word(t: maybe text)
 fi
 
 task main()
-    bind a: maybe int = 5
-    hold b: maybe int = none
+    fixed a: maybe int = 5
+    flex b: maybe int = none
     show(a)
     show(b)
     b = 42
@@ -54,20 +54,20 @@ task main()
     show(describe(half(3)))
     show(describe(7))
 
-    bind r = Reading { label: "temperature", value: 21.5 }
-    bind blank = Reading { label: "wind", value: none }
+    fixed r = Reading { label: "temperature", value: 21.5 }
+    fixed blank = Reading { label: "wind", value: none }
     show(r.value)
     show(blank.value)
 
-    bind flag: maybe bool = true
-    bind word: maybe text = "hi"
+    fixed flag: maybe bool = true
+    fixed word: maybe text = "hi"
     show(flag)
     show(word)
     first_word(word)
     first_word(none)
 
     region cells
-    bind boxed = new maybe int(3) at cells
+    fixed boxed = new maybe int(3) at cells
     show(boxed^)
     boxed^ = none
     show(boxed^)

@@ -4,7 +4,7 @@ task divmod(a: int, b: int) -> int, int
 fi
 
 task main()
-    hold a = 0
+    flex a = 0
     a, a = divmod(17, 5)
     show(a)
 fi

@@ -23,15 +23,15 @@ task main()
     CHECK
     region kept
     region work
-    bind line = scan(\"\") at work { \"\" }
-    bind written = line.copy() at kept
-    bind short = line.copy()@kept
-    hold place: text@kept = \"\"
+    fixed line = scan(\"\") at work { \"\" }
+    fixed written = line.copy() at kept
+    fixed short = line.copy()@kept
+    flex place: text@kept = \"\"
     place = line.copy()
-    bind worker: Person@work = Person { name: line, age: 3 }
-    bind person = worker.copy() at kept
-    bind node = new Node(Node { label: line, next: none }) at work
-    bind nodes = node.copy()@kept
+    fixed worker: Person@work = Person { name: line, age: 3 }
+    fixed person = worker.copy() at kept
+    fixed node = new Node(Node { label: line, next: none }) at work
+    fixed nodes = node.copy()@kept
     show(place)
     @@
 fi
@@ -89,10 +89,10 @@ fn completion_offers_copy_on_values_holding_text_slices_or_pointers() {
         assert!(labels(&program(checks, "show(line.@@)")).contains(&"copy".to_string()), "text, checks: {}", checks);
         let fields = labels(&program(checks, "show(worker.@@)"));
         assert!(fields.contains(&"name".to_string()) && fields.contains(&"copy".to_string()), "{:?}", fields);
-        let counted = labels(&program(checks, "bind n = 3\n    show(n.@@)"));
+        let counted = labels(&program(checks, "fixed n = 3\n    show(n.@@)"));
         assert!(!counted.contains(&"copy".to_string()), "an int, checks: {}: {:?}", checks, counted);
-        assert!(labels(&program(checks, "bind again = line.copy() @@")).contains(&"at".to_string()), "checks: {}", checks);
-        assert!(labels(&program(checks, "bind again = line.copy()@ @@")).contains(&"kept".to_string()), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed again = line.copy() @@")).contains(&"at".to_string()), "checks: {}", checks);
+        assert!(labels(&program(checks, "fixed again = line.copy()@ @@")).contains(&"kept".to_string()), "checks: {}", checks);
     }
     // A pointer's fields are reached through `^`; the pointer itself is copied.
     let through = completions(&program(true, "show(node.@@)"));
@@ -102,7 +102,7 @@ fn completion_offers_copy_on_values_holding_text_slices_or_pointers() {
 
 #[test]
 fn a_copy_without_a_region_is_reported() {
-    let source = program(true, "bind lost = line.copy()");
+    let source = program(true, "fixed lost = line.copy()");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("can't tell which region to copy into"), "{}", diagnostic.message);

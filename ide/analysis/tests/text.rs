@@ -23,25 +23,25 @@ fi
 task main()
     CHECK
     region r
-    bind name = \"Ada\"
-    bind person = Person { name: name }
-    bind line = scan(\"\") at r { \"\" }
-    bind count = name.len
-    bind inner = person.name.len
-    bind read = line.len
-    bind part = name[0..2]
-    bind kept = line[1..line.len]
-    bind inside = person.name[0..1][0..1]
-    bind before = name < \"Bob\"
-    bind joined = name + \" \" + line at r
-    bind wrapped = (\"<\" + name + \">\")@r
-    bind sum = count + 1
-    bind digits = count.str() at r
-    bind given = count.str(r)
-    bind cast = text(count)@r
-    bind point = Point { x: 1 }.str() at r
-    bind said = \"{name} is {count}\" at r
-    bind shouted = \"{name}!\"@r
+    fixed name = \"Ada\"
+    fixed person = Person { name: name }
+    fixed line = scan(\"\") at r { \"\" }
+    fixed count = name.len
+    fixed inner = person.name.len
+    fixed read = line.len
+    fixed part = name[0..2]
+    fixed kept = line[1..line.len]
+    fixed inside = person.name[0..1][0..1]
+    fixed before = name < \"Bob\"
+    fixed joined = name + \" \" + line at r
+    fixed wrapped = (\"<\" + name + \">\")@r
+    fixed sum = count + 1
+    fixed digits = count.str() at r
+    fixed given = count.str(r)
+    fixed cast = text(count)@r
+    fixed point = Point { x: 1 }.str() at r
+    fixed said = \"{name} is {count}\" at r
+    fixed shouted = \"{name}!\"@r
     @@
 fi
 ";
@@ -115,7 +115,7 @@ fn text_completes_its_length_str_and_copy() {
 
 #[test]
 fn a_misspelled_length_says_what_text_has() {
-    let source = "task main()\n    bind name = \"Ada\"\n    show(name.size)\n    show(name.len())\nfi\n";
+    let source = "task main()\n    fixed name = \"Ada\"\n    show(name.size)\n    show(name.len())\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
     // Both lines are wrong, and both are reported: reading the length is no call.
     assert_eq!(
@@ -140,7 +140,7 @@ fn joined_text_is_text_of_its_region_whether_or_not_the_file_checks() {
 
 #[test]
 fn joining_without_a_region_says_how_to_name_one() {
-    let source = "task main()\n    bind name = \"Ada\" + \"!\"\n    show(name)\nfi\n";
+    let source = "task main()\n    fixed name = \"Ada\" + \"!\"\n    show(name)\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
     assert_eq!(
         messages,
@@ -225,7 +225,7 @@ fn a_region_completes_after_the_at_sign_of_text_holding_values() {
     // The text is new, so a region the task only takes in its types, which it
     // cannot allocate in, is not offered. (The cursor is found by hand: the
     // `@@` marker would run into the `@` naming the region.)
-    let source = "task where(t: text@q) -> text@q\n    bind n = 1\n    region here\n    <- \"{n}\"@\nfi\n";
+    let source = "task where(t: text@q) -> text@q\n    fixed n = 1\n    region here\n    <- \"{n}\"@\nfi\n";
     let at = source.find("\"@").unwrap() + "\"@".len();
     let items = Analysis::new(source).complete(LineIndex::new(source).utf16_of(at)).items;
     let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
@@ -234,7 +234,7 @@ fn a_region_completes_after_the_at_sign_of_text_holding_values() {
 
 #[test]
 fn text_holding_values_without_a_region_says_how_to_name_one() {
-    let source = "task main()\n    bind n = 1\n    show(\"n = {n}\")\nfi\n";
+    let source = "task main()\n    fixed n = 1\n    show(\"n = {n}\")\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
     assert_eq!(messages, ["text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'"]);
 }

@@ -1,5 +1,5 @@
 ; error: 4:16: type int has no methods
 task main()
-    bind count = 1
+    fixed count = 1
     show(count.twice(2))
 fi

@@ -1,6 +1,6 @@
-; error: 3:24: a loop through the values of a group gives no value, since each pass is written out for a value of its own; give the values on to a task, or gather what the passes give in a variable
+; error: 3:25: a loop through the values of a group gives no value, since each pass is written out for a value of its own; give the values on to a task, or gather what the passes give in a variable
 task count<P...>(args: P...) -> int
-    bind n = each v in args
+    fixed n = each v in args
         1
     fi
     <- n { 0 }

@@ -1,6 +1,6 @@
-; error: 5:27: 'library.Card' is a shape, not a kind, so it has no variant 'Hearts'
+; error: 5:28: 'library.Card' is a shape, not a kind, so it has no variant 'Hearts'
 include modules/library
 
 task main()
-    bind s = library.Card.Hearts
+    fixed s = library.Card.Hearts
 fi

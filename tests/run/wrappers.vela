@@ -20,7 +20,7 @@ fi
 
 ; Runs the rest of the chain `times` times, and sends the last result.
 task repeated(next: (int) -> int, times: int, n: int) -> int
-    hold last = 0
+    flex last = 0
     each i in 0..times
         last = next(n + i)
     fi

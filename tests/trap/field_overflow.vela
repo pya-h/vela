@@ -3,6 +3,6 @@ shape S
     v: int
 fi
 task main()
-    hold s = S { v: 9223372036854775807 }
+    flex s = S { v: 9223372036854775807 }
     s.v = s.v + 1
 fi

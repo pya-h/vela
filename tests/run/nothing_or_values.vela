@@ -22,11 +22,11 @@ task take(x: nothing ~ text) -> int
 fi
 
 task main()
-    bind x = save(5)
+    fixed x = save(5)
     show(take(x))
-    bind s = Saved { result: save(0) }
+    fixed s = Saved { result: save(0) }
     show(take(s.result))
-    hold y: nothing ~ text = save(0)
+    flex y: nothing ~ text = save(0)
     y = fail "z"
     show(take(y))
 fi

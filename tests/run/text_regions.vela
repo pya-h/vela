@@ -41,7 +41,7 @@ fi
 ; Keeps text in a value in the caller's region, and reads it back: text a
 ; value in `r` holds is `text@r`, even when it was a literal.
 task named(r: region, name: text) -> text@r
-    bind boxed = new text(name) at r
+    fixed boxed = new text(name) at r
     <- boxed^
 fi
 
@@ -57,21 +57,21 @@ fi
 
 task main()
     region r
-    bind lasting = "Ada"
-    bind kept = named(r, lasting)
+    fixed lasting = "Ada"
+    fixed kept = named(r, lasting)
     show(kept)
     show(kept == lasting)
     show(longer(kept, "Bob"))
     show(longer("x", "x"))
 
     ; A shape holding text: none of a region, or text of one.
-    bind plain = Person { name: "Cy", age: 3 }
-    bind held: Person@r = Person { name: kept, age: 36 }
-    bind inferred = Person { name: kept, age: 1 }
+    fixed plain = Person { name: "Cy", age: 3 }
+    fixed held: Person@r = Person { name: kept, age: 36 }
+    fixed inferred = Person { name: kept, age: 1 }
     greet(plain)
     greet(held)
     show(inferred.age)
-    hold people = new [Person]() at r
+    flex people = new [Person]() at r
     people.add(plain)
     people.add(held)
     show(people[0].name)
@@ -80,19 +80,19 @@ task main()
     show(pick([kept, "Bob"], 1))
 
     ; Text in slices and pointers is in their region.
-    hold names = new [text]() at r
+    flex names = new [text]() at r
     names.add(lasting)
     names.add(kept)
     names.add("Eve")
     show(names.del(0))
-    bind first = names[0]
+    fixed first = names[0]
     show(first)
-    bind note = new text("note") at r
+    fixed note = new text("note") at r
     note^ = lasting
     show(note^)
 
     ; A shape holding pointers holds its text in its region.
-    bind job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
+    fixed job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
     show(describe(job^.status))
     show(describe(Status.Todo))
     job^.title = names[1]
@@ -106,11 +106,11 @@ task main()
     fi
 
     ; maybe and errors of text of a region.
-    hold found: maybe text@r = none
+    flex found: maybe text@r = none
     found = kept
     show(found)
-    bind fallback = found { "missing" }
+    fixed fallback = found { "missing" }
     show(fallback)
-    bind reasons = [Status.Todo, Status.Blocked(kept)]
+    fixed reasons = [Status.Todo, Status.Blocked(kept)]
     show(describe(reasons[1]))
 fi

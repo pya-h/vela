@@ -38,6 +38,6 @@ task main()
     check(1, 1)
     check("a", "b")
     show(larger(3, 7), " ", larger("fig", "pear"))
-    bind pair = twice(4)
+    fixed pair = twice(4)
     show(pair.0 + pair.1)
 fi

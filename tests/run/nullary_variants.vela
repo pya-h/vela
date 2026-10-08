@@ -34,7 +34,7 @@ fi
 task main()
     show(name(Red))
     show(name(Amber()))
-    hold light = Green
+    flex light = Green
     show(name(light))
     light = Red
     show(name(light))

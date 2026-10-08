@@ -6,6 +6,6 @@ shape S
 fi
 
 task main()
-    bind s = S { tuple: 42 }
+    fixed s = S { tuple: 42 }
     show((s...))
 fi

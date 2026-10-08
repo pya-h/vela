@@ -12,6 +12,6 @@ shape B
     t: (int, maybe int) = A.t2
 fi
 task main()
-    bind b = B {}
+    fixed b = B {}
     show(A.v, " ", A.arr, " ", b.w, " ", b.t)
 fi

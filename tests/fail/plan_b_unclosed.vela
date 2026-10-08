@@ -1,8 +1,8 @@
-; error: 7:5: expected '}' to close the plan B at 5:20, got 'fi'
+; error: 7:5: expected '}' to close the plan B at 5:21, got 'fi'
 task main()
-    bind m: maybe int = none
+    fixed m: maybe int = none
     when true
-        bind n = m {
+        fixed n = m {
             0
     fi
 fi

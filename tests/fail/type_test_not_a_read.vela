@@ -1,8 +1,8 @@
 ; error: 6:10: a type after 'is' tests a tuple's item read with '.#' from a tuple with a name, as in 'when t.#2 is maybe int {x}'
 ; A type is tested on a tuple's item read with `.#`.
 task main()
-    bind t = (1, 2)
-    bind n = 3
+    fixed t = (1, 2)
+    fixed n = 3
     when n? is maybe int
         show(1)
     fi

@@ -1,6 +1,6 @@
-; error: 4:19: expected type int, got maybe int; extract its value first, as in 'x { … }' or 'when x is {value}'
+; error: 4:20: expected type int, got maybe int; extract its value first, as in 'x { … }' or 'when x is {value}'
 task main()
-    bind m: maybe int = 1
-    bind n: int = m
+    fixed m: maybe int = 1
+    fixed n: int = m
     show(n)
 fi

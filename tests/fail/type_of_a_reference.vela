@@ -1,5 +1,5 @@
 ; error: 4:11: an address, '&x', is only shown, turned into text with 'str', or compared with '=='; the type of the place is 'x.type'
 task main()
-    hold x = 1
+    flex x = 1
     show((&x).type)
 fi

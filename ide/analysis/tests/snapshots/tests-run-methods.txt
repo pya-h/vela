@@ -36,8 +36,8 @@
     | keyword:fi
  24 |     alters by(n: int)
     | keyword:alters  method:by  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)
- 25 |         hold left = n
-    | keyword:hold  variable:left  operator:=  parameter:n
+ 25 |         flex left = n
+    | keyword:flex  variable:left  operator:=  parameter:n
  26 |         loop left > 0
     | keyword:loop  variable:left  operator:>  number:0
  27 |             .step()
@@ -114,8 +114,8 @@
     | keyword:<-  number:0
  71 |         fi
     | keyword:fi
- 72 |         bind next = Point { x: .x + 1, y: .y }
-    | keyword:bind  variable:next  operator:=  type:Point  punctuation:{  field:x  punctuation::  punctuation:.  field:x  operator:+  number:1  punctuation:,  field:y  punctuation::  punctuation:.  field:y  punctuation:}
+ 72 |         fixed next = Point { x: .x + 1, y: .y }
+    | keyword:fixed  variable:next  operator:=  type:Point  punctuation:{  field:x  punctuation::  punctuation:.  field:x  operator:+  number:1  punctuation:,  field:y  punctuation::  punctuation:.  field:y  punctuation:}
  73 |         <- 1 + next.stepsTo(goal)
     | keyword:<-  number:1  operator:+  variable:next  punctuation:.  method:stepsTo  punctuation:(  parameter:goal  punctuation:)
  74 |     fi
@@ -192,8 +192,8 @@
     | keyword:fi
 119 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-120 |     hold c: Counter = Counter { label: "clicks", count: 0 }
-    | keyword:hold  variable:c  punctuation::  type:Counter  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"clicks"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
+120 |     flex c: Counter = Counter { label: "clicks", count: 0 }
+    | keyword:flex  variable:c  punctuation::  type:Counter  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"clicks"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
 121 |     c.step()
     | variable:c  punctuation:.  method:step  punctuation:(  punctuation:)
 122 |     show(c.total())
@@ -210,16 +210,16 @@
     | variable:c  punctuation:.  method:reset  punctuation:(  punctuation:)
 128 |     show(c.total())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
-130 |     ; A method that changes nothing is called on anything, a `bind` too.
-    | comment:; A method that changes nothing is called on anything, a `bind` too.
-131 |     bind steady = Counter { label: "once", count: 1 }
-    | keyword:bind  variable:steady  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
+130 |     ; A method that changes nothing is called on anything, a `fixed` too.
+    | comment:; A method that changes nothing is called on anything, a `fixed` too.
+131 |     fixed steady = Counter { label: "once", count: 1 }
+    | keyword:fixed  variable:steady  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
 132 |     show(steady.total())
     | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
 133 |     show(steady.nameOf())
     | builtin-fn:show  punctuation:(  variable:steady  punctuation:.  method:nameOf  punctuation:(  punctuation:)  punctuation:)
-135 |     hold p = Point { x: 3, y: 4 }
-    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}
+135 |     flex p = Point { x: 3, y: 4 }
+    | keyword:flex  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}
 136 |     show(p.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:lengthSquared  punctuation:(  punctuation:)  punctuation:)
 137 |     p.shift(1, 1)
@@ -232,20 +232,20 @@
     | keyword:region  region:r
 142 |     ; Through a pointer, which is where a task changes a value of its own.
     | comment:; Through a pointer, which is where a task changes a value of its own.
-143 |     hold q = new Point(Point { x: 1, y: 1 }) at r
-    | keyword:hold  variable:q  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
+143 |     flex q = new Point(Point { x: 1, y: 1 }) at r
+    | keyword:flex  variable:q  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
 144 |     q^.shift(2, 2)
     | variable:q  operator:^  punctuation:.  method:shift  punctuation:(  number:2  punctuation:,  number:2  punctuation:)
 145 |     show(q^.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:q  operator:^  punctuation:.  method:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-147 |     ; A field of a `hold`, and an item of a slice, are places that can change.
-    | comment:; A field of a `hold`, and an item of a slice, are places that can change.
-148 |     hold items = new [Point]() at r
-    | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+147 |     ; A field of a `flex`, and an item of a slice, are places that can change.
+    | comment:; A field of a `flex`, and an item of a slice, are places that can change.
+148 |     flex items = new [Point]() at r
+    | keyword:flex  variable:items  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 149 |     items.add(Point { x: 6, y: 8 })
     | variable:items  punctuation:.  field:add  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:6  punctuation:,  field:y  punctuation::  number:8  punctuation:}  punctuation:)
-150 |     hold row = Row { here: Point { x: 1, y: 2 }, items: items }
-    | keyword:hold  variable:row  operator:=  type:Row  punctuation:{  field:here  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  field:items  punctuation::  variable:items  punctuation:}
+150 |     flex row = Row { here: Point { x: 1, y: 2 }, items: items }
+    | keyword:flex  variable:row  operator:=  type:Row  punctuation:{  field:here  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  field:items  punctuation::  variable:items  punctuation:}
 151 |     show(row.firstLength())
     | builtin-fn:show  punctuation:(  variable:row  punctuation:.  method:firstLength  punctuation:(  punctuation:)  punctuation:)
 152 |     row.here.shift(10, 0)
@@ -262,28 +262,28 @@
     | comment:; A method on the value a call sends.
 159 |     show(made().total())
     | builtin-fn:show  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
-161 |     bind bag = Bag { items: items_of(r) }
-    | keyword:bind  variable:bag  operator:=  type:Bag  punctuation:{  field:items  punctuation::  task:items_of  punctuation:(  region:r  punctuation:)  punctuation:}
+161 |     fixed bag = Bag { items: items_of(r) }
+    | keyword:fixed  variable:bag  operator:=  type:Bag  punctuation:{  field:items  punctuation::  task:items_of  punctuation:(  region:r  punctuation:)  punctuation:}
 162 |     show(bag.firstOf())
     | builtin-fn:show  punctuation:(  variable:bag  punctuation:.  method:firstOf  punctuation:(  punctuation:)  punctuation:)
-163 |     bind empty = Bag { items: new [int]() at r }
-    | keyword:bind  variable:empty  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+163 |     fixed empty = Bag { items: new [int]() at r }
+    | keyword:fixed  variable:empty  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
 164 |     show(empty.firstOf())
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  method:firstOf  punctuation:(  punctuation:)  punctuation:)
 166 |     ; The text a method sends is in the region the value is in.
     | comment:; The text a method sends is in the region the value is in.
-167 |     hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
-    | keyword:hold  variable:named  punctuation::  type:Counter  operator:@  region:r  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:count  punctuation::  number:2  punctuation:}
-168 |     bind held: text@r = named.nameOf()
-    | keyword:bind  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:named  punctuation:.  method:nameOf  punctuation:(  punctuation:)
+167 |     flex named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
+    | keyword:flex  variable:named  punctuation::  type:Counter  operator:@  region:r  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:count  punctuation::  number:2  punctuation:}
+168 |     fixed held: text@r = named.nameOf()
+    | keyword:fixed  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:named  punctuation:.  method:nameOf  punctuation:(  punctuation:)
 169 |     show(held)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:)
 170 |     named.step()
     | variable:named  punctuation:.  method:step  punctuation:(  punctuation:)
 171 |     show(named.total())
     | builtin-fn:show  punctuation:(  variable:named  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
-173 |     hold holder: Holder@r = Holder { held: q }
-    | keyword:hold  variable:holder  punctuation::  type:Holder  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:held  punctuation::  variable:q  punctuation:}
+173 |     flex holder: Holder@r = Holder { held: q }
+    | keyword:flex  variable:holder  punctuation::  type:Holder  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:held  punctuation::  variable:q  punctuation:}
 174 |     holder.keep(new Point(Point { x: 0, y: 5 }) at r)
     | variable:holder  punctuation:.  method:keep  punctuation:(  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:5  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:)
 175 |     show(holder.heldLength())
@@ -298,8 +298,8 @@
     | keyword:fi
 182 | task items_of(r: region) -> [int]@r
     | keyword:task  task:items_of  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
-183 |     hold xs = new [int]() at r
-    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+183 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 184 |     xs.add(41)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:41  punctuation:)
 185 |     <- xs
