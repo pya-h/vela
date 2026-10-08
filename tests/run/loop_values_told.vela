@@ -1,0 +1,75 @@
+; A loop that gives a value takes the B and M nothing in it gives from the
+; place its value goes: a variable's type, a task's result, a parameter.
+include std/loops {LoopResult}
+
+task why(r: int ~ LoopResult<text, int>) -> int
+    <- r { failure e
+        -1
+    }
+fi
+
+task last<T>(r: region, xs: [T#3]) -> T ~ LoopResult<T, text>@r
+    <- each x in xs
+        x
+    fi
+fi
+
+kind Opt<T: shown>
+    No
+    Yes(v: T)
+fi
+
+task firsts(xs: [int#3]) -> int ~ LoopResult<int, text>
+    <- each x in xs
+        x * 2
+    fi
+fi
+
+task said<V: shown, B: shown, M: shown>(a: region, r: V ~ LoopResult<B, M>@a)
+    match r
+    case {v}
+        show("gave ", v)
+    case failure e
+        show(e)
+    fi
+fi
+
+task main()
+    region q
+    said(q, firsts([1, 2, 3]))
+    bind a: int ~ LoopResult<text, bool> = each x in 0..3
+        when x == 1
+            break
+        fi
+        x
+    fi
+    said(q, a)
+    bind b: int ~ LoopResult<bool, text> = each x in 0..0
+        x
+    fi
+    said(q, b)
+    bind e: int ~ LoopResult<text, int> = each x in 0..2
+        x
+    fi
+    said(q, e)
+    bind c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
+        when x == 0
+            Opt.No
+        else
+            Opt.Yes("y")
+        fi
+    fi
+    said(q, c)
+    hold d: int ~ LoopResult<text, text> = 0
+    d = loop hold i = 0 || i < 3 || i++
+        when i == 2
+            continue
+        fi
+        i
+    fi
+    said(q, d)
+    show(why(each x in 0..2
+        x
+    fi))
+    show(last(q, ["a", "b", "c"]) { "none" })
+fi

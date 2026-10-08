@@ -3411,8 +3411,9 @@ show(total)</pre>
           last line fails only with <code>fail LoopResult.Manual(…)</code> written there; the other three say what the
           loop did, so a value that may fail, as another loop giving a value, takes a plan B on the last line.</li>
         <li><strong>Its types.</strong> <code>V</code> is what the last lines give, <code>B</code> what the
-          <code>break</code>s give, and <code>M</code> what the last lines fail with, <code>bool</code> where a loop
-          gives none. The <code>break</code>s of a loop give one type, and what they and the last lines fail with is in
+          <code>break</code>s give, and <code>M</code> what the last lines fail with. Where nothing in the loop gives
+          one, the place its value goes names it, <code>bind r: int ~ LoopResult&lt;text, int&gt; = loop …</code>, a
+          task's result or a parameter, and where no place does, it is <code>bool</code>. The <code>break</code>s of a loop give one type, and what they and the last lines fail with is in
           one region. A <code>break</code> in a turn of an <code>each</code> over a group gives a loop around it no
           value of the turn's own type, which each value makes another. On the loop's own variable,
           <code>bind r: int ~ LoopResult = loop …</code>, a bare <code>LoopResult</code> takes the loop's

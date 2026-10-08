@@ -3519,7 +3519,7 @@ impl Parser {
     fn loop_value(&mut self, stmt: Stmt, name: Option<(String, Span)>, gives: bool, span: Span) -> Expr {
         self.loop_values = true;
         let arrow = name.is_some();
-        let value = ValueLoop { stmt, name, arrow, gives };
+        let value = ValueLoop { stmt, name, arrow, gives, open: (false, false) };
         Expr::new(ExprKind::LoopValue(Box::new(value)), span)
     }
 

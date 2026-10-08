@@ -1697,6 +1697,10 @@ pub struct ValueLoop {
     pub arrow: bool,
     /// Whether its passes give a value; not for a statement with a plan B.
     pub gives: bool,
+    /// Whether nothing in it tells `B` (no `break` gives a value) and `M` (no
+    /// last line fails): each is `bool` until the place the value goes names
+    /// it, `int ~ LoopResult<int, text>` (see `Checker::settle_variant`).
+    pub open: (bool, bool),
 }
 
 impl ValueLoop {

@@ -353,7 +353,8 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       </table>
       <p>
         <code>B</code> is what the loop's <code>break</code>s give and <code>M</code> what its last lines fail with,
-        each <code>bool</code> where the loop gives none. On a loop's own variable, a bare <code>LoopResult</code> takes
+        each taken from the place the value goes where the loop gives none, and <code>bool</code> where no place names
+        it either. On a loop's own variable, a bare <code>LoopResult</code> takes
         the loop's types, as <code>found</code> does above; anywhere else they are written,
         <code>LoopResult&lt;int, text&gt;</code>.
       </p>

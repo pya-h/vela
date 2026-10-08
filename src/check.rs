@@ -3250,6 +3250,7 @@ impl Checker {
         if matches!(given, Type::None) {
             return err(at, "the last line of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'");
         }
+        value.open = (!breaks.iter().any(|(ty, _)| *ty != Type::None), manual.is_none());
         let manual = match manual {
             None => Type::Bool,
             Some(error) => self.manual_type(&error, value, at)?,
@@ -7526,19 +7527,42 @@ impl Checker {
             }
             return Ok(());
         }
-        // A loop whose last lines give `Option.None` where an
-        // `Option<int> ~ LoopResult` goes: each is told by the place.
+        // A loop going where an `int ~ LoopResult<int, text>` goes: the place
+        // tells the `B` and `M` nothing in it told, and the variant its last
+        // lines give whose types they didn't, `Option.None`.
         if let ExprKind::LoopValue(value) = &mut expr.kind
-            && let Some(Type::Or(given, result)) = &expr.ty
-            && holds_untold(given)
-            && let Type::Or(place, _) = expected
-            && !holds_untold(place)
             && value.gives
-            && let Some(body) = value.body_mut()
+            && let Some(Type::Or(given, result)) = expr.ty.clone()
+            && let Type::Or(place, place_error) = expected
         {
-            let own = Type::Or(place.clone(), result.clone());
-            self.settle_value(body, &own)?;
-            expr.ty = Some(own);
+            let told_given = holds_untold(&given) && !holds_untold(place);
+            let told_result = match (self.unmade(&result), self.unmade(place_error)) {
+                (Type::Applied(mine), Type::Applied(placed)) if value.open != (false, false) && mine.name == library::LOOP_RESULT && placed.name == mine.name => {
+                    let pick = |i: usize, open: bool| if open { placed.types.get(i) } else { mine.types.get(i) }.cloned().unwrap_or(Type::Bool);
+                    let types = vec![pick(0, value.open.0), pick(1, value.open.1)];
+                    let region = mine.region.clone().filter(|region| region != ANY_REGION).or_else(|| placed.region.clone());
+                    (types != mine.types).then(|| Type::Applied(Box::new(Applied { name: mine.name.clone(), types, region })))
+                }
+                _ => None,
+            };
+            if told_given || told_result.is_some() {
+                let result = match told_result {
+                    Some(told) => self.made_kinds(told, expr.span)?,
+                    None => *result,
+                };
+                let own = Type::Or(if told_given { place.clone() } else { given }, Box::new(result.clone()));
+                if let Some(body) = value.body_mut() {
+                    // What the last lines were made part of fails with the
+                    // loop's new result; then the place tells them the rest.
+                    last_values_mut(body, &mut |e| {
+                        if let (ExprKind::Wrap(_), Some(Type::Or(value, _))) = (&e.kind, &e.ty) {
+                            e.ty = Some(Type::Or(value.clone(), Box::new(result.clone())));
+                        }
+                    });
+                    self.settle_value(body, &own)?;
+                }
+                expr.ty = Some(own);
+            }
             return Ok(());
         }
         // `(Option.None, 1)` where a `(Option<int>, int)` goes: each item is
@@ -14675,6 +14699,21 @@ fn last_values<'a>(block: &'a [Stmt], values: &mut Vec<&'a Expr>) {
             }
         }
         Some(StmtKind::Match(_, cases)) => cases.iter().for_each(|case| last_values(&case.body, values)),
+        _ => {}
+    }
+}
+
+/// Calls `f` on each value the last line of `block` gives (see `last_values`).
+fn last_values_mut(block: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
+    match block.last_mut().map(|stmt| &mut stmt.kind) {
+        Some(StmtKind::Expr(e)) => f(e),
+        Some(StmtKind::When(arms, else_block)) => {
+            arms.iter_mut().for_each(|arm| last_values_mut(&mut arm.body, f));
+            if let Some(block) = else_block {
+                last_values_mut(block, f);
+            }
+        }
+        Some(StmtKind::Match(_, cases)) => cases.iter_mut().for_each(|case| last_values_mut(&mut case.body, f)),
         _ => {}
     }
 }
