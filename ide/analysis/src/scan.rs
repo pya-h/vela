@@ -13,7 +13,7 @@
 //! and regions), which are only visible after their declaration.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
@@ -193,6 +193,8 @@ pub(crate) struct Scan {
     /// The names `include m (a, b)` brings in, each by the name this file
     /// writes (its alias, if it has one), with the declaration it names.
     pub imports: HashMap<String, usize>,
+    /// Where each lambda's `(` starts, `(x: int) -> int … fi`, by byte.
+    pub lambdas: HashSet<usize>,
 }
 
 /// `field_accesses` maps the (line, column) of a field name in `a.b` to the
@@ -201,11 +203,12 @@ pub(crate) struct Scan {
 pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>, context: Context) -> Scan {
     let lexed = spread(highlight(source));
     let tokens = Tokens::new(source, &lexed);
+    let lambdas = (0..tokens.len()).filter(|&p| tokens.token(p) == Some(&Token::LParen) && tokens.starts_lambda(p)).filter_map(|p| tokens.get(p).map(|t| t.range.start)).collect();
     let (mut symbols, mut declared_at, includes) = declarations(&tokens);
     let (modules, imports) = included_modules(&mut symbols, &mut declared_at, &includes, context);
     let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses, imports.clone()).run();
     let (symbols, tokens) = classified;
-    Scan { lexed, symbols, tokens, modules, imports }
+    Scan { lexed, symbols, tokens, modules, imports, lambdas }
 }
 
 /// `lexed` with each text holding values spread into its pieces: its text as
@@ -642,9 +645,11 @@ impl<'a> Tokens<'a> {
                 Some(Token::RParen) => grouped -= 1,
                 // A call follows the types a task is given, a literal the types
                 // a shape is given, and a variant the types a kind is given.
+                // A variant's `.` touches the `>`, as the parser has it.
                 Some(Token::Gt) if depth == 0 => {
+                    let touching = matches!((self.get(q), self.get(q + 1)), (Some(gt), Some(dot)) if gt.range.end == dot.range.start);
                     return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace))
-                        || (self.token(q + 1) == Some(&Token::Dot) && self.ident(q + 2).is_some());
+                        || (touching && self.token(q + 1) == Some(&Token::Dot) && self.ident(q + 2).is_some());
                 }
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
@@ -1004,7 +1009,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     symbol.range = tokens.range(first).start..tokens.range(last).end;
                 }
             }
-            Token::When | Token::Loop | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
+            Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
             // A lambda is a block of its own, closed by its `fi`.
             Token::LParen if !header && tokens.starts_lambda(p) => {
                 blocks.push(Block::Inner);
@@ -1217,6 +1222,10 @@ impl<'a> Classifier<'a> {
         // In the names of a `bind` or `hold`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
+        // In a loop's start, before its first `||`, and the word, `hold` or
+        // `bind`, that covers the names after it there.
+        let mut loop_start = false;
+        let mut loop_words: Option<&'static str> = None;
         // On an `include` line, and inside its parentheses of names.
         let mut in_include = false;
         let mut in_include_names = false;
@@ -1281,6 +1290,8 @@ impl<'a> Classifier<'a> {
                     in_pattern = false;
                     in_results = false;
                     declaring_list = None;
+                    loop_start = false;
+                    loop_words = None;
                     type_brackets = 0;
                     type_parens = 0;
                     type_angles = 0;
@@ -1333,7 +1344,7 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Method, None);
                 }
                 // `outer => loop …`: a loop's name, declared in the loop's scope.
-                Token::Ident(_) if !in_include && tokens.token(p + 1) == Some(&Token::FatArrow) && matches!(tokens.token(p + 2), Some(Token::Loop | Token::Each)) => {
+                Token::Ident(_) if !in_include && tokens.token(p + 1) == Some(&Token::FatArrow) && matches!(tokens.token(p + 2), Some(Token::Loop | Token::Endless | Token::Each)) => {
                     loop_name = Some((p, self.out.len()));
                     self.push(range, TokenClass::Variable, None);
                 }
@@ -1511,13 +1522,24 @@ impl<'a> Classifier<'a> {
                 Token::Amp => self.push(range, TokenClass::Operator, None),
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
-                    match declaring_list {
+                    match (declaring_list, loop_words) {
                         // `-> int, int`: another result type.
                         _ if in_results => in_type = true,
                         // `bind q, r = …`: another name.
-                        Some(intro) => declaring = Some(intro),
-                        None => {}
+                        (Some(intro), _) => declaring = Some(intro),
+                        // `loop hold i = 0, j = 9`: another name the word covers.
+                        (None, Some(intro)) if loop_start && tokens.ident(p + 1).is_some() && matches!(tokens.token(p + 2), Some(Token::Assign | Token::Comma)) => {
+                            declaring = Some(intro);
+                            declaring_list = Some(intro);
+                        }
+                        _ => {}
                     }
+                }
+                // `loop start || condition || step`: what parts them.
+                Token::Parts => {
+                    self.push(range, TokenClass::Operator, None);
+                    loop_start = false;
+                    loop_words = None;
                 }
                 Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent | Token::Eq | Token::Ne
                 | Token::Increment | Token::Decrement | Token::PlusAssign | Token::MinusAssign | Token::StarAssign
@@ -1565,8 +1587,12 @@ impl<'a> Classifier<'a> {
                         Token::When if tokens.before(p) == Some(&Token::Else) => {}
                         Token::When => self.open(ScopeKind::When),
                         Token::Block => self.open(ScopeKind::Other),
-                        Token::Loop | Token::Each => {
+                        Token::Loop | Token::Endless | Token::Each => {
                             self.open(ScopeKind::Other);
+                            // `loop hold i = 0, j = 9 || …`: the start, up to its
+                            // first `||`, declares the names after `hold` or `bind`.
+                            loop_start = *token == Token::Loop;
+                            loop_words = None;
                             if let Some((q, at)) = loop_name.take() {
                                 let id = self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), String::new());
                                 if let Some(named) = self.out.get_mut(at) {
@@ -1598,6 +1624,9 @@ impl<'a> Classifier<'a> {
                             };
                             declaring = Some(intro);
                             declaring_list = Some(intro);
+                            if loop_start {
+                                loop_words = Some(intro);
+                            }
                         }
                         Token::Case => {
                             self.close_plan_b(at, &mut braces);
@@ -1874,7 +1903,12 @@ impl<'a> Classifier<'a> {
             let kind = self.symbols.get(id).map_or(SymbolKind::Task, |s| s.kind);
             return (kind.class(), Some(id));
         }
-        if let Some(id) = self.local(name, tokens.range(p).start) {
+        // After `break` or `continue`, the name of a loop, which is no value.
+        let local = match tokens.before(p) {
+            Some(Token::Break | Token::Continue) => self.loop_named(name, tokens.range(p).start),
+            _ => self.local(name, tokens.range(p).start),
+        };
+        if let Some(id) = local {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
@@ -2052,7 +2086,29 @@ impl<'a> Classifier<'a> {
             Some("is") => (p..tokens.len()).take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None)).find(|&q| tokens.token(q) == Some(&Token::And)),
             _ => None,
         };
-        let from = joined.map_or(line_end, |and| tokens.range(and).end);
+        // `loop hold i = 0, j = i || i < j || …`: a name a loop's start declares
+        // is seen from the end of its item, its `,` or the `||` after it.
+        let item_end = match intro {
+            Some("hold" | "bind") => {
+                let line: Vec<usize> = (p..tokens.len()).take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None)).collect();
+                let mut depth = 0usize;
+                let mut assigned = false;
+                let parted = line.iter().any(|&q| tokens.token(q) == Some(&Token::Parts));
+                line.into_iter().filter(|_| parted).find(|&q| {
+                    match tokens.token(q) {
+                        Some(Token::LParen | Token::LBracket | Token::LBrace) => depth += 1,
+                        Some(Token::RParen | Token::RBracket | Token::RBrace) => depth = depth.saturating_sub(1),
+                        Some(Token::Assign) if depth == 0 => assigned = true,
+                        Some(Token::Comma) if depth == 0 && assigned => return true,
+                        Some(Token::Parts) if depth == 0 => return true,
+                        _ => {}
+                    }
+                    false
+                })
+            }
+            _ => None,
+        };
+        let from = joined.or(item_end).map_or(line_end, |end| tokens.range(end).end);
         let visible = from..tokens.source.len();
         self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
         let id = self.symbols.len() - 1;
@@ -2065,12 +2121,23 @@ impl<'a> Classifier<'a> {
     /// The variable or parameter called `name` visible at byte `at`, innermost
     /// first. (A variable isn't visible in its own initializer: `bind y = y + 1`.)
     fn local(&self, name: &str, at: usize) -> Option<usize> {
+        self.scoped(name, at, false)
+    }
+
+    /// The loop named `name` around byte `at`, which `break` and `continue`
+    /// name (see `LOOP_NAME`).
+    fn loop_named(&self, name: &str, at: usize) -> Option<usize> {
+        self.scoped(name, at, true)
+    }
+
+    /// The local `name` at byte `at`, a loop's name or any other.
+    fn scoped(&self, name: &str, at: usize, loop_name: bool) -> Option<usize> {
         self.scopes
             .iter()
             .rev()
             .flat_map(|scope| scope.variables.iter().rev())
             .copied()
-            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at))
+            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at && (s.intro == Some(LOOP_NAME)) == loop_name))
     }
 
     /// The top-level declaration called `name`, if it is one of `kinds`: one of

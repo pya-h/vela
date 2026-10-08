@@ -358,5 +358,29 @@
     | builtin-fn:show  punctuation:(  variable:w  punctuation:)
 195 |     fi
     | keyword:fi
-196 | fi
+197 |     ; A plan B whose last line is a when that stops or goes on in every branch.
+    | comment:; A plan B whose last line is a when that stops or goes on in every branch.
+198 |     bind few = [1, 2, 3]
+    | keyword:bind  variable:few  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+199 |     each slot in 0..6
+    | keyword:each  variable:slot  keyword:in  number:0  operator:..  number:6
+200 |         bind v = few[#slot] {
+    | keyword:bind  variable:v  operator:=  variable:few  punctuation:[  punctuation:#  variable:slot  punctuation:]  punctuation:{
+201 |             when slot == 4
+    | keyword:when  variable:slot  operator:==  number:4
+202 |                 break
+    | keyword:break
+203 |             else
+    | keyword:else
+204 |                 continue
+    | keyword:continue
+205 |             fi
+    | keyword:fi
+206 |         }
+    | punctuation:}
+207 |         show("v ", v)
+    | builtin-fn:show  punctuation:(  string:"v "  punctuation:,  variable:v  punctuation:)
+208 |     fi
+    | keyword:fi
+209 | fi
     | keyword:fi

@@ -676,6 +676,9 @@ impl Type {
                 write!(f, ">")?;
                 suffix(f, &applied.region)
             }
+            // A type a variant's values didn't tell yet (`Option.None`), which
+            // the checker names `?T`: the program never writes it.
+            Type::Param(name) if name.starts_with('?') => write!(f, "…"),
             Type::Param(name) => write!(f, "{}", name),
             Type::Group(name) => write!(f, "{}...", name),
             // Its regions are its own, so none is left out for an outer one.
@@ -1568,6 +1571,8 @@ pub enum StmtKind {
     /// many there are, and a `when` written alone inside an `else` is nested.
     When(Vec<WhenArm>, Option<Block>),
     Loop(Condition, Block),
+    /// `loop start || condition || step`, and `endless` (see `PartedLoop`).
+    Parted(Box<PartedLoop>),
     /// `block … fi`: statements in a block of their own, whose names, regions,
     /// and the files opened in them end at its `fi`.
     Block(Block),
@@ -1646,6 +1651,22 @@ impl Target {
             Target::Place(expr) => expr.span,
         }
     }
+}
+
+/// `loop i = 0, hold j = 9 || i < j || i++, j--`: a loop in three parts, each
+/// of which may be empty. The start runs once, before the loop, and the names
+/// it declares, after `hold` or `bind`, live in the loop; the condition, none
+/// for a loop that never ends by itself, is tested before each pass; the step
+/// runs after each pass, a `continue` too, and never after a `break`.
+/// `endless` is all three left empty, said in a word.
+#[derive(Debug, Clone)]
+pub struct PartedLoop {
+    pub start: Vec<Stmt>,
+    pub cond: Option<Condition>,
+    pub step: Vec<Stmt>,
+    pub body: Block,
+    /// Written `endless`.
+    pub endless: bool,
 }
 
 /// The condition of a `when` or `loop`: a `bool`, or `value is pattern`,

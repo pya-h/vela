@@ -1,0 +1,6 @@
+; error: 3:17: a loop's start and step declare no region, as they are no block of their own; declare it before the loop, or in its body for each pass
+task main()
+    loop region q, hold i = 0 || i < 3 || i++
+        show(i)
+    fi
+fi

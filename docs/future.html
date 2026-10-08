@@ -920,7 +920,7 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
         is generated per set of types, so <code>Box&lt;int&gt;</code> is a struct holding an <code>int64_t</code>.
       </p>
       <p>
-        Left for later: types for kinds, an <a href="#undecided-generic-kinds">undecided idea</a>; a word for
+        Left for later (types for kinds are <a href="#undecided-generic-kinds">done</a>): a word for
         arithmetic, which would let one task add numbers of either type; and working out the region a shape given types
         lives in, so that a task returning <code>Box&lt;T&gt;</code> needn't take a region for the uses whose type
         holds nothing in one.
@@ -1774,9 +1774,9 @@ show(c.total())</pre>
 
       <h3>Type System</h3>
       <ul>
-        <li><strong>Generics:</strong> tasks and shapes take types today (<code>task first&lt;T&gt;(…)</code>,
-          <code>shape Box&lt;T&gt;</code>, <a href="#generics">below</a>); kinds are an
-          <a href="#undecided-generic-kinds">undecided idea</a>. Tasks are also generic over regions
+        <li><strong>Generics:</strong> tasks, shapes and kinds take types today (<code>task first&lt;T&gt;(…)</code>,
+          <code>shape Box&lt;T&gt;</code>, <a href="#generics">below</a>, and <a href="vela.html#generic-kinds">kinds</a>,
+          <code>kind Option&lt;T&gt;</code>). Tasks are also generic over regions
           (<code>list: maybe ^Node@r</code>), which stay implicit rather than written in the same
           <code>&lt; &gt;</code> (see <a href="regions.html#ideas-passing">region brackets</a>)</li>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
@@ -2460,8 +2460,8 @@ fi
             <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>, with aliases and <code>Kind.Variant</code>), then a package manager</li>
             <li><s>Methods on shapes and kinds</s> (done: <a href="vela.html#methods">methods</a>, with <code>alters</code>, <code>.this</code>, and <code>@this</code>)</li>
             <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), <s>generics for tasks and shapes</s>
-              (done: <a href="vela.html#generics">types a declaration takes</a>), then perhaps
-              <a href="#undecided-generic-kinds">for kinds</a></li>
+              (done: <a href="vela.html#generics">types a declaration takes</a>), <s>and for kinds</s>
+              (done: <a href="vela.html#generic-kinds">kinds that take types</a>)</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T ~ E</code></a>)</li>
             <li><s>Pattern-match expressions</s> (done: <a href="vela.html#choices">a match or a when as a value</a>,
               with <code>else when</code> chains)</li>

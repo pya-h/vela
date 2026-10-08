@@ -349,7 +349,7 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Highlighting that knows names</h4>
           <p>Tasks, shapes and kinds, variants, parameters, variables, fields, regions, and modules each get their own
-            color, even in a half-typed line. The types a task or shape takes (<code>&lt;T: ordered&gt;</code>) are
+            color, even in a half-typed line. The types a task, shape or kind takes (<code>&lt;T: ordered&gt;</code>) are
             colored as types wherever they are written, as are the ones a use gives (<code>Box&lt;int&gt;</code>), and
             the word asked of one as a word of the language. A method is colored as a task where it is declared and
             wherever it is called (<code>c.step(2)</code>, <code>.cap()</code>), even a kind's, whose members are
@@ -385,12 +385,14 @@ Press Ctrl+C to stop.</pre>
             (<code>(int, text)</code>), each comma of a header's results (<code>-&gt; int, int</code>), and each type a
             use gives a declaration that takes them (<code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>,
             <code>Box&lt;int&gt; { … }</code>), and nothing for an array type's count;
-            the types a task or shape takes are offered as types inside it (<code>T</code>), and after a
+            the types a task, shape or kind takes are offered as types inside it (<code>T</code>), and after a
             type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>fixed</code>,
             <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor;
             the types after a kind's name before one of its variants (<code>Option&lt;int&gt;.None</code>), colored
             as types, and the variant after them;
-            <code>break</code> and <code>continue</code> inside a loop, and after either the names of the loops around it
+            <code>endless</code> among the statements, and the names a loop's start declares
+            (<code>loop hold i = 0, j = 9 || …</code>) inside that loop only, typed even in a file that doesn't parse;
+            <code>break</code> and <code>continue</code> inside a loop, but not inside a lambda in it, and after either the names of the loops around it
             (<code>outer =&gt; each …</code>, which hover as loops and are offered nowhere else); fields and
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
@@ -448,7 +450,7 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Hover and go to definition</h4>
           <p>Hover a name to see its type or signature (a region says whether the task can allocate in it, and a
-            type with <code>@_</code> explains it), a type a task or shape takes (<code>T</code>), which says what the
+            type with <code>@_</code> explains it), a type a task, shape or kind takes (<code>T</code>), which says what the
             word after its <code>:</code> allows, a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
             of what they do. A method shows its header, which shape or kind it belongs to, and whether it changes the

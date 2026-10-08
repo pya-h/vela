@@ -1,0 +1,7 @@
+; error: 4:35: a loop has three parts, its start, its condition and its step, parted by two '||'s; for either of two conditions, Vela writes 'or'
+task main()
+    bind a = true
+    loop hold i = 0 || i < 3 || a || i++
+        show(i)
+    fi
+fi

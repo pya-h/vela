@@ -1317,6 +1317,14 @@ impl Resolver<'_> {
                 self.expr(range)?;
                 self.block(body)
             }
+            StmtKind::Parted(parted) => {
+                parted.start.iter_mut().try_for_each(|stmt| self.stmt(stmt))?;
+                if let Some(cond) = &mut parted.cond {
+                    self.condition(cond)?;
+                }
+                parted.step.iter_mut().try_for_each(|stmt| self.stmt(stmt))?;
+                self.block(&mut parted.body)
+            }
             StmtKind::Match(value, cases) => {
                 self.expr(value)?;
                 cases.iter_mut().try_for_each(|case| self.pattern(&mut case.pattern))?;
@@ -1385,6 +1393,11 @@ impl Resolver<'_> {
                     let what = match self.lookup(kind, span, false)? {
                         Some(entry) if entry.what == What::Shape => format!("'{0}' is a shape, so its values are written '{0}<…> {{ … }}'", kind),
                         Some(entry) => format!("'{}' is a {}, not a kind, so it has no variant '{}'", kind, entry.what.word(), tag),
+                        // `(a < b, c >.x)`: two comparisons, read as a kind given types.
+                        None if types.len() > 1 => format!(
+                            "unknown kind '{0}'; if '{0} < …, … >.{1}' compares, put the comparison before the ',' in parentheses, as in '({0} < …), … >.{1}'",
+                            kind, tag
+                        ),
                         None => format!("unknown kind '{}'", kind),
                     };
                     return err(span, what);

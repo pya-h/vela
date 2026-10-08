@@ -1,4 +1,4 @@
-; error: 9:20: every case of this match sends with '<-', so nothing gives it a value
+; error: 9:20: every case of this match leaves, with '<-', 'break' or 'continue', so nothing gives it a value
 kind Which
     First
     Second

@@ -274,6 +274,17 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
+            StmtKind::Parted(parted) => {
+                self.block(&parted.start, kinds);
+                for part in parted.cond.iter().flat_map(|cond| cond.parts()) {
+                    self.expr(&part.value, kinds);
+                    if let Some(pattern) = &part.pattern {
+                        self.pattern(part.value.ty.as_ref(), pattern, kinds);
+                    }
+                }
+                self.block(&parted.step, kinds);
+                self.block(&parted.body, kinds);
+            }
             StmtKind::Each(_, second, range, body) => {
                 // A counter, an item of an array or slice, or a map's key and
                 // value, once the checker knows which.

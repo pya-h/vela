@@ -1,0 +1,12 @@
+; error: 7:18: 'outer' is already the name of a loop around this lambda, at 5:5
+; A lambda is a task of its own, but its names take none of the loops around it.
+task main()
+    region r
+    outer => each i in 0..3
+        bind f = [@r](x: int) -> int
+            bind outer = x
+            <- outer + i
+        fi
+        show(f(i))
+    fi
+fi

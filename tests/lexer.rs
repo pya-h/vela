@@ -319,7 +319,10 @@ fn common_mistakes_get_hints() {
     assert_eq!(kinds("1.")[0], invalid(1, 1, "invalid number '1.': write '1.0'"));
     assert_eq!(kinds("1..5")[1], token(Token::Range));
     assert_eq!(kinds("a && b")[1], invalid(1, 3, "unexpected '&&'; Vela writes 'and'"));
-    assert_eq!(kinds("a || b")[1], invalid(1, 3, "unexpected '||'; Vela writes 'or'"));
+    // `||` parts a loop's parts; the parser says 'or' wherever else it stands.
+    assert_eq!(kinds("a || b")[1], token(Token::Parts));
+    assert_eq!(Token::Parts.describe(), "'||'");
+    assert_eq!(kinds("a | b")[1], invalid(1, 3, "unexpected character '|'; Vela writes 'or'"));
     assert_eq!(kinds("!x")[0], invalid(1, 1, "unexpected '!'; Vela negates with 'not'"));
     // Floats are described as Vela writes them.
     assert_eq!(Token::Float(1e20).describe(), "float 100000000000000000000.0");

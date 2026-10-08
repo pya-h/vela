@@ -106,7 +106,7 @@ shape File
     ; The rest of the file, line by line.
     lines(into: region) -> [text@into]@into ~ FileError
         hold all = new [text]() at into
-        loop true
+        endless
             bind got = read_line(.handle, into)
             bind code = status()
             when code == ended_code()

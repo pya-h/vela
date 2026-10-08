@@ -1,0 +1,7 @@
+; error: 4:22: 'spare' is declared for this loop, and no part of it uses it; leave it out
+; A name a loop declares is one some part of it uses.
+task main()
+    loop hold i = 0, spare = 9 || i < 3 || i++
+        show(i)
+    fi
+fi

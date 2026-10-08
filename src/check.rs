@@ -321,10 +321,17 @@ pub struct Checker {
     loops: Vec<Option<(String, Span)>>,
     /// The name given to the loop about to be checked, `outer =>`.
     loop_name: Option<(String, Span)>,
+    /// While a loop's step is checked, how many loops are around it, that
+    /// loop the innermost (see `PartedLoop`).
+    stepping: Option<usize>,
     /// For each lambda, the names its value's place sees: the variables and
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
     lambda_outer: HashMap<String, HashSet<String>>,
+    /// For each lambda, the named loops around its value's place, outside
+    /// lambdas around it too: no name inside the lambda takes theirs, and no
+    /// jump in it reaches them.
+    lambda_loops: HashMap<String, Vec<(String, Span)>>,
     /// For each lambda that keeps what it uses (see `ExprKind::Closure`): what
     /// it may keep and what it does.
     kept_lambdas: HashMap<String, KeptLambda>,
@@ -1459,7 +1466,20 @@ impl Checker {
         }
         // The types it is given are in the region of the value holding them, as
         // a shape's fields are, so they take the region written on the whole
-        // type (or the one around it).
+        // type (or the one around it), and name none of their own (`Box<text>@r`
+        // fills in its `text@r` as it is read, which says the same).
+        if let Some(named) = applied.types.iter().flat_map(Type::regions).find(|named| applied.region.as_deref() != Some(*named)) {
+            let given: Vec<String> = applied.types.iter().map(|ty| ty.without_regions().to_string()).collect();
+            return err(
+                self.place(span, &format!("@{}", named)),
+                format!(
+                    "a type given lives in the region of the value holding it, so it names no region; write '{}<{}>@{}'",
+                    unqualified(name),
+                    given.join(", "),
+                    named
+                ),
+            );
+        }
         let region = applied.region.as_deref().or(inside);
         let mut types = Vec::new();
         for ty in &applied.types {
@@ -1567,8 +1587,15 @@ impl Checker {
         for variant in &source.variants {
             let mut payload = Vec::new();
             for field in &variant.payload {
-                let ty = field.ty.map_params(&mut |param| given.get(param).cloned());
-                match self.resolve_type(&ty, field.ty_span, TypePlace::Field) {
+                // A kind used before its declaration is checked has its
+                // payloads as written, where `T` is still a name: read with
+                // its types in scope, `T` is the type it takes (as
+                // `instance_fields` has it).
+                let outer = std::mem::replace(&mut self.type_params, source.types.clone());
+                let read = self.resolve_type(&field.ty, field.ty_span, TypePlace::Field);
+                self.type_params = outer;
+                let ty = read.map(|ty| ty.map_params(&mut |param| given.get(param).cloned()));
+                match ty.and_then(|ty| self.resolve_type(&ty, field.ty_span, TypePlace::Field)) {
                     Ok(ty) => payload.push(Field { ty, ..field.clone() }),
                     Err(error) => found = Err(error),
                 }
@@ -2693,9 +2720,10 @@ impl Checker {
     /// A kind can be created if any of its variants can.
     fn check_constructible(&mut self, items: &[Item]) {
         // Each type that could be created, with the types each way of making it
-        // holds: a shape's fields, or each variant's values. A shape made for a
-        // set of types (`Out<int>`) is one of them, with the fields it was made
-        // with, since what it holds says whether it can be (see `shape_instance`).
+        // holds: a shape's fields, or each variant's values. A shape or kind
+        // made for a set of types (`Out<int>`, `Option<int>`) is one of them,
+        // with what it was made with, since what it holds says whether it can
+        // be (see `shape_instance` and `kind_instance`).
         let mut types: Vec<(&str, Vec<Vec<Type>>)> = Vec::new();
         for item in items {
             match item {
@@ -2707,6 +2735,8 @@ impl Checker {
         for made in self.made_of.keys() {
             if let Some(shape) = self.shapes.get(made) {
                 types.push((made.as_str(), vec![shape.fields.iter().map(|f| f.ty.clone()).collect()]));
+            } else if let Some(kind) = self.kinds.get(made) {
+                types.push((made.as_str(), kind.variants.iter().map(|v| v.payload.iter().map(|f| f.ty.clone()).collect()).collect()));
             }
         }
         // The types whose fields name each type: when a type turns out to be
@@ -2804,6 +2834,7 @@ impl Checker {
         // A lambda's body is a task of its own, inside no loop of the code around it.
         self.loops.clear();
         self.loop_name = None;
+        self.stepping = None;
         // A lambda that keeps what it uses sees the variables of the code
         // around it, and the region it keeps them in, under its own (see
         // `kept_scope`); one whose value was never checked has none to see.
@@ -2981,6 +3012,104 @@ impl Checker {
         self.loops.push(name);
     }
 
+    /// `loop start || condition || step` (see `PartedLoop`), named `named`, in
+    /// the scope its start's names live in.
+    fn check_parted(&mut self, parted: &mut PartedLoop, named: Option<(String, Span)>, span: Span) -> Result<()> {
+        if let Some((name, at)) = unused_in_loop(parted) {
+            return err(at, format!("'{}' is declared for this loop, and no part of it uses it; leave it out", name));
+        }
+        // A region lives until its block closes, and the start and the step
+        // are no blocks.
+        if let Some(region) = parted.start.iter().chain(&parted.step).find(|item| matches!(item.kind, StmtKind::Region { .. })) {
+            return err(region.span, "a loop's start and step declare no region, as they are no block of their own; declare it before the loop, or in its body for each pass");
+        }
+        // The start runs once, before the loop: what it sets is set after it,
+        // and a jump there leaves a loop around this one. A name without
+        // `hold` or `bind` is one already declared, which it changes.
+        for item in parted.start.iter_mut() {
+            if let StmtKind::Assign(targets, _) = &item.kind
+                && let Some((name, at)) = targets.iter().find_map(|target| match target {
+                    Target::Place(Expr { kind: ExprKind::Var(name), span, .. }) if self.lookup(name).is_none() => Some((name.clone(), *span)),
+                    _ => None,
+                })
+            {
+                return err(
+                    at,
+                    format!("unknown variable '{0}'; a loop's start sets names already declared, and declares its own after 'hold' or 'bind', as in 'loop hold {0} = 0 || …'", name),
+                );
+            }
+            self.check_stmt(item)?;
+        }
+        // Its body might not run, so it sets nothing for certain; its condition
+        // is tested inside it, so a plan B there may stop it.
+        let unchanging = parted.cond.as_ref().and_then(|cond| unchanging_reads(cond, &parted.body, &parted.step));
+        let entry = self.unset.clone();
+        let stepping = self.stepping;
+        self.loops.push(named);
+        let result = self.check_parted_passes(parted);
+        self.loops.pop();
+        self.stepping = stepping;
+        self.unset = entry;
+        result?;
+        match &parted.cond {
+            None if !parted.endless && parted.start.is_empty() && parted.step.is_empty() => self.warnings.push(Error::at(span, ENDLESS_UNSAID)),
+            None => {}
+            Some(cond) => {
+                if let Some(names) = unchanging {
+                    self.warn_unchanging(&names, cond.value.span);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The condition, the body and the step of a loop in three parts, inside it.
+    fn check_parted_passes(&mut self, parted: &mut PartedLoop) -> Result<()> {
+        match &mut parted.cond {
+            Some(cond) => self.check_condition(cond, &mut parted.body, None).map(|_| ())?,
+            None => self.check_scoped_block(&mut parted.body)?,
+        }
+        // The step runs after each pass, where a `continue` of this loop leads,
+        // so it can't have one; what it declares ends with it.
+        self.stepping = Some(self.loops.len());
+        for item in parted.step.iter_mut() {
+            if let StmtKind::Binding { names, .. } = &item.kind {
+                let at = names.first().map_or(item.span, |bound| bound.span);
+                return err(at, "a loop's step runs to its end at once, so a name declared there ends before anything can use it; declare it in the start, after 'hold'");
+            }
+            self.check_stmt(item)?;
+        }
+        Ok(())
+    }
+
+    /// Warns, at `at`, about a loop whose condition reads only the variables
+    /// `names`, which nothing in it changes and nothing in it leaves (see
+    /// `unchanging_reads`), so it never ends once it starts: where each is a
+    /// plain value of this task, which no reference or lambda may change
+    /// elsewhere.
+    fn warn_unchanging(&mut self, names: &[String], at: Span) {
+        let plain = |info: &VarInfo| {
+            info.refers.is_none()
+                && !info.kept
+                && matches!(info.passing, Passing::Copy | Passing::Hold | Passing::Bind)
+                && !matches!(info.ty, Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Task(_) | Type::Closure(_) | Type::Unknown)
+        };
+        if !names.iter().all(|name| self.lookup(name).is_some_and(plain)) {
+            return;
+        }
+        // A reference or a lambda that keeps a place may change it anywhere.
+        if self.scopes.iter().flat_map(|scope| scope.names.values()).any(|info| info.refers.is_some())
+            || self.kept_lambdas.values().any(|kept| kept.places.iter().any(|place| names.contains(&place.name)))
+        {
+            return;
+        }
+        let read: Vec<String> = names.iter().map(|name| format!("'{}'", name)).collect();
+        self.warnings.push(Error::at(
+            at,
+            format!("this loop never ends: its condition reads only {}, which nothing in the loop changes, and nothing in it leaves the loop", read.join(" and ")),
+        ));
+    }
+
     /// `break` or `continue` (`word`), given the name of the loop it stops or
     /// goes on with, or none for the innermost: there must be such a loop
     /// around it, in this task.
@@ -2992,9 +3121,20 @@ impl Checker {
             }
             return err(span, format!("'{}' {}, and there is none around it here", word, what));
         }
+        // `continue` in a step of the loop it goes on with would run the step again.
+        let target = match name {
+            None => Some(self.loops.len()),
+            Some((name, _)) => self.loops.iter().rposition(|named| named.as_ref().is_some_and(|(given, _)| given == name)).map(|i| i + 1),
+        };
+        if word == "continue" && target.is_some() && target == self.stepping {
+            return err(span, "'continue' goes to this loop's step, and this is its step; leave it out, or 'break' to stop the loop");
+        }
         let Some((name, at)) = name else { return Ok(()) };
         if self.loops.iter().flatten().any(|(given, _)| given == name) {
             return Ok(());
+        }
+        if self.loop_around_lambda(name).is_some() {
+            return err(*at, format!("'{0}' names a loop around this lambda, and a lambda's body is a task of its own, so it can't {1} that loop; only the loops inside the lambda can be named here", name, verb));
         }
         if self.lookup(name).is_some() {
             return err(*at, format!("'{}' is a variable, not the name of a loop around this; a loop is named before its word, as in 'outer => each x in xs'", name));
@@ -3006,6 +3146,21 @@ impl Checker {
             many => format!("the named loops around it are {}", many.join(", ")),
         };
         err(*at, format!("no loop around this '{}' is named '{}': {}", word, name, around))
+    }
+
+    /// Notes the named loops around the lambda `lambda`'s value (see
+    /// `lambda_loops`).
+    fn note_lambda_loops(&mut self, lambda: &str) {
+        let mut named: Vec<(String, Span)> = self.current_lambda.as_ref().and_then(|current| self.lambda_loops.get(current)).cloned().unwrap_or_default();
+        named.extend(self.loops.iter().flatten().cloned());
+        self.lambda_loops.insert(lambda.to_string(), named);
+    }
+
+    /// The named loop `name` around the lambda being checked, with where it
+    /// is named.
+    fn loop_around_lambda(&self, name: &str) -> Option<Span> {
+        let lambda = self.current_lambda.as_ref()?;
+        self.lambda_loops.get(lambda)?.iter().find(|(given, _)| given == name).map(|(_, at)| *at)
     }
 
     /// Checks `block` in a new nested scope.
@@ -3074,10 +3229,13 @@ impl Checker {
         {
             return err(span, format!("'{}' is already a name in the code around this lambda, and a lambda that keeps what it uses reuses none of those names, even ones it doesn't keep; name this one otherwise", name));
         }
-        // Nor like a loop around it, which `break` and `continue` name.
-        if let Some((_, at)) = self.loops.iter().flatten().find(|(given, _)| given == name) {
-            return err(span, format!("'{}' is already the name of a loop around this, at {}:{}", name, at.line, at.col));
-        }
+        // Nor like a loop around it, which `break` and `continue` name. The
+        // name is still declared, so its uses say nothing more.
+        let clash = match (self.loops.iter().flatten().find(|(given, _)| given == name), self.loop_around_lambda(name)) {
+            (Some((_, at)), _) => Some(format!("'{}' is already the name of a loop around this, at {}:{}", name, at.line, at.col)),
+            (None, Some(at)) => Some(format!("'{}' is already the name of a loop around this lambda, at {}:{}", name, at.line, at.col)),
+            (None, None) => None,
+        };
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
             let what = match existing {
@@ -3093,7 +3251,10 @@ impl Checker {
         };
         let allocates = ty == Type::Region;
         scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false });
-        Ok(())
+        match clash {
+            Some(clash) => err(span, clash),
+            None => Ok(()),
+        }
     }
 
     /// Declares a parameter, which the task's header gives it. Only the value a
@@ -3352,6 +3513,18 @@ impl Checker {
         self.unsettled_copies.truncate(before);
         self.unsettled_types.truncate(types_before);
         self.untold_kinds.truncate(kinds_before);
+        // A mistake about a value of a type nothing told, `Option<…>`, is
+        // that nothing told it: `Option.None == Option.None`. A place that
+        // tells other types is a mistake of its own (`Either<int, text>`
+        // given `Either.Right(5)`).
+        if let (Err(error), Some((at, kind, tag, param))) = (&result, &untold_kind)
+            && !error.message.starts_with("expected type")
+            && !error.message.starts_with("cannot infer")
+            && error.message.contains(&format!("{}<", unqualified(kind)))
+            && ["<…", "…>", ", …"].iter().any(|untold| error.message.contains(untold))
+        {
+            return err(*at, self.untold_kind_message(kind, tag, param));
+        }
         result?;
         if let Some((at, kind, tag, param)) = untold_kind {
             return err(at, self.untold_kind_message(&kind, &tag, &param));
@@ -3605,12 +3778,30 @@ impl Checker {
                 }
                 // A loop's body might not run, so it sets nothing for certain.
                 // Its condition is tested inside it, so a plan B there may stop it.
+                // What the loop may do is read as written, before checking
+                // makes its calls what they are.
+                let unchanging = unchanging_reads(cond, body, &[]);
                 let entry = self.unset.clone();
                 self.enter_loop();
                 let result = self.check_condition(cond, body, None);
                 self.loops.pop();
                 self.unset = entry;
-                result.map(|_| ())
+                result?;
+                // `loop true`: one that never ends by itself says so in a word.
+                if cond.single() && cond.pattern.is_none() && matches!(cond.value.kind, ExprKind::BoolLit(true)) {
+                    self.warnings.push(Error::at(span, ENDLESS_UNSAID));
+                } else if let Some(names) = unchanging {
+                    self.warn_unchanging(&names, cond.value.span);
+                }
+                Ok(())
+            }
+            StmtKind::Parted(parted) => {
+                // Its start's names live in it, which a scope of its own ends.
+                let named = self.loop_name.take();
+                self.push_scope();
+                let result = self.check_parted(parted, named, span);
+                self.pop_scope();
+                result
             }
             StmtKind::Named(name, inner) => {
                 // The name is one in scope as any other: it may match no name
@@ -3975,6 +4166,12 @@ impl Checker {
         self.check_block(rest)?;
         // A `when` or a `match` on the last line gives the value through its own
         // branches, which is what makes a chain of conditions give one.
+        // One whose every branch leaves (`<-`, `break`, `continue`) leaves the
+        // block too, which then gives nothing, as a last `<-` does.
+        if gives_value(last) && always_leaves(std::slice::from_ref(last)) {
+            self.check_stmt(last)?;
+            return Ok(None);
+        }
         if gives_value(last) {
             let span = last.span;
             return Ok(self.check_branching_value(last)?.map(|ty| (ty, span)));
@@ -4036,7 +4233,7 @@ impl Checker {
         }
         let Some(settled) = settled else {
             if given.is_empty() {
-                return err(at, format!("every {} of this {} sends with '<-', so nothing gives it a value", branches.each, branches.of));
+                return err(at, format!("every {} of this {} leaves, with '<-', 'break' or 'continue', so nothing gives it a value", branches.each, branches.of));
             }
             // Every branch that gives a value had a mistake of its own, which is
             // already reported (see `Type::Unknown`).
@@ -6080,6 +6277,7 @@ impl Checker {
         outer.sort_by_key(|(_, info)| (info.span.line, info.span.col));
         let names = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
         self.lambda_outer.insert(lambda.to_string(), names);
+        self.note_lambda_loops(lambda);
         let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
         self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), hold, span, outer, within, uses: Vec::new(), places: places.to_vec() });
         self.kept_order.retain(|name| name != lambda);
@@ -6410,6 +6608,7 @@ impl Checker {
                 if is_lambda(name) {
                     let seen = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
                     self.lambda_outer.insert(name.clone(), seen);
+                    self.note_lambda_loops(name);
                 }
                 self.task_value_type(name, span)
             }
@@ -6819,30 +7018,70 @@ impl Checker {
             expr.ty = inner.ty.clone().map(|ty| Type::Fail(Box::new(ty)));
             return Ok(());
         }
-        let Some(Type::Applied(sent)) = expr.ty.clone().filter(untold_kind) else { return Ok(()) };
-        let span = expr.span;
-        // The value itself, or what a maybe or a `T ~ E` holds.
-        let mut places = vec![expected.clone()];
-        match expected {
-            Type::Maybe(inner) => places.push((**inner).clone()),
-            Type::Or(value, _) => {
-                places.push((**value).clone());
-                if let Type::Maybe(inner) = value.as_ref() {
-                    places.push((**inner).clone());
-                }
-            }
-            _ => {}
+        // A branch's `none` beside a branch's `Option.None`.
+        let none = match &expr.kind {
+            ExprKind::Wrap(inner) => matches!(inner.kind, ExprKind::NoneLit),
+            kind => matches!(kind, ExprKind::NoneLit),
+        };
+        if none
+            && expr.ty.as_ref().is_some_and(holds_untold)
+            && matches!(expected, Type::Maybe(_))
+            && !holds_untold(expected)
+        {
+            expr.ty = Some(expected.clone());
+            return Ok(());
         }
-        for place in places {
-            let Type::Applied(named) = self.unmade(&place) else { continue };
-            if named.name != sent.name || named.types.len() != sent.types.len() {
-                continue;
+        // A branch's `Option.None` made part of the maybe the branches give.
+        if let ExprKind::Wrap(inner) = &mut expr.kind
+            && inner.ty.as_ref().is_some_and(untold_kind)
+        {
+            self.settle_variant(inner, expected)?;
+            if let Some(told) = inner.ty.clone() {
+                expr.ty = match expr.ty.take() {
+                    Some(Type::Maybe(_)) => Some(Type::Maybe(Box::new(told))),
+                    Some(Type::Or(_, error)) => Some(Type::Or(Box::new(told), error)),
+                    other => other,
+                };
             }
-            let told = sent.types.iter().zip(&named.types).all(|(sent, named)| is_untold(sent) || fits(sent, &named.without_regions()) || fits(&named.without_regions(), sent));
-            if !told {
-                continue;
+            return Ok(());
+        }
+        // `(Option.None, 1)` where a `(Option<int>, int)` goes: each item is
+        // told by its own place.
+        if let (ExprKind::Tuple(items), Type::Tuple(places)) = (&mut expr.kind, expected)
+            && expr.ty.as_ref().is_some_and(holds_untold)
+            && items.len() == places.len()
+        {
+            for (item, place) in items.iter_mut().zip(places) {
+                self.settle_variant(item, place)?;
             }
-            let types: Vec<Type> = sent.types.iter().zip(&named.types).map(|(sent, named)| if is_untold(sent) { named.without_regions() } else { sent.clone() }).collect();
+            if let Some(told) = items.iter().map(|item| item.ty.clone()).collect::<Option<Vec<Type>>>() {
+                expr.ty = Some(Type::Tuple(told));
+            }
+            return Ok(());
+        }
+        // The variant whose types are untold, or the one a maybe of it holds,
+        // as a `when` giving `none` or `Option.None` is.
+        let sent = match expr.ty.clone() {
+            Some(Type::Applied(sent)) if sent.types.iter().any(is_untold) => sent,
+            Some(Type::Maybe(inner)) if matches!(&expr.kind, ExprKind::Choice(_)) && untold_kind(&inner) => match *inner {
+                Type::Applied(sent) => sent,
+                _ => return Ok(()),
+            },
+            _ => return Ok(()),
+        };
+        let span = expr.span;
+        let Some(types) = self.told_types(&sent, expected) else { return Ok(()) };
+        // `when c Option.None else Option.None fi`: each branch's value is
+        // told by the place the whole goes.
+        if let ExprKind::Choice(stmt) = &mut expr.kind {
+            self.settle_branch_values(stmt, expected)?;
+            expr.ty = Some(expected.clone());
+            return Ok(());
+        }
+        if !untold_kind(expr.ty.as_ref().unwrap_or(&Type::Unknown)) {
+            return Ok(());
+        }
+        {
             let def = self.kinds.get(&sent.name).cloned().ok_or_else(|| Error::internal_at(span, "a variant of no kind"))?;
             for (param, ty) in def.types.iter().zip(&types) {
                 self.check_need("kind", &sent.name, param, ty, span)?;
@@ -6854,9 +7093,35 @@ impl Checker {
             if let Some(at) = self.untold_kinds.iter().rposition(|(at, _, _, _)| *at == span) {
                 self.untold_kinds.remove(at);
             }
-            return Ok(());
         }
         Ok(())
+    }
+
+    /// The types `sent`, a variant whose types its values didn't all tell,
+    /// takes from `expected`, the place it goes: the value itself, or what a
+    /// maybe or a `T ~ E` holds, where that is its kind with types that fit.
+    fn told_types(&self, sent: &Applied, expected: &Type) -> Option<Vec<Type>> {
+        let mut places = vec![expected.clone()];
+        match expected {
+            Type::Maybe(inner) => places.push((**inner).clone()),
+            Type::Or(value, _) => {
+                places.push((**value).clone());
+                if let Type::Maybe(inner) = value.as_ref() {
+                    places.push((**inner).clone());
+                }
+            }
+            _ => {}
+        }
+        places.into_iter().find_map(|place| {
+            let Type::Applied(named) = self.unmade(&place) else { return None };
+            if named.name != sent.name || named.types.len() != sent.types.len() {
+                return None;
+            }
+            let told = sent.types.iter().zip(&named.types).all(|(sent, named)| is_untold(sent) || fits(sent, &named.without_regions()) || fits(&named.without_regions(), sent));
+            let types: Vec<Type> = sent.types.iter().zip(&named.types).map(|(sent, named)| if is_untold(sent) { named.without_regions() } else { sent.clone() }).collect();
+            // A place no better told, as a branch of the same `when` is.
+            (told && !types.iter().any(|ty| is_untold(ty) || holds_untold(ty))).then_some(types)
+        })
     }
 
     /// The type values of types `a` and `b` can both become (see `join_types`),
@@ -6878,6 +7143,13 @@ impl Checker {
     }
 
     /// The message for a variant of `kind` whose type `param` nothing told.
+    /// The error of the variant at `at` whose types nothing told, if it is
+    /// one (see `untold_kinds`).
+    fn untold_kind_error(&self, at: Span) -> Option<Error> {
+        let (at, kind, tag, param) = self.untold_kinds.iter().rev().find(|(span, _, _, _)| *span == at)?;
+        Some(Error::at(*at, self.untold_kind_message(kind, tag, param)))
+    }
+
     fn untold_kind_message(&self, kind: &str, tag: &str, param: &str) -> String {
         let count = self.kinds.get(kind).map_or(1, |def| def.types.len().max(1));
         format!(
@@ -6995,7 +7267,9 @@ impl Checker {
         let mut items = Vec::new();
         for value in values.iter_mut() {
             let ty = self.check_expr(value)?;
-            if let Some(what) = self.changeable_item(&ty) {
+            // A variant whose types are untold, `(Option.None, 1)`, gets them
+            // from the place the tuple goes, whose type was checked so.
+            if let Some(what) = self.changeable_item(&ty).filter(|_| !holds_untold(&ty)) {
                 return err(value.span, format!("a tuple's items never change, so it can't hold {}", what));
             }
             items.push(ty);
@@ -8245,6 +8519,12 @@ impl Checker {
         }
         // A `when` or a `match` on the last line gives the value through its own
         // branches, as it does in the block of a case (see `value_block_tail`).
+        // One whose every branch leaves (`<-`, `break`, `continue`) leaves the
+        // block too, which then gives nothing, as a last `<-` does.
+        if gives_value(last) && always_leaves(std::slice::from_ref(last)) {
+            self.check_stmt(last)?;
+            return Ok(None);
+        }
         if gives_value(last) {
             let span = last.span;
             let given = self.check_branching_value(last)?;
@@ -8826,6 +9106,12 @@ impl Checker {
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
         let ty = found?;
+        // `Option.None.isSome()`: a method's value tells it no types.
+        if untold_kind(&ty)
+            && let Some(error) = self.untold_kind_error(value.span)
+        {
+            return Err(error);
+        }
         // Which method this is comes from the value's type, so a value whose
         // type the checker couldn't work out leaves the call unread; the
         // expression it is part of is left as `Type::Unknown`.
@@ -10211,6 +10497,14 @@ impl Checker {
         match ty {
             Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) | Type::Task(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
+            // `Option<T>` in a task that takes types: what its variants carry,
+            // given those types, compares as a made kind's does.
+            Type::Applied(applied) if self.kinds.contains_key(&applied.name) => self.applied_parts(applied).is_some_and(|parts| {
+                parts.iter().all(|part| match part {
+                    Type::Maybe(inner) => self.comparable(inner),
+                    other => self.comparable(other),
+                })
+            }),
             Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
             Type::Param(_) | Type::Group(_) => self.allows(Need::Same, ty),
             _ => false,
@@ -11172,6 +11466,14 @@ impl Checker {
                 self.substitute_condition(cond, body, given, made)?;
                 self.substitute_block(body, given, made)
             }
+            StmtKind::Parted(parted) => {
+                self.substitute_block(&mut parted.start, given, made)?;
+                if let Some(cond) = &mut parted.cond {
+                    self.substitute_condition(cond, &mut parted.body, given, made)?;
+                }
+                self.substitute_block(&mut parted.step, given, made)?;
+                self.substitute_block(&mut parted.body, given, made)
+            }
             StmtKind::Each(name, _, range, body) if matches!(&range.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) => {
                 let (name, range, body) = (name.clone(), range.clone(), std::mem::take(body));
                 stmt.kind = self.each_of_group(&name, &range, body, given, made, at)?;
@@ -12123,7 +12425,166 @@ fn always_sends(block: &Block) -> bool {
 /// (see `always_sends`), or stops or goes on with a loop around it, with
 /// `break` or `continue`, on every path. A loop inside it doesn't count, as a
 /// `break` inside one stops that loop only.
-fn always_leaves(block: &Block) -> bool {
+/// The warning for a loop written to never end by itself, without the word.
+const ENDLESS_UNSAID: &str = "this loop never ends by its condition; write 'endless' to say so";
+
+/// The first name `parted`'s start declares that no part of the loop uses
+/// after it, with where it is declared. A lambda in the loop may use one
+/// where this can't see, so then none is told.
+fn unused_in_loop(parted: &PartedLoop) -> Option<(String, Span)> {
+    let mut closures = false;
+    let mut used = |stmts: &[Stmt], names: &mut Vec<(String, Span)>| {
+        walk_block(stmts, &mut |e| match &e.kind {
+            ExprKind::Var(name) => names.retain(|(declared, _)| declared != name),
+            ExprKind::Closure { .. } => closures = true,
+            _ => {}
+        });
+    };
+    let mut declared: Vec<(String, Span)> = Vec::new();
+    for (i, item) in parted.start.iter().enumerate() {
+        if let StmtKind::Binding { names, .. } = &item.kind {
+            for bound in names {
+                bound_names(bound, &mut declared);
+            }
+        }
+        used(parted.start.get(i + 1..).unwrap_or_default(), &mut declared);
+    }
+    if let Some(cond) = &parted.cond {
+        let mut reads = Vec::new();
+        walk_block(&[Stmt::new(StmtKind::Loop(cond.clone(), Vec::new()), cond.value.span)], &mut |e| {
+            if let ExprKind::Var(name) = &e.kind {
+                reads.push(name.clone());
+            }
+        });
+        declared.retain(|(name, _)| !reads.contains(name));
+    }
+    used(&parted.step, &mut declared);
+    used(&parted.body, &mut declared);
+    if closures {
+        return None;
+    }
+    declared.into_iter().next()
+}
+
+/// The names `bound` declares, `(a, b)` its items', with where each is.
+fn bound_names(bound: &Bound, names: &mut Vec<(String, Span)>) {
+    if bound.parts.is_empty() {
+        if bound.name != DISCARD {
+            names.push((bound.name.clone(), bound.span));
+        }
+    } else {
+        bound.parts.iter().for_each(|part| bound_names(part, names));
+    }
+}
+
+/// The places `target` sets, each item's of a tuple's.
+fn target_places<'a>(target: &'a Target, places: &mut Vec<&'a Expr>) {
+    match target {
+        Target::Place(place) => places.push(place),
+        Target::Tuple(parts, _) => parts.iter().for_each(|part| target_places(part, places)),
+        Target::Discard(_) => {}
+    }
+}
+
+/// The variables a loop's condition `cond` reads, where it is only those,
+/// values and operators, and nothing in its `body` and `step`, as written,
+/// leaves the loop or may change one of them (see `Checker::warn_unchanging`).
+fn unchanging_reads(cond: &Condition, body: &[Stmt], step: &[Stmt]) -> Option<Vec<String>> {
+    let mut names = Vec::new();
+    if !cond.parts().all(|part| part.pattern.is_none() && plain_reads(&part.value, &mut names)) || names.is_empty() {
+        return None;
+    }
+    let mut effects = LoopEffects::default();
+    loop_effects(body, &names, 0, &mut effects);
+    loop_effects(step, &names, 0, &mut effects);
+    (!effects.leaves && !effects.changes).then_some(names)
+}
+
+/// Whether `e` only reads variables and values with operators, as a
+/// condition `warn_unchanging` can tell about does, adding the variables
+/// to `names`.
+fn plain_reads(e: &Expr, names: &mut Vec<String>) -> bool {
+    match &e.kind {
+        ExprKind::Var(name) => {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+            true
+        }
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) => true,
+        ExprKind::Binary(_, left, right) => plain_reads(left, names) && plain_reads(right, names),
+        ExprKind::Unary(_, inner) | ExprKind::Field(inner, _) => plain_reads(inner, names),
+        _ => false,
+    }
+}
+
+/// What a loop's statements may do to it (see `loop_effects`).
+#[derive(Default)]
+struct LoopEffects {
+    /// Something may leave the loop: a `break` of it, a `continue` or a
+    /// `break` of a loop around it, or a `<-`.
+    leaves: bool,
+    /// Something may change one of the variables looked at.
+    changes: bool,
+}
+
+/// What `stmts`, inside a loop and `inner` loops deep inside it, may do to
+/// it and to the variables `names` (see `warn_unchanging`).
+fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut LoopEffects) {
+    let root = |e: &Expr| -> Option<String> {
+        let mut e = e;
+        loop {
+            match &e.kind {
+                ExprKind::Var(name) => return Some(name.clone()),
+                ExprKind::Field(base, _) | ExprKind::Index(base, _) => e = base,
+                _ => return None,
+            }
+        }
+    };
+    for stmt in stmts {
+        match &stmt.kind {
+            StmtKind::Send(_) => effects.leaves = true,
+            StmtKind::Break(name) => effects.leaves |= inner == 0 || name.is_some(),
+            StmtKind::Continue(name) => effects.leaves |= name.is_some(),
+            StmtKind::Assign(targets, _) => {
+                let mut set = Vec::new();
+                targets.iter().for_each(|target| target_places(target, &mut set));
+                effects.changes |= set.into_iter().any(|place| root(place).is_some_and(|name| names.contains(&name)));
+            }
+            StmtKind::Step { target, .. } => effects.changes |= root(target).is_some_and(|name| names.contains(&name)),
+            StmtKind::When(arms, else_block) => {
+                arms.iter().for_each(|arm| loop_effects(&arm.body, names, inner, effects));
+                if let Some(block) = else_block {
+                    loop_effects(block, names, inner, effects);
+                }
+            }
+            StmtKind::Block(block) => loop_effects(block, names, inner, effects),
+            StmtKind::Turns(turns) => turns.iter().for_each(|turn| loop_effects(turn, names, inner, effects)),
+            StmtKind::Named(_, nested) => loop_effects(std::slice::from_ref(&**nested), names, inner, effects),
+            StmtKind::Loop(_, block) | StmtKind::Each(_, _, _, block) => loop_effects(block, names, inner + 1, effects),
+            StmtKind::Parted(parted) => {
+                loop_effects(&parted.start, names, inner, effects);
+                loop_effects(&parted.step, names, inner + 1, effects);
+                loop_effects(&parted.body, names, inner + 1, effects);
+            }
+            StmtKind::Match(_, cases) => cases.iter().for_each(|case| loop_effects(&case.body, names, inner, effects)),
+            StmtKind::Expr(_) | StmtKind::Binding { .. } | StmtKind::SetResults(..) | StmtKind::Region { .. } => {}
+        }
+        // What its values do: a place given with `&`, a method that may alter
+        // its value, a lambda keeping a place, and the plan Bs and the `when`s
+        // and `match`es used as values, whose statements may leave or change.
+        walk_stmt(stmt, &mut |e| match &e.kind {
+            ExprKind::Ref(place) => effects.changes |= root(place).is_some_and(|name| names.contains(&name)),
+            ExprKind::MethodCall { value, .. } => effects.changes |= root(value).is_some_and(|name| names.contains(&name)),
+            ExprKind::Closure { places, .. } => effects.changes |= places.iter().any(|place| names.contains(&place.name)),
+            ExprKind::PlanB { body, .. } => loop_effects(body, names, inner, effects),
+            ExprKind::Choice(choice) => loop_effects(std::slice::from_ref(&**choice), names, inner, effects),
+            _ => {}
+        });
+    }
+}
+
+fn always_leaves(block: &[Stmt]) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) | StmtKind::Break(_) | StmtKind::Continue(_) => true,
         StmtKind::When(arms, else_block) => {
@@ -12139,7 +12600,7 @@ fn always_leaves(block: &Block) -> bool {
                     return true;
                 }
             }
-            else_block.as_ref().is_some_and(always_leaves)
+            else_block.as_ref().is_some_and(|block| always_leaves(block))
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_leaves(&case.body)),
         StmtKind::Block(body) => always_leaves(body),
@@ -13103,6 +13564,12 @@ fn walk_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr)) {
         StmtKind::Loop(cond, block) => {
             cond.parts().for_each(|part| walk_expr(&part.value, f));
             walk_block(block, f);
+        }
+        StmtKind::Parted(parted) => {
+            walk_block(&parted.start, f);
+            parted.cond.iter().flat_map(Condition::parts).for_each(|part| walk_expr(&part.value, f));
+            walk_block(&parted.step, f);
+            walk_block(&parted.body, f);
         }
         StmtKind::Block(block) => walk_block(block, f),
         StmtKind::Turns(turns) => turns.iter().for_each(|turn| walk_block(turn, f)),

@@ -3,7 +3,7 @@
 task main()
     bind days = [1, 2, 3]
     hold i = 0
-    loop true
+    endless
         show(days[i])
         i = i + 1
     fi

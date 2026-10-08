@@ -85,3 +85,36 @@ fn break_and_continue_are_offered_inside_a_loop_and_take_the_names_of_the_loops_
     let named = PROGRAM.replace("continue inner", "continue @@");
     assert_eq!(labels(&named), ["inner", "outer"]);
 }
+
+#[test]
+fn a_lambda_inside_a_loop_is_a_task_of_its_own() {
+    let program = "task main()\n    outer => each a in 0..4\n        bind f = (x: int) -> int\n            INSIDE\n            <- x\n        fi\n        AFTER\n    fi\nfi\n";
+    let offers_jumps = |marked: &str| labels(marked).iter().any(|label| label == "break");
+    assert!(!offers_jumps(&program.replace("INSIDE", "@@").replace("AFTER", "show(1)")));
+    assert!(offers_jumps(&program.replace("            INSIDE\n", "").replace("AFTER", "@@")));
+    let one_line = "task main()\n    each a in 0..4\n        bind f = (x: int) -> int <- x * 2 fi\n        @@\n    fi\nfi\n";
+    assert!(offers_jumps(one_line));
+    // Only the lambda's own loops are named in it.
+    let named = program.replace("INSIDE", "inner => each j in 0..2\n                break @@\n            fi").replace("AFTER", "show(1)");
+    assert_eq!(labels(&named), ["inner"]);
+}
+
+#[test]
+fn what_an_each_goes_through_is_outside_its_loop() {
+    let source = "task main()\n    bind xs = [1, 2]\n    each x in xs[#5] { @@\n    }\n        show(x)\n    fi\nfi\n";
+    assert!(!labels(source).iter().any(|label| label == "break"));
+}
+
+#[test]
+fn only_a_loop_is_offered_after_a_loop_s_name() {
+    let offered = labels("task main()\n    outer => @@\nfi\n");
+    assert!(offered.iter().all(|label| label == "loop" || label == "each"), "{:?}", offered);
+    assert!(!offered.is_empty());
+}
+
+#[test]
+fn a_loop_s_name_is_no_value() {
+    let source = "task main()\n    outer => each a in 0..4\n        show(outer)\n    fi\nfi\n";
+    let byte = source.find("outer)").expect("a use");
+    assert_eq!(Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).map(|hover| hover.code), None);
+}

@@ -210,7 +210,9 @@
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
         slice as it is at each pass</a>), <code>stock.vela</code> (a stock list searched with <a href="#generic-kinds">kinds that take types</a>),
         <code>seats.vela</code> (a party seated in a hall, with
-        <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>), <code>journal.vela</code> (notes read from input into a region per line,
+        <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>),
+        <code>collatz.vela</code> (Collatz walks counted with <a href="#loop-parts">a loop in three parts and
+        <code>endless</code></a>), <code>journal.vela</code> (notes read from input into a region per line,
         with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
         (tasks, shapes, pointers, control flow, and text).
       </p>
@@ -243,7 +245,7 @@
           type before it, so <code>maybe int ~ text</code> is <code>(maybe int) ~ text</code>, and parentheses group the
           other nesting, <code>maybe (int ~ text)</code> (see <a href="#wider">Becoming a wider type</a>)</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
-        <li><code class="type">T</code> — a type a task or shape takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
+        <li><code class="type">T</code> — a type a task, shape or kind takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
         <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>)</li>
       </ul>
@@ -278,7 +280,7 @@
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
-block shared type</pre>
+block shared type break continue endless</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
@@ -320,8 +322,9 @@ block shared type</pre>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
         <tr><td><code>kind Option&lt;T&gt;</code>, <code>Option&lt;int&gt;.None</code></td><td>a kind that takes types, and a variant given them where nothing else says them (see <a href="#generic-kinds">Kinds that take types</a>)</td></tr>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
+        <tr><td><code>loop hold i = 0 || i &lt; n || i++</code>, <code>endless</code></td><td>a loop in three parts, its start, condition and step, each with several items parted by <code>,</code> or none; a loop that never ends by itself (see <a href="#loop-parts">A loop in three parts</a>)</td></tr>
         <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
-        <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
+        <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task, shape or kind takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>(hold&amp; int, @r) -&gt; text@r</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
@@ -353,7 +356,7 @@ block shared type</pre>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code>, <code>Shape.m</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it, called or as a value (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
         <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
-        <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
+        <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file; before a loop's word, the loop's name (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
@@ -557,7 +560,7 @@ block shared type</pre>
         under Problems, apart from errors.
       </p>
       <p>
-        The one warning so far is about a plain parameter, <code>x: T</code>, whose giving the compiler chose (see
+        One warning is about a plain parameter, <code>x: T</code>, whose giving the compiler chose (see
         <a href="#large-values">large values</a>): <code>==</code> on a shape, an array, or a tuple, and
         <code>&amp;x</code>, read where the value is, so they depend on that choice. The warning says which way the
         compiler went, from the type's size, and how to say which is meant:
@@ -578,6 +581,25 @@ block shared type</pre>
         that takes types, the warning comes with each use that gives such a type, naming it: the body was checked
         when any type could be given, and a number compares by value. Vela Studio shows the open file's warnings;
         a module's own are shown where it is open.
+      </p>
+      <p id="loop-warnings">
+        Two more are about loops that never end. A loop written to never end by itself, <code>loop || ||</code>,
+        <code>loop ||</code>, or <code>loop true</code>, is told to say so with <code>endless</code> (see
+        <a href="#loop-parts">A loop in three parts</a>). And a loop whose condition reads only variables that
+        nothing in the loop changes, with nothing in it that leaves, never ends once it starts:
+      </p>
+      <pre><span class="keyword">task</span> wait(x: int)
+    <span class="keyword">loop</span> x &lt; <span class="number">10</span>              <span class="comment">; warning: this loop never ends: its condition reads only 'x', which nothing in the loop changes, and nothing in it leaves the loop</span>
+        touch(x)               <span class="comment">; a copy of x, which can't change it</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        It looks only at simple cases, and costs one walk over the loop: a condition of variables, values, fields and
+        operators, each variable a plain value of the task, and a loop with no <code>break</code> or
+        <code>&lt;-</code> in it. Anything that may change a variable counts as changing it: setting it or a part of
+        it, giving it with <code>&amp;</code>, calling a method on it, or a lambda keeping it as a place; and a
+        condition that calls a task, or reads through a pointer, a reference or a shared field, is never told, since
+        those may change elsewhere.
       </p>
 
       <h3 id="references">References</h3>
@@ -2060,9 +2082,8 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           <code>priv</code>, used from another module (<code>numbers.larger(3, 8)</code>), and can use another such task,
           giving it the type it was given itself. A name in <code>&lt; &gt;</code> can't be a builtin type or a type the
           file already names, and <code>main</code> takes no types.</li>
-        <li><strong>Not kinds, for now.</strong> A kind can't take types yet, so there is no
-          <code>kind Result&lt;T&gt;</code>; <code>maybe T</code> and <code>T ~ E</code> cover what most such kinds
-          would be for. A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
+        <li><strong>Kinds too.</strong> A kind takes types the same way, <code>kind Option&lt;T&gt;</code> (see
+          <a href="#generic-kinds">Kinds that take types</a>). A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
           <code>f&lt;T&gt;</code>) would never stop, so a type built up more than 24 types deep, or a task used with
           more than 500 sets of types, is an error.</li>
       </ul>
@@ -2189,10 +2210,14 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           the place the value goes says the rest, as it does for a bare <code>none</code>: a typed <code>bind</code>,
           an assignment, a parameter, what a task sends, a field, an error side (<code>&lt;- fail Option.None</code>
           in a task sending <code>int ~ Option&lt;text&gt;</code>), and a value of the kind beside it in an array, in
-          the branches of a <code>when</code> or a <code>match</code>, or across <code>==</code>. Where nothing says
-          them, they are written after the kind's name, <code>Option&lt;int&gt;.None</code>,
-          <code>Either&lt;int, text&gt;.Right("r")</code>: all of them or none, and never after the variant. A value
-          whose types nothing says is an error that shows how to write them.</li>
+          the branches of a <code>when</code> or a <code>match</code>, or across <code>==</code>. A whole
+          <code>when</code> or <code>match</code>, and a tuple, take them from the place too:
+          <code>&lt;- when c Option.None else Option.None fi</code> in a task sending <code>Option&lt;int&gt;</code>.
+          Where nothing says them, they are written after the kind's name, <code>Option&lt;int&gt;.None</code>,
+          <code>Either&lt;int, text&gt;.Right("r")</code>: all of them or none, never after the variant, and with
+          the <code>.</code> touching the <code>&gt;</code>, which tells them from a comparison with a field of
+          <code>.this</code>, as in <code>(a &lt; b, c &gt; .x)</code>. A value whose types nothing says, or a
+          method called on one, is an error that shows how to write them.</li>
         <li><strong>Matching.</strong> A <code>case</code> takes the types from the value it matches, so it names
           none: <code>case Some v</code> or <code>case Option.Some v</code>, and <code>v</code> is of the type the value
           was given. In a task that takes types, a <code>case</code> on an <code>Option&lt;T&gt;</code> binds a
@@ -3043,7 +3068,9 @@ fi</code></pre>
         <code>loop</code> repeats while its condition holds. The condition follows <code>loop</code> directly:
         <code>loop when count &lt; 10</code> says <code>a 'loop' takes its condition directly, without 'when'</code>.
         A loop also stops early with <code>break</code>, ends a pass early with <code>continue</code>, or leaves the
-        task with <code>&lt;-</code> (see <a href="#break-continue">Stopping a loop: break and continue</a>).
+        task with <code>&lt;-</code> (see <a href="#break-continue">Stopping a loop: break and continue</a>). A loop
+        may also start and step names of its own, <code>loop hold i = 0 || i &lt; 10 || i++</code>, and one that
+        never ends by itself is written <code>endless</code> (see <a href="#loop-parts">A loop in three parts</a>).
       </p>
       <p>
         A <code>when</code> or a <code>match</code> can be a value as well as a statement, giving one from each branch
@@ -3143,6 +3170,73 @@ show(total)</pre>
     show(w)
 <span class="keyword">fi</span></pre>
 
+      <h3 id="loop-parts">A loop in three parts, and endless</h3>
+      <p>
+        A <code>loop</code> may have three parts, parted by <code>||</code>: a start, which runs once before the loop;
+        a condition, tested before each pass as a plain loop's is; and a step, which runs after each pass. The start
+        and the step may each hold several items, parted by <code>,</code>, and any part may be empty.
+        <code>endless</code> is a loop that never ends by itself, the same as <code>loop || ||</code> said in a word.
+      </p>
+      <pre class="program" data-file="parts.vela"><span class="keyword">task</span> main()
+    <span class="comment">; A name of its own, which lives in the loop, and several, side by side.</span>
+    <span class="keyword">loop</span> <span class="keyword">hold</span> i = <span class="number">0</span> || i &lt; <span class="number">3</span> || i++
+        show(i)                      <span class="comment">; 0, 1, 2</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">loop</span> <span class="keyword">hold</span> lo = <span class="number">1</span>, hi = <span class="number">9</span>, <span class="keyword">bind</span> gap = <span class="number">4</span> || hi - lo &gt; gap || lo++, hi--
+        show(lo, <span class="string">"-"</span>, hi)            <span class="comment">; 1-9, 2-8</span>
+    <span class="keyword">fi</span>
+
+    <span class="comment">; Names already declared come first, and keep their last value.</span>
+    <span class="keyword">hold</span> n = <span class="number">0</span>
+    <span class="keyword">hold</span> steps = <span class="number">0</span>
+    <span class="keyword">loop</span> n = <span class="number">27</span>, steps = <span class="number">0</span> || n != <span class="number">1</span> || steps++
+        n = <span class="keyword">when</span> n % <span class="number">2</span> == <span class="number">0</span> n / <span class="number">2</span> <span class="keyword">else</span> <span class="number">3</span> * n + <span class="number">1</span> <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(steps)                      <span class="comment">; 111</span>
+
+    <span class="comment">; Each part may be empty; with no step, the last '||' may go too.</span>
+    <span class="keyword">hold</span> k = <span class="number">0</span>
+    <span class="keyword">loop</span> || k &lt; <span class="number">3</span> || k++
+        <span class="keyword">when</span> k == <span class="number">1</span>
+            <span class="keyword">continue</span>                 <span class="comment">; the step still runs</span>
+        <span class="keyword">fi</span>
+        show(k)                      <span class="comment">; 0, 2</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">endless</span>
+        k++
+        <span class="keyword">when</span> k &gt; <span class="number">5</span>
+            <span class="keyword">break</span>                    <span class="comment">; the step would not run</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(k)                          <span class="comment">; 6</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>The start.</strong> Its names come in two kinds. A name already declared, and changeable, is set
+          and keeps its last value after the loop: <code>loop i = 0 || …</code>. A name of the loop's own is declared
+          with <code>hold</code> or <code>bind</code>, which covers every item after it, so names already declared
+          come first: <code>loop i = 0, j = 0, hold x = 2, y = 3 || …</code> sets <code>i</code> and
+          <code>j</code> and declares <code>x</code> and <code>y</code>. Those live only in the loop, and a
+          <code>bind</code> one, as <code>gap</code> above, is worked out once and never changes. A loop never
+          declares a name by itself: <code>loop i = 0 || …</code> with no <code>i</code> is an error that says to
+          write <code>hold</code>, and so is <code>loop x &lt; 10</code>, as everywhere. A name the loop declares and
+          no part of it uses is an error. Items run left to right, so one may use the names before it.</li>
+        <li><strong>Items and commas.</strong> A <code>,</code> ends an item only where the next one starts, so
+          <code>a, b = b, a + b</code> and <code>hold q, r = divmod(a, b)</code> are one item each, as they are on a
+          line of their own.</li>
+        <li><strong>The condition.</strong> One, or none: a loop with none never ends by itself. It is any condition
+          a loop takes, an <code>is</code> and parts joined with <code>and</code> too, and it is tested inside the
+          loop, so a plan B there may stop it.</li>
+        <li><strong>The step.</strong> Any statements, a call or a one-line <code>when … fi</code> too, run after
+          each pass. <code>continue</code> goes to the step, as in C, and <code>break</code> leaves without it. So a
+          step has no <code>continue</code> of its loop, and declares no names, which would end before anything could
+          use them. With no step, the last <code>||</code> may be left out: <code>loop hold w = 0 || w &lt; 2</code>.</li>
+        <li><strong>Endless.</strong> <code>endless</code> takes nothing on its line. <code>loop || ||</code>,
+          <code>loop ||</code> and <code>loop true</code> work the same, with a warning to write <code>endless</code>
+          (see <a href="#warnings">Warnings</a>). Either can be named, <code>outer =&gt; endless</code>.</li>
+        <li><strong>Not 'or'.</strong> <code>||</code> parts a loop's parts and nothing else: anywhere else it is an
+          error that says Vela writes <code>or</code>.</li>
+      </ul>
+
       <h3 id="break-continue">Stopping a loop: break and continue</h3>
       <p>
         <code>break</code> stops the loop around it there, and the code after the loop goes on. <code>continue</code>
@@ -3203,9 +3297,11 @@ show(total)</pre>
         <li><strong>Instead of a value.</strong> A plan B, or a branch of a <code>when</code> or a <code>match</code>
           used as a value, may stop the loop or go on with it instead of giving the value, as it may send with
           <code>&lt;-</code> (see <a href="#choices">A match or a when as a value</a>). <code>break</code> is a
-          statement, so such a case is written as a block: <code>case Halt = break</code> is refused.</li>
+          statement, so such a case is written as a block: <code>case Halt = break</code> is refused. A
+          <code>show</code> whose value stops the loop has written the values before that one, and leaves the
+          line unended, as a <code>&lt;-</code> there does.</li>
         <li><strong>In its own task.</strong> A lambda's body is a task of its own, so a <code>break</code> in it
-          can't stop a loop around the lambda. In a task taking a <a href="#type-groups">group of types</a>,
+          can't stop a loop around the lambda, nor name one, and a name inside it can't be a loop's around it. In a task taking a <a href="#type-groups">group of types</a>,
           <code>each v in args</code> is written out once per value, and is still one loop.</li>
         <li><strong>No value.</strong> A loop gives none, so <code>break</code> takes only a name:
           <code>break = v</code> is refused.</li>
@@ -4344,7 +4440,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>An array's count is known before the program runs (see <a href="#arrays">Arrays</a>). Tuples are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
-        <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
+        <li>Tasks, shapes and kinds take types, and no word asks a type for arithmetic (see
           <a href="#generics">Types a declaration takes</a>).</li>
         <li>A task that takes types, or that sends several values, can't be a value yet, nor can a
           method of every value (see <a href="#task-values">Tasks as values</a>).</li>

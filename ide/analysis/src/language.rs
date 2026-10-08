@@ -7,7 +7,7 @@ use vela::ast::{ALTERS, BUILTIN_TASKS, BUILTIN_TYPES};
 use vela::lexer::KEYWORDS;
 
 /// Keywords that start a block closed by `fi`.
-pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "when", "loop", "each", "block", "match"];
+pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "when", "loop", "endless", "each", "block", "match"];
 /// Keywords that may come before a block opener on its line, as in `priv task`.
 pub const BLOCK_MODIFIERS: &[&str] = &["priv"];
 /// Keywords that start a new branch inside an open block.
@@ -72,6 +72,7 @@ mod tests {
             "kind K\n    A\nfi\n",
             "task t()\n    when true\n    fi\nfi\n",
             "task t()\n    loop false\n    fi\nfi\n",
+            "task t()\n    endless\n        break\n    fi\nfi\n",
             "task t()\n    each i in 0..1\n    fi\nfi\n",
             "task t()\n    block\n    fi\nfi\n",
             "kind K\n    A\nfi\ntask t(k: K)\n    match k\n    case A\n    fi\nfi\n",

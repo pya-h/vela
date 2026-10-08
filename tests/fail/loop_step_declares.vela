@@ -1,0 +1,6 @@
+; error: 3:43: a loop's step runs to its end at once, so a name declared there ends before anything can use it; declare it in the start, after 'hold'
+task main()
+    loop hold i = 0 || i < 3 || i++, bind t = i
+        show(i)
+    fi
+fi

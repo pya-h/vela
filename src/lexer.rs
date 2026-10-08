@@ -25,6 +25,8 @@ pub enum Token {
     When,
     Else,
     Loop,
+    /// `endless`: a loop that never ends by itself, `loop || ||` said in a word.
+    Endless,
     Each,
     /// `break`: stops the loop around it, or the one it names, `break outer`.
     Break,
@@ -88,6 +90,9 @@ pub enum Token {
     /// `=>`, which gives an included module or name another name:
     /// `include shop/cart => basket`, and names a loop: `outer => each x in xs`.
     FatArrow,
+    /// `||`, which parts a loop's start, condition and step:
+    /// `loop hold i = 0 || i < 10 || i++`. Nowhere else: Vela writes `or`.
+    Parts,
     Range,
     /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
     /// of the values rather than an array.
@@ -149,6 +154,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("when", Token::When),
     ("else", Token::Else),
     ("loop", Token::Loop),
+    ("endless", Token::Endless),
     ("each", Token::Each),
     ("break", Token::Break),
     ("continue", Token::Continue),
@@ -260,6 +266,7 @@ impl Token {
             Token::Dot => ".",
             Token::Arrow => "->",
             Token::FatArrow => "=>",
+            Token::Parts => "||",
             Token::Send => "<-",
             Token::Range => "..",
             Token::Ellipsis => "...",
@@ -701,16 +708,21 @@ impl Lexer {
             }
             '&' | '|' => {
                 let word = if c == '&' { "and" } else { "or" };
-                if self.peek() == c {
+                // `||` parts a loop's start, condition and step; the parser
+                // says 'or' wherever else it stands (see `Parser::parse_loop`).
+                if c == '|' && self.peek() == c {
+                    self.advance();
+                    Token::Parts
+                } else if self.peek() == c {
                     self.advance();
                     return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));
-                }
-                if c == '|' {
+                } else if c == '|' {
                     return invalid(loc, format!("unexpected character '{}'; Vela writes '{}'", c, word));
+                } else {
+                    // A single `&` joins the words a generic type must allow; the
+                    // parser reports it as 'and' anywhere else.
+                    Token::Amp
                 }
-                // A single `&` joins the words a generic type must allow; the
-                // parser reports it as 'and' anywhere else.
-                Token::Amp
             }
             '<' => {
                 if self.peek() == '=' {

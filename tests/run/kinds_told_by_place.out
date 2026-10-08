@@ -1,0 +1,5 @@
+3 none W(None) Nothing
+Both(Held(1), 2)
+true false true false
+None None { None } (None, 1) (None, 1)
+true false

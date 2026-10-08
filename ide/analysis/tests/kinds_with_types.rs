@@ -112,3 +112,44 @@ fn a_variant_whose_types_nothing_tells_is_reported() {
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("cannot infer the type of 'lost'"), "{}", diagnostic.message);
 }
+
+/// The labels offered at `@@`.
+fn labels(marked: &str) -> Vec<String> {
+    let at = marked.find("@@").expect("a @@ marker");
+    let source = marked.replacen("@@", "", 1);
+    let offset = LineIndex::new(&source).utf16_of(at);
+    Analysis::new(&source).complete(offset).items.into_iter().map(|item| item.label).collect()
+}
+
+#[test]
+fn a_kind_given_types_offers_its_variants_after_them() {
+    for written in ["Option<int>.@@", "Either<Option<int>, text>.@@"] {
+        let offered = labels(&program("checked").replace("show(some.isSome())", &format!("show({})", written)));
+        assert!(offered.iter().any(|label| label == "None" || label == "Left"), "{}: {:?}", written, offered);
+    }
+}
+
+#[test]
+fn the_types_a_kind_takes_are_offered_inside_it() {
+    let offered = labels(&program("checked").replace("Some(value: T)", "Some(value: @@)"));
+    assert!(offered.iter().any(|label| label == "T"), "{:?}", offered);
+}
+
+#[test]
+fn a_variant_given_types_and_what_a_case_binds_of_one_read_the_same_whether_or_not_the_file_checks() {
+    for when in WHEN {
+        let source = program(when).replace("bind either = Either<int, text>.Right(\"r\")", "bind either = Either<int, text>.Right(\"r\")\n    match either\n    case Left l\n        show(l)\n    case Right r\n        show(r)\n    fi");
+        assert_eq!(hover(&source, "written ="), "bind written: Option<float>", "{}", when);
+        assert_eq!(hover(&source, "either ="), "bind either: Either<int, text>", "{}", when);
+        assert_eq!(hover(&source, "l\n        show(l)"), "l: int", "{}", when);
+        assert_eq!(hover(&source, "r\n        show(r)"), "r: text", "{}", when);
+    }
+}
+
+#[test]
+fn comparisons_beside_a_comma_are_no_types() {
+    let source = "shape P\n    x: int\n\n    t(a: int, b: int, c: int) -> bool\n        bind t = (a < b, c > .x)\n        <- t.0\n    fi\nfi\n\ntask main()\n    show(P { x: 1 }.t(1, 2, 3))\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(class(source, "b, c"), TokenClass::Parameter);
+    assert_eq!(class(source, "c >"), TokenClass::Parameter);
+}

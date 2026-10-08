@@ -1,0 +1,126 @@
+  1 | ; Kinds that take types, used before they are declared, held by shapes and
+    | comment:; Kinds that take types, used before they are declared, held by shapes and
+  2 | ; other kinds, compared under 'same', and told their types by the place a
+    | comment:; other kinds, compared under 'same', and told their types by the place a
+  3 | ; when, a match, a maybe or a tuple goes.
+    | comment:; when, a match, a maybe or a tuple goes.
+  5 | task valueOr(o: Option<int>, fallback: int) -> int
+    | keyword:task  task:valueOr  punctuation:(  parameter:o  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:,  parameter:fallback  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  6 |     <- match o
+    | keyword:<-  keyword:match  parameter:o
+  7 |     case Some v = v
+    | keyword:case  variant:Some  variable:v  operator:=  variable:v
+  8 |     case None = fallback
+    | keyword:case  variant:None  operator:=  parameter:fallback
+  9 |     fi
+    | keyword:fi
+ 10 | fi
+    | keyword:fi
+ 12 | shape Holder
+    | keyword:shape  type:Holder
+ 13 |     o: Option<int>
+    | field:o  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 14 |     later: maybe Option<text>
+    | field:later  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:text  punctuation:>
+ 15 | fi
+    | keyword:fi
+ 17 | kind Wrap
+    | keyword:kind  type:Wrap
+ 18 |     W(o: Option<int>)
+    | variant:W  punctuation:(  field:o  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:)
+ 19 |     Nothing
+    | variant:Nothing
+ 20 | fi
+    | keyword:fi
+ 22 | kind Pair<T>
+    | keyword:kind  type:Pair  punctuation:<  type:T  punctuation:>
+ 23 |     Both(first: Box<T>, second: T)
+    | variant:Both  punctuation:(  field:first  punctuation::  type:Box  punctuation:<  type:T  punctuation:>  punctuation:,  field:second  punctuation::  type:T  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | kind Box<T>
+    | keyword:kind  type:Box  punctuation:<  type:T  punctuation:>
+ 27 |     Held(value: T)
+    | variant:Held  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | kind Option<T: shown>
+    | keyword:kind  type:Option  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+ 31 |     Some(value: T)
+    | variant:Some  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 32 |     None
+    | variant:None
+ 33 | fi
+    | keyword:fi
+ 35 | task alike<T: same & shown>(a: Option<T>@r, b: Option<T>@r) -> bool
+    | keyword:task  task:alike  punctuation:<  type:T  punctuation::  keyword:same  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:a  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 36 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 37 | fi
+    | keyword:fi
+ 39 | task same<T: same & shown>(a: T, b: T) -> bool
+    | keyword:task  task:same  punctuation:<  type:T  punctuation::  keyword:same  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
+ 40 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 41 | fi
+    | keyword:fi
+ 43 | task pick(c: bool) -> Option<int>
+    | keyword:task  task:pick  punctuation:(  parameter:c  punctuation::  type-builtin:bool  punctuation:)  operator:->  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 44 |     <- when c Option.None else Option.None fi
+    | keyword:<-  keyword:when  parameter:c  type:Option  punctuation:.  variant:None  keyword:else  type:Option  punctuation:.  variant:None  keyword:fi
+ 45 | fi
+    | keyword:fi
+ 47 | task firstOf(c: bool) -> (Option<int>, int)
+    | keyword:task  task:firstOf  punctuation:(  parameter:c  punctuation::  type-builtin:bool  punctuation:)  operator:->  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:,  type-builtin:int  punctuation:)
+ 48 |     <- (Option.None, 1)
+    | keyword:<-  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:,  number:1  punctuation:)
+ 49 | fi
+    | keyword:fi
+ 51 | shape P
+    | keyword:shape  type:P
+ 52 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 54 |     ; Two comparisons, the second with the field of this.
+    | comment:; Two comparisons, the second with the field of this.
+ 55 |     around(a: int, b: int, c: int) -> bool
+    | method:around  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:,  parameter:c  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 56 |         bind both = (a < b, c > .x)
+    | keyword:bind  variable:both  operator:=  punctuation:(  parameter:a  operator:<  parameter:b  punctuation:,  parameter:c  operator:>  punctuation:.  field:x  punctuation:)
+ 57 |         <- both.0 and both.1
+    | keyword:<-  variable:both  punctuation:.  field:0  keyword:and  variable:both  punctuation:.  field:1
+ 58 |     fi
+    | keyword:fi
+ 59 | fi
+    | keyword:fi
+ 61 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 62 |     bind h = Holder { o: Option.Some(3), later: none }
+    | keyword:bind  variable:h  operator:=  type:Holder  punctuation:{  field:o  punctuation::  type:Option  punctuation:.  variant:Some  punctuation:(  number:3  punctuation:)  punctuation:,  field:later  punctuation::  keyword:none  punctuation:}
+ 63 |     show(valueOr(h.o, 0), " ", h.later, " ", Wrap.W(Option.None), " ", Wrap.Nothing)
+    | builtin-fn:show  punctuation:(  task:valueOr  punctuation:(  variable:h  punctuation:.  field:o  punctuation:,  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:h  punctuation:.  field:later  punctuation:,  string:" "  punctuation:,  type:Wrap  punctuation:.  variant:W  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Wrap  punctuation:.  variant:Nothing  punctuation:)
+ 64 |     show(Pair.Both(Box.Held(1), 2))
+    | builtin-fn:show  punctuation:(  type:Pair  punctuation:.  variant:Both  punctuation:(  type:Box  punctuation:.  variant:Held  punctuation:(  number:1  punctuation:)  punctuation:,  number:2  punctuation:)  punctuation:)
+ 66 |     bind a: Option<int> = Option.Some(1)
+    | keyword:bind  variable:a  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
+ 67 |     show(alike(a, Option.Some(1)), " ", alike(a, Option.None), " ", same(a, a), " ", same(Option.Some("x"), Option.Some("y")))
+    | builtin-fn:show  punctuation:(  task:alike  punctuation:(  variable:a  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:alike  punctuation:(  variable:a  punctuation:,  type:Option  punctuation:.  variant:None  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  variable:a  punctuation:,  variable:a  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  type:Option  punctuation:.  variant:Some  punctuation:(  string:"x"  punctuation:)  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  string:"y"  punctuation:)  punctuation:)  punctuation:)
+ 69 |     hold x: Option<int> = Option.Some(1)
+    | keyword:hold  variable:x  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)
+ 70 |     x = match x
+    | variable:x  operator:=  keyword:match  variable:x
+ 71 |     case Some _ = Option.None
+    | keyword:case  variant:Some  keyword:_  operator:=  type:Option  punctuation:.  variant:None
+ 72 |     case None = Option.None
+    | keyword:case  variant:None  operator:=  type:Option  punctuation:.  variant:None
+ 73 |     fi
+    | keyword:fi
+ 74 |     bind q: maybe Option<int> = when true Option.None else none fi
+    | keyword:bind  variable:q  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  keyword:when  keyword:true  type:Option  punctuation:.  variant:None  keyword:else  keyword:none  keyword:fi
+ 75 |     bind t: (Option<int>, int) = (Option.None, 1)
+    | keyword:bind  variable:t  punctuation::  punctuation:(  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:,  number:1  punctuation:)
+ 76 |     show(pick(true), " ", x, " ", q, " ", t, " ", firstOf(true))
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  keyword:true  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:x  punctuation:,  string:" "  punctuation:,  variable:q  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:,  string:" "  punctuation:,  task:firstOf  punctuation:(  keyword:true  punctuation:)  punctuation:)
+ 78 |     show(P { x: 1 }.around(1, 2, 3), " ", P { x: 5 }.around(1, 2, 3))
+    | builtin-fn:show  punctuation:(  type:P  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:.  method:around  punctuation:(  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  type:P  punctuation:{  field:x  punctuation::  number:5  punctuation:}  punctuation:.  method:around  punctuation:(  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
+ 79 | fi
+    | keyword:fi

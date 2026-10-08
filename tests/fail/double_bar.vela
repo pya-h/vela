@@ -1,0 +1,6 @@
+; error: 3:15: unexpected '||'; Vela writes 'or'
+task main()
+    when true || false
+        show(1)
+    fi
+fi

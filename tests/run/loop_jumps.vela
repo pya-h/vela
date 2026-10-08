@@ -193,4 +193,17 @@ task main()
         fi
         show(w)
     fi
+
+    ; A plan B whose last line is a when that stops or goes on in every branch.
+    bind few = [1, 2, 3]
+    each slot in 0..6
+        bind v = few[#slot] {
+            when slot == 4
+                break
+            else
+                continue
+            fi
+        }
+        show("v ", v)
+    fi
 fi

@@ -1906,6 +1906,42 @@ impl Generator {
         self.loops.push(LoopLabels { name, depth: self.regions.len(), stop, next, stopped: false, continued: false });
     }
 
+    /// Inside an open `while (1)`: the test of `cond`, which stops the loop
+    /// when it fails, and `body` where it holds, the names its patterns bind
+    /// seen there.
+    fn gen_tested_pass(&mut self, cond: &Condition, body: &Block) -> Result<()> {
+        if !cond.single() {
+            let matched = self.fresh_temp("matched");
+            self.w.line(&format!("bool {} = false;", matched));
+            self.gen_parts(cond, body, &mut |g| {
+                g.w.line(&format!("{} = true;", matched));
+                g.gen_block(body)
+            })?;
+            self.w.open(&format!("if (!{})", matched));
+            self.w.line("break;");
+            self.w.close();
+            return Ok(());
+        }
+        match &cond.pattern {
+            None => {
+                let c = self.gen_expr(&cond.value)?;
+                self.w.open(&format!("if (!{})", parenthesized(&c)));
+                self.w.line("break;");
+                self.w.close();
+                self.gen_block(body)
+            }
+            Some(pattern) => {
+                let subject = self.gen_subject(&cond.value)?;
+                let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
+                self.w.open(&format!("if (!({}))", test));
+                self.w.line("break;");
+                self.w.close();
+                self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, body)?;
+                self.gen_block(body)
+            }
+        }
+    }
+
     /// The end of a pass of the innermost loop, inside its C body after the
     /// pass's regions are freed: where a `continue` goes. A loop written out
     /// for a group's values ends several passes, each with a label of its own.
@@ -2179,6 +2215,28 @@ impl Generator {
                     self.w.close();
                 }
                 self.leave_loop();
+            }
+            StmtKind::Parted(parted) => {
+                // `{ start; while (1) { test; body; next: step; } stop: }`: the
+                // step runs after a `continue` too, and never after a `break`.
+                let name = self.loop_name.take();
+                self.w.open("");
+                for item in &parted.start {
+                    self.gen_stmt(item)?;
+                }
+                self.enter_loop(name);
+                self.w.open("while (1)");
+                match &parted.cond {
+                    Some(cond) => self.gen_tested_pass(cond, &parted.body)?,
+                    None => self.gen_block(&parted.body)?,
+                }
+                self.end_pass();
+                for item in &parted.step {
+                    self.gen_stmt(item)?;
+                }
+                self.w.close();
+                self.leave_loop();
+                self.w.close();
             }
             StmtKind::Loop(cond, body) if !cond.single() => {
                 // `loop m is {x} and x > 0`: each part tested inside the one
@@ -4686,6 +4744,12 @@ impl UsedTypes {
                     cond.parts().for_each(|part| self.expr(&part.value));
                     self.block(body);
                 }
+                StmtKind::Parted(parted) => {
+                    self.block(&parted.start);
+                    parted.cond.iter().flat_map(Condition::parts).for_each(|part| self.expr(&part.value));
+                    self.block(&parted.step);
+                    self.block(&parted.body);
+                }
                 StmtKind::Each(_, _, range, body) => {
                     self.expr(range);
                     self.block(body);
@@ -4903,6 +4967,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         }
         StmtKind::When(arms, else_b) => arms.iter().any(|arm| arm.cond.parts().any(|part| expr(&part.value)) || body(&arm.body)) || else_b.as_ref().is_some_and(body),
         StmtKind::Loop(cond, b) => cond.parts().any(|part| expr(&part.value)) || body(b),
+        StmtKind::Parted(parted) => body(&parted.start) || parted.cond.iter().flat_map(Condition::parts).any(|part| expr(&part.value)) || body(&parted.step) || body(&parted.body),
         StmtKind::Block(b) => body(b),
         StmtKind::Each(_, _, range, b) => expr(range) || body(b),
         StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),

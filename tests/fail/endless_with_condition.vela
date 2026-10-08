@@ -1,0 +1,7 @@
+; error: 4:13: an 'endless' loop takes nothing on its line: it has no condition, and its statements start on the next one
+task main()
+    hold n = 0
+    endless n < 3
+        n++
+    fi
+fi

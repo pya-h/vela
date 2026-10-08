@@ -122,7 +122,8 @@ const ITEMS = ["task", "shape", "kind"];
 /**
  * The block-opening word a line has, if any: its first word, when that opens a
  * block, or else a `match` or a `when` used as a value further along it
- * (`bind area = match s`, `show(when ok`), which opens a block just the same.
+ * (`bind area = match s`, `show(when ok`), which opens a block just the same,
+ * or a loop's word after the loop's name (`outer => each x in xs`).
  * A `when` right after an `else` continues that `when` and opens nothing, since
  * one `fi` closes the whole chain. Nor does a line that closes every block it
  * opens (`when x > 1 show(x) fi`, which Vela allows on one line): what follows
@@ -136,6 +137,9 @@ export function opener(line: string, words: BlockWords): string | null {
   let at = -1;
   if (first !== null && words.blockOpeners.includes(first)) {
     at = found.indexOf(first);
+  } else if (/^\s*[A-Za-z_][A-Za-z0-9_]*\s*=>\s*[A-Za-z_]/.test(code(line)) && opens(1)) {
+    // `outer => each …`: a loop, named before its word.
+    at = 1;
   } else {
     for (let i = 1; i < found.length; i++) {
       if ((word(i) === "match" || word(i) === "when") && opens(i)) {

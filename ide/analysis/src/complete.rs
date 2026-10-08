@@ -72,7 +72,7 @@ const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
-const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "block", "match", "region"];
+const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "endless", "each", "block", "match", "region"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail", "match", "when"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
@@ -121,6 +121,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (items, word_start, byte);
     }
 
+    // `outer => `: only a loop is named so.
+    if let (Some(arrow), Some(Token::FatArrow)) = (prev, prev_token)
+        && arrow.checked_sub(1).is_some_and(|q| k.ident(q).is_some() && k.line_start(q) == q)
+    {
+        let items = vec![
+            keyword("loop"),
+            keyword("each"),
+            snippet("loop", "repeat while a condition holds", "loop ${condition}\n\t${}\nfi"),
+            snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
+        ];
+        return (items, word_start, byte);
+    }
+
     // After a module's name and `.`: what the module declares.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(module) = dot.checked_sub(1).and_then(|q| k.module_at(q))
@@ -159,8 +172,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     }
 
     // After a kind's name and `.`: its variants, as values or in a pattern.
+    // (`Option<int>.`: the kind is named before the types it is given.)
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
-        && let Some(kind) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Kind))
+        && let Some(kind) = dot.checked_sub(1).map(|q| before_types(&k, q)).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Kind))
     {
         let line = k.line_start(dot);
         let in_pattern = in_pattern(&k, line, dot);
@@ -884,28 +898,7 @@ fn opens_types(k: &Knowledge, p: usize) -> bool {
     {
         return true;
     }
-    let mut depth = 0usize;
-    // Parentheses pair up inside the types, and no `>` inside them closes
-    // anything, as the parser has it (`(i < n), m > (k)` compares).
-    let mut grouped = 0usize;
-    for q in p + 1.. {
-        match k.token(q) {
-            Some(Token::Gt) if grouped > 0 && depth == 0 => return false,
-            Some(Token::LParen) => grouped += 1,
-            Some(Token::RParen) if grouped == 0 => return false,
-            Some(Token::RParen) => grouped -= 1,
-            // A call follows the types a task is given, a literal the types a
-            // shape is given, and a variant the types a kind is given.
-            Some(Token::Gt) if depth == 0 => {
-                return matches!(k.token(q + 1), Some(Token::LParen | Token::LBrace)) || (k.token(q + 1) == Some(&Token::Dot) && k.ident(q + 2).is_some());
-            }
-            Some(Token::Lt) => depth += 1,
-            Some(Token::Gt) => depth -= 1,
-            Some(token) if token.writes_type() => {}
-            _ => return false,
-        }
-    }
-    false
+    k.types_close(p).is_some()
 }
 
 /// The `(` of a tuple type that position `q` is inside, on its line.
@@ -1099,6 +1092,11 @@ enum Block {
     Match,
     /// A `loop` or an `each`, which `break` and `continue` stop or go on with.
     Loop,
+    /// What an `each` goes through, on its line, which is outside its loop.
+    EachSource,
+    /// A lambda, `(x: int) -> int … fi`, a task of its own inside the code
+    /// around it, so the loops around it are none of its own.
+    Lambda,
     Other,
     /// A plan B's block, opened by a `{` ending its line.
     PlanB,
@@ -1158,38 +1156,54 @@ fn method_header(k: &Knowledge, q: usize) -> bool {
 
 /// The blocks open at `byte`, outermost first.
 fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
-    let mut blocks = Vec::new();
+    open_blocks_at(k, byte).into_iter().map(|(block, _)| block).collect()
+}
+
+/// `open_blocks`, each with the position of the token that opens it.
+fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
+    let mut blocks: Vec<(Block, usize)> = Vec::new();
     // Braces opened and not yet closed on the current line.
     let mut inline_braces = 0usize;
     let end = k.last_before(byte).map_or(0, |q| q + 1);
     for q in 0..end {
+        let last = blocks.last().map(|(block, _)| *block);
         match k.token(q) {
+            // An `each`'s line ends what it goes through, and its loop begins.
+            Some(Token::Newline) if last == Some(Block::EachSource) => {
+                inline_braces = 0;
+                if let Some(open) = blocks.last_mut() {
+                    open.0 = Block::Loop;
+                }
+            }
             Some(Token::Newline) => inline_braces = 0,
-            Some(Token::LBrace) if opens_block_of_lines(k, q) => blocks.push(Block::PlanB),
+            Some(Token::LBrace) if opens_block_of_lines(k, q) => blocks.push((Block::PlanB, q)),
             Some(Token::LBrace) => inline_braces += 1,
             Some(Token::RBrace) if inline_braces > 0 => inline_braces -= 1,
             // Closing a plan B also closes any block left open inside it.
             Some(Token::RBrace) => {
-                if let Some(at) = blocks.iter().rposition(|b| *b == Block::PlanB) {
+                if let Some(at) = blocks.iter().rposition(|(b, _)| *b == Block::PlanB) {
                     blocks.truncate(at);
                 }
             }
-            Some(Token::Fi) if blocks.last() == Some(&Block::PlanB) => {}
+            Some(Token::Fi) if last == Some(Block::PlanB) => {}
             Some(Token::Task | Token::Shape | Token::Kind) => {
                 blocks.clear();
-                blocks.push(match k.token(q) {
+                let block = match k.token(q) {
                     Some(Token::Task) => Block::Task,
                     Some(Token::Shape) => Block::Shape,
                     _ => Block::Kind,
-                });
+                };
+                blocks.push((block, q));
             }
             // A method has no word of its own: it opens where the scan
             // declares its name.
-            Some(Token::Ident(_)) if k.declares_method(q) => blocks.push(Block::Method),
-            Some(Token::When) => blocks.push(Block::When),
-            Some(Token::Match) => blocks.push(Block::Match),
-            Some(Token::Loop | Token::Each) => blocks.push(Block::Loop),
-            Some(Token::Block) => blocks.push(Block::Other),
+            Some(Token::Ident(_)) if k.declares_method(q) => blocks.push((Block::Method, q)),
+            Some(Token::When) => blocks.push((Block::When, q)),
+            Some(Token::Match) => blocks.push((Block::Match, q)),
+            Some(Token::Loop | Token::Endless) => blocks.push((Block::Loop, q)),
+            Some(Token::Each) => blocks.push((Block::EachSource, q)),
+            Some(Token::Block) => blocks.push((Block::Other, q)),
+            Some(Token::LParen) if k.starts_lambda(q) => blocks.push((Block::Lambda, q)),
             Some(Token::Fi) => {
                 blocks.pop();
             }
@@ -1393,7 +1407,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
     let mut depth = 0usize;
     for q in match_q + 1..k.len() {
         match k.token(q) {
-            Some(Token::When | Token::Loop | Token::Each | Token::Block | Token::Match) => depth += 1,
+            Some(Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block | Token::Match) => depth += 1,
             Some(Token::Fi) if depth == 0 => break,
             Some(Token::Fi) => depth -= 1,
             Some(Token::Case) if depth == 0 && q != case => {
@@ -1653,7 +1667,7 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
 /// The types the declaration around the cursor takes (`<T: ordered>`), which
 /// are types inside it.
 fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
-    let declares = |kind: SymbolKind| matches!(kind, SymbolKind::Task | SymbolKind::Shape);
+    let declares = |kind: SymbolKind| matches!(kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind);
     let Some((item, _)) = k.symbols().iter().enumerate().find(|(_, s)| declares(s.kind) && s.range.contains(&at)) else {
         return Vec::new();
     };
@@ -1669,6 +1683,27 @@ fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
             boost: LOCAL,
         })
         .collect()
+}
+
+/// The position of the name the types closed by the `>` at `q` are given to,
+/// as `Option` in `Option<int>`; `q` itself when it is no `>`.
+fn before_types(k: &Knowledge, q: usize) -> usize {
+    if k.token(q) != Some(&Token::Gt) {
+        return q;
+    }
+    let mut depth = 0usize;
+    let mut p = q;
+    loop {
+        match k.token(p) {
+            Some(Token::Gt) => depth += 1,
+            Some(Token::Lt) if depth == 1 => return p.checked_sub(1).unwrap_or(q),
+            Some(Token::Lt) => depth -= 1,
+            Some(token) if token.writes_type() || matches!(token, Token::LParen | Token::RParen) => {}
+            _ => return q,
+        }
+        let Some(back) = p.checked_sub(1) else { return q };
+        p = back;
+    }
 }
 
 /// The words a type a declaration takes can be asked to allow.
@@ -1923,7 +1958,7 @@ fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> 
     loop {
         match k.token(q) {
             Some(Token::Fi) => depth += 1,
-            Some(token @ (Token::When | Token::Loop | Token::Each | Token::Block | Token::Match)) => {
+            Some(token @ (Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block | Token::Match)) => {
                 if depth == 0 {
                     return Some(token);
                 }
@@ -1944,7 +1979,8 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         return vec![keyword("case")];
     }
     let mut items: Vec<CompletionItem> = STATEMENT_KEYWORDS.iter().map(|word| keyword(word)).collect();
-    if blocks.contains(&Block::Loop) {
+    // A lambda is a task of its own, inside none of the loops around it.
+    if blocks.iter().rev().take_while(|block| **block != Block::Lambda).any(|block| *block == Block::Loop) {
         items.extend([keyword("break"), keyword("continue")]);
     }
     // Inside a plan B, `}` closes the block, not `fi`.
@@ -2112,7 +2148,9 @@ fn visible_locals<'k>(k: &'k Knowledge, byte: usize) -> impl Iterator<Item = (us
 /// The names of the loops around `byte`, which `break` and `continue` take
 /// (`outer => each …`), innermost first.
 fn loop_name_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
-    let names: Vec<_> = visible_locals(k, byte).filter(|(_, s)| s.intro == Some(LOOP_NAME)).collect();
+    // A lambda's own loops only: the ones around it are none of its own.
+    let lambda = open_blocks_at(k, byte).iter().rev().find(|(block, _)| *block == Block::Lambda).map_or(0, |(_, q)| k.range(*q).start);
+    let names: Vec<_> = visible_locals(k, byte).filter(|(_, s)| s.intro == Some(LOOP_NAME) && s.range.start >= lambda).collect();
     names
         .into_iter()
         .rev()

@@ -1,0 +1,10 @@
+; error: 9:10: can't tell which type 'T' is for this 'Option', since its values don't say and nothing this value goes into names one; write it, as in 'Option<int>.None'
+; Two variants that tell no types tell none to each other.
+kind Option<T>
+    Some(value: T)
+    None
+fi
+
+task main()
+    show(Option.None == Option.None)
+fi

@@ -90,8 +90,8 @@
     | comment:; Every line left, each in a region freed on its pass.
  54 |     hold count = 0
     | keyword:hold  variable:count  operator:=  number:0
- 55 |     loop true
-    | keyword:loop  keyword:true
+ 55 |     endless
+    | keyword:endless
  56 |         region line_memory
     | keyword:region  region:line_memory
  57 |         bind line = scan("") at line_memory { "" }

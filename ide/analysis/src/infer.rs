@@ -73,6 +73,43 @@ impl<'a> Knowledge<'a> {
         self.lexed(q).map_or(self.source.len()..self.source.len(), |t| t.range.clone())
     }
 
+    /// The `>` closing the types a use gives, when the `<` at `p` opens
+    /// them, as the parser reads it: a call follows the types a task is
+    /// given, a literal the types a shape is given, and a variant, its `.`
+    /// touching the `>`, the types a kind is given.
+    pub fn types_close(&self, p: usize) -> Option<usize> {
+        if self.token(p) != Some(&Token::Lt) {
+            return None;
+        }
+        let mut depth = 0usize;
+        // Parentheses pair up inside the types, and no `>` inside them closes
+        // anything, as the parser has it (`(i < n), m > (k)` compares).
+        let mut grouped = 0usize;
+        for q in p + 1.. {
+            match self.token(q) {
+                Some(Token::Gt) if grouped > 0 && depth == 0 => return None,
+                Some(Token::LParen) => grouped += 1,
+                Some(Token::RParen) if grouped == 0 => return None,
+                Some(Token::RParen) => grouped -= 1,
+                Some(Token::Gt) if depth == 0 => {
+                    let touching = self.range(q).end == self.range(q + 1).start;
+                    let opens = matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace)) || (touching && self.token(q + 1) == Some(&Token::Dot) && self.ident(q + 2).is_some());
+                    return opens.then_some(q);
+                }
+                Some(Token::Lt) => depth += 1,
+                Some(Token::Gt) => depth -= 1,
+                Some(token) if token.writes_type() => {}
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    /// Whether the `(` at `q` starts a lambda (see `Scan::lambdas`).
+    pub fn starts_lambda(&self, q: usize) -> bool {
+        self.lexed(q).is_some_and(|t| self.scan.lambdas.contains(&t.range.start))
+    }
+
     fn start(&self, q: usize) -> Option<Span> {
         self.lexed(q).map(|t| t.start)
     }
@@ -241,7 +278,10 @@ impl<'a> Knowledge<'a> {
         let name = self.at_byte(symbol.name_range.start)?;
         let (path, names, equals) = self.binding_place(name)?;
         let (&index, inside) = path.split_first()?;
-        let end = self.line_end(name).checked_sub(1)?;
+        let end = match self.loop_item(name) {
+            Some((_, last)) => last.checked_sub(1)?,
+            None => self.line_end(name).checked_sub(1)?,
+        };
         if end <= equals {
             return None;
         }
@@ -287,10 +327,18 @@ impl<'a> Knowledge<'a> {
     fn binding_place(&self, name: usize) -> Option<(Vec<usize>, usize, usize)> {
         let end = self.line_end(name);
         let equals = (name..end).find(|&q| self.token(q) == Some(&Token::Assign))?;
+        // In a loop's start, the names of its item only.
+        let start = self.loop_item(name).map_or(self.line_start(name), |(first, _)| first);
         let mut path = vec![0usize];
         let mut names = 1;
-        for q in self.line_start(name)..equals {
+        // Before the `=`, a `<` only opens the types a type is given, whose
+        // commas part no names: `bind e: Either<int, text> = …`.
+        let mut angles = 0usize;
+        for q in start..equals {
             match self.token(q) {
+                Some(Token::Lt) => angles += 1,
+                Some(Token::Gt) => angles = angles.saturating_sub(1),
+                _ if angles > 0 => {}
                 Some(Token::LParen) if q < name => path.push(0),
                 Some(Token::RParen) if path.len() > 1 && q < name => {
                     path.pop();
@@ -305,9 +353,10 @@ impl<'a> Knowledge<'a> {
         }
         // Names after `name` at the top level count too, and the parentheses after it don't matter.
         let mut depth = 0usize;
-        for q in self.line_start(name)..equals {
+        for q in start..equals {
             match self.token(q) {
-                Some(Token::LParen) => depth += 1,
+                Some(Token::LParen | Token::Lt) => depth += 1,
+                Some(Token::Gt) => depth = depth.saturating_sub(1),
                 Some(Token::RParen) => depth = depth.saturating_sub(1),
                 Some(Token::Comma) if depth == 0 => names += 1,
                 _ => {}
@@ -316,14 +365,88 @@ impl<'a> Knowledge<'a> {
         Some((path, names, equals))
     }
 
+    /// Where `q` is in a loop's start, `loop hold i = 0, j = 9 || …`: the
+    /// first position of its item, and the one of the `,` or `||` ending it,
+    /// as the parser parts them (see `vela::parser`'s `loop_items`).
+    fn loop_item(&self, q: usize) -> Option<(usize, usize)> {
+        let line = self.line_start(q);
+        let first = (line..q).find(|&p| matches!(self.token(p), Some(Token::Loop)))? + 1;
+        let bar = (first..self.line_end(q)).find(|&p| self.token(p) == Some(&Token::Parts))?;
+        if q >= bar {
+            return None;
+        }
+        let opens = |token: Option<&Token>| matches!(token, Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block));
+        let closes = |token: Option<&Token>| matches!(token, Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi));
+        let sets = |token: Option<&Token>| matches!(token, Some(Token::Assign)) || token.is_some_and(|token| vela::parser::step_operator(token).is_some());
+        // Whether an item starts at `p`: `hold` or `bind`, or a place set
+        // before the next `,`.
+        let starts = |p: usize| {
+            if matches!(self.token(p), Some(Token::Hold | Token::Bind)) {
+                return true;
+            }
+            let mut depth = 0usize;
+            for r in p..bar {
+                match self.token(r) {
+                    token if opens(token) => depth += 1,
+                    token if closes(token) => depth = depth.saturating_sub(1),
+                    _ if depth > 0 => {}
+                    Some(Token::Comma) => return false,
+                    token if sets(token) => return true,
+                    _ => {}
+                }
+            }
+            false
+        };
+        let places = |from: usize, to: usize| {
+            from < to && (from..to).all(|r| matches!(self.token(r), Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma)) || (r == from && matches!(self.token(r), Some(Token::Hold | Token::Bind))))
+        };
+        let (mut start, mut depth, mut names, mut values) = (first, 0usize, 1usize, None::<usize>);
+        for p in first..bar {
+            let token = self.token(p);
+            match token {
+                _ if opens(token) => depth += 1,
+                _ if closes(token) => depth = depth.saturating_sub(1),
+                _ if depth > 0 => {}
+                Some(Token::Assign) if values.is_none() => values = Some(1),
+                Some(Token::Comma) => {
+                    let parts = match values {
+                        None if places(start, p) => {
+                            names += 1;
+                            false
+                        }
+                        None => true,
+                        Some(given) => given >= names || starts(p + 1),
+                    };
+                    if parts {
+                        if (start..p).contains(&q) {
+                            return Some((start, p));
+                        }
+                        (start, names, values) = (p + 1, 1, None);
+                    } else if let Some(given) = values.as_mut() {
+                        *given += 1;
+                    }
+                }
+                _ if values.is_none() && sets(token) => values = Some(names),
+                _ => {}
+            }
+        }
+        Some((start, bar))
+    }
+
     /// The first and last position of each value between `first` and `last`,
     /// which commas outside brackets separate.
     fn value_list(&self, first: usize, last: usize) -> Vec<(usize, usize)> {
         let mut values = Vec::new();
         let mut start = first;
         let mut brackets = 0usize;
+        // The types a use gives, `Either<int, text>.Left(1)`, part no values.
+        let mut types_end = None;
         for p in first..=last {
+            if types_end.is_some_and(|end| p <= end) {
+                continue;
+            }
             match self.token(p) {
+                Some(Token::Lt) => types_end = self.types_close(p),
                 Some(Token::LParen | Token::LBrace | Token::LBracket) => brackets += 1,
                 Some(Token::RParen | Token::RBrace | Token::RBracket) => brackets = brackets.saturating_sub(1),
                 Some(Token::Comma) if brackets == 0 => {
@@ -540,7 +663,16 @@ impl<'a> Knowledge<'a> {
                 let named = self.symbol_at(tag_at).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant));
                 let variant = of_subject.or(named).or_else(|| self.global(tag, SymbolKind::Variant))?;
                 let (_, field) = self.children(variant).nth(index)?;
-                let ty = parse_type(&field.detail)?;
+                // A kind given types: its payload with those types in place of
+                // the names it takes, `case Left q` of an `Either<int, text>`.
+                let detail = match (outcome(), self.symbol(variant).and_then(|v| v.parent)) {
+                    (Some(Type::Applied(applied)), Some(kind)) => {
+                        let params: Vec<String> = self.children(kind).filter(|(_, c)| c.kind == SymbolKind::TypeParam).map(|(_, c)| c.name.clone()).collect();
+                        given_in(&field.detail, &params, &applied.types)
+                    }
+                    _ => field.detail.clone(),
+                };
+                let ty = parse_type(&detail)?;
                 // A payload's pointers are in the region of the value matched.
                 Some(match outcome() {
                     Some(Type::Named(_, Some(region))) => self.in_region(&ty, &region),
@@ -574,7 +706,7 @@ impl<'a> Knowledge<'a> {
         for q in (0..case).rev() {
             match self.token(q) {
                 Some(Token::Fi) => depth += 1,
-                Some(Token::When | Token::Loop | Token::Each | Token::Block) if depth > 0 => depth -= 1,
+                Some(Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block) if depth > 0 => depth -= 1,
                 Some(Token::Match) if depth == 0 => return Some(q),
                 Some(Token::Match) => depth -= 1,
                 Some(Token::Task | Token::Shape | Token::Kind) => return None,
@@ -619,7 +751,7 @@ impl<'a> Knowledge<'a> {
                 }
                 // `Shape.Circle`: a kind's variant.
                 if let Some(variant) = self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant)) {
-                    return self.variant_value(variant, None, depth);
+                    return self.written_kind_type(q).or_else(|| self.variant_value(variant, None, depth));
                 }
                 // `.this` and `.x` inside a method: the value it is called on,
                 // which lives in `@this`, and a field of it.
@@ -834,7 +966,7 @@ impl<'a> Knowledge<'a> {
                     while self.token_before(start) == Some(&Token::Dot) && start >= 2 && self.ident(start - 2).is_some() {
                         start -= 2;
                     }
-                    return exact(start).or_else(|| self.variant_value(variant, Some((open, q)), depth));
+                    return exact(start).or_else(|| self.written_kind_type(p)).or_else(|| self.variant_value(variant, Some((open, q)), depth));
                 }
                 // `f(x)`, where `f` holds a task: what that task sends.
                 if let Some(id) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| matches!(s.kind, SymbolKind::Parameter | SymbolKind::Variable)))
@@ -948,9 +1080,19 @@ impl<'a> Knowledge<'a> {
         let mut expect_operand = true;
         // The operands raised to the power of the next one, by their place.
         let mut bases = Vec::new();
+        // The `>` closing the types a use gives, `Option<int>.None`, which
+        // compare nothing.
+        let mut types_end = None;
         for p in first..=last {
+            if types_end.is_some_and(|end| p <= end) {
+                continue;
+            }
             let token = self.token(p)?;
             match token {
+                Token::Lt if brackets == 0 && self.types_close(p).is_some() => {
+                    types_end = self.types_close(p);
+                    continue;
+                }
                 Token::LParen | Token::LBrace | Token::LBracket => brackets += 1,
                 Token::RParen | Token::RBrace | Token::RBracket => brackets = brackets.saturating_sub(1),
                 _ if brackets > 0 => {}
@@ -1084,8 +1226,14 @@ impl<'a> Knowledge<'a> {
         let mut args = Vec::new();
         let mut first = open + 1;
         let mut brackets = 0usize;
+        // The types a use gives, `f(Either<int, text>.Left(1))`, part no values.
+        let mut types_end = None;
         for p in open + 1..close {
+            if types_end.is_some_and(|end| p <= end) {
+                continue;
+            }
             match self.token(p) {
+                Some(Token::Lt) => types_end = self.types_close(p),
                 Some(Token::LParen | Token::LBrace | Token::LBracket) => brackets += 1,
                 Some(Token::RParen | Token::RBrace | Token::RBracket) => brackets = brackets.saturating_sub(1),
                 Some(Token::Comma) if brackets == 0 => {
@@ -1264,6 +1412,33 @@ impl<'a> Knowledge<'a> {
     }
 
     /// The kind a variant belongs to.
+    /// The kind a variant at position `q` is of, as the types written before
+    /// it give it: `Option<int>.None` is an `Option<int>`.
+    fn written_kind_type(&self, q: usize) -> Option<Type> {
+        let gt = q.checked_sub(2).filter(|_| self.token_before(q) == Some(&Token::Dot))?;
+        if self.token(gt) != Some(&Token::Gt) {
+            return None;
+        }
+        let mut depth = 0usize;
+        let mut p = gt;
+        let lt = loop {
+            match self.token(p)? {
+                Token::Gt => depth += 1,
+                Token::Lt if depth == 1 => break p,
+                Token::Lt => depth -= 1,
+                _ => {}
+            }
+            p = p.checked_sub(1)?;
+        };
+        let name = lt.checked_sub(1).filter(|&n| self.ident(n).is_some())?;
+        // `m.Option<int>.None`: the module's name too.
+        let start = self.qualified_at(name).map_or(name, |(_, start)| start);
+        match parse_type(self.source.get(self.range(start).start..self.range(gt).end)?)? {
+            Type::Applied(applied) => Some(Type::Applied(applied)),
+            _ => None,
+        }
+    }
+
     pub fn variant_kind(&self, variant: usize) -> Option<String> {
         let kind = self.symbol(variant)?.parent?;
         Some(self.symbol(kind)?.name.clone())
@@ -1375,6 +1550,30 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
 /// A type written in source, such as `int`, `^Point@r`, `maybe ^Node@r`,
 /// `region`, `[int#4]`, `[^Node]@r`, or `int ~ ParseError`. Written regions
 /// are kept as written.
+/// The type written `text`, with each of the names `params` a declaration
+/// takes written as the type `types` gives it in the same place.
+fn given_in(text: &str, params: &[String], types: &[Type]) -> String {
+    let mut out = String::new();
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        match params.iter().position(|param| param == word).and_then(|i| types.get(i)) {
+            Some(ty) => out.push_str(&ty.to_string()),
+            None => out.push_str(word),
+        }
+        word.clear();
+    };
+    for c in text.chars() {
+        if c.is_alphanumeric() || c == '_' {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
 pub(crate) fn parse_type(text: &str) -> Option<Type> {
     parse_type_within(text, 0)
 }

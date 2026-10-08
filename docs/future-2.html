@@ -891,7 +891,7 @@ show(a == b)   ; true, generated automatically</pre>
           A channel can only carry <code>own</code> values. After sending, the sender can no longer use the value; the receiver becomes the sole owner.
         </p>
         <pre>task worker(input: Chan[own Job], output: Chan[own Result])
-    loop true
+    endless
         bind job = recv(input)
         bind result = process(job)
         send(output, result)

@@ -1,7 +1,7 @@
 ; error: 6:21: expected type text, got text@pass; this text is in region 'pass', and text here must last as long as the program, as a literal does
 task main()
     hold kept = "x"
-    loop true
+    endless
         region pass
         kept = kept + "y" at pass
         <-

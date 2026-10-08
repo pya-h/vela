@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { type BlockWords, closingLine, firstWord, indentWidth, indentation, methodLines, opener } from "./blocks";
 
 const WORDS: BlockWords = {
-  blockOpeners: ["task", "shape", "kind", "when", "loop", "each", "match"],
+  blockOpeners: ["task", "shape", "kind", "when", "loop", "endless", "each", "match"],
   blockModifiers: ["priv"],
   branchKeywords: ["else", "case"],
   blockCloser: "fi",
@@ -67,6 +67,19 @@ describe("indentation", () => {
     const lines = ["task main()", "    bind area = match s", "    case Circle r = 1.0", "    case Rect w h = 2.0", "    fi", "    show(area)", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(6);
+  });
+
+  it("reads a loop named before its word as opening its block", () => {
+    expect(opener("    outer => each a in 0..4", WORDS)).toBe("each");
+    expect(opener("    inner => loop n < 5", WORDS)).toBe("loop");
+    expect(opener("    outer => endless", WORDS)).toBe("endless");
+    expect(opener("    loop hold i = 0 || i < 9 || i++", WORDS)).toBe("loop");
+    expect(indentOfLast("task main()\n    endless\n")).toBe(8);
+    expect(opener("include std/text => t", WORDS)).toBeNull();
+    expect(indentOfLast("task main()\n    outer => each a in 0..4\n")).toBe(8);
+    const lines = ["task main()", "    outer => each a in 0..4", "        show(a)", "    fi", "fi"];
+    expect(closingLine(lines, lines.length, 1, WORDS)).toBe(3);
+    expect(closingLine(lines, lines.length, 0, WORDS)).toBe(4);
   });
 
   it("reads a block written whole on one line as opening nothing", () => {

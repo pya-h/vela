@@ -1,0 +1,16 @@
+; error: 9:19: unknown kind 'a'; if 'a < …, … >.x' compares, put the comparison before the ',' in parentheses, as in '(a < …), … >.x'
+; A '.' touching the '>' reads as a variant after the types its kind is given.
+shape P
+    x: int
+
+    t(a: int, b: int, c: int) -> bool
+        ; Two comparisons, the second with the field of this.
+        ; With a space before '.x' they read as comparisons.
+        bind t = (a < b, c >.x)
+        <- t.0
+    fi
+fi
+
+task main()
+    show(P { x: 1 }.t(1, 2, 3))
+fi

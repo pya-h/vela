@@ -3,6 +3,12 @@ use crate::error::{Error, Result};
 use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
 /// The mistake of a macro written inside a task, shape, or kind.
+/// A loop's start, condition and step, each the first and the one after the
+/// last position of its items (see `Parser::loop_parts`).
+type LoopParts = Vec<Vec<(usize, usize)>>;
+
+/// The error for `||` where it parts no loop's parts.
+const PARTS_AS_OR: &str = "unexpected '||'; Vela writes 'or'";
 const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line";
 
 /// How deeply code may nest: parentheses, operators in a row, unary
@@ -2049,6 +2055,7 @@ impl Parser {
             Token::Hold => self.parse_binding(false),
             Token::When => self.parse_when(),
             Token::Loop => self.parse_loop(),
+            Token::Endless => self.parse_endless(),
             Token::Block => self.parse_plain_block(),
             Token::Each => self.parse_each(),
             Token::Break | Token::Continue => self.parse_jump(),
@@ -2261,6 +2268,13 @@ impl Parser {
         self.advance(); // bind / hold
         let reference = self.match_reference(word, at)?;
         let span = self.peek_span();
+        self.parse_binding_names(immutable, reference, span)
+    }
+
+    /// A binding after its word: its names, `=`, and its values. A loop's
+    /// start reads the ones after the first this way, which its word covers.
+    fn parse_binding_names(&mut self, immutable: bool, reference: bool, span: Span) -> Result<Stmt> {
+        let word = if immutable { "bind" } else { "hold" };
         let mut names = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
             if reference {
@@ -2336,10 +2350,19 @@ impl Parser {
     fn parse_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance(); // loop
+        if let Some(parts) = self.loop_parts()? {
+            return self.parse_parted_loop(span, parts);
+        }
         // A `when` is a value too, so `loop when x < 3` would read as a loop
         // whose condition is a whole `when`, taking the loop's own `fi` with it.
         if self.check(Token::When) {
             return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
+        }
+        if matches!(self.peek(), Token::Hold | Token::Bind) {
+            return Err(Error::at(
+                self.peek_span(),
+                "a loop declares names of its own in its start, which '||' ends before its condition, as in 'loop hold i = 0 || i < 10 || i++'",
+            ));
         }
         let cond = self.parse_condition()?;
         self.skip_newlines();
@@ -2375,17 +2398,246 @@ impl Parser {
     /// `outer => loop …` or `outer => each …`: a loop and its name, which a
     /// `break` or a `continue` in a loop inside it gives to stop it or go on
     /// with it.
+    /// `endless`, then its statements from the next line, closed by `fi`: a
+    /// loop that never ends by itself, `loop || ||` said in a word.
+    fn parse_endless(&mut self) -> Result<Stmt> {
+        let span = self.peek_span();
+        self.advance(); // endless
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(Error::at(
+                self.peek_span(),
+                "an 'endless' loop takes nothing on its line: it has no condition, and its statements start on the next one",
+            ));
+        }
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        self.expect_fi("endless", span)?;
+        let parted = PartedLoop { start: Vec::new(), cond: None, step: Vec::new(), body, endless: true };
+        Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
+    }
+
+    /// After `loop`, where its line holds `||` outside brackets: the parts it
+    /// parts, each the positions of its items, from first to the one after
+    /// the last. The `||`s, and the `,`s parting items, are made line ends,
+    /// so each item is read as a statement on a line of its own.
+    fn loop_parts(&mut self) -> Result<Option<LoopParts>> {
+        let mut depth = 0usize;
+        let mut bars = Vec::new();
+        let mut end = self.pos;
+        while let Some(token) = self.tokens.get(end) {
+            match token {
+                Token::Newline | Token::Eof => break,
+                Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless => depth += 1,
+                Token::RParen | Token::RBracket | Token::RBrace | Token::Fi => depth = depth.saturating_sub(1),
+                Token::Parts if depth == 0 => bars.push(end),
+                _ => {}
+            }
+            end += 1;
+        }
+        if bars.is_empty() {
+            return Ok(None);
+        }
+        if let Some(&fourth) = bars.get(2) {
+            return Err(Error::at(
+                self.spans.get(fourth).copied().unwrap_or_default(),
+                "a loop has three parts, its start, its condition and its step, parted by two '||'s; for either of two conditions, Vela writes 'or'",
+            ));
+        }
+        let mut bounds = vec![self.pos];
+        bounds.extend(bars.iter().map(|&bar| bar + 1));
+        let mut ends = bars.clone();
+        ends.push(end);
+        let mut parts = Vec::new();
+        for (i, (&first, &last)) in bounds.iter().zip(&ends).enumerate() {
+            // The condition is one value, or none.
+            let items = if i == 1 { if first < last { vec![(first, last)] } else { Vec::new() } } else { self.loop_items(first, last) };
+            parts.push(items);
+        }
+        for p in bars.into_iter().chain(parts.iter().flatten().map(|&(_, last)| last)) {
+            if let Some(token) = self.tokens.get_mut(p)
+                && matches!(token, Token::Parts | Token::Comma)
+            {
+                *token = Token::Newline;
+            }
+        }
+        Ok(Some(parts))
+    }
+
+    /// The items of a loop's start or step from `first` to the one before
+    /// `last`, parted by `,`s. A `,` parts two items only where the next one
+    /// starts, so `a, b = b, a` and `hold q, r = divmod(a, b)` are one item
+    /// each: before an item's `=`, a `,` follows a place it sets, and after
+    /// it, one of the values for those places, until each has one.
+    fn loop_items(&self, first: usize, last: usize) -> Vec<(usize, usize)> {
+        let mut items = Vec::new();
+        let mut start = first;
+        let mut depth = 0usize;
+        let mut places = 1usize;
+        let mut values: Option<usize> = None;
+        let mut p = first;
+        while p < last {
+            match self.tokens.get(p) {
+                Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block | Token::Loop | Token::Each) => depth += 1,
+                Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi) => depth = depth.saturating_sub(1),
+                _ if depth > 0 => {}
+                Some(Token::Assign) if values.is_none() => values = Some(1),
+                Some(token) if values.is_none() && step_operator(token).is_some() => {
+                    values = Some(if matches!(token, Token::Increment | Token::Decrement) { places } else { 1 });
+                }
+                Some(Token::Comma) => {
+                    let parts = match values {
+                        // `a, b = …`: another place, or the end of a statement with none.
+                        None if self.sets_places(start, p) => {
+                            places += 1;
+                            false
+                        }
+                        None => true,
+                        Some(given) => given >= places || self.starts_loop_item(p + 1, last),
+                    };
+                    if parts {
+                        items.push((start, p));
+                        start = p + 1;
+                        places = 1;
+                        values = None;
+                    } else if let Some(given) = values.as_mut() {
+                        *given += 1;
+                    }
+                }
+                _ => {}
+            }
+            p += 1;
+        }
+        if start < last || !items.is_empty() {
+            items.push((start, last));
+        }
+        items
+    }
+
+    /// Whether the tokens from `first` to the one before `last` are places an
+    /// assignment or a declaration sets, as `hold q` and `t.x` are, rather
+    /// than a statement of its own, as `advance(&it)` is.
+    fn sets_places(&self, first: usize, last: usize) -> bool {
+        let mut depth = 0usize;
+        first < last
+            && (first..last).all(|p| match self.tokens.get(p) {
+            Some(Token::LBracket) => {
+                depth += 1;
+                true
+            }
+            Some(Token::RBracket) => {
+                depth = depth.saturating_sub(1);
+                true
+            }
+            _ if depth > 0 => true,
+            Some(Token::Hold | Token::Bind) => p == first,
+            Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma) => true,
+            _ => false,
+        })
+    }
+
+    /// Whether a loop's item starts at `p`: `hold` or `bind`, or what sets a
+    /// place, before the next `,` or `last`.
+    fn starts_loop_item(&self, p: usize, last: usize) -> bool {
+        if matches!(self.tokens.get(p), Some(Token::Hold | Token::Bind)) {
+            return true;
+        }
+        let mut depth = 0usize;
+        for q in p..last {
+            match self.tokens.get(q) {
+                Some(Token::LParen | Token::LBracket | Token::LBrace | Token::When | Token::Match | Token::Block) => depth += 1,
+                Some(Token::RParen | Token::RBracket | Token::RBrace | Token::Fi) => depth = depth.saturating_sub(1),
+                _ if depth > 0 => {}
+                Some(Token::Comma) => return false,
+                Some(Token::Assign) => return true,
+                Some(token) if step_operator(token).is_some() => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// The rest of `loop start || condition || step` (see `loop_parts`).
+    fn parse_parted_loop(&mut self, span: Span, parts: LoopParts) -> Result<Stmt> {
+        let mut parts = parts.into_iter();
+        let start = parts.next().unwrap_or_default();
+        let cond = parts.next().unwrap_or_default();
+        let step = parts.next().unwrap_or_default();
+        // The start: statements, until `hold` or `bind` declares the names
+        // after it, each item one.
+        let mut declaring: Option<bool> = None;
+        let mut started = Vec::new();
+        for (first, last) in start {
+            self.pos = first;
+            let item = match self.peek() {
+                Token::Hold | Token::Bind => {
+                    let immutable = self.check(Token::Bind);
+                    declaring = Some(immutable);
+                    self.parse_binding(immutable)?
+                }
+                Token::Newline => return Err(Error::at(self.peek_span(), "an item of a loop's start is missing between two ','s")),
+                _ => match declaring {
+                    Some(immutable) => self.parse_binding_names(immutable, false, self.peek_span())?,
+                    None => self.parse_stmt()?,
+                },
+            };
+            if let StmtKind::Binding { reference: true, .. } = item.kind {
+                return Err(Error::at(item.span, "a loop's start declares values for the loop, not references; name the place itself"));
+            }
+            self.end_loop_item(last)?;
+            started.push(item);
+        }
+        let cond = match cond.first() {
+            Some(&(first, last)) => {
+                self.pos = first;
+                if self.check(Token::When) {
+                    return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
+                }
+                let cond = self.parse_condition()?;
+                self.end_loop_item(last)?;
+                Some(cond)
+            }
+            None => None,
+        };
+        let mut steps = Vec::new();
+        for (first, last) in step {
+            self.pos = first;
+            if self.check(Token::Newline) {
+                return Err(Error::at(self.peek_span(), "an item of a loop's step is missing between two ','s"));
+            }
+            steps.push(self.parse_stmt()?);
+            self.end_loop_item(last)?;
+        }
+        // The line ends after the last part.
+        while !matches!(self.peek(), Token::Newline | Token::Eof) {
+            self.advance();
+        }
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        self.expect_fi("loop", span)?;
+        let parted = PartedLoop { start: started, cond, step: steps, body, endless: false };
+        Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
+    }
+
+    /// After an item of a loop's parts, which ends at `last`.
+    fn end_loop_item(&mut self, last: usize) -> Result<()> {
+        if self.pos < last {
+            return Err(self.unexpected("',' or '||': a loop's start and step part their items with ',', and '||' parts the start, the condition and the step"));
+        }
+        Ok(())
+    }
+
     fn parse_named_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         self.advance(); // =>
         let inner = match self.peek() {
             Token::Loop => self.parse_loop()?,
+            Token::Endless => self.parse_endless()?,
             Token::Each => self.parse_each()?,
             _ => {
                 return Err(Error::at(
                     self.peek_span(),
-                    format!("'{} =>' names a loop, so 'loop' or 'each' follows it on its line, as in '{} => each x in xs'", name, name),
+                    format!("'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it on its line, as in '{} => each x in xs'", name, name),
                 ));
             }
         };
@@ -2836,6 +3088,11 @@ impl Parser {
         let mut levels = 0;
         let mut ranged = false;
         loop {
+            // A loop's `||`s are read before its parts (see `parse_loop`), so
+            // one here stands where an `or` was meant.
+            if self.check(Token::Parts) {
+                return Err(Error::at(self.peek_span(), PARTS_AS_OR));
+            }
             // `a + b at r` or `"n = {n}" at r`: the `+` chain just read, or the
             // text holding values, is joined into `r`. The right operand of a
             // `+` leaves its `at` to the whole chain.
@@ -3196,6 +3453,7 @@ impl Parser {
         // frame is on the stack once per nesting level.
         let span = self.peek_span();
         match self.peek() {
+            Token::Parts => Err(Error::at(span, PARTS_AS_OR)),
             Token::Interpolated(_) => self.parse_interpolated(span),
             Token::New => self.parse_new(),
             Token::LBracket if self.at_kept() => self.parse_closure_lambda(),
@@ -3725,10 +3983,18 @@ impl Parser {
     }
 
     /// Whether the cursor is at the `<` of the types a kind is given, before
-    /// one of its variants: `Option<int>.None`. A comparison never looks like
-    /// that, as `a < b > .x` would compare a bool with `>`.
+    /// one of its variants: `Option<int>.None`, with the `.` touching the `>`.
+    /// A comparison rarely looks like that: `a < b >.x` would compare a bool
+    /// with `>`, and in `(a < b, c > .x)` a space parts `>` from the field of
+    /// this that `.x` is.
     fn at_kind_types(&self) -> bool {
-        self.type_args_close().is_some_and(|close| self.tokens.get(close + 1) == Some(&Token::Dot) && matches!(self.tokens.get(close + 2), Some(Token::Ident(_))))
+        self.type_args_close().is_some_and(|close| {
+            let touching = match (self.spans.get(close), self.spans.get(close + 1)) {
+                (Some(gt), Some(dot)) => gt.line == dot.line && gt.col + 1 == dot.col,
+                _ => false,
+            };
+            touching && self.tokens.get(close + 1) == Some(&Token::Dot) && matches!(self.tokens.get(close + 2), Some(Token::Ident(_)))
+        })
     }
 
     /// The position of the `>` closing the types a use gives, when the cursor
@@ -4270,7 +4536,8 @@ fn calls_value(expr: &Expr) -> bool {
     }
 }
 
-fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
+/// The operator a step is written with (`++`, `+=`, …) and how, or none.
+pub fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
     Some(match token {
         Token::Increment => (BinaryOp::Add, "++"),
         Token::Decrement => (BinaryOp::Sub, "--"),

@@ -11,7 +11,7 @@ fi
 
 task main()
     hold c = Counter { count: 1_152_921_504_606_846_976 }
-    loop true
+    endless
         show(c.count)
         c.step()
     fi

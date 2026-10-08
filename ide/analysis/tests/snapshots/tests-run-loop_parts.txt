@@ -1,0 +1,220 @@
+  1 | ; warning: 107:5: this loop never ends by its condition; write 'endless' to say so
+    | comment:; warning: 107:5: this loop never ends by its condition; write 'endless' to say so
+  2 | ; warning: 111:5: this loop never ends by its condition; write 'endless' to say so
+    | comment:; warning: 111:5: this loop never ends by its condition; write 'endless' to say so
+  3 | ; warning: 121:12: this loop never ends: its condition reads only 'x', which nothing in the loop changes, and nothing in it leaves the loop
+    | comment:; warning: 121:12: this loop never ends: its condition reads only 'x', which nothing in the loop changes, and nothing in it leaves the loop
+  4 | ; Loops in three parts, 'loop start || condition || step', and 'endless'.
+    | comment:; Loops in three parts, 'loop start || condition || step', and 'endless'.
+  6 | shape Counter
+    | keyword:shape  type:Counter
+  7 |     n: int
+    | field:n  punctuation::  type-builtin:int
+  9 |     alters bump()
+    | keyword:alters  method:bump  punctuation:(  punctuation:)
+ 10 |         .n++
+    | punctuation:.  field:n  operator:++
+ 11 |     fi
+    | keyword:fi
+ 12 | fi
+    | keyword:fi
+ 14 | task advance(hold& spot: int)
+    | keyword:task  task:advance  punctuation:(  keyword:hold  keyword:&  parameter:spot  punctuation::  type-builtin:int  punctuation:)
+ 15 |     spot += 2
+    | parameter:spot  operator:+=  number:2
+ 16 | fi
+    | keyword:fi
+ 18 | task joined<T: shown>(r: region, xs: [T]@r) -> text@r
+    | keyword:task  task:joined  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 19 |     hold out: text@r = ""
+    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""
+ 20 |     loop hold i = 0 || i < xs.len || i++
+    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:xs  punctuation:.  field:len  operator:||  variable:i  operator:++
+ 21 |         out += "{xs[i]} " at r
+    | variable:out  operator:+=  string:"{  parameter:xs  punctuation:[  variable:i  punctuation:]  string:} "  keyword:at  region:r
+ 22 |     fi
+    | keyword:fi
+ 23 |     <- out
+    | keyword:<-  variable:out
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     region r
+    | keyword:region  region:r
+ 29 |     ; A name of its own, and several of them, after 'hold' and 'bind'.
+    | comment:; A name of its own, and several of them, after 'hold' and 'bind'.
+ 30 |     loop hold i = 0 || i < 3 || i++
+    | keyword:loop  keyword:hold  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 31 |         show("i ", i)
+    | builtin-fn:show  punctuation:(  string:"i "  punctuation:,  variable:i  punctuation:)
+ 32 |     fi
+    | keyword:fi
+ 33 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 34 |     loop hold i = 1, j = 10, bind limit = 7 || i < j and i < limit || i++, j--
+    | keyword:loop  keyword:hold  variable:i  operator:=  number:1  punctuation:,  variable:j  operator:=  number:10  punctuation:,  keyword:bind  variable:limit  operator:=  number:7  operator:||  variable:i  operator:<  variable:j  keyword:and  variable:i  operator:<  variable:limit  operator:||  variable:i  operator:++  punctuation:,  variable:j  operator:--
+ 35 |         total += i * j
+    | variable:total  operator:+=  variable:i  operator:*  variable:j
+ 36 |     fi
+    | keyword:fi
+ 37 |     show("total ", total)
+    | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:)
+ 39 |     ; Names already declared come first; the step may swap and call.
+    | comment:; Names already declared come first; the step may swap and call.
+ 40 |     hold k = 0
+    | keyword:hold  variable:k  operator:=  number:0
+ 41 |     hold calls = 0
+    | keyword:hold  variable:calls  operator:=  number:0
+ 42 |     loop k = 1, calls = 0, hold a = 0, b = 1 || b < 30 || a, b = b, a + b, calls++
+    | keyword:loop  variable:k  operator:=  number:1  punctuation:,  variable:calls  operator:=  number:0  punctuation:,  keyword:hold  variable:a  operator:=  number:0  punctuation:,  variable:b  operator:=  number:1  operator:||  variable:b  operator:<  number:30  operator:||  variable:a  punctuation:,  variable:b  operator:=  variable:b  punctuation:,  variable:a  operator:+  variable:b  punctuation:,  variable:calls  operator:++
+ 43 |         show("fib ", b)
+    | builtin-fn:show  punctuation:(  string:"fib "  punctuation:,  variable:b  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 |     show("k ", k, " calls ", calls)
+    | builtin-fn:show  punctuation:(  string:"k "  punctuation:,  variable:k  punctuation:,  string:" calls "  punctuation:,  variable:calls  punctuation:)
+ 47 |     ; 'continue' runs the step, 'break' doesn't.
+    | comment:; 'continue' runs the step, 'break' doesn't.
+ 48 |     hold last = 0
+    | keyword:hold  variable:last  operator:=  number:0
+ 49 |     loop last = 0 || last < 10 || last++
+    | keyword:loop  variable:last  operator:=  number:0  operator:||  variable:last  operator:<  number:10  operator:||  variable:last  operator:++
+ 50 |         when last % 2 == 1
+    | keyword:when  variable:last  operator:%  number:2  operator:==  number:1
+ 51 |             continue
+    | keyword:continue
+ 52 |         fi
+    | keyword:fi
+ 53 |         when last == 6
+    | keyword:when  variable:last  operator:==  number:6
+ 54 |             break
+    | keyword:break
+ 55 |         fi
+    | keyword:fi
+ 56 |         show("even ", last)
+    | builtin-fn:show  punctuation:(  string:"even "  punctuation:,  variable:last  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 58 |     show("last ", last)
+    | builtin-fn:show  punctuation:(  string:"last "  punctuation:,  variable:last  punctuation:)
+ 60 |     ; A part may be empty; the last '||' may be left out.
+    | comment:; A part may be empty; the last '||' may be left out.
+ 61 |     hold m = 0
+    | keyword:hold  variable:m  operator:=  number:0
+ 62 |     loop || m < 3 || m++
+    | keyword:loop  operator:||  variable:m  operator:<  number:3  operator:||  variable:m  operator:++
+ 63 |         show("m ", m)
+    | builtin-fn:show  punctuation:(  string:"m "  punctuation:,  variable:m  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 65 |     loop hold w = 0 || w < 2
+    | keyword:loop  keyword:hold  variable:w  operator:=  number:0  operator:||  variable:w  operator:<  number:2
+ 66 |         show("w ", w)
+    | builtin-fn:show  punctuation:(  string:"w "  punctuation:,  variable:w  punctuation:)
+ 67 |         w++
+    | variable:w  operator:++
+ 68 |     fi
+    | keyword:fi
+ 69 |     loop hold pos = 0 || pos < 7 || advance(&pos)
+    | keyword:loop  keyword:hold  variable:pos  operator:=  number:0  operator:||  variable:pos  operator:<  number:7  operator:||  task:advance  punctuation:(  operator:&  variable:pos  punctuation:)
+ 70 |         show("pos ", pos)
+    | builtin-fn:show  punctuation:(  string:"pos "  punctuation:,  variable:pos  punctuation:)
+ 71 |     fi
+    | keyword:fi
+ 73 |     ; A pattern, and parts joined with 'and', as any loop takes them.
+    | comment:; A pattern, and parts joined with 'and', as any loop takes them.
+ 74 |     bind words = ["ox", "elk", "yak", "zebra", "eel"]
+    | keyword:bind  variable:words  operator:=  punctuation:[  string:"ox"  punctuation:,  string:"elk"  punctuation:,  string:"yak"  punctuation:,  string:"zebra"  punctuation:,  string:"eel"  punctuation:]
+ 75 |     loop hold n = 0 || words[#n] is {word} and word.len < 4 || n++
+    | keyword:loop  keyword:hold  variable:n  operator:=  number:0  operator:||  variable:words  punctuation:[  punctuation:#  variable:n  punctuation:]  keyword:is  punctuation:{  variable:word  punctuation:}  keyword:and  variable:word  punctuation:.  field:len  operator:<  number:4  operator:||  variable:n  operator:++
+ 76 |         show("word ", word)
+    | builtin-fn:show  punctuation:(  string:"word "  punctuation:,  variable:word  punctuation:)
+ 77 |     fi
+    | keyword:fi
+ 79 |     ; A step of any statement, a 'when' too, and the regions of a pass.
+    | comment:; A step of any statement, a 'when' too, and the regions of a pass.
+ 80 |     loop hold s = 0 || s < 6 || s++, when s == 3 s++ fi
+    | keyword:loop  keyword:hold  variable:s  operator:=  number:0  operator:||  variable:s  operator:<  number:6  operator:||  variable:s  operator:++  punctuation:,  keyword:when  variable:s  operator:==  number:3  variable:s  operator:++  keyword:fi
+ 81 |         region pass
+    | keyword:region  region:pass
+ 82 |         bind label = "s{s}" at pass
+    | keyword:bind  variable:label  operator:=  string:"s{  variable:s  string:}"  keyword:at  region:pass
+ 83 |         show(label)
+    | builtin-fn:show  punctuation:(  variable:label  punctuation:)
+ 84 |     fi
+    | keyword:fi
+ 85 |     hold c = Counter { n: 0 }
+    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:0  punctuation:}
+ 86 |     loop || c.n < 3 || c.bump()
+    | keyword:loop  operator:||  variable:c  punctuation:.  field:n  operator:<  number:3  operator:||  variable:c  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 87 |         show("c ", c.n)
+    | builtin-fn:show  punctuation:(  string:"c "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
+ 88 |     fi
+    | keyword:fi
+ 89 |     show(joined(r, [1, 2, 3, ...] at r), joined(r, ["a", "b", ...] at r))
+    | builtin-fn:show  punctuation:(  task:joined  punctuation:(  region:r  punctuation:,  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:,  task:joined  punctuation:(  region:r  punctuation:,  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:)
+ 91 |     ; 'endless', named, stopped from inside.
+    | comment:; 'endless', named, stopped from inside.
+ 92 |     hold e = 0
+    | keyword:hold  variable:e  operator:=  number:0
+ 93 |     outer => endless
+    | variable:outer  operator:=>  keyword:endless
+ 94 |         loop hold inner = 0 || || inner++
+    | keyword:loop  keyword:hold  variable:inner  operator:=  number:0  operator:||  operator:||  variable:inner  operator:++
+ 95 |             e++
+    | variable:e  operator:++
+ 96 |             when e > 7
+    | keyword:when  variable:e  operator:>  number:7
+ 97 |                 break outer
+    | keyword:break  variable:outer
+ 98 |             fi
+    | keyword:fi
+ 99 |             when inner == 2
+    | keyword:when  variable:inner  operator:==  number:2
+100 |                 break
+    | keyword:break
+101 |             fi
+    | keyword:fi
+102 |         fi
+    | keyword:fi
+103 |     fi
+    | keyword:fi
+104 |     show("e ", e)
+    | builtin-fn:show  punctuation:(  string:"e "  punctuation:,  variable:e  punctuation:)
+106 |     ; Without the word, a loop that never ends by itself is told.
+    | comment:; Without the word, a loop that never ends by itself is told.
+107 |     loop || ||
+    | keyword:loop  operator:||  operator:||
+108 |         break
+    | keyword:break
+109 |     fi
+    | keyword:fi
+110 |     hold t = 0
+    | keyword:hold  variable:t  operator:=  number:0
+111 |     loop true
+    | keyword:loop  keyword:true
+112 |         t++
+    | variable:t  operator:++
+113 |         when t == 2
+    | keyword:when  variable:t  operator:==  number:2
+114 |             break
+    | keyword:break
+115 |         fi
+    | keyword:fi
+116 |     fi
+    | keyword:fi
+117 |     show("t ", t)
+    | builtin-fn:show  punctuation:(  string:"t "  punctuation:,  variable:t  punctuation:)
+118 | fi
+    | keyword:fi
+120 | task never(x: int)
+    | keyword:task  task:never  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)
+121 |     loop x < 10
+    | keyword:loop  parameter:x  operator:<  number:10
+122 |         show(x)
+    | builtin-fn:show  punctuation:(  parameter:x  punctuation:)
+123 |     fi
+    | keyword:fi
+124 | fi
+    | keyword:fi

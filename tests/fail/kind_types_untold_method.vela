@@ -1,0 +1,17 @@
+; error: 16:10: can't tell which type 'T' is for this 'Option', since its values don't say and nothing this value goes into names one; write it, as in 'Option<int>.None'
+; A method's value tells it no types.
+kind Option<T: shown>
+    Some(value: T)
+    None
+
+    isSome() -> bool
+        <- match .this
+        case Some _ = true
+        case None = false
+        fi
+    fi
+fi
+
+task main()
+    show(Option.None.isSome())
+fi

@@ -1,0 +1,12 @@
+; error: 10:25: a type given lives in the region of the value holding it, so it names no region; write 'Option<text>@r'
+; The types a kind is given take the region of the whole, which names it.
+kind Option<T>
+    Some(value: T)
+    None
+fi
+
+task main()
+    region r
+    bind o: Option<text@r> = Option.Some("x")
+    show(o)
+fi

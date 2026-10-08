@@ -1,0 +1,72 @@
+  1 | ; Collatz walks: from a number, halve it when it is even, or take three times
+    | comment:; Collatz walks: from a number, halve it when it is even, or take three times
+  2 | ; it and one when it is odd, until it reaches 1. A loop in three parts counts
+    | comment:; it and one when it is odd, until it reaches 1. A loop in three parts counts
+  3 | ; the steps of each walk, and 'endless' looks for the first start whose walk
+    | comment:; the steps of each walk, and 'endless' looks for the first start whose walk
+  4 | ; is longer than a goal, stopping once it finds one.
+    | comment:; is longer than a goal, stopping once it finds one.
+  6 | task steps(from: int) -> int
+    | keyword:task  task:steps  punctuation:(  parameter:from  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  7 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+  8 |     loop hold n = from || n != 1 || count++
+    | keyword:loop  keyword:hold  variable:n  operator:=  parameter:from  operator:||  variable:n  operator:!=  number:1  operator:||  variable:count  operator:++
+  9 |         when n % 2 == 0
+    | keyword:when  variable:n  operator:%  number:2  operator:==  number:0
+ 10 |             n = n / 2
+    | variable:n  operator:=  variable:n  operator:/  number:2
+ 11 |         else
+    | keyword:else
+ 12 |             n = 3 * n + 1
+    | variable:n  operator:=  number:3  operator:*  variable:n  operator:+  number:1
+ 13 |         fi
+    | keyword:fi
+ 14 |     fi
+    | keyword:fi
+ 15 |     <- count
+    | keyword:<-  variable:count
+ 16 | fi
+    | keyword:fi
+ 18 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 19 |     ; The walks of the first few starts, and the longest of them.
+    | comment:; The walks of the first few starts, and the longest of them.
+ 20 |     hold longest = 0
+    | keyword:hold  variable:longest  operator:=  number:0
+ 21 |     loop hold start = 1, bind last = 8 || start <= last || start++
+    | keyword:loop  keyword:hold  variable:start  operator:=  number:1  punctuation:,  keyword:bind  variable:last  operator:=  number:8  operator:||  variable:start  operator:<=  variable:last  operator:||  variable:start  operator:++
+ 22 |         bind walk = steps(start)
+    | keyword:bind  variable:walk  operator:=  task:steps  punctuation:(  variable:start  punctuation:)
+ 23 |         show(start, ": ", walk, " steps")
+    | builtin-fn:show  punctuation:(  variable:start  punctuation:,  string:": "  punctuation:,  variable:walk  punctuation:,  string:" steps"  punctuation:)
+ 24 |         when walk > longest
+    | keyword:when  variable:walk  operator:>  variable:longest
+ 25 |             longest = walk
+    | variable:longest  operator:=  variable:walk
+ 26 |         fi
+    | keyword:fi
+ 27 |     fi
+    | keyword:fi
+ 28 |     show("longest: ", longest)
+    | builtin-fn:show  punctuation:(  string:"longest: "  punctuation:,  variable:longest  punctuation:)
+ 30 |     ; The first start whose walk takes more than 100 steps.
+    | comment:; The first start whose walk takes more than 100 steps.
+ 31 |     hold start = 1
+    | keyword:hold  variable:start  operator:=  number:1
+ 32 |     endless
+    | keyword:endless
+ 33 |         when steps(start) > 100
+    | keyword:when  task:steps  punctuation:(  variable:start  punctuation:)  operator:>  number:100
+ 34 |             break
+    | keyword:break
+ 35 |         fi
+    | keyword:fi
+ 36 |         start++
+    | variable:start  operator:++
+ 37 |     fi
+    | keyword:fi
+ 38 |     show("first past 100: ", start, " (", steps(start), " steps)")
+    | builtin-fn:show  punctuation:(  string:"first past 100: "  punctuation:,  variable:start  punctuation:,  string:" ("  punctuation:,  task:steps  punctuation:(  variable:start  punctuation:)  punctuation:,  string:" steps)"  punctuation:)
+ 39 | fi
+    | keyword:fi
