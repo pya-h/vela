@@ -1,0 +1,12 @@
+; error: 7:24: the value parameter 'from' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, a task, a lambda that keeps nothing, arithmetic on numbers and macros, or a tuple, an array, or a literal of those
+; A default is worked out before the program runs; a call runs with it.
+task start() -> int
+    <- 1
+fi
+
+task count(from: int = start()) -> int
+    <- from
+fi
+
+task main()
+fi

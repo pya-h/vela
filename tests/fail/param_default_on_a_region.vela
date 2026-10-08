@@ -1,0 +1,8 @@
+; error: 3:32: 'r' is a region, which a call names; a region has no value to fall back on
+; A region is named by the call; it has no value to fall back on.
+task label(n: int, r: region = 0) -> text@r
+    <- "n" at r
+fi
+
+task main()
+fi

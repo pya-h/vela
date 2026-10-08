@@ -1,8 +1,9 @@
-; error: 2:33: only a shape's field can be given a value to fall back on, not a parameter
+; error: 8:10: task 'pad' expects 1 to 2 arguments, got 0
+; A parameter with a value to fall back on may be left out; one without can't.
 task pad(word: text, width: int = 8) -> int
     <- width
 fi
 
 task main()
-    show(pad("ada"))
+    show(pad())
 fi

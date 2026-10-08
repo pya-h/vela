@@ -1518,19 +1518,56 @@ impl Parser {
         Ok(true)
     }
 
-    /// `= value` after a shape's field: the value a literal that leaves the
-    /// field out gives it. A parameter and a variant's value have none, and say
-    /// so (see `docs/future.html#default-arguments` for the parameter half).
+    /// `= value` after a shape's field or a task's parameter: the value a
+    /// literal that leaves the field out gives it, or a call that leaves the
+    /// parameter out. A variant's value has none, and says so.
     fn match_field_default(&mut self, slot: Slot) -> Result<Option<Expr>> {
         let at = self.peek_span();
         if !self.match_token(Token::Assign) {
             return Ok(None);
         }
-        if slot != Slot::Field {
-            let what = if slot == Slot::Param { "a parameter" } else { "a variant's value" };
-            return Err(Error::at(at, format!("only a shape's field can be given a value to fall back on, not {}", what)));
+        if slot == Slot::Value {
+            return Err(Error::at(at, "only a shape's field or a task's parameter can be given a value to fall back on, not a variant's value"));
         }
         Ok(Some(self.parse_expr()?))
+    }
+
+    /// Checks the values `params` fall back on, which only the last of them
+    /// have: a call leaves out a tail of the list, never a value between two it
+    /// gives. A place, a region, and a group's values have none to fall back on.
+    fn check_param_defaults(params: &[Field]) -> Result<()> {
+        let Some(first) = params.iter().position(|param| param.default.is_some()) else { return Ok(()) };
+        for param in params.iter().filter(|param| param.default.is_some()) {
+            let at = param.default.as_ref().map_or(param.span, |value| value.span);
+            if matches!(param.passing, Passing::HoldRef | Passing::BindRef) {
+                return Err(Error::at(
+                    at,
+                    format!("'{}' is the caller's place, '{}', which a call names with '&'; a place has no value to fall back on", param.name, param.passing.word()),
+                ));
+            }
+            if param.ty == Type::Region {
+                return Err(Error::at(at, format!("'{}' is a region, which a call names; a region has no value to fall back on", param.name)));
+            }
+        }
+        if let Some(group) = params.iter().find(|param| matches!(param.ty, Type::Group(_))) {
+            let at = params.get(first).map_or(group.span, |param| param.default.as_ref().map_or(param.span, |value| value.span));
+            return Err(Error::at(
+                at,
+                format!(
+                    "a task that takes a group, '{}', takes no values to fall back on: the values a call gives after the others would be the group's or these, and a group can already be given none",
+                    group.name
+                ),
+            ));
+        }
+        let Some(after) = params.iter().skip(first).find(|param| param.default.is_none()) else { return Ok(()) };
+        let before = params.get(first).map_or("", |param| param.name.as_str());
+        Err(Error::at(
+            after.span,
+            format!(
+                "'{}' has no value to fall back on, and comes after '{}', which has one; the parameters with values to fall back on come last, so that a call leaves out only the last ones",
+                after.name, before
+            ),
+        ))
     }
 
     /// The word `default` after a task's parameter, which makes the region it
@@ -1566,6 +1603,9 @@ impl Parser {
             }
         }
         self.expect(Token::RParen)?;
+        if slot == Slot::Param {
+            Self::check_param_defaults(&fields)?;
+        }
         Ok(fields)
     }
 
@@ -3681,6 +3721,12 @@ impl Parser {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
         }
         let params = self.parse_field_list(Slot::Param)?;
+        if let Some(value) = params.iter().find_map(|param| param.default.as_ref()) {
+            return Err(Error::at(
+                value.span,
+                "a lambda's parameters have no values to fall back on: a lambda is called through its type, which names every value; a task's parameters can have them",
+            ));
+        }
         let arrow = self.peek_span();
         self.expect(Token::Arrow)?;
         if matches!(self.peek(), Token::Newline | Token::Fi | Token::Eof) {

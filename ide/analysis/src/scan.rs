@@ -843,7 +843,7 @@ fn never(_: &Token) -> bool {
 }
 
 fn ends_field(token: &Token) -> bool {
-    matches!(token, Token::Comma | Token::RParen)
+    matches!(token, Token::Comma | Token::RParen | Token::Assign)
 }
 
 /// Whether the name at `p` is a shape's field marked `read`, the word starting

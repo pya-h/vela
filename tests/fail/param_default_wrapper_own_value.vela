@@ -1,0 +1,14 @@
+; error: 8:3: wrapper 'scaled' takes the next task, 1 value of its own, then the 1 value of task 'g'; 0 values given
+; A wrapper's own values come before the task's, so '$(w)' writes them all:
+; the defaults are for a call that names the wrapper.
+task scaled(next: (int) -> int, by: int = 3, n: int = 0) -> int
+    <- next(n) * by
+fi
+
+$(scaled)
+task g(n: int) -> int
+    <- n
+fi
+
+task main()
+fi

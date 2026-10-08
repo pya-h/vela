@@ -1,0 +1,122 @@
+; Optional arguments: the last parameters of a task may name a value to fall
+; back on, `width: int = 8`, which a call that leaves them out is given. The
+; value is one the compiler works out (a number, text, a variant, a task, a
+; lambda that keeps nothing, arithmetic on numbers and macros), checked once
+; as the task's own file reads it, and written into each call, so a call costs
+; no more than the same call written out.
+
+include std/math
+include optional_arguments/tools (run, Box)
+
+#WIDTH = 8
+
+kind Side
+    Left
+    Right
+fi
+
+shape Spot
+    x: int = 2 * WIDTH
+    y: int = 0
+fi
+
+task double(x: int) -> int
+    <- x * 2
+fi
+
+task pad(t: text, width: int = WIDTH, fill: char = '.', side: Side = Side.Right)
+    match side
+    case Left
+        show(t, "|", width, fill)
+    case Right
+        show(width, fill, "|", t)
+    fi
+fi
+
+; A task's type: a named task, or a lambda that keeps nothing.
+task apply(x: int, f: (int) -> int = (n: int) -> int <- n + 100 fi) -> int
+    <- f(x)
+fi
+
+task twice(x: int, f: (int) -> int = double) -> int
+    <- f(f(x))
+fi
+
+; Arithmetic is worked out once, before the program runs.
+task scaled(n: int, by: float = -float(WIDTH) / 2.0, label: text = "x" + "y")
+    show(label, " ", float(n) * by)
+fi
+
+; A shape literal, and `none` for a `maybe`.
+task area(spot: Spot = Spot { y: 3 }, name: maybe text = none)
+    show(name { "spot" }, " ", spot.x * spot.y)
+fi
+
+; A type the task takes has no one value, but `none` fits any `maybe`.
+task pick<T>(xs: [T]@r, at_index: int = 0, fallback: maybe T = none) -> maybe T
+    when at_index < xs.len
+        <- xs[at_index]
+    fi
+    <- fallback
+fi
+
+shape Counter
+    n: int = 0
+
+    bumped(by: int = 1) -> Counter
+        <- Counter { n: .n + by }
+    fi
+
+    shared starting(n: int = 10) -> Counter
+        <- Counter { n: n }
+    fi
+fi
+
+; A wrapper is given every value: the call fills in its task's first.
+task logged(next: (int) -> int, n: int) -> int
+    show("logged ", n)
+    <- next(n)
+fi
+
+$(logged)
+task square(n: int = 3) -> int
+    <- n * n
+fi
+
+; A startup decorator's own values may fall back too: `$noted` or `$noted(…)`.
+task noted(next: (int) -> int, times: int = 1) -> nothing ~ text
+    show("noted ", times, " ", next(2))
+fi
+
+$noted
+$noted(2)
+task half(n: int) -> int
+    <- n / 2
+fi
+
+task main()
+    region r default
+    pad("a")
+    pad("b", 3)
+    pad("c", 3, '-')
+    pad("d", 1, ' ', Side.Left)
+    show(apply(4), " ", apply(4, double), " ", twice(5), " ", twice(5, (n: int) -> int <- n + 1 fi))
+    scaled(3)
+    scaled(3, 1.0)
+    scaled(3, 1.0, "z")
+    area()
+    area(Spot {})
+    area(Spot { x: 1, y: 1 }, "one")
+    show(pick([4, 5, ...]) { 0 }, " ", pick([4, 5, ...], 9) { 0 }, " ", pick([4, 5, ...], 9, 6) { 0 })
+    bind c = Counter.starting()
+    show(c.n, " ", c.bumped().n, " ", c.bumped(5).n, " ", Counter.starting(3).bumped().n)
+    bind small = square()
+    bind big = square(4)
+    show(small, " ", big)
+    ; Another file's defaults, which name its private parts.
+    show(run(1), " ", run(1, double), " ", run(1, double, 0), " ", Box {}.grown().v)
+    ; A task named as a value takes every value, as its type says.
+    bind f = pad
+    f("e", 2, '+', Side.Left)
+    show(math.log(1000.0), " ", math.log(8.0, 2.0))
+fi

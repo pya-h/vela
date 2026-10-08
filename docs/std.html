@@ -374,7 +374,8 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     show(sin(P / 2.0))              <span class="comment">; 1</span>
     show(math.cos(P))               <span class="comment">; -1</span>
     show(e ** 2.0)                  <span class="comment">; 7.38906, computed as math.exp(2.0)</span>
-    show(math.log(1000.0, 10.0))    <span class="comment">; 3</span>
+    show(math.log(1000.0))          <span class="comment">; 3, base 10 when none is given</span>
+    show(math.log(8.0, 2.0))        <span class="comment">; 3</span>
     show(math.log(e, e))            <span class="comment">; 1, the natural logarithm</span>
 <span class="keyword">fi</span></pre>
       <table>
@@ -386,11 +387,11 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <tr><td><code>asin(x)</code>, <code>acos(x)</code>, <code>atan(x)</code></td><td>the angle whose sine, cosine, or tangent is <code>x</code></td></tr>
         <tr><td><code>sinh(x)</code>, <code>cosh(x)</code>, <code>tanh(x)</code></td><td>the hyperbolic sine, cosine, and tangent</td></tr>
         <tr><td><code>exp(x)</code></td><td><code>e</code> raised to the power <code>x</code></td></tr>
-        <tr><td><code>log(x, base)</code></td><td>the power <code>base</code> is raised to for <code>x</code>; with <code>e</code> it is the natural logarithm. Bases 2, 10, and <code>e</code> are C's own <code>log2</code>, <code>log10</code>, and <code>log</code>, which are exact where a quotient of logarithms may not be. Once parameters can have defaults, <code>base</code> will be 10 when left out (see <a href="future.html#default-arguments">Default arguments</a>).</td></tr>
+        <tr><td><code>log(x, base = 10.0)</code></td><td>the power <code>base</code> is raised to for <code>x</code>, base 10 when the call leaves it out (see <a href="vela.html#optional-arguments">optional arguments</a>); with <code>e</code> it is the natural logarithm. Bases 2, 10, and <code>e</code> are C's own <code>log2</code>, <code>log10</code>, and <code>log</code>, which are exact where a quotient of logarithms may not be.</td></tr>
       </table>
       <p>
-        A value outside what a task takes gives what C's gives, as float arithmetic does: <code>math.log(-1.0, 10.0)</code>
-        and <code>math.asin(2.0)</code> are nan, and <code>math.log(0.0, 10.0)</code> is -inf. Nothing stops the program.
+        A value outside what a task takes gives what C's gives, as float arithmetic does: <code>math.log(-1.0)</code>
+        and <code>math.asin(2.0)</code> are nan, and <code>math.log(0.0)</code> is -inf. Nothing stops the program.
         <code>math.P</code> and <code>math.e</code> are macros, so nothing can change them
         (<em>'P' is a macro, a value that never changes, not a variable</em>), and a file that brings in
         <code>e</code> by name can't name a variable <code>e</code>; one that writes <code>math.e</code> can.

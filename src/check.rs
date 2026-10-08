@@ -278,8 +278,14 @@ pub struct Checker {
     /// The shapes whose defaults are checked, or being checked (see
     /// `check_defaults_of`).
     defaults_checked: HashSet<String>,
-    /// The field whose default is being checked, whose value is written with no
-    /// task or method around it (see `check_field_default`).
+    /// For each task with parameters that fall back on values, the value of
+    /// each, checked as its own module reads it (`None` for one without), in
+    /// the order of its parameters, a method's value first. A call that leaves
+    /// out the last ones is given these (see `fill_defaults`).
+    param_defaults: HashMap<String, Vec<Option<Expr>>>,
+    /// The field or parameter whose default is being checked, written as a
+    /// message names it, `field 'x'` or `parameter 'n'`: its value is written
+    /// with no task or method around it (see `check_field_default`).
     in_default: Option<String>,
     /// The shared field whose first value is being checked, as its shape and
     /// its index there, which may name a shared field above it (see
@@ -736,6 +742,7 @@ impl Checker {
         // A field's value may name a wrapped task, whose type its wrappers
         // settle (see `settle_wrapped`).
         self.check_field_defaults(items);
+        self.check_param_defaults(items);
         self.check_shared_fields(items);
         self.check_start_values(items);
         // A lambda is checked after the code it is written in, which notes
@@ -1085,6 +1092,86 @@ impl Checker {
         }
     }
 
+    /// Checks the values the tasks' parameters fall back on, each as its own
+    /// module reads it, and keeps them for the calls that leave them out (see
+    /// `param_defaults`). A task with a mistake in one is broken, so its calls
+    /// say nothing more (see `broken`).
+    fn check_param_defaults(&mut self, items: &mut [Item]) {
+        for item in items.iter_mut() {
+            let Item::Task(t) = item else { continue };
+            if t.params.iter().all(|param| param.default.is_none()) || self.broken.contains(&t.name) {
+                continue;
+            }
+            let module = std::mem::replace(&mut self.current_module, module_of(&t.name).to_string());
+            self.enter_type_params(&t.types);
+            let checked = self.check_defaults_of_task(t);
+            self.type_params.clear();
+            self.current_module = module;
+            match checked {
+                Ok(values) => {
+                    self.param_defaults.insert(t.name.clone(), values);
+                }
+                Err(error) => {
+                    self.keep_going(Err(error));
+                    self.broken.insert(t.name.clone());
+                }
+            }
+        }
+    }
+
+    /// The values `t`'s parameters fall back on, checked (see
+    /// `check_param_defaults`).
+    #[inline(never)]
+    fn check_defaults_of_task(&mut self, t: &mut TaskDef) -> Result<Vec<Option<Expr>>> {
+        // The value a method is called on is told by `not_a_method`, which
+        // names it as written.
+        let names: Vec<String> = t.params.iter().map(|param| param.name.clone()).filter(|name| name != THIS).collect();
+        let mut values = Vec::with_capacity(t.params.len());
+        for param in &mut t.params {
+            let Some(value) = &mut param.default else {
+                values.push(None);
+                continue;
+            };
+            // Another parameter has no value before the call gives it.
+            let mut other = None;
+            walk_expr(value, &mut |expr| {
+                if let ExprKind::Var(name) = &expr.kind
+                    && other.is_none()
+                    && names.contains(name)
+                {
+                    other = Some((name.clone(), expr.span));
+                }
+            });
+            if matches!(value.kind, ExprKind::Closure { .. }) {
+                return err(
+                    value.span,
+                    format!(
+                        "a lambda that keeps what it uses keeps it in a region, which the value parameter '{}' falls back on can't name, since it is worked out before the call; give a lambda that keeps nothing, or a task",
+                        param.name
+                    ),
+                );
+            }
+            if let Some((other, at)) = other {
+                return err(
+                    at,
+                    format!(
+                        "the value parameter '{}' falls back on is worked out before the program runs, so it can't read parameter '{}', which a call gives",
+                        param.name, other
+                    ),
+                );
+            }
+            self.check_default_value(value, &param.ty, &format!("parameter '{}'", param.name), "the task takes, which is a different type in every use")?;
+            // `none` for a `maybe T` is the `none` of each use's own type, so
+            // each call checks it as written.
+            if !param.ty.params().is_empty() {
+                values.push(Some(Expr::new(ExprKind::NoneLit, value.span)));
+                continue;
+            }
+            values.push(Some(value.clone()));
+        }
+        Ok(values)
+    }
+
     /// Checks the defaults of the shape `name` once, as its own module reads
     /// them, and marks it broken when one has a mistake. A default that is a
     /// literal of a shape declared later checks that shape's first, so each
@@ -1104,9 +1191,20 @@ impl Checker {
         let types = std::mem::take(&mut self.type_params);
         self.enter_type_params(&shape.types);
         let mut checked = Ok(());
-        for field in &shape.fields {
+        for (i, field) in shape.fields.iter().enumerate() {
             if let Some(value) = &field.default {
-                checked = self.check_field_default(&mut value.clone(), &field.ty, &field.name);
+                let mut value = value.clone();
+                // Arithmetic worked out once is the number each literal is
+                // given (see `check_default_value`).
+                if is_arithmetic(Some(&value))
+                    && let Ok(folded) = self.fold_constant(&value, &mut Vec::new())
+                {
+                    value = folded.literal(value.span);
+                    if let Some(kept) = self.shapes.get_mut(name).and_then(|shape| shape.fields.get_mut(i)) {
+                        kept.default = Some(value.clone());
+                    }
+                }
+                checked = self.check_field_default(&mut value, &field.ty, &field.name);
                 if checked.is_err() {
                     break;
                 }
@@ -2046,26 +2144,36 @@ impl Checker {
     /// aren't settled, so no literal of it says the same thing again (see
     /// `broken`).
     fn check_field_default(&mut self, value: &mut Expr, ty: &Type, field: &str) -> Result<()> {
+        self.check_default_value(value, ty, &format!("field '{}'", field), "the shape takes, which is a different type in every value")
+    }
+
+    /// Checks `value`, which `what` (`field 'x'` or `parameter 'n'`) of type
+    /// `ty` falls back on: a value the compiler works out, of that type, which
+    /// a type the declaration takes (`which` says why) can't have.
+    fn check_default_value(&mut self, value: &mut Expr, ty: &Type, what: &str, which: &str) -> Result<()> {
         let at = value.span;
-        // `none` is the one value that fits a type the shape takes, in a maybe,
-        // whatever type that is.
+        // `none` is the one value that fits a type the declaration takes, in a
+        // maybe, whatever type that is.
         let fits_any = matches!(ty, Type::Maybe(_)) && matches!(value.kind, ExprKind::NoneLit);
         if !ty.params().is_empty() && !fits_any {
-            return err(
-                at,
-                format!("field '{}' is of a type the shape takes, which is a different type in every value, so it has no value to fall back on", field),
-            );
+            return err(at, format!("{} is of a type {}, so it has no value to fall back on", what, which));
         }
-        let outer = self.in_default.replace(field.to_string());
+        // Arithmetic on literals and macros is worked out here, once, so what
+        // each literal or call is given is the number it makes.
+        if is_arithmetic(Some(value)) && let Ok(folded) = self.fold_constant(value, &mut Vec::new()) {
+            *value = folded.literal(at);
+        }
+        let outer = self.in_default.replace(what.to_string());
         let checked = self.check_expr(value);
         self.in_default = outer;
         checked?;
         if !constant_value(value) {
+            let tasks = if what.starts_with("parameter") { ", a task, a lambda that keeps nothing" } else { "" };
             return err(
                 at,
                 format!(
-                    "the value field '{}' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, or a tuple, an array, or a literal of those",
-                    field
+                    "the value {} falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant{}, arithmetic on numbers and macros, or a tuple, an array, or a literal of those",
+                    what, tasks
                 ),
             );
         }
@@ -6621,9 +6729,20 @@ impl Checker {
                 );
             }
         };
-        if args.len() != info.params.len() {
+        // The last of its values may fall back on values of their own (see
+        // `fill_defaults`), as `$d` leaves them out.
+        let needed = self.param_defaults.get(&self.full_name(name)).and_then(|defaults| defaults.iter().position(Option::is_some)).unwrap_or(info.params.len());
+        if args.len() > info.params.len() || args.len() < needed {
             let values = info.params.len() - 1;
-            let takes = if values == 0 { "the task and nothing else, so it is written '$".to_string() + written + "'" } else { format!("the task and {}, written '${}(…)'", count(values, "value"), written) };
+            let takes = if values == 0 {
+                "the task and nothing else, so it is written '$".to_string() + written + "'"
+            } else if needed <= 1 {
+                format!("the task and up to {}, written '${}' or '${}(…)'", count(values, "value"), written, written)
+            } else if needed < info.params.len() {
+                format!("the task and {} to {} values, written '${}(…)'", needed - 1, values, written)
+            } else {
+                format!("the task and {}, written '${}(…)'", count(values, "value"), written)
+            };
             return err(call.span, format!("decorator '{}' takes {}, got {}", written, takes, count(args.len() - 1, "value")));
         }
         let value = self.task_value_type(&self.full_name(decorated), call.span)?;
@@ -7228,6 +7347,7 @@ impl Checker {
             self.check_spread_given(name, &callee, &info, args, spread)?;
         }
         self.settle_call_region(span, &callee, args, &info.params)?;
+        self.fill_defaults(name, args);
         if args.len() != info.params.len() {
             // `f(a < b, c > (d))` reads as one argument, a call of `a`.
             if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
@@ -7236,9 +7356,44 @@ impl Checker {
             }) {
                 return err(at, misread_comparison(name));
             }
-            return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
+            return err(span, format!("{} expects {}, got {}", callee, self.expected_args(name, info.params.len(), 0), args.len()));
         }
         Ok(CallSetup::Call(info, group))
+    }
+
+    /// Gives a call of `task` that leaves out the last of its parameters the
+    /// values they fall back on, written in the task's module, which
+    /// `check_args_of` reads them as (see `param_defaults`). A call with a
+    /// spread gives as many values as only its copies know, and is filled in
+    /// there.
+    fn fill_defaults(&self, task: &str, args: &mut Vec<Expr>) {
+        let Some(defaults) = self.param_defaults.get(task) else { return };
+        if args.iter().any(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
+            return;
+        }
+        while let Some(Some(value)) = defaults.get(args.len()) {
+            args.push(value.clone());
+        }
+    }
+
+    /// The parameters of `task` a call gives, of `all`, without the `skip`
+    /// first (a method's value), as an error message counts them: `2
+    /// arguments`, or `2 to 4 arguments` where the last fall back on values.
+    fn expected_args(&self, task: &str, all: usize, skip: usize) -> String {
+        let all = all.saturating_sub(skip);
+        let needed = self.param_defaults.get(task).and_then(|defaults| defaults.iter().position(Option::is_some)).map(|first| first.saturating_sub(skip));
+        match needed {
+            Some(0) => format!("up to {}", count(all, "argument")),
+            Some(needed) if needed < all => format!("{} to {} arguments", needed, all),
+            _ => count(all, "argument"),
+        }
+    }
+
+    /// Whether `arg`, given for parameter `i` of `task`, is the value that
+    /// parameter falls back on, filled in by `fill_defaults`, which only that
+    /// value's own position names.
+    fn filled_default(&self, task: &str, i: usize, arg: &Expr) -> bool {
+        self.param_defaults.get(task).and_then(|defaults| defaults.get(i)).and_then(Option::as_ref).is_some_and(|value| value.span == arg.span)
     }
 
     /// Where `name`, a decorator naming no task, is a shared method of the
@@ -8810,7 +8965,7 @@ impl Checker {
         if let Some(field) = &self.in_default {
             return err(
                 parts.first().map_or(region_span, |part| part.span),
-                format!("joined text, or text holding values, is made while the program runs, so field '{}' can't fall back on it; its default is text written whole, as in '\"n\"'", field),
+                format!("joined text, or text holding values, is made while the program runs, so {} can't fall back on it; its default is text written whole, as in '\"n\"'", field),
             );
         }
         if region.is_empty() {
@@ -9876,9 +10031,11 @@ impl Checker {
             ExprKind::MethodCall { args, .. } => args.len(),
             _ => 0,
         };
-        // The value it is called on is the first parameter, not an argument.
-        if given + 1 != info.params.len() {
-            return err(span, format!("method '{}' expects {}, got {}", written, count(info.params.len() - 1, "argument"), given));
+        // The value it is called on is the first parameter, not an argument;
+        // the last may fall back on values (see `fill_defaults`).
+        let needed = self.param_defaults.get(&full).and_then(|defaults| defaults.iter().position(Option::is_some)).unwrap_or(info.params.len());
+        if given + 1 > info.params.len() || given + 1 < needed {
+            return err(span, format!("method '{}' expects {}, got {}", written, self.expected_args(&full, info.params.len(), 1), given));
         }
         if info.owner.as_ref().is_some_and(|owner| owner.alters) {
             let ExprKind::MethodCall { value, .. } = &expr.kind else { return Ok(()) };
@@ -10138,7 +10295,7 @@ impl Checker {
                 return err(
                     span,
                     format!(
-                        "the value field '{}' falls back on is worked out before the program runs, and shared field '{}' can change, so it can't be named there; one that never changes can",
+                        "the value {} falls back on is worked out before the program runs, and shared field '{}' can change, so it can't be named there; one that never changes can",
                         falls_back, shared_key(&shape, &field)
                     ),
                 );
@@ -10271,7 +10428,7 @@ impl Checker {
             return format!("'{}' reads the value a method is called on, and a shared field belongs to no value", written);
         }
         if let Some(field) = &self.in_default {
-            return format!("'{}' reads the value a method is called on, and the value field '{}' falls back on is worked out before there is one, so it reads no other field", written, field);
+            return format!("'{}' reads the value a method is called on, and the value {} falls back on is worked out before there is one, so it reads {}", written, field, if field.starts_with("field") { "no other field" } else { "none of its fields" });
         }
         let names = if written == THIS { "is the value a method is called on" } else { "names a member of the value a method is called on" };
         if self.current_lambda.as_ref().is_some_and(|lambda| self.kept_lambdas.contains_key(lambda)) {
@@ -10405,7 +10562,15 @@ impl Checker {
                 // A value of a shape made for its types is read as that shape
                 // given them, so a header naming `Box<T>` matches it (see
                 // `match_regions`).
-                let actual = self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?;
+                // A value filled in is read as the task's module wrote it.
+                let actual = if self.filled_default(task, i, arg) {
+                    let outer = std::mem::replace(&mut self.current_module, module_of(task).to_string());
+                    let actual = self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param);
+                    self.current_module = outer;
+                    actual?
+                } else {
+                    self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?
+                };
                 self.match_regions(ty, &actual, &mut found.regions);
                 Self::note_group_taken(ty, &actual, arg.span, found)?;
                 found.untold |= matches!(ty, Type::Task(_)) && actual.unknown();
@@ -12807,6 +12972,16 @@ fn region_after(args: &[Expr]) -> Option<Span> {
 #[inline(never)]
 fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
     Err(make())
+}
+
+/// Whether `value`, a value a field or a parameter falls back on, is
+/// arithmetic, which the checker works out before the program runs.
+fn is_arithmetic(value: Option<&Expr>) -> bool {
+    match value.map(|value| &value.kind) {
+        Some(ExprKind::Binary(..) | ExprKind::Unary(..)) => true,
+        Some(ExprKind::Call { name, .. }) => [INT_CAST, FLOAT_CAST, CHAR_CAST, UNIT_CAST].contains(&name.as_str()),
+        _ => false,
+    }
 }
 
 fn constant_value(expr: &Expr) -> bool {

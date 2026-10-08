@@ -1,0 +1,9 @@
+; error: 8:10: task 'pad' expects 1 to 2 arguments, got 3
+; Defaults let a call leave values out, not give more than the task takes.
+task pad(word: text, width: int = 8) -> int
+    <- width
+fi
+
+task main()
+    show(pad("a", 1, 2))
+fi

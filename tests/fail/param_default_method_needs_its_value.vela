@@ -1,0 +1,14 @@
+; error: 13:12: method 'Box.grown' expects 1 to 2 arguments, got 0
+; A method's values may fall back too; the ones before them a call gives.
+shape Box
+    v: int = 0
+
+    grown(by: int, times: int = 1) -> int
+        <- .v + by * times
+    fi
+fi
+
+task main()
+    bind b = Box {}
+    show(b.grown())
+fi

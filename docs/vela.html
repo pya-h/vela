@@ -192,7 +192,9 @@
       <pre>cargo run -- examples/hello.vela -o examples/hello
 ./examples/hello</pre>
       <p>
-        More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
+        More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>receipt.vela</code>
+        (<a href="#optional-arguments">optional arguments</a>, a lambda among them), <code>pantry.vela</code>
+        (<a href="#new-empty"><code>new</code> without <code>( )</code></a>), <code>kinds.vela</code>
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
         <code>priv</code>, a method that can fail, one of a shape that takes types, <a href="#field-defaults">fields that name the value they fall back on</a>, a <a href="#read-fields"><code>read</code></a> field, and a <a href="#shared">shared</a> one), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code> and <code>failure</code>, and handling
@@ -317,6 +319,7 @@ block shared type break continue endless</pre>
         <tr><td><code>.x</code>, <code>.m(…)</code>, <code>.this</code>, <code>@this</code></td><td>inside a method: a field of the value it is called on, another of its methods, the value itself, and the region it lives in</td></tr>
         <tr><td><code>; …</code></td><td>a comment, to the end of the line</td></tr>
         <tr><td><code>[T#n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
+        <tr><td><code>width: int = 8</code></td><td>a parameter a call may leave out, one of the last, which is then given the value written (see <a href="#optional-arguments">Optional arguments</a>)</td></tr>
         <tr><td><code>hold x: T</code>, <code>hold&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
         <tr><td><code>bind x: T</code>, <code>bind&amp; x: T</code></td><td>a parameter that is always a copy, or the caller's place only read, given as <code>&amp;a</code> (see <a href="#bind-parameters">Parameters that read</a>)</td></tr>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
@@ -361,7 +364,7 @@ block shared type break continue endless</pre>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file; before a loop's word, the loop's name (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
-        <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
+        <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field</a> or a <a href="#optional-arguments">parameter</a> falls back on, and the value a <code>case</code> gives</td></tr>
         <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison (see <a href="#comparing">Comparing</a>)</td></tr>
         <tr><td><code>x++</code>, <code>x--</code>, <code>x += v</code></td><td>a place counted by one, or given its operator's result with <code>v</code> (also <code>-= *= /= %= **=</code>); statements of their own (see <a href="#steps">Steps</a>)</td></tr>
         <tr><td><code>a ** b</code></td><td><code>a</code> raised to the power <code>b</code>, before <code>*</code>, grouping from the right (see <a href="#powers">Powers</a>)</td></tr>
@@ -419,6 +422,56 @@ block shared type break continue endless</pre>
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
+      </p>
+
+      <h3 id="optional-arguments">Optional arguments</h3>
+      <p>
+        The last parameters of a task may name a value to fall back on, written after the type:
+        <code>width: int = 8</code>. A call that leaves them out is given those values, so <code>pad("a")</code> reads
+        as <code>pad("a", 8, '.')</code> below. Only the last ones can: a parameter without a value can't follow one
+        with a value, so a call leaves out a tail of the list and never a value between two it gives. The same goes
+        for methods and shared methods, and for the values a <a href="#decorators">startup decorator</a> takes after
+        the task, so <code>$d</code> may leave them out too.
+      </p>
+      <pre><span class="keyword">task</span> pad(t: text, width: int = <span class="number">8</span>, fill: char = <span class="string">'.'</span>)
+    show(width, fill, <span class="string">"|"</span>, t)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> apply(x: int, f: (int) -&gt; int = (n: int) -&gt; int <span class="keyword">&lt;-</span> n + <span class="number">1</span> <span class="keyword">fi</span>) -&gt; int
+    <span class="keyword">&lt;-</span> f(x)
+<span class="keyword">fi</span>
+
+pad(<span class="string">"a"</span>)              <span class="comment">; 8.|a</span>
+pad(<span class="string">"b"</span>, <span class="number">3</span>)           <span class="comment">; 3.|b</span>
+pad(<span class="string">"c"</span>, <span class="number">3</span>, <span class="string">'-'</span>)      <span class="comment">; 3-|c</span>
+show(apply(<span class="number">4</span>))        <span class="comment">; 5</span>
+pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 arguments, got 0</span></pre>
+      <p>
+        The value is one the compiler works out without running the program, as a <a href="#field-defaults">field's</a>
+        is: a number, text, <code>true</code>, <code>false</code>, <code>none</code>, a variant, arithmetic on numbers
+        and <a href="#macros">macros</a> (worked out once), a tuple, an array, or a literal of those, and, for a
+        parameter of a task's type, a task named as a value or a lambda that keeps nothing. So it never reads another
+        parameter, calls nothing, and allocates nothing, and the call that leaves it out is the same program as the
+        call that writes it: the C function takes every value, and the compiler writes the missing ones into the call.
+        The value belongs to the task's file, which reads it wherever the call is, so it may name what only that file
+        sees, such as a private macro or task.
+      </p>
+      <p>
+        Some parameters can't have one: a place, <code>hold&amp;</code> or <code>bind&amp;</code>, which the caller
+        names with <code>&amp;</code>; a region, which the call names; a parameter of a type the task takes
+        (<code>x: T</code>), a different type in every use, except <code>fallback: maybe T = none</code>, since
+        <code>none</code> fits every <code>maybe</code>; and every parameter of a task that takes a
+        <a href="#type-groups">group</a>, <code>args: P...</code>, whose values after the others would be the
+        group's or these (a group can be given none already). A <a href="#lambdas">lambda</a>'s own parameters have
+        none, nor does a lambda that keeps what it uses make one, since the region it keeps them in is one no default
+        can name. <code>hold n: int = 0</code>, the task's own copy, can.
+      </p>
+      <p>
+        The values belong to the task's name, not to its type: a task named as a value, <code>bind f = pad</code>,
+        is a <code>(text, int, char) -&gt; nothing</code>, and a call through it gives every value. A call of a task
+        with <a href="#decorators">wrappers</a> is given the values first, so the chain gets them all; in
+        <code>$(w(…))</code>, a wrapper's own values come before the task's and are all written. Arguments are still
+        matched by their place: there are no named arguments to leave out a value in the middle.
       </p>
 
       <h3 id="parameters">Parameters that change</h3>
@@ -1437,7 +1490,8 @@ show(p.x)</pre>
       <p id="field-defaults">
         A field can name the value a literal that leaves it out gives it, written after its type. It is a value the
         compiler works out without running the program — a number, text, <code>true</code>, <code>false</code>,
-        <code>none</code>, a variant, or a tuple, an array, or a literal of those — so a literal that leaves the field
+        <code>none</code>, a variant, arithmetic on numbers and <a href="#macros">macros</a> (<code>size: int = 2 *
+        WIDTH</code>, worked out once), or a tuple, an array, or a literal of those — so a literal that leaves the field
         out costs no more than one that writes it. The value is read where the literal is, so each value made gets its
         own. A literal may still write the field, and a shape whose every field names one is written <code>Job {}</code>.
       </p>

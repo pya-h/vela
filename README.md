@@ -14,7 +14,9 @@ plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one 
 = 3.14 * r * r … fi`), on a case's own line with `=` or on the last line of a block.
 Blocks close with `fi`, a comment starts with `;` (`bind x = 1 ; the first`), and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
-(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
+(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. The last
+parameters may name a value a call that leaves them out is given (`task pad(t: text, width: int = 8)`, then
+`pad("a")`). An `int`
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int#4]`)
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0#n]) at r`
 (or empty, `new [int] at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;

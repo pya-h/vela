@@ -1731,24 +1731,17 @@ show(c.total())</pre>
           in any pattern)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
-        <li id="default-arguments"><strong>Default arguments:</strong> <code>=</code> in a task's header gives a
-          parameter the value a call may leave out, as in <code>task pad(text: text, width: int, fill: text = " ")</code>,
-          and <code>pad(name, 8)</code> then reads as <code>pad(name, 8, " ")</code>.
-          (<span class="badge b-done">Done</span> for a shape's <a href="vela.html#field-defaults">field</a>, which is
-          the same feature where a literal names what it gives, so it needs no rule about order; a parameter and a
-          variant's value still say that only a field can have one.) The rules to keep it small:
-          <strong>the defaults come last</strong> (a parameter with one can't precede a parameter without one, so what a
-          call leaves out is always a tail of the list, and no argument is ever matched by position across a gap); one
-          value per parameter, written where the parameter is; and the value is an expression the compiler can work out
-          without running the program, so a call costs no more than the same call written out. This is the only place
-          <code>=</code> would mean "the value if none is given"; <code>default</code> already means something else and
-          says nothing about a value (it marks a
-          <a href="vela.html#default-region">default region</a>, which is a region's name, not a value), so the two never
-          meet. Open: whether a method's <code>this</code> and a <code>region</code> parameter are ever allowed one
-          (a region has no value to default to, so no), and whether named arguments, above, should land first so that a
-          call can leave out a middle parameter by naming the rest. The first user waiting in the library:
-          <a href="std.html#math"><code>math.log(x, base)</code></a> takes its base today, and would take
-          <code>base: float = 10.0</code>, so that <code>math.log(1000.0)</code> is 3.</li>
+        <li id="default-arguments"><strong>Default arguments:</strong> <span class="badge b-done">Done</span> — see
+          <a href="vela.html#optional-arguments">Optional arguments</a>. <code>=</code> in a task's header gives a
+          parameter the value a call may leave out, as in <code>task pad(t: text, width: int = 8)</code>, and
+          <code>pad("a")</code> reads as <code>pad("a", 8)</code>, as a shape's
+          <a href="vela.html#field-defaults">field</a> does for a literal. The rules that keep it small: the defaults
+          come last, so a call leaves out a tail of the list and no argument is matched by place across a gap; the
+          value is one the compiler works out, so a call costs no more than the same call written out; a place, a
+          region, a type the task takes, a task taking a group, and a lambda's own parameters have none; and the
+          values belong to the task's name, not its type. <code>math.log(x, base: float = 10.0)</code> was the first
+          user in the library. Open: whether named arguments, above, should come next, so that a call can leave out a
+          middle parameter by naming the rest.</li>
         <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;
           requiring the break, and allowing one inside <code>( )</code> and
           <code>{ }</code>, would make long calls and literals splittable</li>

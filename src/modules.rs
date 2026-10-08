@@ -841,6 +841,11 @@ impl Resolver<'_> {
                 self.enter_type_params(&t.types, "task", &t.name)?;
                 for param in &mut t.params {
                     param.ty = self.ty(&param.ty, param.ty_span)?;
+                    // The value a parameter falls back on names the program's
+                    // things as a field's does.
+                    if let Some(value) = &mut param.default {
+                        self.expr(value)?;
+                    }
                 }
                 let spans: Vec<Span> = (0..t.results.len().max(1)).map(|i| t.result_span(i)).collect();
                 t.ret = match &t.ret {

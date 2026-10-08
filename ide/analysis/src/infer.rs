@@ -1637,20 +1637,7 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
 
 /// Where the `)` closing the `(` that `text` starts with is.
 fn closing_paren(text: &str) -> Option<usize> {
-    if !text.starts_with('(') {
-        return None;
-    }
-    let mut depth = 0usize;
-    text.char_indices()
-        .find(|&(_, c)| {
-            match c {
-                '(' | '[' => depth += 1,
-                ')' | ']' => depth = depth.saturating_sub(1),
-                _ => {}
-            }
-            c == ')' && depth == 0
-        })
-        .map(|(at, _)| at)
+    list_end(text.strip_prefix('(')?).map(|at| at + 1)
 }
 
 /// The type of a task whose detail is `detail`, `(n: int) -> int`, as a value:
@@ -1724,14 +1711,59 @@ fn closure_of(task: Type, region: String, hold: bool) -> Option<Type> {
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.
 fn unbracketed<'t>(text: &'t str, needle: &'t str) -> impl Iterator<Item = usize> + 't {
     let mut brackets = 0usize;
+    // The quote of the text or char a parameter's value to fall back on is
+    // inside, `fill: text = ", "`, and whether the last char escaped this one.
+    let mut quoted: Option<char> = None;
+    let mut escaped = false;
     text.char_indices().filter_map(move |(i, c)| {
+        if let Some(quote) = quoted {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                _ if c == quote => quoted = None,
+                _ => {}
+            }
+            return None;
+        }
         match c {
-            '[' | '(' => brackets += 1,
-            ']' | ')' => brackets = brackets.saturating_sub(1),
+            '"' | '\'' => {
+                quoted = Some(c);
+                return None;
+            }
+            '[' | '(' | '{' => brackets += 1,
+            ']' | ')' | '}' => brackets = brackets.saturating_sub(1),
             _ => {}
         }
-        (brackets == 0 && c != ']' && c != ')' && text.get(i..).is_some_and(|rest| rest.starts_with(needle))).then_some(i)
+        (brackets == 0 && c != ']' && c != ')' && c != '}' && text.get(i..).is_some_and(|rest| rest.starts_with(needle))).then_some(i)
     })
+}
+
+/// Where the `)` closing a list that `text` starts inside of is: the first
+/// that no bracket, brace, or quote in `text` holds, as a parameter's value to
+/// fall back on may, `fill: text = ")"`.
+fn list_end(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut quoted: Option<char> = None;
+    let mut escaped = false;
+    for (i, c) in text.char_indices() {
+        if let Some(quote) = quoted {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                _ if c == quote => quoted = None,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' | '\'' => quoted = Some(c),
+            '[' | '(' | '{' => depth += 1,
+            ')' if depth == 0 => return Some(i),
+            ']' | ')' | '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The parts of `text` between its commas outside brackets and parentheses.
@@ -1903,27 +1935,41 @@ fn result_type(written: &str) -> &str {
 
 /// The parameter names in a task's detail, `(a: int, b: int) -> int`.
 pub(crate) fn parameter_names(detail: &str) -> Vec<String> {
-    parameters(detail).into_iter().map(|(name, _)| name).collect()
+    parameter_parts(detail).into_iter().map(|(name, _, _)| name).collect()
+}
+
+/// The names of the parameters in a task's detail that a call gives: all but
+/// the last ones, which fall back on values, `width: int = 8`.
+pub(crate) fn needed_parameter_names(detail: &str) -> Vec<String> {
+    parameter_parts(detail).into_iter().filter(|(_, _, falls_back)| !falls_back).map(|(name, _, _)| name).collect()
 }
 
 /// The parameters in a task's detail, with their types where they parse.
 pub(crate) fn parameters(detail: &str) -> Vec<(String, Option<Type>)> {
+    // `r: region default` is a region.
+    parameter_parts(detail).into_iter().map(|(name, ty, _)| (name, parse_type(without_default(ty)))).collect()
+}
+
+/// The parameters in a task's detail: each name, its type as written, and
+/// whether it falls back on a value, `= 8`, which no type holds.
+fn parameter_parts(detail: &str) -> Vec<(String, &str, bool)> {
+    if !detail.starts_with('(') {
+        return Vec::new();
+    }
     // The parameters end at the `)` closing the first `(`.
-    let mut depth = 0usize;
-    let close = detail.char_indices().find(|&(_, c)| {
-        match c {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-        c == ')' && depth == 0
-    });
-    let inside = close.filter(|_| detail.starts_with('(')).and_then(|(at, _)| detail.get(1..at)).unwrap_or("");
+    let rest = detail.get(1..).unwrap_or("");
+    let inside = rest.get(..list_end(rest).unwrap_or(rest.len())).unwrap_or("");
     split_list(inside)
         .into_iter()
-        // `r: region default` is a region, which the call may leave out.
-        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(without_default(ty)))))
-        .filter(|(name, _)| !name.is_empty())
+        .filter_map(|param| {
+            let (name, ty) = param.split_once(':')?;
+            let (ty, falls_back) = match ty.split_once('=') {
+                Some((ty, _)) => (ty, true),
+                None => (ty, false),
+            };
+            Some((name.trim().to_string(), ty, falls_back))
+        })
+        .filter(|(name, _, _)| !name.is_empty())
         .collect()
 }
 

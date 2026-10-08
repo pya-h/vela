@@ -1,6 +1,7 @@
-; error: 5:10: task 'math.log' expects 2 arguments, got 1
+; error: 6:10: task 'math.log' expects 1 to 2 arguments, got 0
+; 'math.log' falls back on base 10, but the number itself is always given.
 include std/math
 
 task main()
-    show(math.log(10.0))
+    show(math.log())
 fi

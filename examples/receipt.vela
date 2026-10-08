@@ -1,0 +1,54 @@
+; A receipt: each line names an item and its price, with dots out to a width.
+; The last parameters of a task may name a value a call that leaves them out
+; is given, `width: int = WIDTH`: most lines use the receipt's own width and
+; fill, the rule under them its own fill, and the total names one. A parameter
+; of a task's type can have one too, here a lambda that keeps nothing, which a
+; caller may swap for another task.
+
+#WIDTH = 24
+
+; Writes `name`, the fill, then the price in cents as units and cents, so
+; that the line ends at `width`.
+task line(name: text, cents: int, width: int = WIDTH, fill: text = ".")
+    ; The line is made in a region of its own, freed when it is shown.
+    region work default
+    bind units = cents / 100
+    bind part = cents % 100
+    bind price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
+    hold out: text@work = name
+    each i in 0..width - name.len - price.len
+        out = out + fill
+    fi
+    show(out + price)
+fi
+
+; A line of `fill` across the receipt.
+task rule(width: int = WIDTH, fill: text = "-")
+    region work default
+    hold out: text@work = ""
+    each i in 0..width
+        out = out + fill
+    fi
+    show(out)
+fi
+
+; What an item costs after its discount, worked out by `off`: none by default.
+task priced(cents: int, off: (int) -> int = (c: int) -> int <- c fi) -> int
+    <- off(cents)
+fi
+
+; Ten percent off, rounded down to a cent.
+task sale(cents: int) -> int
+    <- cents - cents / 10
+fi
+
+task main()
+    bind tea = priced(450)
+    bind bread = priced(320, sale)
+    bind jam = priced(1299)
+    line("tea", tea)
+    line("bread", bread)
+    line("jam", jam)
+    rule()
+    line("TOTAL", tea + bread + jam, WIDTH, " ")
+fi

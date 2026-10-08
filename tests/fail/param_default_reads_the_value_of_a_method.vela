@@ -1,0 +1,12 @@
+; error: 6:22: '.v' reads the value a method is called on, and the value parameter 'by' falls back on is worked out before there is one, so it reads none of its fields
+; A method's default is worked out before there is a value to call it on.
+shape Box
+    v: int = 1
+
+    grown(by: int = .v) -> int
+        <- .v + by
+    fi
+fi
+
+task main()
+fi

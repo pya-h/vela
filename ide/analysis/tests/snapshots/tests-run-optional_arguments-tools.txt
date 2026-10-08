@@ -1,0 +1,30 @@
+  1 | ; A module for optional_arguments: its defaults name what only this file sees,
+    | comment:; A module for optional_arguments: its defaults name what only this file sees,
+  2 | ; a private macro and task, which a call elsewhere is given all the same.
+    | comment:; a private macro and task, which a call elsewhere is given all the same.
+  4 | #STEP = 7
+    | keyword:#  variant:STEP  operator:=  number:7
+  6 | priv task inc(n: int) -> int
+    | keyword:priv  keyword:task  task:inc  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  7 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+  8 | fi
+    | keyword:fi
+ 10 | task run(n: int, step: (int) -> int = inc, extra: int = STEP) -> int
+    | keyword:task  task:run  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:step  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:inc  punctuation:,  parameter:extra  punctuation::  type-builtin:int  operator:=  variant:STEP  punctuation:)  operator:->  type-builtin:int
+ 11 |     <- step(n) + extra
+    | keyword:<-  parameter:step  punctuation:(  parameter:n  punctuation:)  operator:+  parameter:extra
+ 12 | fi
+    | keyword:fi
+ 14 | shape Box
+    | keyword:shape  type:Box
+ 15 |     v: int = 1
+    | field:v  punctuation::  type-builtin:int  operator:=  number:1
+ 17 |     grown(by: int = STEP) -> Box
+    | method:grown  punctuation:(  parameter:by  punctuation::  type-builtin:int  operator:=  variant:STEP  punctuation:)  operator:->  type:Box
+ 18 |         <- Box { v: .v + by }
+    | keyword:<-  type:Box  punctuation:{  field:v  punctuation::  punctuation:.  field:v  operator:+  parameter:by  punctuation:}
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi

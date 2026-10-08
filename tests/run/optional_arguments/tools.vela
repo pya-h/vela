@@ -1,0 +1,20 @@
+; A module for optional_arguments: its defaults name what only this file sees,
+; a private macro and task, which a call elsewhere is given all the same.
+
+#STEP = 7
+
+priv task inc(n: int) -> int
+    <- n + 1
+fi
+
+task run(n: int, step: (int) -> int = inc, extra: int = STEP) -> int
+    <- step(n) + extra
+fi
+
+shape Box
+    v: int = 1
+
+    grown(by: int = STEP) -> Box
+        <- Box { v: .v + by }
+    fi
+fi

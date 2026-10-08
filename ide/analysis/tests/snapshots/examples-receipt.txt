@@ -1,0 +1,96 @@
+  1 | ; A receipt: each line names an item and its price, with dots out to a width.
+    | comment:; A receipt: each line names an item and its price, with dots out to a width.
+  2 | ; The last parameters of a task may name a value a call that leaves them out
+    | comment:; The last parameters of a task may name a value a call that leaves them out
+  3 | ; is given, `width: int = WIDTH`: most lines use the receipt's own width and
+    | comment:; is given, `width: int = WIDTH`: most lines use the receipt's own width and
+  4 | ; fill, the rule under them its own fill, and the total names one. A parameter
+    | comment:; fill, the rule under them its own fill, and the total names one. A parameter
+  5 | ; of a task's type can have one too, here a lambda that keeps nothing, which a
+    | comment:; of a task's type can have one too, here a lambda that keeps nothing, which a
+  6 | ; caller may swap for another task.
+    | comment:; caller may swap for another task.
+  8 | #WIDTH = 24
+    | keyword:#  variant:WIDTH  operator:=  number:24
+ 10 | ; Writes `name`, the fill, then the price in cents as units and cents, so
+    | comment:; Writes `name`, the fill, then the price in cents as units and cents, so
+ 11 | ; that the line ends at `width`.
+    | comment:; that the line ends at `width`.
+ 12 | task line(name: text, cents: int, width: int = WIDTH, fill: text = ".")
+    | keyword:task  task:line  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:cents  punctuation::  type-builtin:int  punctuation:,  parameter:width  punctuation::  type-builtin:int  operator:=  variant:WIDTH  punctuation:,  parameter:fill  punctuation::  type-builtin:text  operator:=  string:"."  punctuation:)
+ 13 |     ; The line is made in a region of its own, freed when it is shown.
+    | comment:; The line is made in a region of its own, freed when it is shown.
+ 14 |     region work default
+    | keyword:region  region:work  keyword:default
+ 15 |     bind units = cents / 100
+    | keyword:bind  variable:units  operator:=  parameter:cents  operator:/  number:100
+ 16 |     bind part = cents % 100
+    | keyword:bind  variable:part  operator:=  parameter:cents  operator:%  number:100
+ 17 |     bind price = when part < 10 "{units}.0{part}" else "{units}.{part}" fi
+    | keyword:bind  variable:price  operator:=  keyword:when  variable:part  operator:<  number:10  string:"{  variable:units  string:}.0{  variable:part  string:}"  keyword:else  string:"{  variable:units  string:}.{  variable:part  string:}"  keyword:fi
+ 18 |     hold out: text@work = name
+    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  parameter:name
+ 19 |     each i in 0..width - name.len - price.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:width  operator:-  parameter:name  punctuation:.  field:len  operator:-  variable:price  punctuation:.  field:len
+ 20 |         out = out + fill
+    | variable:out  operator:=  variable:out  operator:+  parameter:fill
+ 21 |     fi
+    | keyword:fi
+ 22 |     show(out + price)
+    | builtin-fn:show  punctuation:(  variable:out  operator:+  variable:price  punctuation:)
+ 23 | fi
+    | keyword:fi
+ 25 | ; A line of `fill` across the receipt.
+    | comment:; A line of `fill` across the receipt.
+ 26 | task rule(width: int = WIDTH, fill: text = "-")
+    | keyword:task  task:rule  punctuation:(  parameter:width  punctuation::  type-builtin:int  operator:=  variant:WIDTH  punctuation:,  parameter:fill  punctuation::  type-builtin:text  operator:=  string:"-"  punctuation:)
+ 27 |     region work default
+    | keyword:region  region:work  keyword:default
+ 28 |     hold out: text@work = ""
+    | keyword:hold  variable:out  punctuation::  type-builtin:text  operator:@  region:work  operator:=  string:""
+ 29 |     each i in 0..width
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:width
+ 30 |         out = out + fill
+    | variable:out  operator:=  variable:out  operator:+  parameter:fill
+ 31 |     fi
+    | keyword:fi
+ 32 |     show(out)
+    | builtin-fn:show  punctuation:(  variable:out  punctuation:)
+ 33 | fi
+    | keyword:fi
+ 35 | ; What an item costs after its discount, worked out by `off`: none by default.
+    | comment:; What an item costs after its discount, worked out by `off`: none by default.
+ 36 | task priced(cents: int, off: (int) -> int = (c: int) -> int <- c fi) -> int
+    | keyword:task  task:priced  punctuation:(  parameter:cents  punctuation::  type-builtin:int  punctuation:,  parameter:off  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  parameter:c  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:c  keyword:fi  punctuation:)  operator:->  type-builtin:int
+ 37 |     <- off(cents)
+    | keyword:<-  parameter:off  punctuation:(  parameter:cents  punctuation:)
+ 38 | fi
+    | keyword:fi
+ 40 | ; Ten percent off, rounded down to a cent.
+    | comment:; Ten percent off, rounded down to a cent.
+ 41 | task sale(cents: int) -> int
+    | keyword:task  task:sale  punctuation:(  parameter:cents  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 42 |     <- cents - cents / 10
+    | keyword:<-  parameter:cents  operator:-  parameter:cents  operator:/  number:10
+ 43 | fi
+    | keyword:fi
+ 45 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 46 |     bind tea = priced(450)
+    | keyword:bind  variable:tea  operator:=  task:priced  punctuation:(  number:450  punctuation:)
+ 47 |     bind bread = priced(320, sale)
+    | keyword:bind  variable:bread  operator:=  task:priced  punctuation:(  number:320  punctuation:,  task:sale  punctuation:)
+ 48 |     bind jam = priced(1299)
+    | keyword:bind  variable:jam  operator:=  task:priced  punctuation:(  number:1299  punctuation:)
+ 49 |     line("tea", tea)
+    | task:line  punctuation:(  string:"tea"  punctuation:,  variable:tea  punctuation:)
+ 50 |     line("bread", bread)
+    | task:line  punctuation:(  string:"bread"  punctuation:,  variable:bread  punctuation:)
+ 51 |     line("jam", jam)
+    | task:line  punctuation:(  string:"jam"  punctuation:,  variable:jam  punctuation:)
+ 52 |     rule()
+    | task:rule  punctuation:(  punctuation:)
+ 53 |     line("TOTAL", tea + bread + jam, WIDTH, " ")
+    | task:line  punctuation:(  string:"TOTAL"  punctuation:,  variable:tea  operator:+  variable:bread  operator:+  variable:jam  punctuation:,  variant:WIDTH  punctuation:,  string:" "  punctuation:)
+ 54 | fi
+    | keyword:fi

@@ -1,0 +1,8 @@
+; error: 3:53: a lambda that keeps what it uses keeps it in a region, which the value parameter 'f' falls back on can't name, since it is worked out before the call; give a lambda that keeps nothing, or a task
+; A lambda that keeps what it uses keeps it in a region a default can't name.
+task apply(r: region, n: int, f: [@r](int) -> int = [@r](x: int) -> int <- x fi) -> int
+    <- f(n)
+fi
+
+task main()
+fi

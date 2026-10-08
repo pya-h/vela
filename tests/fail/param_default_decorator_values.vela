@@ -1,0 +1,13 @@
+; error: 7:2: decorator 'announce' takes the task and up to 1 value, written '$announce' or '$announce(…)', got 2 values
+; A decorator's values that fall back may be left out, and no more given.
+task announce(next: (int) -> int, times: int = 2) -> nothing ~ text
+    show(times)
+fi
+
+$announce(1, 2)
+task k(n: int) -> int
+    <- n
+fi
+
+task main()
+fi

@@ -43,6 +43,7 @@ native task tanh(x: float) -> float
 ; `e` raised to the power `x`.
 native task exp(x: float) -> float
 
-; The power `base` is raised to for `x`: `log(100.0, 10.0)` is 2. With `e` as
-; the base, it is the natural logarithm, and bases 2, 10, and `e` are exact.
-native task log(x: float, base: float) -> float
+; The power `base` is raised to for `x`: `log(100.0)` is 2, as base 10 is the
+; one it falls back on, and `log(8.0, 2.0)` is 3. With `e` as the base, it is
+; the natural logarithm, and bases 2, 10, and `e` are exact.
+native task log(x: float, base: float = 10.0) -> float

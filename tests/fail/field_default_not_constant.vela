@@ -1,4 +1,4 @@
-; error: 9:14: the value field 'n' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, or a tuple, an array, or a literal of those
+; error: 9:14: the value field 'n' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, arithmetic on numbers and macros, or a tuple, an array, or a literal of those
 task one() -> int
     <- 1
 fi

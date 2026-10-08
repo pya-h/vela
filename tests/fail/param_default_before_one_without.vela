@@ -1,0 +1,9 @@
+; error: 4:38: 'fill' has no value to fall back on, and comes after 'width', which has one; the parameters with values to fall back on come last, so that a call leaves out only the last ones
+; The parameters with values to fall back on come last, so a call leaves out
+; only the last ones.
+task pad(word: text, width: int = 8, fill: text) -> int
+    <- width
+fi
+
+task main()
+fi

@@ -1945,12 +1945,13 @@ pub struct Field {
     /// caller's place. A field or a payload is always `Passing::Copy`.
     pub passing: Passing,
     /// `size: int = 0`: the value a shape's field takes where a literal leaves
-    /// it out, which is what lets a literal name some fields and not others. It
-    /// is a value the compiler works out without running the program (see
-    /// `check::constant_value`), and the checker writes it into every literal
-    /// that leaves the field out, so nothing later in the compiler sees a
-    /// literal missing a field. A parameter and a variant's value never have one
-    /// (see `docs/future.html#default-arguments` for the parameter half).
+    /// it out, which is what lets a literal name some fields and not others, or
+    /// a task's parameter where a call leaves it out, one of the last (see
+    /// `Checker::fill_defaults`). It is a value the compiler works out without
+    /// running the program (see `check::constant_value`), and the checker writes
+    /// it into every literal or call that leaves it out, so nothing later in the
+    /// compiler sees a literal missing a field or a call missing a value. A
+    /// variant's value never has one.
     pub default: Option<Expr>,
 }
 

@@ -1,0 +1,10 @@
+; error: 5:22: joined text, or text holding values, is made while the program runs, so parameter 't' can't fall back on it; its default is text written whole, as in '"n"'
+; Text holding values is made as the program runs, so no default holds it.
+#N = 3
+
+task label(t: text = "n = {N}") -> text
+    <- t
+fi
+
+task main()
+fi

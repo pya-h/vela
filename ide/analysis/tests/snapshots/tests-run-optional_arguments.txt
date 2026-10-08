@@ -1,0 +1,206 @@
+  1 | ; Optional arguments: the last parameters of a task may name a value to fall
+    | comment:; Optional arguments: the last parameters of a task may name a value to fall
+  2 | ; back on, `width: int = 8`, which a call that leaves them out is given. The
+    | comment:; back on, `width: int = 8`, which a call that leaves them out is given. The
+  3 | ; value is one the compiler works out (a number, text, a variant, a task, a
+    | comment:; value is one the compiler works out (a number, text, a variant, a task, a
+  4 | ; lambda that keeps nothing, arithmetic on numbers and macros), checked once
+    | comment:; lambda that keeps nothing, arithmetic on numbers and macros), checked once
+  5 | ; as the task's own file reads it, and written into each call, so a call costs
+    | comment:; as the task's own file reads it, and written into each call, so a call costs
+  6 | ; no more than the same call written out.
+    | comment:; no more than the same call written out.
+  8 | include std/math
+    | keyword:include  module:std  operator:/  module:math
+  9 | include optional_arguments/tools (run, Box)
+    | keyword:include  module:optional_arguments  operator:/  module:tools  punctuation:(  task:run  punctuation:,  type:Box  punctuation:)
+ 11 | #WIDTH = 8
+    | keyword:#  variant:WIDTH  operator:=  number:8
+ 13 | kind Side
+    | keyword:kind  type:Side
+ 14 |     Left
+    | variant:Left
+ 15 |     Right
+    | variant:Right
+ 16 | fi
+    | keyword:fi
+ 18 | shape Spot
+    | keyword:shape  type:Spot
+ 19 |     x: int = 2 * WIDTH
+    | field:x  punctuation::  type-builtin:int  operator:=  number:2  operator:*  variant:WIDTH
+ 20 |     y: int = 0
+    | field:y  punctuation::  type-builtin:int  operator:=  number:0
+ 21 | fi
+    | keyword:fi
+ 23 | task double(x: int) -> int
+    | keyword:task  task:double  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 24 |     <- x * 2
+    | keyword:<-  parameter:x  operator:*  number:2
+ 25 | fi
+    | keyword:fi
+ 27 | task pad(t: text, width: int = WIDTH, fill: char = '.', side: Side = Side.Right)
+    | keyword:task  task:pad  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:,  parameter:width  punctuation::  type-builtin:int  operator:=  variant:WIDTH  punctuation:,  parameter:fill  punctuation::  type-builtin:char  operator:=  string:'.'  punctuation:,  parameter:side  punctuation::  type:Side  operator:=  type:Side  punctuation:.  variant:Right  punctuation:)
+ 28 |     match side
+    | keyword:match  parameter:side
+ 29 |     case Left
+    | keyword:case  variant:Left
+ 30 |         show(t, "|", width, fill)
+    | builtin-fn:show  punctuation:(  parameter:t  punctuation:,  string:"|"  punctuation:,  parameter:width  punctuation:,  parameter:fill  punctuation:)
+ 31 |     case Right
+    | keyword:case  variant:Right
+ 32 |         show(width, fill, "|", t)
+    | builtin-fn:show  punctuation:(  parameter:width  punctuation:,  parameter:fill  punctuation:,  string:"|"  punctuation:,  parameter:t  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 | fi
+    | keyword:fi
+ 36 | ; A task's type: a named task, or a lambda that keeps nothing.
+    | comment:; A task's type: a named task, or a lambda that keeps nothing.
+ 37 | task apply(x: int, f: (int) -> int = (n: int) -> int <- n + 100 fi) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:+  number:100  keyword:fi  punctuation:)  operator:->  type-builtin:int
+ 38 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 39 | fi
+    | keyword:fi
+ 41 | task twice(x: int, f: (int) -> int = double) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:double  punctuation:)  operator:->  type-builtin:int
+ 42 |     <- f(f(x))
+    | keyword:<-  parameter:f  punctuation:(  parameter:f  punctuation:(  parameter:x  punctuation:)  punctuation:)
+ 43 | fi
+    | keyword:fi
+ 45 | ; Arithmetic is worked out once, before the program runs.
+    | comment:; Arithmetic is worked out once, before the program runs.
+ 46 | task scaled(n: int, by: float = -float(WIDTH) / 2.0, label: text = "x" + "y")
+    | keyword:task  task:scaled  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:by  punctuation::  type-builtin:float  operator:=  operator:-  type-builtin:float  punctuation:(  variant:WIDTH  punctuation:)  operator:/  number:2.0  punctuation:,  parameter:label  punctuation::  type-builtin:text  operator:=  string:"x"  operator:+  string:"y"  punctuation:)
+ 47 |     show(label, " ", float(n) * by)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:" "  punctuation:,  type-builtin:float  punctuation:(  parameter:n  punctuation:)  operator:*  parameter:by  punctuation:)
+ 48 | fi
+    | keyword:fi
+ 50 | ; A shape literal, and `none` for a `maybe`.
+    | comment:; A shape literal, and `none` for a `maybe`.
+ 51 | task area(spot: Spot = Spot { y: 3 }, name: maybe text = none)
+    | keyword:task  task:area  punctuation:(  parameter:spot  punctuation::  type:Spot  operator:=  type:Spot  punctuation:{  field:y  punctuation::  number:3  punctuation:}  punctuation:,  parameter:name  punctuation::  keyword:maybe  type-builtin:text  operator:=  keyword:none  punctuation:)
+ 52 |     show(name { "spot" }, " ", spot.x * spot.y)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:{  string:"spot"  punctuation:}  punctuation:,  string:" "  punctuation:,  parameter:spot  punctuation:.  field:x  operator:*  parameter:spot  punctuation:.  field:y  punctuation:)
+ 53 | fi
+    | keyword:fi
+ 55 | ; A type the task takes has no one value, but `none` fits any `maybe`.
+    | comment:; A type the task takes has no one value, but `none` fits any `maybe`.
+ 56 | task pick<T>(xs: [T]@r, at_index: int = 0, fallback: maybe T = none) -> maybe T
+    | keyword:task  task:pick  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:at_index  punctuation::  type-builtin:int  operator:=  number:0  punctuation:,  parameter:fallback  punctuation::  keyword:maybe  type:T  operator:=  keyword:none  punctuation:)  operator:->  keyword:maybe  type:T
+ 57 |     when at_index < xs.len
+    | keyword:when  parameter:at_index  operator:<  parameter:xs  punctuation:.  field:len
+ 58 |         <- xs[at_index]
+    | keyword:<-  parameter:xs  punctuation:[  parameter:at_index  punctuation:]
+ 59 |     fi
+    | keyword:fi
+ 60 |     <- fallback
+    | keyword:<-  parameter:fallback
+ 61 | fi
+    | keyword:fi
+ 63 | shape Counter
+    | keyword:shape  type:Counter
+ 64 |     n: int = 0
+    | field:n  punctuation::  type-builtin:int  operator:=  number:0
+ 66 |     bumped(by: int = 1) -> Counter
+    | method:bumped  punctuation:(  parameter:by  punctuation::  type-builtin:int  operator:=  number:1  punctuation:)  operator:->  type:Counter
+ 67 |         <- Counter { n: .n + by }
+    | keyword:<-  type:Counter  punctuation:{  field:n  punctuation::  punctuation:.  field:n  operator:+  parameter:by  punctuation:}
+ 68 |     fi
+    | keyword:fi
+ 70 |     shared starting(n: int = 10) -> Counter
+    | keyword:shared  method:starting  punctuation:(  parameter:n  punctuation::  type-builtin:int  operator:=  number:10  punctuation:)  operator:->  type:Counter
+ 71 |         <- Counter { n: n }
+    | keyword:<-  type:Counter  punctuation:{  field:n  punctuation::  parameter:n  punctuation:}
+ 72 |     fi
+    | keyword:fi
+ 73 | fi
+    | keyword:fi
+ 75 | ; A wrapper is given every value: the call fills in its task's first.
+    | comment:; A wrapper is given every value: the call fills in its task's first.
+ 76 | task logged(next: (int) -> int, n: int) -> int
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 77 |     show("logged ", n)
+    | builtin-fn:show  punctuation:(  string:"logged "  punctuation:,  parameter:n  punctuation:)
+ 78 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 79 | fi
+    | keyword:fi
+ 81 | $(logged)
+    | keyword:$  punctuation:(  task:logged  punctuation:)
+ 82 | task square(n: int = 3) -> int
+    | keyword:task  task:square  punctuation:(  parameter:n  punctuation::  type-builtin:int  operator:=  number:3  punctuation:)  operator:->  type-builtin:int
+ 83 |     <- n * n
+    | keyword:<-  parameter:n  operator:*  parameter:n
+ 84 | fi
+    | keyword:fi
+ 86 | ; A startup decorator's own values may fall back too: `$noted` or `$noted(…)`.
+    | comment:; A startup decorator's own values may fall back too: `$noted` or `$noted(…)`.
+ 87 | task noted(next: (int) -> int, times: int = 1) -> nothing ~ text
+    | keyword:task  task:noted  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:times  punctuation::  type-builtin:int  operator:=  number:1  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
+ 88 |     show("noted ", times, " ", next(2))
+    | builtin-fn:show  punctuation:(  string:"noted "  punctuation:,  parameter:times  punctuation:,  string:" "  punctuation:,  parameter:next  punctuation:(  number:2  punctuation:)  punctuation:)
+ 89 | fi
+    | keyword:fi
+ 91 | $noted
+    | keyword:$  task:noted
+ 92 | $noted(2)
+    | keyword:$  task:noted  punctuation:(  number:2  punctuation:)
+ 93 | task half(n: int) -> int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 94 |     <- n / 2
+    | keyword:<-  parameter:n  operator:/  number:2
+ 95 | fi
+    | keyword:fi
+ 97 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 98 |     region r default
+    | keyword:region  region:r  keyword:default
+ 99 |     pad("a")
+    | task:pad  punctuation:(  string:"a"  punctuation:)
+100 |     pad("b", 3)
+    | task:pad  punctuation:(  string:"b"  punctuation:,  number:3  punctuation:)
+101 |     pad("c", 3, '-')
+    | task:pad  punctuation:(  string:"c"  punctuation:,  number:3  punctuation:,  string:'-'  punctuation:)
+102 |     pad("d", 1, ' ', Side.Left)
+    | task:pad  punctuation:(  string:"d"  punctuation:,  number:1  punctuation:,  string:' '  punctuation:,  type:Side  punctuation:.  variant:Left  punctuation:)
+103 |     show(apply(4), " ", apply(4, double), " ", twice(5), " ", twice(5, (n: int) -> int <- n + 1 fi))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  number:4  punctuation:,  task:double  punctuation:)  punctuation:,  string:" "  punctuation:,  task:twice  punctuation:(  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  task:twice  punctuation:(  number:5  punctuation:,  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:+  number:1  keyword:fi  punctuation:)  punctuation:)
+104 |     scaled(3)
+    | task:scaled  punctuation:(  number:3  punctuation:)
+105 |     scaled(3, 1.0)
+    | task:scaled  punctuation:(  number:3  punctuation:,  number:1.0  punctuation:)
+106 |     scaled(3, 1.0, "z")
+    | task:scaled  punctuation:(  number:3  punctuation:,  number:1.0  punctuation:,  string:"z"  punctuation:)
+107 |     area()
+    | task:area  punctuation:(  punctuation:)
+108 |     area(Spot {})
+    | task:area  punctuation:(  type:Spot  punctuation:{  punctuation:}  punctuation:)
+109 |     area(Spot { x: 1, y: 1 }, "one")
+    | task:area  punctuation:(  type:Spot  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:,  string:"one"  punctuation:)
+110 |     show(pick([4, 5, ...]) { 0 }, " ", pick([4, 5, ...], 9) { 0 }, " ", pick([4, 5, ...], 9, 6) { 0 })
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:,  number:9  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:,  number:9  punctuation:,  number:6  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+111 |     bind c = Counter.starting()
+    | keyword:bind  variable:c  operator:=  type:Counter  punctuation:.  method:starting  punctuation:(  punctuation:)
+112 |     show(c.n, " ", c.bumped().n, " ", c.bumped(5).n, " ", Counter.starting(3).bumped().n)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:bumped  punctuation:(  punctuation:)  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:bumped  punctuation:(  number:5  punctuation:)  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  type:Counter  punctuation:.  method:starting  punctuation:(  number:3  punctuation:)  punctuation:.  method:bumped  punctuation:(  punctuation:)  punctuation:.  field:n  punctuation:)
+113 |     bind small = square()
+    | keyword:bind  variable:small  operator:=  task:square  punctuation:(  punctuation:)
+114 |     bind big = square(4)
+    | keyword:bind  variable:big  operator:=  task:square  punctuation:(  number:4  punctuation:)
+115 |     show(small, " ", big)
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:,  string:" "  punctuation:,  variable:big  punctuation:)
+116 |     ; Another file's defaults, which name its private parts.
+    | comment:; Another file's defaults, which name its private parts.
+117 |     show(run(1), " ", run(1, double), " ", run(1, double, 0), " ", Box {}.grown().v)
+    | builtin-fn:show  punctuation:(  task:run  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:run  punctuation:(  number:1  punctuation:,  task:double  punctuation:)  punctuation:,  string:" "  punctuation:,  task:run  punctuation:(  number:1  punctuation:,  task:double  punctuation:,  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Box  punctuation:{  punctuation:}  punctuation:.  method:grown  punctuation:(  punctuation:)  punctuation:.  field:v  punctuation:)
+118 |     ; A task named as a value takes every value, as its type says.
+    | comment:; A task named as a value takes every value, as its type says.
+119 |     bind f = pad
+    | keyword:bind  variable:f  operator:=  task:pad
+120 |     f("e", 2, '+', Side.Left)
+    | variable:f  punctuation:(  string:"e"  punctuation:,  number:2  punctuation:,  string:'+'  punctuation:,  type:Side  punctuation:.  variant:Left  punctuation:)
+121 |     show(math.log(1000.0), " ", math.log(8.0, 2.0))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:log  punctuation:(  number:1000.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  number:8.0  punctuation:,  number:2.0  punctuation:)  punctuation:)
+122 | fi
+    | keyword:fi

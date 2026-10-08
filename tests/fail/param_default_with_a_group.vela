@@ -1,0 +1,9 @@
+; error: 4:31: a task that takes a group, 'args', takes no values to fall back on: the values a call gives after the others would be the group's or these, and a group can already be given none
+; With a group, the values after the others would be the group's or the
+; defaults, so a task taking a group takes no defaults.
+task total<P...>(start: int = 0, args: P...) -> int
+    <- start
+fi
+
+task main()
+fi

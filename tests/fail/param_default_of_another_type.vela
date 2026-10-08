@@ -1,0 +1,8 @@
+; error: 3:38: expected type int, got text
+; A default is a value of its parameter's type.
+task repeat(word: text, times: int = "twice") -> int
+    <- times
+fi
+
+task main()
+fi

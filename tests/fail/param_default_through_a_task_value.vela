@@ -1,0 +1,11 @@
+; error: 10:10: 'f' is a task of type (text, int) -> int, which takes 2 arguments, got 1
+; The values a task falls back on belong to its name; its type, which a task
+; value has, names every value, so a call through one gives them all.
+task pad(word: text, width: int = 8) -> int
+    <- width
+fi
+
+task main()
+    bind f = pad
+    show(f("a"))
+fi

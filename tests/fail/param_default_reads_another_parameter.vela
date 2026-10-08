@@ -1,0 +1,9 @@
+; error: 4:46: the value parameter 'high' falls back on is worked out before the program runs, so it can't read parameter 'low', which a call gives
+; A default is worked out before the program runs, so it can't read a value
+; the call gives.
+task clamp(n: int, low: int = 0, high: int = low) -> int
+    <- n
+fi
+
+task main()
+fi

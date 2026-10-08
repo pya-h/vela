@@ -14,7 +14,7 @@ use serde::Serialize;
 use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Need, Type, unqualified};
 use vela::lexer::{LexKind, Token};
 
-use crate::infer::{Knowledge, parameter_names, parameters};
+use crate::infer::{Knowledge, needed_parameter_names, parameter_names, parameters};
 use crate::scan::{LOOP_NAME, Scan, Symbol, SymbolKind};
 use crate::types::{Checked, Context};
 
@@ -1152,7 +1152,7 @@ fn shared_methods(k: &Knowledge, owner: usize) -> Vec<CompletionItem> {
 /// A method as offered after a dot, with `prefix` before it: its name, and its
 /// parameters to fill in, headed by its word (`alters` or `shared`).
 fn method_item(member: &Symbol, prefix: &str) -> CompletionItem {
-    let params = parameter_names(&member.detail);
+    let params = needed_parameter_names(&member.detail);
     let mut used = Vec::new();
     let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
     let (apply, snippet) = if args.is_empty() {
@@ -1841,7 +1841,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
             let label = own_name(s);
             let (kind, detail, apply, snippet) = match s.kind {
                 SymbolKind::Task => {
-                    let params = parameter_names(&s.detail);
+                    let params = needed_parameter_names(&s.detail);
                     let mut used = Vec::new();
                     let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
                     let (apply, snippet) = if args.is_empty() { (Some(format!("{}()", label)), None) } else { (None, Some(format!("{}({})", label, args.join(", ")))) };
@@ -2214,7 +2214,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
     let mut items: Vec<CompletionItem> = visible_globals(k, &[SymbolKind::Task])
         .into_iter()
         .map(|(label, task)| {
-            let params = parameter_names(&task.detail);
+            let params = needed_parameter_names(&task.detail);
             let mut used = Vec::new();
             let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
             let (apply, snippet) = if args.is_empty() {

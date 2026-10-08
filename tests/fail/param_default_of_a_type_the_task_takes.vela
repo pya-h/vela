@@ -1,0 +1,8 @@
+; error: 3:40: parameter 'fallback' is of a type the task takes, which is a different type in every use, so it has no value to fall back on
+; A type the task takes is another type in every use, so no one value fits it.
+task first<T>(xs: [T]@r, fallback: T = 0) -> T
+    <- fallback
+fi
+
+task main()
+fi

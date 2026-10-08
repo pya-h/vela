@@ -420,6 +420,9 @@ Press Ctrl+C to stop.</pre>
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
             <code>new</code>'s, <code>copy()</code>'s, or a line-reading <code>scan</code>'s value, never after
             <code>scan(prompt, int)</code>, which names no region), <code>and</code>, <code>or</code>, and, after a written type, the <code>~</code> that gives it an error side.
+            A task's call fills in only the values it must give: <code>pad(${t})</code> for
+            <code>task pad(t: text, width: int = 8)</code>, whose header, values and all, its hover shows, and a parameter
+            hovers with its type alone, even in a file that doesn't parse.
             A <code>new</code> written without <code>( )</code>, <code>new [text]</code> or <code>new Point</code>, is a finished value,
             so <code>at</code> follows it rather than <code>~</code>, and it hovers with what it makes even in a file that
             doesn't parse, maps among them. Nothing is offered where a name is being declared: the names after the commas
