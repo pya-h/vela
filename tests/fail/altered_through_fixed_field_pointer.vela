@@ -1,0 +1,20 @@
+; error: 19:5: 'Point.bump' changes 'h.cell^', the value it is called on, and nothing changes through immutable variable 'h', at any depth
+; At any depth: a pointer in a field of a fixed value.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+shape Holder
+    n: int
+    cell: ^Point
+fi
+
+task main()
+    region r default
+    fixed h = Holder { n: 0, cell: new Point(Point { x: 1 }) }
+    h.cell^.bump()
+fi

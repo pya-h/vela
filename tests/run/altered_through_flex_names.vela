@@ -1,0 +1,68 @@
+; Where an alters method may be called: on a value reached from a 'flex' name,
+; at any depth, on a task's result, which the task is building, and on a value
+; made where it is called. Nothing changes through a 'fixed' name (see
+; tests/fail/altered_through_*). A task value kept in a 'fixed' name is still
+; called: what it changes is what it was given as places.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+shape Box
+    items: [Point]
+    alters poke()
+        .items[0].bump()
+    fi
+fi
+
+task get(r: region) -> ^Point@r
+    <- new Point(Point { x: 1 }) at r
+fi
+
+; The task's own copy of a slice, whose items are the caller's.
+task bump_first(flex xs: [Point]@r)
+    xs[0].bump()
+fi
+
+; A result's items change while the task builds it.
+task points(r: region) -> out: [Point]@r
+    out <- new [Point]([Point { x: 0 }#2]) at r
+    out[1].bump()
+fi
+
+task main()
+    region r default
+    flex p = new Point(Point { x: 1 })
+    p^.bump()
+    show(p^.x)
+
+    flex xs = [Point { x: 5 }, Point { x: 7 }, ...]
+    xs[1].bump()
+    bump_first(xs)
+    show(xs[0].x, " ", xs[1].x)
+
+    flex b = Box { items: [Point { x: 9 }, ...] }
+    b.poke()
+    show(b.items[0].x)
+
+    fixed made = points(r)
+    show(made[1].x)
+
+    get(r)^.bump()
+
+    flex found: maybe ^Point@r = new Point(Point { x: 20 })
+    when found is {flex at_point}
+        at_point^.bump()
+        show(at_point^.x)
+    fi
+
+    flex count = 0
+    region kept
+    fixed add = [flex& count, @kept](n: int) -> nothing count = count + n fi
+    add(2)
+    add(3)
+    show(count)
+fi

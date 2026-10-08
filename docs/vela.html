@@ -1795,7 +1795,8 @@ show(c.total())            <span class="comment">; 2</span></pre>
         A method that changes the value it is called on says <code>alters</code> before its name; one that assigns a
         member without it is refused, with the fix named. Only a place that can change may call it: a
         <code>flex</code> variable, a field or item of one, an item of a slice, or what a pointer points to
-        (<code>p^.step()</code>). The compiler gives the method that place, so the change lands where the caller keeps
+        (<code>p^.step()</code>), reached from a <code>flex</code> name: nothing changes through a <code>fixed</code>
+        one, at any depth, so <code>p^.step()</code> with a <code>fixed p</code> is refused too. The compiler gives the method that place, so the change lands where the caller keeps
         the value, as a <a href="#parameters"><code>flex&amp;</code> parameter</a> is given one. A <code>fixed</code>, a
         parameter not written <code>flex</code> or <code>flex&amp;</code>, a result, and a value made on the spot
         never change:

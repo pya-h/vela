@@ -96,7 +96,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "alters",
         "alters name(…)",
-        "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a flex variable, a field or item of one, or what a pointer points to.",
+        "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a flex variable, a field or item of one, or what a pointer points to, reached from a flex name.",
     ),
     (
         "type",

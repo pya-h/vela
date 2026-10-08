@@ -1,0 +1,112 @@
+  1 | ; Where an alters method may be called: on a value reached from a 'flex' name,
+    | comment:; Where an alters method may be called: on a value reached from a 'flex' name,
+  2 | ; at any depth, on a task's result, which the task is building, and on a value
+    | comment:; at any depth, on a task's result, which the task is building, and on a value
+  3 | ; made where it is called. Nothing changes through a 'fixed' name (see
+    | comment:; made where it is called. Nothing changes through a 'fixed' name (see
+  4 | ; tests/fail/altered_through_*). A task value kept in a 'fixed' name is still
+    | comment:; tests/fail/altered_through_*). A task value kept in a 'fixed' name is still
+  5 | ; called: what it changes is what it was given as places.
+    | comment:; called: what it changes is what it was given as places.
+  7 | shape Point
+    | keyword:shape  type:Point
+  8 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  9 |     alters bump()
+    | keyword:alters  method:bump  punctuation:(  punctuation:)
+ 10 |         .x = .x + 1
+    | punctuation:.  field:x  operator:=  punctuation:.  field:x  operator:+  number:1
+ 11 |     fi
+    | keyword:fi
+ 12 | fi
+    | keyword:fi
+ 14 | shape Box
+    | keyword:shape  type:Box
+ 15 |     items: [Point]
+    | field:items  punctuation::  punctuation:[  type:Point  punctuation:]
+ 16 |     alters poke()
+    | keyword:alters  method:poke  punctuation:(  punctuation:)
+ 17 |         .items[0].bump()
+    | punctuation:.  field:items  punctuation:[  number:0  punctuation:]  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task get(r: region) -> ^Point@r
+    | keyword:task  task:get  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  operator:^  type:Point  operator:@  region:r
+ 22 |     <- new Point(Point { x: 1 }) at r
+    | keyword:<-  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
+ 23 | fi
+    | keyword:fi
+ 25 | ; The task's own copy of a slice, whose items are the caller's.
+    | comment:; The task's own copy of a slice, whose items are the caller's.
+ 26 | task bump_first(flex xs: [Point]@r)
+    | keyword:task  task:bump_first  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type:Point  punctuation:]  operator:@  region:r  punctuation:)
+ 27 |     xs[0].bump()
+    | parameter:xs  punctuation:[  number:0  punctuation:]  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | ; A result's items change while the task builds it.
+    | comment:; A result's items change while the task builds it.
+ 31 | task points(r: region) -> out: [Point]@r
+    | keyword:task  task:points  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  variable:out  punctuation::  punctuation:[  type:Point  punctuation:]  operator:@  region:r
+ 32 |     out <- new [Point]([Point { x: 0 }#2]) at r
+    | variable:out  keyword:<-  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:}  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+ 33 |     out[1].bump()
+    | variable:out  punctuation:[  number:1  punctuation:]  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     region r default
+    | keyword:region  region:r  keyword:default
+ 38 |     flex p = new Point(Point { x: 1 })
+    | keyword:flex  variable:p  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:)
+ 39 |     p^.bump()
+    | variable:p  operator:^  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 40 |     show(p^.x)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  punctuation:)
+ 42 |     flex xs = [Point { x: 5 }, Point { x: 7 }, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:7  punctuation:}  punctuation:,  keyword:...  punctuation:]
+ 43 |     xs[1].bump()
+    | variable:xs  punctuation:[  number:1  punctuation:]  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 44 |     bump_first(xs)
+    | task:bump_first  punctuation:(  variable:xs  punctuation:)
+ 45 |     show(xs[0].x, " ", xs[1].x)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:1  punctuation:]  punctuation:.  field:x  punctuation:)
+ 47 |     flex b = Box { items: [Point { x: 9 }, ...] }
+    | keyword:flex  variable:b  operator:=  type:Box  punctuation:{  field:items  punctuation::  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:9  punctuation:}  punctuation:,  keyword:...  punctuation:]  punctuation:}
+ 48 |     b.poke()
+    | variable:b  punctuation:.  method:poke  punctuation:(  punctuation:)
+ 49 |     show(b.items[0].x)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:items  punctuation:[  number:0  punctuation:]  punctuation:.  field:x  punctuation:)
+ 51 |     fixed made = points(r)
+    | keyword:fixed  variable:made  operator:=  task:points  punctuation:(  region:r  punctuation:)
+ 52 |     show(made[1].x)
+    | builtin-fn:show  punctuation:(  variable:made  punctuation:[  number:1  punctuation:]  punctuation:.  field:x  punctuation:)
+ 54 |     get(r)^.bump()
+    | task:get  punctuation:(  region:r  punctuation:)  operator:^  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 56 |     flex found: maybe ^Point@r = new Point(Point { x: 20 })
+    | keyword:flex  variable:found  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:20  punctuation:}  punctuation:)
+ 57 |     when found is {flex at_point}
+    | keyword:when  variable:found  keyword:is  punctuation:{  keyword:flex  variable:at_point  punctuation:}
+ 58 |         at_point^.bump()
+    | variable:at_point  operator:^  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 59 |         show(at_point^.x)
+    | builtin-fn:show  punctuation:(  variable:at_point  operator:^  punctuation:.  field:x  punctuation:)
+ 60 |     fi
+    | keyword:fi
+ 62 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 63 |     region kept
+    | keyword:region  region:kept
+ 64 |     fixed add = [flex& count, @kept](n: int) -> nothing count = count + n fi
+    | keyword:fixed  variable:add  operator:=  punctuation:[  keyword:flex  keyword:&  variable:count  punctuation:,  operator:@  region:kept  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  variable:count  operator:=  variable:count  operator:+  parameter:n  keyword:fi
+ 65 |     add(2)
+    | variable:add  punctuation:(  number:2  punctuation:)
+ 66 |     add(3)
+    | variable:add  punctuation:(  number:3  punctuation:)
+ 67 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 68 | fi
+    | keyword:fi

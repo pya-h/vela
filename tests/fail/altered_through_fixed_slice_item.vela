@@ -1,0 +1,15 @@
+; error: 14:5: 'Point.bump' changes 'xs[0]', the value it is called on, and nothing changes through immutable variable 'xs', at any depth
+; An item of a fixed slice.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    fixed xs = [Point { x: 1 }, ...]
+    xs[0].bump()
+fi

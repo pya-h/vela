@@ -5021,7 +5021,7 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Deref(pointer) => {
-                self.written_through(pointer, written)?;
+                self.written_through(pointer, written, None)?;
                 self.check_expr(expr)
             }
             ExprKind::Shared { shape, field } => {
@@ -5094,7 +5094,7 @@ impl Checker {
             }
             let ty = self.check_expr(base)?;
             if matches!(ty, Type::Slice(..)) {
-                self.written_through(base, written)?;
+                self.written_through(base, written, None)?;
             }
             return Ok(ty);
         }
@@ -5105,7 +5105,7 @@ impl Checker {
             self.assignable_array(base, written)?;
         }
         if matches!(ty, Type::Slice(..)) {
-            self.written_through(base, written)?;
+            self.written_through(base, written, None)?;
         }
         Ok(ty)
     }
@@ -5126,7 +5126,7 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::Deref(pointer) => self.written_through(pointer, written),
+            ExprKind::Deref(pointer) => self.written_through(pointer, written, None),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
             ExprKind::Field(base, field) => {
                 if let Some(ty) = &base.ty {
@@ -5135,7 +5135,7 @@ impl Checker {
                 self.assignable_array(base, written)
             }
             // A value in a map is in its table in a region, as a slice's item is.
-            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written, None),
             ExprKind::Index(base, _) => self.assignable_array(base, written),
             _ => err(place.span, "cannot assign to an item of a temporary value"),
         }
@@ -5147,8 +5147,9 @@ impl Checker {
     /// `fixed` variable, a parameter that isn't `flex`, a `fixed&`, a lambda's
     /// copy, or `.this` outside an `alters` method, at any depth. A result is
     /// the task's own value, being built, so what it holds may be written. A
-    /// value made where it is written (a call's, `new`'s) is no name's.
-    fn written_through(&self, place: &Expr, written: &str) -> Result<()> {
+    /// value made where it is written (a call's, `new`'s) is no name's. With
+    /// `method`, the write is that `alters` method's, called on `written`.
+    fn written_through(&self, place: &Expr, written: &str, method: Option<&str>) -> Result<()> {
         match &place.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, place.span)?;
@@ -5156,11 +5157,19 @@ impl Checker {
                     return Ok(());
                 }
                 if name == THIS {
-                    return Err(self.this_cannot_change(place.span, &format!("writing '{}'", written)));
+                    let what = match method {
+                        Some(method) => format!("calling '{}' on '{}'", method, written),
+                        None => format!("writing '{}'", written),
+                    };
+                    return Err(self.this_cannot_change(place.span, &what));
                 }
-                err(place.span, format!("cannot change '{}': nothing changes through immutable variable '{}', at any depth{}", written, name, param_hint(name, info)))
+                let change = match method {
+                    Some(method) => format!("'{}' changes '{}', the value it is called on, and", method, written),
+                    None => format!("cannot change '{}':", written),
+                };
+                err(place.span, format!("{} nothing changes through immutable variable '{}', at any depth{}", change, name, param_hint(name, info)))
             }
-            ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Deref(base) => self.written_through(base, written),
+            ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Deref(base) => self.written_through(base, written, method),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
             _ => Ok(()),
         }
@@ -10191,6 +10200,12 @@ impl Checker {
     /// the same places an assignment writes to. Its type is already checked, so
     /// this only says why a place can't.
     fn altered_place(&self, value: &Expr, method: &str) -> Result<()> {
+        let written = place_path(value).map_or_else(String::new, |path| path_text(&path));
+        self.altered_part(value, method, &written)
+    }
+
+    /// `altered_place` of `value`, part of the place `written`, as written.
+    fn altered_part(&self, value: &Expr, method: &str, written: &str) -> Result<()> {
         let refuse = |what: String| err(value.span, format!("'{}' changes the value it is called on, so {}", method, what));
         match &value.kind {
             ExprKind::Var(name) => {
@@ -10232,13 +10247,14 @@ impl Checker {
                     }
                     self.read_only_field(ty, field, value.span)?;
                 }
-                self.altered_place(base, method)
+                self.altered_part(base, method, written)
             }
-            // A slice's items are in a region, behind a pointer, so they can
-            // always be written, as what a pointer points to can.
-            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => Ok(()),
-            ExprKind::Index(base, _) => self.altered_place(base, method),
-            ExprKind::Deref(_) => Ok(()),
+            // A slice's items are in a region, behind a pointer, and change as
+            // what a pointer points to does: where it is reached from a name
+            // that changes (see `written_through`).
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written, Some(method)),
+            ExprKind::Index(base, _) => self.altered_part(base, method, written),
+            ExprKind::Deref(pointer) => self.written_through(pointer, written, Some(method)),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, value.span, &format!("'{}' changes the value it is called on, and ", method)),
             _ => refuse("it needs a place that can change, such as a 'flex' variable, a field or item of one, or what a pointer points to, and not a value made here".to_string()),
         }
@@ -11173,7 +11189,7 @@ impl Checker {
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
                 _ => self.given_place(base, taker),
             },
-            ExprKind::Deref(pointer) => self.written_through(pointer, &place_path(place).map_or_else(String::new, |path| path_text(&path))),
+            ExprKind::Deref(pointer) => self.written_through(pointer, &place_path(place).map_or_else(String::new, |path| path_text(&path)), None),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
             _ => refuse("it needs a place that can change: a 'flex' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }

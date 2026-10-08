@@ -1,0 +1,15 @@
+; error: 14:5: 'Point.bump' changes 'p^', the value it is called on, and nothing changes through immutable variable 'p', at any depth
+; An alters method changes the value it is called on, which a fixed pointer's never does.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    fixed p = new Point(Point { x: 1 })
+    p^.bump()
+fi

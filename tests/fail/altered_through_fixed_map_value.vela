@@ -1,0 +1,17 @@
+; error: 16:5: 'Point.bump' changes 'seen[…]', the value it is called on, and nothing changes through immutable variable 'seen', at any depth
+; A value in a fixed map.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    flex m = new [text: Point]() at r
+    m["a"] = Point { x: 1 }
+    fixed seen = m
+    seen["a"].bump()
+fi

@@ -1,0 +1,22 @@
+; error: 14:9: calling 'Point.bump' on '.items[0]' changes the value this method is called on, so 'alters' goes before its name, as in 'alters poke(…)'
+; A method that isn't alters can't call one on what .this holds, at any depth.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+shape Box
+    items: [Point]
+    poke()
+        .items[0].bump()
+    fi
+fi
+
+task main()
+    region r default
+    fixed b = Box { items: [Point { x: 1 }, ...] }
+    b.poke()
+fi

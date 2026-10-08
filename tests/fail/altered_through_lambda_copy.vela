@@ -1,0 +1,16 @@
+; error: 14:33: 'Point.bump' changes 'p^', the value it is called on, and nothing changes through immutable variable 'p', at any depth; 'p' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[flex @r](…)', and one that changes the variable itself keeps it as a place, '[flex& p, @r]'
+; A '[@r]' lambda's copy of a pointer is fixed, so what it points to doesn't change through it.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task main()
+    region r default
+    flex p = new Point(Point { x: 1 })
+    fixed f = [@r]() -> nothing p^.bump() fi
+    f()
+fi

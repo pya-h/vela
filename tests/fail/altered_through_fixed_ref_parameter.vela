@@ -1,0 +1,19 @@
+; error: 12:5: 'Point.bump' changes 'p^', the value it is called on, and nothing changes through immutable variable 'p', at any depth; 'p' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& p: ^Point@r'
+; A 'fixed&' pointer only reads what it points to.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task nudge(fixed& p: ^Point@r)
+    p^.bump()
+fi
+
+task main()
+    region r default
+    flex p = new Point(Point { x: 1 })
+    nudge(&p)
+fi

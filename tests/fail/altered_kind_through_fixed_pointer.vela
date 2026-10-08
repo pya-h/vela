@@ -1,0 +1,16 @@
+; error: 15:5: 'Light.flip' changes 'l^', the value it is called on, and nothing changes through immutable variable 'l', at any depth
+; A kind's alters method too, which may give the value another variant.
+
+kind Light
+    Red
+    Green
+    alters flip()
+        .this = Light.Green
+    fi
+fi
+
+task main()
+    region r default
+    fixed l = new Light(Light.Red)
+    l^.flip()
+fi

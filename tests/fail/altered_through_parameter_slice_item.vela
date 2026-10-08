@@ -1,0 +1,19 @@
+; error: 12:5: 'Point.bump' changes 'xs[0]', the value it is called on, and nothing changes through immutable variable 'xs', at any depth; a parameter that changes is written 'flex xs: [Point]@r', the task's own copy of the slice, whose items are the caller's
+; An item of a slice a plain parameter is; the hint says a flex copy shares the items.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task bump_first(xs: [Point]@r)
+    xs[0].bump()
+fi
+
+task main()
+    region r default
+    flex xs = [Point { x: 1 }, ...]
+    bump_first(xs)
+fi
