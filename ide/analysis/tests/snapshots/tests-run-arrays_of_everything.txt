@@ -68,10 +68,10 @@
     | keyword:fi
  43 |     region r
     | keyword:region  region:r
- 44 |     fixed a = new Node(Node { value: 1, next: none }) at r
-    | keyword:fixed  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
- 45 |     fixed b = new Node(Node { value: 2, next: a }) at r
-    | keyword:fixed  variable:b  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:a  punctuation:}  punctuation:)  keyword:at  region:r
+ 44 |     flex a = new Node(Node { value: 1, next: none }) at r
+    | keyword:flex  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 45 |     flex b = new Node(Node { value: 2, next: a }) at r
+    | keyword:flex  variable:b  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:a  punctuation:}  punctuation:)  keyword:at  region:r
  46 |     flex ptrs: [^Node#3]@r = [a, b, a]
     | keyword:flex  variable:ptrs  punctuation::  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  operator:@  region:r  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:,  variable:a  punctuation:]
  47 |     ptrs[2] = b

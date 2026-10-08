@@ -1,0 +1,110 @@
+; What a fixed name owns, a slice, a map or a pointer, is never given to what
+; may change it (see tests/fail/owned_*). Everything else may be: a value that
+; holds none, a copy, something new made by reading what a fixed name holds,
+; and what a flex name owns. A fixed name made of a flex one still sees what
+; changes through the flex one.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+shape Point
+    x: int
+    y: int
+fi
+
+task push(r: region, list: maybe ^Node@r, v: int) -> ^Node@r
+    <- new Node(Node { v: v, next: list }) at r
+fi
+
+; Reads a list a fixed name may own, calling itself for the rest of it.
+task sum(list: maybe ^Node@r) -> int
+    when list is {node}
+        <- node^.v + sum(node^.next)
+    fi
+    <- 0
+fi
+
+; Makes something new of what it reads, so its result is no one else's.
+task lengths(r: region, names: [text]@r) -> [int]@r
+    flex out = new [int]() at r
+    each name in names
+        out.add(name.len)
+    fi
+    <- out
+fi
+
+; Takes any type: given a slice it would share it, given a number it copies it.
+task bumped<T>(x: T, by: (T) -> T) -> T
+    flex y = x
+    <- by(y)
+fi
+
+task inc(n: int) -> int
+    <- n + 1
+fi
+
+; Sends back what it is given: owned by whoever owns the argument.
+task first_two(xs: [int]@r) -> [int]@r
+    <- xs[0..2]
+fi
+
+task main()
+    region r default
+
+    ; A value that holds no slice, map or pointer is copied whole.
+    fixed n = 1
+    flex m = n
+    m = m + 1
+    fixed spot = Point { x: 1, y: 2 }
+    flex moved = spot
+    moved.x = 9
+    show(n, " ", m, " ", spot.x, " ", moved.x, " ", bumped(n, inc))
+
+    ; New data made of what a fixed name holds.
+    fixed names = ["ada", "bo", ...]
+    flex sizes = lengths(r, names)
+    sizes[0] = 0
+    show(sizes)
+
+    ; A copy of its own, at every depth.
+    fixed xs = [1, 2, 3, ...]
+    flex mine = xs.copy() at r
+    mine[0] = 7
+    flex ints = new [int](xs) at r
+    ints[1] = 8
+    show(xs, " ", mine, " ", ints)
+
+    ; What a call sends back of a fixed name, kept in a fixed name, is read.
+    fixed part = first_two(xs)
+    show(part)
+    ; Of a flex one, it may change.
+    flex ys = [4, 5, 6, ...]
+    flex front = first_two(ys)
+    front[0] = 40
+    show(ys)
+
+    ; A fixed name made of a flex one: nothing changes through it, but the flex
+    ; one may still change what both see.
+    fixed seen = ys
+    ys[1] = 50
+    show(seen)
+
+    ; A list the program changes is held by flex names, and walked with a flex
+    ; cursor and a flex name for each node.
+    flex list: maybe ^Node@r = none
+    each i in 1..4
+        list = push(r, list, i)
+    fi
+    flex current = list
+    loop current is {flex node}
+        node^.v = node^.v * 10
+        current = node^.next
+    fi
+    show(sum(list))
+
+    ; A list a fixed name owns is read by a task that calls itself.
+    fixed kept = push(r, push(r, none, 1), 2)
+    show(sum(kept))
+fi

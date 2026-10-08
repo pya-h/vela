@@ -1,0 +1,9 @@
+; error: 8:10: 'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; Nor be assigned it.
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    flex ys = [3, ...]
+    ys = xs
+fi

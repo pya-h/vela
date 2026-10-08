@@ -1,0 +1,15 @@
+; error: 14:17: 'xs' is given what fixed 'b' owns, and nothing changes through what a fixed name owns; give it a copy: 'b.all(…).copy() at r'
+; A method may send back what the value it is called on holds.
+
+shape Box
+    items: [int]
+    all() -> [int]@this
+        <- .items
+    fi
+fi
+
+task main()
+    region r default
+    fixed b = Box { items: [1, ...] }
+    flex xs = b.all()
+fi

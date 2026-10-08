@@ -100,8 +100,8 @@
     | builtin-fn:show  punctuation:(  variable:average  punctuation:)  comment:; 21.2857
  56 |     region r
     | keyword:region  region:r
- 57 |     fixed scores = new [int]([72, 90, 65, 88, 79]) at r
-    | keyword:fixed  variable:scores  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:72  punctuation:,  number:90  punctuation:,  number:65  punctuation:,  number:88  punctuation:,  number:79  punctuation:]  punctuation:)  keyword:at  region:r
+ 57 |     flex scores = new [int]([72, 90, 65, 88, 79]) at r
+    | keyword:flex  variable:scores  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:72  punctuation:,  number:90  punctuation:,  number:65  punctuation:,  number:88  punctuation:,  number:79  punctuation:]  punctuation:)  keyword:at  region:r
  58 |     sort(scores)
     | task:sort  punctuation:(  variable:scores  punctuation:)
  59 |     show(scores[0])                          ; 65

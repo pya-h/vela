@@ -80,13 +80,10 @@ shape Chain<T: frozen>
 fi
 
 task lengthOf<T: frozen>(chain: ^Chain<T>@r) -> int
-    flex steps = 1
-    flex here = chain
-    loop here^.tailOf() is {next}
-        here = next
-        steps = steps + 1
+    when chain^.tailOf() is {next}
+        <- 1 + lengthOf(next)
     fi
-    <- steps
+    <- 1
 fi
 
 task main()

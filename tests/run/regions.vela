@@ -25,13 +25,15 @@ task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
     <- new Node(Node { value: value, next: list }) at r
 fi
 
-; Only reads, so it names the region without taking it.
-task sum(list: maybe ^Node@r) -> int
+; Only reads, so it names the region without taking it. It walks the list
+; with a cursor, its own copy of the pointer it is given, which a list of 200000
+; nodes needs (calling itself for each node would run out of stack), so its
+; callers hold their lists in flex names.
+task sum(flex list: maybe ^Node@r) -> int
     flex total = 0
-    flex current = list
-    loop current is {node}
+    loop list is {flex node}
         total = total + node^.value
-        current = node^.next
+        list = node^.next
     fi
     <- total
 fi
@@ -171,7 +173,7 @@ task main()
     show(good == new Node(Node { value: 7, next: none }) at trees)
 
     ; A pointer to a pointer lives in one region too.
-    fixed inner = new int(8) at trees
+    flex inner = new int(8) at trees
     flex outer = new ^int(inner) at trees
     outer^^ = outer^^ + 1
     show(inner^)

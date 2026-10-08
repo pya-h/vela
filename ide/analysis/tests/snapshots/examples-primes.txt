@@ -70,8 +70,8 @@
     | keyword:priv  keyword:task  task:main  punctuation:(  punctuation:)
  43 |     region r
     | keyword:region  region:r
- 44 |     fixed results = primes_below(r, LIMIT)
-    | keyword:fixed  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variant:LIMIT  punctuation:)
+ 44 |     flex results = primes_below(r, LIMIT)
+    | keyword:flex  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variant:LIMIT  punctuation:)
  45 |     show("Found: ")
     | builtin-fn:show  punctuation:(  string:"Found: "  punctuation:)
  46 |     show(results.len)

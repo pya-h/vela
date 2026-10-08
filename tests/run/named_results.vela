@@ -110,10 +110,10 @@ task main()
     show(brightness(Dimmed(42)))
 
     region r
-    fixed list, count = build(r, 4)
+    flex list, count = build(r, 4)
     show(count)
     flex current = list
-    loop current is {node}
+    loop current is {flex node}
         show(node^.value)
         current = node^.next
     fi

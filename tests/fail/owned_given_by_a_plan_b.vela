@@ -1,0 +1,14 @@
+; error: 13:20: 'n' is given what fixed 'found' owns, and nothing changes through what a fixed name owns; give it a copy: 'found.copy() at r'
+; A plan B gives what its value or its block may give.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    fixed found: maybe ^Node@r = none
+    fixed spare = new Node(Node { v: 1, next: none })
+    flex n = found { spare }
+fi

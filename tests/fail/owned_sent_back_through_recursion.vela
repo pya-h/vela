@@ -1,0 +1,21 @@
+; error: 19:14: 'l' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'last(…).copy() at r'
+; Through a task that calls itself, too.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task last(n: ^Node@r) -> ^Node@r
+    when n^.next is {next}
+        <- last(next)
+    fi
+    <- n
+fi
+
+task main()
+    region r default
+    fixed a = new Node(Node { v: 1, next: none })
+    flex l = last(a)
+    l^.v = 3
+fi

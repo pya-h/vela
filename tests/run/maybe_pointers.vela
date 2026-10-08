@@ -8,32 +8,27 @@ shape Node
 fi
 
 task sum(list: maybe ^Node@r) -> int
-    flex total = 0
-    flex current = list
-    loop current is {node}
-        total = total + node^.value
-        current = node^.next
+    when list is {node}
+        <- node^.value + sum(node^.next)
     fi
-    <- total
+    <- 0
 fi
 
 task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
-    flex current = list
-    loop current is {node}
+    when list is {node}
         when node^.value == wanted
             <- node
         fi
-        current = node^.next
+        <- find(node^.next, wanted)
     fi
     <- none
 fi
 
 task last(list: ^Node@r) -> ^Node@r
-    flex current = list
-    loop current^.next is {next}
-        current = next
+    when list^.next is {next}
+        <- last(next)
     fi
-    <- current
+    <- list
 fi
 
 task main()
@@ -41,9 +36,10 @@ task main()
     fixed empty: maybe ^Node@nodes = none
     show(empty == none)
     show(sum(empty))
-    fixed third = new Node(Node { value: 3, next: none }) at nodes
-    fixed second = new Node(Node { value: 2, next: third }) at nodes
-    fixed first = new Node(Node { value: 1, next: second }) at nodes
+    ; A list the program changes is held by flex names.
+    flex third = new Node(Node { value: 3, next: none }) at nodes
+    flex second = new Node(Node { value: 2, next: third }) at nodes
+    flex first = new Node(Node { value: 1, next: second }) at nodes
     show(sum(first))
     show(last(first)^.value)
 

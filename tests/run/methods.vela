@@ -95,7 +95,7 @@ fi
 shape Holder
     held: ^Point
 
-    alters keep(p: ^Point@this)
+    alters keep(flex p: ^Point@this)
         .held = p
     fi
 

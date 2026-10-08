@@ -1,0 +1,14 @@
+; error: 5:14: 'y' is given what fixed 'x' owns, where 'keep' is given [int], and nothing changes through what a fixed name owns; give it a copy: 'x.copy() at r'
+; A generic task is checked for each type it is given: here a slice, which a fixed name owns.
+
+task keep<T>(x: T) -> int
+    flex y = x
+    <- 1
+fi
+
+task main()
+    region r default
+    show(keep(3))
+    fixed xs = [1, 2, ...]
+    show(keep(xs))
+fi

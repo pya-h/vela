@@ -611,24 +611,25 @@ Hello, Ada 42 12 true</pre>
 
 <span class="comment">; Only reads what the caller made: it names the region and is given nothing.</span>
 <span class="keyword">task</span> total(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
-    <span class="keyword">flex</span> sum = <span class="number">0</span>
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        sum = sum + node^.value
-        current = node^.next
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + total(node^.next)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> sum
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="comment">; Adds what the list holds to a slice of the caller, in the region it takes.</span>
+<span class="keyword">task</span> gather(list: <span class="keyword">maybe</span> ^Node@r, <span class="keyword">flex&amp;</span> seen: [int]@w, w: <span class="keyword">region</span>)
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        seen.add(node^.value)
+        gather(node^.next, &amp;seen, w)
+    <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
 <span class="comment">; Allocates only for itself: a region of its own, and a result holding nothing.</span>
 <span class="keyword">task</span> largest(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
     <span class="keyword">region</span> work
     <span class="keyword">flex</span> seen = <span class="keyword">new</span> [int]() <span class="keyword">at</span> work
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        seen.add(node^.value)
-        current = node^.next
-    <span class="keyword">fi</span>
+    gather(list, &amp;seen, work)
     <span class="keyword">flex</span> most = <span class="number">0</span>
     <span class="keyword">each</span> v <span class="keyword">in</span> seen
         <span class="keyword">when</span> v &gt; most
@@ -750,7 +751,7 @@ Hello, Ada 42 12 true</pre>
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> points
     <span class="keyword">flex</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> points
-    <span class="keyword">fixed</span> q = <span class="keyword">new</span>@points Point(Point { x: <span class="number">3</span>, y: <span class="number">4</span> })
+    <span class="keyword">flex</span> q = <span class="keyword">new</span>@points Point(Point { x: <span class="number">3</span>, y: <span class="number">4</span> })
     p^.x = p^.x + q^.x
     show(p^.x)
 
@@ -841,13 +842,10 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
-    <span class="keyword">flex</span> total = <span class="number">0</span>
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        total = total + node^.value
-        current = node^.next
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> total
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
@@ -868,7 +866,10 @@ no spare yet
           its result is a pointer into it, <code>^Node@r</code>. The caller decides where the list lives:
           <code>push(nodes, list, i)</code>.</li>
         <li><code>sum</code> only reads, so it just names a region in its parameter's type, <code>@r</code>, without taking
-          it. It works on a list in any region, and costs nothing extra at run time. <code>sum(none)</code> works too.</li>
+          it. It works on a list in any region, and costs nothing extra at run time. <code>sum(none)</code> works too.
+          It calls itself for the rest of the list rather than moving a <code>flex</code> cursor along it, since its
+          parameter is a fixed name and no <code>flex</code> name may be given what one owns (see
+          <a href="vela.html#fixed-owns">What a fixed name owns</a>).</li>
       </ul>
 
       <h3 id="lesson-tasks">Lesson 5: Tasks and regions</h3>
@@ -892,13 +893,10 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> length(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
-    <span class="keyword">flex</span> count = <span class="number">0</span>
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        count = count + <span class="number">1</span>
-        current = node^.next
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> <span class="number">1</span> + length(node^.next)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> count
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
 <span class="keyword">fi</span>
 
 <span class="comment">; Two regions, which may be different.</span>
@@ -910,7 +908,7 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="comment">; One name twice: both lists must be in the same region.</span>
-<span class="keyword">task</span> join(<span class="keyword">flex</span> last: ^Node@r, rest: <span class="keyword">maybe</span> ^Node@r)
+<span class="keyword">task</span> join(<span class="keyword">flex</span> last: ^Node@r, <span class="keyword">flex</span> rest: <span class="keyword">maybe</span> ^Node@r)
     last^.next = rest
 <span class="keyword">fi</span>
 
@@ -922,7 +920,7 @@ no spare yet
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> small
     <span class="keyword">region</span> big
-    <span class="keyword">fixed</span> a = push(small, <span class="keyword">none</span>, <span class="number">1</span>)
+    <span class="keyword">flex</span> a = push(small, <span class="keyword">none</span>, <span class="number">1</span>)
     <span class="keyword">fixed</span> b = push(big, push(big, <span class="keyword">none</span>, <span class="number">2</span>), <span class="number">3</span>)
     show(longer(a, b))
     join(a, pair(small, <span class="number">10</span>))
@@ -1122,7 +1120,7 @@ false</pre>
         <span class="keyword">&lt;-</span> .name
     <span class="keyword">fi</span>
 
-    <span class="keyword">alters</span> point(to: ^Node<span class="keyword">@</span>this)
+    <span class="keyword">alters</span> point(<span class="keyword">flex</span> to: ^Node<span class="keyword">@</span>this)
         .node = to
     <span class="keyword">fi</span>
 
@@ -1198,13 +1196,10 @@ not a digit
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
-    <span class="keyword">flex</span> total = <span class="number">0</span>
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        total = total + node^.value
-        current = node^.next
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> total
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
@@ -1733,8 +1728,8 @@ chosen = item^.title
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> a
-    <span class="keyword">fixed</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
-    <span class="keyword">fixed</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+    <span class="keyword">flex</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+    <span class="keyword">flex</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
     <span class="keyword">when</span> first(start) <span class="keyword">is</span> {<span class="keyword">flex</span> n}
         n^.next = q
         show(n^.value + q^.value)

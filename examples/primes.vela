@@ -41,7 +41,7 @@ fi
 
 priv task main()
     region r
-    fixed results = primes_below(r, LIMIT)
+    flex results = primes_below(r, LIMIT)
     show("Found: ")
     show(results.len)
     show("-----------------------")

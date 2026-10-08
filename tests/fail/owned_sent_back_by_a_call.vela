@@ -1,0 +1,13 @@
+; error: 11:17: 'part' is given what fixed 'nums' owns, and nothing changes through what a fixed name owns; give it a copy: 'first_two(…).copy() at r'
+; A call that sends back what its parameter holds gives what the fixed argument owns.
+
+task first_two(xs: [int]@r) -> [int]@r
+    <- xs[0..2]
+fi
+
+task main()
+    region r default
+    fixed nums = [1, 2, 3, ...]
+    flex part = first_two(nums)
+    part[0] = 9
+fi

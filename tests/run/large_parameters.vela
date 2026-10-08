@@ -65,7 +65,7 @@ task through_reference(b: Big, flex p: ^Big@r) -> int
     <- b.a[1]
 fi
 
-task pass_on(flex& b: Big, p: ^Big@r) -> int
+task pass_on(flex& b: Big, flex p: ^Big@r) -> int
     <- through_reference(b, p)
 fi
 

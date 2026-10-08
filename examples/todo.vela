@@ -29,7 +29,7 @@ fi
 ; title, the status, and the brackets around it are written one after another.
 ; `flex` makes the parameter the task's own copy, which walks down the list.
 task print_list(flex current: maybe ^Item@r)
-    loop current is {item}
+    loop current is {flex item}
         show(item^.title, " [", describe(item^.status), "]")
         current = item^.next
     fi
@@ -38,24 +38,25 @@ fi
 ; Two things to report, so two results, and naming them makes the counting
 ; read as the task's answer: reaching the end sends what they hold.
 task progress(first: maybe ^Item@r) -> done: int, total: int
-    flex current = first
     done, total <- 0, 0
-    loop current is {item}
+    when first is {item}
+        ; The rest of the list, counted by the same task.
+        fixed rest_done, rest_total = progress(item^.next)
+        done, total <- rest_done, rest_total + 1
         when item^.status is Done
             done <- done + 1
         fi
-        total <- total + 1
-        current = item^.next
     fi
 fi
 
+; Reads the list given, so it walks it by calling itself for the rest: no flex
+; name may be given what a fixed one owns.
 task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
-    flex current = first
-    loop current is {item}
+    when first is {item}
         when item^.title == title
             <- item
         fi
-        current = item^.next
+        <- find(item^.next, title)
     fi
     <- none
 fi
@@ -68,9 +69,9 @@ fi
 task main()
     ; Every item lives in `todos`, which frees them all when main ends.
     region todos
-    fixed third = add(todos, "ship it", Blocked("waiting for review"), none)
-    fixed second = add(todos, "write tests", Done, third)
-    fixed first = add(todos, "fix the parser", Todo, second)
+    flex third = add(todos, "ship it", Blocked("waiting for review"), none)
+    flex second = add(todos, "write tests", Done, third)
+    flex first = add(todos, "fix the parser", Todo, second)
     print_list(first)
     fixed done, total = progress(first)
     show(done, " of ", total, " done")

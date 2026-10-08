@@ -34,7 +34,7 @@ task squares(r: region, n: int) -> [int]@r
 fi
 
 task chain(r: region, n: int) -> [^Node]@r
-    fixed first = new Node(Node { value: 0, next: none }) at r
+    flex first = new Node(Node { value: 0, next: none }) at r
     flex nodes = new [^Node]([first#n]) at r
     each i in 1..n
         nodes[i] = new Node(Node { value: i, next: nodes[i - 1] }) at r

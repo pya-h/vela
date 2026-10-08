@@ -94,215 +94,213 @@
     | keyword:<-  variable:head
  57 | fi
     | keyword:fi
- 59 | task count(list: ^Node@r) -> int
+ 59 | ; A list owned by a fixed name is walked by a task of its own for each node,
+    | comment:; A list owned by a fixed name is walked by a task of its own for each node,
+ 60 | ; since no flex name may be given what a fixed one owns.
+    | comment:; since no flex name may be given what a fixed one owns.
+ 61 | task count(list: ^Node@r) -> int
     | keyword:task  task:count  punctuation:(  parameter:list  punctuation::  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 60 |     flex n = 1
-    | keyword:flex  variable:n  operator:=  number:1
- 61 |     flex node = list
-    | keyword:flex  variable:node  operator:=  parameter:list
- 62 |     loop node^.next is {next}
-    | keyword:loop  variable:node  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:next  punctuation:}
- 63 |         n = n + 1
-    | variable:n  operator:=  variable:n  operator:+  number:1
- 64 |         node = next
-    | variable:node  operator:=  variable:next
- 65 |     fi
+ 62 |     when list^.next is {next}
+    | keyword:when  parameter:list  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:next  punctuation:}
+ 63 |         <- 1 + count(next)
+    | keyword:<-  number:1  operator:+  task:count  punctuation:(  variable:next  punctuation:)
+ 64 |     fi
     | keyword:fi
- 66 |     <- n
-    | keyword:<-  variable:n
- 67 | fi
+ 65 |     <- 1
+    | keyword:<-  number:1
+ 66 | fi
     | keyword:fi
- 69 | task main()
+ 68 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 70 |     region kept
+ 69 |     region kept
     | keyword:region  region:kept
- 71 |     flex people = new [Person]() at kept
+ 70 |     flex people = new [Person]() at kept
     | keyword:flex  variable:people  operator:=  keyword:new  punctuation:[  type:Person  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:kept
- 72 |     flex entries = new [Entry]() at kept
+ 71 |     flex entries = new [Entry]() at kept
     | keyword:flex  variable:entries  operator:=  keyword:new  punctuation:[  type:Entry  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:kept
- 73 |     flex lines = new [text]() at kept
+ 72 |     flex lines = new [text]() at kept
     | keyword:flex  variable:lines  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:kept
- 74 |     flex named: maybe text@kept = none
+ 73 |     flex named: maybe text@kept = none
     | keyword:flex  variable:named  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:kept  operator:=  keyword:none
- 75 |     flex list: maybe ^Node@kept = none
+ 74 |     flex list: maybe ^Node@kept = none
     | keyword:flex  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:kept  operator:=  keyword:none
- 76 |     flex bag = Bag { names: new [text]() at kept, first: none }
+ 75 |     flex bag = Bag { names: new [text]() at kept, first: none }
     | keyword:flex  variable:bag  operator:=  type:Bag  punctuation:{  field:names  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:kept  punctuation:,  field:first  punctuation::  keyword:none  punctuation:}
- 77 |     flex both: [text#2]@kept = ["", ""]
+ 76 |     flex both: [text#2]@kept = ["", ""]
     | keyword:flex  variable:both  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:@  region:kept  operator:=  punctuation:[  string:""  punctuation:,  string:""  punctuation:]
- 78 |     flex result: int ~ Problem@kept = 0
+ 77 |     flex result: int ~ Problem@kept = 0
     | keyword:flex  variable:result  punctuation::  type-builtin:int  operator:~  type:Problem  operator:@  region:kept  operator:=  number:0
- 79 |     each pass in 0..1
+ 78 |     each pass in 0..1
     | keyword:each  variable:pass  keyword:in  number:0  operator:..  number:1
- 80 |         region work
+ 79 |         region work
     | keyword:region  region:work
- 81 |         fixed line = scan("") at work { "nobody" }
+ 80 |         fixed line = scan("") at work { "nobody" }
     | keyword:fixed  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:work  punctuation:{  string:"nobody"  punctuation:}
- 83 |         ; Text, into the place it goes, or into the region written.
+ 82 |         ; Text, into the place it goes, or into the region written.
     | comment:; Text, into the place it goes, or into the region written.
- 84 |         lines.add(line.copy())
+ 83 |         lines.add(line.copy())
     | variable:lines  punctuation:.  field:add  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
- 85 |         named = line.copy()
+ 84 |         named = line.copy()
     | variable:named  operator:=  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)
- 86 |         fixed at_kept = line.copy() at kept
+ 85 |         fixed at_kept = line.copy() at kept
     | keyword:fixed  variable:at_kept  operator:=  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:kept
- 87 |         fixed short = line.copy()@kept
+ 86 |         fixed short = line.copy()@kept
     | keyword:fixed  variable:short  operator:=  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:kept
- 88 |         lines.add(at_kept)
+ 87 |         lines.add(at_kept)
     | variable:lines  punctuation:.  field:add  punctuation:(  variable:at_kept  punctuation:)
- 89 |         lines.add(short)
+ 88 |         lines.add(short)
     | variable:lines  punctuation:.  field:add  punctuation:(  variable:short  punctuation:)
- 90 |         lines.add(keep(kept, line))
+ 89 |         lines.add(keep(kept, line))
     | variable:lines  punctuation:.  field:add  punctuation:(  task:keep  punctuation:(  region:kept  punctuation:,  variable:line  punctuation:)  punctuation:)
- 91 |         both = kept_twice(kept, line)
+ 90 |         both = kept_twice(kept, line)
     | variable:both  operator:=  task:kept_twice  punctuation:(  region:kept  punctuation:,  variable:line  punctuation:)
- 93 |         ; Shapes and kinds, and copies inside their literals.
+ 92 |         ; Shapes and kinds, and copies inside their literals.
     | comment:; Shapes and kinds, and copies inside their literals.
- 94 |         people.add(Person { name: line.copy(), age: 36 })
+ 93 |         people.add(Person { name: line.copy(), age: 36 })
     | variable:people  punctuation:.  field:add  punctuation:(  type:Person  punctuation:{  field:name  punctuation::  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:,  field:age  punctuation::  number:36  punctuation:}  punctuation:)
- 95 |         fixed worker: Person@work = Person { name: line, age: 7 }
+ 94 |         fixed worker: Person@work = Person { name: line, age: 7 }
     | keyword:fixed  variable:worker  punctuation::  type:Person  operator:@  region:work  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:line  punctuation:,  field:age  punctuation::  number:7  punctuation:}
- 96 |         people.add(worker.copy())
+ 95 |         people.add(worker.copy())
     | variable:people  punctuation:.  field:add  punctuation:(  variable:worker  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
- 97 |         fixed numbers = new [int]([1, 2, 3]) at work
+ 96 |         fixed numbers = new [int]([1, 2, 3]) at work
     | keyword:fixed  variable:numbers  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:work
- 98 |         entries.add(Entry.Numbers(line, numbers).copy())
+ 97 |         entries.add(Entry.Numbers(line, numbers).copy())
     | variable:entries  punctuation:.  field:add  punctuation:(  type:Entry  punctuation:.  variant:Numbers  punctuation:(  variable:line  punctuation:,  variable:numbers  punctuation:)  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
- 99 |         entries.add(Note(line.copy()))
+ 98 |         entries.add(Note(line.copy()))
     | variable:entries  punctuation:.  field:add  punctuation:(  variant:Note  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)  punctuation:)
-100 |         entries.add(Empty.copy()@kept)
+ 99 |         entries.add(Empty.copy()@kept)
     | variable:entries  punctuation:.  field:add  punctuation:(  variant:Empty  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:kept  punctuation:)
-101 |         result = parse(kept, scan("") at work { "" })
+100 |         result = parse(kept, scan("") at work { "" })
     | variable:result  operator:=  task:parse  punctuation:(  region:kept  punctuation:,  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:work  punctuation:{  string:""  punctuation:}  punctuation:)
-103 |         ; A slice in a shape, and a maybe.
+102 |         ; A slice in a shape, and a maybe.
     | comment:; A slice in a shape, and a maybe.
-104 |         flex names = new [text]() at work
+103 |         flex names = new [text]() at work
     | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:work
-105 |         names.add(line)
+104 |         names.add(line)
     | variable:names  punctuation:.  field:add  punctuation:(  variable:line  punctuation:)
-106 |         names.add("literal")
+105 |         names.add("literal")
     | variable:names  punctuation:.  field:add  punctuation:(  string:"literal"  punctuation:)
-107 |         fixed held: Bag@work = Bag { names: names, first: line }
+106 |         fixed held: Bag@work = Bag { names: names, first: line }
     | keyword:fixed  variable:held  punctuation::  type:Bag  operator:@  region:work  operator:=  type:Bag  punctuation:{  field:names  punctuation::  variable:names  punctuation:,  field:first  punctuation::  variable:line  punctuation:}
-108 |         bag = held.copy()
+107 |         bag = held.copy()
     | variable:bag  operator:=  variable:held  punctuation:.  field:copy  punctuation:(  punctuation:)
-109 |         names[0] = "changed"
+108 |         names[0] = "changed"
     | variable:names  punctuation:[  number:0  punctuation:]  operator:=  string:"changed"
-111 |         ; Linked nodes: one shared by two pointers, and a cycle.
+110 |         ; Linked nodes: one shared by two pointers, and a cycle.
     | comment:; Linked nodes: one shared by two pointers, and a cycle.
-112 |         flex nodes = build(work, 5)
+111 |         flex nodes = build(work, 5)
     | keyword:flex  variable:nodes  operator:=  task:build  punctuation:(  region:work  punctuation:,  number:5  punctuation:)
-113 |         flex second = nodes^.next { nodes }
+112 |         flex second = nodes^.next { nodes }
     | keyword:flex  variable:second  operator:=  variable:nodes  operator:^  punctuation:.  field:next  punctuation:{  variable:nodes  punctuation:}
-114 |         nodes^.other = second
+113 |         nodes^.other = second
     | variable:nodes  operator:^  punctuation:.  field:other  operator:=  variable:second
-115 |         second^.other = nodes
+114 |         second^.other = nodes
     | variable:second  operator:^  punctuation:.  field:other  operator:=  variable:nodes
-116 |         list = nodes.copy()
+115 |         list = nodes.copy()
     | variable:list  operator:=  variable:nodes  punctuation:.  field:copy  punctuation:(  punctuation:)
-117 |     fi
+116 |     fi
     | keyword:fi
-119 |     each shown in lines
+118 |     each shown in lines
     | keyword:each  variable:shown  keyword:in  variable:lines
-120 |         show(shown)
+119 |         show(shown)
     | builtin-fn:show  punctuation:(  variable:shown  punctuation:)
-121 |     fi
+120 |     fi
     | keyword:fi
-122 |     show(named { "none" })
+121 |     show(named { "none" })
     | builtin-fn:show  punctuation:(  variable:named  punctuation:{  string:"none"  punctuation:}  punctuation:)
-123 |     show(both[0] == both[1])
+122 |     show(both[0] == both[1])
     | builtin-fn:show  punctuation:(  variable:both  punctuation:[  number:0  punctuation:]  operator:==  variable:both  punctuation:[  number:1  punctuation:]  punctuation:)
-124 |     each person in people
+123 |     each person in people
     | keyword:each  variable:person  keyword:in  variable:people
-125 |         show(person.name)
+124 |         show(person.name)
     | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  punctuation:)
-126 |     fi
+125 |     fi
     | keyword:fi
-127 |     each entry in entries
+126 |     each entry in entries
     | keyword:each  variable:entry  keyword:in  variable:entries
-128 |         match entry
+127 |         match entry
     | keyword:match  variable:entry
-129 |             case Note line
+128 |             case Note line
     | keyword:case  variant:Note  variable:line
-130 |                 show(line)
+129 |                 show(line)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:)
-131 |             case Numbers title values
+130 |             case Numbers title values
     | keyword:case  variant:Numbers  variable:title  variable:values
-132 |                 show(title)
+131 |                 show(title)
     | builtin-fn:show  punctuation:(  variable:title  punctuation:)
-133 |                 show(values[0] + values[1] + values[2])
+132 |                 show(values[0] + values[1] + values[2])
     | builtin-fn:show  punctuation:(  variable:values  punctuation:[  number:0  punctuation:]  operator:+  variable:values  punctuation:[  number:1  punctuation:]  operator:+  variable:values  punctuation:[  number:2  punctuation:]  punctuation:)
-134 |             case Empty
+133 |             case Empty
     | keyword:case  variant:Empty
-135 |                 show("empty")
+134 |                 show("empty")
     | builtin-fn:show  punctuation:(  string:"empty"  punctuation:)
-136 |         fi
+135 |         fi
     | keyword:fi
-137 |     fi
+136 |     fi
     | keyword:fi
-138 |     match result
+137 |     match result
     | keyword:match  variable:result
-139 |         case {value}
+138 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
-140 |             show(value)
+139 |             show(value)
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
-141 |         case failure problem
+140 |         case failure problem
     | keyword:case  keyword:failure  variable:problem
-142 |             match problem
+141 |             match problem
     | keyword:match  variable:problem
-143 |                 case Missing what
+142 |                 case Missing what
     | keyword:case  variant:Missing  variable:what
-144 |                     show(what == "")
+143 |                     show(what == "")
     | builtin-fn:show  punctuation:(  variable:what  operator:==  string:""  punctuation:)
-145 |             fi
+144 |             fi
     | keyword:fi
-146 |     fi
+145 |     fi
     | keyword:fi
-147 |     show(bag.names[0])
+146 |     show(bag.names[0])
     | builtin-fn:show  punctuation:(  variable:bag  punctuation:.  field:names  punctuation:[  number:0  punctuation:]  punctuation:)
-148 |     show(bag.names[1])
+147 |     show(bag.names[1])
     | builtin-fn:show  punctuation:(  variable:bag  punctuation:.  field:names  punctuation:[  number:1  punctuation:]  punctuation:)
-149 |     show(bag.first { "none" })
+148 |     show(bag.first { "none" })
     | builtin-fn:show  punctuation:(  variable:bag  punctuation:.  field:first  punctuation:{  string:"none"  punctuation:}  punctuation:)
-151 |     when list is {head}
-    | keyword:when  variable:list  keyword:is  punctuation:{  variable:head  punctuation:}
-152 |         show(count(head))
+150 |     when list is {flex head}
+    | keyword:when  variable:list  keyword:is  punctuation:{  keyword:flex  variable:head  punctuation:}
+151 |         show(count(head))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  variable:head  punctuation:)  punctuation:)
-153 |         ; The copy of the shared node is shared: a change through one pointer
+152 |         ; The copy of the shared node is shared: a change through one pointer
     | comment:; The copy of the shared node is shared: a change through one pointer
-154 |         ; shows through the other, and the cycle leads back to the copy.
+153 |         ; shows through the other, and the cycle leads back to the copy.
     | comment:; shows through the other, and the cycle leads back to the copy.
-155 |         flex second = head^.other { head }
+154 |         flex second = head^.other { head }
     | keyword:flex  variable:second  operator:=  variable:head  operator:^  punctuation:.  field:other  punctuation:{  variable:head  punctuation:}
-156 |         second^.label = "shared"
+155 |         second^.label = "shared"
     | variable:second  operator:^  punctuation:.  field:label  operator:=  string:"shared"
-157 |         show(head^.next { head }^.label)
+156 |         show(head^.next { head }^.label)
     | builtin-fn:show  punctuation:(  variable:head  operator:^  punctuation:.  field:next  punctuation:{  variable:head  punctuation:}  operator:^  punctuation:.  field:label  punctuation:)
-158 |         show(second^.other { second }^.label)
+157 |         show(second^.other { second }^.label)
     | builtin-fn:show  punctuation:(  variable:second  operator:^  punctuation:.  field:other  punctuation:{  variable:second  punctuation:}  operator:^  punctuation:.  field:label  punctuation:)
-159 |     fi
+158 |     fi
     | keyword:fi
-161 |     ; A long list, copied into the region it is in, and a copy's items are its own.
+160 |     ; A long list, copied into the region it is in, and a copy's items are its own.
     | comment:; A long list, copied into the region it is in, and a copy's items are its own.
-162 |     region big
+161 |     region big
     | keyword:region  region:big
-163 |     fixed long = build(big, 100000)
+162 |     fixed long = build(big, 100000)
     | keyword:fixed  variable:long  operator:=  task:build  punctuation:(  region:big  punctuation:,  number:100000  punctuation:)
-164 |     fixed again = long.copy() at big
+163 |     fixed again = long.copy() at big
     | keyword:fixed  variable:again  operator:=  variable:long  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:big
-165 |     show(count(again))
+164 |     show(count(again))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  variable:again  punctuation:)  punctuation:)
-166 |     flex values = new [int]([1, 2]) at big
+165 |     flex values = new [int]([1, 2]) at big
     | keyword:flex  variable:values  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)  keyword:at  region:big
-167 |     flex copied = values.copy()@big
+166 |     flex copied = values.copy()@big
     | keyword:flex  variable:copied  operator:=  variable:values  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:big
-168 |     copied[0] = 5
+167 |     copied[0] = 5
     | variable:copied  punctuation:[  number:0  punctuation:]  operator:=  number:5
-169 |     copied.add(3)
+168 |     copied.add(3)
     | variable:copied  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
-170 |     show(values[0])
+169 |     show(values[0])
     | builtin-fn:show  punctuation:(  variable:values  punctuation:[  number:0  punctuation:]  punctuation:)
-171 |     show(copied.len)
+170 |     show(copied.len)
     | builtin-fn:show  punctuation:(  variable:copied  punctuation:.  field:len  punctuation:)
-172 | fi
+171 | fi
     | keyword:fi

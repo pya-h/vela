@@ -1,0 +1,9 @@
+; error: 8:13: 'all' changes, so it can't be given what fixed 'xs' owns: nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; Nor a slice added to.
+
+task main()
+    region r default
+    fixed xs = [1, ...]
+    flex all = new [[int]]() at r
+    all.add(xs)
+fi

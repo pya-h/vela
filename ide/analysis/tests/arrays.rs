@@ -161,7 +161,7 @@ fn completion_continues_array_and_slice_expressions() {
 fn changes_to_a_slice_have_types_hovers_and_snippets() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
-        let code = "flex names = new [text]() at r\n    names.add(\"a\")\n    names.add(0, \"b\")\n    fixed taken = names.del(1)\n    flex moving = points\n    fixed last = moving.del()\n    show(taken)\n    show(last.x)";
+        let code = "flex names = new [text]() at r\n    names.add(\"a\")\n    names.add(0, \"b\")\n    fixed taken = names.del(1)\n    flex moving = points.copy() at r\n    fixed last = moving.del()\n    show(taken)\n    show(last.x)";
         let source = program(checks, code);
         if checks {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());

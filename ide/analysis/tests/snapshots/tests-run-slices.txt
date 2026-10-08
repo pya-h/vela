@@ -60,8 +60,8 @@
     | keyword:fi
  36 | task chain(r: region, n: int) -> [^Node]@r
     | keyword:task  task:chain  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:^  type:Node  punctuation:]  operator:@  region:r
- 37 |     fixed first = new Node(Node { value: 0, next: none }) at r
-    | keyword:fixed  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:0  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 37 |     flex first = new Node(Node { value: 0, next: none }) at r
+    | keyword:flex  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:0  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  38 |     flex nodes = new [^Node]([first#n]) at r
     | keyword:flex  variable:nodes  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  punctuation:[  variable:first  punctuation:#  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
  39 |     each i in 1..n

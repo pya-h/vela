@@ -54,8 +54,8 @@
     | comment:; `flex` makes the parameter the task's own copy, which walks down the list.
  31 | task print_list(flex current: maybe ^Item@r)
     | keyword:task  task:print_list  punctuation:(  keyword:flex  parameter:current  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)
- 32 |     loop current is {item}
-    | keyword:loop  parameter:current  keyword:is  punctuation:{  variable:item  punctuation:}
+ 32 |     loop current is {flex item}
+    | keyword:loop  parameter:current  keyword:is  punctuation:{  keyword:flex  variable:item  punctuation:}
  33 |         show(item^.title, " [", describe(item^.status), "]")
     | builtin-fn:show  punctuation:(  variable:item  operator:^  punctuation:.  field:title  punctuation:,  string:" ["  punctuation:,  task:describe  punctuation:(  variable:item  operator:^  punctuation:.  field:status  punctuation:)  punctuation:,  string:"]"  punctuation:)
  34 |         current = item^.next
@@ -70,91 +70,93 @@
     | comment:; read as the task's answer: reaching the end sends what they hold.
  40 | task progress(first: maybe ^Item@r) -> done: int, total: int
     | keyword:task  task:progress  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  variable:done  punctuation::  type-builtin:int  punctuation:,  variable:total  punctuation::  type-builtin:int
- 41 |     flex current = first
-    | keyword:flex  variable:current  operator:=  parameter:first
- 42 |     done, total <- 0, 0
+ 41 |     done, total <- 0, 0
     | variable:done  punctuation:,  variable:total  keyword:<-  number:0  punctuation:,  number:0
- 43 |     loop current is {item}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
- 44 |         when item^.status is Done
+ 42 |     when first is {item}
+    | keyword:when  parameter:first  keyword:is  punctuation:{  variable:item  punctuation:}
+ 43 |         ; The rest of the list, counted by the same task.
+    | comment:; The rest of the list, counted by the same task.
+ 44 |         fixed rest_done, rest_total = progress(item^.next)
+    | keyword:fixed  variable:rest_done  punctuation:,  variable:rest_total  operator:=  task:progress  punctuation:(  variable:item  operator:^  punctuation:.  field:next  punctuation:)
+ 45 |         done, total <- rest_done, rest_total + 1
+    | variable:done  punctuation:,  variable:total  keyword:<-  variable:rest_done  punctuation:,  variable:rest_total  operator:+  number:1
+ 46 |         when item^.status is Done
     | keyword:when  variable:item  operator:^  punctuation:.  field:status  keyword:is  variant:Done
- 45 |             done <- done + 1
+ 47 |             done <- done + 1
     | variable:done  keyword:<-  variable:done  operator:+  number:1
- 46 |         fi
+ 48 |         fi
     | keyword:fi
- 47 |         total <- total + 1
-    | variable:total  keyword:<-  variable:total  operator:+  number:1
- 48 |         current = item^.next
-    | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
  49 |     fi
     | keyword:fi
  50 | fi
     | keyword:fi
- 52 | task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
+ 52 | ; Reads the list given, so it walks it by calling itself for the rest: no flex
+    | comment:; Reads the list given, so it walks it by calling itself for the rest: no flex
+ 53 | ; name may be given what a fixed one owns.
+    | comment:; name may be given what a fixed one owns.
+ 54 | task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
     | keyword:task  task:find  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:)  operator:->  keyword:maybe  operator:^  type:Item  operator:@  region:r
- 53 |     flex current = first
-    | keyword:flex  variable:current  operator:=  parameter:first
- 54 |     loop current is {item}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
- 55 |         when item^.title == title
+ 55 |     when first is {item}
+    | keyword:when  parameter:first  keyword:is  punctuation:{  variable:item  punctuation:}
+ 56 |         when item^.title == title
     | keyword:when  variable:item  operator:^  punctuation:.  field:title  operator:==  parameter:title
- 56 |             <- item
+ 57 |             <- item
     | keyword:<-  variable:item
- 57 |         fi
+ 58 |         fi
     | keyword:fi
- 58 |         current = item^.next
-    | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
- 59 |     fi
+ 59 |         <- find(item^.next, title)
+    | keyword:<-  task:find  punctuation:(  variable:item  operator:^  punctuation:.  field:next  punctuation:,  parameter:title  punctuation:)
+ 60 |     fi
     | keyword:fi
- 60 |     <- none
+ 61 |     <- none
     | keyword:<-  keyword:none
- 61 | fi
+ 62 | fi
     | keyword:fi
- 63 | ; Adding allocates, so `add` takes the region to allocate in.
+ 64 | ; Adding allocates, so `add` takes the region to allocate in.
     | comment:; Adding allocates, so `add` takes the region to allocate in.
- 64 | task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
+ 65 | task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
     | keyword:task  task:add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:,  parameter:status  punctuation::  type:Status  punctuation:,  parameter:next  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Item  operator:@  region:r
- 65 |     <- new Item(Item { title: title, status: status, next: next }) at r
+ 66 |     <- new Item(Item { title: title, status: status, next: next }) at r
     | keyword:<-  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  parameter:title  punctuation:,  field:status  punctuation::  parameter:status  punctuation:,  field:next  punctuation::  parameter:next  punctuation:}  punctuation:)  keyword:at  region:r
- 66 | fi
+ 67 | fi
     | keyword:fi
- 68 | task main()
+ 69 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 69 |     ; Every item lives in `todos`, which frees them all when main ends.
+ 70 |     ; Every item lives in `todos`, which frees them all when main ends.
     | comment:; Every item lives in `todos`, which frees them all when main ends.
- 70 |     region todos
+ 71 |     region todos
     | keyword:region  region:todos
- 71 |     fixed third = add(todos, "ship it", Blocked("waiting for review"), none)
-    | keyword:fixed  variable:third  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"ship it"  punctuation:,  variant:Blocked  punctuation:(  string:"waiting for review"  punctuation:)  punctuation:,  keyword:none  punctuation:)
- 72 |     fixed second = add(todos, "write tests", Done, third)
-    | keyword:fixed  variable:second  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"write tests"  punctuation:,  variant:Done  punctuation:,  variable:third  punctuation:)
- 73 |     fixed first = add(todos, "fix the parser", Todo, second)
-    | keyword:fixed  variable:first  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"fix the parser"  punctuation:,  variant:Todo  punctuation:,  variable:second  punctuation:)
- 74 |     print_list(first)
+ 72 |     flex third = add(todos, "ship it", Blocked("waiting for review"), none)
+    | keyword:flex  variable:third  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"ship it"  punctuation:,  variant:Blocked  punctuation:(  string:"waiting for review"  punctuation:)  punctuation:,  keyword:none  punctuation:)
+ 73 |     flex second = add(todos, "write tests", Done, third)
+    | keyword:flex  variable:second  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"write tests"  punctuation:,  variant:Done  punctuation:,  variable:third  punctuation:)
+ 74 |     flex first = add(todos, "fix the parser", Todo, second)
+    | keyword:flex  variable:first  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"fix the parser"  punctuation:,  variant:Todo  punctuation:,  variable:second  punctuation:)
+ 75 |     print_list(first)
     | task:print_list  punctuation:(  variable:first  punctuation:)
- 75 |     fixed done, total = progress(first)
+ 76 |     fixed done, total = progress(first)
     | keyword:fixed  variable:done  punctuation:,  variable:total  operator:=  task:progress  punctuation:(  variable:first  punctuation:)
- 76 |     show(done, " of ", total, " done")
+ 77 |     show(done, " of ", total, " done")
     | builtin-fn:show  punctuation:(  variable:done  punctuation:,  string:" of "  punctuation:,  variable:total  punctuation:,  string:" done"  punctuation:)
- 78 |     when find(first, "write tests") is {flex tests}
+ 79 |     when find(first, "write tests") is {flex tests}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  string:"write tests"  punctuation:)  keyword:is  punctuation:{  keyword:flex  variable:tests  punctuation:}
- 79 |         tests^.status = Todo
+ 80 |         tests^.status = Todo
     | variable:tests  operator:^  punctuation:.  field:status  operator:=  variant:Todo
- 80 |     fi
+ 81 |     fi
     | keyword:fi
- 81 |     ; Only the count of done items is wanted now, so the other is dropped.
+ 82 |     ; Only the count of done items is wanted now, so the other is dropped.
     | comment:; Only the count of done items is wanted now, so the other is dropped.
- 82 |     fixed still_done, _ = progress(first)
+ 83 |     fixed still_done, _ = progress(first)
     | keyword:fixed  variable:still_done  punctuation:,  keyword:_  operator:=  task:progress  punctuation:(  variable:first  punctuation:)
- 83 |     show(still_done, " of them now")
+ 84 |     show(still_done, " of them now")
     | builtin-fn:show  punctuation:(  variable:still_done  punctuation:,  string:" of them now"  punctuation:)
- 84 |     show(find(first, "celebrate") == none)
+ 85 |     show(find(first, "celebrate") == none)
     | builtin-fn:show  punctuation:(  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  operator:==  keyword:none  punctuation:)
- 86 |     ; A plan B gives a value to use when there is nothing to extract.
+ 87 |     ; A plan B gives a value to use when there is nothing to extract.
     | comment:; A plan B gives a value to use when there is nothing to extract.
- 87 |     fixed start = find(first, "celebrate") { first }
+ 88 |     fixed start = find(first, "celebrate") { first }
     | keyword:fixed  variable:start  operator:=  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  punctuation:{  variable:first  punctuation:}
- 88 |     show(start^.title)
+ 89 |     show(start^.title)
     | builtin-fn:show  punctuation:(  variable:start  operator:^  punctuation:.  field:title  punctuation:)
- 89 | fi
+ 90 | fi
     | keyword:fi

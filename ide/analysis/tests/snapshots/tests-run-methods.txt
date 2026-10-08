@@ -156,8 +156,8 @@
     | keyword:shape  type:Holder
  96 |     held: ^Point
     | field:held  punctuation::  operator:^  type:Point
- 98 |     alters keep(p: ^Point@this)
-    | keyword:alters  method:keep  punctuation:(  parameter:p  punctuation::  operator:^  type:Point  operator:@  region:this  punctuation:)
+ 98 |     alters keep(flex p: ^Point@this)
+    | keyword:alters  method:keep  punctuation:(  keyword:flex  parameter:p  punctuation::  operator:^  type:Point  operator:@  region:this  punctuation:)
  99 |         .held = p
     | punctuation:.  field:held  operator:=  parameter:p
 100 |     fi

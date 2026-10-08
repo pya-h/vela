@@ -1,0 +1,9 @@
+; error: 5:12: 'out' is a result, which the task may change, so it can't be given what fixed 'xs' owns; give it a copy: 'xs.copy() at r'
+; A named result's contents may be written, so it never takes what a fixed name owns.
+
+task same(r: region, xs: [int]@r) -> out: [int]@r
+    out <- xs
+fi
+
+task main()
+fi

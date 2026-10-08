@@ -1,0 +1,9 @@
+; error: 7:14: a '[flex @r]' lambda may change what its copies hold, so it can't keep a copy of fixed 'xs', and nothing changes through what a fixed name owns; make it a '[@r]' lambda, or keep a copy of its own, as in 'flex mine = xs.copy() at r', and use that
+; A [flex @r] lambda may change what its copies hold, so it keeps no copy of what a fixed name owns.
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    flex f = [flex @r]() -> int <- xs[0] fi
+    show(f())
+fi

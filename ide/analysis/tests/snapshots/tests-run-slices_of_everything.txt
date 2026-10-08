@@ -34,8 +34,8 @@
     | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
  20 |     show(rows[0][1])
     | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:0  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
- 21 |     fixed row = new [int]([0#3]) at r
-    | keyword:fixed  variable:row  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+ 21 |     flex row = new [int]([0#3]) at r
+    | keyword:flex  variable:row  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  punctuation:)  keyword:at  region:r
  22 |     flex table = new [[int]]([row#2]) at r
     | keyword:flex  variable:table  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:[  variable:row  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
  23 |     table[0][2] = 8

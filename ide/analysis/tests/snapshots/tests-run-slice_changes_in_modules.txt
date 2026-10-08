@@ -8,8 +8,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
   7 |     region r
     | keyword:region  region:r
-  8 |     fixed s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
-    | keyword:fixed  variable:s  operator:=  keyword:new  module:stack  punctuation:.  type:Stack  punctuation:(  module:stack  punctuation:.  type:Stack  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
+  8 |     flex s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
+    | keyword:flex  variable:s  operator:=  keyword:new  module:stack  punctuation:.  type:Stack  punctuation:(  module:stack  punctuation:.  type:Stack  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
   9 |     stack.apply(r, s, stack.Op.add(4))
     | module:stack  punctuation:.  task:apply  punctuation:(  region:r  punctuation:,  variable:s  punctuation:,  module:stack  punctuation:.  type:Op  punctuation:.  variant:add  punctuation:(  number:4  punctuation:)  punctuation:)
  10 |     stack.apply(r, s, Op.add(5))

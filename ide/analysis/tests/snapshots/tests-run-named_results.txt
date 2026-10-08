@@ -194,14 +194,14 @@
     | builtin-fn:show  punctuation:(  task:brightness  punctuation:(  variant:Dimmed  punctuation:(  number:42  punctuation:)  punctuation:)  punctuation:)
 112 |     region r
     | keyword:region  region:r
-113 |     fixed list, count = build(r, 4)
-    | keyword:fixed  variable:list  punctuation:,  variable:count  operator:=  task:build  punctuation:(  region:r  punctuation:,  number:4  punctuation:)
+113 |     flex list, count = build(r, 4)
+    | keyword:flex  variable:list  punctuation:,  variable:count  operator:=  task:build  punctuation:(  region:r  punctuation:,  number:4  punctuation:)
 114 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
 115 |     flex current = list
     | keyword:flex  variable:current  operator:=  variable:list
-116 |     loop current is {node}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
+116 |     loop current is {flex node}
+    | keyword:loop  variable:current  keyword:is  punctuation:{  keyword:flex  variable:node  punctuation:}
 117 |         show(node^.value)
     | builtin-fn:show  punctuation:(  variable:node  operator:^  punctuation:.  field:value  punctuation:)
 118 |         current = node^.next

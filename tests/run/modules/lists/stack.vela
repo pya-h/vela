@@ -14,9 +14,8 @@ fi
 
 task sum(top: maybe ^Node@r) -> total: int, count: int
     total, count <- 0, 0
-    flex current = top
-    loop current is {node}
-        total, count <- add(total, node^.value), numbers.add(count, 1)
-        current = node^.below
+    when top is {node}
+        fixed below, under = sum(node^.below)
+        total, count <- add(below, node^.value), numbers.add(under, 1)
     fi
 fi

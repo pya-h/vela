@@ -1,0 +1,16 @@
+; error: 9:10: 'zero' changes what its parameter 'xs' reaches, so it can't be given what fixed 'xs' owns; give it a copy, 'xs.copy() at r', or take 'xs' as 'flex xs'
+; A plain parameter is a fixed name, so passing it on to be changed is refused.
+
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+
+task pass_on(xs: [int]@r)
+    zero(xs)
+fi
+
+task main()
+    region r default
+    flex xs = [3, 1, ...]
+    pass_on(xs)
+fi

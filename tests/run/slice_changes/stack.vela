@@ -18,7 +18,7 @@ task pop(flex s: ^Stack@r) -> int
     <- s^.items.del()
 fi
 
-task apply(r: region, s: ^Stack@r, op: Op)
+task apply(r: region, flex s: ^Stack@r, op: Op)
     match op
         case add amount
             push(r, s, amount)

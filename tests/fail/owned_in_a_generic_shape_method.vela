@@ -1,0 +1,17 @@
+; error: 7:18: 'y' is given what fixed 'other' owns, where 'Box.look' is given [int], and nothing changes through what a fixed name owns; give it a copy: 'other.copy() at r'
+; So is a method of a shape that takes types.
+
+shape Box<T>
+    value: T
+    look(other: T) -> int
+        flex y = other
+        <- 1
+    fi
+fi
+
+task main()
+    region r default
+    fixed b = Box<[int]> { value: [1, ...] }
+    fixed xs = [2, ...]
+    show(b.look(xs))
+fi

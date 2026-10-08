@@ -1008,7 +1008,7 @@ fi</pre>
 fi
 
 flex current = first
-loop current is {item}
+loop current is {flex item}
     show(item^.title)
     current = item^.next
 fi</pre>
@@ -2447,9 +2447,10 @@ fi
           variable words (<code>hold</code> became <code>flex</code> and <code>bind</code> became <code>fixed</code>;
           next, a new <code>bind</code> names one value whose contents may change) is to make <code>fixed</code> fully
           immutable. A slice, a map and a pointer are handles to items kept elsewhere, so a <code>flex</code> copy of a
-          <code>fixed</code> one could change the items the <code>fixed</code> name sees. The plan closes that: giving a
-          <code>fixed</code> value that holds a slice, a map or a pointer to a <code>flex</code> or <code>bind</code>
-          name is an error, and the program writes a complete copy instead (<code>xs.copy() at r</code>,
+          <code>fixed</code> one could change the items the <code>fixed</code> name sees. That is closed: giving what a
+          <code>fixed</code> name owns, a slice, a map or a pointer, to a <code>flex</code> name is an error (see
+          <a href="vela.html#fixed-owns">What a fixed name owns</a>), and the new <code>bind</code> will follow the
+          same rule, so the program writes a complete copy instead (<code>xs.copy() at r</code>,
           <code>m.copy() at r</code>, and the planned <code>xs.added(v)</code> and <code>xs.without(i)</code>).
           <p><strong>What a complete copy costs.</strong> <code>copy()</code> is one already (see
           <a href="vela.html#copy">Copying into another region</a>). It shares nothing with what it copies, at any depth:

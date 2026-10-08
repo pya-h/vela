@@ -54,7 +54,7 @@ task main()
     show(average)                            ; 21.2857
 
     region r
-    fixed scores = new [int]([72, 90, 65, 88, 79]) at r
+    flex scores = new [int]([72, 90, 65, 88, 79]) at r
     sort(scores)
     show(scores[0])                          ; 65
     show(scores[scores.len - 1])             ; 90

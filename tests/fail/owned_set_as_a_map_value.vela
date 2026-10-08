@@ -1,0 +1,9 @@
+; error: 8:14: 'm[…]' changes, so it can't be given what fixed 'xs' owns: nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; Nor a map's value.
+
+task main()
+    region r default
+    fixed xs = [1, ...]
+    flex m = new [text: [int]]() at r
+    m["a"] = xs
+fi

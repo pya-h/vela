@@ -1,0 +1,188 @@
+  1 | ; What a fixed name owns, a slice, a map or a pointer, is never given to what
+    | comment:; What a fixed name owns, a slice, a map or a pointer, is never given to what
+  2 | ; may change it (see tests/fail/owned_*). Everything else may be: a value that
+    | comment:; may change it (see tests/fail/owned_*). Everything else may be: a value that
+  3 | ; holds none, a copy, something new made by reading what a fixed name holds,
+    | comment:; holds none, a copy, something new made by reading what a fixed name holds,
+  4 | ; and what a flex name owns. A fixed name made of a flex one still sees what
+    | comment:; and what a flex name owns. A fixed name made of a flex one still sees what
+  5 | ; changes through the flex one.
+    | comment:; changes through the flex one.
+  7 | shape Node
+    | keyword:shape  type:Node
+  8 |     v: int
+    | field:v  punctuation::  type-builtin:int
+  9 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+ 10 | fi
+    | keyword:fi
+ 12 | shape Point
+    | keyword:shape  type:Point
+ 13 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 14 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 15 | fi
+    | keyword:fi
+ 17 | task push(r: region, list: maybe ^Node@r, v: int) -> ^Node@r
+    | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
+ 18 |     <- new Node(Node { v: v, next: list }) at r
+    | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  parameter:v  punctuation:,  field:next  punctuation::  parameter:list  punctuation:}  punctuation:)  keyword:at  region:r
+ 19 | fi
+    | keyword:fi
+ 21 | ; Reads a list a fixed name may own, calling itself for the rest of it.
+    | comment:; Reads a list a fixed name may own, calling itself for the rest of it.
+ 22 | task sum(list: maybe ^Node@r) -> int
+    | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 23 |     when list is {node}
+    | keyword:when  parameter:list  keyword:is  punctuation:{  variable:node  punctuation:}
+ 24 |         <- node^.v + sum(node^.next)
+    | keyword:<-  variable:node  operator:^  punctuation:.  field:v  operator:+  task:sum  punctuation:(  variable:node  operator:^  punctuation:.  field:next  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 |     <- 0
+    | keyword:<-  number:0
+ 27 | fi
+    | keyword:fi
+ 29 | ; Makes something new of what it reads, so its result is no one else's.
+    | comment:; Makes something new of what it reads, so its result is no one else's.
+ 30 | task lengths(r: region, names: [text]@r) -> [int]@r
+    | keyword:task  task:lengths  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:names  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 31 |     flex out = new [int]() at r
+    | keyword:flex  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 32 |     each name in names
+    | keyword:each  variable:name  keyword:in  parameter:names
+ 33 |         out.add(name.len)
+    | variable:out  punctuation:.  field:add  punctuation:(  variable:name  punctuation:.  field:len  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 |     <- out
+    | keyword:<-  variable:out
+ 36 | fi
+    | keyword:fi
+ 38 | ; Takes any type: given a slice it would share it, given a number it copies it.
+    | comment:; Takes any type: given a slice it would share it, given a number it copies it.
+ 39 | task bumped<T>(x: T, by: (T) -> T) -> T
+    | keyword:task  task:bumped  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:,  parameter:by  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:)  operator:->  type:T
+ 40 |     flex y = x
+    | keyword:flex  variable:y  operator:=  parameter:x
+ 41 |     <- by(y)
+    | keyword:<-  parameter:by  punctuation:(  variable:y  punctuation:)
+ 42 | fi
+    | keyword:fi
+ 44 | task inc(n: int) -> int
+    | keyword:task  task:inc  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 45 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 46 | fi
+    | keyword:fi
+ 48 | ; Sends back what it is given: owned by whoever owns the argument.
+    | comment:; Sends back what it is given: owned by whoever owns the argument.
+ 49 | task first_two(xs: [int]@r) -> [int]@r
+    | keyword:task  task:first_two  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 50 |     <- xs[0..2]
+    | keyword:<-  parameter:xs  punctuation:[  number:0  operator:..  number:2  punctuation:]
+ 51 | fi
+    | keyword:fi
+ 53 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 54 |     region r default
+    | keyword:region  region:r  keyword:default
+ 56 |     ; A value that holds no slice, map or pointer is copied whole.
+    | comment:; A value that holds no slice, map or pointer is copied whole.
+ 57 |     fixed n = 1
+    | keyword:fixed  variable:n  operator:=  number:1
+ 58 |     flex m = n
+    | keyword:flex  variable:m  operator:=  variable:n
+ 59 |     m = m + 1
+    | variable:m  operator:=  variable:m  operator:+  number:1
+ 60 |     fixed spot = Point { x: 1, y: 2 }
+    | keyword:fixed  variable:spot  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 61 |     flex moved = spot
+    | keyword:flex  variable:moved  operator:=  variable:spot
+ 62 |     moved.x = 9
+    | variable:moved  punctuation:.  field:x  operator:=  number:9
+ 63 |     show(n, " ", m, " ", spot.x, " ", moved.x, " ", bumped(n, inc))
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:,  string:" "  punctuation:,  variable:spot  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:moved  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  task:bumped  punctuation:(  variable:n  punctuation:,  task:inc  punctuation:)  punctuation:)
+ 65 |     ; New data made of what a fixed name holds.
+    | comment:; New data made of what a fixed name holds.
+ 66 |     fixed names = ["ada", "bo", ...]
+    | keyword:fixed  variable:names  operator:=  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:,  keyword:...  punctuation:]
+ 67 |     flex sizes = lengths(r, names)
+    | keyword:flex  variable:sizes  operator:=  task:lengths  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
+ 68 |     sizes[0] = 0
+    | variable:sizes  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 69 |     show(sizes)
+    | builtin-fn:show  punctuation:(  variable:sizes  punctuation:)
+ 71 |     ; A copy of its own, at every depth.
+    | comment:; A copy of its own, at every depth.
+ 72 |     fixed xs = [1, 2, 3, ...]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 73 |     flex mine = xs.copy() at r
+    | keyword:flex  variable:mine  operator:=  variable:xs  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 74 |     mine[0] = 7
+    | variable:mine  punctuation:[  number:0  punctuation:]  operator:=  number:7
+ 75 |     flex ints = new [int](xs) at r
+    | keyword:flex  variable:ints  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  variable:xs  punctuation:)  keyword:at  region:r
+ 76 |     ints[1] = 8
+    | variable:ints  punctuation:[  number:1  punctuation:]  operator:=  number:8
+ 77 |     show(xs, " ", mine, " ", ints)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:mine  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:)
+ 79 |     ; What a call sends back of a fixed name, kept in a fixed name, is read.
+    | comment:; What a call sends back of a fixed name, kept in a fixed name, is read.
+ 80 |     fixed part = first_two(xs)
+    | keyword:fixed  variable:part  operator:=  task:first_two  punctuation:(  variable:xs  punctuation:)
+ 81 |     show(part)
+    | builtin-fn:show  punctuation:(  variable:part  punctuation:)
+ 82 |     ; Of a flex one, it may change.
+    | comment:; Of a flex one, it may change.
+ 83 |     flex ys = [4, 5, 6, ...]
+    | keyword:flex  variable:ys  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]
+ 84 |     flex front = first_two(ys)
+    | keyword:flex  variable:front  operator:=  task:first_two  punctuation:(  variable:ys  punctuation:)
+ 85 |     front[0] = 40
+    | variable:front  punctuation:[  number:0  punctuation:]  operator:=  number:40
+ 86 |     show(ys)
+    | builtin-fn:show  punctuation:(  variable:ys  punctuation:)
+ 88 |     ; A fixed name made of a flex one: nothing changes through it, but the flex
+    | comment:; A fixed name made of a flex one: nothing changes through it, but the flex
+ 89 |     ; one may still change what both see.
+    | comment:; one may still change what both see.
+ 90 |     fixed seen = ys
+    | keyword:fixed  variable:seen  operator:=  variable:ys
+ 91 |     ys[1] = 50
+    | variable:ys  punctuation:[  number:1  punctuation:]  operator:=  number:50
+ 92 |     show(seen)
+    | builtin-fn:show  punctuation:(  variable:seen  punctuation:)
+ 94 |     ; A list the program changes is held by flex names, and walked with a flex
+    | comment:; A list the program changes is held by flex names, and walked with a flex
+ 95 |     ; cursor and a flex name for each node.
+    | comment:; cursor and a flex name for each node.
+ 96 |     flex list: maybe ^Node@r = none
+    | keyword:flex  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  operator:=  keyword:none
+ 97 |     each i in 1..4
+    | keyword:each  variable:i  keyword:in  number:1  operator:..  number:4
+ 98 |         list = push(r, list, i)
+    | variable:list  operator:=  task:push  punctuation:(  region:r  punctuation:,  variable:list  punctuation:,  variable:i  punctuation:)
+ 99 |     fi
+    | keyword:fi
+100 |     flex current = list
+    | keyword:flex  variable:current  operator:=  variable:list
+101 |     loop current is {flex node}
+    | keyword:loop  variable:current  keyword:is  punctuation:{  keyword:flex  variable:node  punctuation:}
+102 |         node^.v = node^.v * 10
+    | variable:node  operator:^  punctuation:.  field:v  operator:=  variable:node  operator:^  punctuation:.  field:v  operator:*  number:10
+103 |         current = node^.next
+    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
+104 |     fi
+    | keyword:fi
+105 |     show(sum(list))
+    | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:list  punctuation:)  punctuation:)
+107 |     ; A list a fixed name owns is read by a task that calls itself.
+    | comment:; A list a fixed name owns is read by a task that calls itself.
+108 |     fixed kept = push(r, push(r, none, 1), 2)
+    | keyword:fixed  variable:kept  operator:=  task:push  punctuation:(  region:r  punctuation:,  task:push  punctuation:(  region:r  punctuation:,  keyword:none  punctuation:,  number:1  punctuation:)  punctuation:,  number:2  punctuation:)
+109 |     show(sum(kept))
+    | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:kept  punctuation:)  punctuation:)
+110 | fi
+    | keyword:fi

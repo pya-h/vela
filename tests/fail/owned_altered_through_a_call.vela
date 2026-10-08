@@ -1,0 +1,19 @@
+; error: 18:5: 'Point.bump' changes what 'same(…)' gives back: it is what fixed 'p' owns, and nothing changes through what a fixed name owns, at any depth
+; Nor by an alters method.
+
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+
+task same(p: ^Point@r) -> ^Point@r
+    <- p
+fi
+
+task main()
+    region r default
+    fixed p = new Point(Point { x: 1 })
+    same(p)^.bump()
+fi

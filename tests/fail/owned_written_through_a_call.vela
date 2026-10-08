@@ -1,0 +1,17 @@
+; error: 16:5: cannot change what 'same(…)' gives back: it is what fixed 'a' owns, and nothing changes through what a fixed name owns, at any depth
+; What a call sends back of a fixed name doesn't change either.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task same(n: ^Node@r) -> ^Node@r
+    <- n
+fi
+
+task main()
+    region r default
+    fixed a = new Node(Node { v: 1, next: none })
+    same(a)^.v = 5
+fi

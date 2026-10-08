@@ -110,8 +110,8 @@
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:1  punctuation:]
  66 | fi
     | keyword:fi
- 68 | task pass_on(flex& b: Big, p: ^Big@r) -> int
-    | keyword:task  task:pass_on  punctuation:(  keyword:flex  keyword:&  parameter:b  punctuation::  type:Big  punctuation:,  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 68 | task pass_on(flex& b: Big, flex p: ^Big@r) -> int
+    | keyword:task  task:pass_on  punctuation:(  keyword:flex  keyword:&  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  69 |     <- through_reference(b, p)
     | keyword:<-  task:through_reference  punctuation:(  parameter:b  punctuation:,  parameter:p  punctuation:)
  70 | fi

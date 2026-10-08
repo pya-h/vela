@@ -42,269 +42,273 @@
     | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:next  punctuation::  parameter:list  punctuation:}  punctuation:)  keyword:at  region:r
  26 | fi
     | keyword:fi
- 28 | ; Only reads, so it names the region without taking it.
-    | comment:; Only reads, so it names the region without taking it.
- 29 | task sum(list: maybe ^Node@r) -> int
-    | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 30 |     flex total = 0
+ 28 | ; Only reads, so it names the region without taking it. It walks the list
+    | comment:; Only reads, so it names the region without taking it. It walks the list
+ 29 | ; with a cursor, its own copy of the pointer it is given, which a list of 200000
+    | comment:; with a cursor, its own copy of the pointer it is given, which a list of 200000
+ 30 | ; nodes needs (calling itself for each node would run out of stack), so its
+    | comment:; nodes needs (calling itself for each node would run out of stack), so its
+ 31 | ; callers hold their lists in flex names.
+    | comment:; callers hold their lists in flex names.
+ 32 | task sum(flex list: maybe ^Node@r) -> int
+    | keyword:task  task:sum  punctuation:(  keyword:flex  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 33 |     flex total = 0
     | keyword:flex  variable:total  operator:=  number:0
- 31 |     flex current = list
-    | keyword:flex  variable:current  operator:=  parameter:list
- 32 |     loop current is {node}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
- 33 |         total = total + node^.value
+ 34 |     loop list is {flex node}
+    | keyword:loop  parameter:list  keyword:is  punctuation:{  keyword:flex  variable:node  punctuation:}
+ 35 |         total = total + node^.value
     | variable:total  operator:=  variable:total  operator:+  variable:node  operator:^  punctuation:.  field:value
- 34 |         current = node^.next
-    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
- 35 |     fi
+ 36 |         list = node^.next
+    | parameter:list  operator:=  variable:node  operator:^  punctuation:.  field:next
+ 37 |     fi
     | keyword:fi
- 36 |     <- total
+ 38 |     <- total
     | keyword:<-  variable:total
- 37 | fi
+ 39 | fi
     | keyword:fi
- 39 | ; Recursion builds a tree in the caller's region.
+ 41 | ; Recursion builds a tree in the caller's region.
     | comment:; Recursion builds a tree in the caller's region.
- 40 | task build(r: region, depth: int) -> Tree@r
+ 42 | task build(r: region, depth: int) -> Tree@r
     | keyword:task  task:build  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:depth  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Tree  operator:@  region:r
- 41 |     when depth == 0
+ 43 |     when depth == 0
     | keyword:when  parameter:depth  operator:==  number:0
- 42 |         <- Leaf(1)
+ 44 |         <- Leaf(1)
     | keyword:<-  variant:Leaf  punctuation:(  number:1  punctuation:)
- 43 |     fi
+ 45 |     fi
     | keyword:fi
- 44 |     <- Branch(new Tree(build(r, depth - 1)) at r, new@r Tree(build(r, depth - 1)))
+ 46 |     <- Branch(new Tree(build(r, depth - 1)) at r, new@r Tree(build(r, depth - 1)))
     | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  keyword:at  region:r  punctuation:,  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
- 45 | fi
+ 47 | fi
     | keyword:fi
- 47 | task count(t: Tree@r) -> int
+ 49 | task count(t: Tree@r) -> int
     | keyword:task  task:count  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 48 |     match t
+ 50 |     match t
     | keyword:match  parameter:t
- 49 |     case Leaf value
+ 51 |     case Leaf value
     | keyword:case  variant:Leaf  variable:value
- 50 |         <- value
+ 52 |         <- value
     | keyword:<-  variable:value
- 51 |     case Branch left right
+ 53 |     case Branch left right
     | keyword:case  variant:Branch  variable:left  variable:right
- 52 |         <- count(left^) + count(right^)
+ 54 |         <- count(left^) + count(right^)
     | keyword:<-  task:count  punctuation:(  variable:left  operator:^  punctuation:)  operator:+  task:count  punctuation:(  variable:right  operator:^  punctuation:)
- 53 |     fi
+ 55 |     fi
     | keyword:fi
- 54 | fi
+ 56 | fi
     | keyword:fi
- 56 | ; A region passed on under another name.
+ 58 | ; A region passed on under another name.
     | comment:; A region passed on under another name.
- 57 | task twice(outer: region, value: int) -> Pair@outer
+ 59 | task twice(outer: region, value: int) -> Pair@outer
     | keyword:task  task:twice  punctuation:(  region:outer  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Pair  operator:@  region:outer
- 58 |     <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
+ 60 |     <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
     | keyword:<-  type:Pair  punctuation:{  field:first  punctuation::  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:at  region:outer  punctuation:,  field:second  punctuation::  task:make  punctuation:(  region:outer  punctuation:,  parameter:value  operator:*  number:2  punctuation:)  punctuation:}
- 59 | fi
+ 61 | fi
     | keyword:fi
- 61 | task make(inner: region, value: int) -> ^int@inner
+ 63 | task make(inner: region, value: int) -> ^int@inner
     | keyword:task  task:make  punctuation:(  region:inner  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type-builtin:int  operator:@  region:inner
- 62 |     <- new int(value) at inner
+ 64 |     <- new int(value) at inner
     | keyword:<-  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:at  region:inner
- 63 | fi
+ 65 | fi
     | keyword:fi
- 65 | ; A `<-` from inside nested blocks frees the task's regions first.
+ 67 | ; A `<-` from inside nested blocks frees the task's regions first.
     | comment:; A `<-` from inside nested blocks frees the task's regions first.
- 66 | task early(n: int) -> int
+ 68 | task early(n: int) -> int
     | keyword:task  task:early  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 67 |     region outer
+ 69 |     region outer
     | keyword:region  region:outer
- 68 |     fixed a = new int(n) at outer
+ 70 |     fixed a = new int(n) at outer
     | keyword:fixed  variable:a  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:outer
- 69 |     each i in 0..3
+ 71 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
- 70 |         region inner
+ 72 |         region inner
     | keyword:region  region:inner
- 71 |         fixed b = new int(i) at inner
+ 73 |         fixed b = new int(i) at inner
     | keyword:fixed  variable:b  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:at  region:inner
- 72 |         when b^ == 1
+ 74 |         when b^ == 1
     | keyword:when  variable:b  operator:^  operator:==  number:1
- 73 |             <- a^ + b^
+ 75 |             <- a^ + b^
     | keyword:<-  variable:a  operator:^  operator:+  variable:b  operator:^
- 74 |         fi
+ 76 |         fi
     | keyword:fi
- 75 |     fi
+ 77 |     fi
     | keyword:fi
- 76 |     <- 0
+ 78 |     <- 0
     | keyword:<-  number:0
- 77 | fi
+ 79 | fi
     | keyword:fi
- 79 | task first(list: maybe ^Node@r) -> maybe ^Node@r
+ 81 | task first(list: maybe ^Node@r) -> maybe ^Node@r
     | keyword:task  task:first  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r
- 80 |     <- list
+ 82 |     <- list
     | keyword:<-  parameter:list
- 81 | fi
+ 83 | fi
     | keyword:fi
- 83 | task checked(r: region, n: int) -> ^Node@r ~ text
+ 85 | task checked(r: region, n: int) -> ^Node@r ~ text
     | keyword:task  task:checked  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r  operator:~  type-builtin:text
- 84 |     region scratch
+ 86 |     region scratch
     | keyword:region  region:scratch
- 85 |     fixed temporary = new int(n) at scratch
+ 87 |     fixed temporary = new int(n) at scratch
     | keyword:fixed  variable:temporary  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
- 86 |     when temporary^ < 0
+ 88 |     when temporary^ < 0
     | keyword:when  variable:temporary  operator:^  operator:<  number:0
- 87 |         <- fail "negative"
+ 89 |         <- fail "negative"
     | keyword:<-  keyword:fail  string:"negative"
- 88 |     fi
+ 90 |     fi
     | keyword:fi
- 89 |     <- push(r, none, temporary^)
+ 91 |     <- push(r, none, temporary^)
     | keyword:<-  task:push  punctuation:(  region:r  punctuation:,  keyword:none  punctuation:,  variable:temporary  operator:^  punctuation:)
- 90 | fi
+ 92 | fi
     | keyword:fi
- 92 | task save(n: int) -> nothing ~ text
+ 94 | task save(n: int) -> nothing ~ text
     | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
- 93 |     region scratch
+ 95 |     region scratch
     | keyword:region  region:scratch
- 94 |     fixed copy = new int(n) at scratch
+ 96 |     fixed copy = new int(n) at scratch
     | keyword:fixed  variable:copy  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
- 95 |     when copy^ > 9
+ 97 |     when copy^ > 9
     | keyword:when  variable:copy  operator:^  operator:>  number:9
- 96 |         <- fail "too big"
+ 98 |         <- fail "too big"
     | keyword:<-  keyword:fail  string:"too big"
- 97 |     fi
+ 99 |     fi
     | keyword:fi
- 98 |     show(copy^)
+100 |     show(copy^)
     | builtin-fn:show  punctuation:(  variable:copy  operator:^  punctuation:)
- 99 | fi
+101 | fi
     | keyword:fi
-101 | task main()
+103 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-102 |     region lists
+104 |     region lists
     | keyword:region  region:lists
-103 |     flex list: maybe ^Node@lists = none
+105 |     flex list: maybe ^Node@lists = none
     | keyword:flex  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:lists  operator:=  keyword:none
-104 |     each i in 0..200000
+106 |     each i in 0..200000
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:200000
-105 |         list = push(lists, list, i)
+107 |         list = push(lists, list, i)
     | variable:list  operator:=  task:push  punctuation:(  region:lists  punctuation:,  variable:list  punctuation:,  variable:i  punctuation:)
-106 |     fi
+108 |     fi
     | keyword:fi
-107 |     show(sum(list))
+109 |     show(sum(list))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:list  punctuation:)  punctuation:)
-108 |     show(sum(none))
+110 |     show(sum(none))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  keyword:none  punctuation:)  punctuation:)
-110 |     ; A region inside a loop is new, and freed, on every pass.
+112 |     ; A region inside a loop is new, and freed, on every pass.
     | comment:; A region inside a loop is new, and freed, on every pass.
-111 |     flex total = 0
+113 |     flex total = 0
     | keyword:flex  variable:total  operator:=  number:0
-112 |     each round in 0..1000
+114 |     each round in 0..1000
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:1000
-113 |         region pass
+115 |         region pass
     | keyword:region  region:pass
-114 |         flex pieces: maybe ^Node@pass = none
+116 |         flex pieces: maybe ^Node@pass = none
     | keyword:flex  variable:pieces  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:pass  operator:=  keyword:none
-115 |         each j in 0..100
+117 |         each j in 0..100
     | keyword:each  variable:j  keyword:in  number:0  operator:..  number:100
-116 |             pieces = push(pass, pieces, 1)
+118 |             pieces = push(pass, pieces, 1)
     | variable:pieces  operator:=  task:push  punctuation:(  region:pass  punctuation:,  variable:pieces  punctuation:,  number:1  punctuation:)
-117 |         fi
+119 |         fi
     | keyword:fi
-118 |         total = total + sum(pieces)
+120 |         total = total + sum(pieces)
     | variable:total  operator:=  variable:total  operator:+  task:sum  punctuation:(  variable:pieces  punctuation:)
-119 |     fi
+121 |     fi
     | keyword:fi
-120 |     show(total)
+122 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
-122 |     region trees
+124 |     region trees
     | keyword:region  region:trees
-123 |     show(count(build(trees, 10)))
+125 |     show(count(build(trees, 10)))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  task:build  punctuation:(  region:trees  punctuation:,  number:10  punctuation:)  punctuation:)  punctuation:)
-124 |     show(count(Leaf(5)))
+126 |     show(count(Leaf(5)))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  variant:Leaf  punctuation:(  number:5  punctuation:)  punctuation:)  punctuation:)
-126 |     fixed pair = twice(lists, 21)
+128 |     fixed pair = twice(lists, 21)
     | keyword:fixed  variable:pair  operator:=  task:twice  punctuation:(  region:lists  punctuation:,  number:21  punctuation:)
-127 |     show(pair.first^ + pair.second^)
+129 |     show(pair.first^ + pair.second^)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:first  operator:^  operator:+  variable:pair  punctuation:.  field:second  operator:^  punctuation:)
-129 |     show(early(40))
+131 |     show(early(40))
     | builtin-fn:show  punctuation:(  task:early  punctuation:(  number:40  punctuation:)  punctuation:)
-131 |     ; A plan B's block can use its own region, and give a value from it.
+133 |     ; A plan B's block can use its own region, and give a value from it.
     | comment:; A plan B's block can use its own region, and give a value from it.
-132 |     fixed missing: maybe int = none
+134 |     fixed missing: maybe int = none
     | keyword:fixed  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
-133 |     fixed rescued = missing {
+135 |     fixed rescued = missing {
     | keyword:fixed  variable:rescued  operator:=  variable:missing  punctuation:{
-134 |         region rescue
+136 |         region rescue
     | keyword:region  region:rescue
-135 |         fixed spare = new int(99) at rescue
+137 |         fixed spare = new int(99) at rescue
     | keyword:fixed  variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:99  punctuation:)  keyword:at  region:rescue
-136 |         spare^
+138 |         spare^
     | variable:spare  operator:^
-137 |     }
+139 |     }
     | punctuation:}
-138 |     show(rescued)
+140 |     show(rescued)
     | builtin-fn:show  punctuation:(  variable:rescued  punctuation:)
-140 |     match checked(lists, -1)
+142 |     match checked(lists, -1)
     | keyword:match  task:checked  punctuation:(  region:lists  punctuation:,  operator:-  number:1  punctuation:)
-141 |     case {node}
+143 |     case {node}
     | keyword:case  punctuation:{  variable:node  punctuation:}
-142 |         show(node^.value)
+144 |         show(node^.value)
     | builtin-fn:show  punctuation:(  variable:node  operator:^  punctuation:.  field:value  punctuation:)
-143 |     case failure reason
+145 |     case failure reason
     | keyword:case  keyword:failure  variable:reason
-144 |         region report
+146 |         region report
     | keyword:region  region:report
-145 |         fixed message = new text(reason) at report
+147 |         fixed message = new text(reason) at report
     | keyword:fixed  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:reason  punctuation:)  keyword:at  region:report
-146 |         show(message^)
+148 |         show(message^)
     | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
-147 |     fi
+149 |     fi
     | keyword:fi
-148 |     fixed good = checked(lists, 7) { <- }
+150 |     fixed good = checked(lists, 7) { <- }
     | keyword:fixed  variable:good  operator:=  task:checked  punctuation:(  region:lists  punctuation:,  number:7  punctuation:)  punctuation:{  keyword:<-  punctuation:}
-149 |     show(good^.value)
+151 |     show(good^.value)
     | builtin-fn:show  punctuation:(  variable:good  operator:^  punctuation:.  field:value  punctuation:)
-150 |     save(3) { failure e
+152 |     save(3) { failure e
     | task:save  punctuation:(  number:3  punctuation:)  punctuation:{  keyword:failure  variable:e
-151 |         show(e)
+153 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
-152 |     }
+154 |     }
     | punctuation:}
-153 |     save(30) { failure e
+155 |     save(30) { failure e
     | task:save  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:failure  variable:e
-154 |         show(e)
+156 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
-155 |     }
+157 |     }
     | punctuation:}
-157 |     ; A literal without pointers takes the region of the binding's type, and
+159 |     ; A literal without pointers takes the region of the binding's type, and
     | comment:; A literal without pointers takes the region of the binding's type, and
-158 |     ; can then hold pointers into it.
+160 |     ; can then hold pointers into it.
     | comment:; can then hold pointers into it.
-159 |     flex head: Node@lists = Node { value: 1, next: none }
+161 |     flex head: Node@lists = Node { value: 1, next: none }
     | keyword:flex  variable:head  punctuation::  type:Node  operator:@  region:lists  operator:=  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
-160 |     head.next = push(lists, none, 2)
+162 |     head.next = push(lists, none, 2)
     | variable:head  punctuation:.  field:next  operator:=  task:push  punctuation:(  region:lists  punctuation:,  keyword:none  punctuation:,  number:2  punctuation:)
-161 |     show(sum(head.next) + head.value)
+163 |     show(sum(head.next) + head.value)
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:head  punctuation:.  field:next  punctuation:)  operator:+  variable:head  punctuation:.  field:value  punctuation:)
-162 |     fixed maybe_pair: maybe Pair@lists = pair
+164 |     fixed maybe_pair: maybe Pair@lists = pair
     | keyword:fixed  variable:maybe_pair  punctuation::  keyword:maybe  type:Pair  operator:@  region:lists  operator:=  variable:pair
-163 |     when maybe_pair is {p}
+165 |     when maybe_pair is {p}
     | keyword:when  variable:maybe_pair  keyword:is  punctuation:{  variable:p  punctuation:}
-164 |         show(p.first^)
+166 |         show(p.first^)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:first  operator:^  punctuation:)
-165 |     fi
+167 |     fi
     | keyword:fi
-167 |     ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
+169 |     ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
     | comment:; `first(none)` holds no pointer, so its plan B takes the fallback's region.
-168 |     fixed fallback: ^Node@lists = first(none) { good }
+170 |     fixed fallback: ^Node@lists = first(none) { good }
     | keyword:fixed  variable:fallback  punctuation::  operator:^  type:Node  operator:@  region:lists  operator:=  task:first  punctuation:(  keyword:none  punctuation:)  punctuation:{  variable:good  punctuation:}
-169 |     show(fallback^.value)
+171 |     show(fallback^.value)
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
-170 |     ; Pointers into different regions compare, and are never equal.
+172 |     ; Pointers into different regions compare, and are never equal.
     | comment:; Pointers into different regions compare, and are never equal.
-171 |     show(good == new Node(Node { value: 7, next: none }) at trees)
+173 |     show(good == new Node(Node { value: 7, next: none }) at trees)
     | builtin-fn:show  punctuation:(  variable:good  operator:==  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:trees  punctuation:)
-173 |     ; A pointer to a pointer lives in one region too.
+175 |     ; A pointer to a pointer lives in one region too.
     | comment:; A pointer to a pointer lives in one region too.
-174 |     fixed inner = new int(8) at trees
-    | keyword:fixed  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
-175 |     flex outer = new ^int(inner) at trees
+176 |     flex inner = new int(8) at trees
+    | keyword:flex  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
+177 |     flex outer = new ^int(inner) at trees
     | keyword:flex  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
-176 |     outer^^ = outer^^ + 1
+178 |     outer^^ = outer^^ + 1
     | variable:outer  operator:^  operator:^  operator:=  variable:outer  operator:^  operator:^  operator:+  number:1
-177 |     show(inner^)
+179 |     show(inner^)
     | builtin-fn:show  punctuation:(  variable:inner  operator:^  punctuation:)
-178 | fi
+180 | fi
     | keyword:fi

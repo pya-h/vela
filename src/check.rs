@@ -87,6 +87,61 @@ struct Scope {
     default: Option<(String, Span)>,
 }
 
+/// Where a value that holds a slice, a map or a pointer may come from, for the
+/// rule that what a fixed name owns is never given to what may change it (see
+/// `Checker::owners`). A call gives back what the task's body may send, which
+/// is known once every task is checked, so the rule is settled then (see
+/// `Checker::settle_owners`).
+#[derive(Clone, Debug, PartialEq)]
+enum Own {
+    /// A name of this task that never changes: a `fixed` variable, a
+    /// `fixed&`, a pattern's or loop's name without `flex`, a lambda's copy.
+    Root(String),
+    /// A parameter of this task that never changes (`x: T`, `fixed x`,
+    /// `fixed& x`, `.this` outside `alters`), by its place in the header.
+    Param(usize, String),
+    /// What `task` may send back of what its parameter `param` is given,
+    /// which is given `from`.
+    Sent { task: String, param: usize, from: Vec<Own> },
+    /// What a lambda that keeps what it uses keeps of the code around it.
+    Kept(String),
+}
+
+/// The types one copy of a generic task was given: as the program writes them,
+/// and by the name each fills in.
+type GivenTypes = (Vec<Type>, HashMap<String, Type>);
+
+/// Where a value is given to what may change it (see `Checker::hand`).
+#[derive(Clone, Debug)]
+enum HandedTo {
+    /// A `flex` variable or name, or one assigned.
+    Variable(String),
+    /// A `flex` parameter of a task.
+    Param { task: String, param: String },
+    /// A place that changes: a field, an item, a map's value, a slice added to.
+    Place(String),
+    /// A task's named result.
+    Result(String),
+    /// A place written, or changed by an `alters` method, that is reached from
+    /// a value made where it is written: the words before the owner.
+    Written(String),
+}
+
+/// A value given to what may change it, with what owns it, settled once every
+/// task is checked (see `Checker::settle_owners`).
+#[derive(Clone, Debug)]
+struct Handed {
+    span: Span,
+    owners: Vec<Own>,
+    to: HandedTo,
+    /// The copy the message suggests instead, as in `xs.copy() at r`.
+    copy: String,
+    /// In a generic task, where the value holds a slice, a map or a pointer
+    /// only for some types it may be given: the task and the value's type,
+    /// which each copy of the task fills in (see `Checker::copies`).
+    generic: Option<(String, Type)>,
+}
+
 #[derive(Clone)]
 struct VarInfo {
     /// `Type::Region` for a region.
@@ -109,6 +164,8 @@ struct VarInfo {
     /// Whether this is a variable of the code around a lambda that keeps what
     /// it uses, `[@r](…)`, which the lambda keeps a copy of if it uses it.
     kept: bool,
+    /// For a name that never changes: where its value came from (see `Own`).
+    owners: Vec<Own>,
 }
 
 /// A lambda that keeps what it uses, `[@r](…)` (see `Checker::kept_lambdas`).
@@ -316,6 +373,21 @@ pub struct Checker {
     current_lambda: Option<String>,
     /// The program's name for the task whose body is checked.
     current_task: String,
+    /// The place of each parameter of that task in its header, by name.
+    param_index: HashMap<String, usize>,
+    /// Every value given to what may change it, settled once every task is
+    /// checked (see `settle_owners`).
+    handed: Vec<Handed>,
+    /// For each task, where what its `<-` sends may come from.
+    sends: HashMap<String, Vec<Own>>,
+    /// The tasks whose body is the runtime's, which may send back anything.
+    natives: HashSet<String>,
+    /// What the names about to be declared own, by where each is written,
+    /// which `define` gives them (see `bind_from`).
+    bound_owners: Vec<(Span, Vec<Own>)>,
+    /// For each generic task, the types each copy made of it was given: as
+    /// the program writes them, and by the name each fills in.
+    copies: HashMap<String, Vec<GivenTypes>>,
     /// The tuple items a type test has narrowed, `t.#5? is maybe int`, for the
     /// rest of its condition and its block: the tuple's name, the item's place,
     /// and the type its reads give in a `maybe` there.
@@ -584,6 +656,11 @@ impl Checker {
         if checker.errors.is_empty() {
             let made = checker.expand_instances(&mut program.items);
             checker.keep_going(made);
+        }
+        // What a fixed name owns is given to what may change it only where
+        // every task's sends are known.
+        if checker.errors.is_empty() {
+            checker.settle_owners();
         }
         // The shapes and kinds made for their types join the program, so a
         // tool reading a program with a mistake names them as written too.
@@ -857,6 +934,7 @@ impl Checker {
             for ty in given.values_mut() {
                 self.settle_applications(ty, at)?;
             }
+            self.copies.entry(name.clone()).or_default().push((task.given.clone(), given.clone()));
             let mut made = Made::default();
             self.substitute_task(&mut task, &given, &mut made)?;
             if let Some((read, place, given_count)) = made.past_items.first() {
@@ -2968,6 +3046,7 @@ impl Checker {
         self.current_ret = Some(known(&task.ret));
         self.current_lambda = is_lambda(&task.name).then(|| task.name.clone());
         self.current_task = task.name.clone();
+        self.param_index = task.params.iter().enumerate().map(|(i, param)| (param.name.clone(), i)).collect();
         self.current_method = task.owner.clone();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
@@ -3041,6 +3120,7 @@ impl Checker {
         // A native task's body is the runtime's (see `ast::NATIVE`), so its
         // header is all there is to check.
         if task.native {
+            self.natives.insert(task.name.clone());
             self.scopes.clear();
             self.current_ret = None;
             self.current_method = None;
@@ -3659,7 +3739,12 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false });
+        // What it owns, where `bind_from` or a binding said so.
+        let owners = match self.bound_owners.iter().position(|(at, _)| *at == span) {
+            Some(i) => self.bound_owners.swap_remove(i).1,
+            None => Vec::new(),
+        };
+        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false, owners });
         match clash {
             Some(clash) => err(span, clash),
             None => Ok(()),
@@ -4140,6 +4225,23 @@ impl Checker {
                     }
                     declared.push((name, at, ty));
                 }
+                // What the names are given: a `flex` one may not take what a
+                // fixed name owns, and one that never changes owns it too.
+                for (i, bound) in names.iter().enumerate() {
+                    let Some(value) = (if forwarded { init.first() } else { init.get(i) }) else { continue };
+                    if *mutable {
+                        if let Some(ty) = given.get(i).filter(|_| bound.name != DISCARD || !bound.parts.is_empty()) {
+                            self.hand_as(value, ty, HandedTo::Variable(bound_text(bound)));
+                        }
+                        continue;
+                    }
+                    let owners = self.owners(value);
+                    if !owners.is_empty() {
+                        let mut spans = Vec::new();
+                        bound_spans(bound, &mut spans);
+                        self.bound_owners.extend(spans.into_iter().map(|at| (at, owners.clone())));
+                    }
+                }
                 for (name, at, ty) in declared {
                     // A `[flex @r]` lambda changes what it keeps.
                     if held_lambda(&ty) && !*mutable {
@@ -4217,6 +4319,15 @@ impl Checker {
                     match values.get_mut(i).filter(|_| !forwarded) {
                         Some(value) => self.coerce(value, &expected)?,
                         None => fits_or_err(&actual, &expected, value_span, given_by(values))?,
+                    }
+                    // A place that changes may not take what a fixed name owns.
+                    let to = match targets.get(i) {
+                        Some(Target::Place(Expr { kind: ExprKind::Var(name), .. })) => HandedTo::Variable(name.clone()),
+                        Some(Target::Place(place)) => HandedTo::Place(value_text(place)),
+                        _ => continue,
+                    };
+                    if let Some(value) = if forwarded { values.first() } else { values.get(i) } {
+                        self.hand_as(value, &expected, to);
                     }
                 }
                 Ok(())
@@ -4316,6 +4427,12 @@ impl Checker {
                 let entry = self.unset.clone();
                 self.loops.push(named);
                 self.push_scope();
+                // Its names own what the items are owned by.
+                let mut each_names: Vec<Declared> = vec![(name.clone(), span, item.clone(), false)];
+                if let (Some((second, at)), Some(value)) = (second.as_ref(), value.as_ref()) {
+                    each_names.push((second.clone(), *at, value.clone(), false));
+                }
+                self.bind_from(&each_names, range);
                 let mut result = if name == DISCARD { Ok(()) } else { self.define(name, item, false, span) };
                 if let (Ok(()), Some((second, at)), Some(value)) = (&result, second.as_ref(), value)
                     && second != DISCARD
@@ -4373,7 +4490,9 @@ impl Checker {
                     if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
                         return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
                     }
-                    return self.coerce(e, &ret);
+                    self.coerce(e, &ret)?;
+                    self.note_sent(values);
+                    return Ok(());
                 }
                 let expected = expected.to_vec();
                 let given = self.value_types(values, expected.len(), span, false).map_err(|mut error| {
@@ -4391,6 +4510,7 @@ impl Checker {
                         None => fits_or_err(&actual, want, first, Given::Sent)?,
                     }
                 }
+                self.note_sent(values);
                 Ok(())
             }
             StmtKind::Region { name, default } => {
@@ -4578,6 +4698,7 @@ impl Checker {
             return err(pattern.span, "'_' matches anything, so this condition would always hold");
         }
         let bindings = self.part_bindings(&ty, &mut cond.value, pattern)?;
+        self.bind_from(&bindings, &cond.value);
         match gives {
             Some(branches) => self.check_value_block(bindings, body, pattern.span, branches),
             None => self.check_block_with(bindings, body).map(|()| None),
@@ -4598,7 +4719,9 @@ impl Checker {
                     return err(pattern.span, "'_' matches anything, so this condition would always hold");
                 }
                 Some(pattern) => {
-                    for (name, span, ty, mutable) in self.part_bindings(&ty, &mut current.value, pattern)? {
+                    let bindings = self.part_bindings(&ty, &mut current.value, pattern)?;
+                    self.bind_from(&bindings, &current.value);
+                    for (name, span, ty, mutable) in bindings {
                         if name != DISCARD {
                             self.define(&name, ty, mutable, span)?;
                         }
@@ -4976,7 +5099,9 @@ impl Checker {
     fn check_assign_target(&mut self, expr: &mut Expr) -> Result<Type> {
         // The place as written, for the error about a name it is reached from.
         let written = place_path(expr).map_or_else(String::new, |path| path_text(&path));
-        self.check_written(expr, &written)
+        let ty = self.check_written(expr, &written)?;
+        self.hand_written(expr, None);
+        Ok(ty)
     }
 
     /// `check_assign_target` of `expr`, part of the place `written`, as written.
@@ -5175,6 +5300,325 @@ impl Checker {
         }
     }
 
+    /// Where the value `e`, already checked, may come from, where it holds a
+    /// slice, a map or a pointer: the names that never change it is reached
+    /// from, and the calls that may give back what such a name holds (see
+    /// `Own`). Empty for a value that holds none, which is copied whole, and
+    /// for one made here or reached from a name that changes. What a fixed
+    /// name owns is never given to what may change it (see `hand`).
+    fn owners(&self, e: &Expr) -> Vec<Own> {
+        let holds = e.ty.as_ref().is_some_and(|ty| self.holds_handle(ty));
+        // A lambda's value keeps what it uses, which a call of it may give back.
+        let lambda = matches!(e.ty, Some(Type::Closure(_)));
+        if !holds && !lambda {
+            return Vec::new();
+        }
+        let all = |values: &mut dyn Iterator<Item = &Expr>| values.flat_map(|value| self.owners(value)).collect::<Vec<Own>>();
+        match &e.kind {
+            ExprKind::Var(name) => match self.lookup(name) {
+                Some(info) if !info.mutable && !info.result => {
+                    let mut owners = info.owners.clone();
+                    if holds {
+                        owners.push(match self.param_index.get(name).filter(|_| info.param) {
+                            Some(i) => Own::Param(*i, name.clone()),
+                            None => Own::Root(name.clone()),
+                        });
+                    }
+                    owners
+                }
+                _ => Vec::new(),
+            },
+            ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Lookup(base, _) | ExprKind::Deref(base) => self.owners(base),
+            ExprKind::Call { name, args, .. } => self.call_owners(name, args),
+            // A task value or a lambda's: what it was given, and what it keeps.
+            ExprKind::Invoke { callee, args } => all(&mut std::iter::once(callee.as_ref()).chain(args.iter())),
+            ExprKind::Closure { lambda, .. } => vec![Own::Kept(lambda.clone())],
+            ExprKind::Array(items) | ExprKind::Tuple(items) => all(&mut items.iter()),
+            ExprKind::Construct { args, .. } => all(&mut args.iter()),
+            ExprKind::StructInit { fields, .. } => all(&mut fields.iter().map(|field| &field.value)),
+            ExprKind::Pairs(pairs) => all(&mut pairs.iter().flat_map(|(key, value)| [key, value])),
+            ExprKind::Repeat { value, .. }
+            | ExprKind::Wrap(value)
+            | ExprKind::Kept { value, .. }
+            | ExprKind::Shortcut { value, .. }
+            | ExprKind::Spread(value) => self.owners(value),
+            ExprKind::MapOp { map, .. } => self.owners(map),
+            // A copy of a map is a map of its own, at every depth, and so is a
+            // slice copied of items that hold nothing; a slice copied of items
+            // that hold a slice, a map or a pointer shares what they hold.
+            ExprKind::New { ty, value, .. } => match ty.as_ref() {
+                Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) => Vec::new(),
+                Type::Slice(item, _) if !holds_pointers(item, &self.regional) => Vec::new(),
+                _ => self.owners(value),
+            },
+            ExprKind::Copy { .. } => Vec::new(),
+            ExprKind::PlanB { value, body, .. } => {
+                let mut given = Vec::new();
+                last_values(body, &mut given);
+                all(&mut std::iter::once(value.as_ref()).chain(given))
+            }
+            ExprKind::Choice(stmt) => {
+                let mut given = Vec::new();
+                last_values(std::slice::from_ref(stmt.as_ref()), &mut given);
+                all(&mut given.into_iter())
+            }
+            ExprKind::LoopValue(value) => {
+                let mut given = Vec::new();
+                loop_values(&value.stmt, &mut given);
+                all(&mut given.into_iter())
+            }
+            ExprKind::MethodCall { value, args, .. } => all(&mut std::iter::once(value.as_ref()).chain(args.iter())),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Where the value a call of `task` given `args` gives back may come
+    /// from: what the task may send back of each argument (see `Own::Sent`).
+    /// A call whose arguments aren't one for each parameter, as one giving a
+    /// group's values is, may give back any of them.
+    fn call_owners(&self, task: &str, args: &[Expr]) -> Vec<Own> {
+        let one_each = self.tasks.get(task).is_some_and(|info| info.params.len() == args.len()) && !args.iter().any(|arg| matches!(arg.kind, ExprKind::Spread(_)));
+        args.iter()
+            .enumerate()
+            .flat_map(|(param, arg)| {
+                let from = self.owners(arg);
+                match (from.is_empty(), one_each) {
+                    (true, _) => Vec::new(),
+                    (false, true) => vec![Own::Sent { task: task.to_string(), param, from }],
+                    (false, false) => from,
+                }
+            })
+            .collect()
+    }
+
+    /// Notes that `value`, already checked, is given to `to`, which may change
+    /// what it holds: an error, once every task is checked, if a fixed name
+    /// owns it (see `settle_owners`).
+    fn hand(&mut self, value: &Expr, to: HandedTo) {
+        let ty = value.ty.clone().unwrap_or(Type::Unknown);
+        self.hand_as(value, &ty, to);
+    }
+
+    /// `hand`, where what is given is of type `ty`: one of the several values
+    /// `value` sends, or the whole of it.
+    fn hand_as(&mut self, value: &Expr, ty: &Type, to: HandedTo) {
+        // A lambda's value holds none: what it keeps counts where it is called.
+        if !self.holds_handle(ty) {
+            return;
+        }
+        let owners = self.owners(value);
+        if !owners.is_empty() {
+            let copy = format!("{}.copy() at {}", copied_text(value), copy_region(ty));
+            let generic = self.generic_part(ty);
+            self.handed.push(Handed { span: value.span, owners, to, copy, generic });
+        }
+    }
+
+    /// Whether a value of type `ty` holds a slice, a map or a pointer, which
+    /// another name may share; for several values, whether any of them does.
+    fn holds_handle(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Results(items) => items.iter().any(|item| self.holds_handle(item)),
+            _ => holds_pointers(ty, &self.regional) || self.may_hold(ty),
+        }
+    }
+
+    /// Whether `ty` holds a type the generic task being checked takes, which
+    /// may be given one that holds a slice, a map or a pointer: any but one
+    /// that must be `frozen`.
+    fn may_hold(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Param(name) | Type::Named(name, _) => {
+                self.type_params.iter().any(|param| param.name == *name && !param.needs.iter().any(|(need, _)| *need == Need::Frozen))
+            }
+            Type::Applied(applied) => applied.types.iter().any(|ty| self.may_hold(ty)),
+            Type::Maybe(inner) | Type::Array(inner, _) => self.may_hold(inner),
+            Type::Or(value, error) => self.may_hold(value) || self.may_hold(error),
+            Type::Tuple(items) | Type::Results(items) => items.iter().any(|item| self.may_hold(item)),
+            _ => false,
+        }
+    }
+
+    /// Where a value of type `ty` holds a slice, a map or a pointer only for
+    /// some types the generic task being checked may be given: the task, and
+    /// the type its copies fill in.
+    fn generic_part(&self, ty: &Type) -> Option<(String, Type)> {
+        (!holds_pointers(ty, &self.regional) && self.may_hold(ty)).then(|| (self.current_task.clone(), ty.clone()))
+    }
+
+    /// The names a pattern binds, `bindings`, from `source`, already checked:
+    /// a `flex` one may not be given what a fixed name owns (see `hand`), and
+    /// one that never changes owns what the value is owned by.
+    fn bind_from(&mut self, bindings: &[Declared], source: &Expr) {
+        let owners = self.owners(source);
+        if owners.is_empty() {
+            return;
+        }
+        for (name, at, ty, mutable) in bindings {
+            if name == DISCARD || !self.holds_handle(ty) {
+                continue;
+            }
+            if *mutable {
+                let copy = format!("{}.copy() at {}", copied_text(source), copy_region(ty));
+                let generic = self.generic_part(ty);
+                self.handed.push(Handed { span: *at, owners: owners.clone(), to: HandedTo::Variable(name.clone()), copy, generic });
+            } else {
+                self.bound_owners.push((*at, owners.clone()));
+            }
+        }
+    }
+
+    /// Notes what this task's `<-` sends may come from, which a call of it
+    /// gives back (see `Own::Sent`).
+    fn note_sent(&mut self, values: &[Expr]) {
+        if is_lambda(&self.current_task) {
+            return;
+        }
+        let sent: Vec<Own> = values.iter().flat_map(|value| self.owners(value)).collect();
+        if !sent.is_empty() {
+            self.sends.entry(self.current_task.clone()).or_default().extend(sent);
+        }
+    }
+
+    /// Notes a write, or a change by an `alters` method (`method`), of
+    /// `place`, already checked, where it is reached from a value made where
+    /// it is written rather than from a name, as in `first(xs)^.x = 1`: an
+    /// error if a fixed name owns that value (see `settle_owners`).
+    fn hand_written(&mut self, place: &Expr, method: Option<&str>) {
+        let mut root = place;
+        while let ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Lookup(base, _) | ExprKind::Deref(base) = &root.kind {
+            root = base;
+        }
+        if matches!(root.kind, ExprKind::Var(_) | ExprKind::Shared { .. }) || std::ptr::eq(root, place) {
+            return;
+        }
+        let made = value_text(root);
+        let lead = match method {
+            Some(method) => format!("'{}' changes what '{}' gives back", method, made),
+            None => format!("cannot change what '{}' gives back", made),
+        };
+        let owners = self.owners(root);
+        if !owners.is_empty() {
+            let generic = root.ty.as_ref().and_then(|ty| self.generic_part(ty));
+            self.handed.push(Handed { span: root.span, owners, to: HandedTo::Written(lead), copy: String::new(), generic });
+        }
+    }
+
+    /// Settles every value given to what may change it (see `hand`), once
+    /// every task is checked: which parameters each task may send back is
+    /// worked out from its sends, through the calls in them, until nothing
+    /// more is found, and a value a fixed name owns, directly or through what
+    /// a call gives back, is an error where it is given. A `[flex @r]` lambda
+    /// may not keep a copy of what a fixed name owns either.
+    fn settle_owners(&mut self) {
+        // Which parameters each task may send back, by their place.
+        let mut sends_back: HashMap<String, HashSet<usize>> = HashMap::new();
+        loop {
+            let mut grown = false;
+            for (task, sent) in &self.sends {
+                let params = self.tasks.get(task).map_or(0, |info| info.params.len());
+                for param in 0..params {
+                    if sends_back.get(task).is_some_and(|back| back.contains(&param)) {
+                        continue;
+                    }
+                    if self.reaches_param(sent, param, &sends_back) {
+                        sends_back.entry(task.clone()).or_default().insert(param);
+                        grown = true;
+                    }
+                }
+            }
+            if !grown {
+                break;
+            }
+        }
+        let mut errors = Vec::new();
+        for handed in &self.handed {
+            let Some((owner, of_param)) = self.owner_of_handed(&handed.owners, &sends_back) else { continue };
+            // In a generic task, only a copy given a type that holds one.
+            let given = match &handed.generic {
+                None => String::new(),
+                Some((task, ty)) => {
+                    let copy = self.copies.get(task).and_then(|copies| copies.iter().find(|(_, given)| holds_pointers(&in_copy(ty, given), &self.regional)));
+                    let Some((types, _)) = copy else { continue };
+                    let types: Vec<String> = types.iter().map(|ty| ty.without_regions().to_string()).collect();
+                    format!(", where '{}' is given {}", unqualified(task), types.join(", "))
+                }
+            };
+            let owner_text = if owner == THIS { THIS_WORD.to_string() } else { owner.clone() };
+            let handed = Handed { copy: handed.copy.replace(OWNER_MARK, &owner_text), ..handed.clone() };
+            let rule = "nothing changes through what a fixed name owns";
+            let message = match &handed.to {
+                HandedTo::Variable(name) => format!("'{}' is given what fixed '{}' owns, and {}; give it a copy: '{}'", name, owner_text, rule, handed.copy),
+                HandedTo::Param { task, param } => {
+                    let keep = if of_param { format!("take '{0}' as 'flex {0}'", owner_text) } else { format!("keep '{}' in a flex variable", owner_text) };
+                    format!("'{}' changes what its parameter '{}' reaches, so it can't be given what fixed '{}' owns; give it a copy, '{}', or {}", task, param, owner_text, handed.copy, keep)
+                }
+                HandedTo::Place(place) => format!("'{}' changes, so it can't be given what fixed '{}' owns: {}; give it a copy: '{}'", place, owner_text, rule, handed.copy),
+                HandedTo::Result(name) => format!("'{}' is a result, which the task may change, so it can't be given what fixed '{}' owns; give it a copy: '{}'", name, owner_text, handed.copy),
+                HandedTo::Written(lead) => format!("{}: it is what fixed '{}' owns, and {}, at any depth", lead, owner_text, rule),
+            };
+            // The types a generic task is given that make it so, after its owner.
+            let message = message.replacen(" owns", &format!(" owns{}", given), 1);
+            errors.push(Error::at(handed.span, message));
+        }
+        // A `[flex @r]` lambda's copies are its own to change.
+        for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
+            for name in &kept.uses {
+                let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
+                if info.mutable || info.result || !holds_pointers(&info.ty, &self.regional) {
+                    continue;
+                }
+                let copy = format!("{}.copy() at {}", name, copy_region(&info.ty));
+                errors.push(Error::at(
+                    kept.span,
+                    format!(
+                        "a '[flex @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', and {3}; make it a '[@{1}]' lambda, or keep a copy of its own, as in 'flex mine = {2}', and use that",
+                        name, kept.region, copy, "nothing changes through what a fixed name owns"
+                    ),
+                ));
+            }
+        }
+        // One place may be checked more than once, in a generic task's copies.
+        let mut seen = HashSet::new();
+        errors.retain(|error| seen.insert((error.span.map(|span| (span.file, span.line, span.col)), error.message.clone())));
+        self.errors.extend(errors);
+    }
+
+    /// Whether `owners` reach parameter `param` of the task they are in,
+    /// through what the calls in them send back.
+    fn reaches_param(&self, owners: &[Own], param: usize, sends_back: &HashMap<String, HashSet<usize>>) -> bool {
+        owners.iter().any(|own| match own {
+            Own::Param(i, _) => *i == param,
+            Own::Sent { task, param: given, from } => self.may_send_back(task, *given, sends_back) && self.reaches_param(from, param, sends_back),
+            Own::Root(_) | Own::Kept(_) => false,
+        })
+    }
+
+    /// Whether `task` may send back what its parameter `param` is given.
+    fn may_send_back(&self, task: &str, param: usize, sends_back: &HashMap<String, HashSet<usize>>) -> bool {
+        self.natives.contains(task) || sends_back.get(task).is_some_and(|back| back.contains(&param))
+    }
+
+    /// The fixed name that owns a value with `owners`, if one does, and
+    /// whether it is a parameter.
+    fn owner_of_handed(&self, owners: &[Own], sends_back: &HashMap<String, HashSet<usize>>) -> Option<(String, bool)> {
+        owners.iter().find_map(|own| match own {
+            Own::Root(name) => Some((name.clone(), false)),
+            Own::Param(_, name) => Some((name.clone(), true)),
+            Own::Sent { task, param, from } => self.may_send_back(task, *param, sends_back).then(|| self.owner_of_handed(from, sends_back)).flatten(),
+            Own::Kept(lambda) => {
+                let kept = self.kept_lambdas.get(lambda)?;
+                kept.uses.iter().find_map(|name| {
+                    let (_, info) = kept.outer.iter().find(|(outer, _)| outer == name)?;
+                    if info.mutable || info.result || !holds_pointers(&info.ty, &self.regional) {
+                        return self.owner_of_handed(&info.owners, sends_back);
+                    }
+                    Some((name.clone(), false))
+                })
+            }
+        })
+    }
+
     /// Checks the base of an assigned field, which must itself be an
     /// assignable place. `written` is the place assigned, as written.
     fn check_field_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
@@ -5247,6 +5691,7 @@ impl Checker {
                 return err(case.pattern.span, "this case comes after '_', which already matches everything");
             }
             let bindings = self.pattern_bindings(&ety, &case.pattern, true)?;
+            self.bind_from(&bindings, expr);
             let label = case.pattern.label();
             if matches!(case.pattern.kind, PatternKind::Any) {
                 if !unknown && needed.iter().all(|n| seen.contains(n)) {
@@ -5533,6 +5978,11 @@ impl Checker {
             match values.get_mut(i).filter(|_| !forwarded) {
                 Some(value) => self.coerce(value, want)?,
                 None => fits_or_err(&actual, want, list_span, Given::Sent)?,
+            }
+            // What a result holds may be written, so it may not take what a
+            // fixed name owns.
+            if let (Some((name, _)), Some(value)) = (names.get(i), if forwarded { values.first() } else { values.get(i) }) {
+                self.hand_as(value, want, HandedTo::Result(name.clone()));
             }
         }
         // Set, so the results can be read from here on.
@@ -8701,6 +9151,8 @@ impl Checker {
         let Some(value) = value else { return Ok(item) };
         self.check_expr(value)?;
         self.coerce(value, &item)?;
+        // The slice changes, so it may not take what a fixed name owns.
+        self.hand(value, HandedTo::Place(value_text(items)));
         // Adding may need more room, which comes from the slice's region.
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
@@ -10093,6 +10545,7 @@ impl Checker {
         if info.owner.as_ref().is_some_and(|owner| owner.alters) {
             let ExprKind::MethodCall { value, .. } = &expr.kind else { return Ok(()) };
             self.altered_place(value, &written)?;
+            self.hand_written(value, Some(&written));
         }
         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
         let ExprKind::MethodCall { value, args, .. } = taken else {
@@ -10791,6 +11244,14 @@ impl Checker {
             }
         }
         self.check_aliasing(args, info)?;
+        for ((arg, passing), (param, _)) in args.iter().zip(&info.passing).zip(&info.params) {
+            match (passing, &arg.kind) {
+                // A `flex` parameter may change what it holds.
+                (Passing::Flex, _) => self.hand(arg, HandedTo::Param { task: task.to_string(), param: param.clone() }),
+                (Passing::FlexRef, ExprKind::Ref(place)) => self.hand_written(place, None),
+                _ => {}
+            }
+        }
         let sent = self.settled_type(ret, &regions, &given, span)?;
         // A type no argument names is worked out from the place the value goes
         // (see `settle_types`), or written at the call.
@@ -10871,6 +11332,16 @@ impl Checker {
         bound.ty = Some(ty.clone());
         value.ty = Some(ty.clone());
         let at = bound.span;
+        // A `fixed&` owns what its place is owned by; a `flex&` names a place
+        // that changes, unless reached from a value made here.
+        if mutable {
+            self.hand_written(place, None);
+        } else {
+            let owners = self.owners(place);
+            if !owners.is_empty() {
+                self.bound_owners.push((at, owners));
+            }
+        }
         self.define(&name, ty, mutable, at)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(&name)) {
             info.refers = Some(path);
@@ -14820,6 +15291,97 @@ fn own_region_type(what: &str, task: &str, param: &str, ty: &Type) -> String {
 /// Whether `region` is one no block declares, so no block's end frees it:
 /// the region of a value made without pointers, of what a type test takes
 /// from an item, or of a type found inside a task type.
+/// `a`, or `(a, b)` for names that take a tuple apart, as written.
+fn bound_text(bound: &Bound) -> String {
+    if bound.parts.is_empty() {
+        return bound.name.clone();
+    }
+    format!("({})", bound.parts.iter().map(bound_text).collect::<Vec<_>>().join(", "))
+}
+
+/// Where each name `bound` declares is written.
+fn bound_spans(bound: &Bound, spans: &mut Vec<Span>) {
+    if bound.parts.is_empty() {
+        spans.push(bound.span);
+    }
+    bound.parts.iter().for_each(|part| bound_spans(part, spans));
+}
+
+/// The region a copy of a value of type `ty` would name in a message: the
+/// value's own, or `r`.
+fn copy_region(ty: &Type) -> &str {
+    // A method can't allocate in the region of the value it is called on.
+    ty.regions().into_iter().find(|region| !unnamed_region(region) && *region != THIS_WORD).unwrap_or("r")
+}
+
+/// Where the suggested copy names the owner, a value with no short text of its
+/// own, as a literal holding it (see `copied_text`).
+const OWNER_MARK: &str = "\u{0}";
+
+/// The value a message suggests copying: `value` as written, or its owner
+/// (`OWNER_MARK`) where it has no short text, as `[a, b]` hasn't.
+fn copied_text(value: &Expr) -> String {
+    match value_text(value) {
+        text if text == "…" => OWNER_MARK.to_string(),
+        text => text,
+    }
+}
+
+/// A value as a message names it: a place as written, a call by its task's
+/// name, or a plan B by its value.
+fn value_text(e: &Expr) -> String {
+    if let Some(path) = place_path(e) {
+        return path_text(&path);
+    }
+    match &e.kind {
+        ExprKind::Call { name, args, .. } => match (method_parts(name), args.first()) {
+            (Some((_, method)), Some(value)) => format!("{}.{}(…)", value_text(value), method),
+            _ => format!("{}(…)", unqualified(name)),
+        },
+        ExprKind::Invoke { callee, .. } => format!("{}(…)", value_text(callee)),
+        ExprKind::MethodCall { name, .. } => format!("….{}(…)", name),
+        ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Kept { value, .. } => value_text(value),
+        _ => "…".to_string(),
+    }
+}
+
+/// The values a loop that gives one may give: its last line's, and every
+/// `break = v` in it.
+fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
+    match &stmt.kind {
+        StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => {
+            last_values(body, values);
+            body.iter().for_each(|stmt| break_values(stmt, values));
+        }
+        StmtKind::Parted(parted) => {
+            last_values(&parted.body, values);
+            parted.body.iter().for_each(|stmt| break_values(stmt, values));
+        }
+        StmtKind::Named(_, inner) => loop_values(inner, values),
+        _ => {}
+    }
+}
+
+/// Every `break = v` in `stmt`, through its blocks.
+fn break_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
+    let mut blocks: Vec<&'a [Stmt]> = Vec::new();
+    match &stmt.kind {
+        StmtKind::Break(_, Some(value)) => values.push(value),
+        StmtKind::When(arms, else_block) => {
+            blocks.extend(arms.iter().map(|arm| arm.body.as_slice()));
+            blocks.extend(else_block.iter().map(Vec::as_slice));
+        }
+        StmtKind::Match(_, cases) => blocks.extend(cases.iter().map(|case| case.body.as_slice())),
+        StmtKind::Block(body) | StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => blocks.push(body),
+        StmtKind::Parted(parted) => blocks.push(&parted.body),
+        StmtKind::Named(_, inner) => break_values(inner, values),
+        _ => {}
+    }
+    for block in blocks {
+        block.iter().for_each(|stmt| break_values(stmt, values));
+    }
+}
+
 fn unnamed_region(region: &str) -> bool {
     [ANY_REGION, UNNAMED_REGION, OWN_REGION].contains(&region)
 }

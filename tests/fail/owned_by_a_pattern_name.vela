@@ -1,0 +1,16 @@
+; error: 14:25: 'current' is given what fixed 'node' owns, and nothing changes through what a fixed name owns; give it a copy: 'node^.next.copy() at r'
+; A pattern's name without flex is a fixed name, so what it reaches can't be given to a flex cursor.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    flex list: maybe ^Node@r = new Node(Node { v: 1, next: none })
+    flex current = list
+    loop current is {node}
+        current = node^.next
+    fi
+fi

@@ -1,0 +1,15 @@
+; error: 13:18: 'q' is given what fixed 'p' owns, and nothing changes through what a fixed name owns; give it a copy: 'p.copy() at r'
+; So is an each loop's name.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    flex ps = [new Node(Node { v: 1, next: none }), ...]
+    each p in ps
+        flex q = p
+    fi
+fi

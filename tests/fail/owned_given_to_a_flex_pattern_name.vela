@@ -1,0 +1,15 @@
+; error: 12:25: 'n' is given what fixed 'found' owns, and nothing changes through what a fixed name owns; give it a copy: 'found.copy() at r'
+; A flex name in a pattern.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    fixed found: maybe ^Node@r = new Node(Node { v: 1, next: none })
+    when found is {flex n}
+        n^.v = 2
+    fi
+fi

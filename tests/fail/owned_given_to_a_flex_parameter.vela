@@ -1,0 +1,12 @@
+; error: 11:10: 'sort' changes what its parameter 'items' reaches, so it can't be given what fixed 'scores' owns; give it a copy, 'scores.copy() at r', or keep 'scores' in a flex variable
+; A flex parameter may change what it is given, so it can't take what a fixed name owns.
+
+task sort(flex items: [int]@r)
+    items[0] = 0
+fi
+
+task main()
+    region r default
+    fixed scores = [3, 1, ...]
+    sort(scores)
+fi

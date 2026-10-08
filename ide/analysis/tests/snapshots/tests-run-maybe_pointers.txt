@@ -14,111 +14,103 @@
     | keyword:fi
  10 | task sum(list: maybe ^Node@r) -> int
     | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 11 |     flex total = 0
-    | keyword:flex  variable:total  operator:=  number:0
- 12 |     flex current = list
-    | keyword:flex  variable:current  operator:=  parameter:list
- 13 |     loop current is {node}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
- 14 |         total = total + node^.value
-    | variable:total  operator:=  variable:total  operator:+  variable:node  operator:^  punctuation:.  field:value
- 15 |         current = node^.next
-    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
- 16 |     fi
+ 11 |     when list is {node}
+    | keyword:when  parameter:list  keyword:is  punctuation:{  variable:node  punctuation:}
+ 12 |         <- node^.value + sum(node^.next)
+    | keyword:<-  variable:node  operator:^  punctuation:.  field:value  operator:+  task:sum  punctuation:(  variable:node  operator:^  punctuation:.  field:next  punctuation:)
+ 13 |     fi
     | keyword:fi
- 17 |     <- total
-    | keyword:<-  variable:total
- 18 | fi
+ 14 |     <- 0
+    | keyword:<-  number:0
+ 15 | fi
     | keyword:fi
- 20 | task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
+ 17 | task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
     | keyword:task  task:find  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  parameter:wanted  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r
- 21 |     flex current = list
-    | keyword:flex  variable:current  operator:=  parameter:list
- 22 |     loop current is {node}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
- 23 |         when node^.value == wanted
+ 18 |     when list is {node}
+    | keyword:when  parameter:list  keyword:is  punctuation:{  variable:node  punctuation:}
+ 19 |         when node^.value == wanted
     | keyword:when  variable:node  operator:^  punctuation:.  field:value  operator:==  parameter:wanted
- 24 |             <- node
+ 20 |             <- node
     | keyword:<-  variable:node
- 25 |         fi
+ 21 |         fi
     | keyword:fi
- 26 |         current = node^.next
-    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
- 27 |     fi
+ 22 |         <- find(node^.next, wanted)
+    | keyword:<-  task:find  punctuation:(  variable:node  operator:^  punctuation:.  field:next  punctuation:,  parameter:wanted  punctuation:)
+ 23 |     fi
     | keyword:fi
- 28 |     <- none
+ 24 |     <- none
     | keyword:<-  keyword:none
- 29 | fi
+ 25 | fi
     | keyword:fi
- 31 | task last(list: ^Node@r) -> ^Node@r
+ 27 | task last(list: ^Node@r) -> ^Node@r
     | keyword:task  task:last  punctuation:(  parameter:list  punctuation::  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
- 32 |     flex current = list
-    | keyword:flex  variable:current  operator:=  parameter:list
- 33 |     loop current^.next is {next}
-    | keyword:loop  variable:current  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:next  punctuation:}
- 34 |         current = next
-    | variable:current  operator:=  variable:next
- 35 |     fi
+ 28 |     when list^.next is {next}
+    | keyword:when  parameter:list  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:next  punctuation:}
+ 29 |         <- last(next)
+    | keyword:<-  task:last  punctuation:(  variable:next  punctuation:)
+ 30 |     fi
     | keyword:fi
- 36 |     <- current
-    | keyword:<-  variable:current
- 37 | fi
+ 31 |     <- list
+    | keyword:<-  parameter:list
+ 32 | fi
     | keyword:fi
- 39 | task main()
+ 34 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 40 |     region nodes
+ 35 |     region nodes
     | keyword:region  region:nodes
- 41 |     fixed empty: maybe ^Node@nodes = none
+ 36 |     fixed empty: maybe ^Node@nodes = none
     | keyword:fixed  variable:empty  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:nodes  operator:=  keyword:none
- 42 |     show(empty == none)
+ 37 |     show(empty == none)
     | builtin-fn:show  punctuation:(  variable:empty  operator:==  keyword:none  punctuation:)
- 43 |     show(sum(empty))
+ 38 |     show(sum(empty))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:empty  punctuation:)  punctuation:)
- 44 |     fixed third = new Node(Node { value: 3, next: none }) at nodes
-    | keyword:fixed  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:nodes
- 45 |     fixed second = new Node(Node { value: 2, next: third }) at nodes
-    | keyword:fixed  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)  keyword:at  region:nodes
- 46 |     fixed first = new Node(Node { value: 1, next: second }) at nodes
-    | keyword:fixed  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)  keyword:at  region:nodes
- 47 |     show(sum(first))
+ 39 |     ; A list the program changes is held by flex names.
+    | comment:; A list the program changes is held by flex names.
+ 40 |     flex third = new Node(Node { value: 3, next: none }) at nodes
+    | keyword:flex  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:nodes
+ 41 |     flex second = new Node(Node { value: 2, next: third }) at nodes
+    | keyword:flex  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)  keyword:at  region:nodes
+ 42 |     flex first = new Node(Node { value: 1, next: second }) at nodes
+    | keyword:flex  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)  keyword:at  region:nodes
+ 43 |     show(sum(first))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
- 48 |     show(last(first)^.value)
+ 44 |     show(last(first)^.value)
     | builtin-fn:show  punctuation:(  task:last  punctuation:(  variable:first  punctuation:)  operator:^  punctuation:.  field:value  punctuation:)
- 50 |     when find(first, 2) is {flex found}
+ 46 |     when find(first, 2) is {flex found}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:2  punctuation:)  keyword:is  punctuation:{  keyword:flex  variable:found  punctuation:}
- 51 |         show(found == second)
+ 47 |         show(found == second)
     | builtin-fn:show  punctuation:(  variable:found  operator:==  variable:second  punctuation:)
- 52 |         found^.value = 20
+ 48 |         found^.value = 20
     | variable:found  operator:^  punctuation:.  field:value  operator:=  number:20
- 53 |     fi
+ 49 |     fi
     | keyword:fi
- 54 |     show(sum(first))
+ 50 |     show(sum(first))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
- 55 |     show(find(first, 9) == none)
+ 51 |     show(find(first, 9) == none)
     | builtin-fn:show  punctuation:(  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  operator:==  keyword:none  punctuation:)
- 57 |     when find(first, 9) is {found}
+ 53 |     when find(first, 9) is {found}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  keyword:is  punctuation:{  variable:found  punctuation:}
- 58 |         show(found^.value)
+ 54 |         show(found^.value)
     | builtin-fn:show  punctuation:(  variable:found  operator:^  punctuation:.  field:value  punctuation:)
- 59 |     else
+ 55 |     else
     | keyword:else
- 60 |         show("not found")
+ 56 |         show("not found")
     | builtin-fn:show  punctuation:(  string:"not found"  punctuation:)
- 61 |     fi
+ 57 |     fi
     | keyword:fi
- 63 |     fixed fallback = find(first, 9) { third }
+ 59 |     fixed fallback = find(first, 9) { third }
     | keyword:fixed  variable:fallback  operator:=  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  punctuation:{  variable:third  punctuation:}
- 64 |     show(fallback^.value)
+ 60 |     show(fallback^.value)
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
- 66 |     flex spare: maybe ^int@nodes = none
+ 62 |     flex spare: maybe ^int@nodes = none
     | keyword:flex  variable:spare  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:@  region:nodes  operator:=  keyword:none
- 67 |     spare = new int(7) at nodes
+ 63 |     spare = new int(7) at nodes
     | variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)  keyword:at  region:nodes
- 68 |     when spare is {p}
+ 64 |     when spare is {p}
     | keyword:when  variable:spare  keyword:is  punctuation:{  variable:p  punctuation:}
- 69 |         show(p^)
+ 65 |         show(p^)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:)
- 70 |     fi
+ 66 |     fi
     | keyword:fi
- 71 | fi
+ 67 | fi
     | keyword:fi

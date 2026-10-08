@@ -18,7 +18,7 @@ task main()
     part[0] = 20
     show(rows[1][1])
     show(rows[0][1])
-    fixed row = new [int]([0#3]) at r
+    flex row = new [int]([0#3]) at r
     flex table = new [[int]]([row#2]) at r
     table[0][2] = 8
     show(table[1][2])

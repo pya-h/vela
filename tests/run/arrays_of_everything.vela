@@ -41,8 +41,8 @@ task main()
     fi
 
     region r
-    fixed a = new Node(Node { value: 1, next: none }) at r
-    fixed b = new Node(Node { value: 2, next: a }) at r
+    flex a = new Node(Node { value: 1, next: none }) at r
+    flex b = new Node(Node { value: 2, next: a }) at r
     flex ptrs: [^Node#3]@r = [a, b, a]
     ptrs[2] = b
     each p in ptrs

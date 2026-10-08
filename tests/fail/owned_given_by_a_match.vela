@@ -1,0 +1,23 @@
+; error: 19:14: 'n' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'a.copy() at r'
+; So does a match used as a value.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+kind Pick
+    First
+    Second
+fi
+
+task main()
+    region r default
+    fixed a = new Node(Node { v: 1, next: none })
+    fixed b = new Node(Node { v: 2, next: none })
+    fixed pick = Pick.First
+    flex n = match pick
+        case First = a
+        case Second = b
+    fi
+fi

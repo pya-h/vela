@@ -1,0 +1,9 @@
+; error: 8:15: 'ys' is given what fixed 'seen' owns, and nothing changes through what a fixed name owns; give it a copy: 'seen.copy() at r'
+; A fixed& reference is a fixed name.
+
+task main()
+    region r default
+    flex xs = [1, ...]
+    fixed& seen = &xs
+    flex ys = seen
+fi

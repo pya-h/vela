@@ -486,7 +486,8 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         it was given, which it changes as it changes any <code>flex</code> variable: assigned, its fields and items
         assigned, its <code>alters</code> methods called, a slice added to. A copy of a slice, a map or a pointer
         still names what the caller's does (the items, the map, the value pointed to), so what the task writes
-        there the caller sees; through a plain parameter nothing is written, at any depth.
+        there the caller sees, and it can't be given what a fixed name owns (see
+        <a href="#fixed-owns">What a fixed name owns</a>); through a plain parameter nothing is written, at any depth.
       </p>
       <pre><span class="keyword">task</span> countdown(<span class="keyword">flex</span> n: int, step: int) -&gt; int
     <span class="keyword">flex</span> steps = <span class="number">0</span>
@@ -927,6 +928,58 @@ t += "{count}!"             <span class="comment">; "ab121!", joined into r, the
     show(label)
 <span class="keyword">fi</span>
 show(label)                <span class="comment">; error: unknown variable 'label'</span></pre>
+
+      <h3 id="fixed-owns">What a fixed name owns</h3>
+      <p>
+        Nothing changes through a <code>fixed</code> name, at any depth: not a field, not an item, not what a pointer
+        it holds points to. <code>fixed p = new Point(…) at r</code> then <code>p^.x = 5</code> is an error, and so
+        are <code>xs[0] = 9</code> and <code>xs[0].bump()</code> on a <code>fixed</code> slice. A slice, a map and a
+        pointer are handles, so a copy of one names the same items, and a <code>flex</code> name given them would
+        change what the <code>fixed</code> one holds. So what a fixed name owns is never given to what may change it:
+      </p>
+      <ul>
+        <li>a <code>flex</code> variable or name, or one assigned: <code>flex ys = xs</code>, <code>ys = xs</code>, a
+          <code>flex</code> name in a pattern;</li>
+        <li>a <code>flex</code> parameter: <code>sort(scores)</code>, where <code>sort</code> takes
+          <code>flex items: [int]@r</code>;</li>
+        <li>a place that changes: a field, an item, a map's value, a slice added to (<code>bag.items = xs</code>,
+          <code>all.add(xs)</code>);</li>
+        <li>a task's named result (<code>out &lt;- xs</code>);</li>
+        <li>the copies a <code>[flex @r]</code> lambda keeps.</li>
+      </ul>
+      <p>
+        Each is an error where the value is given, which names the owner and the copy to write instead:
+        <em>'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy:
+        'xs.copy() at r'</em>. A fixed name owns what is reached from it (its fields, its items, what its pointers
+        point to), a value made with such a part (a shape, tuple, array or variant holding it, or a plan B or a
+        <code>match</code> that may give it), and what a call gives back of it. A task may send back what a parameter
+        holds, as <code>first_two(xs)</code> sends <code>xs[0..2]</code>, and then the call's value is what
+        <code>xs</code> owns too; a task that only reads what it is given to make something new, as one counting the
+        lengths of a list of names does, gives back nothing a fixed name owns. A value that holds no slice, map or
+        pointer is copied whole, so a <code>fixed</code> number, text, or shape of them may be given anywhere.
+        Parameters not written <code>flex</code>, <code>fixed&amp;</code> references, pattern and loop names without
+        <code>flex</code>, and <code>.this</code> outside <code>alters</code> are fixed names too. In a task or shape
+        that takes types, the rule is checked for each set of types it is given, and the message names the set that
+        breaks it: <code>flex y = x</code> with <code>x: T</code> is fine where <code>T</code> is <code>int</code>, and
+        an error <em>where 'keep' is given [int]</em>.
+      </p>
+      <p>
+        A list a fixed name owns is walked by a task that calls itself for the rest of it, since no <code>flex</code>
+        cursor may be given it:
+      </p>
+      <pre><span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A list the program changes is kept in <code>flex</code> names, and walked with a <code>flex</code> cursor and
+        a <code>flex</code> name for each node: <code>loop current is {flex node}</code>, then
+        <code>current = node^.next</code>. What a <code>flex</code> name holds is still seen through a
+        <code>fixed</code> one made of it: after <code>fixed zs = ys</code>, a change through <code>ys</code> shows
+        through <code>zs</code>, which only promises that nothing changes through <code>zs</code> itself.
+      </p>
 
       <h3>Numbers</h3>
       <p>
@@ -3224,7 +3277,7 @@ show(total)</pre>
     show(level)
 <span class="keyword">fi</span>
 
-<span class="keyword">loop</span> current <span class="keyword">is</span> {node}      <span class="comment">; while current holds a node</span>
+<span class="keyword">loop</span> current <span class="keyword">is</span> {<span class="keyword">flex</span> node} <span class="comment">; while current holds a node</span>
     show(node^.value)
     current = node^.next
 <span class="keyword">fi</span></pre>
@@ -3948,13 +4001,10 @@ show(next^)                                <span class="comment">; error: this p
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int         <span class="comment">; only reads, so r is just a name</span>
-    <span class="keyword">flex</span> total = 0
-    <span class="keyword">flex</span> current = list
-    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
-        total = total + node^.value
-        current = node^.next
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> total
+    <span class="keyword">&lt;-</span> 0
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()

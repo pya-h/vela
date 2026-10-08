@@ -1,0 +1,17 @@
+; error: 16:17: 'p' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'pair(…).copy() at r'
+; Names that take a tuple apart, written flex.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task pair(n: ^Node@r) -> ^Node@r, int
+    <- n, 1
+fi
+
+task main()
+    region r default
+    fixed a = new Node(Node { v: 1, next: none })
+    flex p, k = pair(a)
+fi

@@ -22,15 +22,13 @@
     | keyword:task  task:sum  punctuation:(  parameter:top  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int  punctuation:,  variable:count  punctuation::  type-builtin:int
  16 |     total, count <- 0, 0
     | variable:total  punctuation:,  variable:count  keyword:<-  number:0  punctuation:,  number:0
- 17 |     flex current = top
-    | keyword:flex  variable:current  operator:=  parameter:top
- 18 |     loop current is {node}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
- 19 |         total, count <- add(total, node^.value), numbers.add(count, 1)
-    | variable:total  punctuation:,  variable:count  keyword:<-  task:add  punctuation:(  variable:total  punctuation:,  variable:node  operator:^  punctuation:.  field:value  punctuation:)  punctuation:,  module:numbers  punctuation:.  task:add  punctuation:(  variable:count  punctuation:,  number:1  punctuation:)
- 20 |         current = node^.below
-    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:below
- 21 |     fi
+ 17 |     when top is {node}
+    | keyword:when  parameter:top  keyword:is  punctuation:{  variable:node  punctuation:}
+ 18 |         fixed below, under = sum(node^.below)
+    | keyword:fixed  variable:below  punctuation:,  variable:under  operator:=  task:sum  punctuation:(  variable:node  operator:^  punctuation:.  field:below  punctuation:)
+ 19 |         total, count <- add(below, node^.value), numbers.add(under, 1)
+    | variable:total  punctuation:,  variable:count  keyword:<-  task:add  punctuation:(  variable:below  punctuation:,  variable:node  operator:^  punctuation:.  field:value  punctuation:)  punctuation:,  module:numbers  punctuation:.  task:add  punctuation:(  variable:under  punctuation:,  number:1  punctuation:)
+ 20 |     fi
     | keyword:fi
- 22 | fi
+ 21 | fi
     | keyword:fi

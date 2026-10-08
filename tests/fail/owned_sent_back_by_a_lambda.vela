@@ -1,0 +1,9 @@
+; error: 8:15: 'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'f(…).copy() at r'
+; A lambda's call may send back the copy it keeps of a fixed name.
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    fixed f = [@r]() -> [int]@r <- xs fi
+    flex ys = f()
+fi

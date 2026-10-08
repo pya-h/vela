@@ -1,0 +1,12 @@
+; error: 11:14: 'b' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; A value made with what a fixed name owns holds it.
+
+shape Bag
+    items: [int]
+fi
+
+task main()
+    region r default
+    fixed xs = [1, ...]
+    flex b = Bag { items: xs }
+fi

@@ -56,14 +56,13 @@ task build(r: region, n: int) -> ^Node@r
     <- head
 fi
 
+; A list owned by a fixed name is walked by a task of its own for each node,
+; since no flex name may be given what a fixed one owns.
 task count(list: ^Node@r) -> int
-    flex n = 1
-    flex node = list
-    loop node^.next is {next}
-        n = n + 1
-        node = next
+    when list^.next is {next}
+        <- 1 + count(next)
     fi
-    <- n
+    <- 1
 fi
 
 task main()
@@ -148,7 +147,7 @@ task main()
     show(bag.names[1])
     show(bag.first { "none" })
 
-    when list is {head}
+    when list is {flex head}
         show(count(head))
         ; The copy of the shared node is shared: a change through one pointer
         ; shows through the other, and the cycle leads back to the copy.
