@@ -1,4 +1,4 @@
-registered a task of (hold& int) -> nothing
+registered a task of (flex& int) -> nothing
 log: 12
 first is 1, second { 2 }, third none
 value 1

@@ -1,4 +1,4 @@
-; error: 16:40: expected type (bind& int) -> nothing, got (hold& int) -> nothing
+; error: 16:40: expected type (fixed& int) -> nothing, got (flex& int) -> nothing
 ; A task type says how each parameter is given, and a place changed is not a place read.
 task bump(flex& n: int)
     n = n + 1

@@ -1,4 +1,4 @@
-; error: 30:15: task 'keep' takes a copy as 'p', so leave out '&'; a parameter written 'hold& p: …' or 'bind& p: …' is given the place itself
+; error: 30:15: task 'keep' takes a copy as 'p', so leave out '&'; a parameter written 'flex& p: …' or 'fixed& p: …' is given the place itself
 shape Point
     x: int
 

@@ -1,5 +1,5 @@
-  1 | ; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
-    | comment:; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
+  1 | ; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'fixed word = "abc"' (said once in each file)
+    | comment:; warning: 35:21: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'fixed word = "abc"' (said once in each file)
   2 | ; A char is one byte, written 'a'. A number moves it and the distance between
     | comment:; A char is one byte, written 'a'. A number moves it and the distance between
   3 | ; two is an int; t[i] reads a byte of text as a char, and t.at(i) the same in a

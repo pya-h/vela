@@ -1,4 +1,4 @@
-; error: 4:10: '+=' joins text into the region the text is in, and this text lasts as long as the program, in no region; keep it in a region, as in 'hold t: text@r = …', or write 't = t + u at r'
+; error: 4:10: '+=' joins text into the region the text is in, and this text lasts as long as the program, in no region; keep it in a region, as in 'flex t: text@r = …', or write 't = t + u at r'
 task main()
     flex name = "vela"
     name += "!"

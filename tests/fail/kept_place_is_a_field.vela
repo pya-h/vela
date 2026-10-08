@@ -1,4 +1,4 @@
-; error: 9:22: a lambda keeps a variable as a place, not a field or an item of one; keep the variable, 'hold& p'
+; error: 9:22: a lambda keeps a variable as a place, not a field or an item of one; keep the variable, 'flex& p'
 ; A lambda keeps a variable as a place, never a field or an item of one.
 shape P
     x: int

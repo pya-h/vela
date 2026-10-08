@@ -1,4 +1,4 @@
-; error: 3:10: 'f' is a '[hold @r]' lambda, which changes what it keeps and is never copied, so it is given as a place, 'hold& f: [hold @r]() -> int'
+; error: 3:10: 'f' is a '[flex @r]' lambda, which changes what it keeps and is never copied, so it is given as a place, 'flex& f: [flex @r]() -> int'
 ; A [flex @r] lambda is given as a place, never as a copy.
 task run(f: [flex @r]() -> int) -> int
     <- f()

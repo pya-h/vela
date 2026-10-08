@@ -222,7 +222,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
     }
     // A long chain of operators is told how to split.
     let error = driver::generate_c(&program(vec!["1"; deep].join(" + "))).expect_err("an operator chain");
-    assert!(error.message.contains("this chain of operators has more than") && error.message.contains("bind part ="), "{}", error.message);
+    assert!(error.message.contains("this chain of operators has more than") && error.message.contains("fixed part ="), "{}", error.message);
     // And so is one of `**`, which groups to the right.
     let error = driver::generate_c(&program(vec!["1"; deep].join(" ** "))).expect_err("a power chain");
     assert!(error.message.contains("this chain of operators has more than"), "{}", error.message);
@@ -348,7 +348,7 @@ fn a_warning_in_a_module_names_the_file_of_the_use_that_gave_its_types() {
     // Shown in the module, where the '==' is, naming the use in the main file.
     assert!(rendered.starts_with("app/compare.vela:2:8: warning: '==' compares P by where it is"), "{}", rendered);
     assert!(rendered.contains("(where 'same' is given P, at 9:10 in the main file)"), "{}", rendered);
-    assert!(rendered.contains("write 'bind& a: T'"), "{}", rendered);
+    assert!(rendered.contains("write 'fixed& a: T'"), "{}", rendered);
     assert_eq!(warnings.warnings.len(), 2);
 }
 

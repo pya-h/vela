@@ -1,4 +1,4 @@
-; error: 15:8: 'p' is given the place itself, to change, so it needs a place that can change, and 'p' is a 'bind&' parameter, which only reads the caller's place; to pass it on to be changed, write 'hold& p: Point'
+; error: 15:8: 'p' is given the place itself, to change, so it needs a place that can change, and 'p' is a 'fixed&' parameter, which only reads the caller's place; to pass it on to be changed, write 'flex& p: Point'
 shape Point
     x: int
 

@@ -1,4 +1,4 @@
-; error: 11:5: cannot assign to immutable variable 'p'; 'p' is a 'bind&' parameter, which only reads the caller's place, and one that changes it is written 'hold& p: Point'
+; error: 11:5: cannot assign to immutable variable 'p'; 'p' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& p: Point'
 shape Point
     x: int
 

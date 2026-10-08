@@ -127,8 +127,8 @@ fi
         if when == "checked" {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
         }
-        assert_eq!(hover(&source, "bumped ="), "bind bumped: (hold& int) -> nothing", "{}", when);
-        assert_eq!(hover(&source, "totalled ="), "bind totalled: (bind& int) -> int", "{}", when);
+        assert_eq!(hover(&source, "bumped ="), "bind bumped: (flex& int) -> nothing", "{}", when);
+        assert_eq!(hover(&source, "totalled ="), "bind totalled: (fixed& int) -> int", "{}", when);
         assert_eq!(hover(&source, "squared ="), "bind squared: (@r, int) -> [int]@r", "{}", when);
         assert_eq!(hover(&source, "kept:"), "hold kept: maybe (@r, int) -> [int]@r", "{}", when);
         // A region taken by default is a region still, and what a call through

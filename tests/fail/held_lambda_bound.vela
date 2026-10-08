@@ -1,4 +1,4 @@
-; error: 6:11: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is held in a 'hold' variable: 'hold f = …'
+; error: 6:11: 'f' is a '[flex @r]' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex f = …'
 ; A [flex @r] lambda is held in a flex variable.
 task main()
     region r

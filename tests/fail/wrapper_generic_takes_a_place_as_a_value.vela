@@ -1,4 +1,4 @@
-; error: 6:3: task 'put' takes 'hold& n: int', and wrapper 'logged' takes 'n: T' in its place
+; error: 6:3: task 'put' takes 'flex& n: int', and wrapper 'logged' takes 'n: T' in its place
 ; A wrapper that takes types still takes the task's values as the task does.
 task logged<T, R>(next: (T) -> R, n: T) -> R
     <- next(n)

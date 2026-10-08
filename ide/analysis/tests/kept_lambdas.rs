@@ -60,7 +60,7 @@ fn the_program_used_by_these_tests_compiles() {
 fn a_lambda_that_keeps_what_it_uses_hovers_with_its_type_whether_or_not_the_file_checks() {
     for when in WHEN {
         let source = program(when);
-        assert_eq!(hover(&source, "next ="), "hold next: [hold @r]() -> int", "{}", when);
+        assert_eq!(hover(&source, "next ="), "hold next: [flex @r]() -> int", "{}", when);
         assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> int", "{}", when);
         assert_eq!(hover(&source, "got ="), "bind got: int", "{}", when);
         assert_eq!(hover(&source, "made ="), "bind made: [@r](int) -> [int]@r", "{}", when);

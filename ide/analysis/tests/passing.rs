@@ -111,7 +111,7 @@ fi
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(
         diagnostic.message,
-        "cannot assign to immutable variable 'n'; a parameter that changes is written 'hold n: int', and is the task's own copy"
+        "cannot assign to immutable variable 'n'; a parameter that changes is written 'flex n: int', and is the task's own copy"
     );
 }
 
@@ -196,7 +196,7 @@ fn a_reference_that_only_reads_is_reported_where_it_is_changed() {
     let source = REFERENCES.replace("CHECK", "show(0)").replace("    show(seen, n)", "    seen = 1");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
-    assert_eq!(diagnostic.message, "cannot assign to immutable variable 'seen'; 'seen' only reads the place it names, and a reference that changes it is written 'hold& seen = &…'");
+    assert_eq!(diagnostic.message, "cannot assign to immutable variable 'seen'; 'seen' only reads the place it names, and a reference that changes it is written 'flex& seen = &…'");
 }
 
 #[test]

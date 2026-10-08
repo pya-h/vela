@@ -1,4 +1,4 @@
-; error: 3:44: a loop's step runs to its end at once, so a name declared there ends before anything can use it; declare it in the start, after 'hold'
+; error: 3:44: a loop's step runs to its end at once, so a name declared there ends before anything can use it; declare it in the start, after 'flex'
 task main()
     loop flex i = 0 || i < 3 || i++, fixed t = i
         show(i)

@@ -1,4 +1,4 @@
-; error: 2:8: a region never changes, so 'r' can't be 'hold'
+; error: 2:8: a region never changes, so 'r' can't be 'flex'
 task f(flex r: region)
 fi
 

@@ -1,4 +1,4 @@
-; error: 16:15: a task's type takes a value as its type alone, '(int) -> nothing', whether the task copies it or not; 'hold&', with '&' against 'hold', is the caller's place
+; error: 16:15: a task's type takes a value as its type alone, '(int) -> nothing', whether the task copies it or not; 'flex&', with '&' against 'flex', is the caller's place
 ; A task type takes a copy as a value, written as its type alone.
 task bump(flex& n: int)
     n = n + 1

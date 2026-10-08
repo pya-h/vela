@@ -1,4 +1,4 @@
-; error: 4:11: a reference names a place for as long as its block lasts, so 'hold&' takes a name, not '_'
+; error: 4:11: a reference names a place for as long as its block lasts, so 'flex&' takes a name, not '_'
 task main()
     flex x = 1
     flex& _ = &x

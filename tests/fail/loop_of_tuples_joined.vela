@@ -1,4 +1,4 @@
-; error: 5:15: a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead
+; error: 5:15: a tuple's items always match, so this loop would never end; take the tuple apart with 'fixed' instead
 ; Every part always matches, so joined they do too.
 task main()
     fixed t = (1, 2)

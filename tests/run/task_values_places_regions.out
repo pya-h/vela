@@ -1,7 +1,7 @@
 tried: 42
-2 task (hold& int) -> nothing
+2 task (flex& int) -> nothing
 4
-5 task (bind& Point) -> int
+5 task (fixed& Point) -> int
 [1, 4, 9, 16] task (@r, int) -> [int]@r
 #7 task (int, @r) -> text@r
 2

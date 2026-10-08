@@ -1,4 +1,4 @@
-; error: 3:23: a group's values are taken as the task given for it takes them, so 'hold&' can't come before the group: '(P...) -> R' fits 'put(hold& n: int)' too
+; error: 3:23: a group's values are taken as the task given for it takes them, so 'flex&' can't come before the group: '(P...) -> R' fits 'put(flex& n: int)' too
 ; A group is never marked: its values are taken as the task given for it takes them.
 task use<P..., R>(f: (flex& P...) -> R, args: P...) -> R
     <- f(args...)

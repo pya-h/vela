@@ -464,7 +464,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 
     // Names being declared get no suggestions, including another name in a
     // `bind` or `hold` list (`bind q, r = …`).
-    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
+    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Fixed | Token::Flex | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
     }
     // `block` takes nothing on its line.
@@ -476,7 +476,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (loop_name_items(&k, byte), word_start, byte);
     }
     // `hold& name` and `bind& name`: the `&` is part of the word.
-    if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Hold | Token::Bind)) {
+    if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Flex | Token::Fixed)) {
         return (Vec::new(), word_start, byte);
     }
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
@@ -849,7 +849,7 @@ fn names_a_result(k: &Knowledge, q: usize) -> bool {
 /// separates its items, not names.
 fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     let line = k.line_start(q);
-    matches!(k.token(line), Some(Token::Bind | Token::Hold))
+    matches!(k.token(line), Some(Token::Fixed | Token::Flex))
         && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
         && type_paren(k, q).is_none()
 }

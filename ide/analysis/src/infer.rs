@@ -486,7 +486,7 @@ impl<'a> Knowledge<'a> {
         let line = self.line_start(name);
         let mut at = name;
         loop {
-            if at > line && self.token(at - 1) == Some(&Token::Hold) {
+            if at > line && self.token(at - 1) == Some(&Token::Flex) {
                 return true;
             }
             let mut depth = 0usize;
@@ -572,7 +572,7 @@ impl<'a> Knowledge<'a> {
         let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
         let outcome = || self.pattern_subject(case, depth);
         // `hold` before the names makes them changeable; the pattern goes on after it.
-        let start = if self.token(case + 1) == Some(&Token::Hold) { case + 2 } else { case + 1 };
+        let start = if self.token(case + 1) == Some(&Token::Flex) { case + 2 } else { case + 1 };
         match self.token(start)? {
             // `{v}` and `{(a, b)}`: the value inside, and its items.
             Token::LBrace => self.pattern_item(outcome()?.extracted().cloned()?, start + 1, name),
@@ -981,14 +981,14 @@ impl<'a> Knowledge<'a> {
         // `[@r](x: int) -> int …`: a lambda that keeps what it uses in `r`.
         if self.token(first) == Some(&Token::LBracket)
             && let Some(open) = (first + 1..=last).find(|&q| self.token(q) == Some(&Token::RBracket)).map(|q| q + 1)
-            && let Some((region, hold, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
+            && let Some((region, flex, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
             && self.token(open) == Some(&Token::LParen)
             && let Some(close) = self.matching_close(open, last)
             && self.token(close + 1) == Some(&Token::Arrow)
         {
             let end = (close + 2..=last).find(|&q| matches!(self.token(q), Some(Token::Send | Token::Fi))).map_or(last, |q| q.saturating_sub(1));
             let task = task_value_type_beside(self.source.get(self.range(open).start..self.range(end).end)?, Some(&region))?;
-            return closure_of(task, region, hold);
+            return closure_of(task, region, flex);
         }
         // `(x: int) -> int …`: a lambda, whose header, up to its body, gives
         // its type.
@@ -1624,7 +1624,7 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
     let ret = parse_type_within(ret, depth + 1)?;
     let task = vela::ast::TaskType { params, taken, ret };
     let mut ty = match kept {
-        Some((region, hold, _)) => Type::Closure(Box::new(vela::ast::ClosureType { task, region, hold }.normalized())),
+        Some((region, flex, _)) => Type::Closure(Box::new(vela::ast::ClosureType { task, region, flex }.normalized())),
         None => Type::Task(Box::new(task.normalized())),
     };
     for pointer in prefixes.into_iter().rev() {
@@ -1666,20 +1666,20 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
 /// The spellings of the word for a place that changes, and of the one for a
 /// place only read: `flex` and `fixed` are the new ones, which replace `hold`
 /// and `bind` (Part 22). Until the old ones go, a program may write either.
-const HOLD_WORDS: [&str; 2] = ["flex", "hold"];
-const BIND_WORDS: [&str; 2] = ["fixed", "bind"];
+const FLEX_WORDS: [&str; 2] = ["flex", "hold"];
+const FIXED_WORDS: [&str; 2] = ["fixed", "bind"];
 
 /// How a place in a task's type or a lambda's header is taken, `hold& int` or
 /// `bind& int` in either spelling, and the text after the word and its `&`.
 fn place_word(text: &str) -> Option<(Passing, &str)> {
     let after = |words: [&'static str; 2]| words.iter().find_map(|word| text.strip_prefix(word)?.strip_prefix('&'));
-    after(HOLD_WORDS).map(|rest| (Passing::HoldRef, rest)).or_else(|| after(BIND_WORDS).map(|rest| (Passing::BindRef, rest)))
+    after(FLEX_WORDS).map(|rest| (Passing::FlexRef, rest)).or_else(|| after(FIXED_WORDS).map(|rest| (Passing::FixedRef, rest)))
 }
 
 /// `item` without the word it may start with, `hold` or `bind` in either
 /// spelling.
 fn without_word(item: &str) -> &str {
-    HOLD_WORDS.iter().chain(BIND_WORDS.iter()).find_map(|word| item.strip_prefix(word)).unwrap_or(item)
+    FLEX_WORDS.iter().chain(FIXED_WORDS.iter()).find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
 /// `[@r]` or `[hold @r]` at the start of `text`, what a lambda keeps: the
@@ -1695,17 +1695,17 @@ fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
         if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;
         }
-        region = Some(match HOLD_WORDS.iter().find_map(|hold| item.strip_prefix(hold)) {
+        region = Some(match FLEX_WORDS.iter().find_map(|flex| item.strip_prefix(flex)) {
             Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
             _ => (false, item),
         });
     }
-    let (hold, region) = region?;
+    let (flex, region) = region?;
     let region = region.strip_prefix('@')?.trim();
     if region.is_empty() || !region.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
-    Some((region.to_string(), hold, inner.get(close + 1..)?))
+    Some((region.to_string(), flex, inner.get(close + 1..)?))
 }
 
 /// The task's type a value of type `ty` is called as, with the region it keeps
@@ -1719,9 +1719,9 @@ fn called_task(ty: Type) -> Option<(vela::ast::TaskType, Option<String>)> {
 }
 
 /// The type of a lambda that keeps what it uses, of a task's type `task`.
-fn closure_of(task: Type, region: String, hold: bool) -> Option<Type> {
+fn closure_of(task: Type, region: String, flex: bool) -> Option<Type> {
     let Type::Task(task) = task else { return None };
-    Some(Type::Closure(Box::new(vela::ast::ClosureType { task: *task, region, hold }.normalized())))
+    Some(Type::Closure(Box::new(vela::ast::ClosureType { task: *task, region, flex }.normalized())))
 }
 
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.

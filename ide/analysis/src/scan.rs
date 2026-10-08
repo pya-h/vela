@@ -575,7 +575,7 @@ impl<'a> Tokens<'a> {
     /// Whether the token at `q` may be part of what a lambda keeps: a name,
     /// `@`, `hold`, `bind`, `&`, or a comma.
     fn kept_part(&self, q: usize) -> bool {
-        matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Hold | Token::Bind | Token::Amp | Token::Comma))
+        matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Flex | Token::Fixed | Token::Amp | Token::Comma))
     }
 
     /// The `]` closing what a lambda keeps, when the `[` at `open` starts
@@ -616,7 +616,7 @@ impl<'a> Tokens<'a> {
         // `(hold& n: int` names a parameter; a type's `(hold& int)` names none.
         let named = |q: usize| self.ident(q).is_some() && self.token(q + 1) == Some(&Token::Colon);
         let after_word = if self.token(p + 2) == Some(&Token::Amp) { p + 3 } else { p + 2 };
-        if !(matches!(self.token(p + 1), Some(Token::Hold | Token::Bind)) && named(after_word)) && !named(p + 1) {
+        if !(matches!(self.token(p + 1), Some(Token::Flex | Token::Fixed)) && named(after_word)) && !named(p + 1) {
             return false;
         }
         let mut depth = 0usize;
@@ -747,7 +747,7 @@ impl<'a> Tokens<'a> {
             start -= 1;
         }
         let name = match self.token(start) {
-            Some(Token::Bind | Token::Hold) => start + 1,
+            Some(Token::Fixed | Token::Flex) => start + 1,
             _ => start,
         };
         self.ident(name)?;
@@ -857,14 +857,14 @@ fn read_marker(tokens: &Tokens, p: usize) -> bool {
 /// `shared hold f`, or `shared read f`, with `shared` starting its line (after
 /// `priv`, if it is written); and if so, whether it is `hold`.
 fn shared_marker(tokens: &Tokens, p: usize) -> Option<bool> {
-    let (at, hold) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
+    let (at, flex) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
         Some(Token::Shared) => (p - 1, false),
-        Some(Token::Hold) => (p.checked_sub(2)?, true),
+        Some(Token::Flex) => (p.checked_sub(2)?, true),
         Some(Token::Ident(word)) if word == READ => (p.checked_sub(2)?, false),
         _ => return None,
     };
     let starts = tokens.starts_line(at) || (tokens.before(at) == Some(&Token::Priv) && tokens.starts_line(at - 1));
-    (tokens.token(at) == Some(&Token::Shared) && starts).then_some(hold)
+    (tokens.token(at) == Some(&Token::Shared) && starts).then_some(flex)
 }
 
 /// What ends a shape's field, whose type may be followed by the value a literal
@@ -1135,7 +1135,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         field.default = falls_back;
                         field.read = read_marker(tokens, p) || (shared.is_some() && tokens.ident(p - 1) == Some(READ));
                         field.shared = shared.is_some();
-                        field.intro = shared.filter(|hold| *hold).map(|_| "hold");
+                        field.intro = shared.filter(|flex| *flex).map(|_| "hold");
                         // `priv shared f`: `declare` looks only just before the name.
                         if shared.is_some() {
                             let start = (p.saturating_sub(3)..p).find(|q| tokens.token(*q) == Some(&Token::Shared));
@@ -1553,7 +1553,7 @@ impl<'a> Classifier<'a> {
                 }
                 // `hold&` is one word, and `&a` gives a place at a call.
                 // The name after `hold&` or `bind&` is still being declared.
-                Token::Amp if matches!(tokens.before(p), Some(Token::Hold | Token::Bind)) => {
+                Token::Amp if matches!(tokens.before(p), Some(Token::Flex | Token::Fixed)) => {
                     self.push(range, TokenClass::Keyword, None);
                     // `(hold& int) -> nothing`: in a task's type, a type follows.
                     if was_type {
@@ -1663,13 +1663,13 @@ impl<'a> Classifier<'a> {
                         // `(hold& int) -> nothing`: how a task's type takes a place.
                         // `[hold& count, @r]`: what a lambda keeps names
                         // variables of the code around it, and declares none.
-                        Token::Hold | Token::Bind if tokens.in_kept_list(p) => {}
-                        Token::Hold | Token::Bind if was_type => in_type = true,
-                        Token::Hold | Token::Bind if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
-                        Token::Bind | Token::Hold => {
+                        Token::Flex | Token::Fixed if tokens.in_kept_list(p) => {}
+                        Token::Flex | Token::Fixed if was_type => in_type = true,
+                        Token::Flex | Token::Fixed if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
+                        Token::Fixed | Token::Flex => {
                             // `hold& y = &x` and `bind& y = &x`: references.
                             let reference = tokens.token(p + 1) == Some(&Token::Amp);
-                            let intro = match (*keyword == Token::Bind, reference) {
+                            let intro = match (*keyword == Token::Fixed, reference) {
                                 (true, false) => "bind",
                                 (true, true) => "bind&",
                                 (false, false) => "hold",
@@ -1862,12 +1862,12 @@ impl<'a> Classifier<'a> {
         // the word, and its `&`, before a parameter's name.
         let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
         let word_at = |q: usize| match tokens.token(q) {
-            Some(Token::Hold) if opens_param(q) => Some("hold"),
-            Some(Token::Bind) if opens_param(q) => Some("bind"),
+            Some(Token::Flex) if opens_param(q) => Some("hold"),
+            Some(Token::Fixed) if opens_param(q) => Some("bind"),
             _ => None,
         };
         let marked = match before {
-            Some(Token::Hold | Token::Bind) => word_at(p - 1).map(|word| word.to_string()),
+            Some(Token::Flex | Token::Fixed) => word_at(p - 1).map(|word| word.to_string()),
             Some(Token::Amp) if p >= 2 => word_at(p - 2).map(|word| format!("{}&", word)),
             _ => None,
         };
@@ -2321,7 +2321,7 @@ fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
 /// type's never do.
 fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {
     header_paren(tokens, q)
-        || matches!(tokens.token(q + 1), Some(Token::Hold | Token::Bind))
+        || matches!(tokens.token(q + 1), Some(Token::Flex | Token::Fixed))
         || (tokens.ident(q + 1).is_some() && tokens.token(q + 2) == Some(&Token::Colon))
 }
 

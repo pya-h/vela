@@ -158,28 +158,28 @@ pub struct TaskType {
 }
 
 /// The type of a lambda that keeps what it uses, `[@r](int) -> int` or
-/// `[hold @r](int) -> int` (see `Type::Closure`): the task's type it is called
+/// `[flex @r](int) -> int` (see `Type::Closure`): the task's type it is called
 /// as, the region it keeps its copies in, and whether it changes them. Its
 /// task's type may name `region`, the one kept, beside regions of its own.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClosureType {
     pub task: TaskType,
     pub region: String,
-    /// `[hold @r]`: it changes its copies, so a value of it is never copied.
-    pub hold: bool,
+    /// `[flex @r]`: it changes its copies, so a value of it is never copied.
+    pub flex: bool,
 }
 
 impl ClosureType {
     /// The same type with the task's own regions named in the order they
     /// first appear, the kept one as it is (see `TaskType::normalized`).
     pub fn normalized(&self) -> ClosureType {
-        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), hold: self.hold }
+        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), flex: self.flex }
     }
 
     /// The type with its task's type remade by `f`, as a task type.
     fn with_task(&self, f: impl FnOnce(&Type) -> Type) -> Type {
         match f(&Type::Task(Box::new(self.task.clone()))) {
-            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), hold: self.hold })),
+            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), flex: self.flex })),
             other => other,
         }
     }
@@ -196,14 +196,14 @@ pub const GROUP_SENDS: Type = Type::Results(Vec::new());
 
 /// How a parameter of a task type is given at a call: as a value, as the
 /// caller's place, or as a region, which the type names so that what the task
-/// sends can live there: `(hold& int) -> nothing`, `(@r, int) -> [int]@r`.
+/// sends can live there: `(flex& int) -> nothing`, `(@r, int) -> [int]@r`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Taken {
-    /// A value: `int`, which the task takes as `n: int`, `hold n: int`, or
-    /// `bind n: int`, all one to its caller.
+    /// A value: `int`, which the task takes as `n: int`, `flex n: int`, or
+    /// `fixed n: int`, all one to its caller.
     Value,
-    /// The caller's place, `hold& int` or `bind& int` (`Passing::HoldRef` or
-    /// `Passing::BindRef`), which the call marks with `&`.
+    /// The caller's place, `flex& int` or `fixed& int` (`Passing::FlexRef` or
+    /// `Passing::FixedRef`), which the call marks with `&`.
     Place(Passing),
     /// A region, `@r`, whose type in `params` is `Type::Region`.
     Region(String),
@@ -706,7 +706,7 @@ impl Type {
                 task.ret.write(f, None)
             }
             Type::Closure(closure) => {
-                write!(f, "[{}@{}]", if closure.hold { "hold " } else { "" }, closure.region)?;
+                write!(f, "[{}@{}]", if closure.flex { "flex " } else { "" }, closure.region)?;
                 Type::Task(Box::new(closure.task.clone())).write(f, None)
             }
             Type::Array(inner, count) => {
@@ -799,7 +799,7 @@ impl Type {
     }
 
     /// Whether the type is a whole number that fits in a byte, which an int
-    /// literal becomes where one is expected (`hold b: unit = 200`).
+    /// literal becomes where one is expected (`flex b: unit = 200`).
     pub fn is_byte(&self) -> bool {
         matches!(self, Type::Unit)
     }
@@ -880,7 +880,7 @@ impl Type {
                     })
                 };
                 let task = closure.task.map_regions(&mut own);
-                Type::Closure(Box::new(ClosureType { task, region, hold: closure.hold }.normalized()))
+                Type::Closure(Box::new(ClosureType { task, region, flex: closure.flex }.normalized()))
             }
             other => other.clone(),
         }
@@ -1075,7 +1075,7 @@ impl Type {
             }
             Type::Closure(closure) => {
                 let task = TaskType { params: closure.task.params.iter().map(Type::normalized_tasks).collect(), taken: closure.task.taken.clone(), ret: closure.task.ret.normalized_tasks() };
-                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), hold: closure.hold }.normalized()))
+                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), flex: closure.flex }.normalized()))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
@@ -1269,10 +1269,10 @@ pub enum ExprKind {
     /// variable.
     Invoke { callee: Box<Expr>, args: Vec<Expr> },
     /// `[@r](x: int) -> int … fi`: a lambda that keeps what it uses from the
-    /// code around it in region `region`, `hold` for `[hold @r]`, which changes
+    /// code around it in region `region`, `flex` for `[flex @r]`, which changes
     /// its copies. `lambda` names the task it is (see `ast::lambda_name`), and
     /// the checker gives the shape of what it keeps (see `kept_name`).
-    Closure { lambda: String, region: String, hold: bool, places: Vec<KeptPlace> },
+    Closure { lambda: String, region: String, flex: bool, places: Vec<KeptPlace> },
     /// A plain task value given where a lambda that keeps what it uses is
     /// expected, `[@r](int) -> int`: it keeps only the task, in `region`, or
     /// for a task named here, `None`, where the program keeps it.
@@ -1340,7 +1340,7 @@ pub enum ExprKind {
         region_span: Span,
     },
     Deref(Box<Expr>),
-    /// `&a`: the place `a` given to a `hold&` parameter, which the task
+    /// `&a`: the place `a` given to a `flex&` parameter, which the task
     /// changes. Only an argument is one (see `check::check_call_args`).
     Ref(Box<Expr>),
     /// `X.f`: the shared field `field` of the shape `shape` (its name in the
@@ -1381,13 +1381,13 @@ pub enum ExprKind {
         error: Option<(String, Span)>,
         body: Block,
     },
-    /// A `match` used as a value, `bind area = match s … fi`: the statement is
+    /// A `match` used as a value, `fixed area = match s … fi`: the statement is
     /// the same `StmtKind::Match` a `match` on its own is, so everything that
     /// reads statements reads this too. Each case's block gives the value on its
     /// last line, as a plan B's block does, or leaves the task with `<-`; a case
     /// written `case p = value` is a block of that one value.
     Choice(Box<Stmt>),
-    /// A loop that gives a value, `bind r = loop … fi` (see `ValueLoop`).
+    /// A loop that gives a value, `fixed r = loop … fi` (see `ValueLoop`).
     LoopValue(Box<ValueLoop>),
     /// Added by the checker where a value becomes part of a `maybe` or a
     /// `T ~ E`: a plain value, `none`, or `fail e`. The node's `ty` is the
@@ -1538,7 +1538,7 @@ pub struct FieldInit {
 
 pub type Block = Vec<Stmt>;
 
-/// A statement. `span` points at the declared name for `bind`/`hold` and
+/// A statement. `span` points at the declared name for `fixed`/`flex` and
 /// `each`, and at the first token otherwise.
 #[derive(Debug, Clone)]
 pub struct Stmt {
@@ -1555,13 +1555,13 @@ impl Stmt {
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Expr(Expr),
-    /// `bind` (immutable) or `hold` (mutable), with one name per value:
-    /// `bind q, r = divmod(17, 5)`.
+    /// `fixed` (immutable) or `flex` (mutable), with one name per value:
+    /// `fixed q, r = divmod(17, 5)`.
     Binding {
         names: Vec<Bound>,
         mutable: bool,
-        /// `hold& y = &x` or `bind& y = &x`: one name, which is another name for
-        /// the place its value marks, changing it (`hold&`) or only reading it.
+        /// `flex& y = &x` or `fixed& y = &x`: one name, which is another name for
+        /// the place its value marks, changing it (`flex&`) or only reading it.
         reference: bool,
         /// The values: one per name, or a single call that sends them all.
         init: Vec<Expr>,
@@ -1616,7 +1616,7 @@ pub enum StmtKind {
     Region { name: String, default: bool },
 }
 
-/// A name a `bind` or `hold` declares, `q` or `q: int`. `ty` is the
+/// A name a `fixed` or `flex` declares, `q` or `q: int`. `ty` is the
 /// annotation, if any, at `ty_span`; the checker fills it in with the
 /// inferred type otherwise. The name may be `_` (`DISCARD`), which declares
 /// nothing and drops its value.
@@ -1663,9 +1663,9 @@ impl Target {
     }
 }
 
-/// `loop i = 0, hold j = 9 || i < j || i++, j--`: a loop in three parts, each
+/// `loop i = 0, flex j = 9 || i < j || i++, j--`: a loop in three parts, each
 /// of which may be empty. The start runs once, before the loop, and the names
-/// it declares, after `hold` or `bind`, live in the loop; the condition, none
+/// it declares, after `flex` or `fixed`, live in the loop; the condition, none
 /// for a loop that never ends by itself, is tested before each pass; the step
 /// runs after each pass, a `continue` too, and never after a `break`.
 /// `endless` is all three left empty, said in a word.
@@ -1689,7 +1689,7 @@ pub struct PartedLoop {
 pub struct ValueLoop {
     /// The loop: a `StmtKind::Loop`, `Each` or `Parted`.
     pub stmt: Stmt,
-    /// Its name: the variable it gives (`bind r = loop …`), or the one written
+    /// Its name: the variable it gives (`fixed r = loop …`), or the one written
     /// with `outer =>` where there is none, with where it is written.
     pub name: Option<(String, Span)>,
     /// Whether written with `outer =>`, which a loop given to a variable
@@ -1822,7 +1822,7 @@ pub enum TypedForm {
 }
 
 /// What a pattern names: one name (or `_`), or `(a, b)`, the names of a
-/// tuple's items. `mutable` is `hold` written before it, which makes every
+/// tuple's items. `mutable` is `flex` written before it, which makes every
 /// name it binds a variable that can be assigned.
 #[derive(Debug, Clone)]
 pub struct Names {
@@ -1836,7 +1836,7 @@ pub struct Names {
 }
 
 impl Names {
-    /// One name, at `span`, which `hold` may make changeable.
+    /// One name, at `span`, which `flex` may make changeable.
     pub fn one(name: String, span: Span, mutable: bool) -> Names {
         Names { name, span, mutable, parts: Vec::new() }
     }
@@ -1900,10 +1900,10 @@ impl fmt::Display for Pattern {
 }
 
 impl fmt::Display for Names {
-    /// The names as they are written: `value`, `hold value`, or `(a, b)`.
+    /// The names as they are written: `value`, `flex value`, or `(a, b)`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.mutable {
-            write!(f, "hold ")?;
+            write!(f, "flex ")?;
         }
         if self.parts.is_empty() {
             return write!(f, "{}", self.name);
@@ -1940,8 +1940,8 @@ pub struct Field {
     /// region (see `ast::DEFAULT`). Only a parameter of type `region` can be
     /// one, and a task takes at most one; a field or a payload never is.
     pub default_region: bool,
-    /// How a parameter takes its value: `x: T` never changes, `hold x: T` is
-    /// the task's own copy, which it may change, and `hold& x: T` is the
+    /// How a parameter takes its value: `x: T` never changes, `flex x: T` is
+    /// the task's own copy, which it may change, and `flex& x: T` is the
     /// caller's place. A field or a payload is always `Passing::Copy`.
     pub passing: Passing,
     /// `size: int = 0`: the value a shape's field takes where a literal leaves
@@ -1961,39 +1961,39 @@ pub enum Passing {
     /// `x: T`: a value that never changes in the task.
     #[default]
     Copy,
-    /// `hold x: T`: the task's own copy, which it may change; the caller's value
+    /// `flex x: T`: the task's own copy, which it may change; the caller's value
     /// never does, so the call has no mark.
-    Hold,
-    /// `hold& x: T`: the caller's place itself, which the call marks,
+    Flex,
+    /// `flex& x: T`: the caller's place itself, which the call marks,
     /// `f(&a)`; every change to `x` is a change to it.
-    HoldRef,
-    /// `bind x: T`: always a copy, even of a large value the compiler would
+    FlexRef,
+    /// `fixed x: T`: always a copy, even of a large value the compiler would
     /// otherwise read where the caller keeps it (see `Copy`).
-    Bind,
-    /// `bind& x: T`: the caller's place, read and never changed, which the call
+    Fixed,
+    /// `fixed& x: T`: the caller's place, read and never changed, which the call
     /// marks, `f(&a)`.
-    BindRef,
+    FixedRef,
 }
 
 impl Passing {
     /// Whether the parameter is the caller's place, given as `&a`.
     pub fn is_ref(self) -> bool {
-        matches!(self, Passing::HoldRef | Passing::BindRef)
+        matches!(self, Passing::FlexRef | Passing::FixedRef)
     }
 
     /// Whether the task may change the parameter.
     pub fn changes(self) -> bool {
-        matches!(self, Passing::Hold | Passing::HoldRef)
+        matches!(self, Passing::Flex | Passing::FlexRef)
     }
 
     /// The words written before the parameter's name, for messages.
     pub fn word(self) -> &'static str {
         match self {
             Passing::Copy => "",
-            Passing::Hold => "hold",
-            Passing::HoldRef => "hold&",
-            Passing::Bind => "bind",
-            Passing::BindRef => "bind&",
+            Passing::Flex => "flex",
+            Passing::FlexRef => "flex&",
+            Passing::Fixed => "fixed",
+            Passing::FixedRef => "fixed&",
         }
     }
 }
@@ -2145,17 +2145,17 @@ pub struct TaskDef {
     /// outermost, each the call `w(values)` as written, without the task that
     /// comes next or the task's values (see `Checker::add_wrappers`).
     pub wrappers: Vec<Expr>,
-    /// For a lambda that keeps what it uses, `[@r](…)` or `[hold @r](…)`: the
+    /// For a lambda that keeps what it uses, `[@r](…)` or `[flex @r](…)`: the
     /// region it keeps its copies in, and whether it changes them.
     pub kept: Option<Kept>,
 }
 
 /// A variable a lambda keeps as a place, named in its list beside the region:
-/// `hold& count`, which it changes, or `bind& big`, which it reads where it is.
+/// `flex& count`, which it changes, or `fixed& big`, which it reads where it is.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeptPlace {
     pub name: String,
-    /// `Passing::HoldRef` or `Passing::BindRef`.
+    /// `Passing::FlexRef` or `Passing::FixedRef`.
     pub passing: Passing,
     pub span: Span,
 }
@@ -2164,9 +2164,9 @@ pub struct KeptPlace {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Kept {
     pub region: String,
-    /// `[hold @r]`: it changes its copies.
-    pub hold: bool,
-    /// `[hold& count, @r]`: the variables it keeps as places.
+    /// `[flex @r]`: it changes its copies.
+    pub flex: bool,
+    /// `[flex& count, @r]`: the variables it keeps as places.
     pub places: Vec<KeptPlace>,
 }
 
@@ -2256,14 +2256,14 @@ pub fn type_word(ty: &Type) -> String {
                 .iter()
                 .zip(&task.taken)
                 .map(|(ty, how)| match how {
-                    Taken::Place(Passing::HoldRef) => format!("holdref__{}", type_word(ty)),
-                    Taken::Place(_) => format!("bindref__{}", type_word(ty)),
+                    Taken::Place(Passing::FlexRef) => format!("flexref__{}", type_word(ty)),
+                    Taken::Place(_) => format!("fixedref__{}", type_word(ty)),
                     _ => type_word(ty),
                 })
                 .collect();
             format!("task__{}__{}__{}", task.params.len(), params.join("__"), type_word(&task.ret))
         }
-        // `[hold @r]` and `[@r]` are one C type: a call and what it keeps.
+        // `[flex @r]` and `[@r]` are one C type: a call and what it keeps.
         Type::Closure(closure) => format!("closure__{}", type_word(&Type::Task(Box::new(closure.task.clone())))),
     }
 }
@@ -2407,9 +2407,9 @@ pub struct ShapeDef {
 #[derive(Debug, Clone)]
 pub struct SharedField {
     pub field: Field,
-    /// `shared hold f`: any code that sees it may change it. A `read` one only
+    /// `shared flex f`: any code that sees it may change it. A `read` one only
     /// the shape's own methods change, and one that is neither never changes.
-    pub hold: bool,
+    pub flex: bool,
     /// For a value of a wrapper worked out where the program starts (a member
     /// of `START_VALUES`), where it is, as a runtime message names it:
     /// `wrapper 'logged' on task 'sq'`. `None` for a field a program declares.
@@ -2417,10 +2417,10 @@ pub struct SharedField {
 }
 
 impl SharedField {
-    /// Whether anything may ever change it: `hold`, or `read`, which its own
+    /// Whether anything may ever change it: `flex`, or `read`, which its own
     /// shape's methods change.
     pub fn changes(&self) -> bool {
-        self.hold || self.field.read
+        self.flex || self.field.read
     }
 }
 

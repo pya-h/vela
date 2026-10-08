@@ -1,4 +1,4 @@
-; error: 5:15: a tuple's items always match, so this 'when' always holds and the arms after it would never run; take the tuple apart with 'bind' instead
+; error: 5:15: a tuple's items always match, so this 'when' always holds and the arms after it would never run; take the tuple apart with 'fixed' instead
 ; A tuple pattern always holds, so the arms after it would never run.
 task main()
     fixed t = (1, 2)

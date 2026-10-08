@@ -1,4 +1,4 @@
-; error: 8:3: task 'put' is a (hold& int) -> int, and wrapper 'logged' takes a (int) -> int first
+; error: 8:3: task 'put' is a (flex& int) -> int, and wrapper 'logged' takes a (int) -> int first
 ; A wrapper takes the rest of the chain as the task takes its values: a place as a place.
 task logged(next: (int) -> int, label: text, n: int) -> int
     show(label)

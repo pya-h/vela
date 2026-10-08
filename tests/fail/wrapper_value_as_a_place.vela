@@ -1,4 +1,4 @@
-; error: 13:11: wrapper 'counted' takes this as a place, with 'hold&', but a wrapper's own values are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper
+; error: 13:11: wrapper 'counted' takes this as a place, with 'flex&', but a wrapper's own values are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper
 ; A wrapper's own value is worked out once, where the program starts, so it
 ; is no place a 'flex&' parameter changes.
 shape Stats

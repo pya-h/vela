@@ -1,4 +1,4 @@
-; error: 8:16: this task value goes where a lambda that keeps what it uses is expected, [@r](int) -> int, and keeps itself in a region, which no other value of this call names; give a task by its name, or keep this one first, as in 'bind kept: [@r](int) -> int = …'
+; error: 8:16: this task value goes where a lambda that keeps what it uses is expected, [@r](int) -> int, and keeps itself in a region, which no other value of this call names; give a task by its name, or keep this one first, as in 'fixed kept: [@r](int) -> int = …'
 ; A task value kept where a lambda that keeps what it uses is expected needs a region.
 task apply(f: [@r](int) -> int, x: int) -> int
     <- f(x)

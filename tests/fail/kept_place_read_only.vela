@@ -1,4 +1,4 @@
-; error: 6:43: cannot assign to immutable variable 'n'; this lambda keeps 'n' as 'bind& n', which only reads it, and one that changes it keeps it as 'hold& n'
+; error: 6:43: cannot assign to immutable variable 'n'; this lambda keeps 'n' as 'fixed& n', which only reads it, and one that changes it keeps it as 'flex& n'
 ; A place kept as 'fixed&' is only read.
 task main()
     flex n = 1

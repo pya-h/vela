@@ -1,4 +1,4 @@
-; error: 8:23: adding to a slice may need more room in its region, but which region this slice is in isn't known here; keep it in a variable whose type names the region, as in 'hold xs: [int]@r = …'
+; error: 8:23: adding to a slice may need more room in its region, but which region this slice is in isn't known here; keep it in a variable whose type names the region, as in 'flex xs: [int]@r = …'
 task rows(p: maybe ^int@r) -> [[int]@r]@r
     <- rows(p)
 fi

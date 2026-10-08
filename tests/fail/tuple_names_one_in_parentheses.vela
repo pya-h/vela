@@ -1,4 +1,4 @@
-; error: 3:11: a tuple has two or more items, so '( … )' names two or more, as in 'bind (a, b) = pair'
+; error: 3:11: a tuple has two or more items, so '( … )' names two or more, as in 'fixed (a, b) = pair'
 task main()
     fixed (a) = 1
 fi

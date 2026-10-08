@@ -1,4 +1,4 @@
-; error: 8:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'a' never does (declared at 7:11); a value declared with 'hold' can
+; error: 8:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'a' never does (declared at 7:11); a value declared with 'flex' can
 task sample(flex& x: int)
     x = 10
 fi

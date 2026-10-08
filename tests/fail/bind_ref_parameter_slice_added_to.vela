@@ -1,4 +1,4 @@
-; error: 3:5: 'add' changes 'xs', a 'bind&' parameter, which only reads the caller's place; one that changes it is written 'hold& xs: [int]@r'
+; error: 3:5: 'add' changes 'xs', a 'fixed&' parameter, which only reads the caller's place; one that changes it is written 'flex& xs: [int]@r'
 task f(fixed& xs: [int]@r)
     xs.add(1)
 fi

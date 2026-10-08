@@ -338,7 +338,7 @@ impl Parser {
             true => Error::at(
                 at,
                 format!(
-                    "this chain of operators has more than {} terms, and each operator counts as a level of nesting, at most {} in all; split it with a name for part of it, as in 'bind part = a + b + …' and then 'part + …'",
+                    "this chain of operators has more than {} terms, and each operator counts as a level of nesting, at most {} in all; split it with a name for part of it, as in 'fixed part = a + b + …' and then 'part + …'",
                     operators + 1,
                     MAX_NESTING
                 ),
@@ -417,7 +417,7 @@ impl Parser {
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
             (Token::Dollar, _, _) => "; '$' marks a decorator, written on the lines above a task or a shared method, as in '$register' or '$route(\"/\")'".to_string(),
-            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' or 'bind&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
+            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'flex&' or 'fixed&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
@@ -658,8 +658,8 @@ impl Parser {
                 let statement = matches!(
                     token,
                     Token::Ident(_)
-                        | Token::Bind
-                        | Token::Hold
+                        | Token::Fixed
+                        | Token::Flex
                         | Token::When
                         | Token::Loop
                         | Token::Each
@@ -1030,7 +1030,7 @@ impl Parser {
     }
 
     /// A shape's `shared` field, with the cursor at `shared` and `private` saying
-    /// `priv` came before it: `shared f: int = 0`, `shared hold f: int = 0`, or
+    /// `priv` came before it: `shared f: int = 0`, `shared flex f: int = 0`, or
     /// `shared read f: int = 0`. It always names its first value.
     fn parse_shared_field(&mut self, shape: &str, types: &[TypeParam], private: bool, methods: &[TaskDef]) -> Result<SharedField> {
         let at = self.peek_span();
@@ -1041,25 +1041,25 @@ impl Parser {
         if self.check(Token::Shared) {
             return Err(Error::at(self.peek_span(), "'shared' is already written here"));
         }
-        let hold_at = self.peek_span();
-        let hold = self.match_token(Token::Hold);
-        if hold && self.check(Token::Amp) {
-            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared hold', without '&'"));
+        let flex_at = self.peek_span();
+        let flex = self.match_token(Token::Flex);
+        if flex && self.check(Token::Amp) {
+            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared flex', without '&'"));
         }
-        if hold && self.check(Token::Hold) {
-            return Err(Error::at(self.peek_span(), "'hold' is already written here"));
+        if flex && self.check(Token::Flex) {
+            return Err(Error::at(self.peek_span(), "'flex' is already written here"));
         }
         let read = self.match_read(private)?;
-        if hold && read {
+        if flex && read {
             return Err(Error::at(
-                hold_at,
-                format!("a shared field is 'hold' or '{0}', not both: 'hold' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+                flex_at,
+                format!("a shared field is 'flex' or '{0}', not both: 'flex' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
             ));
         }
-        if read && self.check(Token::Hold) {
+        if read && self.check(Token::Flex) {
             return Err(Error::at(
                 self.peek_span(),
-                format!("a shared field is 'hold' or '{0}', not both: 'hold' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+                format!("a shared field is 'flex' or '{0}', not both: 'flex' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
             ));
         }
         if !types.is_empty() {
@@ -1079,7 +1079,7 @@ impl Parser {
         }
         field.private = private;
         field.read = read;
-        Ok(SharedField { field, hold, start: None })
+        Ok(SharedField { field, flex, start: None })
     }
 
     /// Rejects a field written below a method: a shape's or a kind's block reads
@@ -1437,28 +1437,28 @@ impl Parser {
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
-    /// `hold`, `hold&`, `bind`, or `bind&` before a task's parameter, which
+    /// `flex`, `flex&`, `fixed`, or `fixed&` before a task's parameter, which
     /// makes it the task's own copy to change, the caller's place, always a
     /// copy, or the caller's place only read (see `Passing`). A shape's field
     /// and a variant's value change with the value they are part of, and say so.
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
-        let hold = match self.peek() {
-            Token::Hold => true,
-            Token::Bind => false,
+        let flex = match self.peek() {
+            Token::Flex => true,
+            Token::Fixed => false,
             _ => return Ok(Passing::Copy),
         };
-        let word = if hold { "hold" } else { "bind" };
+        let word = if flex { "flex" } else { "fixed" };
         let at = self.peek_span();
         match slot {
             Slot::Param => {}
-            Slot::Field if hold => {
+            Slot::Field if flex => {
                 return Err(Error::at(
                     at,
-                    "only a parameter can be 'hold'; a shape's field changes where the value it is part of is held, as in 'hold p = Point {…}' then 'p.x = 1'",
+                    "only a parameter can be 'flex'; a shape's field changes where the value it is part of is held, as in 'flex p = Point {…}' then 'p.x = 1'",
                 ));
             }
             Slot::Field => {
-                return Err(Error::at(at, "only a parameter can be 'bind'; a shape's field is part of the value holding it, and changes where that value is held"));
+                return Err(Error::at(at, "only a parameter can be 'fixed'; a shape's field is part of the value holding it, and changes where that value is held"));
             }
             Slot::Value => {
                 return Err(Error::at(at, format!("only a parameter can be '{}', not a variant's value", word)));
@@ -1466,7 +1466,7 @@ impl Parser {
         }
         self.advance();
         let by_place = if self.check(Token::Amp) {
-            // `hold&` is one word: `hold &x` reads as the `&` of a call.
+            // `flex&` is one word: `flex &x` reads as the `&` of a call.
             if !self.amp_against_word() {
                 return Err(Error::at(self.peek_span(), format!("a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'", word)));
             }
@@ -1475,16 +1475,16 @@ impl Parser {
         } else {
             false
         };
-        let passing = match (hold, by_place) {
-            (true, true) => Passing::HoldRef,
-            (true, false) => Passing::Hold,
-            (false, true) => Passing::BindRef,
-            (false, false) => Passing::Bind,
+        let passing = match (flex, by_place) {
+            (true, true) => Passing::FlexRef,
+            (true, false) => Passing::Flex,
+            (false, true) => Passing::FixedRef,
+            (false, false) => Passing::Fixed,
         };
-        if matches!(self.peek(), Token::Hold | Token::Bind) {
+        if matches!(self.peek(), Token::Flex | Token::Fixed) {
             return Err(Error::at(
                 self.peek_span(),
-                format!("'{}' is already written here: a parameter is written with one of 'hold', 'hold&', 'bind', and 'bind&', or none", passing.word()),
+                format!("'{}' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', and 'fixed&', or none", passing.word()),
             ));
         }
         if self.check(Token::Amp) {
@@ -1541,7 +1541,7 @@ impl Parser {
         let Some(first) = params.iter().position(|param| param.default.is_some()) else { return Ok(()) };
         for param in params.iter().filter(|param| param.default.is_some()) {
             let at = param.default.as_ref().map_or(param.span, |value| value.span);
-            if matches!(param.passing, Passing::HoldRef | Passing::BindRef) {
+            if matches!(param.passing, Passing::FlexRef | Passing::FixedRef) {
                 return Err(Error::at(
                     at,
                     format!("'{}' is the caller's place, '{}', which a call names with '&'; a place has no value to fall back on", param.name, param.passing.word()),
@@ -1744,20 +1744,20 @@ impl Parser {
     }
 
     /// Whether the cursor, at `[`, starts what a lambda keeps: `[@r]`,
-    /// `[hold @r]`, or a place first, `[hold& count, @r]`, before a lambda or
+    /// `[flex @r]`, or a place first, `[flex& count, @r]`, before a lambda or
     /// its type.
     fn at_kept(&self) -> bool {
         match self.tokens.get(self.pos + 1) {
             Some(Token::AtSign) => true,
-            Some(Token::Hold) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
-            Some(Token::Bind) => self.tokens.get(self.pos + 2) == Some(&Token::Amp),
+            Some(Token::Flex) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
+            Some(Token::Fixed) => self.tokens.get(self.pos + 2) == Some(&Token::Amp),
             _ => false,
         }
     }
 
-    /// At `[`, what a lambda keeps: the region, `@r` or `hold @r` for one that
-    /// changes its copies, and the variables it keeps as places, `hold& count`
-    /// and `bind& big`, in any order, then `]`.
+    /// At `[`, what a lambda keeps: the region, `@r` or `flex @r` for one that
+    /// changes its copies, and the variables it keeps as places, `flex& count`
+    /// and `fixed& big`, in any order, then `]`.
     fn parse_kept(&mut self) -> Result<(String, bool, Span, Vec<KeptPlace>)> {
         let opened = self.peek_span();
         self.advance(); // [
@@ -1765,30 +1765,30 @@ impl Parser {
         let mut places: Vec<KeptPlace> = Vec::new();
         loop {
             let at = self.peek_span();
-            let hold = self.match_token(Token::Hold);
-            let bind = !hold && self.match_token(Token::Bind);
-            if (hold || bind) && self.match_token(Token::Amp) {
+            let flex = self.match_token(Token::Flex);
+            let fixed = !flex && self.match_token(Token::Fixed);
+            if (flex || fixed) && self.match_token(Token::Amp) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
                 if matches!(self.peek(), Token::Dot | Token::LBracket) {
-                    let word = if hold { "hold&" } else { "bind&" };
+                    let word = if flex { "flex&" } else { "fixed&" };
                     return Err(Error::at(span, format!("a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'", word, name)));
                 }
                 if places.iter().any(|place| place.name == name) {
                     return Err(Error::at(span, format!("'{}' is already in this lambda's list; each place is kept once", name)));
                 }
-                places.push(KeptPlace { name, passing: if hold { Passing::HoldRef } else { Passing::BindRef }, span });
-            } else if !bind && self.match_token(Token::AtSign) {
+                places.push(KeptPlace { name, passing: if flex { Passing::FlexRef } else { Passing::FixedRef }, span });
+            } else if !fixed && self.match_token(Token::AtSign) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
                 if region.is_some() {
-                    return Err(Error::at(at, "a lambda keeps what it uses in one region, so its list names one, as in '[hold& count, @r]'"));
+                    return Err(Error::at(at, "a lambda keeps what it uses in one region, so its list names one, as in '[flex& count, @r]'"));
                 }
-                region = Some((name, hold, span));
+                region = Some((name, flex, span));
             } else {
                 return Err(Error::at(
                     at,
-                    "a lambda's list names the region it keeps what it uses in, '@r' or 'hold @r', and the variables it keeps as places, 'hold& count' or 'bind& big', as in '[hold& count, @r]'",
+                    "a lambda's list names the region it keeps what it uses in, '@r' or 'flex @r', and the variables it keeps as places, 'flex& count' or 'fixed& big', as in '[flex& count, @r]'",
                 ));
             }
             if !self.match_token(Token::Comma) {
@@ -1798,16 +1798,16 @@ impl Parser {
         if !self.match_token(Token::RBracket) {
             return Err(self.unexpected("',' and another item, or ']' to close what the lambda keeps"));
         }
-        let Some((region, hold, at)) = region else {
-            return Err(Error::at(opened, "a lambda keeps what it uses in a region, which its list names, as in '[hold& count, @r]'"));
+        let Some((region, flex, at)) = region else {
+            return Err(Error::at(opened, "a lambda keeps what it uses in a region, which its list names, as in '[flex& count, @r]'"));
         };
-        Ok((region, hold, at, places))
+        Ok((region, flex, at, places))
     }
 
     /// `[@r](int) -> int`, at `[` written at `span`: the type of a lambda that
     /// keeps what it uses in `r` (see `Type::Closure`).
     fn parse_closure_type(&mut self, span: Span) -> Result<Type> {
-        let (region, hold, at, places) = self.parse_kept()?;
+        let (region, flex, at, places) = self.parse_kept()?;
         if let Some(place) = places.first() {
             return Err(Error::at(
                 place.span,
@@ -1815,7 +1815,7 @@ impl Parser {
             ));
         }
         self.type_parts.push((format!("@{}", region), at));
-        let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
+        let written = if flex { format!("[flex @{}]", region) } else { format!("[@{}]", region) };
         let opened = self.peek_span();
         let task = match self.match_token(Token::LParen) {
             true => self.parse_tuple_type(opened)?,
@@ -1827,7 +1827,7 @@ impl Parser {
         if task.taken.iter().any(|how| *how == Taken::Region(region.clone())) {
             return Err(Error::at(at, format!("'{}' keeps what the lambda uses in '{}', so a region the lambda takes is named otherwise, as in '@a'", written, region)));
         }
-        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, hold })))
+        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, flex })))
     }
 
     /// A type named at `span` and the cursor, with the types a shape is given.
@@ -1927,7 +1927,7 @@ impl Parser {
                         return Err(Error::at(at, format!("a group never holds a region, so '{}' can't come before '...'; name the region on its own beside the group, as in '({}, P...) -> R'", written, written)));
                     }
                     Some(written) => {
-                        return Err(Error::at(at, format!("a group's values are taken as the task given for it takes them, so '{}' can't come before the group: '(P...) -> R' fits 'put(hold& n: int)' too", written)));
+                        return Err(Error::at(at, format!("a group's values are taken as the task given for it takes them, so '{}' can't come before the group: '(P...) -> R' fits 'put(flex& n: int)' too", written)));
                     }
                     None => {}
                 }
@@ -1957,7 +1957,7 @@ impl Parser {
             return Err(Error::at(opened, format!("a group of types, '{}...', is only part of what a task's type takes, as in '({}...) -> R' or '(int, {}...) -> R'", group, group, group)));
         }
         if let Some((at, written)) = marked {
-            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(hold& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
+            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
         }
         // One item, with no comma after it (which the loop reports above): the
         // parentheses group that type rather than making a tuple of it.
@@ -1996,7 +1996,7 @@ impl Parser {
     }
 
     /// How a parameter of a task's type is given, written before its type:
-    /// `hold&` or `bind&` for the caller's place, `@r` for a region (whose type
+    /// `flex&` or `fixed&` for the caller's place, `@r` for a region (whose type
     /// is then all of it), or nothing for a value.
     fn parse_taken(&mut self) -> Result<Taken> {
         if self.match_token(Token::AtSign) {
@@ -2005,15 +2005,15 @@ impl Parser {
             }
             return Ok(Taken::Region(self.expect_ident()?));
         }
-        let hold = match self.peek() {
-            Token::Hold => true,
-            Token::Bind => false,
+        let flex = match self.peek() {
+            Token::Flex => true,
+            Token::Fixed => false,
             _ => return Ok(Taken::Value),
         };
         let at = self.peek_span();
-        let word = if hold { "hold" } else { "bind" };
+        let word = if flex { "flex" } else { "fixed" };
         self.advance();
-        // `hold&` is one word, as in a header.
+        // `flex&` is one word, as in a header.
         if !self.amp_against_word() {
             return Err(Error::at(
                 at,
@@ -2024,7 +2024,7 @@ impl Parser {
         if self.check(Token::AtSign) {
             return Err(Error::at(at, "a region is given as it is, so a task's type writes it '@r' alone, never as a place"));
         }
-        Ok(Taken::Place(if hold { Passing::HoldRef } else { Passing::BindRef }))
+        Ok(Taken::Place(if flex { Passing::FlexRef } else { Passing::FixedRef }))
     }
 
     /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a
@@ -2099,8 +2099,8 @@ impl Parser {
         self.skip_newlines();
         let span = self.peek_span();
         match self.peek() {
-            Token::Bind => self.parse_binding(true),
-            Token::Hold => self.parse_binding(false),
+            Token::Fixed => self.parse_binding(true),
+            Token::Flex => self.parse_binding(false),
             Token::When => self.parse_when(),
             Token::Loop | Token::Endless | Token::Each => {
                 let stmt = match self.peek() {
@@ -2337,11 +2337,11 @@ impl Parser {
         Ok(())
     }
 
-    /// `bind name [: type] [, name [: type]]* = values`, or the same with
-    /// `hold`. A name may be `_`, which drops its value.
+    /// `fixed name [: type] [, name [: type]]* = values`, or the same with
+    /// `flex`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
-        let word = if immutable { "bind" } else { "hold" };
-        self.advance(); // bind / hold
+        let word = if immutable { "fixed" } else { "flex" };
+        self.advance(); // fixed / flex
         let reference = self.match_reference(word)?;
         let span = self.peek_span();
         self.parse_binding_names(immutable, reference, span)
@@ -2350,7 +2350,7 @@ impl Parser {
     /// A binding after its word: its names, `=`, and its values. A loop's
     /// start reads the ones after the first this way, which its word covers.
     fn parse_binding_names(&mut self, immutable: bool, reference: bool, span: Span) -> Result<Stmt> {
-        let word = if immutable { "bind" } else { "hold" };
+        let word = if immutable { "fixed" } else { "flex" };
         let mut names = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
             if reference {
@@ -2371,13 +2371,13 @@ impl Parser {
     }
 
     /// Whether the `&` at the cursor is written against the word just read, as
-    /// in `hold&`: it starts where the word ends, whichever spelling the word
-    /// has (`flex&` and `fixed&` too).
+    /// in `flex&`: it starts where the word ends, whichever spelling the word
+    /// has (`hold&` and `bind&` too, until they go).
     fn amp_against_word(&self) -> bool {
         self.check(Token::Amp) && self.pos.checked_sub(1).and_then(|word| self.ends.get(word)) == Some(&self.peek_span())
     }
 
-    /// The `&` of `hold&` or `bind&` before a binding's name, written against
+    /// The `&` of `flex&` or `fixed&` before a binding's name, written against
     /// the word just read, which makes the binding a reference.
     fn match_reference(&mut self, word: &str) -> Result<bool> {
         if !self.check(Token::Amp) {
@@ -2440,10 +2440,10 @@ impl Parser {
         if self.check(Token::When) {
             return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
         }
-        if matches!(self.peek(), Token::Hold | Token::Bind) {
+        if matches!(self.peek(), Token::Flex | Token::Fixed) {
             return Err(Error::at(
                 self.peek_span(),
-                "a loop declares names of its own in its start, which '||' ends before its condition, as in 'loop hold i = 0 || i < 10 || i++'",
+                "a loop declares names of its own in its start, which '||' ends before its condition, as in 'loop flex i = 0 || i < 10 || i++'",
             ));
         }
         let cond = self.parse_condition()?;
@@ -2570,7 +2570,7 @@ impl Parser {
         let start = parts.next().unwrap_or_default();
         let cond = parts.next().unwrap_or_default();
         let step = parts.next().unwrap_or_default();
-        // The start: statements, until `hold` or `bind` declares the names
+        // The start: statements, until `flex` or `fixed` declares the names
         // after it, each item one.
         let mut declaring: Option<bool> = None;
         let mut started = Vec::new();
@@ -2578,8 +2578,8 @@ impl Parser {
         for (n, (first, last)) in start.into_iter().enumerate() {
             self.pos = first;
             let item = match self.peek() {
-                Token::Hold | Token::Bind => {
-                    let immutable = self.check(Token::Bind);
+                Token::Flex | Token::Fixed => {
+                    let immutable = self.check(Token::Fixed);
                     declaring = Some(immutable);
                     self.parse_binding(immutable)?
                 }
@@ -2754,7 +2754,7 @@ impl Parser {
 
     /// What a `case` or `is` (the `keyword`) matches: `Circle r`, `{value}`,
     /// `none`, `fail e`, `(x, y)`, or `_`. A name it binds may be written
-    /// `hold name`, which makes it a variable that can be assigned.
+    /// `flex name`, which makes it a variable that can be assigned.
     fn parse_pattern(&mut self, keyword: &str) -> Result<Pattern> {
         let span = self.peek_span();
         let kind = match self.peek() {
@@ -2776,7 +2776,7 @@ impl Parser {
                         self.expect(Token::RBrace)?;
                         TypedForm::Value(names)
                     }
-                    Token::Ident(_) | Token::Hold | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
+                    Token::Ident(_) | Token::Flex | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
                     _ => TypedForm::Only,
                 };
                 PatternKind::Typed { ty, form, asks: false }
@@ -2805,14 +2805,14 @@ impl Parser {
             }
             // The verb makes a failure; a pattern names one with the noun.
             Token::Fail => return Err(Error::at(self.peek_span(), FAILURE_NAMES)),
-            // `(x, y)` or `hold (x, y)`: the items of a tuple.
-            Token::LParen | Token::Hold => {
+            // `(x, y)` or `flex (x, y)`: the items of a tuple.
+            Token::LParen | Token::Flex => {
                 let names = self.parse_pattern_names()?;
                 if names.parts.is_empty() {
                     return Err(Error::at(
                         names.span,
                         format!(
-                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{hold {1}}}' for the value inside a maybe or a 'T ~ E', or '{0} hold (x, y)' for a tuple's items",
+                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{flex {1}}}' for the value inside a maybe or a 'T ~ E', or '{0} flex (x, y)' for a tuple's items",
                             keyword, names.name
                         ),
                     ));
@@ -2859,7 +2859,7 @@ impl Parser {
                     ));
                 }
                 let mut binds = Vec::new();
-                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Hold) {
+                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Flex) {
                     let names = self.parse_pattern_names()?;
                     if !names.parts.is_empty() {
                         return Err(Error::at(names.span, format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
@@ -2874,10 +2874,10 @@ impl Parser {
     }
 
     /// What a pattern names: `name`, `_`, or `(a, b)`, the names of a tuple's
-    /// items, each of which `hold` may make changeable.
+    /// items, each of which `flex` may make changeable.
     fn parse_pattern_names(&mut self) -> Result<Names> {
         let span = self.peek_span();
-        let mutable = self.match_token(Token::Hold);
+        let mutable = self.match_token(Token::Flex);
         if !self.check(Token::LParen) {
             let (name, at) = self.parse_bound_name()?;
             return Ok(Names::one(name, at, mutable));
@@ -2914,7 +2914,7 @@ impl Parser {
             if self.check(Token::Colon) {
                 return Err(Error::at(
                     self.peek_span(),
-                    "'( … )' takes a tuple apart, so each name in it takes its own type, as in 'bind (a: int, b: text) = t'",
+                    "'( … )' takes a tuple apart, so each name in it takes its own type, as in 'fixed (a: int, b: text) = t'",
                 ));
             }
             return Ok(Bound { name: String::new(), span, ty: None, ty_span: None, parts });
@@ -2937,7 +2937,7 @@ impl Parser {
         }
         self.expect(Token::RParen)?;
         if parts.len() < 2 {
-            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'bind (a, b) = pair'"));
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'fixed (a, b) = pair'"));
         }
         Ok(parts)
     }
@@ -3653,7 +3653,7 @@ impl Parser {
         // `(` tells first, so that nested parentheses aren't each read to their
         // end.
         let next = self.tokens.get(self.pos + 1);
-        let takes = matches!(next, Some(Token::RParen | Token::Hold | Token::Bind))
+        let takes = matches!(next, Some(Token::RParen | Token::Flex | Token::Fixed))
             || (matches!(next, Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::Colon));
         if !takes {
             return false;
@@ -3697,12 +3697,12 @@ impl Parser {
 
     /// `[@r](params) -> type`, its body, and `fi`, at `[`: a lambda that keeps
     /// what it uses from the code around it in region `r`, and with
-    /// `[hold @r]` changes its copies (see `ExprKind::Closure`).
+    /// `[flex @r]` changes its copies (see `ExprKind::Closure`).
     fn parse_closure_lambda(&mut self) -> Result<Expr> {
         let span = self.peek_span();
-        let (region, hold, _, places) = self.parse_kept()?;
+        let (region, flex, _, places) = self.parse_kept()?;
         if !(self.check(Token::LParen) && self.at_lambda()) {
-            let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
+            let written = if flex { format!("[flex @{}]", region) } else { format!("[@{}]", region) };
             return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
         }
         let header = self.peek_span();
@@ -3714,11 +3714,11 @@ impl Parser {
         } else {
             self.parse_lambda_line(span)?
         };
-        let kept = Kept { region: region.clone(), hold, places: places.clone() };
+        let kept = Kept { region: region.clone(), flex, places: places.clone() };
         let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept)).kind else {
             return Err(Error::internal_at(span, "a lambda named by no variable"));
         };
-        Ok(Expr::new(ExprKind::Closure { lambda, region, hold, places }, span))
+        Ok(Expr::new(ExprKind::Closure { lambda, region, flex, places }, span))
     }
 
     /// The header of a lambda at `span` and the cursor, up to its body.
@@ -4710,7 +4710,7 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
         return false;
     }
     let next = tokens.token_at(p + 1);
-    let takes = matches!(next, Some(Token::RParen | Token::Hold | Token::Bind)) || (matches!(next, Some(Token::Ident(_))) && tokens.token_at(p + 2) == Some(&Token::Colon));
+    let takes = matches!(next, Some(Token::RParen | Token::Flex | Token::Fixed)) || (matches!(next, Some(Token::Ident(_))) && tokens.token_at(p + 2) == Some(&Token::Colon));
     if !takes {
         return false;
     }
@@ -4773,7 +4773,7 @@ pub fn types_close(tokens: &impl LineTokens, p: usize) -> Option<usize> {
 /// The items of a loop's start or step from `first` to the one before
 /// `last`, parted by `,`s, each its first position and the one after its
 /// last. A `,` parts two items only where the next one starts, so `a, b =
-/// b, a` and `hold q, r = divmod(a, b)` are one item each: before an item's
+/// b, a` and `flex q, r = divmod(a, b)` are one item each: before an item's
 /// `=`, a `,` follows a place it sets, and after it, one of the values for
 /// those places, until each has one. No `,` inside brackets, a block, or the
 /// types a use gives or a name is written with parts anything.
@@ -4840,7 +4840,7 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
 }
 
 /// Whether the tokens from `first` to the one before `last` are places an
-/// assignment or a declaration sets, as `hold q` and `t.x` are, rather than
+/// assignment or a declaration sets, as `flex q` and `t.x` are, rather than
 /// a statement of its own, as `advance(&it)` is.
 fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
     let mut depth = 0usize;
@@ -4855,17 +4855,17 @@ fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
                 true
             }
             _ if depth > 0 => true,
-            Some(Token::Hold | Token::Bind) => p == first,
+            Some(Token::Flex | Token::Fixed) => p == first,
             Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::Underscore | Token::Comma) | None => true,
             _ => false,
         })
 }
 
-/// Whether a loop's item starts at `p`: `hold` or `bind`, a name and the
+/// Whether a loop's item starts at `p`: `flex` or `fixed`, a name and the
 /// type it is written with, or what sets a place, before the next `,` or
 /// `last`.
 fn starts_loop_item(tokens: &impl LineTokens, p: usize, last: usize) -> bool {
-    if matches!(tokens.token_at(p), Some(Token::Hold | Token::Bind)) {
+    if matches!(tokens.token_at(p), Some(Token::Flex | Token::Fixed)) {
         return true;
     }
     let (mut depth, mut blocks) = (0usize, 0usize);

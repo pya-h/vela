@@ -216,8 +216,8 @@ fn every_keyword_lexes_to_its_token() {
         let first = KEYWORDS.iter().find(|(_, token)| token == keyword).map(|(first, _)| *first);
         assert_eq!(keyword.describe(), format!("'{}'", first.unwrap_or(word)));
     }
-    assert_eq!(Token::Bind.describe(), "'fixed'");
-    assert_eq!(Token::Hold.describe(), "'flex'");
+    assert_eq!(Token::Fixed.describe(), "'fixed'");
+    assert_eq!(Token::Flex.describe(), "'flex'");
     // Longer words that start with a keyword are names.
     assert_eq!(kinds("fine"), [token(Token::Ident("fine".into())), token(Token::Eof)]);
 }

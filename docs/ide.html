@@ -450,8 +450,9 @@ Press Ctrl+C to stop.</pre>
             <code>hold&amp; y = &amp;x</code> or <code>bind&amp; y = &amp;x</code>, hovers as <code>hold&amp; y: int</code>
             or <code>bind&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.
             <code>flex</code> and <code>fixed</code>, the new spellings of <code>hold</code> and <code>bind</code>, are
-            read the same everywhere, as keywords, in parameters, in a task's type and in what a lambda keeps; the
-            hovers still say the old words until they go.</p>
+            read the same everywhere, as keywords, in parameters, in a task's type and in what a lambda keeps. The
+            compiler's messages and the types in a hover say the new words already (<code>(flex&amp; int) -&gt; nothing</code>),
+            while the word a hover starts with is still the old one (<code>hold n: int</code>) until Studio's own words change.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>

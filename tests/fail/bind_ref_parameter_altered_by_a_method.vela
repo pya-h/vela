@@ -1,4 +1,4 @@
-; error: 11:5: 'Point.grow' changes the value it is called on, so it needs a place that can change, and 'x' is a 'bind&' parameter, which only reads the caller's place; write 'hold& x: Point' to change it
+; error: 11:5: 'Point.grow' changes the value it is called on, so it needs a place that can change, and 'x' is a 'fixed&' parameter, which only reads the caller's place; write 'flex& x: Point' to change it
 shape Point
     x: int
 

@@ -1,4 +1,4 @@
-; error: 7:9: cannot assign to immutable variable 'n'; 'n' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[hold @r](…)', and one that changes the variable itself keeps it as a place, '[hold& n, @r]'
+; error: 7:9: cannot assign to immutable variable 'n'; 'n' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[flex @r](…)', and one that changes the variable itself keeps it as a place, '[flex& n, @r]'
 ; A [@r] lambda never changes the copies it keeps.
 task main()
     region r

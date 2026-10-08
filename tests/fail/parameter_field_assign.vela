@@ -1,4 +1,4 @@
-; error: 6:5: cannot assign to a field of immutable variable 'p'; a parameter that changes is written 'hold p: Point', and is the task's own copy
+; error: 6:5: cannot assign to a field of immutable variable 'p'; a parameter that changes is written 'flex p: Point', and is the task's own copy
 shape Point
     x: int
 fi

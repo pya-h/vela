@@ -1,4 +1,4 @@
-; error: 6:22: this lambda keeps 'n' as 'hold& n', to change it, so it needs a place that can change, and 'n' never does (declared at 4:11); a value declared with 'hold' can
+; error: 6:22: this lambda keeps 'n' as 'flex& n', to change it, so it needs a place that can change, and 'n' never does (declared at 4:11); a value declared with 'flex' can
 ; A lambda keeps as 'flex&' only a place that can change.
 task main()
     fixed n = 1

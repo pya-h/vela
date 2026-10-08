@@ -1,4 +1,4 @@
-; error: 3:10: unknown variable 'i'; a loop's start sets names already declared, and declares its own after 'hold' or 'bind', as in 'loop hold i = 0 || …'
+; error: 3:10: unknown variable 'i'; a loop's start sets names already declared, and declares its own after 'flex' or 'fixed', as in 'loop flex i = 0 || …'
 task main()
     loop i = 0 || i < 3 || i++
         show(i)

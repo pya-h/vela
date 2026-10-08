@@ -1,4 +1,4 @@
-; error: 8:8: '+=' names its place twice, reading and then setting it, so the place can't call a task or change anything; keep that part in a variable first, as in 'bind i = next()' and then 'xs[i] += …'
+; error: 8:8: '+=' names its place twice, reading and then setting it, so the place can't call a task or change anything; keep that part in a variable first, as in 'fixed i = next()' and then 'xs[i] += …'
 task next() -> int
     <- 0
 fi

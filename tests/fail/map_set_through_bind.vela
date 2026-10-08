@@ -1,4 +1,4 @@
-; error: 5:5: 'm[k] = v' changes 'm', which is immutable; keep the map in a 'hold' variable to change it
+; error: 5:5: 'm[k] = v' changes 'm', which is immutable; keep the map in a 'flex' variable to change it
 task main()
     region r
     fixed m = ["a": 1] at r

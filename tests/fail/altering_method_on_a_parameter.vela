@@ -1,4 +1,4 @@
-; error: 11:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'c' is a parameter, which never does; write 'hold c: Counter' to change the task's own copy, or 'hold& c: Counter' to change the caller's
+; error: 11:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'c' is a parameter, which never does; write 'flex c: Counter' to change the task's own copy, or 'flex& c: Counter' to change the caller's
 shape Counter
     count: int
 

@@ -16,8 +16,8 @@ pub enum Token {
     False,
     None,
     Task,
-    Bind,
-    Hold,
+    Fixed,
+    Flex,
     /// `<-`, which sends a task's result (the counterpart of `->` in its header).
     Send,
     Shape,
@@ -46,7 +46,7 @@ pub enum Token {
     Or,
     Not,
     /// `&`, which joins the words a generic type must allow (`<T: same & shown>`),
-    /// marks a place given to `hold&` (`f(&a)`), and makes `hold&` and `bind&`.
+    /// marks a place given to `flex&` (`f(&a)`), and makes `flex&` and `fixed&`.
     /// Vela writes `and` for both conditions at once.
     Amp,
     Fi,
@@ -91,7 +91,7 @@ pub enum Token {
     /// `include shop/cart => basket`, and names a loop: `outer => each x in xs`.
     FatArrow,
     /// `||`, which parts a loop's start, condition and step:
-    /// `loop hold i = 0 || i < 10 || i++`. Nowhere else: Vela writes `or`.
+    /// `loop flex i = 0 || i < 10 || i++`. Nowhere else: Vela writes `or`.
     Parts,
     Range,
     /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
@@ -150,10 +150,10 @@ pub enum Token {
 /// first spelling here.
 pub const KEYWORDS: &[(&str, Token)] = &[
     ("task", Token::Task),
-    ("fixed", Token::Bind),
-    ("flex", Token::Hold),
-    ("bind", Token::Bind),
-    ("hold", Token::Hold),
+    ("fixed", Token::Fixed),
+    ("flex", Token::Flex),
+    ("bind", Token::Fixed),
+    ("hold", Token::Flex),
     ("shape", Token::Shape),
     ("kind", Token::Kind),
     ("when", Token::When),

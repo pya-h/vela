@@ -1,4 +1,4 @@
-; error: 4:17: this loop gives no value, so its 'break' gives none; a loop gives one where it is a value, as in 'bind r = loop … fi'
+; error: 4:17: this loop gives no value, so its 'break' gives none; a loop gives one where it is a value, as in 'fixed r = loop … fi'
 task main()
     each i in 0..3
         break = i

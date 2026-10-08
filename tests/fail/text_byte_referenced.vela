@@ -1,4 +1,4 @@
-; error: 4:24: 'hold& first' names a place to change it, so it needs a place that can change, and text never does
+; error: 4:24: 'flex& first' names a place to change it, so it needs a place that can change, and text never does
 task main()
     flex word = "hello"
     flex& first = &word[0]

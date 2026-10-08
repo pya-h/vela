@@ -1,4 +1,4 @@
-; error: 10:15: 'x' is given the place itself, to change, so it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'hold' variable, change it, and put it back
+; error: 10:15: 'x' is given the place itself, to change, so it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'flex' variable, change it, and put it back
 task sample(flex& x: int)
     x = 10
 fi

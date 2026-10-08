@@ -1,4 +1,4 @@
-; error: 4:15: this lambda keeps 'x' as a place, 'hold& x', so it ends before 'x' does, and it ends with region 'r', which is given to the task, so it outlives the task's variables; declare a region after 'x', in its block, and keep the lambda there
+; error: 4:15: this lambda keeps 'x' as a place, 'flex& x', so it ends before 'x' does, and it ends with region 'r', which is given to the task, so it outlives the task's variables; declare a region after 'x', in its block, and keep the lambda there
 ; A region given to the task outlives its variables, so a lambda kept there keeps none as a place.
 task bump(r: region, flex& x: int) -> [@r]() -> nothing
     <- [flex& x, @r]() -> nothing x = x + 1 fi

@@ -100,7 +100,7 @@ pub struct Generator {
     altering: HashSet<String>,
     /// The names in the task being generated that are pointers to a place,
     /// read through them: the value a method that alters it is called on, every
-    /// `hold&` parameter, and the references of the blocks being generated.
+    /// `flex&` parameter, and the references of the blocks being generated.
     pointers: HashSet<String>,
     /// The parameters of the task being generated that are passed by a hidden
     /// pointer (see `HIDDEN_ABOVE`), which are in `pointers` too.
@@ -431,8 +431,8 @@ impl Generator {
     }
 
     /// For task `name`, named as a value, a function taking its values as its
-    /// type does, when the task's own C takes them otherwise: a large `hold`
-    /// or `bind` parameter is copied into the task, where a task value reads
+    /// type does, when the task's own C takes them otherwise: a large `flex`
+    /// or `fixed` parameter is copied into the task, where a task value reads
     /// it where the caller keeps it, and a native task takes every value as it
     /// is (see `is_hidden`).
     fn gen_adapter(&mut self, items: &[Item], name: &str) {
@@ -442,7 +442,7 @@ impl Generator {
         }) else {
             return;
         };
-        // `.this` of an `alters` method is the caller's place, as `hold&` is.
+        // `.this` of an `alters` method is the caller's place, as `flex&` is.
         let alters = self.altering.contains(name);
         let taken = t
             .params
@@ -453,7 +453,7 @@ impl Generator {
                 } else if param.passing.is_ref() {
                     Taken::Place(param.passing)
                 } else if alters && param.name == THIS {
-                    Taken::Place(Passing::HoldRef)
+                    Taken::Place(Passing::FlexRef)
                 } else {
                     Taken::Value
                 }
@@ -513,7 +513,7 @@ impl Generator {
             let value = if field.ty == Type::Region {
                 c_ident(&field.name)
             } else if field.passing.is_ref() {
-                // A place: the variable's address, as a `hold&` parameter is given.
+                // A place: the variable's address, as a `flex&` parameter is given.
                 let mut var = Expr::new(ExprKind::Var(field.name.clone()), e.span);
                 var.ty = field.ty.ptr_inner().cloned();
                 format!("({})({})", c_type(&field.ty), self.gen_address(&var)?)
@@ -2175,8 +2175,8 @@ impl Generator {
                     self.w.line(&format!("{};", expr));
                 }
             }
-            // `hold& y = &x`: a pointer to the place, read through it; one that
-            // only reads, `bind& y = &x`, may name a value passed by a hidden
+            // `flex& y = &x`: a pointer to the place, read through it; one that
+            // only reads, `fixed& y = &x`, may name a value passed by a hidden
             // pointer, which is `const`.
             StmtKind::Binding { names, mutable, reference: true, init } => {
                 if let ([bound], [Expr { kind: ExprKind::Ref(place), .. }]) = (names.as_slice(), init.as_slice()) {
@@ -3009,7 +3009,7 @@ impl Generator {
                 ExprKind::Ref(place) if place.ty.as_ref().is_some_and(|place| *ty == Type::Ptr(Box::new(place.clone()), None)) => {
                     self.w.line(&format!("const void* {} = {};", tmp, value));
                 }
-                // A place given to a `hold&` parameter is its address.
+                // A place given to a `flex&` parameter is its address.
                 ExprKind::Ref(_) => self.w.line(&format!("{}* {} = {};", c_type(operand.ty()?), tmp, value)),
                 _ => self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value)),
             }
@@ -3073,7 +3073,7 @@ impl Generator {
     }
 
     /// Whether `e` is a place in the task's own memory, which only the task
-    /// changes: a local variable (not a reference or a `hold&` parameter, which
+    /// changes: a local variable (not a reference or a `flex&` parameter, which
     /// may name memory in a region), a parameter passed by a hidden pointer,
     /// or a field or an array item of one.
     fn kept_place(&self, e: &Expr) -> bool {
@@ -3153,7 +3153,7 @@ impl Generator {
             ExprKind::RegionAfter(_) => Err(Error::internal_at(e.span, "a region written after a call that the checker left as it was")),
             ExprKind::TypeOf(_) => Err(Error::internal_at(e.span, "a '.type' left for types a task was never made for")),
             ExprKind::Var(name) if self.pointers.contains(name) => Ok(format!("(*{})", c_ident(name))),
-            // The place given to a `hold&` parameter: its address, worked out
+            // The place given to a `flex&` parameter: its address, worked out
             // where the argument is, as its value would be (`gen_operands`
             // keeps it in order with the others).
             ExprKind::Ref(place) => self.gen_address(place),
@@ -3513,12 +3513,12 @@ impl Generator {
     }
 
     /// The address of the place a method that changes the value it is called on
-    /// is called on, or of one given to a `hold&` parameter, which the checker
+    /// is called on, or of one given to a `flex&` parameter, which the checker
     /// has made sure can change.
     fn gen_receiver(&mut self, value: &Expr) -> Result<String> {
         if let ExprKind::Var(name) = &value.kind {
             // The value a method is called on is already a pointer in a method
-            // that changes it, and so is a `hold&` parameter, so giving either
+            // that changes it, and so is a `flex&` parameter, so giving either
             // on passes the pointer.
             if self.pointers.contains(name) {
                 return Ok(c_ident(name));
@@ -4317,7 +4317,7 @@ pub(crate) fn notice_name(name: &str) -> String {
 /// `hidden`.
 fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
     match how {
-        Taken::Place(Passing::HoldRef) => format!("{}*", c_type(ty)),
+        Taken::Place(Passing::FlexRef) => format!("{}*", c_type(ty)),
         Taken::Place(_) => format!("{} const*", c_type(ty)),
         _ if hidden => format!("const {}*", c_type(ty)),
         _ => c_type(ty),
@@ -5306,14 +5306,14 @@ fn changes_nothing(e: &Expr) -> bool {
 pub const HIDDEN_ABOVE: usize = 64;
 
 /// Whether parameter `p` of a task is a pointer to the caller's place in C: a
-/// `hold&` one, or the value a method that `alters` it is called on.
+/// `flex&` one, or the value a method that `alters` it is called on.
 fn is_pointer_param(p: &Field, alters: bool) -> bool {
     p.passing.is_ref() || (alters && p.name == THIS)
 }
 
 /// Whether parameter `p` of `t` is a copy of the task's own, which the task
 /// makes from the value it is given, under the name `given_name`: one given as
-/// a value (`x: T`, `bind x`, `hold x`, and `.this` of a method that changes
+/// a value (`x: T`, `fixed x`, `flex x`, and `.this` of a method that changes
 /// nothing), not one the task reads where the caller keeps it (`hidden`) or
 /// through a pointer. A parameter given as a value is a place of the task's own
 /// in C too, but an optimizing C compiler may read it where the caller keeps
@@ -5355,11 +5355,11 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             }
             // A method that changes the value it is called on is given the
             // place it is in, so what it writes is what the caller holds, and
-            // so is a `hold&` parameter.
-            // A `bind&` one is only read there, so it is given a place that
+            // so is a `flex&` parameter.
+            // A `fixed&` one is only read there, so it is given a place that
             // never changes as well: `T const*`, which for a pointer is a
             // pointer that stays, not what it points to (`T* const*`).
-            if p.passing == Passing::BindRef {
+            if p.passing == Passing::FixedRef {
                 return format!("{} const* {}", c_type(&p.ty), c_ident(&p.name));
             }
             if is_pointer_param(p, alters) {

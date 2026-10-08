@@ -1,5 +1,5 @@
-  1 | ; warning: 53:31: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
-    | comment:; warning: 53:31: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
+  1 | ; warning: 53:31: this lambda keeps 'm' as a place, 'flex& m', and never uses it; leave it out of the list
+    | comment:; warning: 53:31: this lambda keeps 'm' as a place, 'flex& m', and never uses it; leave it out of the list
   2 | ; Lambdas that keep variables as places, named in their list beside the region:
     | comment:; Lambdas that keep variables as places, named in their list beside the region:
   3 | ; flex& changes the variable itself, fixed& reads it where it is with no copy.

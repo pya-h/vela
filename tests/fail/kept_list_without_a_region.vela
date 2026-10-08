@@ -1,4 +1,4 @@
-; error: 5:15: a lambda keeps what it uses in a region, which its list names, as in '[hold& count, @r]'
+; error: 5:15: a lambda keeps what it uses in a region, which its list names, as in '[flex& count, @r]'
 ; A lambda's list names the region it keeps what it uses in.
 task main()
     flex n = 1

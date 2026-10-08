@@ -1,4 +1,4 @@
-; error: 3:15: expected ')', got '&'; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' or 'bind&' parameter, as in 'f(&a)', and joins the words a generic type must allow)
+; error: 3:15: expected ')', got '&'; Vela writes 'and' for both at once ('&' gives a place to a 'flex&' or 'fixed&' parameter, as in 'f(&a)', and joins the words a generic type must allow)
 task main()
     show(true & false)
 fi

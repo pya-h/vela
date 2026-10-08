@@ -1,4 +1,4 @@
-; error: 4:14: a reference is declared one at a time, each with its own 'hold&'
+; error: 4:14: a reference is declared one at a time, each with its own 'flex&'
 task main()
     flex x = 1
     flex& a, b = &x, &x

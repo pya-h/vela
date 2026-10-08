@@ -1,4 +1,4 @@
-; error: 5:5: 'add' changes 'xs', which is immutable; keep the slice in a 'hold' variable to change it
+; error: 5:5: 'add' changes 'xs', which is immutable; keep the slice in a 'flex' variable to change it
 task main()
     region r
     fixed xs = new [int]() at r

@@ -1,4 +1,4 @@
-; error: 10:16: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, 'f(…)', or give it as a place, '&f', to a 'hold& f: [hold @r]() -> int' parameter
+; error: 10:16: 'f' is a '[flex @r]' lambda, which changes what it keeps, so it is never copied: call it, 'f(…)', or give it as a place, '&f', to a 'flex& f: [flex @r]() -> int' parameter
 ; A [flex @r] lambda is held alone.
 task main()
     region r

@@ -1,4 +1,4 @@
-; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'bind& a: Wide' for the caller's place, or 'bind a: Wide' for a copy of its own
+; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'fixed& a: Wide' for the caller's place, or 'fixed a: Wide' for a copy of its own
 ; How a parameter is given, written before its name: nothing lets the compiler
 ; choose (a copy, or where the caller keeps a large value), `fixed x` is always
 ; a copy, and `fixed& x` is the caller's place, only read, which a call gives

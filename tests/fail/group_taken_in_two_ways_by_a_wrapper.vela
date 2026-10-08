@@ -1,4 +1,4 @@
-; error: 10:5: this task value takes value 1 of the group as a value, and another task value the call gives takes it as a place, 'hold&', so the call can't give it to both; give task values taking it the same way
+; error: 10:5: this task value takes value 1 of the group as a value, and another task value the call gives takes it as a place, 'flex&', so the call can't give it to both; give task values taking it the same way
 ; A wrapper value taking the group as values, where the wrapped task takes a place.
 task w<P...>(next: (P...) -> nothing, f: (P...) -> nothing, args: P...)
     f(args...)

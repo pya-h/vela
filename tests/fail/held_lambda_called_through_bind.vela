@@ -1,4 +1,4 @@
-; error: 11:45: 'tick' is a '[hold @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'hold' variable or a 'hold&', which 'tick' isn't
+; error: 11:45: 'tick' is a '[flex @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' variable or a 'flex&', which 'tick' isn't
 ; Calling a [flex @r] lambda changes what it keeps, so it is called through a place that changes.
 task main()
     region r

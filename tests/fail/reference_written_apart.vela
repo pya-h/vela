@@ -1,4 +1,4 @@
-; error: 4:11: a reference is written 'bind& y = &x', with '&' against 'bind'
+; error: 4:11: a reference is written 'fixed& y = &x', with '&' against 'fixed'
 task main()
     flex x = 1
     fixed &y = &x

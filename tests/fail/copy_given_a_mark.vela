@@ -1,4 +1,4 @@
-; error: 4:14: 'hold y' takes a copy, so leave out '&'; 'hold& y = &…' is another name for the place
+; error: 4:14: 'flex y' takes a copy, so leave out '&'; 'flex& y = &…' is another name for the place
 task main()
     flex x = 1
     flex y = &x

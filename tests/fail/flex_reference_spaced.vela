@@ -1,4 +1,4 @@
-; error: 6:10: a reference is written 'hold& y = &x', with '&' against 'hold'
+; error: 6:10: a reference is written 'flex& y = &x', with '&' against 'flex'
 ; 'flex&' is one word, as 'hold&' is, in a reference too.
 
 task main()

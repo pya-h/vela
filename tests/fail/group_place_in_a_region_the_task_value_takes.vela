@@ -1,4 +1,4 @@
-; error: 7:3: wrapper 'w' takes 'P' from a task value, where it is (hold& [int]@a, int), with '@a' a region that task value takes; which region that is only the body of 'w' says, when it gives the task value one, so 'P' can't be in it; write that type out in the header of 'w', with the region it takes as a parameter of its own, 'a: region', as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
+; error: 7:3: wrapper 'w' takes 'P' from a task value, where it is (flex& [int]@a, int), with '@a' a region that task value takes; which region that is only the body of 'w' says, when it gives the task value one, so 'P' can't be in it; write that type out in the header of 'w', with the region it takes as a parameter of its own, 'a: region', as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
 ; A group holding a place in a region the next task takes: the wrapper may give it another region.
 task w<P..., R>(next: (@a, P...) -> R, q: region, args: P...) -> R
     region tmp
