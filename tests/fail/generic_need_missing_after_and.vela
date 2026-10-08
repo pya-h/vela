@@ -1,4 +1,4 @@
-; error: 2:21: expected what the type must allow: 'frozen', 'same', 'shown', 'ordered'
+; error: 2:21: expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered'
 task tell<T: shown &>(value: T) -> T
     <- value
 fi

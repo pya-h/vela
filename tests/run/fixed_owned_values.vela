@@ -107,4 +107,22 @@ task main()
     ; A list a fixed name owns is read by a task that calls itself.
     fixed kept = push(r, push(r, none, 1), 2)
     show(sum(kept))
+
+    ; A map's keys and values are copied into a slice of their own, and a
+    ; lambda may read what it keeps to make something new.
+    fixed ages = ["ada": 36, "bo": 7]
+    flex who = ages.keys at r
+    who[0] = "cy"
+    flex years = ages.values at r
+    years[0] = 0
+    fixed doubled = [@r]() -> [int]@r
+        flex out = new [int]() at r
+        each x in xs
+            out.add(x * 2)
+        fi
+        <- out
+    fi
+    flex twice = doubled()
+    twice[0] = 0
+    show(who, " ", years, " ", ages["ada"], " ", twice, " ", xs)
 fi

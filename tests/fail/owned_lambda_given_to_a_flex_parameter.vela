@@ -1,0 +1,13 @@
+; error: 12:12: 'use' may change what its parameter 'f' sends back, so it can't be given a lambda that may send back what fixed 'xs' owns; take it as 'f' without 'flex', or have the lambda send back a copy, as in '<- xs.copy() at r'
+; A flex parameter's lambda gives what it sends back to a name that may change,
+; so it can't be given one that sends back what a fixed name owns.
+
+task use(r: region, flex f: [@r]() -> [int]@r)
+    show(f())
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    use(r, [@r]() -> [int]@r <- xs fi)
+fi

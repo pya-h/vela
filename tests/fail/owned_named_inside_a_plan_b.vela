@@ -1,0 +1,14 @@
+; error: 9:16: 'v' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; A plan B may declare a fixed name of its own and give it; that name owns what
+; it was given, after the plan B too.
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    flex m: maybe [int]@r = none
+    flex v = m {
+        fixed s = xs
+        s
+    }
+    show(v)
+fi

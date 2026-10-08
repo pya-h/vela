@@ -1,0 +1,15 @@
+; error: 13:15: 'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'f(…).copy() at r'
+; A task may send back a lambda that keeps its parameter, and the lambda then
+; sends back what the caller's fixed name owns.
+
+task keeper(r: region, xs: [int]@r) -> [@r]() -> [int]@r
+    <- [@r]() -> [int]@r <- xs fi
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    fixed f = keeper(r, xs)
+    flex ys = f()
+    show(ys)
+fi

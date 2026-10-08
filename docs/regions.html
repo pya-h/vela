@@ -1707,7 +1707,7 @@ chosen = item^.title
         <h3 id="limit-pattern">A name bound from a pointer-free value can't be given a pointer</h3>
         <pre><span class="keyword">region</span> a
 <span class="keyword">fixed</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
-<span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {n}
+<span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n}
     n^.next = q
     <span class="comment">; error: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), ...</span>
 <span class="keyword">fi</span></pre>
@@ -1967,7 +1967,7 @@ entities.remove(player)
       </div>
       <div class="idea">
         <h4>Typed patterns and region inference for bindings <span class="badge b-rec">Recommended</span></h4>
-        <pre><span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {n: ^Node@a}      <span class="comment">; the pattern names the region</span>
+        <pre><span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n: ^Node@a} <span class="comment">; the pattern names the region</span>
     n^.next = q
 <span class="keyword">fi</span>
 

@@ -1,0 +1,13 @@
+; error: 9:14: a '[flex @r]' lambda may change what its copies hold, so it can't keep a copy of fixed 'g', a lambda that may send back what a fixed name owns, and nothing changes through what a fixed name owns; make it a '[@r]' lambda
+; A '[flex @r]' lambda's copies may change, so it can't keep a lambda that sends
+; back what a fixed name owns.
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    fixed g = [@r]() -> [int]@r <- xs fi
+    flex k = [flex @r]() -> int
+        <- g().len
+    fi
+    show(k())
+fi

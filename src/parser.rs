@@ -4485,9 +4485,18 @@ fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
             Token::Hold => ("hold", "a variable that changes is written 'flex'"),
             _ => continue,
         };
+        let before = i.checked_sub(1).and_then(|at| tokens.get(at)).map(|(token, _, _)| *token);
+        // Where a line or a pattern starts, `(` may begin the names a variable's
+        // word takes apart, as in `fixed (a, b) = t` or `is flex(x, y)`.
+        let starts_line = matches!(before, None | Some(Token::Newline));
+        let starts = starts_line || matches!(before, Some(Token::Is | Token::Case | Token::Each | Token::Loop));
         let as_word = match tokens.get(i + 1) {
-            Some((Token::Ident(_) | Token::Amp | Token::AtSign, _, _)) => true,
-            Some((Token::LParen, next, _)) => next != end,
+            Some((Token::Ident(_) | Token::Amp, _, _)) => true,
+            // `[flex @r]`, a lambda's copies, and not a type such as `text@r`.
+            Some((Token::AtSign, _, _)) => matches!(before, Some(Token::LBracket)),
+            // Written against the word at a line's start, it is a call, as
+            // `hold(1)` is, unless the names are assigned to.
+            Some((Token::LParen, next, _)) => starts && (next != end || !starts_line || assigned_after(tokens, i + 1)),
             _ => false,
         };
         return Some(if as_word {
@@ -4499,10 +4508,29 @@ fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
     None
 }
 
+/// Whether the `(` at `open` in `tokens` closes with `)` and `=` after it.
+fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
+    let mut depth = 0;
+    for (at, (token, _, _)) in tokens.iter().enumerate().skip(open) {
+        match token {
+            Token::LParen => depth += 1,
+            Token::RParen => {
+                depth -= 1;
+                if depth == 0 {
+                    return matches!(tokens.get(at + 1), Some((Token::Assign, _, _)));
+                }
+            }
+            Token::Newline => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// The words a generic type can be asked to allow, for a message, from what
 /// most types allow to what fewest do.
 fn needs_list() -> String {
-    let words: Vec<String> = [Need::Frozen, Need::Same, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
+    let words: Vec<String> = [Need::Frozen, Need::Same, Need::Similar, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
 }
 

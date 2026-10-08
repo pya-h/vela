@@ -46,6 +46,13 @@ task squares(r: region, n: int) -> out: [int]@r
     fi
 fi
 
+; So are the values already in a result's map.
+task boxes(r: region) -> out: [text: Box]@r
+    out <- ["a": Box { items: [1, 2, ...] at r }] at r
+    out["a"].items[1] = 20
+    out["a"].poke(10)
+fi
+
 task main()
     region r default
     flex xs = [1, 2, 3, ...]
@@ -79,6 +86,7 @@ task main()
     show(b.items)
 
     show(squares(r, 4))
+    show(boxes(r)["a"].items)
 
     ; Values made where they are written.
     get(r)^.v = 3

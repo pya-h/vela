@@ -1,0 +1,17 @@
+; error: 8:20: 'ys' is given what fixed '.this' owns, and nothing changes through what a fixed name owns; give it a copy: '.items.copy() at r', in a region the task takes, as in 'r: region'
+; A method that names no region can't copy here, so the message says the copy
+; needs a region the task takes.
+
+shape Box
+    items: [int]
+    count() -> int
+        flex ys = .items
+        <- ys.len
+    fi
+fi
+
+task main()
+    region r default
+    fixed b = Box { items: [1, ...] }
+    show(b.count())
+fi

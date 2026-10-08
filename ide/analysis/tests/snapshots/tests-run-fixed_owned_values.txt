@@ -184,5 +184,39 @@
     | keyword:fixed  variable:kept  operator:=  task:push  punctuation:(  region:r  punctuation:,  task:push  punctuation:(  region:r  punctuation:,  keyword:none  punctuation:,  number:1  punctuation:)  punctuation:,  number:2  punctuation:)
 109 |     show(sum(kept))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:kept  punctuation:)  punctuation:)
-110 | fi
+111 |     ; A map's keys and values are copied into a slice of their own, and a
+    | comment:; A map's keys and values are copied into a slice of their own, and a
+112 |     ; lambda may read what it keeps to make something new.
+    | comment:; lambda may read what it keeps to make something new.
+113 |     fixed ages = ["ada": 36, "bo": 7]
+    | keyword:fixed  variable:ages  operator:=  punctuation:[  string:"ada"  punctuation::  number:36  punctuation:,  string:"bo"  punctuation::  number:7  punctuation:]
+114 |     flex who = ages.keys at r
+    | keyword:flex  variable:who  operator:=  variable:ages  punctuation:.  field:keys  keyword:at  region:r
+115 |     who[0] = "cy"
+    | variable:who  punctuation:[  number:0  punctuation:]  operator:=  string:"cy"
+116 |     flex years = ages.values at r
+    | keyword:flex  variable:years  operator:=  variable:ages  punctuation:.  field:values  keyword:at  region:r
+117 |     years[0] = 0
+    | variable:years  punctuation:[  number:0  punctuation:]  operator:=  number:0
+118 |     fixed doubled = [@r]() -> [int]@r
+    | keyword:fixed  variable:doubled  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+119 |         flex out = new [int]() at r
+    | keyword:flex  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+120 |         each x in xs
+    | keyword:each  variable:x  keyword:in  variable:xs
+121 |             out.add(x * 2)
+    | variable:out  punctuation:.  field:add  punctuation:(  variable:x  operator:*  number:2  punctuation:)
+122 |         fi
+    | keyword:fi
+123 |         <- out
+    | keyword:<-  variable:out
+124 |     fi
+    | keyword:fi
+125 |     flex twice = doubled()
+    | keyword:flex  variable:twice  operator:=  variable:doubled  punctuation:(  punctuation:)
+126 |     twice[0] = 0
+    | variable:twice  punctuation:[  number:0  punctuation:]  operator:=  number:0
+127 |     show(who, " ", years, " ", ages["ada"], " ", twice, " ", xs)
+    | builtin-fn:show  punctuation:(  variable:who  punctuation:,  string:" "  punctuation:,  variable:years  punctuation:,  string:" "  punctuation:,  variable:ages  punctuation:[  string:"ada"  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:twice  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:)
+128 | fi
     | keyword:fi

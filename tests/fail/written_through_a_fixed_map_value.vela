@@ -1,0 +1,13 @@
+; error: 12:5: cannot change 'm[…].x': nothing changes through immutable variable 'm', at any depth
+; Writing into a value already in a fixed map changes what the map holds, so it
+; is refused as any write through a fixed name is.
+
+shape Point
+    x: int
+fi
+
+task main()
+    region r default
+    fixed m = ["a": Point { x: 1 }]
+    m["a"].x = 3
+fi

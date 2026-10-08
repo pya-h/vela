@@ -118,6 +118,8 @@ fn an_old_word_written_as_a_variable_word_is_an_error_that_names_the_new_one() {
         ("task f(bind& n: int) -> int\n    <- n\nfi\n", 1, 8, fixed),
         ("task main()\n    fixed t = (1, 2)\n    bind (a, b) = t\nfi\n", 3, 5, fixed),
         ("task main()\n    region r\n    flex f = [hold @r]() -> int\n        <- 1\n    fi\nfi\n", 3, 15, flex),
+        ("task main()\n    fixed t = (1, 2)\n    bind(a, b) = t\nfi\n", 3, 5, fixed),
+        ("task main()\n    fixed t = (1, 2)\n    when t is hold(a, b)\n        show(a)\n    fi\nfi\n", 3, 15, flex),
     ] {
         assert_eq!(only_error(source), (line, col, message.to_string()), "{:?}", source);
     }
@@ -129,6 +131,8 @@ fn an_old_word_written_as_a_name_is_an_error_that_it_is_reserved() {
         ("task main()\n    fixed bind = 1\nfi\n", 2, 11, "bind"),
         ("task hold(n: int)\nfi\n", 1, 6, "hold"),
         ("task main()\n    fixed n = 1\n    show(\"{hold}\")\nfi\n", 3, 12, "hold"),
+        ("task main()\n    region r\n    fixed s: hold@r = \"a\" at r\nfi\n", 3, 14, "hold"),
+        ("task main()\n    show(hold (1))\nfi\n", 2, 10, "hold"),
     ] {
         assert_eq!(only_error(source), (line, col, format!("'{}' is a reserved word, so it can't be a name", word)), "{:?}", source);
     }
@@ -141,6 +145,10 @@ fn the_old_words_are_never_offered() {
         assert!(!offered.iter().any(|label| ["bind", "bind&", "hold", "hold&"].contains(&label.as_str())), "{:?}: {:?}", marked, offered);
     }
     assert!(labels("task main()\n    @@\nfi\n").iter().any(|label| label == "fixed"));
+    // Nothing follows a reserved word: the word is the error.
+    for marked in ["task main()\n    fixed x = 1\n    bind @@\nfi\n", "task main()\n    fixed x = 1\n    hold @@\nfi\n"] {
+        assert!(labels(marked).is_empty(), "{:?}: {:?}", marked, labels(marked));
+    }
 }
 
 #[test]
@@ -152,5 +160,5 @@ fn a_type_that_never_changes_is_asked_for_with_frozen() {
     let wrong = "shape Box<T: fixed>\n    value: T\nfi\n";
     let diagnostics = Analysis::new(wrong).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
-    assert_eq!(diagnostics[0].message, "expected what the type must allow: 'frozen', 'same', 'shown', 'ordered'");
+    assert_eq!(diagnostics[0].message, "expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered'");
 }

@@ -1,0 +1,19 @@
+; error: 14:14: 'v' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; A name a case binds is gone once the match gives its value, but what owns it
+; is kept, so the flex name given that value is refused.
+
+kind Held
+    Has(items: [int])
+    Empty
+fi
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    fixed held = Held.Has(xs)
+    flex v = match held
+        case Has items = items
+        case Empty = [0, ...]
+    fi
+    show(v)
+fi

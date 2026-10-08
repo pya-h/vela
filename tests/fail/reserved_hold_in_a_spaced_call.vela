@@ -1,0 +1,7 @@
+; error: 6:10: 'hold' is a reserved word, so it can't be a name
+; A call written with a space before its '(' is no variable's word, so the
+; message only says the word can't be a name.
+
+task main()
+    show(hold (1))
+fi

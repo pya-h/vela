@@ -103,7 +103,8 @@ enum Own {
     /// What `task` may send back of what its parameter `param` is given,
     /// which is given `from`.
     Sent { task: String, param: usize, from: Vec<Own> },
-    /// What a lambda that keeps what it uses keeps of the code around it.
+    /// What a lambda that keeps what it uses keeps of the code around it,
+    /// which a call of it may send back.
     Kept(String),
 }
 
@@ -136,6 +137,12 @@ struct Handed {
     to: HandedTo,
     /// The copy the message suggests instead, as in `xs.copy() at r`.
     copy: String,
+    /// Whether the value is a lambda, which holds no slice, map or pointer of
+    /// its own but may send back what it keeps when called.
+    lambda: bool,
+    /// Where no region is here to copy into: the one the copy names, which
+    /// the task would take.
+    no_region: Option<String>,
     /// In a generic task, where the value holds a slice, a map or a pointer
     /// only for some types it may be given: the task and the value's type,
     /// which each copy of the task fills in (see `Checker::copies`).
@@ -184,6 +191,8 @@ struct KeptLambda {
     uses: Vec<String>,
     /// The variables it keeps as places, `[flex& count, @r]`.
     places: Vec<KeptPlace>,
+    /// What owns each of `outer`, where it is written (see `Checker::owners`).
+    owned: HashMap<String, Vec<Own>>,
 }
 
 /// What a place an assignment writes to takes: nothing (`_`), a value of a
@@ -385,6 +394,10 @@ pub struct Checker {
     /// What the names about to be declared own, by where each is written,
     /// which `define` gives them (see `bind_from`).
     bound_owners: Vec<(Span, Vec<Own>)>,
+    /// What owns each variable read, by where it is read (its file, line and
+    /// column), noted while its name is known: a value block's last line may
+    /// read a name of its own, which is gone when the block's value is used.
+    read_owners: HashMap<(usize, usize, usize), Vec<Own>>,
     /// For each generic task, the types each copy made of it was given: as
     /// the program writes them, and by the name each fills in.
     copies: HashMap<String, Vec<GivenTypes>>,
@@ -4323,7 +4336,7 @@ impl Checker {
                     // A place that changes may not take what a fixed name owns.
                     let to = match targets.get(i) {
                         Some(Target::Place(Expr { kind: ExprKind::Var(name), .. })) => HandedTo::Variable(name.clone()),
-                        Some(Target::Place(place)) => HandedTo::Place(value_text(place)),
+                        Some(Target::Place(place)) => HandedTo::Place(self.value_text(place)),
                         _ => continue,
                     };
                     if let Some(value) = if forwarded { values.first() } else { values.get(i) } {
@@ -5097,15 +5110,22 @@ impl Checker {
     /// assignable place, and what a pointer points to or a slice's or map's
     /// item, reached from a name that changes (see `written_through`).
     fn check_assign_target(&mut self, expr: &mut Expr) -> Result<Type> {
+        self.check_place_target(expr, true)
+    }
+
+    /// `check_assign_target`, where `sets_key` says a map's item written is
+    /// set as `m[k] = v` sets it, which may add the key; `add` and `del` on a
+    /// slice kept in a map change the value already there.
+    fn check_place_target(&mut self, expr: &mut Expr, sets_key: bool) -> Result<Type> {
         // The place as written, for the error about a name it is reached from.
-        let written = place_path(expr).map_or_else(String::new, |path| path_text(&path));
-        let ty = self.check_written(expr, &written)?;
+        let written = self.written_text(expr);
+        let ty = self.check_written(expr, &written, sets_key)?;
         self.hand_written(expr, None);
         Ok(ty)
     }
 
     /// `check_assign_target` of `expr`, part of the place `written`, as written.
-    fn check_written(&mut self, expr: &mut Expr, written: &str) -> Result<Type> {
+    fn check_written(&mut self, expr: &mut Expr, written: &str, sets_key: bool) -> Result<Type> {
         let span = expr.span;
         match &mut expr.kind {
             ExprKind::Var(name) => {
@@ -5117,7 +5137,7 @@ impl Checker {
                     if name == THIS {
                         return Err(self.this_cannot_change(span, &format!("assigning '{}'", THIS)));
                     }
-                    return err(span, format!("cannot assign to immutable variable '{}'{}", name, param_hint(name, info)));
+                    return err(span, format!("cannot assign to immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 let ty = info.ty.clone();
                 expr.ty = Some(ty.clone());
@@ -5166,7 +5186,7 @@ impl Checker {
                     }
                     return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
                 }
-                let base_ty = self.check_item_base(base, written)?;
+                let base_ty = self.check_item_base(base, written, sets_key)?;
                 if matches!(base_ty, Type::Text(_)) {
                     return err(span, "a byte of text can't be assigned, since text never changes; build other text instead, as in 't = t[0..2] + \"x\" at r'");
                 }
@@ -5202,23 +5222,31 @@ impl Checker {
     /// type. An array holds its items, so it must be an assignable place
     /// itself; a slice's items are in a region, behind a pointer, and are
     /// written where the slice is reached from a name that changes, as what a
-    /// pointer points to is. `written` is the place assigned, as written.
-    fn check_item_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
+    /// pointer points to is. `written` is the place assigned, as written, and
+    /// `sets_key` says the item is set as `m[k] = v` sets it, which may add the
+    /// key; a write into a value already in a map changes what the map holds,
+    /// as a write into a slice's item does.
+    fn check_item_base(&mut self, base: &mut Expr, written: &str, sets_key: bool) -> Result<Type> {
         if let ExprKind::Var(name) = &base.kind {
             let info = self.lookup_or_err(name, base.span)?;
-            if matches!(info.ty, Type::Array(..) | Type::Map(..)) {
+            if matches!(info.ty, Type::Array(..)) || (sets_key && matches!(info.ty, Type::Map(..))) {
                 if info.result {
                     return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable && matches!(info.ty, Type::Map(..)) {
-                    return err(base.span, format!("'m[k] = v' changes '{}', which is immutable; keep the map in a 'flex' variable to change it{}", name, param_hint(name, info)));
+                    // A parameter's hint says how to write one that changes.
+                    let hint = match self.param_hint(name, info) {
+                        hint if hint.is_empty() => "; keep the map in a 'flex' variable to change it".to_string(),
+                        hint => hint,
+                    };
+                    return err(base.span, format!("'m[k] = v' changes '{}', which is immutable{}", name, hint));
                 }
                 if !info.mutable {
-                    return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
+                    return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
             }
             let ty = self.check_expr(base)?;
-            if matches!(ty, Type::Slice(..)) {
+            if matches!(ty, Type::Slice(..) | Type::Map(..)) {
                 self.written_through(base, written, None)?;
             }
             return Ok(ty);
@@ -5247,7 +5275,7 @@ impl Checker {
                     return err(place.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable {
-                    return err(place.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
+                    return err(place.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 Ok(())
             }
@@ -5292,7 +5320,7 @@ impl Checker {
                     Some(method) => format!("'{}' changes '{}', the value it is called on, and", method, written),
                     None => format!("cannot change '{}':", written),
                 };
-                err(place.span, format!("{} nothing changes through immutable variable '{}', at any depth{}", change, name, param_hint(name, info)))
+                err(place.span, format!("{} nothing changes through immutable variable '{}', at any depth{}", change, name, self.param_hint(name, info)))
             }
             ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Deref(base) => self.written_through(base, written, method),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
@@ -5315,19 +5343,12 @@ impl Checker {
         }
         let all = |values: &mut dyn Iterator<Item = &Expr>| values.flat_map(|value| self.owners(value)).collect::<Vec<Own>>();
         match &e.kind {
-            ExprKind::Var(name) => match self.lookup(name) {
-                Some(info) if !info.mutable && !info.result => {
-                    let mut owners = info.owners.clone();
-                    if holds {
-                        owners.push(match self.param_index.get(name).filter(|_| info.param) {
-                            Some(i) => Own::Param(*i, name.clone()),
-                            None => Own::Root(name.clone()),
-                        });
-                    }
-                    owners
-                }
-                _ => Vec::new(),
+            ExprKind::Var(name) => match self.read_owners.get(&(e.span.file, e.span.line, e.span.col)) {
+                Some(owners) => owners.clone(),
+                None => self.lookup(name).map_or_else(Vec::new, |info| self.name_owners(name, info)),
             },
+            // A `fixed&` argument is the place it names.
+            ExprKind::Ref(place) => self.owners(place),
             ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Lookup(base, _) | ExprKind::Deref(base) => self.owners(base),
             ExprKind::Call { name, args, .. } => self.call_owners(name, args),
             // A task value or a lambda's: what it was given, and what it keeps.
@@ -5341,8 +5362,15 @@ impl Checker {
             | ExprKind::Wrap(value)
             | ExprKind::Kept { value, .. }
             | ExprKind::Shortcut { value, .. }
-            | ExprKind::Spread(value) => self.owners(value),
-            ExprKind::MapOp { map, .. } => self.owners(map),
+            | ExprKind::Spread(value)
+            | ExprKind::Fail(value) => self.owners(value),
+            // Keys and values are copied into a slice of their own, which
+            // shares only what each of them holds.
+            ExprKind::MapOp { map, op, .. } => match (op, &map.ty) {
+                (MapOp::Keys, Some(Type::Map(key, _, _))) if self.holds_handle(key) => self.owners(map),
+                (MapOp::Values, Some(Type::Map(_, value, _))) if self.holds_handle(value) => self.owners(map),
+                _ => Vec::new(),
+            },
             // A copy of a map is a map of its own, at every depth, and so is a
             // slice copied of items that hold nothing; a slice copied of items
             // that hold a slice, a map or a pointer shares what they hold.
@@ -5372,6 +5400,27 @@ impl Checker {
         }
     }
 
+    /// What owns the value of the variable `name`, with `info`, where it never
+    /// changes: what it was given, and the name itself where its value holds a
+    /// slice, a map or a pointer. A lambda kept in a variable is followed to
+    /// what it keeps, from what it was given; one that is a parameter may
+    /// send back anything the caller's lambda keeps.
+    fn name_owners(&self, name: &str, info: &VarInfo) -> Vec<Own> {
+        if info.mutable || info.result {
+            return Vec::new();
+        }
+        let mut owners = info.owners.clone();
+        let ty = info.ty.clone();
+        let index = self.param_index.get(name).filter(|_| info.param);
+        if self.holds_handle(&ty) && (index.is_some() || !self.only_lambdas(&ty)) {
+            owners.push(match index {
+                Some(i) => Own::Param(*i, name.to_string()),
+                None => Own::Root(name.to_string()),
+            });
+        }
+        owners
+    }
+
     /// Where the value a call of `task` given `args` gives back may come
     /// from: what the task may send back of each argument (see `Own::Sent`).
     /// A call whose arguments aren't one for each parameter, as one giving a
@@ -5391,6 +5440,68 @@ impl Checker {
             .collect()
     }
 
+    /// The hint for a variable that never changes, `name` with `info`, where a
+    /// change is refused (see `param_hint_for`).
+    fn param_hint(&self, name: &str, info: &VarInfo) -> String {
+        param_hint_for(name, info, holds_pointers(&info.ty, &self.regional))
+    }
+
+    /// The value a message suggests copying: `value` as written, or its owner
+    /// (`OWNER_MARK`) where it has no short text, as `[a, b]` hasn't, or is a
+    /// plan B, which may give another value.
+    fn copied_text(&self, value: &Expr) -> String {
+        match self.value_text(value) {
+            // A plan B's own value may be what its block gives.
+            _ if matches!(value.kind, ExprKind::PlanB { .. }) => OWNER_MARK.to_string(),
+            text if text == "…" => OWNER_MARK.to_string(),
+            text => text,
+        }
+    }
+
+    /// A value as a message names it: a place as written, a call by its task's
+    /// name (a method by what it is called on, or its shape's name if shared),
+    /// or a plan B by its value.
+    fn value_text(&self, e: &Expr) -> String {
+        if let Some(path) = place_path(e) {
+            return path_text(&path);
+        }
+        match &e.kind {
+            ExprKind::Call { name, args, .. } => {
+                let shared = self.tasks.get(name).and_then(|info| info.owner.as_ref()).is_some_and(|owner| owner.shared);
+                match (method_parts(name), args.first()) {
+                    (Some(_), _) if shared => format!("{}(…)", called_name(name)),
+                    (Some((_, method)), Some(value)) => format!("{}.{}(…)", self.value_text(value), method),
+                    _ => format!("{}(…)", name),
+                }
+            }
+            ExprKind::Invoke { callee, .. } => format!("{}(…)", self.value_text(callee)),
+            ExprKind::MethodCall { name, .. } => format!("….{}(…)", name),
+            ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Kept { value, .. } => self.value_text(value),
+            ExprKind::Lookup(base, index) => match index.kind {
+                ExprKind::IntLit(n) => format!("{}[#{}]", self.value_text(base), n),
+                _ => format!("{}[#…]", self.value_text(base)),
+            },
+            _ => "…".to_string(),
+        }
+    }
+
+    /// A place as a message quotes it, as `path_text` writes it, where a part
+    /// taken of a value on the way (`xs[0..2][0]`) is an item too.
+    fn written_text(&self, e: &Expr) -> String {
+        if let Some(path) = place_path(e) {
+            return path_text(&path);
+        }
+        match &e.kind {
+            ExprKind::Field(base, field) => format!("{}.{}", self.written_text(base), field),
+            ExprKind::Index(base, index) => match index.kind {
+                ExprKind::IntLit(n) => format!("{}[{}]", self.written_text(base), n),
+                _ => format!("{}[…]", self.written_text(base)),
+            },
+            ExprKind::Deref(base) => format!("{}^", self.written_text(base)),
+            _ => self.value_text(e),
+        }
+    }
+
     /// Notes that `value`, already checked, is given to `to`, which may change
     /// what it holds: an error, once every task is checked, if a fixed name
     /// owns it (see `settle_owners`).
@@ -5408,33 +5519,67 @@ impl Checker {
         }
         let owners = self.owners(value);
         if !owners.is_empty() {
-            let copy = format!("{}.copy() at {}", copied_text(value), copy_region(ty));
-            let generic = self.generic_part(ty);
-            self.handed.push(Handed { span: value.span, owners, to, copy, generic });
+            // Several values sent by one call are no one value to copy.
+            let copied = if matches!(value.ty, Some(Type::Results(_))) { OWNER_MARK.to_string() } else { self.copied_text(value) };
+            let handed = self.handed(value.span, owners, to, &copied, ty);
+            self.handed.push(handed);
         }
     }
 
-    /// Whether a value of type `ty` holds a slice, a map or a pointer, which
-    /// another name may share; for several values, whether any of them does.
-    fn holds_handle(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Results(items) => items.iter().any(|item| self.holds_handle(item)),
-            _ => holds_pointers(ty, &self.regional) || self.may_hold(ty),
+    /// A value of type `ty` given at `span` to `to`, with what owns it; the
+    /// message suggests a copy of `copied`, or of the owner (`OWNER_MARK`)
+    /// for a lambda, whose value can't be copied.
+    fn handed(&self, span: Span, owners: Vec<Own>, to: HandedTo, copied: &str, ty: &Type) -> Handed {
+        let lambda = self.only_lambdas(ty);
+        let copied = if lambda { OWNER_MARK } else { copied };
+        let (region, none_here) = match ty {
+            Type::Closure(closure) => self.copy_region_here(&closure.task.ret),
+            _ => self.copy_region_here(ty),
+        };
+        let copy = format!("{}.copy() at {}", copied, region);
+        let no_region = none_here.then_some(region);
+        Handed { span, owners, to, copy, lambda, no_region, generic: self.generic_part(ty) }
+    }
+
+    /// The region a suggested copy of a value of type `ty` goes in: the one
+    /// its type names, where the code here may allocate in it, or else the
+    /// innermost region here; and whether there is none here, so the region
+    /// the copy names is one the task would take.
+    fn copy_region_here(&self, ty: &Type) -> (String, bool) {
+        let usable = |name: &str| self.lookup(name).is_some_and(|info| info.ty == Type::Region && info.allocates);
+        if let Some(region) = ty.regions().into_iter().find(|region| !unnamed_region(region) && *region != THIS_WORD && usable(region)) {
+            return (region.to_string(), false);
         }
+        let here = self.scopes.iter().rev().flat_map(|scope| scope.names.iter()).find(|(name, info)| info.ty == Type::Region && info.allocates && !unnamed_region(name) && *name != THIS_WORD);
+        here.map_or_else(|| (copy_region(ty).to_string(), true), |(name, _)| (name.clone(), false))
+    }
+
+    /// Whether a value of type `ty` holds a slice, a map or a pointer, which
+    /// another name may share, or is a lambda that may send one back; for
+    /// several values, whether any of them does.
+    fn holds_handle(&self, ty: &Type) -> bool {
+        shares_handle(ty, &self.regional, true) || self.may_hold(ty, true)
+    }
+
+    /// Whether a value of type `ty` holds a slice, a map or a pointer only
+    /// through lambdas that may send one back.
+    fn only_lambdas(&self, ty: &Type) -> bool {
+        self.holds_handle(ty) && !shares_handle(ty, &self.regional, false) && !self.may_hold(ty, false)
     }
 
     /// Whether `ty` holds a type the generic task being checked takes, which
     /// may be given one that holds a slice, a map or a pointer: any but one
-    /// that must be `frozen`.
-    fn may_hold(&self, ty: &Type) -> bool {
+    /// that must be `frozen`. With `lambdas`, also one a lambda sends back.
+    fn may_hold(&self, ty: &Type, lambdas: bool) -> bool {
         match ty {
             Type::Param(name) | Type::Named(name, _) => {
                 self.type_params.iter().any(|param| param.name == *name && !param.needs.iter().any(|(need, _)| *need == Need::Frozen))
             }
-            Type::Applied(applied) => applied.types.iter().any(|ty| self.may_hold(ty)),
-            Type::Maybe(inner) | Type::Array(inner, _) => self.may_hold(inner),
-            Type::Or(value, error) => self.may_hold(value) || self.may_hold(error),
-            Type::Tuple(items) | Type::Results(items) => items.iter().any(|item| self.may_hold(item)),
+            Type::Applied(applied) => applied.types.iter().any(|ty| self.may_hold(ty, lambdas)),
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) => self.may_hold(inner, lambdas),
+            Type::Or(value, error) => self.may_hold(value, lambdas) || self.may_hold(error, lambdas),
+            Type::Tuple(items) | Type::Results(items) => items.iter().any(|item| self.may_hold(item, lambdas)),
+            Type::Closure(closure) => lambdas && self.may_hold(&closure.task.ret, lambdas),
             _ => false,
         }
     }
@@ -5443,7 +5588,7 @@ impl Checker {
     /// some types the generic task being checked may be given: the task, and
     /// the type its copies fill in.
     fn generic_part(&self, ty: &Type) -> Option<(String, Type)> {
-        (!holds_pointers(ty, &self.regional) && self.may_hold(ty)).then(|| (self.current_task.clone(), ty.clone()))
+        (!shares_handle(ty, &self.regional, true) && self.may_hold(ty, true)).then(|| (self.current_task.clone(), ty.clone()))
     }
 
     /// The names a pattern binds, `bindings`, from `source`, already checked:
@@ -5459,9 +5604,8 @@ impl Checker {
                 continue;
             }
             if *mutable {
-                let copy = format!("{}.copy() at {}", copied_text(source), copy_region(ty));
-                let generic = self.generic_part(ty);
-                self.handed.push(Handed { span: *at, owners: owners.clone(), to: HandedTo::Variable(name.clone()), copy, generic });
+                let handed = self.handed(*at, owners.clone(), HandedTo::Variable(name.clone()), &self.copied_text(source), ty);
+                self.handed.push(handed);
             } else {
                 self.bound_owners.push((*at, owners.clone()));
             }
@@ -5469,11 +5613,9 @@ impl Checker {
     }
 
     /// Notes what this task's `<-` sends may come from, which a call of it
-    /// gives back (see `Own::Sent`).
+    /// gives back (see `Own::Sent`); for a lambda, what a call of its value
+    /// gives back (see `Own::Kept`).
     fn note_sent(&mut self, values: &[Expr]) {
-        if is_lambda(&self.current_task) {
-            return;
-        }
         let sent: Vec<Own> = values.iter().flat_map(|value| self.owners(value)).collect();
         if !sent.is_empty() {
             self.sends.entry(self.current_task.clone()).or_default().extend(sent);
@@ -5492,7 +5634,7 @@ impl Checker {
         if matches!(root.kind, ExprKind::Var(_) | ExprKind::Shared { .. }) || std::ptr::eq(root, place) {
             return;
         }
-        let made = value_text(root);
+        let made = self.value_text(root);
         let lead = match method {
             Some(method) => format!("'{}' changes what '{}' gives back", method, made),
             None => format!("cannot change what '{}' gives back", made),
@@ -5500,7 +5642,7 @@ impl Checker {
         let owners = self.owners(root);
         if !owners.is_empty() {
             let generic = root.ty.as_ref().and_then(|ty| self.generic_part(ty));
-            self.handed.push(Handed { span: root.span, owners, to: HandedTo::Written(lead), copy: String::new(), generic });
+            self.handed.push(Handed { span: root.span, owners, to: HandedTo::Written(lead), copy: String::new(), lambda: false, no_region: None, generic });
         }
     }
 
@@ -5538,23 +5680,39 @@ impl Checker {
             let given = match &handed.generic {
                 None => String::new(),
                 Some((task, ty)) => {
-                    let copy = self.copies.get(task).and_then(|copies| copies.iter().find(|(_, given)| holds_pointers(&in_copy(ty, given), &self.regional)));
+                    let copy = self.copies.get(task).and_then(|copies| copies.iter().find(|(_, given)| shares_handle(&in_copy(ty, given), &self.regional, true)));
                     let Some((types, _)) = copy else { continue };
                     let types: Vec<String> = types.iter().map(|ty| ty.without_regions().to_string()).collect();
                     format!(", where '{}' is given {}", unqualified(task), types.join(", "))
                 }
             };
-            let owner_text = if owner == THIS { THIS_WORD.to_string() } else { owner.clone() };
-            let handed = Handed { copy: handed.copy.replace(OWNER_MARK, &owner_text), ..handed.clone() };
+            let owner_text = owner.clone();
+            let copy = handed.copy.replace(OWNER_MARK, &owner_text);
+            // Where no region is here, the copy goes in one the task would take.
+            let region = handed.no_region.as_ref().map_or_else(String::new, |region| format!(", in a region the task takes, as in '{}: region'", region));
             let rule = "nothing changes through what a fixed name owns";
+            // A lambda's value can't be copied, but what it sends back can.
+            let lambda = format!("a lambda that may send back what fixed '{}' owns", owner_text);
+            let send_copy = format!("have the lambda send back a copy, as in '<- {}'{}", copy, region);
             let message = match &handed.to {
-                HandedTo::Variable(name) => format!("'{}' is given what fixed '{}' owns, and {}; give it a copy: '{}'", name, owner_text, rule, handed.copy),
-                HandedTo::Param { task, param } => {
-                    let keep = if of_param { format!("take '{0}' as 'flex {0}'", owner_text) } else { format!("keep '{}' in a flex variable", owner_text) };
-                    format!("'{}' changes what its parameter '{}' reaches, so it can't be given what fixed '{}' owns; give it a copy, '{}', or {}", task, param, owner_text, handed.copy, keep)
+                HandedTo::Variable(name) if handed.lambda => format!("'{}' is given {}, and {}; make '{}' fixed, or {}", name, lambda, rule, name, send_copy),
+                HandedTo::Param { task, param } if handed.lambda => {
+                    format!("'{}' may change what its parameter '{}' sends back, so it can't be given {}; take it as '{}' without 'flex', or {}", task, param, lambda, param, send_copy)
                 }
-                HandedTo::Place(place) => format!("'{}' changes, so it can't be given what fixed '{}' owns: {}; give it a copy: '{}'", place, owner_text, rule, handed.copy),
-                HandedTo::Result(name) => format!("'{}' is a result, which the task may change, so it can't be given what fixed '{}' owns; give it a copy: '{}'", name, owner_text, handed.copy),
+                HandedTo::Place(place) if handed.lambda => format!("'{}' changes, so it can't be given {}: {}; {}", place, lambda, rule, send_copy),
+                HandedTo::Result(name) if handed.lambda => format!("'{}' is a result, which the task may change, so it can't be given {}; {}", name, lambda, send_copy),
+                HandedTo::Variable(name) => format!("'{}' is given what fixed '{}' owns, and {}; give it a copy: '{}'{}", name, owner_text, rule, copy, region),
+                HandedTo::Param { task, param } => {
+                    let keep = match of_param {
+                        // `.this` changes in an `alters` method.
+                        true if owner == THIS => "make the method 'alters'".to_string(),
+                        true => format!("take '{0}' as 'flex {0}'", owner_text),
+                        false => format!("keep '{}' in a flex variable", owner_text),
+                    };
+                    format!("'{}' changes what its parameter '{}' reaches, so it can't be given what fixed '{}' owns; give it a copy, '{}'{}, or {}", task, param, owner_text, copy, region, keep)
+                }
+                HandedTo::Place(place) => format!("'{}' changes, so it can't be given what fixed '{}' owns: {}; give it a copy: '{}'{}", place, owner_text, rule, copy, region),
+                HandedTo::Result(name) => format!("'{}' is a result, which the task may change, so it can't be given what fixed '{}' owns; give it a copy: '{}'{}", name, owner_text, copy, region),
                 HandedTo::Written(lead) => format!("{}: it is what fixed '{}' owns, and {}, at any depth", lead, owner_text, rule),
             };
             // The types a generic task is given that make it so, after its owner.
@@ -5565,17 +5723,24 @@ impl Checker {
         for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
             for name in &kept.uses {
                 let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
-                if info.mutable || info.result || !holds_pointers(&info.ty, &self.regional) {
+                if info.mutable || info.result || !shares_handle(&info.ty, &self.regional, true) {
                     continue;
                 }
-                let copy = format!("{}.copy() at {}", name, copy_region(&info.ty));
-                errors.push(Error::at(
-                    kept.span,
+                let rule = "nothing changes through what a fixed name owns";
+                // A lambda kept may send back what it keeps, and can't be copied.
+                let message = if self.only_lambdas(&info.ty) {
+                    format!(
+                        "a '[flex @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', a lambda that may send back what a fixed name owns, and {2}; make it a '[@{1}]' lambda",
+                        name, kept.region, rule
+                    )
+                } else {
+                    let copy = format!("{}.copy() at {}", name, copy_region(&info.ty));
                     format!(
                         "a '[flex @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', and {3}; make it a '[@{1}]' lambda, or keep a copy of its own, as in 'flex mine = {2}', and use that",
-                        name, kept.region, copy, "nothing changes through what a fixed name owns"
-                    ),
-                ));
+                        name, kept.region, copy, rule
+                    )
+                };
+                errors.push(Error::at(kept.span, message));
             }
         }
         // One place may be checked more than once, in a generic task's copies.
@@ -5590,7 +5755,8 @@ impl Checker {
         owners.iter().any(|own| match own {
             Own::Param(i, _) => *i == param,
             Own::Sent { task, param: given, from } => self.may_send_back(task, *given, sends_back) && self.reaches_param(from, param, sends_back),
-            Own::Root(_) | Own::Kept(_) => false,
+            Own::Kept(lambda) => self.reaches_param(&self.lambda_sends(lambda), param, sends_back),
+            Own::Root(_) => false,
         })
     }
 
@@ -5606,17 +5772,40 @@ impl Checker {
             Own::Root(name) => Some((name.clone(), false)),
             Own::Param(_, name) => Some((name.clone(), true)),
             Own::Sent { task, param, from } => self.may_send_back(task, *param, sends_back).then(|| self.owner_of_handed(from, sends_back)).flatten(),
-            Own::Kept(lambda) => {
-                let kept = self.kept_lambdas.get(lambda)?;
-                kept.uses.iter().find_map(|name| {
-                    let (_, info) = kept.outer.iter().find(|(outer, _)| outer == name)?;
-                    if info.mutable || info.result || !holds_pointers(&info.ty, &self.regional) {
-                        return self.owner_of_handed(&info.owners, sends_back);
-                    }
-                    Some((name.clone(), false))
-                })
-            }
+            Own::Kept(lambda) => self.owner_of_handed(&self.lambda_sends(lambda), sends_back),
         })
+    }
+
+    /// What a call of `lambda`'s value may give back, as the code where it is
+    /// written owns it: its sends, where each copy it keeps is what owns that
+    /// variable there. What the lambda makes, and its parameters, which its
+    /// caller gives, are no one's there.
+    fn lambda_sends(&self, lambda: &str) -> Vec<Own> {
+        let Some(kept) = self.kept_lambdas.get(lambda) else { return Vec::new() };
+        let sent = self.sends.get(lambda).map_or(&[][..], Vec::as_slice);
+        self.around_lambda(kept, lambda, sent)
+    }
+
+    /// `owners`, noted in `lambda` (kept as `kept`), as the code where it is
+    /// written owns them: a copy by what owns its variable there, a lambda
+    /// written inside this one by what it sends, and what the copies were
+    /// given there as it is.
+    fn around_lambda(&self, kept: &KeptLambda, lambda: &str, owners: &[Own]) -> Vec<Own> {
+        owners
+            .iter()
+            .flat_map(|own| match own {
+                Own::Root(name) => kept.owned.get(name).cloned().unwrap_or_default(),
+                Own::Param(..) => Vec::new(),
+                Own::Sent { task, param, from } => {
+                    let from = self.around_lambda(kept, lambda, from);
+                    if from.is_empty() { Vec::new() } else { vec![Own::Sent { task: task.clone(), param: *param, from }] }
+                }
+                Own::Kept(inner) if self.kept_lambdas.get(inner).is_some_and(|inner| inner.within.as_deref() == Some(lambda)) => {
+                    self.around_lambda(kept, lambda, &self.lambda_sends(inner))
+                }
+                Own::Kept(_) => vec![own.clone()],
+            })
+            .collect()
     }
 
     /// Checks the base of an assigned field, which must itself be an
@@ -5639,11 +5828,11 @@ impl Checker {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if is_shape && !info.mutable {
-                    return err(span, format!("cannot assign to a field of immutable variable '{}'{}", name, param_hint(name, info)));
+                    return err(span, format!("cannot assign to a field of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 self.check_expr(base)
             }
-            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_written(base, written),
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_written(base, written, false),
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
     }
@@ -5769,6 +5958,14 @@ impl Checker {
         let ty = self.infer_expr(expr)?;
         if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. } | ExprKind::New { .. }) {
             self.warn_char_array(&ty, expr.span);
+        }
+        if let ExprKind::Var(name) = &expr.kind
+            && let Some(info) = self.lookup(name)
+        {
+            let owners = self.name_owners(name, info);
+            if !owners.is_empty() {
+                self.read_owners.insert((expr.span.file, expr.span.line, expr.span.col), owners);
+            }
         }
         expr.ty = Some(ty.clone());
         Ok(ty)
@@ -7350,7 +7547,8 @@ impl Checker {
         self.lambda_outer.insert(lambda.to_string(), names);
         self.note_lambda_loops(lambda);
         let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
-        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), flex, span, outer, within, uses: Vec::new(), places: places.to_vec() });
+        let owned = outer.iter().map(|(name, info)| (name.clone(), self.name_owners(name, info))).collect();
+        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), flex, span, outer, within, uses: Vec::new(), places: places.to_vec(), owned });
         self.kept_order.retain(|name| name != lambda);
         self.kept_order.push(lambda.to_string());
         if self.broken.contains(lambda) {
@@ -9064,7 +9262,7 @@ impl Checker {
                     }
                     if info.param || info.refers.is_some() {
                         let what = if info.param { "a parameter, which never changes" } else { "a 'fixed&'" };
-                        return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, param_hint(&name, info)));
+                        return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, self.param_hint(&name, info)));
                     }
                     let what = if matches!(info.ty, Type::Map(..)) { "map" } else { "slice" };
                     return err(items.span, format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what));
@@ -9079,7 +9277,7 @@ impl Checker {
                 );
             }
             // The place is checked as an assignment's is: the slice is written.
-            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_assign_target(items).map_err(|mut error| {
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_place_target(items, false).map_err(|mut error| {
                 // Said of this change rather than of an assignment.
                 if let Some(rest) = error.message.strip_prefix("cannot assign to ") {
                     error.message = format!("'{}' can't change {}", word, rest);
@@ -9152,7 +9350,7 @@ impl Checker {
         self.check_expr(value)?;
         self.coerce(value, &item)?;
         // The slice changes, so it may not take what a fixed name owns.
-        self.hand(value, HandedTo::Place(value_text(items)));
+        self.hand(value, HandedTo::Place(self.value_text(items)));
         // Adding may need more room, which comes from the slice's region.
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
@@ -10653,8 +10851,7 @@ impl Checker {
     /// the same places an assignment writes to. Its type is already checked, so
     /// this only says why a place can't.
     fn altered_place(&self, value: &Expr, method: &str) -> Result<()> {
-        let written = place_path(value).map_or_else(String::new, |path| path_text(&path));
-        self.altered_part(value, method, &written)
+        self.altered_part(value, method, &self.written_text(value))
     }
 
     /// `altered_place` of `value`, part of the place `written`, as written.
@@ -11601,6 +11798,11 @@ impl Checker {
     /// a place that can change, as an assignment writes to, other than an item
     /// of a slice, which may move when the slice grows.
     fn given_place(&self, place: &Expr, taker: &Taker) -> Result<()> {
+        self.given_part(place, taker, &self.written_text(place))
+    }
+
+    /// `given_place` of `place`, part of the place `written`, as written.
+    fn given_part(&self, place: &Expr, taker: &Taker, written: &str) -> Result<()> {
         let refuse = |why: String| err(place.span, format!("{}, so {}", taker.lead(), why));
         match &place.kind {
             ExprKind::Var(name) => {
@@ -11643,7 +11845,7 @@ impl Checker {
                     Some(ty) => self.read_only_field(ty, field, place.span)?,
                     None => {}
                 }
-                self.given_place(base, taker)
+                self.given_part(base, taker, written)
             }
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
                 refuse("it needs a place that can change, and a part taken of a value is a new value, not a place".to_string())
@@ -11658,9 +11860,9 @@ impl Checker {
                         .to_string(),
                 ),
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
-                _ => self.given_place(base, taker),
+                _ => self.given_part(base, taker, written),
             },
-            ExprKind::Deref(pointer) => self.written_through(pointer, &place_path(place).map_or_else(String::new, |path| path_text(&path)), None),
+            ExprKind::Deref(pointer) => self.written_through(pointer, written, None),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
             _ => refuse("it needs a place that can change: a 'flex' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }
@@ -13422,6 +13624,21 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
         Type::Tuple(items) => items.iter().any(|item| holds_pointers(item, regional)),
         _ => false,
+    }
+}
+
+/// Whether a value of type `ty` holds a slice, a map or a pointer another
+/// name may share, given the shapes and kinds in `regional` that do, or what
+/// `fail` sends holds one; with `lambdas`, also a lambda whose call may send
+/// one back. A field can't hold a lambda that keeps what it uses, so a shape
+/// or kind holds none.
+fn shares_handle(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
+    match ty {
+        Type::Results(items) | Type::Tuple(items) => items.iter().any(|item| shares_handle(item, regional, lambdas)),
+        Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) => shares_handle(inner, regional, lambdas),
+        Type::Or(value, error) => shares_handle(value, regional, lambdas) || shares_handle(error, regional, lambdas),
+        Type::Closure(closure) => lambdas && shares_handle(&closure.task.ret, regional, lambdas),
+        _ => holds_pointers(ty, regional),
     }
 }
 
@@ -15318,33 +15535,6 @@ fn copy_region(ty: &Type) -> &str {
 /// own, as a literal holding it (see `copied_text`).
 const OWNER_MARK: &str = "\u{0}";
 
-/// The value a message suggests copying: `value` as written, or its owner
-/// (`OWNER_MARK`) where it has no short text, as `[a, b]` hasn't.
-fn copied_text(value: &Expr) -> String {
-    match value_text(value) {
-        text if text == "…" => OWNER_MARK.to_string(),
-        text => text,
-    }
-}
-
-/// A value as a message names it: a place as written, a call by its task's
-/// name, or a plan B by its value.
-fn value_text(e: &Expr) -> String {
-    if let Some(path) = place_path(e) {
-        return path_text(&path);
-    }
-    match &e.kind {
-        ExprKind::Call { name, args, .. } => match (method_parts(name), args.first()) {
-            (Some((_, method)), Some(value)) => format!("{}.{}(…)", value_text(value), method),
-            _ => format!("{}(…)", unqualified(name)),
-        },
-        ExprKind::Invoke { callee, .. } => format!("{}(…)", value_text(callee)),
-        ExprKind::MethodCall { name, .. } => format!("….{}(…)", name),
-        ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Kept { value, .. } => value_text(value),
-        _ => "…".to_string(),
-    }
-}
-
 /// The values a loop that gives one may give: its last line's, and every
 /// `break = v` in it.
 fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
@@ -15866,8 +16056,9 @@ fn chosen_message(what: &str, name: &str, ty: &Type, declared: &Type, size: usiz
 }
 
 /// The end of the message for changing a parameter that never changes: how to
-/// write one the task may change. Empty for anything else.
-fn param_hint(name: &str, info: &VarInfo) -> String {
+/// write one the task may change, and, with `shares`, that its copy still
+/// names what the caller's value holds. Empty for anything else.
+fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
     if info.kept && info.passing == Passing::FixedRef {
         return format!("; this lambda keeps '{0}' as 'fixed& {0}', which only reads it, and one that changes it keeps it as 'flex& {0}'", name);
     }
@@ -15888,6 +16079,7 @@ fn param_hint(name: &str, info: &VarInfo) -> String {
         Type::Slice(..) => "the task's own copy of the slice, whose items are the caller's",
         Type::Map(..) => "the task's own copy of the map, which names the caller's map",
         Type::Ptr(..) => "the task's own copy of the pointer, which points to the caller's value",
+        _ if shares => "the task's own copy, whose slices, maps and pointers name what the caller's do",
         _ => "and is the task's own copy",
     };
     format!("; a parameter that changes is written 'flex {}: {}', {}", name, info.ty, own)

@@ -1,4 +1,4 @@
-; error: 7:18: 'y' is given what fixed 'other' owns, where 'Box.look' is given [int], and nothing changes through what a fixed name owns; give it a copy: 'other.copy() at r'
+; error: 7:18: 'y' is given what fixed 'other' owns, where 'Box.look' is given [int], and nothing changes through what a fixed name owns; give it a copy: 'other.copy() at r', in a region the task takes, as in 'r: region'
 ; So is a method of a shape that takes types.
 
 shape Box<T>

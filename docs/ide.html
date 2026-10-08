@@ -430,7 +430,7 @@ Press Ctrl+C to stop.</pre>
             hover with the type of the value in their place (a tuple's item, for a name that takes one apart), and the
             names in the <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code> and
             <code>shape Box&lt;T&gt;</code>. After a <code>:</code> or an <code>&amp;</code> inside those
-            <code>&lt; &gt;</code>, only the four words a type can be asked to allow are offered, and inside the
+            <code>&lt; &gt;</code>, only the five words a type can be asked to allow are offered, and inside the
             <code>&lt; &gt;</code> of a call or of a shape given types, the types are.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
@@ -445,7 +445,8 @@ Press Ctrl+C to stop.</pre>
             a shared field hovers as <code>shared flex made: int</code>, saying who may change it, and a shared method
             as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
             <code>flex</code> and <code>flex&amp;</code>, which make the parameter the task's own copy to change, or
-            the caller's place; such a parameter hovers as <code>flex n: int</code> or <code>flex&amp; n: int</code>,
+            the caller's place, and <code>fixed</code> and <code>fixed&amp;</code>, a copy or the caller's place, only
+            read; such a parameter hovers as <code>flex n: int</code> or <code>flex&amp; n: int</code>,
             and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
             <code>flex&amp; y = &amp;x</code> or <code>fixed&amp; y = &amp;x</code>, hovers as <code>flex&amp; y: int</code>
             or <code>fixed&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.

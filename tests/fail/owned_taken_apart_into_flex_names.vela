@@ -1,4 +1,4 @@
-; error: 16:17: 'p' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'pair(…).copy() at r'
+; error: 16:17: 'p' is given what fixed 'a' owns, and nothing changes through what a fixed name owns; give it a copy: 'a.copy() at r'
 ; Names that take a tuple apart, written flex.
 
 shape Node

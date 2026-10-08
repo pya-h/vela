@@ -1,0 +1,9 @@
+; error: 7:14: 'hold' is a reserved word, so it can't be a name
+; A type with a region written against it is no variable's word, so the
+; message only says the word can't be a name.
+
+task main()
+    region r
+    fixed s: hold@r = "a" at r
+    show(s)
+fi

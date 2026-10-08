@@ -61,7 +61,7 @@ fn a_flex_parameter_is_a_parameter_whose_hover_says_it_changes() {
         let (code, doc) = hover(&source, "n: int");
         assert_eq!(code, "flex n: int", "{}", when);
         assert!(doc.starts_with("A parameter of task countdown."), "{}: {}", when, doc);
-        assert!(doc.contains("the caller's value never does"), "{}: {}", when, doc);
+        assert!(doc.contains("the caller's variable never does"), "{}: {}", when, doc);
         // Where it is used, too, and a plain one beside it says nothing of the kind.
         assert_eq!(hover(&source, "n > 0").0, "flex n: int", "{}", when);
         assert_eq!(hover(&source, "step: int").0, "step: int", "{}", when);

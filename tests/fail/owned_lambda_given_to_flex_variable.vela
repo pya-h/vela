@@ -1,0 +1,10 @@
+; error: 8:14: 'f' is given a lambda that may send back what fixed 'xs' owns, and nothing changes through what a fixed name owns; make 'f' fixed, or have the lambda send back a copy, as in '<- xs.copy() at r'
+; A lambda that sends back what it keeps of a fixed name can't be kept by a
+; flex name, which would give a flex name what the lambda sends back.
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    flex f = [@r]() -> [int]@r <- xs fi
+    show(f())
+fi

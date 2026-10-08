@@ -1,0 +1,17 @@
+; error: 16:11: cannot change 'p^.x': nothing changes through immutable variable 'p', at any depth
+; A place reached through a fixed pointer can't be given to a 'flex&'
+; parameter, and the message quotes the whole place given.
+
+shape Point
+    x: int
+fi
+
+task bump(flex& n: int)
+    n = n + 1
+fi
+
+task main()
+    region r default
+    fixed p = new Point(Point { x: 1 })
+    bump(&p^.x)
+fi

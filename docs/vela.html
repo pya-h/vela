@@ -508,7 +508,7 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         <code>fixed</code> or a literal too. A slice is a copy of the caller's slice: adding to it leaves the caller's
         length as it was, and the items the two still share are the same items, as after <code>ys = xs</code> (see
         <a href="#slice-changes">Adding and taking out items</a>). A method takes one too:
-        <code>alters add(flex by: int)</code>. A region never changes, so <code>flex r: region</code> is an error, and
+        <code>alters grow(flex by: int)</code>. A region never changes, so <code>flex r: region</code> is an error, and
         only a parameter is <code>flex</code>: a shape's field changes where the value it is part of is held.
       </p>
       <p>
@@ -529,8 +529,8 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
 <span class="keyword">fi</span></pre>
       <p>
         A place is given only where it can change: a <code>flex</code> variable, a field or an array item of one
-        (<code>&amp;c.n</code>, <code>&amp;pair[0]</code>), what a pointer points to (<code>&amp;p^</code>,
-        <code>&amp;p^.n</code>), or a <code>flex&amp;</code> or <code>flex</code> parameter, passed on. The rest is
+        (<code>&amp;c.n</code>, <code>&amp;pair[0]</code>), what a pointer reached from a <code>flex</code> name
+        points to (<code>&amp;p^</code>, <code>&amp;p^.n</code>), or a <code>flex&amp;</code> or <code>flex</code> parameter, passed on. The rest is
         refused, each with the reason:
       </p>
       <ul>
@@ -955,7 +955,12 @@ show(label)                <span class="comment">; error: unknown variable 'labe
         <code>match</code> that may give it), and what a call gives back of it. A task may send back what a parameter
         holds, as <code>first_two(xs)</code> sends <code>xs[0..2]</code>, and then the call's value is what
         <code>xs</code> owns too; a task that only reads what it is given to make something new, as one counting the
-        lengths of a list of names does, gives back nothing a fixed name owns. A value that holds no slice, map or
+        lengths of a list of names does, gives back nothing a fixed name owns. What <code>fail</code> sends is given
+        back too, as the failure. <code>m.keys at r</code> and <code>m.values at r</code> are slices of their own,
+        which share only what each key or value holds. A lambda that keeps what it uses holds what its call may send
+        back: <code>[@r]() -&gt; [int]@r &lt;- xs fi</code> may only be kept in a <code>fixed</code> name or given
+        where nothing changes it, and what its call gives back is what <code>xs</code> owns, but one that only reads
+        <code>xs</code> to make a new slice gives back nothing owned. A value that holds no slice, map or
         pointer is copied whole, so a <code>fixed</code> number, text, or shape of them may be given anywhere.
         Parameters not written <code>flex</code>, <code>fixed&amp;</code> references, pattern and loop names without
         <code>flex</code>, and <code>.this</code> outside <code>alters</code> are fixed names too. In a task or shape
@@ -2269,7 +2274,7 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           (<code>next: maybe ^Node&lt;T&gt;</code>), as a shape may name itself. One that gives it a type built from
           its own (<code>^Grow&lt;Grow&lt;T&gt;&gt;</code>) would need an endless line of shapes, so that is an error
           after 24 of them, as is a shape containing itself by value.</li>
-        <li><strong>Words.</strong> The same four words, meaning the same things:
+        <li><strong>Words.</strong> The same five words, meaning the same things:
           <code>shape Shown&lt;T: shown&gt;</code> may only be given a type that word allows. A task
           passing its own type on must ask for at least as much: a <code>task tell&lt;T&gt;(b: Shown&lt;T&gt;@r)</code>
           is an error that says to require <code>shown</code> too.</li>
@@ -2349,7 +2354,7 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           names one exactly when its values hold something there (<code>Option&lt;text&gt;@r</code>,
           <code>Option&lt;int&gt;</code>); a variant may name the kind again behind a pointer
           (<code>Node(left: ^Tree&lt;T&gt;, right: ^Tree&lt;T&gt;)</code>), and one giving it a type built from its own
-          is an error after 24 kinds; the four words ask the same of the types given. Its methods see the types too
+          is an error after 24 kinds; the five words ask the same of the types given. Its methods see the types too
           (<code>orElse</code> above sends a <code>T</code>), its own <code>str</code> writes every kind made from it,
           and <code>==</code> and <code>~=</code> compare by what the kind made carries. As for shapes that take
           types, it has no shared methods yet, and its methods take no wrappers yet.</li>
@@ -2606,8 +2611,9 @@ fi</code></pre>
         <strong>What it keeps.</strong> A copy of each variable it uses: numbers, shapes, arrays, task values, and the
         handles of slices, maps, pointers and text. The variables themselves never change through the lambda, unless it
         keeps one as a place (below). What lives
-        in <code>r</code> (a slice's items, what a pointer points to, text in <code>r</code>) is used where it is, so writing
-        an item changes the one the code around it sees, as writing through any pointer does. The copy of a slice shares
+        in <code>r</code> (a slice's items, what a pointer points to, text in <code>r</code>) is used where it is, so a
+        <code>[flex @r]</code> lambda writing an item changes the one the code around it sees, as writing through any
+        pointer does; a <code>[@r]</code> lambda's copies never change, so nothing is written through them. The copy of a slice shares
         its items but not its length, so a lambda doesn't <code>add</code> to or <code>del</code> from a slice it keeps a copy
         of: it makes one of its own, takes one as a <code>flex&amp;</code> parameter, or keeps the slice as a place,
         <code>[flex&amp; xs, @s]</code>. A value in another region is refused,
@@ -4332,8 +4338,9 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         that shared memory, which the other views then see, as they see <code>xs[i] = v</code>. So does
         <code>del</code> at the end: it gives the item's space back to the room, and the next <code>add</code> to that
         slice goes there, over the item a copy made before the <code>del</code> may still count. After changing a
-        slice, use the slice you changed, and give a copy that must keep its items items of its own:
-        <code>new [T](xs) at r</code>.
+        slice, use the slice you changed, and give a copy that must keep its items of its own:
+        <code>xs.copy() at r</code>, which copies at every depth, or <code>new [T](xs) at r</code>, whose items are
+        its own but still share what they hold (a slice, a map, or what a pointer points to).
       </p>
 
       <h3 id="maps">Maps</h3>

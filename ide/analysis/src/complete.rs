@@ -464,7 +464,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 
     // Names being declared get no suggestions, including another name in a
     // `fixed` or `flex` list (`fixed q, r = …`).
-    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Fixed | Token::Flex | Token::Each | Token::Region)) {
+    // After a reserved word, the error is the word itself.
+    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Fixed | Token::Flex | Token::Each | Token::Region | Token::Bind | Token::Hold)) {
         return (Vec::new(), word_start, byte);
     }
     // `block` takes nothing on its line.

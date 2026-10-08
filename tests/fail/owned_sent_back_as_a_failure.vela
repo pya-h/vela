@@ -1,0 +1,18 @@
+; error: 15:23: 'e' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'check(…).copy() at r'
+; What 'fail' sends is given back as the failure, so a failure a fixed name
+; owns can't be taken by a flex name either.
+
+task check(xs: [int]@r) -> int ~ [int]@r
+    <- fail xs
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    match check(xs)
+    case {n}
+        show(n)
+    case failure flex e
+        e[0] = 9
+    fi
+fi

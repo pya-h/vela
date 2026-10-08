@@ -1,0 +1,9 @@
+; error: 8:5: cannot change 'm[…]': nothing changes through immutable variable 'm', at any depth
+; Adding to a slice kept in a fixed map changes the value already there, which
+; is refused as any write through a fixed name is.
+
+task main()
+    region r default
+    fixed m = ["a": [1, ...]]
+    m["a"].add(4)
+fi

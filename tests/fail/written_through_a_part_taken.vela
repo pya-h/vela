@@ -1,0 +1,13 @@
+; error: 12:5: cannot change 'xs[…][0].x': nothing changes through immutable variable 'xs', at any depth
+; A part taken of a fixed slice shares its items, so writing one is refused, and
+; the message quotes the place as written.
+
+shape Point
+    x: int
+fi
+
+task main()
+    region r default
+    fixed xs = [Point { x: 1 }, Point { x: 2 }, ...]
+    xs[0..1][0].x = 4
+fi

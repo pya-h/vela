@@ -76,73 +76,87 @@
     | keyword:fi
  47 | fi
     | keyword:fi
- 49 | task main()
-    | keyword:task  task:main  punctuation:(  punctuation:)
- 50 |     region r default
-    | keyword:region  region:r  keyword:default
- 51 |     flex xs = [1, 2, 3, ...]
-    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
- 52 |     xs[0] = 9
-    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
- 53 |     zero(xs)
-    | task:zero  punctuation:(  variable:xs  punctuation:)
- 54 |     show(xs)
-    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
- 56 |     flex p = new Node(Node { v: 1, next: none })
-    | keyword:flex  variable:p  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
- 57 |     p^.v = 5
-    | variable:p  operator:^  punctuation:.  field:v  operator:=  number:5
- 58 |     bump(p)
-    | task:bump  punctuation:(  variable:p  punctuation:)
- 59 |     show(p^.v)
-    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:v  punctuation:)
- 60 |     p^.next = new Node(Node { v: 7, next: none })
-    | variable:p  operator:^  punctuation:.  field:next  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
- 61 |     when p^.next is {flex n}
-    | keyword:when  variable:p  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  keyword:flex  variable:n  punctuation:}
- 62 |         n^.v = 8
-    | variable:n  operator:^  punctuation:.  field:v  operator:=  number:8
- 63 |     fi
+ 49 | ; So are the values already in a result's map.
+    | comment:; So are the values already in a result's map.
+ 50 | task boxes(r: region) -> out: [text: Box]@r
+    | keyword:task  task:boxes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  variable:out  punctuation::  punctuation:[  variable:text  punctuation::  type:Box  punctuation:]  operator:@  region:r
+ 51 |     out <- ["a": Box { items: [1, 2, ...] at r }] at r
+    | variable:out  keyword:<-  punctuation:[  string:"a"  punctuation::  type:Box  punctuation:{  field:items  punctuation::  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:}  punctuation:]  keyword:at  region:r
+ 52 |     out["a"].items[1] = 20
+    | variable:out  punctuation:[  string:"a"  punctuation:]  punctuation:.  field:items  punctuation:[  number:1  punctuation:]  operator:=  number:20
+ 53 |     out["a"].poke(10)
+    | variable:out  punctuation:[  string:"a"  punctuation:]  punctuation:.  method:poke  punctuation:(  number:10  punctuation:)
+ 54 | fi
     | keyword:fi
- 64 |     show(p^.next { p }^.v)
+ 56 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 57 |     region r default
+    | keyword:region  region:r  keyword:default
+ 58 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 59 |     xs[0] = 9
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 60 |     zero(xs)
+    | task:zero  punctuation:(  variable:xs  punctuation:)
+ 61 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 63 |     flex p = new Node(Node { v: 1, next: none })
+    | keyword:flex  variable:p  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 64 |     p^.v = 5
+    | variable:p  operator:^  punctuation:.  field:v  operator:=  number:5
+ 65 |     bump(p)
+    | task:bump  punctuation:(  variable:p  punctuation:)
+ 66 |     show(p^.v)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:v  punctuation:)
+ 67 |     p^.next = new Node(Node { v: 7, next: none })
+    | variable:p  operator:^  punctuation:.  field:next  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 68 |     when p^.next is {flex n}
+    | keyword:when  variable:p  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  keyword:flex  variable:n  punctuation:}
+ 69 |         n^.v = 8
+    | variable:n  operator:^  punctuation:.  field:v  operator:=  number:8
+ 70 |     fi
+    | keyword:fi
+ 71 |     show(p^.next { p }^.v)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:next  punctuation:{  variable:p  punctuation:}  operator:^  punctuation:.  field:v  punctuation:)
- 66 |     flex m = new [text: int]() at r
+ 73 |     flex m = new [text: int]() at r
     | keyword:flex  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 67 |     m["a"] = 1
+ 74 |     m["a"] = 1
     | variable:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:1
- 68 |     put(m)
+ 75 |     put(m)
     | task:put  punctuation:(  variable:m  punctuation:)
- 69 |     show(m.len)
+ 76 |     show(m.len)
     | builtin-fn:show  punctuation:(  variable:m  punctuation:.  field:len  punctuation:)
- 71 |     flex cell = new int(1)
+ 78 |     flex cell = new int(1)
     | keyword:flex  variable:cell  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)
- 72 |     bump_int(&cell^)
+ 79 |     bump_int(&cell^)
     | task:bump_int  punctuation:(  operator:&  variable:cell  operator:^  punctuation:)
- 73 |     flex& named = &cell^
+ 80 |     flex& named = &cell^
     | keyword:flex  keyword:&  variable:named  operator:=  operator:&  variable:cell  operator:^
- 74 |     named = named + 10
+ 81 |     named = named + 10
     | variable:named  operator:=  variable:named  operator:+  number:10
- 75 |     show(cell^)
+ 82 |     show(cell^)
     | builtin-fn:show  punctuation:(  variable:cell  operator:^  punctuation:)
- 77 |     flex b = Box { items: [1, 2, ...] }
+ 84 |     flex b = Box { items: [1, 2, ...] }
     | keyword:flex  variable:b  operator:=  type:Box  punctuation:{  field:items  punctuation::  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  punctuation:}
- 78 |     b.poke(4)
+ 85 |     b.poke(4)
     | variable:b  punctuation:.  method:poke  punctuation:(  number:4  punctuation:)
- 79 |     show(b.items)
+ 86 |     show(b.items)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:items  punctuation:)
- 81 |     show(squares(r, 4))
+ 88 |     show(squares(r, 4))
     | builtin-fn:show  punctuation:(  task:squares  punctuation:(  region:r  punctuation:,  number:4  punctuation:)  punctuation:)
- 83 |     ; Values made where they are written.
+ 89 |     show(boxes(r)["a"].items)
+    | builtin-fn:show  punctuation:(  task:boxes  punctuation:(  region:r  punctuation:)  punctuation:[  string:"a"  punctuation:]  punctuation:.  field:items  punctuation:)
+ 91 |     ; Values made where they are written.
     | comment:; Values made where they are written.
- 84 |     get(r)^.v = 3
+ 92 |     get(r)^.v = 3
     | task:get  punctuation:(  region:r  punctuation:)  operator:^  punctuation:.  field:v  operator:=  number:3
- 85 |     new Node(Node { v: 1, next: none })^.v = 2
+ 93 |     new Node(Node { v: 1, next: none })^.v = 2
     | keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  operator:^  punctuation:.  field:v  operator:=  number:2
- 87 |     flex rows = new [[int#2]]([[0, 0]#2]) at r
+ 95 |     flex rows = new [[int#2]]([[0, 0]#2]) at r
     | keyword:flex  variable:rows  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:#  number:2  punctuation:]  punctuation:]  punctuation:(  punctuation:[  punctuation:[  number:0  punctuation:,  number:0  punctuation:]  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
- 88 |     rows[1][0] = 6
+ 96 |     rows[1][0] = 6
     | variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:6
- 89 |     show(rows[1][0])
+ 97 |     show(rows[1][0])
     | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:0  punctuation:]  punctuation:)
- 90 | fi
+ 98 | fi
     | keyword:fi

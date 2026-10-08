@@ -1,0 +1,13 @@
+; error: 6:15: 'ys' is given what fixed 'f' owns, and nothing changes through what a fixed name owns; give it a copy: 'f(…).copy() at r'
+; A lambda given as a parameter may send back anything its caller's lambda
+; keeps, so what it sends is owned by the parameter.
+
+task first(r: region, f: [@r]() -> [int]@r)
+    flex ys = f()
+    show(ys)
+fi
+
+task main()
+    region r
+    first(r, [@r]() -> [int]@r <- [1, ...] at r fi)
+fi

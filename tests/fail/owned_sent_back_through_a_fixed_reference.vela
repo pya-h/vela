@@ -1,0 +1,14 @@
+; error: 12:15: 'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'same(…).copy() at r'
+; A 'fixed&' parameter is the caller's place, so a task sending it back gives
+; back what the caller's fixed name owns.
+
+task same(fixed& x: [int]@r) -> [int]@r
+    <- x
+fi
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    flex ys = same(&xs)
+    show(ys)
+fi
