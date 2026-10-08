@@ -17,7 +17,7 @@ task summary(readings: [float#7]) -> high: float, average: float
 fi
 
 ; Sorts the items of a slice in place: a slice writes into the memory it views.
-task sort(items: [int]@r)
+task sort(flex items: [int]@r)
     each i in 1..items.len
         flex j = i
         loop j > 0 and items[j - 1] > items[j]
@@ -31,7 +31,7 @@ fi
 ; starts empty and grows as they are found.
 task primes(r: region, limit: int) -> [int]@r
     region scratch
-    fixed composite = new [bool]([false#limit]) at scratch
+    flex composite = new [bool]([false#limit]) at scratch
     flex found = new [int]() at r
     each n in 2..limit
         when not composite[n]

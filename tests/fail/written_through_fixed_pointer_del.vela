@@ -1,0 +1,12 @@
+; error: 11:9: cannot change 'b^.items': nothing changes through immutable variable 'b', at any depth
+; So does 'del'.
+
+shape Bag
+    items: [int]
+fi
+
+task main()
+    region r default
+    fixed b = new Bag(Bag { items: [1, 2, ...] })
+    _ = b^.items.del()
+fi

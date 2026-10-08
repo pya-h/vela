@@ -87,12 +87,12 @@ task main()
     show(names.del(0))
     fixed first = names[0]
     show(first)
-    fixed note = new text("note") at r
+    flex note = new text("note") at r
     note^ = lasting
     show(note^)
 
     ; A shape holding pointers holds its text in its region.
-    fixed job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
+    flex job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
     show(describe(job^.status))
     show(describe(Status.Todo))
     job^.title = names[1]

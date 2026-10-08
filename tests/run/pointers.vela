@@ -9,7 +9,7 @@ fi
 
 task main()
     region r
-    fixed n: ^int@r = new int(42) at r
+    flex n: ^int@r = new int(42) at r
     show(n^)
     n^ = n^ + 1
     show(n^)

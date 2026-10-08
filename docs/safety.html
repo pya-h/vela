@@ -412,14 +412,14 @@
     v: int
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> f(<span class="keyword">fixed&amp;</span> x: Box, p: ^Box@r)
+<span class="keyword">task</span> f(<span class="keyword">fixed&amp;</span> x: Box, <span class="keyword">flex</span> p: ^Box@r)
     p^.v = 99
     show(x.v)                      <span class="comment">; 99: x is where p points</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">fixed</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
+    <span class="keyword">flex</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
     f(&amp;p^, p)
 <span class="keyword">fi</span></code></pre>
         <p>
@@ -431,7 +431,7 @@
     show(a, <span class="string">" "</span>, b)                <span class="comment">; 2 2</span>
 <span class="keyword">fi</span>
 
-<span class="keyword">fixed</span> q = p
+<span class="keyword">flex</span> q = p
 two(&amp;p^.v, &amp;q^.v)</code></pre>
         <p>
           The value an <code>alters</code> method is called on is given the same way, so <code>p^.set(p)</code>, where
@@ -564,7 +564,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
 <span class="keyword">shape</span> Item
     n: int
 
-    <span class="keyword">alters</span> poke(b: ^Bag@r, r: <span class="keyword">region</span>)
+    <span class="keyword">alters</span> poke(<span class="keyword">flex</span> b: ^Bag@r, r: <span class="keyword">region</span>)
         b^.items.add(Item { n: 2 })
         b^.items.add(Item { n: 3 })
         .n = 9                         <span class="comment">; written to the block the items left</span>
@@ -573,7 +573,7 @@ show(y)                            <span class="comment">; 2</span></code></pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">fixed</span> b = <span class="keyword">new</span> Bag(Bag { items: <span class="keyword">new</span> [Item]([Item { n: 1 }]) <span class="keyword">at</span> r }) <span class="keyword">at</span> r
+    <span class="keyword">flex</span> b = <span class="keyword">new</span> Bag(Bag { items: <span class="keyword">new</span> [Item]([Item { n: 1 }]) <span class="keyword">at</span> r }) <span class="keyword">at</span> r
     b^.items[0].poke(b, r)
     show(b^.items[0].n, <span class="string">" "</span>, b^.items.len)   <span class="comment">; 1 3, not 9 3</span>
 <span class="keyword">fi</span></code></pre>
@@ -659,11 +659,12 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
       <div class="entry" id="slice-copies">
         <h3>A copy of a slice shares its items <span class="badge b-design">by design</span></h3>
         <p>
-          A slice is a view of items in a region, so a copy of it, a <code>fixed</code> of it, or a plain parameter
-          given it, sees the same items, and a write through one is seen through all. <code>fixed</code> and a plain
-          parameter keep the slice's length from changing, not its items:
+          A slice is a view of items in a region, so a copy of it, a <code>fixed</code> of it, or a parameter given
+          it, sees the same items, and a write through one is seen through all. Nothing is written through a
+          <code>fixed</code> name or a plain parameter, at any depth, but a <code>flex</code> one that shares the
+          items may write them, and the <code>fixed</code> one sees the change:
         </p>
-        <pre><code><span class="keyword">task</span> change(xs: [int]@r)
+        <pre><code><span class="keyword">task</span> change(<span class="keyword">flex</span> xs: [int]@r)
     xs[0] = 99
 <span class="keyword">fi</span>
 
@@ -671,8 +672,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
     <span class="keyword">region</span> r
     <span class="keyword">flex</span> xs = <span class="keyword">new</span> [int]([1, 2, 3]) <span class="keyword">at</span> r
     <span class="keyword">fixed</span> seen = xs
-    change(seen)
-    show(xs[0])                        <span class="comment">; 99</span>
+    change(xs)
+    show(seen[0])                      <span class="comment">; 99</span>
 <span class="keyword">fi</span></code></pre>
         <p>
           For the same reason, keeping a copy in a variable doesn't separate a slice given twice to a call that

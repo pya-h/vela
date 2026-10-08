@@ -35,7 +35,7 @@ fi
 
 ; Adds through a pointer, so the caller's slice changes; it allocates, so it
 ; takes the region.
-task fill(r: region, bag: ^Bag@r, n: int)
+task fill(r: region, flex bag: ^Bag@r, n: int)
     each i in 0..n
         bag^.items.add(i * 10)
     fi
@@ -128,7 +128,7 @@ task main()
     show(many.len)
 
     ; Through a pointer, a field, and an item of another slice.
-    fixed bag = new Bag(Bag { items: new [int]() at r }) at r
+    flex bag = new Bag(Bag { items: new [int]() at r }) at r
     fill(r, bag, 4)
     show(bag^.items.del(1))
     flex kept = Bag { items: new [int]([1]) at r }

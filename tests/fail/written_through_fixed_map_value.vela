@@ -1,0 +1,15 @@
+; error: 14:5: cannot change 'seen[…]^.v': nothing changes through immutable variable 'seen', at any depth
+; A map's value is reached through the map, so a fixed map's pointers are fixed too.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    flex m = new [text: ^Node]() at r
+    m["a"] = new Node(Node { v: 1, next: none })
+    fixed seen = m
+    seen["a"]^.v = 2
+fi

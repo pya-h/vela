@@ -118,8 +118,8 @@
     | task:first_word  punctuation:(  keyword:none  punctuation:)
  69 |     region cells
     | keyword:region  region:cells
- 70 |     fixed boxed = new maybe int(3) at cells
-    | keyword:fixed  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:cells
+ 70 |     flex boxed = new maybe int(3) at cells
+    | keyword:flex  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:cells
  71 |     show(boxed^)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
  72 |     boxed^ = none

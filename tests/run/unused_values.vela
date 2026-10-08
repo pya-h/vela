@@ -39,7 +39,7 @@ task main()
     flex moved = Point { x: 1, y: 2 }
     moved.x = 10
     region scratch
-    fixed boxed = new int(4) at scratch
+    flex boxed = new int(4) at scratch
     boxed^ = 5
     unused_region(scratch, boxed, scratch)
     fixed later = 6

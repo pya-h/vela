@@ -84,8 +84,8 @@
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
  48 |     show(last(first)^.value)
     | builtin-fn:show  punctuation:(  task:last  punctuation:(  variable:first  punctuation:)  operator:^  punctuation:.  field:value  punctuation:)
- 50 |     when find(first, 2) is {found}
-    | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:2  punctuation:)  keyword:is  punctuation:{  variable:found  punctuation:}
+ 50 |     when find(first, 2) is {flex found}
+    | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:2  punctuation:)  keyword:is  punctuation:{  keyword:flex  variable:found  punctuation:}
  51 |         show(found == second)
     | builtin-fn:show  punctuation:(  variable:found  operator:==  variable:second  punctuation:)
  52 |         found^.value = 20

@@ -12,10 +12,10 @@ task main()
     show(y)
     ; heap allocated stuff can be changed even if they
     region r default
-    fixed x2 = new [int]([1,2,3])
+    flex x2 = new [int]([1,2,3])
     x2[0] = 2
     show(x2[0])
-    fixed pnt = new int(1)
+    flex pnt = new int(1)
     pnt^ = 2
     show(pnt^)
 fi

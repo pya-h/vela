@@ -196,8 +196,8 @@
     | keyword:flex  variable:copies  operator:=  punctuation:[  variable:a  punctuation:,  variable:a  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
 102 |     region s
     | keyword:region  region:s
-103 |     fixed moved = copies.copy() at s
-    | keyword:fixed  variable:moved  operator:=  variable:copies  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:s
+103 |     flex moved = copies.copy() at s
+    | keyword:flex  variable:moved  operator:=  variable:copies  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:s
 104 |     moved[0]["w"] = 9
     | variable:moved  punctuation:[  number:0  punctuation:]  punctuation:[  string:"w"  punctuation:]  operator:=  number:9
 105 |     show(moved[1].has("w"), " ", a.has("w"))

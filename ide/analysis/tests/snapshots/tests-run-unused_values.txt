@@ -68,8 +68,8 @@
     | variable:moved  punctuation:.  field:x  operator:=  number:10
  41 |     region scratch
     | keyword:region  region:scratch
- 42 |     fixed boxed = new int(4) at scratch
-    | keyword:fixed  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)  keyword:at  region:scratch
+ 42 |     flex boxed = new int(4) at scratch
+    | keyword:flex  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)  keyword:at  region:scratch
  43 |     boxed^ = 5
     | variable:boxed  operator:^  operator:=  number:5
  44 |     unused_region(scratch, boxed, scratch)

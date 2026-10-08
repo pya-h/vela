@@ -1,0 +1,17 @@
+; error: 10:5: cannot change 'p^.v': nothing changes through immutable variable 'p', at any depth; 'p' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& p: ^Node@r'
+; A 'fixed&' pointer only reads, what it points to as well as itself.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task nudge(fixed& p: ^Node@r)
+    p^.v = 2
+fi
+
+task main()
+    region r default
+    flex p = new Node(Node { v: 1, next: none })
+    nudge(&p)
+fi

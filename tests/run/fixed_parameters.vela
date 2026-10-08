@@ -77,9 +77,9 @@ task same_place<T: same>(fixed& a: T, fixed& b: T) -> bool
     <- a == b
 fi
 
-; A pointer only read: it stays, and what it points to is its own place, which
-; the task may change through it.
-task nudge(fixed& spot: ^Point@r) -> int
+; The task's own copy of a pointer, which points to the caller's value: it
+; changes that value through it, which nothing does through a 'fixed&' pointer.
+task nudge(flex spot: ^Point@r) -> int
     spot^.x = spot^.x + 1
     <- spot^.x
 fi
@@ -107,8 +107,8 @@ task main()
     fixed xs = [1, 2, 3]
     show(sum(&xs, 10))
     ; What a pointer points to, and a field, are places too.
-    fixed ptr = new Point(p) at r
+    flex ptr = new Point(p) at r
     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
     flex held: maybe ^Point@r = ptr
-    show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
+    show(nudge(ptr), " ", open(&held), " ", kept(&ptr)^.x)
 fi

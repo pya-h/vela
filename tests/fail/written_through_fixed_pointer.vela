@@ -1,0 +1,13 @@
+; error: 12:5: cannot change 'p^.v': nothing changes through immutable variable 'p', at any depth
+; What a fixed pointer points to never changes through it.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    fixed p = new Node(Node { v: 1, next: none })
+    p^.v = 5
+fi

@@ -1,0 +1,9 @@
+; error: 7:16: cannot change 'p^': nothing changes through immutable variable 'p', at any depth; 'fixed& q = &p^' names it only to read it
+; Nor named by a 'flex&' reference; a 'fixed&' one may read it.
+
+task main()
+    region r default
+    fixed p = new int(1)
+    flex& q = &p^
+    q = 2
+fi

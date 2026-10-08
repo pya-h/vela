@@ -26,16 +26,16 @@
     | builtin-fn:show  punctuation:(  variable:line  punctuation:.  field:to  punctuation:.  field:x  punctuation:)
  18 |     region r
     | keyword:region  region:r
- 19 |     fixed p = new Point(Point { x: 1, y: 2 }) at r
-    | keyword:fixed  variable:p  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)  keyword:at  region:r
+ 19 |     flex p = new Point(Point { x: 1, y: 2 }) at r
+    | keyword:flex  variable:p  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)  keyword:at  region:r
  20 |     p^.x = 9
     | variable:p  operator:^  punctuation:.  field:x  operator:=  number:9
  21 |     p^ = Point { x: p^.x + 1, y: 0 }
     | variable:p  operator:^  operator:=  type:Point  punctuation:{  field:x  punctuation::  variable:p  operator:^  punctuation:.  field:x  operator:+  number:1  punctuation:,  field:y  punctuation::  number:0  punctuation:}
  22 |     show(p^.x)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  punctuation:)
- 24 |     fixed lp = new Line(line) at r
-    | keyword:fixed  variable:lp  operator:=  keyword:new  type:Line  punctuation:(  variable:line  punctuation:)  keyword:at  region:r
+ 24 |     flex lp = new Line(line) at r
+    | keyword:flex  variable:lp  operator:=  keyword:new  type:Line  punctuation:(  variable:line  punctuation:)  keyword:at  region:r
  25 |     lp^.from.y = 7
     | variable:lp  operator:^  punctuation:.  field:from  punctuation:.  field:y  operator:=  number:7
  26 |     show(lp^.from.y)

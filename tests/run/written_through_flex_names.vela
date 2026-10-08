@@ -1,0 +1,90 @@
+; What may be written through a name: through a 'flex' one, at any depth, and
+; through a task's result, which the task is building. A value made where it is
+; written is no name's, so it may be written too. Nothing changes through a
+; 'fixed' name (see tests/fail/written_through_*).
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+shape Box
+    items: [int]
+    alters poke(v: int)
+        .items[0] = v
+    fi
+fi
+
+task get(r: region) -> ^Node@r
+    <- new Node(Node { v: 1, next: none }) at r
+fi
+
+; The task's own copy of a slice, whose items are the caller's.
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+
+; The task's own copy of a pointer, which points to the caller's value.
+task bump(flex p: ^Node@r)
+    p^.v = p^.v + 1
+fi
+
+; The task's own copy of a map, which names the caller's map.
+task put(flex m: [text: int]@r)
+    m["b"] = 2
+fi
+
+task bump_int(flex& n: int)
+    n = n + 1
+fi
+
+; A result's items are written while the task builds it.
+task squares(r: region, n: int) -> out: [int]@r
+    out <- new [int]([0#n]) at r
+    loop flex i = 0 || i < n || i++
+        out[i] = i * i
+    fi
+fi
+
+task main()
+    region r default
+    flex xs = [1, 2, 3, ...]
+    xs[0] = 9
+    zero(xs)
+    show(xs)
+
+    flex p = new Node(Node { v: 1, next: none })
+    p^.v = 5
+    bump(p)
+    show(p^.v)
+    p^.next = new Node(Node { v: 7, next: none })
+    when p^.next is {flex n}
+        n^.v = 8
+    fi
+    show(p^.next { p }^.v)
+
+    flex m = new [text: int]() at r
+    m["a"] = 1
+    put(m)
+    show(m.len)
+
+    flex cell = new int(1)
+    bump_int(&cell^)
+    flex& named = &cell^
+    named = named + 10
+    show(cell^)
+
+    flex b = Box { items: [1, 2, ...] }
+    b.poke(4)
+    show(b.items)
+
+    show(squares(r, 4))
+
+    ; Values made where they are written.
+    get(r)^.v = 3
+    new Node(Node { v: 1, next: none })^.v = 2
+
+    flex rows = new [[int#2]]([[0, 0]#2]) at r
+    rows[1][0] = 6
+    show(rows[1][0])
+fi

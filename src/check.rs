@@ -4970,11 +4970,17 @@ impl Checker {
 
     /// Checks the left side of an assignment and returns its type.
     ///
-    /// Assignable places are: a `flex` variable, a field of an assignable
-    /// place, and anything behind a pointer (`p^`, `p^.x`). Writing through a
-    /// pointer is allowed even when the pointer itself is a `fixed`, because
-    /// the binding holds the address, not the pointed-to value.
+    /// Assignable places are: a `flex` variable, a field or item of an
+    /// assignable place, and what a pointer points to or a slice's or map's
+    /// item, reached from a name that changes (see `written_through`).
     fn check_assign_target(&mut self, expr: &mut Expr) -> Result<Type> {
+        // The place as written, for the error about a name it is reached from.
+        let written = place_path(expr).map_or_else(String::new, |path| path_text(&path));
+        self.check_written(expr, &written)
+    }
+
+    /// `check_assign_target` of `expr`, part of the place `written`, as written.
+    fn check_written(&mut self, expr: &mut Expr, written: &str) -> Result<Type> {
         let span = expr.span;
         match &mut expr.kind {
             ExprKind::Var(name) => {
@@ -4998,7 +5004,7 @@ impl Checker {
                 if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
                     return Err(self.this_cannot_change(span, &format!("assigning '{}{}'", MODULE_SEPARATOR, field)));
                 }
-                let base_ty = self.check_field_base(base)?;
+                let base_ty = self.check_field_base(base, written)?;
                 let ty = self.field_type(&base_ty, field, span)?;
                 self.read_only_field(&base_ty, field, span)?;
                 match base_ty {
@@ -5014,7 +5020,10 @@ impl Checker {
                 expr.ty = Some(ty.clone());
                 Ok(ty)
             }
-            ExprKind::Deref(_) => self.check_expr(expr),
+            ExprKind::Deref(pointer) => {
+                self.written_through(pointer, written)?;
+                self.check_expr(expr)
+            }
             ExprKind::Shared { shape, field } => {
                 let (shape, field) = (shape.clone(), field.clone());
                 let ty = self.check_expr(expr)?;
@@ -5032,7 +5041,7 @@ impl Checker {
                     }
                     return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
                 }
-                let base_ty = self.check_item_base(base)?;
+                let base_ty = self.check_item_base(base, written)?;
                 if matches!(base_ty, Type::Text(_)) {
                     return err(span, "a byte of text can't be assigned, since text never changes; build other text instead, as in 't = t[0..2] + \"x\" at r'");
                 }
@@ -5064,11 +5073,12 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks the array or slice whose item is assigned, and returns its type.
-    /// An array holds its items, so it must be an assignable place itself; a
-    /// slice's items are in a region, behind a pointer, so they can always be
-    /// written, as through `p^`.
-    fn check_item_base(&mut self, base: &mut Expr) -> Result<Type> {
+    /// Checks the array, slice or map whose item is assigned, and returns its
+    /// type. An array holds its items, so it must be an assignable place
+    /// itself; a slice's items are in a region, behind a pointer, and are
+    /// written where the slice is reached from a name that changes, as what a
+    /// pointer points to is. `written` is the place assigned, as written.
+    fn check_item_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
         if let ExprKind::Var(name) = &base.kind {
             let info = self.lookup_or_err(name, base.span)?;
             if matches!(info.ty, Type::Array(..) | Type::Map(..)) {
@@ -5082,20 +5092,29 @@ impl Checker {
                     return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
                 }
             }
-            return self.check_expr(base);
+            let ty = self.check_expr(base)?;
+            if matches!(ty, Type::Slice(..)) {
+                self.written_through(base, written)?;
+            }
+            return Ok(ty);
         }
         let ty = self.check_expr(base)?;
         // `m[k] = v` may add the key, which changes the map as `add` changes a
         // slice, so the map is in a place that can change.
         if matches!(ty, Type::Array(..) | Type::Map(..)) {
-            self.assignable_array(base)?;
+            self.assignable_array(base, written)?;
+        }
+        if matches!(ty, Type::Slice(..)) {
+            self.written_through(base, written)?;
         }
         Ok(ty)
     }
 
     /// Rejects an array, already checked, whose item can't be assigned: one in a
-    /// `fixed` variable, a result, or a temporary value.
-    fn assignable_array(&self, place: &Expr) -> Result<()> {
+    /// `fixed` variable, a result, or a temporary value, or one reached from a
+    /// name that never changes (see `written_through`). `written` is the place
+    /// assigned, as written.
+    fn assignable_array(&self, place: &Expr, written: &str) -> Result<()> {
         match &place.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, place.span)?;
@@ -5107,24 +5126,49 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::Deref(_) => Ok(()),
+            ExprKind::Deref(pointer) => self.written_through(pointer, written),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
             ExprKind::Field(base, field) => {
                 if let Some(ty) = &base.ty {
                     self.read_only_field(ty, field, place.span)?;
                 }
-                self.assignable_array(base)
+                self.assignable_array(base, written)
             }
             // A value in a map is in its table in a region, as a slice's item is.
-            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => Ok(()),
-            ExprKind::Index(base, _) => self.assignable_array(base),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written),
+            ExprKind::Index(base, _) => self.assignable_array(base, written),
             _ => err(place.span, "cannot assign to an item of a temporary value"),
         }
     }
 
+    /// Refuses a write into `written` (the place as written) through `place`,
+    /// what a pointer points to or a slice's or map's items are reached from,
+    /// where its root is a name that never changes: nothing changes through a
+    /// `fixed` variable, a parameter that isn't `flex`, a `fixed&`, a lambda's
+    /// copy, or `.this` outside an `alters` method, at any depth. A result is
+    /// the task's own value, being built, so what it holds may be written. A
+    /// value made where it is written (a call's, `new`'s) is no name's.
+    fn written_through(&self, place: &Expr, written: &str) -> Result<()> {
+        match &place.kind {
+            ExprKind::Var(name) => {
+                let info = self.lookup_or_err(name, place.span)?;
+                if info.mutable || info.result {
+                    return Ok(());
+                }
+                if name == THIS {
+                    return Err(self.this_cannot_change(place.span, &format!("writing '{}'", written)));
+                }
+                err(place.span, format!("cannot change '{}': nothing changes through immutable variable '{}', at any depth{}", written, name, param_hint(name, info)))
+            }
+            ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Deref(base) => self.written_through(base, written),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
+            _ => Ok(()),
+        }
+    }
+
     /// Checks the base of an assigned field, which must itself be an
-    /// assignable place.
-    fn check_field_base(&mut self, base: &mut Expr) -> Result<Type> {
+    /// assignable place. `written` is the place assigned, as written.
+    fn check_field_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
         let span = base.span;
         match &base.kind {
             ExprKind::Var(name) => {
@@ -5146,7 +5190,7 @@ impl Checker {
                 }
                 self.check_expr(base)
             }
-            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_assign_target(base),
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_written(base, written),
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
     }
@@ -11129,7 +11173,7 @@ impl Checker {
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
                 _ => self.given_place(base, taker),
             },
-            ExprKind::Deref(_) => Ok(()),
+            ExprKind::Deref(pointer) => self.written_through(pointer, &place_path(place).map_or_else(String::new, |path| path_text(&path))),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
             _ => refuse("it needs a place that can change: a 'flex' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }
@@ -15261,7 +15305,14 @@ fn param_hint(name: &str, info: &VarInfo) -> String {
     if info.passing == Passing::FixedRef {
         return format!("; '{0}' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& {0}: {1}'", name, info.ty);
     }
-    format!("; a parameter that changes is written 'flex {}: {}', and is the task's own copy", name, info.ty)
+    // The task's own copy of a handle still names what the caller's does.
+    let own = match &info.ty {
+        Type::Slice(..) => "the task's own copy of the slice, whose items are the caller's",
+        Type::Map(..) => "the task's own copy of the map, which names the caller's map",
+        Type::Ptr(..) => "the task's own copy of the pointer, which points to the caller's value",
+        _ => "and is the task's own copy",
+    };
+    format!("; a parameter that changes is written 'flex {}: {}', {}", name, info.ty, own)
 }
 
 /// A step from a variable to a place in it: a field, an item, or what a

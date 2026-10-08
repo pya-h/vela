@@ -75,7 +75,7 @@ task main()
     fixed done, total = progress(first)
     show(done, " of ", total, " done")
 
-    when find(first, "write tests") is {tests}
+    when find(first, "write tests") is {flex tests}
         tests^.status = Todo
     fi
     ; Only the count of done items is wanted now, so the other is dropped.

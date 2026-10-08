@@ -220,8 +220,8 @@
     | variable:scores  punctuation:[  number:1  punctuation:]  operator:=  punctuation:(  string:"Cy"  punctuation:,  number:80  punctuation:)
 128 |     show(scores[1].1)
     | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  number:1  punctuation:]  punctuation:.  field:1  punctuation:)
-129 |     fixed boxed = new (int, int)((5, 6)) at r
-    | keyword:fixed  variable:boxed  operator:=  keyword:new  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:(  punctuation:(  number:5  punctuation:,  number:6  punctuation:)  punctuation:)  keyword:at  region:r
+129 |     flex boxed = new (int, int)((5, 6)) at r
+    | keyword:flex  variable:boxed  operator:=  keyword:new  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:(  punctuation:(  number:5  punctuation:,  number:6  punctuation:)  punctuation:)  keyword:at  region:r
 130 |     show(boxed^.1)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:1  punctuation:)
 131 |     boxed^ = (7, 8)

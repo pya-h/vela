@@ -1,0 +1,8 @@
+; error: 7:5: cannot change 'p^': nothing changes through immutable variable 'p', at any depth
+; Nor is what it points to given a new value.
+
+task main()
+    region r default
+    fixed p = new int(1)
+    p^ = 5
+fi

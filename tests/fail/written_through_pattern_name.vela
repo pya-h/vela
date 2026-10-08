@@ -1,0 +1,15 @@
+; error: 13:9: cannot change 'n^.v': nothing changes through immutable variable 'n', at any depth
+; A name a pattern binds without 'flex' is fixed.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    flex found: maybe ^Node@r = new Node(Node { v: 1, next: none })
+    when found is {n}
+        n^.v = 2
+    fi
+fi

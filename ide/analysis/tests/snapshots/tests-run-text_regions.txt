@@ -152,16 +152,16 @@
     | keyword:fixed  variable:first  operator:=  variable:names  punctuation:[  number:0  punctuation:]
  89 |     show(first)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:)
- 90 |     fixed note = new text("note") at r
-    | keyword:fixed  variable:note  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"note"  punctuation:)  keyword:at  region:r
+ 90 |     flex note = new text("note") at r
+    | keyword:flex  variable:note  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"note"  punctuation:)  keyword:at  region:r
  91 |     note^ = lasting
     | variable:note  operator:^  operator:=  variable:lasting
  92 |     show(note^)
     | builtin-fn:show  punctuation:(  variable:note  operator:^  punctuation:)
  94 |     ; A shape holding pointers holds its text in its region.
     | comment:; A shape holding pointers holds its text in its region.
- 95 |     fixed job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
-    | keyword:fixed  variable:job  operator:=  keyword:new  type:Task  punctuation:(  type:Task  punctuation:{  field:title  punctuation::  string:"write"  punctuation:,  field:status  punctuation::  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:,  field:owner  punctuation::  variable:held  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 95 |     flex job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
+    | keyword:flex  variable:job  operator:=  keyword:new  type:Task  punctuation:(  type:Task  punctuation:{  field:title  punctuation::  string:"write"  punctuation:,  field:status  punctuation::  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:,  field:owner  punctuation::  variable:held  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  96 |     show(describe(job^.status))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:job  operator:^  punctuation:.  field:status  punctuation:)  punctuation:)
  97 |     show(describe(Status.Todo))

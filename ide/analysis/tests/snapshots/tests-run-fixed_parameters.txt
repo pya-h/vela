@@ -130,12 +130,12 @@
     | keyword:<-  parameter:a  operator:==  parameter:b
  78 | fi
     | keyword:fi
- 80 | ; A pointer only read: it stays, and what it points to is its own place, which
-    | comment:; A pointer only read: it stays, and what it points to is its own place, which
- 81 | ; the task may change through it.
-    | comment:; the task may change through it.
- 82 | task nudge(fixed& spot: ^Point@r) -> int
-    | keyword:task  task:nudge  punctuation:(  keyword:fixed  keyword:&  parameter:spot  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 80 | ; The task's own copy of a pointer, which points to the caller's value: it
+    | comment:; The task's own copy of a pointer, which points to the caller's value: it
+ 81 | ; changes that value through it, which nothing does through a 'fixed&' pointer.
+    | comment:; changes that value through it, which nothing does through a 'fixed&' pointer.
+ 82 | task nudge(flex spot: ^Point@r) -> int
+    | keyword:task  task:nudge  punctuation:(  keyword:flex  parameter:spot  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  83 |     spot^.x = spot^.x + 1
     | parameter:spot  operator:^  punctuation:.  field:x  operator:=  parameter:spot  operator:^  punctuation:.  field:x  operator:+  number:1
  84 |     <- spot^.x
@@ -184,13 +184,13 @@
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  operator:&  variable:xs  punctuation:,  number:10  punctuation:)  punctuation:)
 109 |     ; What a pointer points to, and a field, are places too.
     | comment:; What a pointer points to, and a field, are places too.
-110 |     fixed ptr = new Point(p) at r
-    | keyword:fixed  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
+110 |     flex ptr = new Point(p) at r
+    | keyword:flex  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
 111 |     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
     | builtin-fn:show  punctuation:(  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:ptr  operator:^  punctuation:)  punctuation:,  string:" "  punctuation:,  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:.  field:x  punctuation:,  operator:&  variable:p  punctuation:.  field:x  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:xs  punctuation:,  operator:&  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:)
 112 |     flex held: maybe ^Point@r = ptr
     | keyword:flex  variable:held  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  operator:=  variable:ptr
-113 |     show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
-    | builtin-fn:show  punctuation:(  task:nudge  punctuation:(  operator:&  variable:ptr  punctuation:)  punctuation:,  string:" "  punctuation:,  task:open  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  operator:&  variable:ptr  punctuation:)  operator:^  punctuation:.  field:x  punctuation:)
+113 |     show(nudge(ptr), " ", open(&held), " ", kept(&ptr)^.x)
+    | builtin-fn:show  punctuation:(  task:nudge  punctuation:(  variable:ptr  punctuation:)  punctuation:,  string:" "  punctuation:,  task:open  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  operator:&  variable:ptr  punctuation:)  operator:^  punctuation:.  field:x  punctuation:)
 114 | fi
     | keyword:fi

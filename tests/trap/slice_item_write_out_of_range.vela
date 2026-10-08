@@ -1,7 +1,7 @@
 ; trap: index 4 is out of range 0..4 at 9:10 in task 'main'
 task main()
     region r
-    fixed items = new [int]([0#4]) at r
+    flex items = new [int]([0#4]) at r
     flex i = 3
     items[i] = 1
     show(items[i])

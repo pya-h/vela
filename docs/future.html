@@ -797,7 +797,8 @@ show(names.del(1))                    ; takes item 1 out: b</pre>
         of range 0..4 at 7:12 in task 'main'</em>). A constant index or bound out of range, a count below 1, and a type
         whose values would take more than 1 TiB are errors when compiling, the last so that every program the compiler
         accepts also compiles as C. <strong>Places.</strong> An array's item can be assigned where a field could be (in
-        a <code>flex</code>, or behind a pointer); a slice's items can always be written, as through a pointer; neither's
+        a <code>flex</code>, or behind a pointer reached from one); a slice's items can be written where the slice is
+        reached from a <code>flex</code> name, as through a pointer; neither's
         <code>len</code> can. An array behind a pointer, or an item of a slice, is in a region, so it can be sliced.
         <strong>C.</strong> An array is a struct holding a C array, which C can copy and return; a slice is a struct of a
         pointer, an <code>int64_t</code> length, and its room. Reading a slice's item, slicing, copying, and filling go
@@ -808,8 +809,8 @@ show(names.del(1))                    ; takes item 1 out: b</pre>
       </p>
       <p>
         What growing settled. <strong>Where.</strong> A change is written to the slice where it is kept, so the slice
-        must be in a place that can be assigned (a <code>flex</code> variable, a field of one, anything behind a pointer,
-        an item of another slice), and <code>add</code> needs the slice's region itself (declared, or an
+        must be in a place that can be assigned (a <code>flex</code> variable, a field of one, anything behind a pointer
+        reached from one, an item of such a slice), and <code>add</code> needs the slice's region itself (declared, or an
         <code>r: region</code> parameter), as <code>new</code> does. <strong>Room.</strong> A slice carries a pointer to
         its room: a block of its region holding its items and free space after them. A full block is replaced by one
         twice as large, or grows in place when it ends where the region hands out memory next, so adding is amortized

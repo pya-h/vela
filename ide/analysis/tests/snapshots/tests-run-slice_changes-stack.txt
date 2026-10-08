@@ -16,14 +16,14 @@
     | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
  11 | fi
     | keyword:fi
- 13 | task push(r: region, s: ^Stack@r, v: int)
-    | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)
+ 13 | task push(r: region, flex s: ^Stack@r, v: int)
+    | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:flex  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)
  14 |     s^.items.add(v)
     | parameter:s  operator:^  punctuation:.  field:items  punctuation:.  field:add  punctuation:(  parameter:v  punctuation:)
  15 | fi
     | keyword:fi
- 17 | task pop(s: ^Stack@r) -> int
-    | keyword:task  task:pop  punctuation:(  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 17 | task pop(flex s: ^Stack@r) -> int
+    | keyword:task  task:pop  punctuation:(  keyword:flex  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  18 |     <- s^.items.del()
     | keyword:<-  parameter:s  operator:^  punctuation:.  field:items  punctuation:.  field:del  punctuation:(  punctuation:)
  19 | fi

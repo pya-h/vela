@@ -728,7 +728,7 @@ Hello, Ada 42 12 true</pre>
       <h3 id="lesson-first">Lesson 1: A first region</h3>
       <pre class="program" data-file="01_first.vela"><span class="keyword">task</span> main()
     <span class="keyword">region</span> scratch
-    <span class="keyword">fixed</span> count = <span class="keyword">new</span> int(<span class="number">41</span>) <span class="keyword">at</span> scratch
+    <span class="keyword">flex</span> count = <span class="keyword">new</span> int(<span class="number">41</span>) <span class="keyword">at</span> scratch
     count^ = count^ + <span class="number">1</span>
     show(count^)
 <span class="keyword">fi</span></pre>
@@ -737,8 +737,8 @@ Hello, Ada 42 12 true</pre>
         <code>region scratch</code> is a statement: from here to the end of the block (the task), <code>scratch</code> is
         a region you can allocate in. <code>new int(41) at scratch</code> copies <code>41</code> into it and gives back a
         pointer, so <code>count</code> has type <code>^int@scratch</code>. <code>count^</code> is the value it points to,
-        which you can read and write. <code>count</code> is a <code>fixed</code>, so the pointer can't change, but the value
-        it points to can. At the task's <code>fi</code>, the region is freed.
+        which you can read and write, since <code>count</code> is a <code>flex</code>: through a <code>fixed</code>,
+        nothing changes, not even the value it points to. At the task's <code>fi</code>, the region is freed.
       </p>
 
       <h3 id="lesson-types">Lesson 2: Pointer types name their region</h3>
@@ -749,7 +749,7 @@ Hello, Ada 42 12 true</pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> points
-    <span class="keyword">fixed</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> points
+    <span class="keyword">flex</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> points
     <span class="keyword">fixed</span> q = <span class="keyword">new</span>@points Point(Point { x: <span class="number">3</span>, y: <span class="number">4</span> })
     p^.x = p^.x + q^.x
     show(p^.x)
@@ -793,7 +793,7 @@ no spare yet
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> outer
-    <span class="keyword">fixed</span> total = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> outer
+    <span class="keyword">flex</span> total = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> outer
     <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
         <span class="keyword">region</span> pass
         <span class="keyword">fixed</span> step = <span class="keyword">new</span> int(round * <span class="number">10</span>) <span class="keyword">at</span> pass
@@ -910,7 +910,7 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="comment">; One name twice: both lists must be in the same region.</span>
-<span class="keyword">task</span> join(last: ^Node@r, rest: <span class="keyword">maybe</span> ^Node@r)
+<span class="keyword">task</span> join(<span class="keyword">flex</span> last: ^Node@r, rest: <span class="keyword">maybe</span> ^Node@r)
     last^.next = rest
 <span class="keyword">fi</span>
 
@@ -1242,7 +1242,7 @@ not a digit
       </p>
       <pre class="program" data-file="09_slices.vela"><span class="comment">; The first n Fibonacci numbers, in the caller&#x27;s region.</span>
 <span class="keyword">task</span> fibs(r: <span class="keyword">region</span>, n: int) -&gt; [int]@r
-    <span class="keyword">fixed</span> out = <span class="keyword">new</span> [int]([<span class="number">1</span>#n]) <span class="keyword">at</span> r
+    <span class="keyword">flex</span> out = <span class="keyword">new</span> [int]([<span class="number">1</span>#n]) <span class="keyword">at</span> r
     <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">2</span>..n
         out[i] = out[i - <span class="number">1</span>] + out[i - <span class="number">2</span>]
     <span class="keyword">fi</span>
@@ -1266,7 +1266,7 @@ not a digit
     show(sum(tail))
     <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>
         <span class="keyword">region</span> work
-        <span class="keyword">fixed</span> scratch = <span class="keyword">new</span> [int](tail) <span class="keyword">at</span> work
+        <span class="keyword">flex</span> scratch = <span class="keyword">new</span> [int](tail) <span class="keyword">at</span> work
         scratch[<span class="number">0</span>] = <span class="number">0</span>
         show(sum(scratch))
     <span class="keyword">fi</span>
@@ -1543,7 +1543,7 @@ pass 1
           inside the loop and copy out only what survives with <code>.copy()</code> (Lesson 8).</p>
         <pre class="program" data-file="w_replace.vela"><span class="keyword">task</span> main()
     <span class="keyword">region</span> long
-    <span class="keyword">fixed</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
+    <span class="keyword">flex</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
     <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">1000</span>
         latest^ = i                      <span class="comment">; reuse the memory: no new allocation</span>
     <span class="keyword">fi</span>
@@ -1735,7 +1735,7 @@ chosen = item^.title
     <span class="keyword">region</span> a
     <span class="keyword">fixed</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
     <span class="keyword">fixed</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
-    <span class="keyword">when</span> first(start) <span class="keyword">is</span> {n}
+    <span class="keyword">when</span> first(start) <span class="keyword">is</span> {<span class="keyword">flex</span> n}
         n^.next = q
         show(n^.value + q^.value)
     <span class="keyword">fi</span>

@@ -1,0 +1,12 @@
+; error: 11:5: cannot change 'p^.m[…]': nothing changes through immutable variable 'p', at any depth
+; And setting a key of a map reached through a fixed pointer.
+
+shape Index
+    m: [text: int]
+fi
+
+task main()
+    region r default
+    fixed p = new Index(Index { m: new [text: int]() })
+    p^.m["a"] = 1
+fi

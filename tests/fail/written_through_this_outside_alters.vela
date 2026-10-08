@@ -1,0 +1,15 @@
+; error: 7:9: writing '.items[0]' changes the value this method is called on, so 'alters' goes before its name, as in 'alters poke(…)'
+; '.this' outside an 'alters' method is fixed, at any depth.
+
+shape Box
+    items: [int]
+    poke()
+        .items[0] = 1
+    fi
+fi
+
+task main()
+    region r default
+    fixed b = Box { items: [1, ...] }
+    b.poke()
+fi

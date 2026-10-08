@@ -417,7 +417,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 };
                 (format!("result {}", typed(&symbol.name)), format!("{} Set it with '{} <- …'.", doc, symbol.name))
             }
-            _ => (format!("fixed {}", typed(&symbol.name)), "An immutable variable.".to_string()),
+            _ => (format!("fixed {}", typed(&symbol.name)), "An immutable variable: nothing changes through it, at any depth.".to_string()),
         },
     })
 }

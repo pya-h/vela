@@ -100,7 +100,7 @@ task main()
     show(keep[0] == keep[1])
     flex copies = [a, a, ...] at r
     region s
-    fixed moved = copies.copy() at s
+    flex moved = copies.copy() at s
     moved[0]["w"] = 9
     show(moved[1].has("w"), " ", a.has("w"))
     flex many = new [int: int]() at r

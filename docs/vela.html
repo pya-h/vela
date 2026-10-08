@@ -484,7 +484,9 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         <em>cannot assign to immutable variable 'n'; a parameter that changes is written 'flex n: int', and is the
         task's own copy</em>. Written <code>flex</code> before its name, a parameter is the task's own copy of what
         it was given, which it changes as it changes any <code>flex</code> variable: assigned, its fields and items
-        assigned, its <code>alters</code> methods called, a slice added to.
+        assigned, its <code>alters</code> methods called, a slice added to. A copy of a slice, a map or a pointer
+        still names what the caller's does (the items, the map, the value pointed to), so what the task writes
+        there the caller sees; through a plain parameter nothing is written, at any depth.
       </p>
       <pre><span class="keyword">task</span> countdown(<span class="keyword">flex</span> n: int, step: int) -&gt; int
     <span class="keyword">flex</span> steps = <span class="number">0</span>
@@ -3843,8 +3845,8 @@ save(500) {
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> scratch                          <span class="comment">; a new, empty region</span>
-    <span class="keyword">fixed</span> n = <span class="keyword">new</span> int(42) <span class="keyword">at</span> scratch         <span class="comment">; n is a ^int@scratch</span>
-    <span class="keyword">fixed</span> p = <span class="keyword">new</span>@scratch Point(Point { x: 1, y: 2 })
+    <span class="keyword">flex</span> n = <span class="keyword">new</span> int(42) <span class="keyword">at</span> scratch         <span class="comment">; n is a ^int@scratch</span>
+    <span class="keyword">flex</span> p = <span class="keyword">new</span>@scratch Point(Point { x: 1, y: 2 })
     n^ = n^ + 1                             <span class="comment">; read and write through ^</span>
     p^.x = 5
     show(n^ + p^.x)                         <span class="comment">; 48</span>
@@ -3853,8 +3855,10 @@ save(500) {
         <code>new T(value) at r</code> and <code>new@r T(value)</code> are the same: both copy the value into region
         <code>r</code> and give back a <code>^T@r</code>. The type after <code>new</code> names no region, since what
         it makes lives in the region it allocates in. A pointer to a shape has no fields of its own: read and write
-        them through <code>^</code>, as in <code>p^.x</code> (<code>p.x</code> is an error that says so). Writing
-        through a pointer is allowed even from a <code>fixed</code>, which holds the address, not the value.
+        them through <code>^</code>, as in <code>p^.x</code> (<code>p.x</code> is an error that says so). What a
+        pointer points to is written through a <code>flex</code> name: nothing changes through a <code>fixed</code>
+        one, at any depth, so <code>fixed p = new Point(…) at r</code> then <code>p^.x = 5</code> is an error, which
+        says <em>cannot change 'p^.x': nothing changes through immutable variable 'p', at any depth</em>.
       </p>
       <p id="new-empty">
         <strong>The empty value needs no <code>( )</code>.</strong> Where a <code>new</code> gives no value, the
@@ -4188,7 +4192,7 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         does, although nothing reads it after its line (see <a href="safety.html#temporaries">Safety</a>).
       </p>
       <pre><span class="keyword">task</span> squares(r: region, n: int) -&gt; [int]@r
-    <span class="keyword">fixed</span> out = <span class="keyword">new</span> [int]([0#n]) <span class="keyword">at</span> r
+    <span class="keyword">flex</span> out = <span class="keyword">new</span> [int]([0#n]) <span class="keyword">at</span> r
     <span class="keyword">each</span> i <span class="keyword">in</span> 0..n
         out[i] = i * i
     <span class="keyword">fi</span>
@@ -4197,9 +4201,9 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">fixed</span> all = squares(r, 5)            <span class="comment">; 0 1 4 9 16</span>
-    <span class="keyword">fixed</span> middle = all[1..4]             <span class="comment">; 1 4 9: the same memory, not a copy</span>
-    middle[0] = 100                     <span class="comment">; a slice's items are written through it, even a fixed's</span>
+    <span class="keyword">flex</span> all = squares(r, 5)            <span class="comment">; 0 1 4 9 16</span>
+    <span class="keyword">flex</span> middle = all[1..4]             <span class="comment">; 1 4 9: the same memory, not a copy</span>
+    middle[0] = 100                     <span class="comment">; a slice's items are written through it, and every view of them sees it</span>
     show(all[1])                        <span class="comment">; 100</span>
     show(middle.len)                    <span class="comment">; 3</span>
     <span class="keyword">fixed</span> copied = <span class="keyword">new</span> [int](middle) <span class="keyword">at</span> r  <span class="comment">; its own items</span>
@@ -4213,8 +4217,9 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         <li><strong>Checks.</strong> Every index and slice is checked as the program runs (<em>vela: slice 2..7 is out of
           range 0..4</em>, <em>vela: slice 3..1 ends before it starts</em>), and so is a count for <code>new [T]([v#n])</code>
           (<em>vela: count -2 is negative</em>).</li>
-        <li><strong>Writing.</strong> A slice's items can always be written, like what a pointer points to; its
-          <code>len</code> can't be: it changes as items are added and taken out, or by slicing.</li>
+        <li><strong>Writing.</strong> A slice's items are written through a slice reached from a <code>flex</code>
+          name, like what a pointer points to, and never through a <code>fixed</code> one, at any depth; its
+          <code>len</code> can't be written: it changes as items are added and taken out, or by slicing.</li>
         <li><strong>Regions.</strong> A slice's items live in its region, so <code>new [^Node](nodes) at other</code> is an
           error when the pointers are in another region, as copying a pointer there would be.</li>
       </ul>
@@ -4241,8 +4246,8 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
           (<code>xs.del(0)</code> as a statement). The items after the change move to close or open the gap. They are
           built into every slice, as <code>len</code> is, so no <a href="#methods">method</a> can take their names.</li>
         <li><strong>Where.</strong> The slice changes where it is kept, so it must be in a place that can be assigned: a
-          <code>flex</code> variable, a field of one, anything behind a pointer (<code>bag^.items.add(v)</code>), or an item of
-          another slice. A <code>fixed</code>, a plain or <code>fixed</code> parameter, a result, a call's value, and a part
+          <code>flex</code> variable, a field of one, anything behind a pointer reached from a <code>flex</code> name
+          (<code>bag^.items.add(v)</code>), or an item of such a slice. A <code>fixed</code>, a plain or <code>fixed</code> parameter, a result, a call's value, and a part
           taken with <code>xs[a..b]</code> can't change; keep them in a <code>flex</code> variable first. A
           <a href="#parameters"><code>flex</code> parameter</a> changes the task's own copy, and a
           <code>flex&amp;</code> parameter the caller's slice (<code>task grow(flex&amp; xs: [int]@r, r: region)</code>,

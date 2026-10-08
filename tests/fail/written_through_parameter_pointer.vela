@@ -1,0 +1,17 @@
+; error: 10:5: cannot change 'p^.v': nothing changes through immutable variable 'p', at any depth; a parameter that changes is written 'flex p: ^Node@r', the task's own copy of the pointer, which points to the caller's value
+; The same for a pointer: its own copy points to the caller's value.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task bump(p: ^Node@r)
+    p^.v = p^.v + 1
+fi
+
+task main()
+    region r default
+    flex p = new Node(Node { v: 1, next: none })
+    bump(p)
+fi

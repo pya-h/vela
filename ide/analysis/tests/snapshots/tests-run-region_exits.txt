@@ -32,8 +32,8 @@
     | keyword:task  task:from_condition  punctuation:(  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  20 |     region outer
     | keyword:region  region:outer
- 21 |     fixed total = new int(0) at outer
-    | keyword:fixed  variable:total  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:outer
+ 21 |     flex total = new int(0) at outer
+    | keyword:flex  variable:total  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:outer
  22 |     flex j = 1
     | keyword:flex  variable:j  operator:=  number:1
  23 |     loop pick(j) {

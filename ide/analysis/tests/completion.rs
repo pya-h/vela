@@ -283,7 +283,7 @@ fn hover_describes_declarations() {
     );
     let pair = |code: &str, doc: &str| (code.to_string(), doc.to_string());
     assert_eq!(code_and_doc(hover(&source, "area(figure)", 0)), pair("task area(s: Shape) -> float", ""));
-    assert_eq!(code_and_doc(hover(&source, "p,", 0)), pair("fixed p: Point", "An immutable variable."));
+    assert_eq!(code_and_doc(hover(&source, "p,", 0)), pair("fixed p: Point", "An immutable variable: nothing changes through it, at any depth."));
     assert_eq!(code_and_doc(hover(&source, "total >", 0)), pair("flex total: int", "A mutable variable."));
     assert_eq!(code_and_doc(hover(&source, "s: Shape", 0)), pair("s: Shape", "A parameter of task area."));
     assert_eq!(code_and_doc(hover(&source, "r)", 0)), pair("r: float", "Bound by case Circle."));

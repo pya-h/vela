@@ -78,8 +78,8 @@
     | comment:; Given memory in a region, and a pointer to the same memory, which it writes:
  48 | ; what it was given stays as it was.
     | comment:; what it was given stays as it was.
- 49 | task through_pointer(b: Big, p: ^Big@r) -> int
-    | keyword:task  task:through_pointer  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 49 | task through_pointer(b: Big, flex p: ^Big@r) -> int
+    | keyword:task  task:through_pointer  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  50 |     fixed before = b.a[0]
     | keyword:fixed  variable:before  operator:=  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
  51 |     p^.a[0] = 1000
@@ -102,8 +102,8 @@
     | keyword:fi
  62 | ; Given its own place too, through a flex& of the caller's caller.
     | comment:; Given its own place too, through a flex& of the caller's caller.
- 63 | task through_reference(b: Big, p: ^Big@r) -> int
-    | keyword:task  task:through_reference  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 63 | task through_reference(b: Big, flex p: ^Big@r) -> int
+    | keyword:task  task:through_reference  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  64 |     p^.a[1] = 3000
     | parameter:p  operator:^  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:=  number:3000
  65 |     <- b.a[1]

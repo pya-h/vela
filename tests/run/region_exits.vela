@@ -18,7 +18,7 @@ fi
 
 task from_condition(limit: int) -> int
     region outer
-    fixed total = new int(0) at outer
+    flex total = new int(0) at outer
     flex j = 1
     loop pick(j) {
         region c

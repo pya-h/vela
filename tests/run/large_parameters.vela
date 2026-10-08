@@ -46,7 +46,7 @@ fi
 
 ; Given memory in a region, and a pointer to the same memory, which it writes:
 ; what it was given stays as it was.
-task through_pointer(b: Big, p: ^Big@r) -> int
+task through_pointer(b: Big, flex p: ^Big@r) -> int
     fixed before = b.a[0]
     p^.a[0] = 1000
     <- before * 1000 + b.a[0]
@@ -60,7 +60,7 @@ task through_slice(b: Big, flex xs: [Big]@r, r: region) -> int
 fi
 
 ; Given its own place too, through a flex& of the caller's caller.
-task through_reference(b: Big, p: ^Big@r) -> int
+task through_reference(b: Big, flex p: ^Big@r) -> int
     p^.a[1] = 3000
     <- b.a[1]
 fi

@@ -47,7 +47,7 @@ task main()
     show(sum(first))
     show(last(first)^.value)
 
-    when find(first, 2) is {found}
+    when find(first, 2) is {flex found}
         show(found == second)
         found^.value = 20
     fi

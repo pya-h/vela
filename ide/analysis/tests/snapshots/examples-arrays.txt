@@ -32,8 +32,8 @@
     | keyword:fi
  19 | ; Sorts the items of a slice in place: a slice writes into the memory it views.
     | comment:; Sorts the items of a slice in place: a slice writes into the memory it views.
- 20 | task sort(items: [int]@r)
-    | keyword:task  task:sort  punctuation:(  parameter:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 20 | task sort(flex items: [int]@r)
+    | keyword:task  task:sort  punctuation:(  keyword:flex  parameter:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
  21 |     each i in 1..items.len
     | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:items  punctuation:.  field:len
  22 |         flex j = i
@@ -58,8 +58,8 @@
     | keyword:task  task:primes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
  33 |     region scratch
     | keyword:region  region:scratch
- 34 |     fixed composite = new [bool]([false#limit]) at scratch
-    | keyword:fixed  variable:composite  operator:=  keyword:new  punctuation:[  type-builtin:bool  punctuation:]  punctuation:(  punctuation:[  keyword:false  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:scratch
+ 34 |     flex composite = new [bool]([false#limit]) at scratch
+    | keyword:flex  variable:composite  operator:=  keyword:new  punctuation:[  type-builtin:bool  punctuation:]  punctuation:(  punctuation:[  keyword:false  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:scratch
  35 |     flex found = new [int]() at r
     | keyword:flex  variable:found  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  36 |     each n in 2..limit

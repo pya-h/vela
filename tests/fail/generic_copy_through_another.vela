@@ -1,5 +1,5 @@
 ; error: 8:5: 'inner' copies a 'T' into region 'local' at 4:15, and 'local' is declared inside 'inner' and freed when it ends, so that copy is only the value itself; this use gives text@r, which is in region 'r'. So copy the value before the call, or write 'inner' for text@r itself
-task inner<T>(xs: [T]@r, v: T)
+task inner<T>(flex xs: [T]@r, v: T)
     region local
     xs[0] = v.copy() at local
 fi

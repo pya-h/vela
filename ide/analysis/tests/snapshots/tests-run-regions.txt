@@ -300,8 +300,8 @@
     | comment:; A pointer to a pointer lives in one region too.
 174 |     fixed inner = new int(8) at trees
     | keyword:fixed  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
-175 |     fixed outer = new ^int(inner) at trees
-    | keyword:fixed  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
+175 |     flex outer = new ^int(inner) at trees
+    | keyword:flex  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
 176 |     outer^^ = outer^^ + 1
     | variable:outer  operator:^  operator:^  operator:=  variable:outer  operator:^  operator:^  operator:+  number:1
 177 |     show(inner^)

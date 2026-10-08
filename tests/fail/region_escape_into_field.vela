@@ -5,7 +5,7 @@ shape Node
 fi
 task main()
     region a
-    fixed first = new Node(Node { value: 1, next: none }) at a
+    flex first = new Node(Node { value: 1, next: none }) at a
     when true
         region b
         fixed second = new Node(Node { value: 2, next: none }) at b

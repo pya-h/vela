@@ -1,0 +1,8 @@
+; error: 7:5: cannot change 'rows[0][1]': nothing changes through immutable variable 'rows', at any depth
+; An array that is a slice's item is written through the slice.
+
+task main()
+    region r default
+    fixed rows = new [[int#2]]([[0, 0]#2]) at r
+    rows[0][1] = 5
+fi

@@ -1,0 +1,13 @@
+; error: 12:5: cannot change 'a.cell^': nothing changes through immutable variable 'a', at any depth
+; At any depth: a pointer in a field of a fixed value.
+
+shape Holder
+    v: int
+    cell: ^int
+fi
+
+task main()
+    region r default
+    fixed a = Holder { v: 0, cell: new int(1) }
+    a.cell^ = 2
+fi

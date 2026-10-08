@@ -126,7 +126,7 @@ task main()
     fi
     scores[1] = ("Cy", 80)
     show(scores[1].1)
-    fixed boxed = new (int, int)((5, 6)) at r
+    flex boxed = new (int, int)((5, 6)) at r
     show(boxed^.1)
     boxed^ = (7, 8)
     show(boxed^.0)

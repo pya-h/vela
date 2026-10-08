@@ -1,0 +1,9 @@
+; error: 7:33: cannot change 'xs[0]': nothing changes through immutable variable 'xs', at any depth; 'xs' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[flex @r](…)', and one that changes the variable itself keeps it as a place, '[flex& xs, @r]'
+; A '[@r]' lambda never changes its copies, nor the items of a slice it copied.
+
+task main()
+    region r
+    flex xs = [1, 2, ...] at r
+    fixed f = [@r]() -> nothing xs[0] = 5 fi
+    f()
+fi

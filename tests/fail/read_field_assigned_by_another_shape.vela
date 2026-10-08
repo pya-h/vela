@@ -6,7 +6,7 @@ fi
 shape Clerk
     name: text = "ada"
 
-    alters cheat(t: ^Tally@r)
+    alters cheat(flex t: ^Tally@r)
         t^.total = 99
     fi
 fi

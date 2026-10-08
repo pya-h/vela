@@ -11,7 +11,7 @@ fi
 task main()
     region a
     fixed q = new Node(Node { value: 1, next: none }) at a
-    when first(none) is {n}
+    when first(none) is {flex n}
         n^.next = q
     fi
 fi

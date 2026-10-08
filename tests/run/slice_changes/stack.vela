@@ -10,11 +10,11 @@ shape Stack
     items: [int]
 fi
 
-task push(r: region, s: ^Stack@r, v: int)
+task push(r: region, flex s: ^Stack@r, v: int)
     s^.items.add(v)
 fi
 
-task pop(s: ^Stack@r) -> int
+task pop(flex s: ^Stack@r) -> int
     <- s^.items.del()
 fi
 

@@ -1,0 +1,13 @@
+; error: 12:5: cannot change 'pts[1].x': nothing changes through immutable variable 'pts', at any depth
+; A field of a slice's item is written through the slice too.
+
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    region r default
+    fixed pts = new [Point]([Point { x: 0, y: 0 }#2]) at r
+    pts[1].x = 5
+fi

@@ -1,0 +1,18 @@
+; error: 10:5: cannot change 'm[…]^.v': nothing changes through immutable variable 'm', at any depth; a parameter that changes is written 'flex m: [text: ^Node]@r', the task's own copy of the map, which names the caller's map
+; And a map: its own copy names the caller's map, so a key set in it is the caller's.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task put(m: [text: ^Node]@r, n: ^Node@r)
+    m["a"]^.v = n^.v
+fi
+
+task main()
+    region r default
+    flex m = new [text: ^Node]() at r
+    m["a"] = new Node(Node { v: 1, next: none })
+    put(m, new Node(Node { v: 2, next: none }))
+fi

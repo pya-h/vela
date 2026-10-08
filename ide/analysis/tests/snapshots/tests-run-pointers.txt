@@ -16,8 +16,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  11 |     region r
     | keyword:region  region:r
- 12 |     fixed n: ^int@r = new int(42) at r
-    | keyword:fixed  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:r
+ 12 |     flex n: ^int@r = new int(42) at r
+    | keyword:flex  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:r
  13 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
  14 |     n^ = n^ + 1

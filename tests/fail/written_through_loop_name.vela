@@ -1,0 +1,10 @@
+; error: 8:9: cannot change 'p^': nothing changes through immutable variable 'p', at any depth
+; An 'each' name is fixed, so what it points to doesn't change through it.
+
+task main()
+    region r default
+    flex ps = [new int(1), new int(2), ...]
+    each p in ps
+        p^ = 0
+    fi
+fi

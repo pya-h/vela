@@ -1,0 +1,12 @@
+; error: 11:11: cannot change 'p^': nothing changes through immutable variable 'p', at any depth
+; What a fixed pointer points to can't be given to a 'flex&' place, which changes it.
+
+task bump(flex& n: int)
+    n = n + 1
+fi
+
+task main()
+    region r default
+    fixed p = new int(1)
+    bump(&p^)
+fi

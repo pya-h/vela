@@ -109,8 +109,8 @@ task main()
         names[0] = "changed"
 
         ; Linked nodes: one shared by two pointers, and a cycle.
-        fixed nodes = build(work, 5)
-        fixed second = nodes^.next { nodes }
+        flex nodes = build(work, 5)
+        flex second = nodes^.next { nodes }
         nodes^.other = second
         second^.other = nodes
         list = nodes.copy()
@@ -152,7 +152,7 @@ task main()
         show(count(head))
         ; The copy of the shared node is shared: a change through one pointer
         ; shows through the other, and the cycle leads back to the copy.
-        fixed second = head^.other { head }
+        flex second = head^.other { head }
         second^.label = "shared"
         show(head^.next { head }^.label)
         show(second^.other { second }^.label)

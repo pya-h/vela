@@ -1,0 +1,9 @@
+; error: 8:5: cannot change 'q^': nothing changes through immutable variable 'q', at any depth; 'q' only reads the place it names, and a reference that changes it is written 'flex& q = &…'
+; A 'fixed&' reference only reads, at any depth.
+
+task main()
+    region r default
+    flex p = new int(1)
+    fixed& q = &p
+    q^ = 2
+fi

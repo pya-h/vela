@@ -3,7 +3,7 @@ shape Bag
     items: [int]
 fi
 
-task put(bag: ^Bag@r)
+task put(flex bag: ^Bag@r)
     bag^.items.add(1)
 fi
 

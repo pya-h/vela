@@ -16,7 +16,7 @@ task is_prime(n: int) -> bool
 fi
 
 task primes_below_no_add(r: region, limit: int) -> [int]@r
-    fixed primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
+    flex primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
     flex idx = 0
 
     each i in 2..limit

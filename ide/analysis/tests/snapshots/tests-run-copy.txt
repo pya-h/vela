@@ -190,10 +190,10 @@
     | variable:names  punctuation:[  number:0  punctuation:]  operator:=  string:"changed"
 111 |         ; Linked nodes: one shared by two pointers, and a cycle.
     | comment:; Linked nodes: one shared by two pointers, and a cycle.
-112 |         fixed nodes = build(work, 5)
-    | keyword:fixed  variable:nodes  operator:=  task:build  punctuation:(  region:work  punctuation:,  number:5  punctuation:)
-113 |         fixed second = nodes^.next { nodes }
-    | keyword:fixed  variable:second  operator:=  variable:nodes  operator:^  punctuation:.  field:next  punctuation:{  variable:nodes  punctuation:}
+112 |         flex nodes = build(work, 5)
+    | keyword:flex  variable:nodes  operator:=  task:build  punctuation:(  region:work  punctuation:,  number:5  punctuation:)
+113 |         flex second = nodes^.next { nodes }
+    | keyword:flex  variable:second  operator:=  variable:nodes  operator:^  punctuation:.  field:next  punctuation:{  variable:nodes  punctuation:}
 114 |         nodes^.other = second
     | variable:nodes  operator:^  punctuation:.  field:other  operator:=  variable:second
 115 |         second^.other = nodes
@@ -272,8 +272,8 @@
     | comment:; The copy of the shared node is shared: a change through one pointer
 154 |         ; shows through the other, and the cycle leads back to the copy.
     | comment:; shows through the other, and the cycle leads back to the copy.
-155 |         fixed second = head^.other { head }
-    | keyword:fixed  variable:second  operator:=  variable:head  operator:^  punctuation:.  field:other  punctuation:{  variable:head  punctuation:}
+155 |         flex second = head^.other { head }
+    | keyword:flex  variable:second  operator:=  variable:head  operator:^  punctuation:.  field:other  punctuation:{  variable:head  punctuation:}
 156 |         second^.label = "shared"
     | variable:second  operator:^  punctuation:.  field:label  operator:=  string:"shared"
 157 |         show(head^.next { head }^.label)

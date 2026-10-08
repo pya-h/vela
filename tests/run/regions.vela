@@ -172,7 +172,7 @@ task main()
 
     ; A pointer to a pointer lives in one region too.
     fixed inner = new int(8) at trees
-    fixed outer = new ^int(inner) at trees
+    flex outer = new ^int(inner) at trees
     outer^^ = outer^^ + 1
     show(inner^)
 fi

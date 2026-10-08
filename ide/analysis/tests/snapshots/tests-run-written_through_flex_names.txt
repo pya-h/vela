@@ -1,0 +1,148 @@
+  1 | ; What may be written through a name: through a 'flex' one, at any depth, and
+    | comment:; What may be written through a name: through a 'flex' one, at any depth, and
+  2 | ; through a task's result, which the task is building. A value made where it is
+    | comment:; through a task's result, which the task is building. A value made where it is
+  3 | ; written is no name's, so it may be written too. Nothing changes through a
+    | comment:; written is no name's, so it may be written too. Nothing changes through a
+  4 | ; 'fixed' name (see tests/fail/written_through_*).
+    | comment:; 'fixed' name (see tests/fail/written_through_*).
+  6 | shape Node
+    | keyword:shape  type:Node
+  7 |     v: int
+    | field:v  punctuation::  type-builtin:int
+  8 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+  9 | fi
+    | keyword:fi
+ 11 | shape Box
+    | keyword:shape  type:Box
+ 12 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+ 13 |     alters poke(v: int)
+    | keyword:alters  method:poke  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)
+ 14 |         .items[0] = v
+    | punctuation:.  field:items  punctuation:[  number:0  punctuation:]  operator:=  parameter:v
+ 15 |     fi
+    | keyword:fi
+ 16 | fi
+    | keyword:fi
+ 18 | task get(r: region) -> ^Node@r
+    | keyword:task  task:get  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
+ 19 |     <- new Node(Node { v: 1, next: none }) at r
+    | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 20 | fi
+    | keyword:fi
+ 22 | ; The task's own copy of a slice, whose items are the caller's.
+    | comment:; The task's own copy of a slice, whose items are the caller's.
+ 23 | task zero(flex xs: [int]@r)
+    | keyword:task  task:zero  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 24 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 25 | fi
+    | keyword:fi
+ 27 | ; The task's own copy of a pointer, which points to the caller's value.
+    | comment:; The task's own copy of a pointer, which points to the caller's value.
+ 28 | task bump(flex p: ^Node@r)
+    | keyword:task  task:bump  punctuation:(  keyword:flex  parameter:p  punctuation::  operator:^  type:Node  operator:@  region:r  punctuation:)
+ 29 |     p^.v = p^.v + 1
+    | parameter:p  operator:^  punctuation:.  field:v  operator:=  parameter:p  operator:^  punctuation:.  field:v  operator:+  number:1
+ 30 | fi
+    | keyword:fi
+ 32 | ; The task's own copy of a map, which names the caller's map.
+    | comment:; The task's own copy of a map, which names the caller's map.
+ 33 | task put(flex m: [text: int]@r)
+    | keyword:task  task:put  punctuation:(  keyword:flex  parameter:m  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 34 |     m["b"] = 2
+    | parameter:m  punctuation:[  string:"b"  punctuation:]  operator:=  number:2
+ 35 | fi
+    | keyword:fi
+ 37 | task bump_int(flex& n: int)
+    | keyword:task  task:bump_int  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 38 |     n = n + 1
+    | parameter:n  operator:=  parameter:n  operator:+  number:1
+ 39 | fi
+    | keyword:fi
+ 41 | ; A result's items are written while the task builds it.
+    | comment:; A result's items are written while the task builds it.
+ 42 | task squares(r: region, n: int) -> out: [int]@r
+    | keyword:task  task:squares  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:out  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 43 |     out <- new [int]([0#n]) at r
+    | variable:out  keyword:<-  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
+ 44 |     loop flex i = 0 || i < n || i++
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  parameter:n  operator:||  variable:i  operator:++
+ 45 |         out[i] = i * i
+    | variable:out  punctuation:[  variable:i  punctuation:]  operator:=  variable:i  operator:*  variable:i
+ 46 |     fi
+    | keyword:fi
+ 47 | fi
+    | keyword:fi
+ 49 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 50 |     region r default
+    | keyword:region  region:r  keyword:default
+ 51 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 52 |     xs[0] = 9
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 53 |     zero(xs)
+    | task:zero  punctuation:(  variable:xs  punctuation:)
+ 54 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 56 |     flex p = new Node(Node { v: 1, next: none })
+    | keyword:flex  variable:p  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 57 |     p^.v = 5
+    | variable:p  operator:^  punctuation:.  field:v  operator:=  number:5
+ 58 |     bump(p)
+    | task:bump  punctuation:(  variable:p  punctuation:)
+ 59 |     show(p^.v)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:v  punctuation:)
+ 60 |     p^.next = new Node(Node { v: 7, next: none })
+    | variable:p  operator:^  punctuation:.  field:next  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 61 |     when p^.next is {flex n}
+    | keyword:when  variable:p  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  keyword:flex  variable:n  punctuation:}
+ 62 |         n^.v = 8
+    | variable:n  operator:^  punctuation:.  field:v  operator:=  number:8
+ 63 |     fi
+    | keyword:fi
+ 64 |     show(p^.next { p }^.v)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:next  punctuation:{  variable:p  punctuation:}  operator:^  punctuation:.  field:v  punctuation:)
+ 66 |     flex m = new [text: int]() at r
+    | keyword:flex  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 67 |     m["a"] = 1
+    | variable:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:1
+ 68 |     put(m)
+    | task:put  punctuation:(  variable:m  punctuation:)
+ 69 |     show(m.len)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:.  field:len  punctuation:)
+ 71 |     flex cell = new int(1)
+    | keyword:flex  variable:cell  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)
+ 72 |     bump_int(&cell^)
+    | task:bump_int  punctuation:(  operator:&  variable:cell  operator:^  punctuation:)
+ 73 |     flex& named = &cell^
+    | keyword:flex  keyword:&  variable:named  operator:=  operator:&  variable:cell  operator:^
+ 74 |     named = named + 10
+    | variable:named  operator:=  variable:named  operator:+  number:10
+ 75 |     show(cell^)
+    | builtin-fn:show  punctuation:(  variable:cell  operator:^  punctuation:)
+ 77 |     flex b = Box { items: [1, 2, ...] }
+    | keyword:flex  variable:b  operator:=  type:Box  punctuation:{  field:items  punctuation::  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  punctuation:}
+ 78 |     b.poke(4)
+    | variable:b  punctuation:.  method:poke  punctuation:(  number:4  punctuation:)
+ 79 |     show(b.items)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:items  punctuation:)
+ 81 |     show(squares(r, 4))
+    | builtin-fn:show  punctuation:(  task:squares  punctuation:(  region:r  punctuation:,  number:4  punctuation:)  punctuation:)
+ 83 |     ; Values made where they are written.
+    | comment:; Values made where they are written.
+ 84 |     get(r)^.v = 3
+    | task:get  punctuation:(  region:r  punctuation:)  operator:^  punctuation:.  field:v  operator:=  number:3
+ 85 |     new Node(Node { v: 1, next: none })^.v = 2
+    | keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  operator:^  punctuation:.  field:v  operator:=  number:2
+ 87 |     flex rows = new [[int#2]]([[0, 0]#2]) at r
+    | keyword:flex  variable:rows  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:#  number:2  punctuation:]  punctuation:]  punctuation:(  punctuation:[  punctuation:[  number:0  punctuation:,  number:0  punctuation:]  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+ 88 |     rows[1][0] = 6
+    | variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:6
+ 89 |     show(rows[1][0])
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:0  punctuation:]  punctuation:)
+ 90 | fi
+    | keyword:fi

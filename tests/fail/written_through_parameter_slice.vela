@@ -1,0 +1,12 @@
+; error: 5:5: cannot change 'xs[0]': nothing changes through immutable variable 'xs', at any depth; a parameter that changes is written 'flex xs: [int]@r', the task's own copy of the slice, whose items are the caller's
+; A plain parameter never changes, nor the items of a slice it is; 'flex' is the task's own copy, which shares them.
+
+task zero(xs: [int]@r)
+    xs[0] = 0
+fi
+
+task main()
+    region r
+    flex xs = [1, 2, ...] at r
+    zero(xs)
+fi

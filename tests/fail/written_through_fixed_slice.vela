@@ -1,0 +1,8 @@
+; error: 7:5: cannot change 'xs[0]': nothing changes through immutable variable 'xs', at any depth
+; Nothing changes through a fixed name: not a slice's items either.
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    xs[0] = 9
+fi

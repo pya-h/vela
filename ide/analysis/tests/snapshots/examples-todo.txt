@@ -136,8 +136,8 @@
     | keyword:fixed  variable:done  punctuation:,  variable:total  operator:=  task:progress  punctuation:(  variable:first  punctuation:)
  76 |     show(done, " of ", total, " done")
     | builtin-fn:show  punctuation:(  variable:done  punctuation:,  string:" of "  punctuation:,  variable:total  punctuation:,  string:" done"  punctuation:)
- 78 |     when find(first, "write tests") is {tests}
-    | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  string:"write tests"  punctuation:)  keyword:is  punctuation:{  variable:tests  punctuation:}
+ 78 |     when find(first, "write tests") is {flex tests}
+    | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  string:"write tests"  punctuation:)  keyword:is  punctuation:{  keyword:flex  variable:tests  punctuation:}
  79 |         tests^.status = Todo
     | variable:tests  operator:^  punctuation:.  field:status  operator:=  variant:Todo
  80 |     fi

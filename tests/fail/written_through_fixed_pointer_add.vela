@@ -1,0 +1,12 @@
+; error: 11:5: cannot change 'b^.items': nothing changes through immutable variable 'b', at any depth
+; 'add' changes a slice reached through a fixed pointer, which nothing does.
+
+shape Bag
+    items: [int]
+fi
+
+task main()
+    region r default
+    fixed b = new Bag(Bag { items: new [int]() })
+    b^.items.add(1)
+fi
