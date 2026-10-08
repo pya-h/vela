@@ -1,0 +1,20 @@
+; std/loops: what a loop that gives a value fails with. A loop gives one
+; without this module, `bind r = loop … fi`; a file that names `LoopResult`
+; itself, in a type or a variant, brings it in with
+; `include std/loops {LoopResult}`, or names `loops.LoopResult` after
+; `include std/loops`.
+
+; Why a loop that gives a value has none: `B` is what a `break = v` gives,
+; and `M` what the last line's `fail LoopResult.Manual(m)` gives, `bool` where
+; the loop gives none.
+kind LoopResult<B, M>
+    ; The body never ran: the condition failed at once, or there was nothing
+    ; to go through.
+    Skipped
+    ; A `break` stopped it, with the value it gave, or `none`.
+    Broke(value: maybe B)
+    ; Its final pass ended with `continue`, before the last line.
+    EndedByContinue
+    ; The last line of the final pass failed with this.
+    Manual(value: M)
+fi

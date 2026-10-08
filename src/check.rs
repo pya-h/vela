@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::codegen;
 use crate::error::{Error, Result};
+use crate::library;
 use crate::modules::{IncludeScope, ModuleScope, Program};
 use crate::parser::MAX_NESTING;
 
@@ -322,6 +323,14 @@ pub struct Checker {
     loops: Vec<Option<(String, Span)>>,
     /// The name given to the loop about to be checked, `outer =>`.
     loop_name: Option<(String, Span)>,
+    /// The loops that give a value around the code being checked (see
+    /// `ValueLoop`): each one's place in `loops`, counting from one, and the
+    /// values its `break`s give, with where.
+    value_loops: Vec<(usize, Vec<(Type, Span)>)>,
+    /// Whether the loop about to be checked gives a value on the last lines of
+    /// its passes, and, once checked, what they give.
+    loop_gives: bool,
+    loop_given: Option<(Type, Span)>,
     /// While a loop's step is checked, how many loops are around it, that
     /// loop the innermost (see `PartedLoop`).
     stepping: Option<usize>,
@@ -432,6 +441,7 @@ struct Branches {
 
 const MATCH_BRANCHES: Branches = Branches { of: "match", each: "case" };
 const WHEN_BRANCHES: Branches = Branches { of: "when", each: "branch" };
+const LOOP_BRANCHES: Branches = Branches { of: "loop", each: "pass" };
 
 impl Branches {
     /// What a branch that gives no value is missing.
@@ -649,6 +659,9 @@ impl Checker {
     /// the message is spelled for the file later (see `check_program`).
     fn elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else { return String::new() };
+        if name == unqualified(library::LOOP_RESULT) {
+            return "; it is in Vela's library, and 'include std/loops {LoopResult}' brings it in".to_string();
+        }
         let declared = |full: &str| {
             !self.private.contains(full) && (self.tasks.contains_key(full) || self.shapes.contains_key(full) || self.kinds.contains_key(full) || self.variants.contains_key(full))
         };
@@ -3025,7 +3038,8 @@ impl Checker {
 
     /// `loop start || condition || step` (see `PartedLoop`), named `named`, in
     /// the scope its start's names live in.
-    fn check_parted(&mut self, parted: &mut PartedLoop, named: Option<(String, Span)>, span: Span) -> Result<()> {
+    /// Its passes give a value where it `gives` (see `ValueLoop`).
+    fn check_parted(&mut self, parted: &mut PartedLoop, named: Option<(String, Span)>, gives: bool, span: Span) -> Result<()> {
         if let Some((name, at)) = unused_in_loop(parted) {
             return err(at, format!("'{}' is declared for this loop, and no part of it uses it; leave it out", name));
         }
@@ -3070,7 +3084,7 @@ impl Checker {
         let entry = self.unset.clone();
         let stepping = self.stepping;
         self.loops.push(named);
-        let result = self.check_parted_passes(parted);
+        let result = self.check_parted_passes(parted, gives);
         self.loops.pop();
         self.stepping = stepping;
         self.unset = entry;
@@ -3093,11 +3107,11 @@ impl Checker {
     }
 
     /// The condition, the body and the step of a loop in three parts, inside it.
-    fn check_parted_passes(&mut self, parted: &mut PartedLoop) -> Result<()> {
-        match &mut parted.cond {
-            Some(cond) => self.check_condition(cond, &mut parted.body, None).map(|_| ())?,
-            None => self.check_scoped_block(&mut parted.body)?,
-        }
+    fn check_parted_passes(&mut self, parted: &mut PartedLoop, gives: bool) -> Result<()> {
+        let given = match &mut parted.cond {
+            Some(cond) => self.check_condition(cond, &mut parted.body, gives.then_some(LOOP_BRANCHES))?,
+            None => self.check_scoped_block(&mut parted.body).map(|()| None)?,
+        };
         // The step runs after each pass, where a `continue` of this loop leads,
         // so it can't have one; what it declares ends with it.
         self.stepping = Some(self.loops.len());
@@ -3108,6 +3122,7 @@ impl Checker {
             }
             self.check_stmt(item)?;
         }
+        self.loop_given = given;
         Ok(())
     }
 
@@ -3137,6 +3152,166 @@ impl Checker {
             at,
             format!("this loop never ends: its condition reads only {}, which nothing in the loop changes, and nothing in it leaves the loop", read.join(" and ")),
         ));
+    }
+
+    /// A loop that gives a value (see `ValueLoop`), and its type: `V ~
+    /// LoopResult<B, M>`, `V` what the last lines of its passes give, `B` what
+    /// its `break`s give and `M` what its last lines fail with, each `bool`
+    /// where none is given. As a statement with a plan B, it gives nothing.
+    fn check_loop_value(&mut self, value: &mut ValueLoop, span: Span) -> Result<Type> {
+        let never_ends = match &value.stmt.kind {
+            StmtKind::Parted(parted) => parted.cond.as_ref().is_none_or(says_true),
+            StmtKind::Loop(cond, _) => says_true(cond),
+            _ => false,
+        };
+        if never_ends {
+            return err(
+                span,
+                "a loop that never ends by itself gives no value, since no pass of it is the final one; give it a condition, as in 'loop i < n', and stop it early with 'break = v'",
+            );
+        }
+        // A name written with `=>` follows the rule of names, as a statement's does.
+        if let Some((name, at)) = value.name.as_ref().filter(|_| value.arrow) {
+            self.push_scope();
+            let free = self.define(name, Type::Unknown, false, *at);
+            self.pop_scope();
+            free?;
+        }
+        self.loop_name = value.name.clone();
+        self.value_loops.push((self.loops.len() + 1, Vec::new()));
+        self.loop_gives = value.gives;
+        self.loop_given = None;
+        // The statement is the loop the value is, whose last lines the place
+        // the value goes may tell more of (see `settle_variant`).
+        let result = self.check_stmt_kind(&mut value.stmt);
+        self.loop_gives = false;
+        self.loop_name = None;
+        let breaks = self.value_loops.pop().map(|(_, breaks)| breaks).unwrap_or_default();
+        let given = self.loop_given.take();
+        result?;
+        // `each v in args` is written out once per value, each pass its own.
+        if let StmtKind::Each(_, _, range, _) = &value.stmt.kind
+            && matches!(range.ty, Some(Type::Group(_)))
+        {
+            return err(range.span, "a loop through the values of a group gives no value, since each pass is written out for a value of its own; give the values on to a task, or gather what the passes give in a variable");
+        }
+        // What the last lines give: a value, and what they may fail with.
+        let (given, at) = match (value.gives, given) {
+            (false, _) => (Type::Nothing, span),
+            (true, Some(given)) => given,
+            (true, None) => return err(span, "every pass of this loop leaves, with '<-', 'break' or 'continue', so its last line never gives its value"),
+        };
+        let (given, manual) = match given {
+            Type::Or(value, error) => (*value, Some(*error)),
+            Type::Fail(_) => return err(at, "the last line of every pass of this loop fails, so it never gives a value; give one on a path of its own"),
+            other => (other, None),
+        };
+        if matches!(given, Type::None) {
+            return err(at, "the last line of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'");
+        }
+        let manual = match manual {
+            None => Type::Bool,
+            Some(error) => self.manual_type(&error, value, at)?,
+        };
+        // What the `break`s give, or `bool` where none does.
+        let mut broke: Option<Type> = None;
+        for (ty, at) in &breaks {
+            let ty = match ty {
+                Type::None => continue,
+                Type::Maybe(inner) => (**inner).clone(),
+                other => other.clone(),
+            };
+            broke = Some(match broke {
+                None => ty,
+                Some(before) => self.join(&before, &ty).filter(|joined| !matches!(joined, Type::Maybe(_) | Type::Or(..))).ok_or_else(|| {
+                    Error::at(*at, format!("this 'break' gives {}, and another gives {}; the breaks of a loop give one type", ty, before))
+                })?,
+            });
+        }
+        let broke = broke.unwrap_or(Type::Bool);
+        // `LoopResult<B, M>`, in the region of what it holds.
+        let region = breaks
+            .iter()
+            .map(|(ty, _)| ty)
+            .chain([&manual])
+            .flat_map(|ty| ty.regions())
+            .find(|region| *region != ANY_REGION)
+            .unwrap_or(ANY_REGION)
+            .to_string();
+        let result = Applied { name: library::LOOP_RESULT.to_string(), types: vec![broke, manual], region: Some(region) };
+        let result = self.made_kinds(Type::Applied(Box::new(result)), span)?;
+        let ty = Type::Or(Box::new(given), Box::new(result));
+        if value.gives
+            && let Some(body) = value.body_mut()
+        {
+            self.settle_value(body, &ty)?;
+        }
+        // Its value outlives every pass, so it is in no region one declares.
+        if let Some(region) = ty.regions().into_iter().find(|region| !unnamed_region(region) && *region != ANY_REGION && self.lookup(region).is_none()) {
+            let at = breaks.iter().find(|(ty, _)| ty.regions().contains(&region)).map_or(at, |(_, at)| *at);
+            return err(at, format!("this value is in region '{}', which is freed when the pass ends, so it can't be the loop's value", region));
+        }
+        Ok(ty)
+    }
+
+    /// `M`, what the last lines of the loop `value` fail with, from `error`,
+    /// the error they give: only `LoopResult.Manual(m)`, since the other
+    /// variants say what the loop did.
+    fn manual_type(&self, error: &Type, value: &ValueLoop, at: Span) -> Result<Type> {
+        let wrong = || {
+            err(
+                at,
+                "the last line of a loop that gives a value fails only with 'LoopResult.Manual(…)', which 'include std/loops {LoopResult}' brings in; 'break = v' stops it with a value",
+            )
+        };
+        let Type::Applied(result) = self.unmade(error) else { return wrong() };
+        if result.name != library::LOOP_RESULT {
+            return wrong();
+        }
+        let mut failures = Vec::new();
+        if let Some(body) = value.body() {
+            last_values(body, &mut failures);
+        }
+        for failure in failures {
+            let failure = match &failure.kind {
+                ExprKind::Wrap(inner) => inner,
+                _ => failure,
+            };
+            if let ExprKind::Fail(inner) = &failure.kind
+                && let ExprKind::Construct { tag, .. } = &inner.kind
+                && tag != "Manual"
+            {
+                return err(
+                    inner.span,
+                    format!("'{}' says what the loop did, so its last line fails only with 'LoopResult.Manual(…)'; 'break = v' stops it with a value", tag),
+                );
+            }
+        }
+        Ok(result.types.get(1).cloned().filter(|ty| !is_untold(ty)).unwrap_or(Type::Bool))
+    }
+
+    /// The value of a `break` that stops the loop named `name`, or the
+    /// innermost: one that gives a value takes it, as what it fails with.
+    fn check_break_value(&mut self, name: Option<&(String, Span)>, value: Option<&mut Expr>) -> Result<()> {
+        let target = match name {
+            None => Some(self.loops.len()),
+            Some((name, _)) => self.loops.iter().rposition(|named| named.as_ref().is_some_and(|(given, _)| given == name)).map(|i| i + 1),
+        };
+        let Some(value) = value else { return Ok(()) };
+        let Some(at) = self.value_loops.iter().rposition(|(at, _)| Some(*at) == target) else {
+            return err(
+                value.span,
+                "this loop gives no value, so its 'break' gives none; a loop gives one where it is a value, as in 'bind r = loop … fi'",
+            );
+        };
+        let ty = self.check_expr(value)?;
+        if matches!(ty, Type::Nothing | Type::Fail(_) | Type::Or(..)) {
+            return err(value.span, format!("a 'break' gives a value the loop fails with, and this is {}", ty));
+        }
+        if let Some((_, breaks)) = self.value_loops.get_mut(at) {
+            breaks.push((ty, value.span));
+        }
+        Ok(())
     }
 
     /// `break` or `continue` (`word`), given the name of the loop it stops or
@@ -3673,11 +3848,32 @@ impl Checker {
                         Ok(())
                     }
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
+                    ExprKind::Fail(_) => err(
+                        e.span,
+                        "'fail …' makes a failure, which a line of its own drops; send it with '<- fail …', or stop a loop that gives a value with 'break = …'",
+                    ),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
             }
             StmtKind::Binding { names, mutable, reference: true, init } => self.check_reference(names, *mutable, init),
             StmtKind::Binding { names, mutable, init, .. } => {
+                // `bind r = loop …`: the variable names the loop it gives, and a
+                // `LoopResult` written with no types there takes the loop's,
+                // `bind r: int ~ LoopResult = loop …`.
+                let mut from_loop = HashSet::new();
+                let each_given = init.len() == names.len();
+                for (i, bound) in names.iter_mut().enumerate() {
+                    let Some(ExprKind::LoopValue(value)) = init.get_mut(i).filter(|_| each_given).map(|value| &mut value.kind) else { continue };
+                    if bound.parts.is_empty() && bound.name != DISCARD {
+                        name_value_loop(value, &bound.name, bound.span)?;
+                    }
+                    if let Some(Type::Or(given, error)) = &bound.ty
+                        && matches!(error.as_ref(), Type::Named(name, None) if name == library::LOOP_RESULT)
+                    {
+                        bound.ty = Some((**given).clone());
+                        from_loop.insert(i);
+                    }
+                }
                 for bound in names.iter_mut() {
                     self.resolve_bound_types(bound)?;
                 }
@@ -3702,6 +3898,10 @@ impl Checker {
                         continue;
                     }
                     let Some((name, at, annotated)) = names.get(i).map(|b| (b.name.clone(), b.span, b.ty.clone())) else { continue };
+                    let annotated = match (annotated, &actual) {
+                        (Some(given), Type::Or(_, result)) if from_loop.contains(&i) => Some(Type::Or(Box::new(given), result.clone())),
+                        (annotated, _) => annotated,
+                    };
                     let ty = match annotated {
                         Some(annotated) => {
                             match init.get_mut(i).filter(|_| !forwarded) {
@@ -3740,6 +3940,12 @@ impl Checker {
                 Ok(())
             }
             StmtKind::Assign(targets, values) => {
+                // `total = loop …`: the variable names the loop it gives.
+                for (target, value) in targets.iter().zip(values.iter_mut()) {
+                    if let (Target::Place(Expr { kind: ExprKind::Var(name), span, .. }), ExprKind::LoopValue(value)) = (target, &mut value.kind) {
+                        name_value_loop(value, name, *span)?;
+                    }
+                }
                 let mut places = Vec::new();
                 let mut assigned: HashMap<String, Span> = HashMap::new();
                 for target in targets.iter_mut() {
@@ -3802,6 +4008,7 @@ impl Checker {
             // set is set after it; what they declare ends at its `fi`.
             StmtKind::Block(body) => self.check_scoped_block(body),
             StmtKind::Loop(cond, body) => {
+                let gives = std::mem::take(&mut self.loop_gives);
                 if always_holds(cond)
                     && let Some(pattern) = &cond.pattern
                 {
@@ -3814,10 +4021,10 @@ impl Checker {
                 let unchanging = unchanging_reads(cond, body, &[]);
                 let entry = self.unset.clone();
                 self.enter_loop();
-                let result = self.check_condition(cond, body, None);
+                let result = self.check_condition(cond, body, gives.then_some(LOOP_BRANCHES));
                 self.loops.pop();
                 self.unset = entry;
-                result?;
+                self.loop_given = result?;
                 // `loop true`: one that never ends by itself says so in a word.
                 if says_true(cond) {
                     self.warnings.push(Error::at(span, ENDLESS_UNSAID));
@@ -3829,8 +4036,9 @@ impl Checker {
             StmtKind::Parted(parted) => {
                 // Its start's names live in it, which a scope of its own ends.
                 let named = self.loop_name.take();
+                let gives = std::mem::take(&mut self.loop_gives);
                 self.push_scope();
-                let result = self.check_parted(parted, named, span);
+                let result = self.check_parted(parted, named, gives, span);
                 self.pop_scope();
                 result
             }
@@ -3849,9 +4057,10 @@ impl Checker {
                 self.loop_name = None;
                 result
             }
-            StmtKind::Break(name) => {
+            StmtKind::Break(name, value) => {
                 let name = name.clone();
-                self.check_jump("break", name.as_ref(), span)
+                self.check_jump("break", name.as_ref(), span)?;
+                self.check_break_value(name.as_ref(), value.as_deref_mut())
             }
             StmtKind::Continue(name) => {
                 let name = name.clone();
@@ -3862,6 +4071,7 @@ impl Checker {
                 // What it goes through is found before it starts, outside it,
                 // so a loop in a plan B there takes neither its name nor a `break`.
                 let named = self.loop_name.take();
+                let gives = std::mem::take(&mut self.loop_gives);
                 let (item, value) = self.check_each_source(name, second.as_ref(), range)?;
                 if name == DISCARD && value.is_none() {
                     return err(span, "'_' drops a map's key or value, as in 'each _, v in m'; a loop over this gives one item each pass, so name it");
@@ -3890,7 +4100,13 @@ impl Checker {
                 {
                     result = self.define(second, value, false, *at);
                 }
-                let result = result.and_then(|()| self.check_block(body));
+                let result = result.and_then(|()| {
+                    if !gives {
+                        return self.check_block(body);
+                    }
+                    self.loop_given = self.value_block_tail(body, span, LOOP_BRANCHES)?;
+                    Ok(())
+                });
                 self.pop_scope();
                 self.loops.pop();
                 self.unset = entry;
@@ -4195,6 +4411,13 @@ impl Checker {
         let Some((last, rest)) = body.split_last_mut() else {
             return err(at, branches.needs_value());
         };
+        // `each x in xs … fi { 0 }` starting the last line is the value of a
+        // loop, which a line of its own would only fail with.
+        if let StmtKind::Expr(Expr { kind: ExprKind::PlanB { value, .. }, .. }) = &mut last.kind
+            && let ExprKind::LoopValue(value) = &mut value.kind
+        {
+            value.gives = true;
+        }
         self.check_block(rest)?;
         // A `when` or a `match` on the last line gives the value through its own
         // branches, which is what makes a chain of conditions give one.
@@ -6715,6 +6938,7 @@ impl Checker {
             // one whose branches had a mistake of their own gives an unknown
             // type, so nothing after it complains twice (see `Type::Unknown`).
             ExprKind::Choice(stmt) => Ok(self.check_branching_value(stmt)?.unwrap_or(Type::Unknown)),
+            ExprKind::LoopValue(value) => self.check_loop_value(value, span),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
             ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
@@ -11557,7 +11781,8 @@ impl Checker {
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
-            StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => Ok(()),
+            StmtKind::Break(_, Some(value)) => self.substitute_expr(value, given, made),
+            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
             StmtKind::Named(_, inner) => self.substitute_stmt(inner, given, made),
             StmtKind::Turns(turns) => turns.iter_mut().try_for_each(|turn| self.substitute_block(turn, given, made)),
             StmtKind::Binding { names, init, .. } => {
@@ -11977,6 +12202,7 @@ impl Checker {
             }
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.substitute_stmt(stmt, given, made),
+            ExprKind::LoopValue(value) => self.substitute_stmt(&mut value.stmt, given, made),
             ExprKind::Edit { items, args, .. } => {
                 self.substitute_expr(items, given, made)?;
                 args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
@@ -12720,7 +12946,7 @@ fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut Lo
     for stmt in stmts {
         match &stmt.kind {
             StmtKind::Send(_) => effects.leaves = true,
-            StmtKind::Break(name) => {
+            StmtKind::Break(name, _) => {
                 let stops = inner == 0 || name.is_some();
                 effects.leaves |= stops;
                 effects.stops |= stops;
@@ -12774,7 +13000,7 @@ fn loop_effects(stmts: &[Stmt], names: &[String], inner: usize, effects: &mut Lo
 /// `break` inside one stops that loop only.
 fn always_leaves(block: &[Stmt]) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
-        StmtKind::Send(_) | StmtKind::Break(_) | StmtKind::Continue(_) => true,
+        StmtKind::Send(_) | StmtKind::Break(..) | StmtKind::Continue(_) => true,
         StmtKind::When(arms, else_block) => {
             for arm in arms {
                 let known = known_condition(&arm.cond);
@@ -13770,7 +13996,8 @@ fn walk_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr)) {
             walk_expr(subject, f);
             cases.iter().for_each(|case| walk_block(&case.body, f));
         }
-        StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => {}
+        StmtKind::Break(_, Some(value)) => walk_expr(value, f),
+        StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => {}
     }
 }
 
@@ -13825,6 +14052,7 @@ fn walk_expr(e: &Expr, f: &mut dyn FnMut(&Expr)) {
             walk_block(body, f);
         }
         ExprKind::Choice(stmt) => walk_stmt(stmt, f),
+        ExprKind::LoopValue(value) => walk_stmt(&value.stmt, f),
     }
 }
 
@@ -14031,6 +14259,35 @@ fn padded_group_tuples(ty: &Type) -> Type {
         })),
         Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(padded_group_tuples).collect(), taken: task.taken.clone(), ret: padded_group_tuples(&task.ret) })),
         other => other.clone(),
+    }
+}
+
+/// Names the loop `value`, which gives the variable `name` at `at` its value,
+/// as that variable: unless written with `=>`, since a loop has one name.
+fn name_value_loop(value: &mut ValueLoop, name: &str, at: Span) -> Result<()> {
+    if let Some((written, written_at)) = value.name.as_ref().filter(|_| value.arrow) {
+        return err(
+            *written_at,
+            format!("this loop gives '{0}' its value, which names it '{0}', so it takes no name of its own; leave out '{1} =>' and write 'break {0}'", name, written),
+        );
+    }
+    value.name = Some((name.to_string(), at));
+    Ok(())
+}
+
+/// The values the last line of `block` gives, through the branches of a
+/// `when` or a `match` there.
+fn last_values<'a>(block: &'a [Stmt], values: &mut Vec<&'a Expr>) {
+    match block.last().map(|stmt| &stmt.kind) {
+        Some(StmtKind::Expr(e)) => values.push(e),
+        Some(StmtKind::When(arms, else_block)) => {
+            arms.iter().for_each(|arm| last_values(&arm.body, values));
+            if let Some(block) = else_block {
+                last_values(block, values);
+            }
+        }
+        Some(StmtKind::Match(_, cases)) => cases.iter().for_each(|case| last_values(&case.body, values)),
+        _ => {}
     }
 }
 

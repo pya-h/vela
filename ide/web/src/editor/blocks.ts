@@ -119,10 +119,13 @@ export function closesBrace(line: string): boolean {
 /** The words that open an item: a task, a shape, or a kind. */
 const ITEMS = ["task", "shape", "kind"];
 
+/** The block words that may start a value further along a line: `bind r = each x in xs`. */
+const VALUE_OPENERS = ["match", "when", "loop", "each", "endless"];
+
 /**
  * The block-opening word a line has, if any: its first word, when that opens a
- * block, or else a `match` or a `when` used as a value further along it
- * (`bind area = match s`, `show(when ok`), which opens a block just the same,
+ * block, or else a `match`, a `when` or a loop used as a value further along it
+ * (`bind area = match s`, `show(when ok`, `bind r = each x in xs`), which opens a block just the same,
  * or a loop's word after the loop's name (`outer => each x in xs`).
  * A `when` right after an `else` continues that `when` and opens nothing, since
  * one `fi` closes the whole chain. Nor does a line that closes every block it
@@ -142,7 +145,7 @@ export function opener(line: string, words: BlockWords): string | null {
     at = 1;
   } else {
     for (let i = 1; i < found.length; i++) {
-      if ((word(i) === "match" || word(i) === "when") && opens(i)) {
+      if (VALUE_OPENERS.includes(word(i)) && opens(i)) {
         at = i;
         break;
       }

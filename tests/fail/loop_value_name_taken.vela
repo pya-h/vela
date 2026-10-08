@@ -1,0 +1,8 @@
+; error: 4:14: 'r' is already the name of a loop around this, at 3:10
+task main()
+    bind r = each x in 0..3
+        hold r = 1
+        x + r
+    fi
+    show(r { 0 })
+fi

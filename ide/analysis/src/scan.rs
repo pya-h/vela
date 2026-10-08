@@ -1624,6 +1624,14 @@ impl<'a> Classifier<'a> {
                                 if let Some(named) = self.out.get_mut(at) {
                                     named.symbol = Some(id);
                                 }
+                            } else if let Some(q) = p.checked_sub(2).filter(|&q| {
+                                // `bind r = loop …`, `total = each …`: the variable
+                                // the loop gives names it, for `break r`.
+                                tokens.before(p) == Some(&Token::Assign)
+                                    && tokens.ident(q).is_some()
+                                    && matches!(tokens.before(q), Some(Token::Bind | Token::Hold | Token::Newline) | None)
+                            }) {
+                                self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), String::new());
                             }
                             if *token == Token::Each {
                                 declaring = Some("each");

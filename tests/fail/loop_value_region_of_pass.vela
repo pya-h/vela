@@ -1,0 +1,8 @@
+; error: 5:9: this value is in region 'pass', which is freed when the pass ends, so it can't be the loop's value
+task main()
+    bind r = each x in 0..3
+        region pass
+        "{x}" at pass
+    fi
+    show(r { "" })
+fi

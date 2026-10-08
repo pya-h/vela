@@ -210,6 +210,8 @@ struct Module {
     /// For each of `includes`, the module it loads.
     included: Vec<usize>,
     items: Vec<Item>,
+    /// Whether it has a loop that gives a value (see `Parser::loop_values`).
+    loop_values: bool,
 }
 
 #[derive(Default)]
@@ -231,6 +233,18 @@ impl State {
     fn load(&mut self, path: &Path, source: &str, loader: &mut Loader) -> Result<Program> {
         let main = self.parse(String::new(), path, identity(path), source.to_string(), None)?;
         self.visit(main, loader)?;
+        // A loop that gives a value fails with `std/loops`'s `LoopResult`, which
+        // a file names only if it includes it.
+        let key = PathBuf::from(format!("<{0}>/{0}/{1}", library::ROOT, library::LOOPS));
+        if self.modules.iter().any(|module| module.loop_values)
+            && !self.by_path.contains_key(&key)
+            && let Some(source) = library::module(library::LOOPS)
+        {
+            let id = format!("{}/{}", library::ROOT, library::LOOPS);
+            let path = PathBuf::from(format!("{}.vela", id));
+            let loops = self.parse(id, &path, key, source.to_string(), None)?;
+            self.visit(loops, loader)?;
+        }
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
         let variants = variants_of_kinds(&self.modules);
         // Every name in the program, by the identity of its module.
@@ -266,9 +280,10 @@ impl State {
         check_natives(&id, &items)?;
         self.type_places.extend(parser.type_places());
         let includes = parser.includes();
+        let loop_values = parser.loop_values();
         let index = self.modules.len();
         self.by_path.insert(key, index);
-        self.modules.push(Module { id, file, includes, included: Vec::new(), items });
+        self.modules.push(Module { id, file, includes, included: Vec::new(), items, loop_values });
         Ok(index)
     }
 
@@ -535,6 +550,9 @@ fn spelling(
     for (written, full, _) in imports {
         names.insert(full.clone(), written.clone());
     }
+    // What a loop that gives a value fails with is named by its own name
+    // where the file brings in no way to write it.
+    names.entry(library::LOOP_RESULT.to_string()).or_insert_with(|| unqualified(library::LOOP_RESULT).to_string());
     // A variant not written otherwise is written through its kind.
     for (kind, tags) in variants {
         let Some(kind) = names.get(kind).cloned() else { continue };
@@ -1331,7 +1349,8 @@ impl Resolver<'_> {
                 cases.iter_mut().try_for_each(|case| self.block(&mut case.body))
             }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter_mut().try_for_each(|e| self.expr(e)),
-            StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => Ok(()),
+            StmtKind::Break(_, Some(value)) => self.expr(value),
+            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
         }
     }
 
@@ -1434,6 +1453,7 @@ impl Resolver<'_> {
             }
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.stmt(stmt),
+            ExprKind::LoopValue(value) => self.stmt(&mut value.stmt),
             ExprKind::Edit { items, args, .. } => {
                 self.expr(items)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))

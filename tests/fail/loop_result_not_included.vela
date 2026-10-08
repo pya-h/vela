@@ -1,0 +1,7 @@
+; error: 3:19: unknown type 'LoopResult'; it is in Vela's library, and 'include std/loops {LoopResult}' brings it in
+task main()
+    bind r: int ~ LoopResult = each x in 0..3
+        x
+    fi
+    show(r { 0 })
+fi

@@ -63,7 +63,10 @@ binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `mayb
 started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
 pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. A loop may come in
 three parts, `loop hold i = 0, j = 9 || i < j || i++, j--`, and one that never ends by itself is written
-`endless`; the compiler warns about a loop that never ends without saying so. Kinds take types as
+`endless`; the compiler warns about a loop that never ends without saying so. A loop can be a value,
+`bind r = each x in xs … fi`, the last line of its final pass, or a failure that says why it has none
+(`LoopResult` of `std/loops`: it never ran, `break = v` stopped it, its final pass ended with `continue`, or its
+last line failed). Kinds take types as
 shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
 `Option<int>.None`. `block … fi` runs
 statements in a block of their own.

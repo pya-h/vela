@@ -2367,6 +2367,26 @@ fi</code></pre>
           that differ by their types; or let a header say a region is only needed for some types, which is a new rule to
           learn. Doing neither leaves the wart. The question to decide is whether real programs write enough of these
           tasks for the noise to be worth a rule (see <a href="vela.html#generic-shapes">Shapes that take types</a>).</li>
+        <li id="fail-loop-at-once"><strong>Failing a loop at once:</strong> a loop that gives a value fails with
+          <code>LoopResult.Manual(m)</code> only from the last line of its final pass (see
+          <a href="vela.html#loop-values">Loops that give a value</a>), and a <code>fail …</code> on a line of its own
+          does nothing. To stop it in the middle with a failure of the author's choosing, a program today gives the
+          <code>break</code> the value, <code>break = "bad input"</code>, and reads it from <code>Broke</code>. The idea
+          (the author's, 2026-10-08) is a word that stops the loop there and fails with what follows, as
+          <code>&lt;-</code> leaves a task. The spellings suggested, and what each meets:
+          <ul>
+            <li><code>&lt;= fail m</code>: <code>&lt;=</code> is already "at most". Starting a line, as
+              <code>&lt;-</code> does, the compiler could tell them apart, but a reader sees the same two
+              characters in <code>a &lt;= b</code>.</li>
+            <li><code>&lt;@ fail m</code>: <code>@</code> names a region everywhere else (<code>text@r</code>).</li>
+            <li><code>&lt;! fail m</code>: no clash, but a new symbol where Vela prefers words.</li>
+            <li><code>break = fail LoopResult.Manual(m)</code>: no new syntax, a <code>break</code> whose value is the
+              failure itself, which the loop then fails with as it is, rather than as <code>Broke</code>.</li>
+          </ul>
+          <p><strong>What it would add.</strong> A failure that says why without folding it into the break's type.
+          <strong>What it would cost.</strong> A second way to stop a loop with a value, beside <code>break = v</code>,
+          which already does the same with one more <code>match</code>. To be decided once programs show how often
+          <code>break = v</code> falls short.</p></li>
         <li id="inner-kind-variants"><strong>Variants of a kind held in a kind:</strong> a kind whose variant holds
           another kind is read through two matches today. <code>InputError</code> is the first in the language
           (<a href="vela.html#reading-input">Reading a number from input</a>): its <code>NoNumber</code> holds a

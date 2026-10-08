@@ -1,0 +1,366 @@
+  1 | ; Loops that give a value: the last line of each pass gives it, the final
+    | comment:; Loops that give a value: the last line of each pass gives it, the final
+  2 | ; pass's is the loop's, and the loop fails with LoopResult when it has none.
+    | comment:; pass's is the loop's, and the loop fails with LoopResult when it has none.
+  4 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  6 | task describe(why: LoopResult<text, int>@r)
+    | keyword:task  task:describe  punctuation:(  parameter:why  punctuation::  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:@  region:r  punctuation:)
+  7 |     match why
+    | keyword:match  parameter:why
+  8 |     case Broke b
+    | keyword:case  variant:Broke  variable:b
+  9 |         show("broke ", b { "?" })
+    | builtin-fn:show  punctuation:(  string:"broke "  punctuation:,  variable:b  punctuation:{  string:"?"  punctuation:}  punctuation:)
+ 10 |     case Skipped
+    | keyword:case  variant:Skipped
+ 11 |         show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 12 |     case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 13 |         show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 14 |     case Manual m
+    | keyword:case  variant:Manual  variable:m
+ 15 |         show("manual ", m)
+    | builtin-fn:show  punctuation:(  string:"manual "  punctuation:,  variable:m  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 | fi
+    | keyword:fi
+ 19 | ; In a task that takes types, B is the task's.
+    | comment:; In a task that takes types, B is the task's.
+ 20 | task first_over<T: ordered & shown>(xs: [T]@r, limit: T) -> T ~ bool
+    | keyword:task  task:first_over  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:limit  punctuation::  type:T  punctuation:)  operator:->  type:T  operator:~  type-builtin:bool
+ 21 |     bind found = each x in xs
+    | keyword:bind  variable:found  operator:=  keyword:each  variable:x  keyword:in  parameter:xs
+ 22 |         when x > limit
+    | keyword:when  variable:x  operator:>  parameter:limit
+ 23 |             break = x
+    | keyword:break  operator:=  variable:x
+ 24 |         fi
+    | keyword:fi
+ 25 |         x
+    | variable:x
+ 26 |     fi
+    | keyword:fi
+ 27 |     match found
+    | keyword:match  variable:found
+ 28 |     case {_}
+    | keyword:case  punctuation:{  keyword:_  punctuation:}
+ 29 |         <- fail false
+    | keyword:<-  keyword:fail  keyword:false
+ 30 |     case failure why
+    | keyword:case  keyword:failure  variable:why
+ 31 |         match why
+    | keyword:match  variable:why
+ 32 |         case Broke b
+    | keyword:case  variant:Broke  variable:b
+ 33 |             <- b { limit }
+    | keyword:<-  variable:b  punctuation:{  parameter:limit  punctuation:}
+ 34 |         case Skipped
+    | keyword:case  variant:Skipped
+ 35 |             <- fail true
+    | keyword:<-  keyword:fail  keyword:true
+ 36 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 37 |             <- fail true
+    | keyword:<-  keyword:fail  keyword:true
+ 38 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+ 39 |             <- fail true
+    | keyword:<-  keyword:fail  keyword:true
+ 40 |         fi
+    | keyword:fi
+ 41 |     fi
+    | keyword:fi
+ 42 | fi
+    | keyword:fi
+ 44 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 45 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 46 | fi
+    | keyword:fi
+ 48 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 49 |     region r
+    | keyword:region  region:r
+ 50 |     bind xs = [3, 8, 1, 9, 4]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:3  punctuation:,  number:8  punctuation:,  number:1  punctuation:,  number:9  punctuation:,  number:4  punctuation:]
+ 52 |     ; The final pass's last line.
+    | comment:; The final pass's last line.
+ 53 |     bind doubled = each x in xs
+    | keyword:bind  variable:doubled  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+ 54 |         x * 2
+    | variable:x  operator:*  number:2
+ 55 |     fi
+    | keyword:fi
+ 56 |     show("doubled ", doubled { -1 })
+    | builtin-fn:show  punctuation:(  string:"doubled "  punctuation:,  variable:doubled  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 58 |     ; A break gives a value it fails with, or none.
+    | comment:; A break gives a value it fails with, or none.
+ 59 |     bind big = each x in xs
+    | keyword:bind  variable:big  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+ 60 |         when x > 8
+    | keyword:when  variable:x  operator:>  number:8
+ 61 |             break = x
+    | keyword:break  operator:=  variable:x
+ 62 |         fi
+    | keyword:fi
+ 63 |         x
+    | variable:x
+ 64 |     fi
+    | keyword:fi
+ 65 |     match big
+    | keyword:match  variable:big
+ 66 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+ 67 |         show("ended with ", v)
+    | builtin-fn:show  punctuation:(  string:"ended with "  punctuation:,  variable:v  punctuation:)
+ 68 |     case failure why
+    | keyword:case  keyword:failure  variable:why
+ 69 |         match why
+    | keyword:match  variable:why
+ 70 |         case Broke b
+    | keyword:case  variant:Broke  variable:b
+ 71 |             show("broke ", b { 0 })
+    | builtin-fn:show  punctuation:(  string:"broke "  punctuation:,  variable:b  punctuation:{  number:0  punctuation:}  punctuation:)
+ 72 |         case Skipped
+    | keyword:case  variant:Skipped
+ 73 |             show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 74 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 75 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 76 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+ 77 |             show("manual")
+    | builtin-fn:show  punctuation:(  string:"manual"  punctuation:)
+ 78 |         fi
+    | keyword:fi
+ 79 |     fi
+    | keyword:fi
+ 81 |     ; A body that never runs, a final pass that continues, a last line that fails.
+    | comment:; A body that never runs, a final pass that continues, a last line that fails.
+ 82 |     hold n = 10
+    | keyword:hold  variable:n  operator:=  number:10
+ 83 |     bind none_ran = loop n < 3
+    | keyword:bind  variable:none_ran  operator:=  keyword:loop  variable:n  operator:<  number:3
+ 84 |         n++
+    | variable:n  operator:++
+ 85 |         n
+    | variable:n
+ 86 |     fi
+    | keyword:fi
+ 87 |     bind odd = each x in xs
+    | keyword:bind  variable:odd  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+ 88 |         when x % 2 == 0
+    | keyword:when  variable:x  operator:%  number:2  operator:==  number:0
+ 89 |             continue
+    | keyword:continue
+ 90 |         fi
+    | keyword:fi
+ 91 |         x
+    | variable:x
+ 92 |     fi
+    | keyword:fi
+ 93 |     bind checked: int ~ LoopResult<text, int> = each x in xs
+    | keyword:bind  variable:checked  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+ 94 |         when x > 100
+    | keyword:when  variable:x  operator:>  number:100
+ 95 |             break = "huge"
+    | keyword:break  operator:=  string:"huge"
+ 96 |         else when x == 4
+    | keyword:else  keyword:when  variable:x  operator:==  number:4
+ 97 |             fail LoopResult.Manual(x)
+    | keyword:fail  type:LoopResult  punctuation:.  variant:Manual  punctuation:(  variable:x  punctuation:)
+ 98 |         else
+    | keyword:else
+ 99 |             x
+    | variable:x
+100 |         fi
+    | keyword:fi
+101 |     fi
+    | keyword:fi
+102 |     show("never ran ", none_ran { -1 }, ", odd ", odd { -1 })
+    | builtin-fn:show  punctuation:(  string:"never ran "  punctuation:,  variable:none_ran  punctuation:{  operator:-  number:1  punctuation:}  punctuation:,  string:", odd "  punctuation:,  variable:odd  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+103 |     match checked
+    | keyword:match  variable:checked
+104 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+105 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+106 |     case failure why
+    | keyword:case  keyword:failure  variable:why
+107 |         describe(why)
+    | task:describe  punctuation:(  variable:why  punctuation:)
+108 |     fi
+    | keyword:fi
+110 |     ; Three parts, and a LoopResult written bare takes the loop's types.
+    | comment:; Three parts, and a LoopResult written bare takes the loop's types.
+111 |     bind total: int ~ LoopResult = loop hold i = 0, sum = 0 || i < 5 || i++
+    | keyword:bind  variable:total  punctuation::  type-builtin:int  operator:~  type:LoopResult  operator:=  keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  variable:sum  operator:=  number:0  operator:||  variable:i  operator:<  number:5  operator:||  variable:i  operator:++
+112 |         sum += i
+    | variable:sum  operator:+=  variable:i
+113 |         sum
+    | variable:sum
+114 |     fi
+    | keyword:fi
+115 |     show("total ", total { 0 })
+    | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:{  number:0  punctuation:}  punctuation:)
+117 |     ; The variable names the loop, for a break from a loop inside it.
+    | comment:; The variable names the loop, for a break from a loop inside it.
+118 |     bind pair = each a in 1..4
+    | keyword:bind  variable:pair  operator:=  keyword:each  variable:a  keyword:in  number:1  operator:..  number:4
+119 |         each b in 1..4
+    | keyword:each  variable:b  keyword:in  number:1  operator:..  number:4
+120 |             when a * b == 6
+    | keyword:when  variable:a  operator:*  variable:b  operator:==  number:6
+121 |                 break pair = a * 10 + b
+    | keyword:break  variable:pair  operator:=  variable:a  operator:*  number:10  operator:+  variable:b
+122 |             fi
+    | keyword:fi
+123 |         fi
+    | keyword:fi
+124 |         0
+    | number:0
+125 |     fi
+    | keyword:fi
+126 |     match pair
+    | keyword:match  variable:pair
+127 |     case {_}
+    | keyword:case  punctuation:{  keyword:_  punctuation:}
+128 |         show("no pair")
+    | builtin-fn:show  punctuation:(  string:"no pair"  punctuation:)
+129 |     case failure why
+    | keyword:case  keyword:failure  variable:why
+130 |         match why
+    | keyword:match  variable:why
+131 |         case Broke b
+    | keyword:case  variant:Broke  variable:b
+132 |             show("pair ", b { 0 })
+    | builtin-fn:show  punctuation:(  string:"pair "  punctuation:,  variable:b  punctuation:{  number:0  punctuation:}  punctuation:)
+133 |         case Skipped
+    | keyword:case  variant:Skipped
+134 |             show("?")
+    | builtin-fn:show  punctuation:(  string:"?"  punctuation:)
+135 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+136 |             show("?")
+    | builtin-fn:show  punctuation:(  string:"?"  punctuation:)
+137 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+138 |             show("?")
+    | builtin-fn:show  punctuation:(  string:"?"  punctuation:)
+139 |         fi
+    | keyword:fi
+140 |     fi
+    | keyword:fi
+141 |     bind rows = each a in 0..3
+    | keyword:bind  variable:rows  operator:=  keyword:each  variable:a  keyword:in  number:0  operator:..  number:3
+142 |         each b in 0..3
+    | keyword:each  variable:b  keyword:in  number:0  operator:..  number:3
+143 |             when b == a
+    | keyword:when  variable:b  operator:==  variable:a
+144 |                 continue rows
+    | keyword:continue  variable:rows
+145 |             fi
+    | keyword:fi
+146 |         fi
+    | keyword:fi
+147 |         a
+    | variable:a
+148 |     fi
+    | keyword:fi
+149 |     show("rows ", rows { -1 })
+    | builtin-fn:show  punctuation:(  string:"rows "  punctuation:,  variable:rows  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+151 |     ; Anywhere a value goes: a call, a condition, another loop's last line.
+    | comment:; Anywhere a value goes: a call, a condition, another loop's last line.
+152 |     show(loop hold k = 0 || k < 3 || k++
+    | builtin-fn:show  punctuation:(  keyword:loop  keyword:hold  variable:k  operator:=  number:0  operator:||  variable:k  operator:<  number:3  operator:||  variable:k  operator:++
+153 |         k * 10
+    | variable:k  operator:*  number:10
+154 |     fi { 0 })
+    | keyword:fi  punctuation:{  number:0  punctuation:}  punctuation:)
+155 |     when (each x in 0..4
+    | keyword:when  punctuation:(  keyword:each  variable:x  keyword:in  number:0  operator:..  number:4
+156 |         x
+    | variable:x
+157 |     fi { 0 }) == 3
+    | keyword:fi  punctuation:{  number:0  punctuation:}  punctuation:)  operator:==  number:3
+158 |         show("three")
+    | builtin-fn:show  punctuation:(  string:"three"  punctuation:)
+159 |     fi
+    | keyword:fi
+160 |     bind deep = each a in 1..3
+    | keyword:bind  variable:deep  operator:=  keyword:each  variable:a  keyword:in  number:1  operator:..  number:3
+161 |         each b in 1..3
+    | keyword:each  variable:b  keyword:in  number:1  operator:..  number:3
+162 |             a * b
+    | variable:a  operator:*  variable:b
+163 |         fi { 0 }
+    | keyword:fi  punctuation:{  number:0  punctuation:}
+164 |     fi
+    | keyword:fi
+165 |     show("deep ", deep { 0 })
+    | builtin-fn:show  punctuation:(  string:"deep "  punctuation:,  variable:deep  punctuation:{  number:0  punctuation:}  punctuation:)
+166 |     show(first_over([1, 5, 9, ...] at r, 4) { 0 }, " ", first_over(["a", "q", ...] at r, "m") { "" })
+    | builtin-fn:show  punctuation:(  task:first_over  punctuation:(  punctuation:[  number:1  punctuation:,  number:5  punctuation:,  number:9  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:first_over  punctuation:(  punctuation:[  string:"a"  punctuation:,  string:"q"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  string:"m"  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+167 |     show(apply((m: int) -> int
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  punctuation:(  parameter:m  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+168 |         bind s = loop hold i = 0, sum = 0 || i < m || i++
+    | keyword:bind  variable:s  operator:=  keyword:loop  keyword:hold  variable:i  operator:=  number:0  punctuation:,  variable:sum  operator:=  number:0  operator:||  variable:i  operator:<  parameter:m  operator:||  variable:i  operator:++
+169 |             sum += i
+    | variable:sum  operator:+=  variable:i
+170 |             sum
+    | variable:sum
+171 |         fi
+    | keyword:fi
+172 |         <- s { -1 }
+    | keyword:<-  variable:s  punctuation:{  operator:-  number:1  punctuation:}
+173 |     fi, 5))
+    | keyword:fi  punctuation:,  number:5  punctuation:)  punctuation:)
+175 |     ; A statement with a plan B gives nothing, and only fails.
+    | comment:; A statement with a plan B gives nothing, and only fails.
+176 |     hold seen = 0
+    | keyword:hold  variable:seen  operator:=  number:0
+177 |     each x in xs
+    | keyword:each  variable:x  keyword:in  variable:xs
+178 |         seen += x
+    | variable:seen  operator:+=  variable:x
+179 |         when x == 1
+    | keyword:when  variable:x  operator:==  number:1
+180 |             break
+    | keyword:break
+181 |         fi
+    | keyword:fi
+182 |     fi {
+    | keyword:fi  punctuation:{
+183 |         failure why
+    | keyword:failure  variable:why
+184 |         match why
+    | keyword:match  variable:why
+185 |         case Broke _
+    | keyword:case  variant:Broke  keyword:_
+186 |             show("stopped at one, seen ", seen)
+    | builtin-fn:show  punctuation:(  string:"stopped at one, seen "  punctuation:,  variable:seen  punctuation:)
+187 |         case Skipped
+    | keyword:case  variant:Skipped
+188 |             show("empty")
+    | builtin-fn:show  punctuation:(  string:"empty"  punctuation:)
+189 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+190 |             show("?")
+    | builtin-fn:show  punctuation:(  string:"?"  punctuation:)
+191 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+192 |             show("?")
+    | builtin-fn:show  punctuation:(  string:"?"  punctuation:)
+193 |         fi
+    | keyword:fi
+194 |     }
+    | punctuation:}
+195 | fi
+    | keyword:fi

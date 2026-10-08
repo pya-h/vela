@@ -1,0 +1,9 @@
+; error: 7:9: the last line of a pass gives its value, but this has none
+task note(x: int)
+    show(x)
+fi
+task main()
+    bind r = each x in 0..3
+        note(x)
+    fi
+fi

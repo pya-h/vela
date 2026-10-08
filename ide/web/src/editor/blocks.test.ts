@@ -52,6 +52,8 @@ describe("indentation", () => {
     // The opener may sit after an `=`, or inside a call, and `else when` opens
     // nothing, since one `fi` closes its chain.
     expect(opener("    bind area = match s", WORDS)).toBe("match");
+    expect(opener("    bind found = each x in xs", WORDS)).toBe("each");
+    expect(opener("    show(loop hold i = 0 || i < 3 || i++", WORDS)).toBe("loop");
     expect(opener("    show(when ok", WORDS)).toBe("when");
     expect(opener("    bind label = when n > 0", WORDS)).toBe("when");
     expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  ; match", WORDS)]).toEqual([null, null, null]);

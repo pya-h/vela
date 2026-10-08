@@ -1,0 +1,7 @@
+; error: 3:14: this loop gives 'r' its value, which names it 'r', so it takes no name of its own; leave out 'outer =>' and write 'break r'
+task main()
+    bind r = outer => each x in 0..3
+        x
+    fi
+    show(r { 0 })
+fi

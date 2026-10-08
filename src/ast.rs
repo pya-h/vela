@@ -1387,6 +1387,8 @@ pub enum ExprKind {
     /// last line, as a plan B's block does, or leaves the task with `<-`; a case
     /// written `case p = value` is a block of that one value.
     Choice(Box<Stmt>),
+    /// A loop that gives a value, `bind r = loop … fi` (see `ValueLoop`).
+    LoopValue(Box<ValueLoop>),
     /// Added by the checker where a value becomes part of a `maybe` or a
     /// `T ~ E`: a plain value, `none`, or `fail e`. The node's `ty` is the
     /// type it becomes.
@@ -1590,8 +1592,10 @@ pub enum StmtKind {
     /// statement's span is where the name is written.
     Named(String, Box<Stmt>),
     /// `break`, or `break outer`: stops the loop around it, or the one named,
-    /// with where the name is written.
-    Break(Option<(String, Span)>),
+    /// with where the name is written. In a loop that gives a value,
+    /// `break = v` gives `v`, which the loop fails with as `LoopResult.Broke`
+    /// (see `ValueLoop`).
+    Break(Option<(String, Span)>, Option<Box<Expr>>),
     /// `continue`, or `continue outer`: ends this pass of the loop around it,
     /// or of the one named, which goes on with its next.
     Continue(Option<(String, Span)>),
@@ -1673,6 +1677,45 @@ pub struct PartedLoop {
     pub body: Block,
     /// Written `endless`.
     pub endless: bool,
+}
+
+/// A `loop` or `each` used as a value: each pass gives the value on its last
+/// line, and the loop gives the one of its final pass, or fails with
+/// `LoopResult` (`std/loops`): the body never ran (`Skipped`), a `break`
+/// stopped it (`Broke`), its final pass ended with `continue`
+/// (`EndedByContinue`), or the last line failed (`Manual`). As a statement
+/// with a plan B, `loop … fi { … }`, it gives nothing, and only fails.
+#[derive(Debug, Clone)]
+pub struct ValueLoop {
+    /// The loop: a `StmtKind::Loop`, `Each` or `Parted`.
+    pub stmt: Stmt,
+    /// Its name: the variable it gives (`bind r = loop …`), or the one written
+    /// with `outer =>` where there is none, with where it is written.
+    pub name: Option<(String, Span)>,
+    /// Whether written with `outer =>`, which a loop given to a variable
+    /// can't be.
+    pub arrow: bool,
+    /// Whether its passes give a value; not for a statement with a plan B.
+    pub gives: bool,
+}
+
+impl ValueLoop {
+    /// The loop's body.
+    pub fn body(&self) -> Option<&Block> {
+        match &self.stmt.kind {
+            StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => Some(body),
+            StmtKind::Parted(parted) => Some(&parted.body),
+            _ => None,
+        }
+    }
+
+    pub fn body_mut(&mut self) -> Option<&mut Block> {
+        match &mut self.stmt.kind {
+            StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => Some(body),
+            StmtKind::Parted(parted) => Some(&mut parted.body),
+            _ => None,
+        }
+    }
 }
 
 /// The condition of a `when` or `loop`: a `bool`, or `value is pattern`,

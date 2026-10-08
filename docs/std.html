@@ -325,6 +325,41 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     </section>
 
     <section>
+      <h2 id="loops">std/loops</h2>
+      <p>
+        What a <a href="vela.html#loop-values">loop that gives a value</a> fails with, <code>LoopResult&lt;B, M&gt;</code>:
+        a kind that takes types, written in Vela. A loop gives a value in any file, with or without this module; a
+        file that writes <code>LoopResult</code> itself, in a type or a variant, brings it in by name
+        (<em>unknown type 'LoopResult'; it is in Vela's library, and 'include std/loops {LoopResult}' brings it
+        in</em>). A <code>case Broke b</code> on a loop's failure names no kind, and needs no include.
+      </p>
+      <pre><span class="keyword">include</span> std/loops {LoopResult}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> found: int ~ LoopResult = <span class="keyword">each</span> x <span class="keyword">in</span> [<span class="number">2</span>, <span class="number">7</span>, <span class="number">4</span>]
+        <span class="keyword">when</span> x &gt; <span class="number">5</span>
+            <span class="keyword">break</span> = x
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> x == <span class="number">4</span> <span class="keyword">fail</span> LoopResult.Manual(<span class="string">"four"</span>) <span class="keyword">else</span> x <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(found { <span class="number">0</span> })                  <span class="comment">; 0: a break stopped it at 7</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Variant</th><th>Why the loop has no value</th></tr>
+        <tr><td><code>Skipped</code></td><td>its body never ran: the condition failed at once, or there was nothing to go through</td></tr>
+        <tr><td><code>Broke(value: maybe B)</code></td><td>a <code>break</code> stopped it, with what <code>break = v</code> gave, or <code>none</code></td></tr>
+        <tr><td><code>EndedByContinue</code></td><td>its final pass ended with <code>continue</code>, before the last line</td></tr>
+        <tr><td><code>Manual(value: M)</code></td><td>the last line of its final pass failed with <code>fail LoopResult.Manual(m)</code></td></tr>
+      </table>
+      <p>
+        <code>B</code> is what the loop's <code>break</code>s give and <code>M</code> what its last lines fail with,
+        each <code>bool</code> where the loop gives none. On a loop's own variable, a bare <code>LoopResult</code> takes
+        the loop's types, as <code>found</code> does above; anywhere else they are written,
+        <code>LoopResult&lt;int, text&gt;</code>.
+      </p>
+    </section>
+
+    <section>
       <h2 id="math">std/math</h2>
       <p>
         Numbers beyond arithmetic: the <a href="vela.html#macros">macros</a> <code>P</code> (pi) and <code>e</code>, and

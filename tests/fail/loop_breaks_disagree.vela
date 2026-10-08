@@ -1,0 +1,13 @@
+; error: 8:21: this 'break' gives text, and another gives int; the breaks of a loop give one type
+task main()
+    bind r = each x in 0..3
+        when x == 1
+            break = 1
+        fi
+        when x == 2
+            break = "two"
+        fi
+        x
+    fi
+    show(r { 0 })
+fi

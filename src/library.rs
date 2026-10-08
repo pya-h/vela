@@ -12,7 +12,19 @@
 pub const ROOT: &str = "std";
 
 /// Each module of the library: its name after `std/`, and its source.
-pub const MODULES: &[(&str, &str)] = &[("files", include_str!("../std/files.vela")), ("math", include_str!("../std/math.vela"))];
+pub const MODULES: &[(&str, &str)] = &[
+    ("files", include_str!("../std/files.vela")),
+    ("loops", include_str!("../std/loops.vela")),
+    ("math", include_str!("../std/math.vela")),
+];
+
+/// The module that has `LOOP_RESULT`, which a program with a loop that gives
+/// a value loads whether a file includes it or not (see `modules::load`).
+pub const LOOPS: &str = "loops";
+
+/// What a loop that gives a value fails with (see `ast::ValueLoop`), by its
+/// name in the program.
+pub const LOOP_RESULT: &str = "std/loops.LoopResult";
 
 /// Euler's number in `std/math`, whose powers are computed by `exp`.
 pub const MATH_E: &str = "std/math.e";

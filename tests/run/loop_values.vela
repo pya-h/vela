@@ -1,0 +1,195 @@
+; Loops that give a value: the last line of each pass gives it, the final
+; pass's is the loop's, and the loop fails with LoopResult when it has none.
+
+include std/loops {LoopResult}
+
+task describe(why: LoopResult<text, int>@r)
+    match why
+    case Broke b
+        show("broke ", b { "?" })
+    case Skipped
+        show("skipped")
+    case EndedByContinue
+        show("ended by continue")
+    case Manual m
+        show("manual ", m)
+    fi
+fi
+
+; In a task that takes types, B is the task's.
+task first_over<T: ordered & shown>(xs: [T]@r, limit: T) -> T ~ bool
+    bind found = each x in xs
+        when x > limit
+            break = x
+        fi
+        x
+    fi
+    match found
+    case {_}
+        <- fail false
+    case failure why
+        match why
+        case Broke b
+            <- b { limit }
+        case Skipped
+            <- fail true
+        case EndedByContinue
+            <- fail true
+        case Manual _
+            <- fail true
+        fi
+    fi
+fi
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task main()
+    region r
+    bind xs = [3, 8, 1, 9, 4]
+
+    ; The final pass's last line.
+    bind doubled = each x in xs
+        x * 2
+    fi
+    show("doubled ", doubled { -1 })
+
+    ; A break gives a value it fails with, or none.
+    bind big = each x in xs
+        when x > 8
+            break = x
+        fi
+        x
+    fi
+    match big
+    case {v}
+        show("ended with ", v)
+    case failure why
+        match why
+        case Broke b
+            show("broke ", b { 0 })
+        case Skipped
+            show("skipped")
+        case EndedByContinue
+            show("ended by continue")
+        case Manual _
+            show("manual")
+        fi
+    fi
+
+    ; A body that never runs, a final pass that continues, a last line that fails.
+    hold n = 10
+    bind none_ran = loop n < 3
+        n++
+        n
+    fi
+    bind odd = each x in xs
+        when x % 2 == 0
+            continue
+        fi
+        x
+    fi
+    bind checked: int ~ LoopResult<text, int> = each x in xs
+        when x > 100
+            break = "huge"
+        else when x == 4
+            fail LoopResult.Manual(x)
+        else
+            x
+        fi
+    fi
+    show("never ran ", none_ran { -1 }, ", odd ", odd { -1 })
+    match checked
+    case {v}
+        show(v)
+    case failure why
+        describe(why)
+    fi
+
+    ; Three parts, and a LoopResult written bare takes the loop's types.
+    bind total: int ~ LoopResult = loop hold i = 0, sum = 0 || i < 5 || i++
+        sum += i
+        sum
+    fi
+    show("total ", total { 0 })
+
+    ; The variable names the loop, for a break from a loop inside it.
+    bind pair = each a in 1..4
+        each b in 1..4
+            when a * b == 6
+                break pair = a * 10 + b
+            fi
+        fi
+        0
+    fi
+    match pair
+    case {_}
+        show("no pair")
+    case failure why
+        match why
+        case Broke b
+            show("pair ", b { 0 })
+        case Skipped
+            show("?")
+        case EndedByContinue
+            show("?")
+        case Manual _
+            show("?")
+        fi
+    fi
+    bind rows = each a in 0..3
+        each b in 0..3
+            when b == a
+                continue rows
+            fi
+        fi
+        a
+    fi
+    show("rows ", rows { -1 })
+
+    ; Anywhere a value goes: a call, a condition, another loop's last line.
+    show(loop hold k = 0 || k < 3 || k++
+        k * 10
+    fi { 0 })
+    when (each x in 0..4
+        x
+    fi { 0 }) == 3
+        show("three")
+    fi
+    bind deep = each a in 1..3
+        each b in 1..3
+            a * b
+        fi { 0 }
+    fi
+    show("deep ", deep { 0 })
+    show(first_over([1, 5, 9, ...] at r, 4) { 0 }, " ", first_over(["a", "q", ...] at r, "m") { "" })
+    show(apply((m: int) -> int
+        bind s = loop hold i = 0, sum = 0 || i < m || i++
+            sum += i
+            sum
+        fi
+        <- s { -1 }
+    fi, 5))
+
+    ; A statement with a plan B gives nothing, and only fails.
+    hold seen = 0
+    each x in xs
+        seen += x
+        when x == 1
+            break
+        fi
+    fi {
+        failure why
+        match why
+        case Broke _
+            show("stopped at one, seen ", seen)
+        case Skipped
+            show("empty")
+        case EndedByContinue
+            show("?")
+        case Manual _
+            show("?")
+        fi
+    }
+fi

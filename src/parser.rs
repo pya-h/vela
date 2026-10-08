@@ -138,6 +138,8 @@ pub struct Parser {
     /// The position of a `<-` that may send without starting a line: the first
     /// token of a lambda's body written on the line of its header.
     send_after_header: Option<usize>,
+    /// Whether a loop that gives a value was read, which needs `std/loops`.
+    loop_values: bool,
 }
 
 /// An `is` joined with `or`, or after one.
@@ -146,7 +148,12 @@ const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None }
+        Parser { tokens, spans, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
+    }
+
+    /// Whether the file has a loop that gives a value (see `ValueLoop`).
+    pub fn loop_values(&self) -> bool {
+        self.loop_values
     }
 
     /// The `include` lines of the file parsed.
@@ -2054,12 +2061,24 @@ impl Parser {
             Token::Bind => self.parse_binding(true),
             Token::Hold => self.parse_binding(false),
             Token::When => self.parse_when(),
-            Token::Loop => self.parse_loop(),
-            Token::Endless => self.parse_endless(),
+            Token::Loop | Token::Endless | Token::Each => {
+                let stmt = match self.peek() {
+                    Token::Loop => self.parse_loop()?,
+                    Token::Each => self.parse_each()?,
+                    _ => self.parse_endless()?,
+                };
+                self.loop_with_plan_b(stmt, None, span)
+            }
             Token::Block => self.parse_plain_block(),
-            Token::Each => self.parse_each(),
             Token::Break | Token::Continue => self.parse_jump(),
-            Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => self.parse_named_loop(),
+            Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
+                let stmt = self.parse_named_loop()?;
+                let StmtKind::Named(name, inner) = stmt.kind else { return Ok(stmt) };
+                if self.check(Token::LBrace) {
+                    return self.loop_with_plan_b(*inner, Some((name, span)), span);
+                }
+                Ok(Stmt::new(StmtKind::Named(name, inner), stmt.span))
+            }
             Token::Match => self.parse_match(),
             Token::Send => self.parse_send(),
             Token::Ident(name) if name == "send" => {
@@ -2074,6 +2093,23 @@ impl Parser {
             ),
             _ => self.parse_simple_stmt(span),
         }
+    }
+
+    /// The loop `stmt`, named `name`, as a statement: with a plan B after its
+    /// `fi`, a loop that fails as one giving a value does, and gives nothing.
+    fn loop_with_plan_b(&mut self, stmt: Stmt, name: Option<(String, Span)>, span: Span) -> Result<Stmt> {
+        if !self.check(Token::LBrace) {
+            return Ok(match name {
+                Some((name, at)) => Stmt::new(StmtKind::Named(name, Box::new(stmt)), at),
+                None => stmt,
+            });
+        }
+        let value = self.loop_value(stmt, name, false, span);
+        let value = self.parse_suffixes(value, false)?;
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
+            return Err(self.unexpected("the end of the line after the loop's plan B"));
+        }
+        Ok(Stmt::new(StmtKind::Expr(value), span))
     }
 
     /// An assignment, to one place or to a list of them, a result update, or an
@@ -2386,13 +2422,24 @@ impl Parser {
             }
             _ => None,
         };
-        // Nothing else follows on its line: a loop gives no value to take.
+        // `break = v`: what a loop that gives a value fails with.
+        let value = if self.check(Token::Assign) {
+            if !stop {
+                return Err(Error::at(self.peek_span(), "a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value"));
+            }
+            self.advance(); // =
+            Some(Box::new(self.parse_expr()?))
+        } else {
+            None
+        };
+        // Nothing else follows on its line.
         if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
             let what = if stop { "stops" } else { "goes on with" };
-            let name = name.as_ref().map_or("outer", |(name, _)| name.as_str());
-            return Err(Error::at(self.peek_span(), format!("a '{0}' takes only the name of the loop it {1}, when that is not the innermost, as in '{0} {2}'; a loop gives no value", word, what, name)));
+            let example = name.as_ref().map_or("outer", |(name, _)| name.as_str());
+            let given = if stop { ", and the value it gives after '=', as in 'break = v'" } else { "" };
+            return Err(Error::at(self.peek_span(), format!("a '{0}' takes the name of the loop it {1}, when that is not the innermost, as in '{0} {2}'{3}", word, what, example, given)));
         }
-        Ok(Stmt::new(if stop { StmtKind::Break(name) } else { StmtKind::Continue(name) }, span))
+        Ok(Stmt::new(if stop { StmtKind::Break(name, value) } else { StmtKind::Continue(name) }, span))
     }
 
     /// `endless`, then its statements from the next line, closed by `fi`: a
@@ -3398,6 +3445,21 @@ impl Parser {
             Token::LParen if self.at_lambda() => self.parse_lambda(),
             Token::LParen => self.parse_parenthesized(),
             Token::Match | Token::When => self.parse_choice(span),
+            // A loop that gives a value, and one named so where no variable names it.
+            Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
+            Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
+                let name = (name.clone(), span);
+                self.advance(); // the name
+                self.advance(); // =>
+                if !matches!(self.peek(), Token::Loop | Token::Each | Token::Endless) {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        format!("'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it", name.0),
+                    ));
+                }
+                let at = self.peek_span();
+                self.parse_loop_value(at, Some(name))
+            }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
             Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type))
@@ -3435,6 +3497,28 @@ impl Parser {
         let chosen = if self.check(Token::Match) { self.parse_match()? } else { self.parse_when()? };
         self.leave(1);
         Ok(Expr::new(ExprKind::Choice(Box::new(chosen)), span))
+    }
+
+    /// A `loop`, `each` or `endless` at `span` and the cursor, where a value is
+    /// expected, named `name` with `=>`: its passes give the value, each on the
+    /// last line of its body (see `ValueLoop`).
+    fn parse_loop_value(&mut self, span: Span, name: Option<(String, Span)>) -> Result<Expr> {
+        self.enter()?;
+        let stmt = match self.peek() {
+            Token::Loop => self.parse_loop(),
+            Token::Each => self.parse_each(),
+            _ => self.parse_endless(),
+        };
+        self.leave(1);
+        Ok(self.loop_value(stmt?, name, true, span))
+    }
+
+    /// The loop `stmt` as a value (see `ValueLoop`).
+    fn loop_value(&mut self, stmt: Stmt, name: Option<(String, Span)>, gives: bool, span: Span) -> Expr {
+        self.loop_values = true;
+        let arrow = name.is_some();
+        let value = ValueLoop { stmt, name, arrow, gives };
+        Expr::new(ExprKind::LoopValue(Box::new(value)), span)
     }
 
     /// `.this`, `.field`, or `.method(…)` at `span`, with the cursor at the

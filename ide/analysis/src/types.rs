@@ -264,7 +264,8 @@ impl Checked {
             StmtKind::Block(body) => self.block(body, kinds),
             StmtKind::Turns(turns) => turns.iter().for_each(|turn| self.block(turn, kinds)),
             StmtKind::Named(_, inner) => self.statement(inner, kinds),
-            StmtKind::Break(_) | StmtKind::Continue(_) => {}
+            StmtKind::Break(_, value) => value.iter().for_each(|value| self.expr(value, kinds)),
+            StmtKind::Continue(_) => {}
             StmtKind::Loop(cond, body) => {
                 for part in cond.parts() {
                     self.expr(&part.value, kinds);
@@ -463,6 +464,7 @@ impl Checked {
             }
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.statement(stmt, kinds),
+            ExprKind::LoopValue(value) => self.statement(&value.stmt, kinds),
             ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => {
                 for arg in args {
                     self.expr(arg, kinds);

@@ -1,0 +1,11 @@
+; error: 3:14: every pass of this loop leaves, with '<-', 'break' or 'continue', so its last line never gives its value
+task main()
+    bind r = each x in 0..3
+        when x > 1
+            break
+        else
+            continue
+        fi
+    fi
+    show(r { 0 })
+fi

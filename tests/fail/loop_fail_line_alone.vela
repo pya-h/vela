@@ -1,0 +1,8 @@
+; error: 5:9: 'fail …' makes a failure, which a line of its own drops; send it with '<- fail …', or stop a loop that gives a value with 'break = …'
+include std/loops {LoopResult}
+task main()
+    bind r = each x in 0..3
+        fail LoopResult.Broke(none)
+        x
+    fi
+fi

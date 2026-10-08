@@ -212,7 +212,8 @@
         <code>seats.vela</code> (a party seated in a hall, with
         <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>),
         <code>collatz.vela</code> (Collatz walks counted with <a href="#loop-parts">a loop in three parts and
-        <code>endless</code></a>), <code>journal.vela</code> (notes read from input into a region per line,
+        <code>endless</code></a>), <code>readings.vela</code> (sensor readings searched with
+        <a href="#loop-values">loops that give a value</a> and <code>LoopResult</code>), <code>journal.vela</code> (notes read from input into a region per line,
         with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
         (tasks, shapes, pointers, control flow, and text).
       </p>
@@ -324,6 +325,7 @@ block shared type break continue endless</pre>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
         <tr><td><code>loop hold i = 0 || i &lt; n || i++</code>, <code>endless</code></td><td>a loop in three parts, its start, condition and step, each with several items parted by <code>,</code> or none; a loop that never ends by itself (see <a href="#loop-parts">A loop in three parts</a>)</td></tr>
         <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
+        <tr><td><code>bind r = each x in xs … fi</code>, <code>break = v</code></td><td>a loop that gives a value, its final pass's last line, or fails with <code>LoopResult</code>; a <code>break</code> that stops it with one (see <a href="#loop-values">Loops that give a value</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task, shape or kind takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -3077,6 +3079,8 @@ fi</code></pre>
         task with <code>&lt;-</code> (see <a href="#break-continue">Stopping a loop: break and continue</a>). A loop
         may also start and step names of its own, <code>loop hold i = 0 || i &lt; 10 || i++</code>, and one that
         never ends by itself is written <code>endless</code> (see <a href="#loop-parts">A loop in three parts</a>).
+        A loop can be a value too, its final pass's last line, <code>bind r = each x in xs … fi</code> (see
+        <a href="#loop-values">Loops that give a value</a>).
       </p>
       <p>
         A <code>when</code> or a <code>match</code> can be a value as well as a statement, giving one from each branch
@@ -3295,7 +3299,8 @@ show(total)</pre>
       <ul>
         <li><strong>Without a name, the innermost loop.</strong> <code>break outer</code> stops the loop named
           <code>outer</code>, which a loop inside it can't do otherwise. A loop is named with <code>=&gt;</code> before
-          its word, <code>outer =&gt; loop …</code> or <code>outer =&gt; each …</code>, and only loops are named so.
+          its word, <code>outer =&gt; loop …</code> or <code>outer =&gt; each …</code>, and only loops are named so; a
+          loop that gives a variable its value is named by it (see <a href="#loop-values">Loops that give a value</a>).
           The name follows the rule of every name: it matches none in scope where it is given, nothing inside the
           loop may take it, and loops side by side may each use the same one. A name that is no loop's around it is
           an error that lists the named loops there.</li>
@@ -3315,8 +3320,111 @@ show(total)</pre>
         <li><strong>In its own task.</strong> A lambda's body is a task of its own, so a <code>break</code> in it
           can't stop a loop around the lambda, nor name one, and a name inside it can't be a loop's around it. In a task taking a <a href="#type-groups">group of types</a>,
           <code>each v in args</code> is written out once per value, and is still one loop.</li>
-        <li><strong>No value.</strong> A loop gives none, so <code>break</code> takes only a name:
-          <code>break = v</code> is refused.</li>
+        <li><strong>A value.</strong> <code>break = v</code> and <code>break outer = v</code> stop a loop that gives
+          a value with one (see <a href="#loop-values">Loops that give a value</a>); in any other loop a
+          <code>break</code> takes only a name. <code>continue</code> never takes a value.</li>
+      </ul>
+
+      <h3 id="loop-values">Loops that give a value</h3>
+      <p>
+        A <code>loop</code> or an <code>each</code> can be a value, wherever a value goes: <code>bind r = loop … fi</code>,
+        an argument, a condition, what a task sends. The last line of each pass gives the value, as a plan B's block
+        does, and the loop gives the one of its final pass. A loop may also end without one, and then it fails with
+        <code>LoopResult&lt;B, M&gt;</code>, a kind of Vela's library, <code>std/loops</code>: so its value is a
+        <code>V ~ LoopResult&lt;B, M&gt;</code>, read with a plan B, a <code>match</code>, or <code>is</code>.
+      </p>
+      <pre class="program" data-file="loop_values.vela"><span class="keyword">include</span> std/loops {LoopResult}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> xs = [<span class="number">3</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">9</span>, <span class="number">4</span>]
+    <span class="comment">; The final pass's last line is the value.</span>
+    <span class="keyword">bind</span> doubled = <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        x * <span class="number">2</span>
+    <span class="keyword">fi</span>
+    show(doubled { <span class="number">0</span> })                   <span class="comment">; 8</span>
+
+    <span class="comment">; A break stops it with a value, which it fails with.</span>
+    <span class="keyword">bind</span> big = <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        <span class="keyword">when</span> x &gt; <span class="number">8</span>
+            <span class="keyword">break</span> = x
+        <span class="keyword">fi</span>
+        x
+    <span class="keyword">fi</span>
+    <span class="keyword">match</span> big
+    <span class="keyword">case</span> {v}
+        show(<span class="string">"ended with "</span>, v)
+    <span class="keyword">case</span> <span class="keyword">failure</span> why
+        <span class="keyword">match</span> why
+        <span class="keyword">case</span> Broke b
+            show(<span class="string">"broke at "</span>, b { <span class="number">0</span> })      <span class="comment">; broke at 9</span>
+        <span class="keyword">case</span> Skipped
+            show(<span class="string">"no items"</span>)
+        <span class="keyword">case</span> EndedByContinue
+            show(<span class="string">"the last pass continued"</span>)
+        <span class="keyword">case</span> Manual m
+            show(<span class="string">"the last line failed: "</span>, m)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+
+    <span class="comment">; The last line may fail on purpose, and LoopResult written bare</span>
+    <span class="comment">; on the loop's own variable takes the loop's types.</span>
+    <span class="keyword">bind</span> checked: int ~ LoopResult = <span class="keyword">loop</span> <span class="keyword">hold</span> i = <span class="number">0</span> || i &lt; xs.len || i++
+        <span class="keyword">when</span> xs[i] == <span class="number">4</span> <span class="keyword">fail</span> LoopResult.Manual(i) <span class="keyword">else</span> xs[i] <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(checked { -<span class="number">1</span> })                   <span class="comment">; -1: the final pass failed</span>
+
+    <span class="comment">; The variable names the loop, for a break from a loop inside it.</span>
+    <span class="keyword">bind</span> pair = <span class="keyword">each</span> a <span class="keyword">in</span> <span class="number">1</span>..<span class="number">4</span>
+        <span class="keyword">each</span> b <span class="keyword">in</span> <span class="number">1</span>..<span class="number">4</span>
+            <span class="keyword">when</span> a * b == <span class="number">6</span>
+                <span class="keyword">break</span> pair = a * <span class="number">10</span> + b
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
+        <span class="number">0</span>
+    <span class="keyword">fi</span>
+    show(pair { -<span class="number">1</span> })                      <span class="comment">; -1: a break stopped it</span>
+
+    <span class="comment">; As a statement with a plan B, it gives nothing, and only fails.</span>
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        <span class="keyword">when</span> x == <span class="number">1</span>
+            <span class="keyword">break</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span> {
+        show(<span class="string">"found a one"</span>)              <span class="comment">; found a one</span>
+    }
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>The last line.</strong> It runs every pass, and the final pass's value is the loop's, so a
+          <code>when</code> or a <code>match</code> there gives it through its branches, one of which may
+          <code>break</code> or <code>continue</code> instead. A failure there, <code>fail LoopResult.Manual(m)</code>,
+          is that pass's value like any other: only the final pass's counts, and the loop then fails with it. A
+          <code>fail …</code> on a line of its own does nothing, and is refused.</li>
+        <li><strong>Why it fails.</strong> <code>Skipped</code>: the body never ran, its condition failing at once or
+          its <code>each</code> having nothing to go through. <code>Broke(maybe B)</code>: a <code>break</code>
+          stopped it, holding what <code>break = v</code> gave, or <code>none</code> for a bare <code>break</code>.
+          <code>EndedByContinue</code>: its final pass ended with <code>continue</code>, before the last line, even
+          when an earlier pass gave a value. <code>Manual(M)</code>: the final pass's last line failed with it. The
+          last line fails only with <code>Manual</code>; the other three say what the loop did.</li>
+        <li><strong>Its types.</strong> <code>V</code> is what the last lines give, <code>B</code> what the
+          <code>break</code>s give, and <code>M</code> what the last lines fail with, <code>bool</code> where a loop
+          gives none. The <code>break</code>s of a loop give one type. On the loop's own variable,
+          <code>bind r: int ~ LoopResult = loop …</code>, a bare <code>LoopResult</code> takes the loop's
+          <code>B</code> and <code>M</code>; anywhere else its types are written, as any kind's are.</li>
+        <li><strong>Its name.</strong> The variable it gives names it, <code>break r = v</code>, as
+          <code>bind r =</code>, <code>hold r =</code>, or <code>r =</code> does, and so it takes no name with
+          <code>=&gt;</code>. Where no variable is given, as in an argument, <code>outer =&gt; loop …</code> names it.</li>
+        <li><strong>Without an include.</strong> A loop gives a value in any file. A file that writes
+          <code>LoopResult</code> itself, in a type or a variant, brings it in with
+          <code>include std/loops {LoopResult}</code>; a <code>case Broke b</code> names no kind, and needs none.</li>
+        <li><strong>As a statement.</strong> A loop on a line of its own with a plan B after its <code>fi</code>,
+          <code>each x in xs … fi { … }</code>, is a <code>nothing ~ LoopResult</code>: its passes give nothing, and
+          the plan B runs when it fails. On the last line of a block that gives a value, it gives one instead.</li>
+        <li><strong>What it can't be.</strong> A loop that never ends by itself, <code>endless</code>,
+          <code>loop true</code> or one with no condition, gives no value, since no pass of it is the final one. A
+          loop through the values of a <a href="#type-groups">group</a>, written out once per value, gives none
+          either. Its value can't be in a region a pass declares, which is freed when the pass ends.</li>
+        <li><strong>In C.</strong> A temporary holds the value, <code>Skipped</code> until a pass gives one; each
+          pass's last line, a <code>break</code> and a <code>continue</code> set it. No memory is allocated.</li>
       </ul>
 
       <h3 id="choices">A match or a when as a value</h3>

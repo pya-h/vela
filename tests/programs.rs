@@ -452,8 +452,9 @@ fn docs_guide_programs() {
     let mut failures = Vec::new();
     for (i, (code, wanted)) in programs.iter().enumerate() {
         // A program that includes a module needs the module's file, which the
-        // page shows separately; `tests/run/modules.vela` covers those.
-        if code.lines().any(|line| line.trim_start().starts_with("include ")) {
+        // page shows separately; `tests/run/modules.vela` covers those. Vela's
+        // library needs none.
+        if code.lines().any(|line| line.trim_start().starts_with("include ") && !line.trim_start().starts_with("include std/")) {
             continue;
         }
         let source = scratch.join(format!("guide{:02}.vela", i));

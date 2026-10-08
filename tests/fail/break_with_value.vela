@@ -1,4 +1,4 @@
-; error: 4:15: a 'break' takes only the name of the loop it stops, when that is not the innermost, as in 'break outer'; a loop gives no value
+; error: 4:17: this loop gives no value, so its 'break' gives none; a loop gives one where it is a value, as in 'bind r = loop … fi'
 task main()
     each i in 0..3
         break = i
