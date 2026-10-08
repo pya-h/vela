@@ -1,0 +1,12 @@
+; error: 7:18: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; A lambda that changes its copies is '[flex @r]'.
+
+task main()
+    region r
+    flex seen = 0
+    flex next = [hold @r]() -> int
+        seen = seen + 1
+        <- seen
+    fi
+    show(next())
+fi

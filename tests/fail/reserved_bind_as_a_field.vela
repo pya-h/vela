@@ -1,0 +1,10 @@
+; error: 5:5: 'bind' is a reserved word, so it can't be a name
+; 'bind' is reserved, so no field takes it as its name.
+
+shape Rope
+    bind: int
+fi
+
+task main()
+    show(Rope { bind: 1 }.bind)
+fi

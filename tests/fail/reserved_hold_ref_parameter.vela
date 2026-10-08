@@ -1,0 +1,11 @@
+; error: 4:11: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; 'hold&' is not the caller's place that changes: that is 'flex&'.
+
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task main()
+    flex n = 1
+    bump(&n)
+fi

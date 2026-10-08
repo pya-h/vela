@@ -1,0 +1,7 @@
+; error: 5:5: 'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'
+; The reserved word is reported before any mistake of the program's structure after it.
+
+task main()
+    bind x = 1
+    show(x
+fi

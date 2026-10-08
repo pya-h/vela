@@ -18,6 +18,11 @@ pub enum Token {
     Task,
     Fixed,
     Flex,
+    /// `bind` and `hold`, reserved words with no use yet: the old spellings of
+    /// `fixed` and `flex`, which a program can't take as names, and which are an
+    /// error wherever they are written (see `Parser::parse_file`).
+    Bind,
+    Hold,
     /// `<-`, which sends a task's result (the counterpart of `->` in its header).
     Send,
     Shape,
@@ -144,16 +149,14 @@ pub enum Token {
 }
 
 /// Every keyword with its token: the one list of Vela's reserved words, used
-/// by the lexer and by tools such as editors. `fixed` and `flex` are the new
-/// spellings of `bind` and `hold`, which they replace (Part 22); until the old
-/// ones go, both spell the same token, and a message names a token by the
-/// first spelling here.
+/// by the lexer and by tools such as editors. `bind` and `hold` are reserved
+/// with no use yet (see `Token::Bind`).
 pub const KEYWORDS: &[(&str, Token)] = &[
     ("task", Token::Task),
     ("fixed", Token::Fixed),
     ("flex", Token::Flex),
-    ("bind", Token::Fixed),
-    ("hold", Token::Flex),
+    ("bind", Token::Bind),
+    ("hold", Token::Hold),
     ("shape", Token::Shape),
     ("kind", Token::Kind),
     ("when", Token::When),

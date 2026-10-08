@@ -1,0 +1,8 @@
+; error: 5:10: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; A loop's start that changes is 'loop flex i = 0 || …'.
+
+task main()
+    loop hold i = 0 || i < 3 || i++
+        show(i)
+    fi
+fi

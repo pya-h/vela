@@ -171,6 +171,10 @@ impl Parser {
 
     /// Parses a whole file: its `include` lines (see `includes`), then its items.
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
+        let tokens: Vec<(&Token, Span, Span)> = self.tokens.iter().zip(&self.spans).zip(&self.ends).map(|((token, start), end)| (token, *start, *end)).collect();
+        if let Some(error) = reserved_word(&tokens) {
+            return Err(error);
+        }
         let mut items = Vec::new();
         self.skip_newlines();
         while self.check(Token::Include) {
@@ -2371,8 +2375,7 @@ impl Parser {
     }
 
     /// Whether the `&` at the cursor is written against the word just read, as
-    /// in `flex&`: it starts where the word ends, whichever spelling the word
-    /// has (`hold&` and `bind&` too, until they go).
+    /// in `flex&`: it starts where the word ends, whichever its length.
     fn amp_against_word(&self) -> bool {
         self.check(Token::Amp) && self.pos.checked_sub(1).and_then(|word| self.ends.get(word)) == Some(&self.peek_span())
     }
@@ -4452,6 +4455,48 @@ impl Parser {
             None => self.unexpected("a name"),
         }
     }
+}
+
+/// The error for the first `bind` or `hold` in `tokens` (each with where it
+/// starts and ends), or in a value in their text: words reserved with no use
+/// yet, which are an error wherever they are written. Written where a
+/// variable's word goes (before a name, a `&`, an `@`, or a `(` apart from it),
+/// the error names the word a program writes today.
+fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
+    for (i, (token, start, end)) in tokens.iter().enumerate() {
+        if let Token::Interpolated(pieces) = token {
+            for piece in pieces {
+                if let Piece::Value { tokens: inner, .. } = piece {
+                    let inner: Vec<(&Token, Span, Span)> = inner
+                        .iter()
+                        .filter_map(|t| match &t.kind {
+                            LexKind::Token(token) => Some((token, t.start, t.end)),
+                            _ => None,
+                        })
+                        .collect();
+                    if let Some(error) = reserved_word(&inner) {
+                        return Some(error);
+                    }
+                }
+            }
+        }
+        let (word, today) = match token {
+            Token::Bind => ("bind", "a variable that never changes is written 'fixed'"),
+            Token::Hold => ("hold", "a variable that changes is written 'flex'"),
+            _ => continue,
+        };
+        let as_word = match tokens.get(i + 1) {
+            Some((Token::Ident(_) | Token::Amp | Token::AtSign, _, _)) => true,
+            Some((Token::LParen, next, _)) => next != end,
+            _ => false,
+        };
+        return Some(if as_word {
+            Error::at(*start, format!("'{}' is a reserved word with no use yet; {}", word, today))
+        } else {
+            Error::at(*start, format!("'{}' is a reserved word, so it can't be a name", word))
+        });
+    }
+    None
 }
 
 /// The words a generic type can be asked to allow, for a message, from what

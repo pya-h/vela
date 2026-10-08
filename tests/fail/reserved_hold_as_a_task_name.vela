@@ -1,0 +1,10 @@
+; error: 4:6: 'hold' is a reserved word, so it can't be a name
+; 'hold' is a reserved word, so no task takes it as its name, and calling one is the same error.
+
+task hold() -> int
+    <- 1
+fi
+
+task main()
+    show(hold())
+fi

@@ -1,5 +1,5 @@
 ; error: 4:17: a parameter that is the caller's place is written 'fixed& x', with '&' against 'fixed'
-; 'fixed&' is one word, as 'bind&' is: written apart, the '&' is not against the word.
+; 'fixed&' is one word: written apart, the '&' is not against the word.
 
 task read(fixed &x: int) -> int
     <- x

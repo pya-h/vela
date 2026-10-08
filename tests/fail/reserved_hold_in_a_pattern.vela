@@ -1,0 +1,13 @@
+; error: 9:21: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; Names a pattern binds that may change are 'is {flex v}'.
+
+task find() -> maybe int
+    <- 3
+fi
+
+task main()
+    when find() is {hold v}
+        v = v + 1
+        show(v)
+    fi
+fi

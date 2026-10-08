@@ -1,0 +1,8 @@
+; error: 6:5: 'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'
+; A reference that only reads its place is 'fixed& y = &x'.
+
+task main()
+    flex n = 1
+    bind& m = &n
+    show(m)
+fi

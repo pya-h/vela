@@ -1,0 +1,7 @@
+; error: 6:16: 'hold' is a reserved word, so it can't be a name
+; A value in text is read as code, where 'hold' is reserved too.
+
+task main()
+    fixed n = 1
+    show("{n} {hold}")
+fi

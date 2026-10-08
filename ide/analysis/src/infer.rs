@@ -1663,23 +1663,16 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
     Some(Type::Task(Box::new(vela::ast::TaskType { params, taken, ret: return_type(detail) }.normalized_beside(kept))))
 }
 
-/// The spellings of the word for a place that changes, and of the one for a
-/// place only read: `flex` and `fixed` are the new ones, which replace `hold`
-/// and `bind` (Part 22). Until the old ones go, a program may write either.
-const FLEX_WORDS: [&str; 2] = ["flex", "hold"];
-const FIXED_WORDS: [&str; 2] = ["fixed", "bind"];
-
 /// How a place in a task's type or a lambda's header is taken, `flex& int` or
-/// `fixed& int` in either spelling, and the text after the word and its `&`.
+/// `fixed& int`, and the text after the word and its `&`.
 fn place_word(text: &str) -> Option<(Passing, &str)> {
-    let after = |words: [&'static str; 2]| words.iter().find_map(|word| text.strip_prefix(word)?.strip_prefix('&'));
-    after(FLEX_WORDS).map(|rest| (Passing::FlexRef, rest)).or_else(|| after(FIXED_WORDS).map(|rest| (Passing::FixedRef, rest)))
+    let after = |word: &str| text.strip_prefix(word)?.strip_prefix('&');
+    after("flex").map(|rest| (Passing::FlexRef, rest)).or_else(|| after("fixed").map(|rest| (Passing::FixedRef, rest)))
 }
 
-/// `item` without the word it may start with, `flex` or `fixed` in either
-/// spelling.
+/// `item` without the word it may start with, `flex` or `fixed`.
 fn without_word(item: &str) -> &str {
-    FLEX_WORDS.iter().chain(FIXED_WORDS.iter()).find_map(|word| item.strip_prefix(word)).unwrap_or(item)
+    ["flex", "fixed"].iter().find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
 /// `[@r]` or `[flex @r]` at the start of `text`, what a lambda keeps: the
@@ -1695,7 +1688,7 @@ fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
         if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;
         }
-        region = Some(match FLEX_WORDS.iter().find_map(|flex| item.strip_prefix(flex)) {
+        region = Some(match item.strip_prefix("flex") {
             Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
             _ => (false, item),
         });

@@ -1,0 +1,12 @@
+; error: 9:15: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; A task's type takes a place that changes as 'flex&'.
+
+task bump(flex& n: int)
+    n = n + 1
+fi
+
+task main()
+    fixed f: (hold& int) -> nothing = bump
+    flex n = 1
+    f(&n)
+fi

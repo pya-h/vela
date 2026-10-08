@@ -1,5 +1,5 @@
 ; error: 5:11: expected a name, got 'fixed', which is a reserved word
-; 'fixed' is a word of the language, the new spelling of 'bind', so nothing takes it as a name.
+; 'fixed' is a word of the language, for a variable that never changes, so nothing takes it as a name.
 
 task main()
     fixed fixed = 1

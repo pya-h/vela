@@ -1,0 +1,7 @@
+; error: 5:11: 'bind' is a reserved word, so it can't be a name
+; 'bind' is a reserved word, so nothing takes it as a name.
+
+task main()
+    fixed bind = 1
+    show(bind)
+fi

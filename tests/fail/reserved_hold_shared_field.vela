@@ -1,0 +1,11 @@
+; error: 6:12: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; A shared field any code may change is 'shared flex'.
+
+shape Counter
+    n: int
+    shared hold made: int = 0
+fi
+
+task main()
+    show(Counter.made)
+fi

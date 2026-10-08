@@ -1,5 +1,4 @@
-; Every form of the words for variables, written with their new spellings,
-; fixed and flex, which replace bind and hold.
+; Every form of the words for variables, fixed and flex.
 
 include std/loops {LoopResult}
 
