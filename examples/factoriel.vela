@@ -1,0 +1,11 @@
+
+task main()
+    endless
+        fixed n = scan("n = ", int) { 1 }
+        show(loop flex i = 1, r = 1|| i <= n  || i++, r *= i
+            r 
+        fi {
+            1
+        })
+    fi
+fi
