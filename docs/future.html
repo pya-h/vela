@@ -2442,6 +2442,41 @@ fi
           <code>maybe T</code> and <code>T ~ E</code> already cover what most generic kinds would be used for. The
           question to decide is whether a program that has shapes and tasks taking types still needs kinds taking them
           often enough to pay for that reach.</li>
+        <li id="knowing-shallow-copies"><strong>Copies that share, knowingly:</strong> the planned refactor of the
+          variable words (<code>hold</code> becomes <code>flex</code>, <code>bind</code> becomes <code>fixed</code>,
+          and a new <code>bind</code> names one value whose contents may change) makes <code>fixed</code> fully
+          immutable. A slice, a map and a pointer are handles to items kept elsewhere, so a <code>flex</code> copy of a
+          <code>fixed</code> one could change the items the <code>fixed</code> name sees. The plan closes that: giving a
+          <code>fixed</code> value that holds a slice, a map or a pointer to a <code>flex</code> or <code>bind</code>
+          name is an error, and the program writes a complete copy instead (<code>new [T](xs) at r</code>,
+          <code>m.copy() at r</code>, and the planned <code>xs.added(v)</code> and <code>xs.without(i)</code>).
+          <p><strong>What a complete copy costs.</strong> It shares nothing with what it copies, at any depth: items
+          that are slices or maps are copied too, and so is what each pointer points to. Pointers may form a cycle
+          (<code>next: maybe ^Node</code>) or point two at one value, so the copy keeps a table of the values it has
+          already copied and points to the copy it made before, which keeps the cycle and the sharing as they were,
+          inside the copy. That is one lookup per pointer, a table that lives while the copy is made, and room in the
+          region for every item and every value pointed to, all of it kept until the region ends. For a long list or
+          a large graph, that is the whole structure again, every time.</p>
+          <p><strong>The idea.</strong> An operation, written so that it can't be missed, that makes a shallow copy
+          on purpose: a <code>flex</code> handle to the items a <code>fixed</code> name sees, at the price of the
+          guarantee that a <code>fixed</code> value never changes. Nothing about it is decided: not its syntax, not
+          what it is allowed on, and not what it checks. Directions to weigh, some from the author's notes on data
+          races:</p>
+          <ul>
+            <li>A word for unsafe operations in general, of which this is the first, so that a reader finds every
+              place a program gave up a guarantee by searching for it.</li>
+            <li>Checks where the program runs: the items the shared copy reaches stay marked as owned by the
+              <code>fixed</code> name, and a write to them through the copy stops the program with a message, as an
+              index out of range does. It costs a check on each write through the copy.</li>
+            <li>The author's lock idea, <code>hold x!: int</code>: a place that only one name may change, refused by
+              the compiler where it can tell, and stopping the program where it can't. The same mark on a shared
+              copy would say which side may write.</li>
+            <li>Plain sharing with no check at all, for code that measured the copy and can't pay for it, as C would
+              do it.</li>
+          </ul>
+          <p><strong>The question to decide</strong> is whether real programs copy large <code>fixed</code> values
+          into <code>flex</code> ones often enough to need a way around the cost, and if so, which guarantee they give
+          up and how loudly the program says so.</p></li>
       </ul>
     </section>
 
