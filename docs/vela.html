@@ -4224,7 +4224,11 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         be), its type names its region except in a field and after <code>new</code>, it can't be stored in another
         region, and a task sends one only into a region it is given. <code>new [T](items) at r</code> makes a slice by
         copying the items into <code>r</code>: <code>[v#n]</code> for <code>n</code> copies of <code>v</code>, where
-        <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T] at r</code>
+        <code>n</code> may be known only as the program runs, an array, or another slice. A slice made of an array or
+        of another slice is a complete copy, as <a href="#copy"><code>copy()</code></a> is: where the items hold text,
+        a slice, a map or a pointer, that is copied too, at every depth, so the new slice shares nothing with the one
+        it is made of. A slice of the values written, <code>[a, b, ...]</code>, holds those values as they are.
+        <code>new [T] at r</code>
         (or <code>new [T]() at r</code>, see <a href="#new-empty">the empty value</a>) makes one with no items.
       </p>
       <p id="slice-shortcut">
@@ -4339,8 +4343,7 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         <code>del</code> at the end: it gives the item's space back to the room, and the next <code>add</code> to that
         slice goes there, over the item a copy made before the <code>del</code> may still count. After changing a
         slice, use the slice you changed, and give a copy that must keep its items of its own:
-        <code>xs.copy() at r</code>, which copies at every depth, or <code>new [T](xs) at r</code>, whose items are
-        its own but still share what they hold (a slice, a map, or what a pointer points to).
+        <code>xs.copy() at r</code> or <code>new [T](xs) at r</code>, which both copy at every depth.
       </p>
 
       <h3 id="maps">Maps</h3>

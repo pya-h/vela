@@ -1,0 +1,108 @@
+  1 | ; A slice made of another slice or of an array, new [T](xs) at r, is a complete
+    | comment:; A slice made of another slice or of an array, new [T](xs) at r, is a complete
+  2 | ; copy, as copy() is: what its items hold is copied too, at every depth, so it
+    | comment:; copy, as copy() is: what its items hold is copied too, at every depth, so it
+  3 | ; shares nothing with what it was made of. Two pointers to one value point to
+    | comment:; shares nothing with what it was made of. Two pointers to one value point to
+  4 | ; one copy, and a cycle stays a cycle, inside the copy. A slice of the values
+    | comment:; one copy, and a cycle stays a cycle, inside the copy. A slice of the values
+  5 | ; written holds them as they are.
+    | comment:; written holds them as they are.
+  7 | shape Node
+    | keyword:shape  type:Node
+  8 |     v: int
+    | field:v  punctuation::  type-builtin:int
+  9 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+ 10 | fi
+    | keyword:fi
+ 12 | shape Bag
+    | keyword:shape  type:Bag
+ 13 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+ 14 |     counts: [text: int]
+    | field:counts  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]
+ 15 | fi
+    | keyword:fi
+ 17 | task copied<T>(r: region, xs: [T]@r) -> [T]@r
+    | keyword:task  task:copied  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
+ 18 |     <- new [T](xs) at r
+    | keyword:<-  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  parameter:xs  punctuation:)  keyword:at  region:r
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     region r default
+    | keyword:region  region:r  keyword:default
+ 24 |     ; Slices inside the items are copied too.
+    | comment:; Slices inside the items are copied too.
+ 25 |     fixed rows = [[1, 2, ...], [3, ...], ...]
+    | keyword:fixed  variable:rows  operator:=  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  keyword:...  punctuation:]  punctuation:,  keyword:...  punctuation:]
+ 26 |     flex mine = new [[int]](rows) at r
+    | keyword:flex  variable:mine  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  variable:rows  punctuation:)  keyword:at  region:r
+ 27 |     mine[0][0] = 9
+    | variable:mine  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 28 |     mine[1].add(4)
+    | variable:mine  punctuation:[  number:1  punctuation:]  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 29 |     show(rows, " ", mine)
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:,  string:" "  punctuation:,  variable:mine  punctuation:)
+ 31 |     ; Two pointers to one value point to one copy of it.
+    | comment:; Two pointers to one value point to one copy of it.
+ 32 |     flex one = new Node(Node { v: 1, next: none })
+    | keyword:flex  variable:one  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 33 |     flex ps = [one, one, ...]
+    | keyword:flex  variable:ps  operator:=  punctuation:[  variable:one  punctuation:,  variable:one  punctuation:,  keyword:...  punctuation:]
+ 34 |     flex qs = new [^Node](ps) at r
+    | keyword:flex  variable:qs  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  variable:ps  punctuation:)  keyword:at  region:r
+ 35 |     qs[0]^.v = 5
+    | variable:qs  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:v  operator:=  number:5
+ 36 |     show(ps[0]^.v, " ", qs[1]^.v, " ", &qs[0]^ == &qs[1]^, " ", &qs[0]^ == &ps[0]^)
+    | builtin-fn:show  punctuation:(  variable:ps  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:qs  punctuation:[  number:1  punctuation:]  operator:^  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  operator:&  variable:qs  punctuation:[  number:0  punctuation:]  operator:^  operator:==  operator:&  variable:qs  punctuation:[  number:1  punctuation:]  operator:^  punctuation:,  string:" "  punctuation:,  operator:&  variable:qs  punctuation:[  number:0  punctuation:]  operator:^  operator:==  operator:&  variable:ps  punctuation:[  number:0  punctuation:]  operator:^  punctuation:)
+ 38 |     ; A cycle stays a cycle.
+    | comment:; A cycle stays a cycle.
+ 39 |     flex a = new Node(Node { v: 7, next: none })
+    | keyword:flex  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 40 |     a^.next = a
+    | variable:a  operator:^  punctuation:.  field:next  operator:=  variable:a
+ 41 |     flex cs = new [^Node]([a, ...]) at r
+    | keyword:flex  variable:cs  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  punctuation:[  variable:a  punctuation:,  keyword:...  punctuation:]  punctuation:)  keyword:at  region:r
+ 42 |     when cs[0]^.next is {n}
+    | keyword:when  variable:cs  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:n  punctuation:}
+ 43 |         show(n^.v, " ", &n^ == &cs[0]^, " ", &n^ == &a^)
+    | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  operator:&  variable:n  operator:^  operator:==  operator:&  variable:cs  punctuation:[  number:0  punctuation:]  operator:^  punctuation:,  string:" "  punctuation:,  operator:&  variable:n  operator:^  operator:==  operator:&  variable:a  operator:^  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 46 |     ; Shapes holding a slice and a map, and an array made into a slice.
+    | comment:; Shapes holding a slice and a map, and an array made into a slice.
+ 47 |     fixed bags = [Bag { items: [1, ...], counts: ["a": 1] }#2]
+    | keyword:fixed  variable:bags  operator:=  punctuation:[  type:Bag  punctuation:{  field:items  punctuation::  punctuation:[  number:1  punctuation:,  keyword:...  punctuation:]  punctuation:,  field:counts  punctuation::  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  punctuation:}  punctuation:#  number:2  punctuation:]
+ 48 |     flex loose = new [Bag](bags) at r
+    | keyword:flex  variable:loose  operator:=  keyword:new  punctuation:[  type:Bag  punctuation:]  punctuation:(  variable:bags  punctuation:)  keyword:at  region:r
+ 49 |     loose[0].items[0] = 10
+    | variable:loose  punctuation:[  number:0  punctuation:]  punctuation:.  field:items  punctuation:[  number:0  punctuation:]  operator:=  number:10
+ 50 |     loose[1].counts["a"] = 20
+    | variable:loose  punctuation:[  number:1  punctuation:]  punctuation:.  field:counts  punctuation:[  string:"a"  punctuation:]  operator:=  number:20
+ 51 |     show(bags[0].items, " ", bags[1].counts["a"], " ", loose[0].items, " ", loose[1].counts["a"])
+    | builtin-fn:show  punctuation:(  variable:bags  punctuation:[  number:0  punctuation:]  punctuation:.  field:items  punctuation:,  string:" "  punctuation:,  variable:bags  punctuation:[  number:1  punctuation:]  punctuation:.  field:counts  punctuation:[  string:"a"  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:loose  punctuation:[  number:0  punctuation:]  punctuation:.  field:items  punctuation:,  string:" "  punctuation:,  variable:loose  punctuation:[  number:1  punctuation:]  punctuation:.  field:counts  punctuation:[  string:"a"  punctuation:]  punctuation:)
+ 53 |     ; In a generic task, for the types it is given.
+    | comment:; In a generic task, for the types it is given.
+ 54 |     fixed nested = [[5, ...], ...]
+    | keyword:fixed  variable:nested  operator:=  punctuation:[  punctuation:[  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:,  keyword:...  punctuation:]
+ 55 |     flex again = copied(r, nested)
+    | keyword:flex  variable:again  operator:=  task:copied  punctuation:(  region:r  punctuation:,  variable:nested  punctuation:)
+ 56 |     again[0][0] = 50
+    | variable:again  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:50
+ 57 |     show(nested, " ", again)
+    | builtin-fn:show  punctuation:(  variable:nested  punctuation:,  string:" "  punctuation:,  variable:again  punctuation:)
+ 59 |     ; A slice of the values written holds them as they are.
+    | comment:; A slice of the values written holds them as they are.
+ 60 |     flex row = [1, 2, ...]
+    | keyword:flex  variable:row  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 61 |     flex held = [row, ...]
+    | keyword:flex  variable:held  operator:=  punctuation:[  variable:row  punctuation:,  keyword:...  punctuation:]
+ 62 |     held[0][0] = 100
+    | variable:held  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:100
+ 63 |     show(row)
+    | builtin-fn:show  punctuation:(  variable:row  punctuation:)
+ 64 | fi
+    | keyword:fi

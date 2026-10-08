@@ -295,7 +295,15 @@ impl Generator {
         self.gen_item_helpers(&used);
         self.gen_map_helpers(&used);
         self.gen_compares(&used)?;
-        self.gen_copies(&used.copied.list);
+        // A slice made of another whose items hold anything in a region is
+        // copied as `copy()` copies (see `gen_new`).
+        let mut copied = used.copied.list.clone();
+        for slice in used.slice_copied.list.iter().filter(|slice| self.copies_deep(slice)) {
+            if !copied.contains(slice) {
+                copied.push(slice.clone());
+            }
+        }
+        self.gen_copies(&copied);
         self.gen_closure_helpers(&used);
         self.w.blank();
 
@@ -1006,7 +1014,13 @@ impl Generator {
             self.w.line(&format!("return ({}){{ .items = s.items + from, .len = to - from, .room = s.room }};", ctype));
             self.w.close();
         }
-        for slice in &used.slice_copy {
+        let mut shallow: Vec<&Type> = used.slice_copy.list.iter().collect();
+        for slice in used.slice_copied.list.iter().filter(|slice| !self.copies_deep(slice)) {
+            if !shallow.contains(&slice) {
+                shallow.push(slice);
+            }
+        }
+        for slice in shallow {
             let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
             self.w.open(&format!("static {0} {1}(vela__rt__region* r, {0} s)", ctype, item_helper("copy", slice)));
             // The source exists, so its size in bytes can't overflow.
@@ -1316,6 +1330,13 @@ impl Generator {
             self.w.line("return value;");
             self.w.close();
         }
+    }
+
+    /// Whether `new [T](xs)` making a `slice` of another copies at every
+    /// depth, as `copy()` does: where its items hold text, a slice, a map or a
+    /// pointer, so the new slice shares nothing with the one it is made of.
+    fn copies_deep(&self, slice: &Type) -> bool {
+        self.needs_fix(&fix_type(item_type(slice)))
     }
 
     /// Whether a value of type `ty` holds anything in a region that a copy
@@ -3642,6 +3663,11 @@ impl Generator {
                 ),
                 _ => source,
             };
+            // A slice made of another shares nothing with it, at any depth;
+            // one made of the values written holds them as they are.
+            if !matches!(value.kind, ExprKind::Array(_)) && self.copies_deep(slice) {
+                return Ok(format!("{}({}, {})", copy_helper("copied", slice), c_ident(region), source));
+            }
             return Ok(format!("{}({}, {})", item_helper("copy", slice), c_ident(region), source));
         }
         // Copies the value out of a one-element array compound literal,
@@ -4450,6 +4476,9 @@ struct UsedTypes {
     lookups: TypeList,
     slice_part: TypeList,
     slice_copy: TypeList,
+    /// The slices made of another slice or array, `new [T](xs)`, which copy
+    /// at every depth where their items hold anything in a region.
+    slice_copied: TypeList,
     slice_fill: TypeList,
     slice_add: TypeList,
     slice_insert: TypeList,
@@ -4552,6 +4581,7 @@ impl UsedTypes {
             lookups: TypeList::default(),
             slice_part: TypeList::default(),
             slice_copy: TypeList::default(),
+            slice_copied: TypeList::default(),
             slice_fill: TypeList::default(),
             slice_add: TypeList::default(),
             slice_insert: TypeList::default(),
@@ -4937,8 +4967,15 @@ impl UsedTypes {
                     }
                     // `new [T]()` copies nothing.
                     ExprKind::Array(values) if values.is_empty() => {}
-                    _ => {
+                    // The values written, copied item by item.
+                    ExprKind::Array(_) => {
                         note(&mut self.slice_copy, slice);
+                        self.expr(value);
+                    }
+                    // Another slice or array, copied at every depth where the
+                    // items hold anything in a region (see `Generator::gen_new`).
+                    _ => {
+                        note(&mut self.slice_copied, slice);
                         self.expr(value);
                     }
                 }

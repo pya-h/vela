@@ -1,0 +1,64 @@
+; A slice made of another slice or of an array, new [T](xs) at r, is a complete
+; copy, as copy() is: what its items hold is copied too, at every depth, so it
+; shares nothing with what it was made of. Two pointers to one value point to
+; one copy, and a cycle stays a cycle, inside the copy. A slice of the values
+; written holds them as they are.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+shape Bag
+    items: [int]
+    counts: [text: int]
+fi
+
+task copied<T>(r: region, xs: [T]@r) -> [T]@r
+    <- new [T](xs) at r
+fi
+
+task main()
+    region r default
+
+    ; Slices inside the items are copied too.
+    fixed rows = [[1, 2, ...], [3, ...], ...]
+    flex mine = new [[int]](rows) at r
+    mine[0][0] = 9
+    mine[1].add(4)
+    show(rows, " ", mine)
+
+    ; Two pointers to one value point to one copy of it.
+    flex one = new Node(Node { v: 1, next: none })
+    flex ps = [one, one, ...]
+    flex qs = new [^Node](ps) at r
+    qs[0]^.v = 5
+    show(ps[0]^.v, " ", qs[1]^.v, " ", &qs[0]^ == &qs[1]^, " ", &qs[0]^ == &ps[0]^)
+
+    ; A cycle stays a cycle.
+    flex a = new Node(Node { v: 7, next: none })
+    a^.next = a
+    flex cs = new [^Node]([a, ...]) at r
+    when cs[0]^.next is {n}
+        show(n^.v, " ", &n^ == &cs[0]^, " ", &n^ == &a^)
+    fi
+
+    ; Shapes holding a slice and a map, and an array made into a slice.
+    fixed bags = [Bag { items: [1, ...], counts: ["a": 1] }#2]
+    flex loose = new [Bag](bags) at r
+    loose[0].items[0] = 10
+    loose[1].counts["a"] = 20
+    show(bags[0].items, " ", bags[1].counts["a"], " ", loose[0].items, " ", loose[1].counts["a"])
+
+    ; In a generic task, for the types it is given.
+    fixed nested = [[5, ...], ...]
+    flex again = copied(r, nested)
+    again[0][0] = 50
+    show(nested, " ", again)
+
+    ; A slice of the values written holds them as they are.
+    flex row = [1, 2, ...]
+    flex held = [row, ...]
+    held[0][0] = 100
+    show(row)
+fi

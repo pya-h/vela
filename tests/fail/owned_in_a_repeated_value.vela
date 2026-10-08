@@ -1,0 +1,13 @@
+; error: 11:17: 'rows' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy: 'xs.copy() at r'
+; A slice of one value repeated holds that value as it is, so each item is
+; what the fixed name owns; a slice made of another, or of an array, is a copy
+; of its own, at every depth.
+
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    fixed pair = [xs, xs]
+    flex copied = new [[int]](pair) at r
+    flex rows = new [[int]]([xs#2]) at r
+    show(copied, rows)
+fi

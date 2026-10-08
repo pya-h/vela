@@ -1,0 +1,26 @@
+; A seating plan and a draft of it: the plan is fixed, so nothing changes
+; through it, at any depth, and a flex name can't be given it. The draft is
+; made with 'new [T](plan) at r', a complete copy: each row, a slice of its
+; own, is copied too, so changing the draft leaves the plan as it was.
+shape Guest
+    name: text
+    table: int
+fi
+
+task seat(r: region, plan: [[text]]@r, guests: [Guest]@r) -> [[text]]@r
+    ; A copy of every row, to change, then the guests added where they sit.
+    flex draft = new [[text]](plan) at r
+    each guest in guests
+        draft[guest.table].add(guest.name)
+    fi
+    <- draft
+fi
+
+task main()
+    region party
+    fixed plan = [["ada", ...] at party, ["bo", ...] at party, ...] at party
+    fixed late = [Guest { name: "cy", table: 0 }, Guest { name: "di", table: 1 }, ...] at party
+    fixed seated = seat(party, plan, late)
+    show("plan:   ", plan)
+    show("seated: ", seated)
+fi

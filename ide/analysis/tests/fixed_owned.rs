@@ -2,7 +2,8 @@
 //! may change it (Part 22, phase 2.3): Studio shows the compiler's error where
 //! the value is given, for a call that sends back what it was given too, and
 //! none where a task only reads what it is given to make something new; a
-//! lambda is followed to what it sends back.
+//! lambda is followed to what it sends back. A slice made of another is a
+//! complete copy, owned by no one (phase 2.4).
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -57,4 +58,9 @@ fn a_lambda_is_followed_to_what_it_sends_back() {
     );
     // One that only reads what it keeps to make something new gives nothing owned.
     assert_eq!(diagnostics("    fixed xs = [1, 2, ...]\n    flex f = [@r]() -> [int]@r <- xs.copy() at r fi\n    flex ys = f()\n    ys[0] = 0\n"), []);
+}
+
+#[test]
+fn a_slice_made_of_another_is_a_copy_of_its_own() {
+    assert_eq!(diagnostics("    fixed rows = [[1, 2, ...], ...]\n    flex mine = new [[int]](rows) at r\n    mine[0][0] = 9\n"), []);
 }

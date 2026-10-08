@@ -768,8 +768,8 @@ show(names.del(1))                    ; takes item 1 out: b</pre>
         <li><strong>A slice lives in a region.</strong> In C, an array is another form of pointer, and a slice is that
           pointer with a length, so it follows the pointer rules: its type names its region, it is never
           <code>none</code>, and it can't outlive its region or move to another. A slice of a local array would point
-          at the stack, so that is an error, and copying into a region is written out (<code>new [T](xs) at r</code>, or
-          <code>xs.copy() at r</code>, which also copies what the items hold).</li>
+          at the stack, so that is an error, and copying into a region is written out (<code>new [T](xs) at r</code> or
+          <code>xs.copy() at r</code>, both of which also copy what the items hold).</li>
         <li><strong><code>new [T](…) at r</code>.</strong> The same form as <code>new T(v) at r</code>: the value in
           parentheses gives the items (<code>[v#n]</code>, an array, or a slice, copied), and the result is the slice
           itself rather than a pointer to one. A count known only as the program runs is allowed only there, since an
@@ -2450,9 +2450,9 @@ fi
           <code>fixed</code> one could change the items the <code>fixed</code> name sees. That is closed: giving what a
           <code>fixed</code> name owns, a slice, a map or a pointer, to a <code>flex</code> name is an error (see
           <a href="vela.html#fixed-owns">What a fixed name owns</a>), and the new <code>bind</code> will follow the
-          same rule, so the program writes a complete copy instead (<code>xs.copy() at r</code>,
+          same rule, so the program writes a complete copy instead (<code>xs.copy() at r</code>, <code>new [T](xs) at r</code>,
           <code>m.copy() at r</code>, and the planned <code>xs.added(v)</code> and <code>xs.without(i)</code>).
-          <p><strong>What a complete copy costs.</strong> <code>copy()</code> is one already (see
+          <p><strong>What a complete copy costs.</strong> <code>copy()</code> and <code>new [T](xs)</code> are complete copies (see
           <a href="vela.html#copy">Copying into another region</a>). It shares nothing with what it copies, at any depth:
           items that are slices or maps are copied too, and so is what each pointer points to. Pointers may form a
           cycle (<code>next: maybe ^Node</code>) or point two at one value, so the copy keeps a table of the values it

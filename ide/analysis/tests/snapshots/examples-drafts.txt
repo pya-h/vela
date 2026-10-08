@@ -1,0 +1,48 @@
+  1 | ; A seating plan and a draft of it: the plan is fixed, so nothing changes
+    | comment:; A seating plan and a draft of it: the plan is fixed, so nothing changes
+  2 | ; through it, at any depth, and a flex name can't be given it. The draft is
+    | comment:; through it, at any depth, and a flex name can't be given it. The draft is
+  3 | ; made with 'new [T](plan) at r', a complete copy: each row, a slice of its
+    | comment:; made with 'new [T](plan) at r', a complete copy: each row, a slice of its
+  4 | ; own, is copied too, so changing the draft leaves the plan as it was.
+    | comment:; own, is copied too, so changing the draft leaves the plan as it was.
+  5 | shape Guest
+    | keyword:shape  type:Guest
+  6 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  7 |     table: int
+    | field:table  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | task seat(r: region, plan: [[text]]@r, guests: [Guest]@r) -> [[text]]@r
+    | keyword:task  task:seat  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:plan  punctuation::  punctuation:[  punctuation:[  type-builtin:text  punctuation:]  punctuation:]  operator:@  region:r  punctuation:,  parameter:guests  punctuation::  punctuation:[  type:Guest  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  punctuation:[  type-builtin:text  punctuation:]  punctuation:]  operator:@  region:r
+ 11 |     ; A copy of every row, to change, then the guests added where they sit.
+    | comment:; A copy of every row, to change, then the guests added where they sit.
+ 12 |     flex draft = new [[text]](plan) at r
+    | keyword:flex  variable:draft  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:text  punctuation:]  punctuation:]  punctuation:(  parameter:plan  punctuation:)  keyword:at  region:r
+ 13 |     each guest in guests
+    | keyword:each  variable:guest  keyword:in  parameter:guests
+ 14 |         draft[guest.table].add(guest.name)
+    | variable:draft  punctuation:[  variable:guest  punctuation:.  field:table  punctuation:]  punctuation:.  field:add  punctuation:(  variable:guest  punctuation:.  field:name  punctuation:)
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- draft
+    | keyword:<-  variable:draft
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     region party
+    | keyword:region  region:party
+ 21 |     fixed plan = [["ada", ...] at party, ["bo", ...] at party, ...] at party
+    | keyword:fixed  variable:plan  operator:=  punctuation:[  punctuation:[  string:"ada"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:party  punctuation:,  punctuation:[  string:"bo"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:party  punctuation:,  keyword:...  punctuation:]  keyword:at  region:party
+ 22 |     fixed late = [Guest { name: "cy", table: 0 }, Guest { name: "di", table: 1 }, ...] at party
+    | keyword:fixed  variable:late  operator:=  punctuation:[  type:Guest  punctuation:{  field:name  punctuation::  string:"cy"  punctuation:,  field:table  punctuation::  number:0  punctuation:}  punctuation:,  type:Guest  punctuation:{  field:name  punctuation::  string:"di"  punctuation:,  field:table  punctuation::  number:1  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:party
+ 23 |     fixed seated = seat(party, plan, late)
+    | keyword:fixed  variable:seated  operator:=  task:seat  punctuation:(  region:party  punctuation:,  variable:plan  punctuation:,  variable:late  punctuation:)
+ 24 |     show("plan:   ", plan)
+    | builtin-fn:show  punctuation:(  string:"plan:   "  punctuation:,  variable:plan  punctuation:)
+ 25 |     show("seated: ", seated)
+    | builtin-fn:show  punctuation:(  string:"seated: "  punctuation:,  variable:seated  punctuation:)
+ 26 | fi
+    | keyword:fi

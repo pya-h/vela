@@ -5371,12 +5371,12 @@ impl Checker {
                 (MapOp::Values, Some(Type::Map(_, value, _))) if self.holds_handle(value) => self.owners(map),
                 _ => Vec::new(),
             },
-            // A copy of a map is a map of its own, at every depth, and so is a
-            // slice copied of items that hold nothing; a slice copied of items
-            // that hold a slice, a map or a pointer shares what they hold.
+            // A copy of a map or of a slice is its own, at every depth, but what
+            // a lambda keeps stays shared; a slice of the values written, or of
+            // one value repeated, holds them as they are.
             ExprKind::New { ty, value, .. } => match ty.as_ref() {
-                Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) => Vec::new(),
-                Type::Slice(item, _) if !holds_pointers(item, &self.regional) => Vec::new(),
+                map @ Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) && !has_closure(map) => Vec::new(),
+                Type::Slice(item, _) if !matches!(value.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) && !has_closure(item) => Vec::new(),
                 _ => self.owners(value),
             },
             ExprKind::Copy { .. } => Vec::new(),
