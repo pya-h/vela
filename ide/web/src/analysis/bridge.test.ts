@@ -31,7 +31,7 @@ describe("VelaAnalysis", () => {
       ["warning", 6, 13],
     ]);
     expect(diagnostics[0]?.message).toContain("given as the compiler chose");
-    expect(analysis.file(source.replace("same(a: Point", "same(fixed& a: Point").replace("b: Point)", "bind& b: Point)").replace("same(p, p)", "same(&p, &p)")).diagnostics).toEqual([]);
+    expect(analysis.file(source.replace("same(a: Point", "same(fixed& a: Point").replace("b: Point)", "fixed& b: Point)").replace("same(p, p)", "same(&p, &p)")).diagnostics).toEqual([]);
   });
 
   it("analyzes text holding a lone surrogate, with offsets unchanged", () => {
@@ -308,7 +308,7 @@ describe("VelaAnalysis", () => {
 
   it("describes the language from the compiler's tables", () => {
     const language = analysis.language();
-    expect(language.keywords).toEqual(expect.arrayContaining(["task", "fi", "hold", "none"]));
+    expect(language.keywords).toEqual(expect.arrayContaining(["task", "fi", "hold", "fixed", "flex", "none"]));
     expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "endless", "each", "block", "match"]);
     expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
