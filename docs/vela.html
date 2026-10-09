@@ -484,8 +484,9 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         <em>cannot assign to immutable variable 'n'; a parameter that changes is written 'flex n: int', and is the
         task's own copy</em>. Written <code>flex</code> before its name, a parameter is the task's own copy of what
         it was given, which it changes as it changes any <code>flex</code> variable: assigned, its fields and items
-        assigned, its <code>alters</code> methods called, a slice added to. A copy of a slice, a map or a pointer
-        still names what the caller's does (the items, the map, the value pointed to), so what the task writes
+        assigned, its <code>alters</code> methods called, a slice added to. A copy of a
+        <a href="#whole-twofold-place">twofold</a> value, a slice, a map or a pointer or what holds one, still names
+        what the caller's does (the items, the map, the value pointed to), so what the task writes
         there the caller sees, and it can't be given what a fixed name owns (see
         <a href="#fixed-owns">What a fixed name owns</a>); through a plain parameter nothing is written, at any depth.
       </p>
@@ -929,13 +930,48 @@ t += "{count}!"             <span class="comment">; "ab121!", joined into r, the
 <span class="keyword">fi</span>
 show(label)                <span class="comment">; error: unknown variable 'label'</span></pre>
 
+      <h3 id="whole-twofold-place">Whole values, twofold values, and places</h3>
+      <p>
+        What a copy of a value does sorts every value into one of two kinds, and a place is where one is kept:
+      </p>
+      <ul>
+        <li><strong>Whole</strong>: numbers, <code>bool</code>, <code>char</code>, <code>unit</code>, text, and arrays,
+          tuples, shapes and kinds made only of these. A copy is a value of its own, so changing it changes nothing
+          else. Text may live in a region, but it never changes, so it is whole too.</li>
+        <li><strong>Twofold</strong>: a slice, a map, a pointer, and anything that holds one, such as a shape with a
+          slice field or a <code>maybe</code> pointer. It is in two parts: what a variable holds (where the items are,
+          and for a slice how many), and the items, in a region. A copy copies the first part, so it names the same
+          items. A lambda whose call may send back a twofold value is twofold too.</li>
+        <li><strong>Place</strong>: where a value is kept, a variable, a field or an item of one, or what a pointer
+          points to. <code>&amp;x</code> gives the place itself, not a copy of its value: to a <code>flex&amp;</code> or
+          <code>fixed&amp;</code> parameter, to a reference, <code>flex&amp; y = &amp;x</code>, or to a lambda keeping
+          it.</li>
+      </ul>
+      <pre><span class="keyword">flex</span> a = Point { x: <span class="number">1</span> }       <span class="comment">; whole</span>
+<span class="keyword">flex</span> b = a
+b.x = <span class="number">2</span>                       <span class="comment">; a.x is still 1</span>
+<span class="keyword">flex</span> xs = [<span class="number">1</span>, <span class="number">2</span>, ...]       <span class="comment">; twofold</span>
+<span class="keyword">flex</span> ys = xs
+ys[<span class="number">0</span>] = <span class="number">9</span>                     <span class="comment">; xs is [9, 2] too: one set of items</span>
+<span class="keyword">flex</span> zs = xs.copy() <span class="keyword">at</span> r      <span class="comment">; items of its own, at every depth</span></pre>
+      <p>
+        The rules about change follow from the kind. What a task does to a whole value it was given is its own, so
+        <code>flex</code> and <code>fixed</code> matter to others only for twofold values and places: what a fixed name
+        owns, a twofold value, is never given to what may change it (below); <code>copy()</code> and
+        <code>new [T](xs)</code> copy a twofold value's items too (see <a href="#copy">Copying into another
+        region</a>); a task's type says <code>flex</code> for a twofold value the task changes, and
+        <code>flex&amp;</code> or <code>fixed&amp;</code> for a place, but nothing for a whole value (see
+        <a href="#task-types-flex">A value the task changes through</a>); and the call marks a place it gives with
+        <code>&amp;</code>.
+      </p>
+
       <h3 id="fixed-owns">What a fixed name owns</h3>
       <p>
         Nothing changes through a <code>fixed</code> name, at any depth: not a field, not an item, not what a pointer
         it holds points to. <code>fixed p = new Point(…) at r</code> then <code>p^.x = 5</code> is an error, and so
         are <code>xs[0] = 9</code> and <code>xs[0].bump()</code> on a <code>fixed</code> slice. A slice, a map and a
-        pointer are handles, so a copy of one names the same items, and a <code>flex</code> name given them would
-        change what the <code>fixed</code> one holds. So what a fixed name owns is never given to what may change it:
+        pointer are <a href="#whole-twofold-place">twofold</a>, so a copy of one names the same items, and a
+        <code>flex</code> name given them would change what the <code>fixed</code> one holds. So what a fixed name owns is never given to what may change it:
       </p>
       <ul>
         <li>a <code>flex</code> variable or name, or one assigned: <code>flex ys = xs</code>, <code>ys = xs</code>, a
@@ -960,8 +996,8 @@ show(label)                <span class="comment">; error: unknown variable 'labe
         which share only what each key or value holds. A lambda that keeps what it uses holds what its call may send
         back: <code>[@r]() -&gt; [int]@r &lt;- xs fi</code> may only be kept in a <code>fixed</code> name or given
         where nothing changes it, and what its call gives back is what <code>xs</code> owns, but one that only reads
-        <code>xs</code> to make a new slice gives back nothing owned. A value that holds no slice, map or
-        pointer is copied whole, so a <code>fixed</code> number, text, or shape of them may be given anywhere.
+        <code>xs</code> to make a new slice gives back nothing owned. A whole value, which holds no slice, map or
+        pointer, is copied whole, so a <code>fixed</code> number, text, or shape of them may be given anywhere.
         Parameters not written <code>flex</code>, <code>fixed&amp;</code> references, pattern and loop names without
         <code>flex</code>, and <code>.this</code> outside <code>alters</code> are fixed names too. In a task or shape
         that takes types, the rule is checked for each set of types it is given, and the message names the set that
@@ -2482,7 +2518,7 @@ fi</code></pre>
       </p>
       <p id="task-types-flex">
         <strong>A value the task changes through.</strong> A slice, a map and a pointer, and what holds one, are
-        twofold: a copy names the caller's items. So a task taking <code>flex xs: [int]@r</code> changes what the caller's
+        <a href="#whole-twofold-place">twofold</a>: a copy names the caller's items. So a task taking <code>flex xs: [int]@r</code> changes what the caller's
         slice holds, and its type says so: <code>(flex [int]@r) -&gt; nothing</code>. It goes only where a type says
         <code>flex</code> for that value, and a call through such a value is checked as a call of a task with a
         <code>flex</code> parameter is: nothing a fixed name owns is given there (see
@@ -2512,8 +2548,8 @@ task main()
 fi</code></pre>
       <p>
         And <code>fixed plain: ([int]@r) -&gt; nothing = zero</code> is an error that names the type to write:
-        <em>… this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that
-        value, as in '(flex [int]@r) -&gt; nothing'</em>.
+        <em>… this task changes what a twofold value it is given reaches, a slice, a map or a pointer or what holds one,
+        so it goes only where the type says 'flex' for that value, as in '(flex [int]@r) -&gt; nothing'</em>.
       </p>
       <pre><code>task bump(flex&amp; n: int)
     n = n + 1

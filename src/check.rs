@@ -2506,7 +2506,7 @@ impl Checker {
     /// changes nothing the caller sees, so it is a value.
     fn taken_for(&self, how: &Taken, ty: &Type) -> Taken {
         match how {
-            Taken::Flex if !self.holds_handle(ty) => Taken::Value,
+            Taken::Flex if !self.twofold(ty) => Taken::Value,
             how => how.clone(),
         }
     }
@@ -5353,7 +5353,7 @@ impl Checker {
     /// for one made here or reached from a name that changes. What a fixed
     /// name owns is never given to what may change it (see `hand`).
     fn owners(&self, e: &Expr) -> Vec<Own> {
-        let holds = e.ty.as_ref().is_some_and(|ty| self.holds_handle(ty));
+        let holds = e.ty.as_ref().is_some_and(|ty| self.twofold(ty));
         // A lambda's value keeps what it uses, which a call of it may give back.
         let lambda = matches!(e.ty, Some(Type::Closure(_)));
         if !holds && !lambda {
@@ -5385,8 +5385,8 @@ impl Checker {
             // Keys and values are copied into a slice of their own, which
             // shares only what each of them holds.
             ExprKind::MapOp { map, op, .. } => match (op, &map.ty) {
-                (MapOp::Keys, Some(Type::Map(key, _, _))) if self.holds_handle(key) => self.owners(map),
-                (MapOp::Values, Some(Type::Map(_, value, _))) if self.holds_handle(value) => self.owners(map),
+                (MapOp::Keys, Some(Type::Map(key, _, _))) if self.twofold(key) => self.owners(map),
+                (MapOp::Values, Some(Type::Map(_, value, _))) if self.twofold(value) => self.owners(map),
                 _ => Vec::new(),
             },
             // A copy of a map or of a slice is its own, at every depth, but what
@@ -5430,7 +5430,7 @@ impl Checker {
         let mut owners = info.owners.clone();
         let ty = info.ty.clone();
         let index = self.param_index.get(name).filter(|_| info.param);
-        if self.holds_handle(&ty) && (index.is_some() || !self.only_lambdas(&ty)) {
+        if self.twofold(&ty) && (index.is_some() || !self.only_lambdas(&ty)) {
             owners.push(match index {
                 Some(i) => Own::Param(*i, name.to_string()),
                 None => Own::Root(name.to_string()),
@@ -5555,7 +5555,7 @@ impl Checker {
     /// `value` sends, or the whole of it.
     fn hand_as(&mut self, value: &Expr, ty: &Type, to: HandedTo) {
         // A lambda's value holds none: what it keeps counts where it is called.
-        if !self.holds_handle(ty) {
+        if !self.twofold(ty) {
             return;
         }
         let owners = self.owners(value);
@@ -5596,17 +5596,19 @@ impl Checker {
         here.map_or_else(|| (copy_region(ty).to_string(), true), |(name, _)| (name.clone(), false))
     }
 
-    /// Whether a value of type `ty` holds a slice, a map or a pointer, which
-    /// another name may share, or is a lambda that may send one back; for
-    /// several values, whether any of them does.
-    fn holds_handle(&self, ty: &Type) -> bool {
-        shares_handle(ty, &self.regional, true) || self.may_hold(ty, true)
+    /// Whether a value of type `ty` is twofold: it holds a slice, a map or a
+    /// pointer, which another name may share, or is a lambda that may send one
+    /// back, or is of a type the generic task being checked takes that may be
+    /// one; for several values, whether any of them is. Any other value is
+    /// whole, copied whole.
+    fn twofold(&self, ty: &Type) -> bool {
+        holds_twofold(ty, &self.regional, true) || self.may_hold(ty, true)
     }
 
     /// Whether a value of type `ty` holds a slice, a map or a pointer only
     /// through lambdas that may send one back.
     fn only_lambdas(&self, ty: &Type) -> bool {
-        self.holds_handle(ty) && !shares_handle(ty, &self.regional, false) && !self.may_hold(ty, false)
+        self.twofold(ty) && !holds_twofold(ty, &self.regional, false) && !self.may_hold(ty, false)
     }
 
     /// Whether `ty` holds a type the generic task being checked takes, which
@@ -5630,7 +5632,7 @@ impl Checker {
     /// some types the generic task being checked may be given: the task, and
     /// the type its copies fill in.
     fn generic_part(&self, ty: &Type) -> Option<(String, Type)> {
-        (!shares_handle(ty, &self.regional, true) && self.may_hold(ty, true)).then(|| (self.current_task.clone(), ty.clone()))
+        (!holds_twofold(ty, &self.regional, true) && self.may_hold(ty, true)).then(|| (self.current_task.clone(), ty.clone()))
     }
 
     /// The names a pattern binds, `bindings`, from `source`, already checked:
@@ -5642,7 +5644,7 @@ impl Checker {
             return;
         }
         for (name, at, ty, mutable) in bindings {
-            if name == DISCARD || !self.holds_handle(ty) {
+            if name == DISCARD || !self.twofold(ty) {
                 continue;
             }
             if *mutable {
@@ -5722,7 +5724,7 @@ impl Checker {
             let given = match &handed.generic {
                 None => String::new(),
                 Some((task, ty)) => {
-                    let copy = self.copies.get(task).and_then(|copies| copies.iter().find(|(_, given)| shares_handle(&in_copy(ty, given), &self.regional, true)));
+                    let copy = self.copies.get(task).and_then(|copies| copies.iter().find(|(_, given)| holds_twofold(&in_copy(ty, given), &self.regional, true)));
                     let Some((types, _)) = copy else { continue };
                     let types: Vec<String> = types.iter().map(|ty| ty.without_regions().to_string()).collect();
                     format!(", where '{}' is given {}", unqualified(task), types.join(", "))
@@ -5770,7 +5772,7 @@ impl Checker {
         for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
             for name in &kept.uses {
                 let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
-                if info.mutable || info.result || !shares_handle(&info.ty, &self.regional, true) {
+                if info.mutable || info.result || !holds_twofold(&info.ty, &self.regional, true) {
                     continue;
                 }
                 let rule = "nothing changes through what a fixed name owns";
@@ -13721,17 +13723,17 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     }
 }
 
-/// Whether a value of type `ty` holds a slice, a map or a pointer another
-/// name may share, given the shapes and kinds in `regional` that do, or what
-/// `fail` sends holds one; with `lambdas`, also a lambda whose call may send
-/// one back. A field can't hold a lambda that keeps what it uses, so a shape
-/// or kind holds none.
-fn shares_handle(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
+/// Whether a value of type `ty` is twofold, holding a slice, a map or a
+/// pointer another name may share, given the shapes and kinds in `regional`
+/// that do, or what `fail` sends holds one; with `lambdas`, also a lambda whose
+/// call may send one back. A field can't hold a lambda that keeps what it
+/// uses, so a shape or kind holds none.
+fn holds_twofold(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
     match ty {
-        Type::Results(items) | Type::Tuple(items) => items.iter().any(|item| shares_handle(item, regional, lambdas)),
-        Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) => shares_handle(inner, regional, lambdas),
-        Type::Or(value, error) => shares_handle(value, regional, lambdas) || shares_handle(error, regional, lambdas),
-        Type::Closure(closure) => lambdas && shares_handle(&closure.task.ret, regional, lambdas),
+        Type::Results(items) | Type::Tuple(items) => items.iter().any(|item| holds_twofold(item, regional, lambdas)),
+        Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) => holds_twofold(inner, regional, lambdas),
+        Type::Or(value, error) => holds_twofold(value, regional, lambdas) || holds_twofold(error, regional, lambdas),
+        Type::Closure(closure) => lambdas && holds_twofold(&closure.task.ret, regional, lambdas),
         _ => holds_pointers(ty, regional),
     }
 }
@@ -14925,7 +14927,7 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
             _ => Type::Task(Box::new(marked)),
         };
         return format!(
-            "; this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that value, as in '{}', and nothing a fixed name owns is given to it there",
+            "; this task changes what a twofold value it is given reaches, a slice, a map or a pointer or what holds one, so it goes only where the type says 'flex' for that value, as in '{}', and nothing a fixed name owns is given to it there",
             marked
         );
     }
@@ -16213,12 +16215,12 @@ fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
     if info.passing == Passing::FixedRef {
         return format!("; '{0}' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& {0}: {1}'", name, info.ty);
     }
-    // The task's own copy of a handle still names what the caller's does.
+    // The task's own copy of a twofold value still names what the caller's does.
     let own = match &info.ty {
         Type::Slice(..) => "the task's own copy of the slice, whose items are the caller's",
         Type::Map(..) => "the task's own copy of the map, which names the caller's map",
         Type::Ptr(..) => "the task's own copy of the pointer, which points to the caller's value",
-        _ if shares => "the task's own copy, whose slices, maps and pointers name what the caller's do",
+        _ if shares => "the task's own copy of a twofold value, which names what the caller's does",
         _ => "and is the task's own copy",
     };
     format!("; a parameter that changes is written 'flex {}: {}', {}", name, info.ty, own)

@@ -210,5 +210,5 @@ fi
     }
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
     assert_eq!(messages.len(), 1, "{:?}", messages);
-    assert!(messages[0].starts_with("expected type ([int]@r) -> nothing, got (flex [int]@r) -> nothing; this task changes what a value it is given reaches"), "{:?}", messages);
+    assert!(messages[0].starts_with("expected type ([int]@r) -> nothing, got (flex [int]@r) -> nothing; this task changes what a twofold value it is given reaches"), "{:?}", messages);
 }

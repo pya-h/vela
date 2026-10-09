@@ -342,7 +342,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 return Some((format!("flex& {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
             if symbol.intro == Some("flex") {
-                let doc = format!("{} The task's own copy, which it may change; the caller's variable never does, though a slice's items, a map, or what a pointer points to are the caller's.", doc);
+                let doc = format!("{} The task's own copy, which it may change; the caller's variable never does, though what a twofold value names, a slice's items, a map, or what a pointer points to, is the caller's.", doc);
                 return Some((format!("flex {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
             if symbol.intro == Some("fixed&") {

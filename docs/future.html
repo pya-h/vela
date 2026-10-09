@@ -886,7 +886,10 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
           interfaces, no <code>impl</code> blocks, no resolution rules. Every word is written even where one set of types
           sits inside another today, because a later step may let a shape or kind say how it answers a word itself (how
           it is ordered, say), and then the sets need not nest. No word asks for arithmetic: a task
-          that adds its values takes numbers.</li>
+          that adds its values takes numbers. An idea for later, the author's (2026-10-09): words by the kind of
+          value, <code>&lt;T: whole&gt;</code> or <code>&lt;T: twofold&gt;</code> (see
+          <a href="vela.html#whole-twofold-place">Whole values, twofold values, and places</a>). <code>frozen</code>
+          is not <code>whole</code>: it refuses arrays too, since a tuple's items never change and an array's may.</li>
         <li><strong>One task per set of types.</strong> The body is checked once, with <code>T</code> standing for the
           type each use gives, and the compiler then makes one task for each set of types the program uses, so a call
           costs exactly what an ordinary call costs and the generated C holds no type tags or void pointers. The names
@@ -906,7 +909,7 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
         Checking the body abstractly, with the words as the only thing known about a type, means an error in a generic
         task is reported once, at the task, rather than once per use — and that a use fails only on what the words
         promise. <strong>Studio.</strong> The types a task takes are colored as types, hover explains what their word
-        allows, the outline lists them under the task, and completion offers them as types inside the task, the four
+        allows, the outline lists them under the task, and completion offers them as types inside the task, the five
         words after a <code>:</code> or <code>&amp;</code>, and types inside a call's <code>&lt; &gt;</code>.
         <strong>Limits.</strong> A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
         <code>f&lt;T&gt;</code>) would never stop, so a type more than 24 types deep, or a task used with more than 500

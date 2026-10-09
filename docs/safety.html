@@ -659,7 +659,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
       <div class="entry" id="slice-copies">
         <h3>A copy of a slice shares its items <span class="badge b-design">by design</span></h3>
         <p>
-          A slice is a view of items in a region, so a copy of it, a <code>fixed</code> of it, or a parameter given
+          A slice is a view of items in a region, a <a href="vela.html#whole-twofold-place">twofold</a> value, so a copy
+          of it, a <code>fixed</code> of it, or a parameter given
           it, sees the same items, and a write through one is seen through all. Nothing is written through a
           <code>fixed</code> name or a plain parameter, at any depth, but a <code>flex</code> one that shares the
           items may write them, and the <code>fixed</code> one sees the change:

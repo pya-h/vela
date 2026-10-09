@@ -1972,8 +1972,9 @@ pub enum Passing {
     #[default]
     Copy,
     /// `flex x: T`: the task's own copy, which it may change; the caller's
-    /// variable never does, so the call has no mark, though a slice's items, a
-    /// map, or what a pointer points to are the caller's.
+    /// variable never does, so the call has no mark, though what a twofold
+    /// value names (a slice's items, a map, what a pointer points to) is the
+    /// caller's.
     Flex,
     /// `flex& x: T`: the caller's place itself, which the call marks,
     /// `f(&a)`; every change to `x` is a change to it.

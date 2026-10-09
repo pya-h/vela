@@ -1,4 +1,4 @@
-; error: 10:5: cannot change 'h.cell^': nothing changes through immutable variable 'h', at any depth; a parameter that changes is written 'flex h: Holder@r', the task's own copy, whose slices, maps and pointers name what the caller's do
+; error: 10:5: cannot change 'h.cell^': nothing changes through immutable variable 'h', at any depth; a parameter that changes is written 'flex h: Holder@r', the task's own copy of a twofold value, which names what the caller's does
 ; A shape parameter's pointer still points to the caller's value, which the
 ; hint says, since a flex copy would write there too.
 
