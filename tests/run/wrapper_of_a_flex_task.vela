@@ -1,0 +1,17 @@
+; A wrapper of a task that changes what its slice reaches takes it as a
+; (flex [int]@r) -> nothing, and passes its own flex value on.
+
+task logged(next: (flex [int]@r) -> nothing, flex xs: [int]@r)
+    show("before ", xs)
+    next(xs)
+fi
+$(logged)
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+task main()
+    region r default
+    flex xs = [1, 2, ...]
+    zero(xs)
+    show(xs)
+fi

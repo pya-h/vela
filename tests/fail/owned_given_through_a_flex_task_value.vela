@@ -1,0 +1,13 @@
+; error: 12:7: 'f' changes what its first value reaches, so it can't be given what fixed 'xs' owns; give it a copy, 'xs.copy() at r', or keep 'xs' in a flex variable
+; A call through a task value whose type says 'flex' is checked as a call of a
+; task with a flex parameter: what a fixed name owns can't be given there.
+
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    fixed f: (flex [int]@r) -> nothing = zero
+    f(xs)
+fi

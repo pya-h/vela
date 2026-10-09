@@ -1907,12 +1907,15 @@ impl Parser {
                 };
             }
             let at = self.peek_span();
+            // `fixed T` reads as `T`, but only a task's type takes a word.
+            let fixed_value = self.check(Token::Fixed) && !matches!(self.tokens.get(self.pos + 1), Some(Token::Amp));
             let how = self.parse_taken()?;
-            if how != Taken::Value && marked.is_none() {
+            if (how != Taken::Value || fixed_value) && marked.is_none() {
                 let written = match &how {
                     Taken::Region(name) => format!("@{}", name),
                     Taken::Place(passing) => passing.word().to_string(),
-                    Taken::Value => String::new(),
+                    Taken::Flex => Passing::Flex.word().to_string(),
+                    Taken::Value => Passing::Fixed.word().to_string(),
                 };
                 marked = Some((at, written));
             }
@@ -1924,6 +1927,7 @@ impl Parser {
                 let written = match taken.last() {
                     Some(Taken::Region(name)) => Some(format!("@{}", name)),
                     Some(Taken::Place(passing)) => Some(passing.word().to_string()),
+                    Some(Taken::Flex) => Some(Passing::Flex.word().to_string()),
                     _ => None,
                 };
                 match written {
@@ -1961,7 +1965,7 @@ impl Parser {
             return Err(Error::at(opened, format!("a group of types, '{}...', is only part of what a task's type takes, as in '({}...) -> R' or '(int, {}...) -> R'", group, group, group)));
         }
         if let Some((at, written)) = marked {
-            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
+            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
         }
         // One item, with no comma after it (which the loop reports above): the
         // parentheses group that type rather than making a tuple of it.
@@ -2001,7 +2005,10 @@ impl Parser {
 
     /// How a parameter of a task's type is given, written before its type:
     /// `flex&` or `fixed&` for the caller's place, `@r` for a region (whose type
-    /// is then all of it), or nothing for a value.
+    /// is then all of it), `flex` for a value whose items the task changes,
+    /// `fixed` or nothing for a value. The checker reads `flex` before a whole
+    /// value, which has no items the caller sees, as nothing (see
+    /// `Checker::resolve_task_type`).
     fn parse_taken(&mut self) -> Result<Taken> {
         if self.match_token(Token::AtSign) {
             if !matches!(self.peek(), Token::Ident(_)) {
@@ -2015,14 +2022,15 @@ impl Parser {
             _ => return Ok(Taken::Value),
         };
         let at = self.peek_span();
-        let word = if flex { "flex" } else { "fixed" };
         self.advance();
-        // `flex&` is one word, as in a header.
+        // `flex [int]@r` and `fixed int`: a value, which the task may change
+        // through or not; `flex&` is one word, as in a header.
+        if !self.check(Token::Amp) {
+            return Ok(if flex { Taken::Flex } else { Taken::Value });
+        }
         if !self.amp_against_word() {
-            return Err(Error::at(
-                at,
-                format!("a task's type takes a value as its type alone, '(int) -> nothing', whether the task copies it or not; '{0}&', with '&' against '{0}', is the caller's place", word),
-            ));
+            let word = if flex { "flex" } else { "fixed" };
+            return Err(Error::at(at, format!("'{0}&' is written with '&' against '{0}', as in '({0}& int) -> nothing'", word)));
         }
         self.advance(); // &
         if self.check(Token::AtSign) {

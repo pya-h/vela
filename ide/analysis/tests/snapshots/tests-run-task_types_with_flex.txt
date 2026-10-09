@@ -1,0 +1,98 @@
+  1 | ; A task type says flex for a value whose items the task changes, a slice, a map
+    | comment:; A task type says flex for a value whose items the task changes, a slice, a map
+  2 | ; or a pointer: a task taking flex xs goes only where the type says so, a task
+    | comment:; or a pointer: a task taking flex xs goes only where the type says so, a task
+  3 | ; that only reads goes there too, and flex before a whole value, as (flex int),
+    | comment:; that only reads goes there too, and flex before a whole value, as (flex int),
+  4 | ; reads as the value alone. Lambdas and wrappers follow the same rule.
+    | comment:; reads as the value alone. Lambdas and wrappers follow the same rule.
+  6 | task zero(flex xs: [int]@r)
+    | keyword:task  task:zero  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+  7 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+  8 | fi
+    | keyword:fi
+  9 | task total(xs: [int]@r) -> int
+    | keyword:task  task:total  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 10 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+ 11 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 12 |         sum += x
+    | variable:sum  operator:+=  variable:x
+ 13 |     fi
+    | keyword:fi
+ 14 |     <- sum
+    | keyword:<-  variable:sum
+ 15 | fi
+    | keyword:fi
+ 16 | task double(n: int) -> int
+    | keyword:task  task:double  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 17 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 18 | fi
+    | keyword:fi
+ 19 | task bump(flex n: int) -> int
+    | keyword:task  task:bump  punctuation:(  keyword:flex  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 20 |     n += 1
+    | parameter:n  operator:+=  number:1
+ 21 |     <- n
+    | keyword:<-  parameter:n
+ 22 | fi
+    | keyword:fi
+ 23 | task apply(f: (flex [int]@r) -> nothing, flex xs: [int]@r)
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 24 |     f(xs)
+    | parameter:f  punctuation:(  parameter:xs  punctuation:)
+ 25 | fi
+    | keyword:fi
+ 26 | task apply_kept(r: region, f: [@r](flex [int]@r) -> nothing, flex xs: [int]@r)
+    | keyword:task  task:apply_kept  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 27 |     f(xs)
+    | parameter:f  punctuation:(  parameter:xs  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 29 | task reads(f: (flex [int]@r) -> int, xs: [int]@r) -> int
+    | keyword:task  task:reads  punctuation:(  parameter:f  punctuation::  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 30 |     <- 0
+    | keyword:<-  number:0
+ 31 | fi
+    | keyword:fi
+ 32 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 33 |     region r default
+    | keyword:region  region:r  keyword:default
+ 34 |     flex xs = [1, 2, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 35 |     apply(zero, xs)
+    | task:apply  punctuation:(  task:zero  punctuation:,  variable:xs  punctuation:)
+ 36 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 37 |     show(reads(total, xs))
+    | builtin-fn:show  punctuation:(  task:reads  punctuation:(  task:total  punctuation:,  variable:xs  punctuation:)  punctuation:)
+ 38 |     fixed g: (flex int) -> int = bump
+    | keyword:fixed  variable:g  punctuation::  punctuation:(  keyword:flex  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:bump
+ 39 |     fixed h: (int) -> int = bump
+    | keyword:fixed  variable:h  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:bump
+ 40 |     fixed k: (fixed int) -> int = double
+    | keyword:fixed  variable:k  punctuation::  punctuation:(  keyword:fixed  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:double
+ 41 |     show(g(1), " ", h(1), " ", k(2), " ", g.type)
+    | builtin-fn:show  punctuation:(  variable:g  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:h  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:k  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:g  punctuation:.  keyword:type  punctuation:)
+ 42 |     fixed lam = [@r](flex ys: [int]@r) -> nothing
+    | keyword:fixed  variable:lam  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  keyword:flex  parameter:ys  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing
+ 43 |         ys[1] = 9
+    | parameter:ys  punctuation:[  number:1  punctuation:]  operator:=  number:9
+ 44 |     fi
+    | keyword:fi
+ 45 |     show(lam.type)
+    | builtin-fn:show  punctuation:(  variable:lam  punctuation:.  keyword:type  punctuation:)
+ 46 |     apply_kept(r, lam, xs)
+    | task:apply_kept  punctuation:(  region:r  punctuation:,  variable:lam  punctuation:,  variable:xs  punctuation:)
+ 47 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 48 |     fixed w: ([int]@r) -> int = total
+    | keyword:fixed  variable:w  punctuation::  punctuation:(  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:=  task:total
+ 49 |     show(w(xs))
+    | builtin-fn:show  punctuation:(  variable:w  punctuation:(  variable:xs  punctuation:)  punctuation:)
+ 50 | fi
+    | keyword:fi

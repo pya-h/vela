@@ -1,0 +1,16 @@
+; error: 8:3: task 'zero' is a (flex [int]@r) -> nothing, and wrapper 'logged' takes a ([int]@r) -> nothing first; this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that value, as in '(flex [int]@r) -> nothing', and nothing a fixed name owns is given to it there
+; A wrapper takes the task it wraps as that task's type: one changing what its
+; slice reaches, '(flex [int]@r) -> nothing'.
+
+task logged(next: ([int]@r) -> nothing, xs: [int]@r)
+    next(xs)
+fi
+$(logged)
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+task main()
+    region r default
+    flex xs = [1, 2, ...]
+    zero(xs)
+fi

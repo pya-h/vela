@@ -194,14 +194,22 @@ pub type GroupItems = (Vec<Type>, Vec<Taken>);
 /// are the group's, unlike a task type's, which are its own.
 pub const GROUP_SENDS: Type = Type::Results(Vec::new());
 
-/// How a parameter of a task type is given at a call: as a value, as the
-/// caller's place, or as a region, which the type names so that what the task
-/// sends can live there: `(flex& int) -> nothing`, `(@r, int) -> [int]@r`.
+/// How a parameter of a task type is given at a call: as a value, as a value
+/// whose items the task changes, as the caller's place, or as a region, which
+/// the type names so that what the task sends can live there:
+/// `(flex& int) -> nothing`, `(flex [int]@r) -> nothing`, `(@r, int) -> [int]@r`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Taken {
-    /// A value: `int`, which the task takes as `n: int`, `flex n: int`, or
-    /// `fixed n: int`, all one to its caller.
+    /// A value the task doesn't change through: a whole value, `int`, which the
+    /// task takes as `n: int`, `flex n: int`, or `fixed n: int`, all one to its
+    /// caller; or a twofold one, a slice, a map or a pointer or what holds one,
+    /// taken `xs: [int]@r` or `fixed xs: [int]@r`.
     Value,
+    /// A twofold value the task may change through, `flex [int]@r`: a task
+    /// taking `flex xs: [int]@r` changes the items the caller's slice names. A
+    /// task taking it as a `Value` fits where one taking it so is expected, but
+    /// never the other way (see `Checker::task_fits`).
+    Flex,
     /// The caller's place, `flex& int` or `fixed& int` (`Passing::FlexRef` or
     /// `Passing::FixedRef`), which the call marks with `&`.
     Place(Passing),
@@ -228,6 +236,7 @@ impl TaskType {
     pub fn passing(&self, i: usize) -> Passing {
         match self.taken.get(i) {
             Some(Taken::Place(passing)) => *passing,
+            Some(Taken::Flex) => Passing::Flex,
             _ => Passing::Copy,
         }
     }
@@ -694,6 +703,7 @@ impl Type {
                             continue;
                         }
                         Some(Taken::Place(passing)) => write!(f, "{} ", passing.word())?,
+                        Some(Taken::Flex) => write!(f, "{} ", Passing::Flex.word())?,
                         _ => {}
                     }
                     ty.write(f, None)?;

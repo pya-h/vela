@@ -2494,7 +2494,21 @@ impl Checker {
                 format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
             );
         }
-        Ok(TaskType { params, taken: task.taken.clone(), ret })
+        // `flex` before a whole value says nothing its caller sees, so it reads
+        // as nothing: `(flex int) -> int` is `(int) -> int`.
+        let taken = task.taken.iter().zip(&params).map(|(how, param)| self.taken_for(how, param)).collect();
+        Ok(TaskType { params, taken, ret })
+    }
+
+    /// How a task's type takes a value of type `ty` it is said to take `how`:
+    /// `flex` only before a twofold value, a slice, a map or a pointer or what
+    /// holds one, whose items the task may change; before a whole value it
+    /// changes nothing the caller sees, so it is a value.
+    fn taken_for(&self, how: &Taken, ty: &Type) -> Taken {
+        match how {
+            Taken::Flex if !self.holds_handle(ty) => Taken::Value,
+            how => how.clone(),
+        }
     }
 
     fn resolve_regions(&mut self, ty: &Type, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
@@ -5737,7 +5751,12 @@ impl Checker {
                         true => format!("take '{0}' as 'flex {0}'", owner_text),
                         false => format!("keep '{}' in a flex variable", owner_text),
                     };
-                    format!("'{}' changes what its parameter '{}' reaches, so it can't be given what fixed '{}' owns; give it a copy, '{}'{}, or {}", task, param, owner_text, copy, region, keep)
+                    // A task value's parameters have no names: 'value 1'.
+                    let what = match param.strip_prefix("value ").and_then(|k| k.parse::<usize>().ok()) {
+                        Some(k) => format!("its {} value", ordinal(k)),
+                        None => format!("its parameter '{}'", param),
+                    };
+                    format!("'{}' changes what {} reaches, so it can't be given what fixed '{}' owns; give it a copy, '{}'{}, or {}", task, what, owner_text, copy, region, keep)
                 }
                 HandedTo::Place(place) => format!("'{}' changes, so it can't be given what fixed '{}' owns: {}; give it a copy: '{}'{}", place, owner_text, rule, copy, region),
                 HandedTo::Result(name) => format!("'{}' is a result, which the task may change, so it can't be given what fixed '{}' owns; give it a copy: '{}'{}", name, owner_text, copy, region),
@@ -6898,7 +6917,8 @@ impl Checker {
                             example.unwrap_or_else(|| "text@a".to_string())
                         )
                     }
-                    _ => String::new(),
+                    // A task changing what a value reaches, or taking a place.
+                    _ => task_way_hint(&next, first),
                 };
                 return err(call.span, format!("{} is a {}, and wrapper '{}' takes a {} first{}", chain, next, written, first, regions));
             }
@@ -6908,7 +6928,7 @@ impl Checker {
                 for &(mine, theirs) in &tail.pairs {
                     let theirs = theirs + skip;
                     let (Some((param, ty)), Some(passing), Some((value, given)), Some(how)) = (wrapper.params.get(mine), wrapper.passing.get(mine), params.get(theirs), taken.get(theirs)) else { continue };
-                    let same_way = match (taken_by(param, ty, *passing), how) {
+                    let same_way = match (self.taken_for(&taken_by(param, ty, *passing), ty), how) {
                         (Taken::Region(_), Taken::Region(_)) => true,
                         (mine, theirs) => mine == *theirs,
                     };
@@ -7526,7 +7546,7 @@ impl Checker {
                     (Type::Named(name.clone(), None), if alters { Taken::Place(Passing::FlexRef) } else { Taken::Value })
                 }
                 _ if param == THIS && alters => (ty.clone(), Taken::Place(Passing::FlexRef)),
-                _ => (ty.clone(), taken_by(param, ty, *passing)),
+                _ => (ty.clone(), self.taken_for(&taken_by(param, ty, *passing), ty)),
             })
             .unzip()
     }
@@ -11242,6 +11262,7 @@ impl Checker {
                     let item = name.rsplit(GROUP_ITEM).next().and_then(|k| k.parse::<usize>().ok()).map_or(0, |k| k + 1);
                     let way = |how: &Taken| match how {
                         Taken::Value => "as a value".to_string(),
+                        Taken::Flex => "as a value it changes, 'flex'".to_string(),
                         Taken::Place(passing) => format!("as a place, '{}'", passing.word()),
                         Taken::Region(_) => "as a region".to_string(),
                     };
@@ -12780,9 +12801,32 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
         (Type::Tuple(a), Type::Tuple(e)) => a.len() == e.len() && a.iter().zip(e).all(|(a, e)| fits_regions(a, e)),
         // A lambda that only reads what it keeps goes where one that changes
         // it is expected, never the other way.
-        (Type::Closure(a), Type::Closure(e)) => a.region == e.region && a.task == e.task && (!a.flex || e.flex),
+        (Type::Closure(a), Type::Closure(e)) => a.region == e.region && task_fits(&a.task, &e.task) && (!a.flex || e.flex),
+        (Type::Task(a), Type::Task(e)) => task_fits(a, e),
         _ => actual == expected,
     }
+}
+
+/// `k` as an ordinal for a message: `first` for 1, then `4th`, `21st` and on.
+fn ordinal(k: usize) -> String {
+    match k {
+        1 => "first".to_string(),
+        2 => "second".to_string(),
+        3 => "third".to_string(),
+        k if (11..=13).contains(&(k % 100)) => format!("{}th", k),
+        k => format!("{}{}", k, ["th", "st", "nd", "rd"].get(k % 10).unwrap_or(&"th")),
+    }
+}
+
+/// Whether a task of type `actual` goes where one of type `expected` is: the
+/// same types, each taken the same way, but that a task changing nothing
+/// through a value goes where one that may is expected, `(flex [int]@r)`,
+/// since its callers give it only what may change; never the other way.
+fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
+    actual.params == expected.params
+        && actual.ret == expected.ret
+        && actual.taken.len() == expected.taken.len()
+        && actual.taken.iter().zip(&expected.taken).all(|(a, e)| a == e || (*a == Taken::Value && *e == Taken::Flex))
 }
 
 /// Whether a statement on the last line of a block gives that block its value: a
@@ -14416,6 +14460,7 @@ fn always_leaves(block: &[Stmt]) -> bool {
 fn task_passing(how: &Taken) -> Passing {
     match how {
         Taken::Place(passing) => *passing,
+        Taken::Flex => Passing::Flex,
         _ => Passing::Copy,
     }
 }
@@ -14429,12 +14474,14 @@ fn shown_param(name: &str, ty: &Type, passing: Passing) -> String {
 }
 
 /// How a task's type takes parameter `name` of type `ty`, which its header
-/// takes as `passing` (see `Taken`): a region by its name, a place as one, and
-/// anything else, a copy too, as a value.
+/// takes as `passing` (see `Taken`): a region by its name, a place as one, a
+/// `flex` value as one the task changes (which `Checker::taken_for` makes a
+/// value where it is whole), and anything else, a copy too, as a value.
 fn taken_by(name: &str, ty: &Type, passing: Passing) -> Taken {
     match (ty, passing) {
         (Type::Region, _) => Taken::Region(name.to_string()),
         (_, passing) if passing.is_ref() => Taken::Place(passing),
+        (_, Passing::Flex) => Taken::Flex,
         _ => Taken::Value,
     }
 }
@@ -14857,6 +14904,44 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
     Ok(())
 }
 
+/// The hint for a task of type `actual` given where one of type `expected` is,
+/// which differ only in how they take a value: one changing what it reaches,
+/// `flex`, or taking the caller's place. Empty where that isn't why.
+fn task_way_hint(actual: &Type, expected: &Type) -> String {
+    // A task changing what a value reaches goes only where the type says so.
+    let task_of = |ty: &Type| match ty {
+        Type::Task(task) => Some(task.as_ref().clone()),
+        Type::Closure(closure) => Some(closure.task.clone()),
+        _ => None,
+    };
+    if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
+        && given.params == wanted.params
+        && given.taken.iter().zip(&wanted.taken).any(|(a, e)| *a == Taken::Flex && *e == Taken::Value)
+    {
+        let marked = TaskType { taken: wanted.taken.iter().zip(&given.taken).map(|(e, a)| if *a == Taken::Flex { Taken::Flex } else { e.clone() }).collect(), ..wanted };
+        // Written as the type expected is: a lambda's with its region.
+        let marked = match expected {
+            Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: marked, ..closure.as_ref().clone() })),
+            _ => Type::Task(Box::new(marked)),
+        };
+        return format!(
+            "; this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that value, as in '{}', and nothing a fixed name owns is given to it there",
+            marked
+        );
+    }
+    // A task taking the caller's place goes only where the type says so.
+    if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
+        && given.params == wanted.params
+        && let Some(passing) = given.taken.iter().zip(&wanted.taken).find_map(|(a, e)| match (a, e) {
+            (Taken::Place(passing), Taken::Value | Taken::Flex) => Some(*passing),
+            _ => None,
+        })
+    {
+        return format!("; this task takes the caller's place, '{0}', which the call marks with '&', so the type says '{0}' for it too", passing.word());
+    }
+    String::new()
+}
+
 /// Why a value of type `actual` doesn't fit where `expected` is required, or
 /// nothing when there is nothing useful to say.
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
@@ -14866,6 +14951,10 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             "; a lambda that keeps what it uses goes only where a type naming its region is expected, as '[@{0}](…)', since a task's type names none and the lambda could outlive '{0}'",
             closure.region
         );
+    }
+    let ways = task_way_hint(actual, expected);
+    if !ways.is_empty() {
+        return ways;
     }
     // `P#0`: the type of one item of a group's tuple, which no code writes.
     if let Some(item) = [actual, expected].into_iter().find_map(|ty| match ty {

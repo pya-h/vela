@@ -1,0 +1,19 @@
+; error: 18:38: expected type (int) -> nothing, got (flex& int) -> nothing; this task takes the caller's place, 'flex&', which the call marks with '&', so the type says 'flex&' for it too
+; 'flex' before a whole value in a task's type reads as the value alone, since
+; the task changes nothing its caller sees: '(flex int) -> nothing' is
+; '(int) -> nothing', where a task taking the caller's place doesn't go.
+task bump(flex& n: int)
+    n = n + 1
+fi
+
+task both(flex& a: int, fixed& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    fixed f: (flex int) -> nothing = bump
+fi

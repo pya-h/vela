@@ -1,0 +1,50 @@
+; A task type says flex for a value whose items the task changes, a slice, a map
+; or a pointer: a task taking flex xs goes only where the type says so, a task
+; that only reads goes there too, and flex before a whole value, as (flex int),
+; reads as the value alone. Lambdas and wrappers follow the same rule.
+
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+task total(xs: [int]@r) -> int
+    flex sum = 0
+    each x in xs
+        sum += x
+    fi
+    <- sum
+fi
+task double(n: int) -> int
+    <- n * 2
+fi
+task bump(flex n: int) -> int
+    n += 1
+    <- n
+fi
+task apply(f: (flex [int]@r) -> nothing, flex xs: [int]@r)
+    f(xs)
+fi
+task apply_kept(r: region, f: [@r](flex [int]@r) -> nothing, flex xs: [int]@r)
+    f(xs)
+fi
+task reads(f: (flex [int]@r) -> int, xs: [int]@r) -> int
+    <- 0
+fi
+task main()
+    region r default
+    flex xs = [1, 2, ...]
+    apply(zero, xs)
+    show(xs)
+    show(reads(total, xs))
+    fixed g: (flex int) -> int = bump
+    fixed h: (int) -> int = bump
+    fixed k: (fixed int) -> int = double
+    show(g(1), " ", h(1), " ", k(2), " ", g.type)
+    fixed lam = [@r](flex ys: [int]@r) -> nothing
+        ys[1] = 9
+    fi
+    show(lam.type)
+    apply_kept(r, lam, xs)
+    show(xs)
+    fixed w: ([int]@r) -> int = total
+    show(w(xs))
+fi

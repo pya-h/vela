@@ -1,0 +1,32 @@
+  1 | ; A wrapper of a task that changes what its slice reaches takes it as a
+    | comment:; A wrapper of a task that changes what its slice reaches takes it as a
+  2 | ; (flex [int]@r) -> nothing, and passes its own flex value on.
+    | comment:; (flex [int]@r) -> nothing, and passes its own flex value on.
+  4 | task logged(next: (flex [int]@r) -> nothing, flex xs: [int]@r)
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+  5 |     show("before ", xs)
+    | builtin-fn:show  punctuation:(  string:"before "  punctuation:,  parameter:xs  punctuation:)
+  6 |     next(xs)
+    | parameter:next  punctuation:(  parameter:xs  punctuation:)
+  7 | fi
+    | keyword:fi
+  8 | $(logged)
+    | keyword:$  punctuation:(  task:logged  punctuation:)
+  9 | task zero(flex xs: [int]@r)
+    | keyword:task  task:zero  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 10 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 11 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     region r default
+    | keyword:region  region:r  keyword:default
+ 14 |     flex xs = [1, 2, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 15 |     zero(xs)
+    | task:zero  punctuation:(  variable:xs  punctuation:)
+ 16 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 17 | fi
+    | keyword:fi

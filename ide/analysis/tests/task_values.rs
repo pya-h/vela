@@ -1,6 +1,7 @@
 //! Task values in the editor: a task named without `()`, a task's type written
 //! `(int) -> int`, and the call of a value that holds a task, hovered with their
-//! types whether or not the file checks.
+//! types whether or not the file checks; a task changing what a slice it is
+//! given reaches says 'flex' for it in its type.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -181,4 +182,33 @@ task g(
     assert_eq!(hover(source, "got ="), "fixed got: [int]@_");
     assert_eq!(hover(source, "kept ="), "fixed kept: [int]@q");
     assert_eq!(hover(source, "r: region"), "r: region");
+}
+
+#[test]
+fn a_task_changing_what_its_slice_reaches_has_flex_in_its_type() {
+    let source = "\
+task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+
+task bump(flex n: int) -> int
+    <- n + 1
+fi
+
+task main()
+    region r default
+    fixed changes = zero
+    fixed counts = bump
+    fixed plain: ([int]@r) -> nothing = zero
+fi
+";
+    // Whether or not the file checks, the type says what the task changes; an
+    // int is copied whole, so 'flex' before it says nothing a caller sees.
+    for source in [source.to_string(), format!("{}task g(\n", source)] {
+        assert_eq!(hover(&source, "changes ="), "fixed changes: (flex [int]@r) -> nothing");
+        assert_eq!(hover(&source, "counts ="), "fixed counts: (int) -> int");
+    }
+    let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
+    assert_eq!(messages.len(), 1, "{:?}", messages);
+    assert!(messages[0].starts_with("expected type ([int]@r) -> nothing, got (flex [int]@r) -> nothing; this task changes what a value it is given reaches"), "{:?}", messages);
 }

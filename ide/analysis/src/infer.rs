@@ -1614,8 +1614,12 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
                 (Taken::Region(region.trim().to_string()), Type::Region)
             } else if let Some((passing, ty)) = place_word(param) {
                 (Taken::Place(passing), parse_type_within(ty, depth + 1)?)
+            } else if let Some(ty) = param.strip_prefix("flex ") {
+                // `flex [int]@r`: a value whose items the task changes.
+                let ty = parse_type_within(ty, depth + 1)?;
+                (flex_taken(&ty), ty)
             } else {
-                (Taken::Value, parse_type_within(param, depth + 1)?)
+                (Taken::Value, parse_type_within(param.strip_prefix("fixed ").unwrap_or(param), depth + 1)?)
             };
             params.push(ty);
             taken.push(how);
@@ -1631,6 +1635,17 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
         ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
     }
     Some(ty)
+}
+
+/// How a task's type takes a `flex` value of type `ty`: as one whose items it
+/// changes where `ty` is a slice, a map or a pointer (or a maybe of one), as the
+/// compiler does for every twofold type, and as a value otherwise.
+fn flex_taken(ty: &Type) -> Taken {
+    match ty {
+        Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => Taken::Flex,
+        Type::Maybe(inner) => flex_taken(inner),
+        _ => Taken::Value,
+    }
 }
 
 /// Where the `)` closing the `(` that `text` starts with is.
@@ -1655,6 +1670,7 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
         // a place; a region is named as its parameter is.
         taken.push(match (&ty, name.split_whitespace().collect::<Vec<_>>().as_slice()) {
             (Type::Region, [.., region]) => Taken::Region(region.to_string()),
+            (_, ["flex", ..]) => flex_taken(&ty),
             (_, [word, ..]) => place_word(word).map_or(Taken::Value, |(passing, _)| Taken::Place(passing)),
             _ => Taken::Value,
         });

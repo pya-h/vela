@@ -1,0 +1,17 @@
+; error: 15:11: expected type ([int]@r) -> nothing, got (flex [int]@r) -> nothing; this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that value, as in '(flex [int]@r) -> nothing', and nothing a fixed name owns is given to it there
+; A task changing what a slice it is given reaches goes only where the task type
+; says 'flex' for it: otherwise a call through the value could change what a
+; fixed name owns (known bug 71).
+
+task zero(flex xs: [int]@r)
+    xs[0] = 99
+fi
+task apply(f: ([int]@r) -> nothing, xs: [int]@r)
+    f(xs)
+fi
+task main()
+    region r default
+    fixed xs = [1, 2, ...]
+    apply(zero, xs)
+    show(xs)
+fi

@@ -1,0 +1,6 @@
+[0, 2]
+0
+2 2 4 (int) -> int
+[@r](flex [int]@r) -> nothing
+[0, 9]
+9

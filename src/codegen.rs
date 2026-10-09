@@ -390,9 +390,11 @@ impl Generator {
     }
 
     /// Which parameters a task of type `task` takes by a hidden pointer: each
-    /// that is larger than `HIDDEN_ABOVE`, as a task's plain parameter is.
+    /// that is larger than `HIDDEN_ABOVE`, as a task's plain parameter is. A
+    /// value the task changes through, `flex`, is one C type with a value, since
+    /// a task taking it as a value goes where it is expected.
     fn hidden_of_type(&self, task: &TaskType) -> Vec<bool> {
-        task.params.iter().zip(&task.taken).map(|(param, how)| *how == Taken::Value && self.c_layout(param).0 > HIDDEN_ABOVE).collect()
+        task.params.iter().zip(&task.taken).map(|(param, how)| matches!(how, Taken::Value | Taken::Flex) && self.c_layout(param).0 > HIDDEN_ABOVE).collect()
     }
 
     /// The C type of task type `ty`: a pointer to a function taking its values

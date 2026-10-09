@@ -1,0 +1,6 @@
+; error: 5:15: 'flex' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's
+; 'flex' says how a task's type takes a value; a tuple holds values.
+
+task main()
+    fixed t: (flex int, text) = (1, "a")
+fi

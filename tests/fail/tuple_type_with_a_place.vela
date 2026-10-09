@@ -1,4 +1,4 @@
-; error: 16:15: 'flex&' says how a task's type takes a parameter, as in '(flex& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's
+; error: 16:15: 'flex&' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's
 ; Only a task type says how its parameters are given; a tuple holds values.
 task bump(flex& n: int)
     n = n + 1

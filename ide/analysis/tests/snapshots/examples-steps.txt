@@ -1,0 +1,62 @@
+  1 | ; Steps that change a list of readings in place, kept as task values. Each takes
+    | comment:; Steps that change a list of readings in place, kept as task values. Each takes
+  2 | ; the list as 'flex', so its type says '(flex [int]@r) -> nothing', and it is
+    | comment:; the list as 'flex', so its type says '(flex [int]@r) -> nothing', and it is
+  3 | ; given only a list that may change; a step that only reads goes there too. A
+    | comment:; given only a list that may change; a step that only reads goes there too. A
+  4 | ; fixed list can't be given to them: nothing changes through a fixed name.
+    | comment:; fixed list can't be given to them: nothing changes through a fixed name.
+  5 | task clamp(flex xs: [int]@r)
+    | keyword:task  task:clamp  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+  6 |     each i in 0..xs.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:xs  punctuation:.  field:len
+  7 |         when xs[i] > 100
+    | keyword:when  parameter:xs  punctuation:[  variable:i  punctuation:]  operator:>  number:100
+  8 |             xs[i] = 100
+    | parameter:xs  punctuation:[  variable:i  punctuation:]  operator:=  number:100
+  9 |         fi
+    | keyword:fi
+ 10 |     fi
+    | keyword:fi
+ 11 | fi
+    | keyword:fi
+ 13 | task halve(flex xs: [int]@r)
+    | keyword:task  task:halve  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 14 |     each i in 0..xs.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:xs  punctuation:.  field:len
+ 15 |         xs[i] = xs[i] / 2
+    | parameter:xs  punctuation:[  variable:i  punctuation:]  operator:=  parameter:xs  punctuation:[  variable:i  punctuation:]  operator:/  number:2
+ 16 |     fi
+    | keyword:fi
+ 17 | fi
+    | keyword:fi
+ 19 | ; Only reads the list, so it fits where a step that changes it is expected.
+    | comment:; Only reads the list, so it fits where a step that changes it is expected.
+ 20 | task report(xs: [int]@r)
+    | keyword:task  task:report  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 21 |     show("now ", xs)
+    | builtin-fn:show  punctuation:(  string:"now "  punctuation:,  parameter:xs  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | task run(steps: [(flex [int]@r) -> nothing]@r, flex xs: [int]@r)
+    | keyword:task  task:run  punctuation:(  parameter:steps  punctuation::  punctuation:[  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  punctuation:]  operator:@  region:r  punctuation:,  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 25 |     each step in steps
+    | keyword:each  variable:step  keyword:in  parameter:steps
+ 26 |         step(xs)
+    | variable:step  punctuation:(  parameter:xs  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     region r default
+    | keyword:region  region:r  keyword:default
+ 32 |     flex readings = [40, 250, 90, ...]
+    | keyword:flex  variable:readings  operator:=  punctuation:[  number:40  punctuation:,  number:250  punctuation:,  number:90  punctuation:,  keyword:...  punctuation:]
+ 33 |     fixed steps: [(flex [int]@r) -> nothing]@r = [clamp, report, halve, report, ...]
+    | keyword:fixed  variable:steps  punctuation::  punctuation:[  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  punctuation:]  operator:@  region:r  operator:=  punctuation:[  task:clamp  punctuation:,  task:report  punctuation:,  task:halve  punctuation:,  task:report  punctuation:,  keyword:...  punctuation:]
+ 34 |     run(steps, readings)
+    | task:run  punctuation:(  variable:steps  punctuation:,  variable:readings  punctuation:)
+ 35 | fi
+    | keyword:fi

@@ -1,0 +1,35 @@
+; Steps that change a list of readings in place, kept as task values. Each takes
+; the list as 'flex', so its type says '(flex [int]@r) -> nothing', and it is
+; given only a list that may change; a step that only reads goes there too. A
+; fixed list can't be given to them: nothing changes through a fixed name.
+task clamp(flex xs: [int]@r)
+    each i in 0..xs.len
+        when xs[i] > 100
+            xs[i] = 100
+        fi
+    fi
+fi
+
+task halve(flex xs: [int]@r)
+    each i in 0..xs.len
+        xs[i] = xs[i] / 2
+    fi
+fi
+
+; Only reads the list, so it fits where a step that changes it is expected.
+task report(xs: [int]@r)
+    show("now ", xs)
+fi
+
+task run(steps: [(flex [int]@r) -> nothing]@r, flex xs: [int]@r)
+    each step in steps
+        step(xs)
+    fi
+fi
+
+task main()
+    region r default
+    flex readings = [40, 250, 90, ...]
+    fixed steps: [(flex [int]@r) -> nothing]@r = [clamp, report, halve, report, ...]
+    run(steps, readings)
+fi

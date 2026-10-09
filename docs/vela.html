@@ -2480,6 +2480,41 @@ fi</code></pre>
         region last, a <code>(int, @r) -&gt; text@r</code>. A copy, <code>flex n: int</code> or <code>fixed n: int</code>, is
         a value to the caller, so its type writes <code>int</code>.
       </p>
+      <p id="task-types-flex">
+        <strong>A value the task changes through.</strong> A slice, a map and a pointer, and what holds one, are
+        twofold: a copy names the caller's items. So a task taking <code>flex xs: [int]@r</code> changes what the caller's
+        slice holds, and its type says so: <code>(flex [int]@r) -&gt; nothing</code>. It goes only where a type says
+        <code>flex</code> for that value, and a call through such a value is checked as a call of a task with a
+        <code>flex</code> parameter is: nothing a fixed name owns is given there (see
+        <a href="#fixed-owns">What a fixed name owns</a>). A task that only reads, <code>xs: [int]@r</code>, goes there
+        too, since it changes less, but never the other way. Before a whole value, copied whole, <code>flex</code>
+        says nothing a caller sees, so <code>(flex int) -&gt; int</code> is <code>(int) -&gt; int</code>, which
+        <code>task bump(flex n: int)</code> is; <code>fixed</code>, which a plain parameter already is, reads as nothing
+        too. The same holds for lambdas, <code>[@r](flex [int]@r) -&gt; nothing</code>, and for wrappers.
+      </p>
+      <pre><code>task zero(flex xs: [int]@r)
+    xs[0] = 0
+fi
+
+task apply(f: (flex [int]@r) -&gt; nothing, flex xs: [int]@r)
+    f(xs)
+fi
+
+task main()
+    region r default
+    flex xs = [1, 2, ...]
+    apply(zero, xs)
+    show(xs)                        ; [0, 2]
+    fixed kept = [1, 2, ...]
+    fixed f: (flex [int]@r) -&gt; nothing = zero
+    f(kept)                         ; error: 'f' changes what its first value reaches, so it can't
+                                    ;   be given what fixed 'kept' owns; give it a copy, …
+fi</code></pre>
+      <p>
+        And <code>fixed plain: ([int]@r) -&gt; nothing = zero</code> is an error that names the type to write:
+        <em>… this task changes what a value it is given reaches, so it goes only where the type says 'flex' for that
+        value, as in '(flex [int]@r) -&gt; nothing'</em>.
+      </p>
       <pre><code>task bump(flex&amp; n: int)
     n = n + 1
 fi
@@ -2513,7 +2548,8 @@ fi</code></pre>
         named task sends, and a task value's type is the only thing that says where that is. A task value holds no place
         and no region: it is given them at each call, as a named task is, so it goes anywhere a task value goes. Two
         types that differ only in how a parameter is given are different types, <code>(flex&amp; int) -&gt; nothing</code>
-        is not <code>(int) -&gt; nothing</code>, and a region's name is the type's own, as any of its regions' is:
+        is not <code>(int) -&gt; nothing</code> (but a task that only reads a slice goes where one that changes it is
+        expected, see <a href="#task-types-flex">above</a>), and a region's name is the type's own, as any of its regions' is:
         <code>(@r, int) -&gt; [int]@r</code> and <code>(@s, int) -&gt; [int]@s</code> are one type.
       </p>
       <p>
