@@ -1,0 +1,12 @@
+; error: 11:33: expected type ^int@b, got ^int@a; a value can't move to another region: a pointer into one region is never stored in another
+; A slice of the values written holds them as they are, so pointers into one
+; region can't be held in a slice in another; a slice made of another slice is
+; a complete copy, which may come from any region.
+
+task main()
+    region a
+    region b
+    fixed one = new int(1) at a
+    fixed items = new [^int](new [^int]([one#2]) at a) at b
+    fixed written = new [^int]([one, one]) at b
+fi

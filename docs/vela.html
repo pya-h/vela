@@ -4227,7 +4227,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <code>n</code> may be known only as the program runs, an array, or another slice. A slice made of an array or
         of another slice is a complete copy, as <a href="#copy"><code>copy()</code></a> is: where the items hold text,
         a slice, a map or a pointer, that is copied too, at every depth, so the new slice shares nothing with the one
-        it is made of. A slice of the values written, <code>[a, b, ...]</code>, holds those values as they are.
+        it is made of, which may be in any region. Assigning a slice, giving it to a task, or naming it again copies
+        only the slice itself, and the items stay shared. A slice of the values written, <code>[a, b, ...]</code>, holds those values as they are.
         <code>new [T] at r</code>
         (or <code>new [T]() at r</code>, see <a href="#new-empty">the empty value</a>) makes one with no items.
       </p>
@@ -4281,8 +4282,10 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         <li><strong>Writing.</strong> A slice's items are written through a slice reached from a <code>flex</code>
           name, like what a pointer points to, and never through a <code>fixed</code> one, at any depth; its
           <code>len</code> can't be written: it changes as items are added and taken out, or by slicing.</li>
-        <li><strong>Regions.</strong> A slice's items live in its region, so <code>new [^Node](nodes) at other</code> is an
-          error when the pointers are in another region, as copying a pointer there would be.</li>
+        <li><strong>Regions.</strong> A slice's items live in its region. <code>new [^Node](nodes) at other</code>
+          copies what each pointer points to into <code>other</code>, as <code>copy()</code> does, so <code>nodes</code>
+          may be in any region; a slice of the values written, <code>[p, q, ...] at other</code>, holds the pointers
+          as they are, so they must point into <code>other</code>.</li>
       </ul>
 
       <h3 id="slice-changes">Adding and taking out items</h3>

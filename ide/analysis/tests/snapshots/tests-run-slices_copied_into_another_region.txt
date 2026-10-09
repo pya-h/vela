@@ -1,0 +1,68 @@
+  1 | ; A slice made of another, new [T](xs) at s, is a complete copy, so the items
+    | comment:; A slice made of another, new [T](xs) at s, is a complete copy, so the items
+  2 | ; may be in any region: everything they hold is copied into s, as copy() does,
+    | comment:; may be in any region: everything they hold is copied into s, as copy() does,
+  3 | ; and the copy outlives the region it was made from.
+    | comment:; and the copy outlives the region it was made from.
+  5 | shape Node
+    | keyword:shape  type:Node
+  6 |     v: int
+    | field:v  punctuation::  type-builtin:int
+  7 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+  8 | fi
+    | keyword:fi
+ 10 | task keep(s: region, rows: [[int]]@r) -> [[int]]@s
+    | keyword:task  task:keep  punctuation:(  region:s  punctuation::  keyword:region  punctuation:,  parameter:rows  punctuation::  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  operator:@  region:s
+ 11 |     <- new [[int]](rows) at s
+    | keyword:<-  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  parameter:rows  punctuation:)  keyword:at  region:s
+ 12 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     region outer
+    | keyword:region  region:outer
+ 16 |     flex kept = new [[int]]() at outer
+    | keyword:flex  variable:kept  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
+ 17 |     flex names = new [text]() at outer
+    | keyword:flex  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
+ 18 |     block
+    | keyword:block
+ 19 |         region inner
+    | keyword:region  region:inner
+ 20 |         flex rows = [[1, 2, ...] at inner, [3, ...] at inner, ...] at inner
+    | keyword:flex  variable:rows  operator:=  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:inner  punctuation:,  punctuation:[  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:inner  punctuation:,  keyword:...  punctuation:]  keyword:at  region:inner
+ 21 |         kept = keep(outer, rows)
+    | variable:kept  operator:=  task:keep  punctuation:(  region:outer  punctuation:,  variable:rows  punctuation:)
+ 22 |         rows[0][0] = 9
+    | variable:rows  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 23 |         flex ts = ["a" + "b" at inner, ...] at inner
+    | keyword:flex  variable:ts  operator:=  punctuation:[  string:"a"  operator:+  string:"b"  keyword:at  region:inner  punctuation:,  keyword:...  punctuation:]  keyword:at  region:inner
+ 24 |         names = new [text](ts) at outer
+    | variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  variable:ts  punctuation:)  keyword:at  region:outer
+ 25 |         flex a = new Node(Node { v: 1, next: none }) at inner
+    | keyword:flex  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:v  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:inner
+ 26 |         a^.next = a
+    | variable:a  operator:^  punctuation:.  field:next  operator:=  variable:a
+ 27 |         flex ns = [a, ...] at inner
+    | keyword:flex  variable:ns  operator:=  punctuation:[  variable:a  punctuation:,  keyword:...  punctuation:]  keyword:at  region:inner
+ 28 |         flex copied = new [^Node](ns) at outer
+    | keyword:flex  variable:copied  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  variable:ns  punctuation:)  keyword:at  region:outer
+ 29 |         copied[0]^.v = 5
+    | variable:copied  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:v  operator:=  number:5
+ 30 |         show(a^.v, " ", copied[0]^.v)
+    | builtin-fn:show  punctuation:(  variable:a  operator:^  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:copied  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:v  punctuation:)
+ 31 |         when copied[0]^.next is {n}
+    | keyword:when  variable:copied  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:next  keyword:is  punctuation:{  variable:n  punctuation:}
+ 32 |             show(&n^ == &copied[0]^)
+    | builtin-fn:show  punctuation:(  operator:&  variable:n  operator:^  operator:==  operator:&  variable:copied  punctuation:[  number:0  punctuation:]  operator:^  punctuation:)
+ 33 |         fi
+    | keyword:fi
+ 34 |     fi
+    | keyword:fi
+ 35 |     ; inner is freed; the copies live in outer.
+    | comment:; inner is freed; the copies live in outer.
+ 36 |     show(kept, " ", names)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:,  string:" "  punctuation:,  variable:names  punctuation:)
+ 37 | fi
+    | keyword:fi

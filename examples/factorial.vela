@@ -1,7 +1,7 @@
 
 task main()
     endless
-        fixed n = scan("n = ", int) { 1 }
+        fixed n = scan("n = ", int) { break }
         show(loop flex i = 1, r = 1|| i <= n  || i++, r *= i
             r 
         fi {

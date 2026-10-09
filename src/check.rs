@@ -9891,7 +9891,15 @@ impl Checker {
             return Ok(());
         }
         let ty = self.check_expr(value)?;
+        // A slice made of another or of an array is a complete copy, which puts
+        // everything its items hold in the new slice's region, as `copy()` does,
+        // so the items may be in any region. A lambda isn't copied, and the
+        // values written are held as they are.
+        let copies = !matches!(value.kind, ExprKind::Array(_))
+            && !has_closure(items)
+            && (holds_pointers(items, &self.regional) || holds_text(items, &self.takes_region));
         match &ty {
+            Type::Array(source, _) | Type::Slice(source, _) if copies && fits_regions(&source.without_regions(), &items.without_regions()) => Ok(()),
             Type::Array(_, count) => self.coerce(value, &Type::Array(Box::new(items.clone()), *count)),
             Type::Slice(source, _) if fits_regions(source, items) => Ok(()),
             Type::Slice(source, _) => {

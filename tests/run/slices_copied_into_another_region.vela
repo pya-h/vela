@@ -1,0 +1,37 @@
+; A slice made of another, new [T](xs) at s, is a complete copy, so the items
+; may be in any region: everything they hold is copied into s, as copy() does,
+; and the copy outlives the region it was made from.
+
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task keep(s: region, rows: [[int]]@r) -> [[int]]@s
+    <- new [[int]](rows) at s
+fi
+
+task main()
+    region outer
+    flex kept = new [[int]]() at outer
+    flex names = new [text]() at outer
+    block
+        region inner
+        flex rows = [[1, 2, ...] at inner, [3, ...] at inner, ...] at inner
+        kept = keep(outer, rows)
+        rows[0][0] = 9
+        flex ts = ["a" + "b" at inner, ...] at inner
+        names = new [text](ts) at outer
+        flex a = new Node(Node { v: 1, next: none }) at inner
+        a^.next = a
+        flex ns = [a, ...] at inner
+        flex copied = new [^Node](ns) at outer
+        copied[0]^.v = 5
+        show(a^.v, " ", copied[0]^.v)
+        when copied[0]^.next is {n}
+            show(&n^ == &copied[0]^)
+        fi
+    fi
+    ; inner is freed; the copies live in outer.
+    show(kept, " ", names)
+fi
