@@ -81,16 +81,18 @@ fn a_parameter_list_offers_flex() {
     for marked in ["task f(@@)\nfi\n", "task f(a: int, @@)\nfi\n", "task f(ho@@)\nfi\n"] {
         let items = completions(marked);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["flex", "flex&", "fixed", "fixed&"], "{:?}", marked);
+        assert_eq!(labels, ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"], "{:?}", marked);
     }
     // A method's too, in a shape, and in a kind once the line says it is one.
     for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
         let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
-        assert_eq!(labels, ["flex", "flex&", "fixed", "fixed&"], "{:?}", marked);
+        assert_eq!(labels, ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"], "{:?}", marked);
     }
     // Not after the word, where the parameter's name goes.
     assert!(completions("task f(flex @@)\nfi\n").is_empty());
     assert!(completions("task f(flex& @@)\nfi\n").is_empty());
+    assert!(completions("task f(bind @@)\nfi\n").is_empty());
+    assert!(completions("task f(bind& @@)\nfi\n").is_empty());
     // At a call, what follows '&' is a place: the variables.
     let at_call: Vec<String> = completions(&program(true).replace("swap(&x, &y)", "swap(&x, &@@)")).into_iter().map(|item| item.label).collect();
     assert!(at_call.contains(&"y".to_string()), "{:?}", at_call);

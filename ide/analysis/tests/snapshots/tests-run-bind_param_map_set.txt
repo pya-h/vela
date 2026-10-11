@@ -1,0 +1,20 @@
+  1 | task set_items(bind m: [text: int]@r)
+    | keyword:task  task:set_items  punctuation:(  keyword:bind  parameter:m  punctuation::  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+  2 |     m["a"] = 1
+    | parameter:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:1
+  3 |     m.del("b")
+    | parameter:m  punctuation:.  field:del  punctuation:(  string:"b"  punctuation:)
+  4 | fi
+    | keyword:fi
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     region r
+    | keyword:region  region:r
+  8 |     flex m = ["x": 10, "y": 20] at r
+    | keyword:flex  variable:m  operator:=  punctuation:[  string:"x"  punctuation::  number:10  punctuation:,  string:"y"  punctuation::  number:20  punctuation:]  keyword:at  region:r
+  9 |     set_items(m)
+    | task:set_items  punctuation:(  variable:m  punctuation:)
+ 10 |     show(m)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:)
+ 11 | fi
+    | keyword:fi

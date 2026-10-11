@@ -1,3 +1,3 @@
-; error: 2:14: 'fixed' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', and 'fixed&', or none
+; error: 2:14: 'fixed' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', 'fixed&', 'bind' and 'bind&', or none
 task f(fixed flex x: int)
 fi

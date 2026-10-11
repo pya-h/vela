@@ -1,0 +1,11 @@
+; error: 10:12: 'change' changes what its parameter 'xs' reaches, so it can't be given what fixed 'xs' owns; give it a copy, 'xs.copy() at r', or keep 'xs' in a flex variable
+
+task change(bind xs: [int]@r)
+    xs[0] = 9
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    change(xs)
+fi

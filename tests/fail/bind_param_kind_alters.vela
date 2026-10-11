@@ -1,0 +1,19 @@
+; error: 13:5: 'Color.bump' changes the value it is called on, so it needs a place that can change, and 'c' is a parameter, which never does; write 'flex c: Color' to change the task's own copy, or 'flex& c: Color' to change the caller's
+
+kind Color
+    Red
+    Green
+
+    alters bump()
+        .this = Color.Green
+    fi
+fi
+
+task paint(bind c: Color)
+    c.bump()
+fi
+
+task main()
+    flex c = Color.Red
+    paint(c)
+fi

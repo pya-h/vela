@@ -561,6 +561,51 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         is a pointer to the place, as the value an <code>alters</code> method is called on already is.
       </p>
 
+      <h3 id="bind-parameters">Parameters that bind</h3>
+      <p>
+        A <code>bind x: T</code> parameter is like <code>flex x: T</code>, but it can never be assigned as a whole:
+        <code>x = …</code> is an error. Its contents may still change: fields and items assigned, what a pointer
+        points to, and a slice's items or a map's entries changed. For a simple type such as <code>int</code>, which
+        has no contents apart from the value, <code>bind</code> acts exactly like <code>fixed</code>. A
+        <code>bind</code> parameter is given by value, and like <code>flex</code> it can't be given what a
+        <code>fixed</code> name owns if the value is twofold (see <a href="#fixed-owns">What a fixed name owns</a>).
+      </p>
+      <pre><span class="keyword">task</span> clear(<span class="keyword">bind</span> xs: [int]@r)
+    xs[<span class="number">0</span>] = <span class="number">0</span>
+    xs[<span class="number">1</span>] = <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> xs = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, ...] <span class="keyword">at</span> r
+    clear(xs)
+    show(xs)                 <span class="comment">; [0, 0, 3]</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        Written <code>bind&amp;</code>, a parameter is the caller's place, only its contents may change and it is
+        never assigned as a whole. The call marks the place with <code>&amp;</code>, as for <code>flex&amp;</code>.
+        A <code>bind&amp;</code> place must be one whose contents can change, so a <code>fixed</code> variable of a
+        twofold type can't be given to it; a fixed value of a simple single type can, since on such types
+        <code>bind&amp;</code> and <code>fixed&amp;</code> act the same.
+      </p>
+      <pre><span class="keyword">task</span> set_first(<span class="keyword">bind&amp;</span> xs: [int]@r, v: int)
+    xs[<span class="number">0</span>] = v
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> xs = [<span class="number">1</span>, <span class="number">2</span>, ...] <span class="keyword">at</span> r
+    set_first(&amp;xs, <span class="number">9</span>)
+    show(xs)                 <span class="comment">; [9, 2]</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A <code>bind</code> or <code>bind&amp;</code> parameter can't be assigned as a whole, can't have its length
+        changed with <code>add</code> or <code>del</code>, and can't be given to a <code>flex&amp;</code> place, which
+        may be assigned as a whole. Only a parameter is <code>bind</code> or <code>bind&amp;</code>: a shape's field
+        changes where the value it is part of is held. In C, <code>bind</code> is a plain parameter and
+        <code>bind&amp;</code> is a pointer to a mutable place.
+      </p>
+
       <h3 id="fixed-parameters">Parameters that read</h3>
       <p>
         A plain parameter, <code>x: T</code>, leaves the compiler to choose how it is given: a copy, or, for a large

@@ -1,0 +1,11 @@
+task set_items(bind m: [text: int]@r)
+    m["a"] = 1
+    m.del("b")
+fi
+
+task main()
+    region r
+    flex m = ["x": 10, "y": 20] at r
+    set_items(m)
+    show(m)
+fi

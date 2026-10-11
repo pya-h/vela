@@ -196,7 +196,7 @@
       back to. Most of the concerns are about places two names share. In Vela a value behaves as a copy: giving it to a
       task, binding it to another name, or putting it in a shape never lets two names change one thing. A few features
       give that up on purpose, since they are how two names share one place: a reference (<code>flex&amp;</code>,
-      <code>fixed&amp;</code>), a pointer (<code>^T</code>), a shared field, a slice (a view of items in a region, so a
+      <code>bind&amp;</code>, <code>fixed&amp;</code>), a pointer (<code>^T</code>), a shared field, a slice (a view of items in a region, so a
       copy of it sees the same items), and a <code>File</code> (a copy names the same open file). Nothing here changes
       the language.
     </p>
@@ -218,11 +218,11 @@
           <thead><tr><th>Rule</th><th>When</th><th>What it prevents</th></tr></thead>
           <tbody>
             <tr>
-              <td>A place a call changes is given once: two <code>flex&amp;</code> parameters, or a
-                <code>flex&amp;</code> and a <code>fixed&amp;</code> or a plain parameter, never name one place, and
-                nor do <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>, which may. A method that
-                <code>alters</code> the value it is called on counts as changing it. Two slices count as two places even
-                when they view the same items (see <a href="#slice-copies">below</a>).</td>
+              <td>A place a call changes is given once: two parameters that may change it
+                (<code>flex&amp;</code> or <code>bind&amp;</code>), or one of those and a <code>fixed&amp;</code> or a
+                plain parameter, never name one place, and nor do <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>,
+                which may. A method that <code>alters</code> the value it is called on counts as changing it. Two
+                slices count as two places even when they view the same items (see <a href="#slice-copies">below</a>).</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
               <td>A task changing a value through one parameter while it reads it through another. See
                 <a href="vela.html#parameters">Parameters</a>.</td>

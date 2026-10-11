@@ -1,0 +1,9 @@
+task zero(bind a: [int#3])
+    a[0] = 0
+fi
+
+task main()
+    bind a = [1, 2, 3]
+    zero(a)
+    show(a)
+fi

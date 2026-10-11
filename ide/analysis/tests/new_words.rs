@@ -156,7 +156,7 @@ fn bind_written_as_a_name_is_an_error() {
 fn the_old_words_are_never_offered() {
     for marked in ["task main()\n    @@\nfi\n", "task f(@@)\nfi\n", "task main()\n    b@@\nfi\n", "task main()\n    h@@\nfi\n"] {
         let offered = labels(marked);
-        assert!(!offered.iter().any(|label| ["bind", "bind&", "hold", "hold&"].contains(&label.as_str())), "{:?}: {:?}", marked, offered);
+        assert!(!offered.iter().any(|label| ["hold", "hold&"].contains(&label.as_str())), "{:?}: {:?}", marked, offered);
     }
     assert!(labels("task main()\n    @@\nfi\n").iter().any(|label| label == "fixed"));
     // Nothing follows a reserved word: the word is the error.

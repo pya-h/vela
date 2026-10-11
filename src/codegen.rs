@@ -394,7 +394,7 @@ impl Generator {
     /// value the task changes through, `flex`, is one C type with a value, since
     /// a task taking it as a value goes where it is expected.
     fn hidden_of_type(&self, task: &TaskType) -> Vec<bool> {
-        task.params.iter().zip(&task.taken).map(|(param, how)| matches!(how, Taken::Value | Taken::Flex) && self.c_layout(param).0 > HIDDEN_ABOVE).collect()
+        task.params.iter().zip(&task.taken).map(|(param, how)| matches!(how, Taken::Value | Taken::Flex | Taken::Bind) && self.c_layout(param).0 > HIDDEN_ABOVE).collect()
     }
 
     /// The C type of task type `ty`: a pointer to a function taking its values
@@ -4345,7 +4345,7 @@ pub(crate) fn notice_name(name: &str) -> String {
 /// `hidden`.
 fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
     match how {
-        Taken::Place(Passing::FlexRef) => format!("{}*", c_type(ty)),
+        Taken::Place(Passing::FlexRef | Passing::BindRef) => format!("{}*", c_type(ty)),
         Taken::Place(_) => format!("{} const*", c_type(ty)),
         _ if hidden => format!("const {}*", c_type(ty)),
         _ => c_type(ty),

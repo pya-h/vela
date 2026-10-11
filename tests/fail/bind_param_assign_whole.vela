@@ -1,0 +1,11 @@
+; error: 4:5: cannot assign to 'bind' variable 'xs' as a whole; a 'bind' name stays bound to one value
+
+task rebind(bind xs: [int]@r, r: region)
+    xs = new [int]() at r
+fi
+
+task main()
+    region r
+    bind xs = [1, 2, ...] at r
+    rebind(xs, r)
+fi

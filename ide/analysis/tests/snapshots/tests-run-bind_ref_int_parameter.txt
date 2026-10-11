@@ -1,0 +1,14 @@
+  1 | task read(bind& p: int) -> int
+    | keyword:task  task:read  punctuation:(  keyword:bind  keyword:&  parameter:p  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  2 |     <- p
+    | keyword:<-  parameter:p
+  3 | fi
+    | keyword:fi
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     fixed n = 1
+    | keyword:fixed  variable:n  operator:=  number:1
+  7 |     show(read(&n))
+    | builtin-fn:show  punctuation:(  task:read  punctuation:(  operator:&  variable:n  punctuation:)  punctuation:)
+  8 | fi
+    | keyword:fi

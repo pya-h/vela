@@ -1,0 +1,11 @@
+; error: 10:13: 'xs' is given the place itself, to change its contents, so it needs a place that can change, and 'xs' never does (declared at 9:11); a value declared with 'flex' or 'bind' can
+
+task change(bind& xs: [int]@r)
+    xs[0] = 9
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    change(&xs)
+fi

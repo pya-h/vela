@@ -573,9 +573,9 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether the token at `q` may be part of what a lambda keeps: a name,
-    /// `@`, `flex`, `fixed`, `&`, or a comma.
+    /// `@`, `flex`, `fixed`, `bind`, `&`, or a comma.
     fn kept_part(&self, q: usize) -> bool {
-        matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Flex | Token::Fixed | Token::Amp | Token::Comma))
+        matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Flex | Token::Fixed | Token::Bind | Token::Amp | Token::Comma))
     }
 
     /// The `]` closing what a lambda keeps, when the `[` at `open` starts
@@ -616,7 +616,7 @@ impl<'a> Tokens<'a> {
         // `(flex& n: int` names a parameter; a type's `(flex& int)` names none.
         let named = |q: usize| self.ident(q).is_some() && self.token(q + 1) == Some(&Token::Colon);
         let after_word = if self.token(p + 2) == Some(&Token::Amp) { p + 3 } else { p + 2 };
-        if !(matches!(self.token(p + 1), Some(Token::Flex | Token::Fixed)) && named(after_word)) && !named(p + 1) {
+        if !(matches!(self.token(p + 1), Some(Token::Flex | Token::Fixed | Token::Bind)) && named(after_word)) && !named(p + 1) {
             return false;
         }
         let mut depth = 0usize;
@@ -1861,16 +1861,18 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
-        // `flex n: int`, `flex& n: int`, `fixed n: int`, and `fixed& n: int`:
-        // the word, and its `&`, before a parameter's name.
+        // `flex n: int`, `flex& n: int`, `fixed n: int`, `fixed& n: int`,
+        // `bind n: int` and `bind& n: int`: the word, and its `&`, before a
+        // parameter's name.
         let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
         let word_at = |q: usize| match tokens.token(q) {
             Some(Token::Flex) if opens_param(q) => Some("flex"),
             Some(Token::Fixed) if opens_param(q) => Some("fixed"),
+            Some(Token::Bind) if opens_param(q) => Some("bind"),
             _ => None,
         };
         let marked = match before {
-            Some(Token::Flex | Token::Fixed) => word_at(p - 1).map(|word| word.to_string()),
+            Some(Token::Flex | Token::Fixed | Token::Bind) => word_at(p - 1).map(|word| word.to_string()),
             Some(Token::Amp) if p >= 2 => word_at(p - 2).map(|word| format!("{}&", word)),
             _ => None,
         };
@@ -1883,6 +1885,8 @@ impl<'a> Classifier<'a> {
             let intro = match marked.as_deref() {
                 Some("flex&") => Some("flex&"),
                 Some("flex") => Some("flex"),
+                Some("bind&") => Some("bind&"),
+                Some("bind") => Some("bind"),
                 Some("fixed&") => Some("fixed&"),
                 Some("fixed") => Some("fixed"),
                 _ => None,
@@ -2324,7 +2328,7 @@ fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
 /// type's never do.
 fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {
     header_paren(tokens, q)
-        || matches!(tokens.token(q + 1), Some(Token::Flex | Token::Fixed))
+        || matches!(tokens.token(q + 1), Some(Token::Flex | Token::Fixed | Token::Bind))
         || (tokens.ident(q + 1).is_some() && tokens.token(q + 2) == Some(&Token::Colon))
 }
 

@@ -346,6 +346,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let doc = format!("{} The task's own copy, which it may change; the caller's variable never does, though what a twofold value names, a slice's items, a map, or what a pointer points to, is the caller's.", doc);
                 return Some((format!("flex {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
+            if symbol.intro == Some("bind&") {
+                let doc = format!("{} The caller's place, which the call gives as '&a': it may change the contents there, but never assigns the place as a whole.", doc);
+                return Some((format!("bind& {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
+            if symbol.intro == Some("bind") {
+                let doc = format!("{} The task's own copy; it may change the contents, but never assigns it as a whole. The caller's variable never does, though what a twofold value names, a slice's items, a map, or what a pointer points to, is the caller's.", doc);
+                return Some((format!("bind {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
             if symbol.intro == Some("fixed&") {
                 let doc = format!("{} The caller's place, which the call gives as '&a', read where it is and never changed.", doc);
                 return Some((format!("fixed& {}", typed(&symbol.name)), doc.trim_start().to_string()));
@@ -403,9 +411,17 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 (format!("each {}", typed(&symbol.name)), doc.to_string())
             }
             Some("flex") => (format!("flex {}", typed(&symbol.name)), "A mutable variable.".to_string()),
+            Some("bind") => (
+                format!("bind {}", typed(&symbol.name)),
+                "A variable bound to one value; its contents may change, but it is never assigned as a whole.".to_string(),
+            ),
             Some("flex&") => (
                 format!("flex& {}", typed(&symbol.name)),
                 "A reference: another name for the place given after '=', so a change to either is a change to both.".to_string(),
+            ),
+            Some("bind&") => (
+                format!("bind& {}", typed(&symbol.name)),
+                "A reference to a place whose contents may change, but which is never assigned as a whole.".to_string(),
             ),
             Some("fixed&") => (
                 format!("fixed& {}", typed(&symbol.name)),

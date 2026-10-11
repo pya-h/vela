@@ -3123,7 +3123,13 @@ impl Checker {
                 // and a parameter the task holds a copy of (`flex x: T`) or the
                 // caller's place (`flex& x: T`).
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                let mode = if alters || param.passing.changes() { Mode::Flex } else { Mode::Fixed };
+                let mode = if alters || matches!(param.passing, Passing::Flex | Passing::FlexRef) {
+                    Mode::Flex
+                } else if matches!(param.passing, Passing::Bind | Passing::BindRef) {
+                    Mode::Bind
+                } else {
+                    Mode::Fixed
+                };
                 self.define_param(&param.name, known(&param.ty), mode, param.passing, param.span)?;
             }
         }
@@ -7176,7 +7182,7 @@ impl Checker {
                 for (i, arg) in args.iter_mut().enumerate().skip(1).take(own) {
                     // A place the wrapper changes or reads where it is kept: no
                     // value worked out once is one.
-                    if let Some(mark) = passing.get(i).filter(|passing| passing.is_ref()).map(|passing| if *passing == Passing::FlexRef { "flex&" } else { "fixed&" }) {
+                    if let Some(mark) = passing.get(i).filter(|passing| passing.is_ref()).map(|passing| passing.word()) {
                         self.record(Error::at(
                             arg.span,
                             format!("wrapper '{}' takes this as a place, with '{}', but {} are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper", codegen::notice_name(&wrapper), mark, WRAPPER_VALUES),
@@ -9339,6 +9345,12 @@ impl Checker {
                             format!("'{0}' changes '{1}', a 'fixed&' parameter, which only reads the caller's place; one that changes it is written 'flex& {1}: {2}'", word, name, info.ty),
                         );
                     }
+                    if info.mode == Mode::Bind && needs_flex {
+                        return err(
+                            items.span,
+                            format!("'{0}' changes '{1}', a 'bind' slice; use '{1}.added(…)' or '{1}.without(…)' for a new one, or keep it in a 'flex' variable", word, name),
+                        );
+                    }
                     if info.param || info.refers.is_some() {
                         let what = if info.param { "a parameter, which never changes" } else { "a 'fixed&'" };
                         return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, self.param_hint(&name, info)));
@@ -11308,6 +11320,7 @@ impl Checker {
                     let way = |how: &Taken| match how {
                         Taken::Value => "as a value".to_string(),
                         Taken::Flex => "as a value it changes, 'flex'".to_string(),
+                        Taken::Bind => "as a value it changes the contents of, 'bind'".to_string(),
                         Taken::Place(passing) => format!("as a place, '{}'", passing.word()),
                         Taken::Region(_) => "as a region".to_string(),
                     };
@@ -11555,9 +11568,9 @@ impl Checker {
         self.check_aliasing(args, info)?;
         for ((arg, passing), (param, _)) in args.iter().zip(&info.passing).zip(&info.params) {
             match (passing, &arg.kind) {
-                // A `flex` parameter may change what it holds.
-                (Passing::Flex, _) => self.hand(arg, HandedTo::Param { task: task.to_string(), param: param.clone() }),
-                (Passing::FlexRef, ExprKind::Ref(place)) => self.hand_written(place, None),
+                // A `flex` or `bind` parameter may change what it holds.
+                (Passing::Flex | Passing::Bind, _) => self.hand(arg, HandedTo::Param { task: task.to_string(), param: param.clone() }),
+                (Passing::FlexRef | Passing::BindRef, ExprKind::Ref(place)) => self.hand_written(place, None),
                 _ => {}
             }
         }
@@ -11869,7 +11882,7 @@ impl Checker {
     /// value otherwise.
     fn check_argument(&mut self, arg: &mut Expr, passing: Passing, callee: &str, param: &str) -> Result<Type> {
         match (&mut arg.kind, passing) {
-            (ExprKind::Ref(place), Passing::FlexRef | Passing::FixedRef) => {
+            (ExprKind::Ref(place), Passing::FlexRef | Passing::FixedRef | Passing::BindRef) => {
                 // A `[flex @r]` lambda is given as a place, never copied.
                 self.calling = matches!(place.kind, ExprKind::Var(_));
                 let ty = self.check_expr(place);
@@ -11881,9 +11894,9 @@ impl Checker {
             }
             (ExprKind::Ref(_), _) => err(
                 arg.span,
-                format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'flex& {1}: …' or 'fixed& {1}: …' is given the place itself", callee, param),
+                format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'flex& {1}: …', 'fixed& {1}: …' or 'bind& {1}: …' is given the place itself", callee, param),
             ),
-            (_, Passing::FixedRef | Passing::FlexRef) => {
+            (_, Passing::FixedRef | Passing::FlexRef | Passing::BindRef) => {
                 self.check_expr(arg)?;
                 Err(unmarked_place(arg, passing, callee, param))
             }
@@ -11891,11 +11904,21 @@ impl Checker {
         }
     }
 
-    /// Checks `place`, checked already, given with `&` to the `flex&` or
-    /// `fixed&` parameter `param` of `callee`.
+    /// Checks `place`, checked already, given with `&` to the `flex&`,
+    /// `fixed&` or `bind&` parameter `param` of `callee`.
     fn check_given_place(&mut self, place: &Expr, passing: Passing, callee: &str, param: &str) -> Result<()> {
         match passing {
             Passing::FlexRef => self.given_place(place, &Taker::Param(param)),
+            Passing::BindRef => {
+                // A `bind&` parameter changes the contents of the caller's
+                // place, but for simple types it has no contents, so it only
+                // reads them, like `fixed&`.
+                if self.bind_has_contents(place.ty.as_ref().unwrap_or(&Type::Unknown)) {
+                    self.given_place(place, &Taker::BindParam(param))
+                } else {
+                    self.read_place(place).map_err(|error| Error { message: error.message.replacen("a reference names a place for as long as its block lasts", &format!("'{}' is read where the caller keeps it while the task runs", param), 1), ..error })
+                }
+            }
             // A place only read: any place a `fixed&` reference may name.
             _ => {
                 if !self.is_place(place) {
@@ -11926,7 +11949,12 @@ impl Checker {
                 if info.result {
                     return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
                 }
-                if info.mode == Mode::Flex {
+                let bind_taker = matches!(taker, Taker::BindParam(_));
+                if bind_taker {
+                    if info.mode.can_change_contents(true) {
+                        return Ok(());
+                    }
+                } else if info.mode == Mode::Flex {
                     return Ok(());
                 }
                 if name == THIS {
@@ -11936,22 +11964,25 @@ impl Checker {
                     return refuse(format!("it needs a place that can change, and '{}' is a 'fixed&', which only reads the place it names", name));
                 }
                 if info.param && info.passing == Passing::FixedRef {
+                    let want = if bind_taker { "bind&" } else { "flex&" };
                     return refuse(format!(
-                        "it needs a place that can change, and '{0}' is a 'fixed&' parameter, which only reads the caller's place; to pass it on to be changed, write 'flex& {0}: {1}'",
-                        name, info.ty
+                        "it needs a place that can change, and '{0}' is a 'fixed&' parameter, which only reads the caller's place; to pass it on to be changed, write '{2} {0}: {1}'",
+                        name, info.ty, want
                     ));
                 }
                 if info.param {
+                    let want = if bind_taker { "bind&" } else { "flex&" };
                     return refuse(format!(
-                        "it needs a place that can change, and '{0}' is a parameter, which never does; to pass on the caller's place, write 'flex& {0}: {1}'",
-                        name, info.ty
+                        "it needs a place that can change, and '{0}' is a parameter, which never does; to pass on the caller's place, write '{2} {0}: {1}'",
+                        name, info.ty, want
                     ));
                 }
                 // A lambda's copy: the hint says which lambda changes it.
                 if info.kept {
                     return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
                 }
-                refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can", name, info.span.line, info.span.col))
+                let kind = if bind_taker { "a value declared with 'flex' or 'bind'" } else { "a value declared with 'flex'" };
+                refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); {} can", name, info.span.line, info.span.col, kind))
             }
             ExprKind::Field(base, field) => {
                 if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents(true)) {
@@ -12024,11 +12055,11 @@ impl Checker {
         let mut places: Vec<(Vec<Step>, bool, &str, Span)> = Vec::new();
         for (i, ((arg, (param, _)), passing)) in args.iter().zip(&info.params).zip(&info.passing).enumerate() {
             let (place, changed) = match (&arg.kind, passing) {
-                (ExprKind::Ref(place), Passing::FlexRef) => (place.as_ref(), true),
+                (ExprKind::Ref(place), Passing::FlexRef | Passing::BindRef) => (place.as_ref(), true),
                 // Read where it is while the task runs, so no place given
                 // beside it may change.
                 (ExprKind::Ref(place), Passing::FixedRef) => (place.as_ref(), false),
-                (_, Passing::Flex | Passing::Fixed) => continue,
+                (_, Passing::Flex | Passing::Fixed | Passing::Bind) => continue,
                 _ => (arg, i == 0 && alters),
             };
             let Some(path) = self.resolved_path(place) else { continue };
@@ -12875,7 +12906,9 @@ fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
     actual.params == expected.params
         && actual.ret == expected.ret
         && actual.taken.len() == expected.taken.len()
-        && actual.taken.iter().zip(&expected.taken).all(|(a, e)| a == e || (*a == Taken::Value && *e == Taken::Flex))
+        && actual.taken.iter().zip(&expected.taken).all(|(a, e)| {
+            a == e || (*a == Taken::Value && matches!(e, Taken::Flex | Taken::Bind))
+        })
 }
 
 /// Whether a statement on the last line of a block gives that block its value: a
@@ -14510,6 +14543,7 @@ fn task_passing(how: &Taken) -> Passing {
     match how {
         Taken::Place(passing) => *passing,
         Taken::Flex => Passing::Flex,
+        Taken::Bind => Passing::Bind,
         _ => Passing::Copy,
     }
 }
@@ -14524,13 +14558,15 @@ fn shown_param(name: &str, ty: &Type, passing: Passing) -> String {
 
 /// How a task's type takes parameter `name` of type `ty`, which its header
 /// takes as `passing` (see `Taken`): a region by its name, a place as one, a
-/// `flex` value as one the task changes (which `Checker::taken_for` makes a
-/// value where it is whole), and anything else, a copy too, as a value.
+/// `flex` or `bind` value as one the task changes the contents of (which
+/// `Checker::taken_for` makes a value where it is whole), and anything else, a
+/// copy too, as a value.
 fn taken_by(name: &str, ty: &Type, passing: Passing) -> Taken {
     match (ty, passing) {
         (Type::Region, _) => Taken::Region(name.to_string()),
         (_, passing) if passing.is_ref() => Taken::Place(passing),
         (_, Passing::Flex) => Taken::Flex,
+        (_, Passing::Bind) => Taken::Bind,
         _ => Taken::Value,
     }
 }
@@ -14978,11 +15014,25 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
             marked
         );
     }
+    if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
+        && given.params == wanted.params
+        && given.taken.iter().zip(&wanted.taken).any(|(a, e)| *a == Taken::Bind && *e == Taken::Value)
+    {
+        let marked = TaskType { taken: wanted.taken.iter().zip(&given.taken).map(|(e, a)| if *a == Taken::Bind { Taken::Bind } else { e.clone() }).collect(), ..wanted };
+        let marked = match expected {
+            Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: marked, ..closure.as_ref().clone() })),
+            _ => Type::Task(Box::new(marked)),
+        };
+        return format!(
+            "; this task changes what a value it is given reaches, so it goes only where the type says 'bind' for that value, as in '{}', and nothing a fixed name owns is given to it there",
+            marked
+        );
+    }
     // A task taking the caller's place goes only where the type says so.
     if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
         && given.params == wanted.params
         && let Some(passing) = given.taken.iter().zip(&wanted.taken).find_map(|(a, e)| match (a, e) {
-            (Taken::Place(passing), Taken::Value | Taken::Flex) => Some(*passing),
+            (Taken::Place(passing), Taken::Value | Taken::Flex | Taken::Bind) => Some(*passing),
             _ => None,
         })
     {
@@ -16424,6 +16474,7 @@ fn path_text(path: &[Step]) -> String {
 /// reference, by its name, which the errors about the place name.
 enum Taker<'a> {
     Param(&'a str),
+    BindParam(&'a str),
     Reference(&'a str),
     /// A lambda keeping the variable as a place, `[flex& count, @r]`.
     Kept(&'a str),
@@ -16434,6 +16485,7 @@ impl Taker<'_> {
     fn lead(&self) -> String {
         match self {
             Taker::Param(name) => format!("'{}' is given the place itself, to change", name),
+            Taker::BindParam(name) => format!("'{}' is given the place itself, to change its contents", name),
             Taker::Reference(name) => format!("'flex& {}' names a place to change it", name),
             Taker::Kept(name) => format!("this lambda keeps '{0}' as 'flex& {0}', to change it", name),
         }
@@ -16442,7 +16494,7 @@ impl Taker<'_> {
     /// What giving it `place` is, for the error that it changes `.this`.
     fn using(&self, place: &str) -> String {
         match self {
-            Taker::Param(name) => format!("giving '{}' to '{}'", place, name),
+            Taker::Param(name) | Taker::BindParam(name) => format!("giving '{}' to '{}'", place, name),
             Taker::Reference(name) => format!("naming '{}' with 'flex& {}'", place, name),
             Taker::Kept(name) => format!("keeping '{}' as 'flex& {}'", place, name),
         }

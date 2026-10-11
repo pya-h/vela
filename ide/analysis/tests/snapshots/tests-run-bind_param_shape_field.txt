@@ -1,0 +1,22 @@
+  1 | shape Box
+    | keyword:shape  type:Box
+  2 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  3 | fi
+    | keyword:fi
+  5 | task set_value(bind b: Box)
+    | keyword:task  task:set_value  punctuation:(  keyword:bind  parameter:b  punctuation::  type:Box  punctuation:)
+  6 |     b.value = 5
+    | parameter:b  punctuation:.  field:value  operator:=  number:5
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     bind b = Box { value: 1 }
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:1  punctuation:}
+ 11 |     set_value(b)
+    | task:set_value  punctuation:(  variable:b  punctuation:)
+ 12 |     show(b.value)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:value  punctuation:)
+ 13 | fi
+    | keyword:fi

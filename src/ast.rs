@@ -210,6 +210,9 @@ pub enum Taken {
     /// task taking it as a `Value` fits where one taking it so is expected, but
     /// never the other way (see `Checker::task_fits`).
     Flex,
+    /// A value the task may change the contents of, but never assign as a whole.
+    /// The compiler keeps this distinct from `Value` even for simple types.
+    Bind,
     /// The caller's place, `flex& int` or `fixed& int` (`Passing::FlexRef` or
     /// `Passing::FixedRef`), which the call marks with `&`.
     Place(Passing),
@@ -704,6 +707,7 @@ impl Type {
                         }
                         Some(Taken::Place(passing)) => write!(f, "{} ", passing.word())?,
                         Some(Taken::Flex) => write!(f, "{} ", Passing::Flex.word())?,
+                        Some(Taken::Bind) => write!(f, "{} ", Passing::Bind.word())?,
                         _ => {}
                     }
                     ty.write(f, None)?;
@@ -1985,17 +1989,23 @@ pub enum Passing {
     /// `fixed& x: T`: the caller's place, read and never changed, which the call
     /// marks, `f(&a)`.
     FixedRef,
+    /// `bind x: T`: the task's own copy, which it may change the contents of,
+    /// but never assign as a whole.
+    Bind,
+    /// `bind& x: T`: the caller's place, which the call marks, `f(&a)`: it may
+    /// change the contents there, but never assigns the place as a whole.
+    BindRef,
 }
 
 impl Passing {
     /// Whether the parameter is the caller's place, given as `&a`.
     pub fn is_ref(self) -> bool {
-        matches!(self, Passing::FlexRef | Passing::FixedRef)
+        matches!(self, Passing::FlexRef | Passing::FixedRef | Passing::BindRef)
     }
 
     /// Whether the task may change the parameter.
     pub fn changes(self) -> bool {
-        matches!(self, Passing::Flex | Passing::FlexRef)
+        matches!(self, Passing::Flex | Passing::FlexRef | Passing::Bind | Passing::BindRef)
     }
 
     /// The words written before the parameter's name, for messages.
@@ -2006,6 +2016,8 @@ impl Passing {
             Passing::FlexRef => "flex&",
             Passing::Fixed => "fixed",
             Passing::FixedRef => "fixed&",
+            Passing::Bind => "bind",
+            Passing::BindRef => "bind&",
         }
     }
 }
@@ -2313,6 +2325,7 @@ pub fn type_word(ty: &Type) -> String {
                 .zip(&task.taken)
                 .map(|(ty, how)| match how {
                     Taken::Place(Passing::FlexRef) => format!("flexref__{}", type_word(ty)),
+                    Taken::Place(Passing::BindRef) => format!("bindref__{}", type_word(ty)),
                     Taken::Place(_) => format!("fixedref__{}", type_word(ty)),
                     _ => type_word(ty),
                 })

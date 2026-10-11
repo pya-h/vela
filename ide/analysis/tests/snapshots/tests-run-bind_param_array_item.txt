@@ -1,0 +1,16 @@
+  1 | task zero(bind a: [int#3])
+    | keyword:task  task:zero  punctuation:(  keyword:bind  parameter:a  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:)
+  2 |     a[0] = 0
+    | parameter:a  punctuation:[  number:0  punctuation:]  operator:=  number:0
+  3 | fi
+    | keyword:fi
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     bind a = [1, 2, 3]
+    | keyword:bind  variable:a  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+  7 |     zero(a)
+    | task:zero  punctuation:(  variable:a  punctuation:)
+  8 |     show(a)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:)
+  9 | fi
+    | keyword:fi

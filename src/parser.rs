@@ -1441,24 +1441,26 @@ impl Parser {
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
-    /// `flex`, `flex&`, `fixed`, or `fixed&` before a task's parameter, which
-    /// makes it the task's own copy to change, the caller's place, always a
-    /// copy, or the caller's place only read (see `Passing`). A shape's field
-    /// and a variant's value change with the value they are part of, and say so.
+    /// `flex`, `flex&`, `fixed`, `fixed&`, `bind` or `bind&` before a task's
+    /// parameter, which makes it the task's own copy to change, the caller's
+    /// place, always a copy, the caller's place only read, or a bind place whose
+    /// contents may change but which is never assigned as a whole (see
+    /// `Passing`). A shape's field and a variant's value change with the value
+    /// they are part of, and say so.
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
-        let flex = match self.peek() {
-            Token::Flex => true,
-            Token::Fixed => false,
+        let (base, word) = match self.peek() {
+            Token::Flex => (Passing::Flex, "flex"),
+            Token::Fixed => (Passing::Fixed, "fixed"),
+            Token::Bind => (Passing::Bind, "bind"),
             _ => return Ok(Passing::Copy),
         };
-        let word = if flex { "flex" } else { "fixed" };
         let at = self.peek_span();
         match slot {
             Slot::Param => {}
-            Slot::Field if flex => {
+            Slot::Field if matches!(base, Passing::Flex | Passing::Bind) => {
                 return Err(Error::at(
                     at,
-                    "only a parameter can be 'flex'; a shape's field changes where the value it is part of is held, as in 'flex p = Point {…}' then 'p.x = 1'",
+                    "only a parameter can be 'flex' or 'bind'; a shape's field changes where the value it is part of is held, as in 'flex p = Point {…}' then 'p.x = 1'",
                 ));
             }
             Slot::Field => {
@@ -1479,16 +1481,19 @@ impl Parser {
         } else {
             false
         };
-        let passing = match (flex, by_place) {
-            (true, true) => Passing::FlexRef,
-            (true, false) => Passing::Flex,
-            (false, true) => Passing::FixedRef,
-            (false, false) => Passing::Fixed,
+        let passing = match base {
+            Passing::Flex if by_place => Passing::FlexRef,
+            Passing::Flex => Passing::Flex,
+            Passing::Fixed if by_place => Passing::FixedRef,
+            Passing::Fixed => Passing::Fixed,
+            Passing::Bind if by_place => Passing::BindRef,
+            Passing::Bind => Passing::Bind,
+            _ => unreachable!(),
         };
-        if matches!(self.peek(), Token::Flex | Token::Fixed) {
+        if matches!(self.peek(), Token::Flex | Token::Fixed | Token::Bind) {
             return Err(Error::at(
                 self.peek_span(),
-                format!("'{}' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', and 'fixed&', or none", passing.word()),
+                format!("'{}' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', 'fixed&', 'bind' and 'bind&', or none", passing.word()),
             ));
         }
         if self.check(Token::Amp) {
@@ -1545,7 +1550,7 @@ impl Parser {
         let Some(first) = params.iter().position(|param| param.default.is_some()) else { return Ok(()) };
         for param in params.iter().filter(|param| param.default.is_some()) {
             let at = param.default.as_ref().map_or(param.span, |value| value.span);
-            if matches!(param.passing, Passing::FlexRef | Passing::FixedRef) {
+            if param.passing.is_ref() {
                 return Err(Error::at(
                     at,
                     format!("'{}' is the caller's place, '{}', which a call names with '&'; a place has no value to fall back on", param.name, param.passing.word()),
@@ -1915,6 +1920,7 @@ impl Parser {
                     Taken::Region(name) => format!("@{}", name),
                     Taken::Place(passing) => passing.word().to_string(),
                     Taken::Flex => Passing::Flex.word().to_string(),
+                    Taken::Bind => Passing::Bind.word().to_string(),
                     Taken::Value => Passing::Fixed.word().to_string(),
                 };
                 marked = Some((at, written));
@@ -1928,6 +1934,7 @@ impl Parser {
                     Some(Taken::Region(name)) => Some(format!("@{}", name)),
                     Some(Taken::Place(passing)) => Some(passing.word().to_string()),
                     Some(Taken::Flex) => Some(Passing::Flex.word().to_string()),
+                    Some(Taken::Bind) => Some(Passing::Bind.word().to_string()),
                     _ => None,
                 };
                 match written {
@@ -2004,11 +2011,11 @@ impl Parser {
     }
 
     /// How a parameter of a task's type is given, written before its type:
-    /// `flex&` or `fixed&` for the caller's place, `@r` for a region (whose type
-    /// is then all of it), `flex` for a value whose items the task changes,
-    /// `fixed` or nothing for a value. The checker reads `flex` before a whole
-    /// value, which has no items the caller sees, as nothing (see
-    /// `Checker::resolve_task_type`).
+    /// `flex&`, `fixed&` or `bind&` for the caller's place, `@r` for a region
+    /// (whose type is then all of it), `flex` or `bind` for a value whose items
+    /// the task changes, `fixed` or nothing for a value. The checker reads
+    /// `flex` or `bind` before a whole value, which has no items the caller
+    /// sees, as nothing (see `Checker::resolve_task_type`).
     fn parse_taken(&mut self) -> Result<Taken> {
         if self.match_token(Token::AtSign) {
             if !matches!(self.peek(), Token::Ident(_)) {
@@ -2016,27 +2023,37 @@ impl Parser {
             }
             return Ok(Taken::Region(self.expect_ident()?));
         }
-        let flex = match self.peek() {
-            Token::Flex => true,
-            Token::Fixed => false,
+        let base = match self.peek() {
+            Token::Flex => Passing::Flex,
+            Token::Fixed => Passing::Fixed,
+            Token::Bind => Passing::Bind,
             _ => return Ok(Taken::Value),
         };
         let at = self.peek_span();
         self.advance();
-        // `flex [int]@r` and `fixed int`: a value, which the task may change
-        // through or not; `flex&` is one word, as in a header.
+        // `flex [int]@r`, `bind [int]@r` and `fixed int`: a value, which the
+        // task may change through or not; `flex&` and `bind&` are one word, as
+        // in a header.
         if !self.check(Token::Amp) {
-            return Ok(if flex { Taken::Flex } else { Taken::Value });
+            return Ok(match base {
+                Passing::Flex => Taken::Flex,
+                Passing::Bind => Taken::Bind,
+                _ => Taken::Value,
+            });
         }
         if !self.amp_against_word() {
-            let word = if flex { "flex" } else { "fixed" };
+            let word = base.word();
             return Err(Error::at(at, format!("'{0}&' is written with '&' against '{0}', as in '({0}& int) -> nothing'", word)));
         }
         self.advance(); // &
         if self.check(Token::AtSign) {
             return Err(Error::at(at, "a region is given as it is, so a task's type writes it '@r' alone, never as a place"));
         }
-        Ok(Taken::Place(if flex { Passing::FlexRef } else { Passing::FixedRef }))
+        Ok(Taken::Place(match base {
+            Passing::Flex => Passing::FlexRef,
+            Passing::Bind => Passing::BindRef,
+            _ => Passing::FixedRef,
+        }))
     }
 
     /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a

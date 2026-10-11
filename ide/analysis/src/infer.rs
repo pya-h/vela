@@ -1618,6 +1618,10 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
                 // `flex [int]@r`: a value whose items the task changes.
                 let ty = parse_type_within(ty, depth + 1)?;
                 (flex_taken(&ty), ty)
+            } else if let Some(ty) = param.strip_prefix("bind ") {
+                // `bind [int]@r`: a value whose contents the task changes.
+                let ty = parse_type_within(ty, depth + 1)?;
+                (bind_taken(&ty), ty)
             } else {
                 (Taken::Value, parse_type_within(param.strip_prefix("fixed ").unwrap_or(param), depth + 1)?)
             };
@@ -1648,6 +1652,14 @@ fn flex_taken(ty: &Type) -> Taken {
     }
 }
 
+/// How a task's type takes a `bind` value of type `ty`: as one the task may
+/// change the contents of, but never assign as a whole. The compiler keeps
+/// `bind` in the task type even for simple types, so this returns `Bind` for
+/// every type.
+fn bind_taken(_ty: &Type) -> Taken {
+    Taken::Bind
+}
+
 /// Where the `)` closing the `(` that `text` starts with is.
 fn closing_paren(text: &str) -> Option<usize> {
     list_end(text.strip_prefix('(')?).map(|at| at + 1)
@@ -1671,6 +1683,7 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
         taken.push(match (&ty, name.split_whitespace().collect::<Vec<_>>().as_slice()) {
             (Type::Region, [.., region]) => Taken::Region(region.to_string()),
             (_, ["flex", ..]) => flex_taken(&ty),
+            (_, ["bind", ..]) => bind_taken(&ty),
             (_, [word, ..]) => place_word(word).map_or(Taken::Value, |(passing, _)| Taken::Place(passing)),
             _ => Taken::Value,
         });
@@ -1683,12 +1696,15 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
 /// `fixed& int`, and the text after the word and its `&`.
 fn place_word(text: &str) -> Option<(Passing, &str)> {
     let after = |word: &str| text.strip_prefix(word)?.strip_prefix('&');
-    after("flex").map(|rest| (Passing::FlexRef, rest)).or_else(|| after("fixed").map(|rest| (Passing::FixedRef, rest)))
+    after("flex")
+        .map(|rest| (Passing::FlexRef, rest))
+        .or_else(|| after("bind").map(|rest| (Passing::BindRef, rest)))
+        .or_else(|| after("fixed").map(|rest| (Passing::FixedRef, rest)))
 }
 
-/// `item` without the word it may start with, `flex` or `fixed`.
+/// `item` without the word it may start with, `flex`, `fixed` or `bind`.
 fn without_word(item: &str) -> &str {
-    ["flex", "fixed"].iter().find_map(|word| item.strip_prefix(word)).unwrap_or(item)
+    ["flex", "fixed", "bind"].iter().find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
 /// `[@r]` or `[flex @r]` at the start of `text`, what a lambda keeps: the

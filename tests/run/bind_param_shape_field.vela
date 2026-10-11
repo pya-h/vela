@@ -1,0 +1,13 @@
+shape Box
+    value: int
+fi
+
+task set_value(bind b: Box)
+    b.value = 5
+fi
+
+task main()
+    bind b = Box { value: 1 }
+    set_value(b)
+    show(b.value)
+fi

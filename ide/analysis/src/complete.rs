@@ -476,8 +476,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if matches!(prev_token, Some(Token::Break | Token::Continue)) {
         return (loop_name_items(&k, byte), word_start, byte);
     }
-    // `flex& name` and `fixed& name`: the `&` is part of the word.
-    if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Flex | Token::Fixed)) {
+    // `flex& name`, `fixed& name` and `bind& name`: the `&` is part of the word.
+    if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Flex | Token::Fixed | Token::Bind)) {
         return (Vec::new(), word_start, byte);
     }
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
@@ -552,7 +552,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 .any(|p| matches!(k.token(p), Some(Token::Arrow)) || k.ident(p) == Some(vela::ast::ALTERS))
         });
         let takes = first_token == Some(&Token::Task) || (prev.is_some_and(|q| method_header(&k, q)) && (!in_kind || says_method));
-        let items = if takes { vec![keyword("flex"), keyword("flex&"), keyword("fixed"), keyword("fixed&")] } else { Vec::new() };
+        let items = if takes { vec![keyword("flex"), keyword("flex&"), keyword("bind"), keyword("bind&"), keyword("fixed"), keyword("fixed&")] } else { Vec::new() };
         return (items, word_start, byte);
     }
 
@@ -845,12 +845,12 @@ fn names_a_result(k: &Knowledge, q: usize) -> bool {
     k.token(p) == Some(&Token::Comma) && result_list(k, p) == Some(true)
 }
 
-/// Whether the comma at position `q` separates the names of a `fixed` or
-/// `flex`, so another name follows it. A comma inside a name's tuple type
+/// Whether the comma at position `q` separates the names of a `fixed`, `flex`
+/// or `bind`, so another name follows it. A comma inside a name's tuple type
 /// separates its items, not names.
 fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     let line = k.line_start(q);
-    matches!(k.token(line), Some(Token::Fixed | Token::Flex))
+    matches!(k.token(line), Some(Token::Fixed | Token::Flex | Token::Bind))
         && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
         && type_paren(k, q).is_none()
 }

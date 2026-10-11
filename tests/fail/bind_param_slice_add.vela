@@ -1,0 +1,11 @@
+; error: 4:5: 'add' changes 'xs', a 'bind' slice; use 'xs.added(…)' or 'xs.without(…)' for a new one, or keep it in a 'flex' variable
+
+task grow(bind xs: [int]@r)
+    xs.add(3)
+fi
+
+task main()
+    region r
+    flex xs = [1, 2, ...] at r
+    grow(xs)
+fi

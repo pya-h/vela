@@ -1,4 +1,4 @@
-; error: 5:5: expected a name, got 'bind', which is a reserved word
+; error: 5:5: only a parameter can be 'flex' or 'bind'; a shape's field changes where the value it is part of is held, as in 'flex p = Point {…}' then 'p.x = 1'
 ; 'bind' is a keyword, so no field takes it as its name.
 
 shape Rope
