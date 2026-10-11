@@ -11632,11 +11632,18 @@ impl Checker {
         let ty = self.check_expr(place);
         self.calling = false;
         let ty = ty?;
-        if mode.can_change_contents(true) {
-            if let Err(error) = self.given_place(place, &Taker::Reference(&name)) {
+        let has_contents = self.bind_has_contents(&ty);
+        let changing = mode.can_change_contents(has_contents);
+        if changing {
+            let taker = match mode {
+                Mode::Bind => Taker::BindReference(&name),
+                _ => Taker::Reference(&name),
+            };
+            if let Err(error) = self.given_place(place, &taker) {
                 // A place that only can't change may still be read through one.
+                let word = if mode == Mode::Bind { "bind&" } else { "fixed&" };
                 return match (self.read_place(place), self.resolved_path(place)) {
-                    (Ok(()), Some(path)) => Err(Error { message: format!("{}; 'fixed& {} = &{}' names it only to read it", error.message, name, path_text(&path)), ..error }),
+                    (Ok(()), Some(path)) => Err(Error { message: format!("{}; '{} {} = &{}' names it only to read it", error.message, word, name, path_text(&path)), ..error }),
                     _ => Err(error),
                 };
             }
@@ -11949,7 +11956,7 @@ impl Checker {
                 if info.result {
                     return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
                 }
-                let bind_taker = matches!(taker, Taker::BindParam(_));
+                let bind_taker = matches!(taker, Taker::BindParam(_) | Taker::BindReference(_));
                 if bind_taker {
                     if info.mode.can_change_contents(true) {
                         return Ok(());
@@ -16476,6 +16483,8 @@ enum Taker<'a> {
     Param(&'a str),
     BindParam(&'a str),
     Reference(&'a str),
+    /// A reference that changes the contents of a place but never assigns it whole.
+    BindReference(&'a str),
     /// A lambda keeping the variable as a place, `[flex& count, @r]`.
     Kept(&'a str),
 }
@@ -16487,6 +16496,7 @@ impl Taker<'_> {
             Taker::Param(name) => format!("'{}' is given the place itself, to change", name),
             Taker::BindParam(name) => format!("'{}' is given the place itself, to change its contents", name),
             Taker::Reference(name) => format!("'flex& {}' names a place to change it", name),
+            Taker::BindReference(name) => format!("'bind& {}' names a place to change its contents", name),
             Taker::Kept(name) => format!("this lambda keeps '{0}' as 'flex& {0}', to change it", name),
         }
     }
@@ -16496,6 +16506,7 @@ impl Taker<'_> {
         match self {
             Taker::Param(name) | Taker::BindParam(name) => format!("giving '{}' to '{}'", place, name),
             Taker::Reference(name) => format!("naming '{}' with 'flex& {}'", place, name),
+            Taker::BindReference(name) => format!("naming '{}' with 'bind& {}'", place, name),
             Taker::Kept(name) => format!("keeping '{}' as 'flex& {}'", place, name),
         }
     }

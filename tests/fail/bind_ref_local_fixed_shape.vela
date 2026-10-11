@@ -1,0 +1,10 @@
+; error: 7:5: 'bind& r' names a place to change its contents, so it needs a place that can change, and 'b' never does (declared at 6:11); a value declared with 'flex' or 'bind' can
+
+shape Box
+    value: int
+fi
+
+task main()
+    fixed b = Box { value: 1 }
+    bind& r = &b
+fi

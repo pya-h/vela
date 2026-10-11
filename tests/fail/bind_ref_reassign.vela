@@ -1,0 +1,8 @@
+; error: 7:5: cannot assign to 'bind' variable 'r' as a whole; a 'bind' name stays bound to one value
+
+task main()
+    fixed n = 1
+    fixed m = 2
+    bind& r = &n
+    r = &m
+fi

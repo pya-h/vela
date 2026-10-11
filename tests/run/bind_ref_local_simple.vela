@@ -1,0 +1,5 @@
+task main()
+    fixed n = 5
+    bind& r = &n
+    show(r)
+fi

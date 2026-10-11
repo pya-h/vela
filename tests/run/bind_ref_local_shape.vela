@@ -1,0 +1,10 @@
+shape Box
+    value: int
+fi
+
+task main()
+    bind b = Box { value: 1 }
+    bind& r = &b
+    r.value = 7
+    show(b.value)
+fi

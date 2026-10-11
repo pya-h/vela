@@ -2412,9 +2412,6 @@ impl Parser {
         if !self.check(Token::Amp) {
             return Ok(false);
         }
-        if word == "bind" {
-            return Err(Error::at(self.peek_span(), "a 'bind' reference is not allowed yet; it comes in a later phase"));
-        }
         if !self.amp_against_word() {
             return Err(Error::at(self.peek_span(), format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
         }
