@@ -2113,6 +2113,7 @@ impl Parser {
         match self.peek() {
             Token::Fixed => self.parse_binding(Mode::Fixed),
             Token::Flex => self.parse_binding(Mode::Flex),
+            Token::Bind => self.parse_binding(Mode::Bind),
             Token::When => self.parse_when(),
             Token::Loop | Token::Endless | Token::Each => {
                 let stmt = match self.peek() {
@@ -2394,6 +2395,9 @@ impl Parser {
         if !self.check(Token::Amp) {
             return Ok(false);
         }
+        if word == "bind" {
+            return Err(Error::at(self.peek_span(), "a 'bind' reference is not allowed yet; it comes in a later phase"));
+        }
         if !self.amp_against_word() {
             return Err(Error::at(self.peek_span(), format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
         }
@@ -2451,7 +2455,7 @@ impl Parser {
         if self.check(Token::When) {
             return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
         }
-        if matches!(self.peek(), Token::Flex | Token::Fixed) {
+        if matches!(self.peek(), Token::Flex | Token::Fixed | Token::Bind) {
             return Err(Error::at(
                 self.peek_span(),
                 "a loop declares names of its own in its start, which '||' ends before its condition, as in 'loop flex i = 0 || i < 10 || i++'",
@@ -4489,7 +4493,6 @@ fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
             }
         }
         let (word, today) = match token {
-            Token::Bind => ("bind", "a variable that never changes is written 'fixed'"),
             Token::Hold => ("hold", "a variable that changes is written 'flex'"),
             _ => continue,
         };

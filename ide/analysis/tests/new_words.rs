@@ -74,6 +74,11 @@ fn only_error(source: &str) -> (usize, usize, String) {
     (d.line.unwrap(), d.col.unwrap(), d.message.clone())
 }
 
+/// Whether `source` has no diagnostics.
+fn checks(source: &str) {
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new(), "{:?}", source);
+}
+
 #[test]
 fn a_program_written_with_the_words_checks() {
     assert_eq!(Analysis::new(PROGRAM).diagnostics(), Vec::new());
@@ -109,16 +114,11 @@ fn the_old_words_are_keywords_still() {
 
 #[test]
 fn an_old_word_written_as_a_variable_word_is_an_error_that_names_the_new_one() {
-    let fixed = "'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'";
     let flex = "'hold' is a reserved word with no use yet; a variable that changes is written 'flex'";
     for (source, line, col, message) in [
-        ("task main()\n    bind x = 1\nfi\n", 2, 5, fixed),
         ("task main()\n    hold x = 1\nfi\n", 2, 5, flex),
         ("task f(hold& n: int)\n    n = 1\nfi\n", 1, 8, flex),
-        ("task f(bind& n: int) -> int\n    <- n\nfi\n", 1, 8, fixed),
-        ("task main()\n    fixed t = (1, 2)\n    bind (a, b) = t\nfi\n", 3, 5, fixed),
         ("task main()\n    region r\n    flex f = [hold @r]() -> int\n        <- 1\n    fi\nfi\n", 3, 15, flex),
-        ("task main()\n    fixed t = (1, 2)\n    bind(a, b) = t\nfi\n", 3, 5, fixed),
         ("task main()\n    fixed t = (1, 2)\n    when t is hold(a, b)\n        show(a)\n    fi\nfi\n", 3, 15, flex),
     ] {
         assert_eq!(only_error(source), (line, col, message.to_string()), "{:?}", source);
@@ -126,9 +126,15 @@ fn an_old_word_written_as_a_variable_word_is_an_error_that_names_the_new_one() {
 }
 
 #[test]
+fn bind_is_a_variable_word_now() {
+    checks("task main()\n    bind x = 1\nfi\n");
+    checks("task main()\n    fixed t = (1, 2)\n    bind (a, b) = t\nfi\n");
+    checks("task main()\n    fixed t = (1, 2)\n    bind(a, b) = t\nfi\n");
+}
+
+#[test]
 fn an_old_word_written_as_a_name_is_an_error_that_it_is_reserved() {
     for (source, line, col, word) in [
-        ("task main()\n    fixed bind = 1\nfi\n", 2, 11, "bind"),
         ("task hold(n: int)\nfi\n", 1, 6, "hold"),
         ("task main()\n    fixed n = 1\n    show(\"{hold}\")\nfi\n", 3, 12, "hold"),
         ("task main()\n    region r\n    fixed s: hold@r = \"a\" at r\nfi\n", 3, 14, "hold"),
@@ -136,6 +142,14 @@ fn an_old_word_written_as_a_name_is_an_error_that_it_is_reserved() {
     ] {
         assert_eq!(only_error(source), (line, col, format!("'{}' is a reserved word, so it can't be a name", word)), "{:?}", source);
     }
+}
+
+#[test]
+fn bind_written_as_a_name_is_an_error() {
+    assert_eq!(
+        only_error("task main()\n    fixed bind = 1\nfi\n"),
+        (2, 11, "expected a name, got 'bind', which is a reserved word".to_string())
+    );
 }
 
 #[test]

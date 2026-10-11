@@ -1553,7 +1553,7 @@ impl<'a> Classifier<'a> {
                 }
                 // `flex&` is one word, and `&a` gives a place at a call.
                 // The name after `flex&` or `fixed&` is still being declared.
-                Token::Amp if matches!(tokens.before(p), Some(Token::Flex | Token::Fixed)) => {
+                Token::Amp if matches!(tokens.before(p), Some(Token::Flex | Token::Fixed | Token::Bind)) => {
                     self.push(range, TokenClass::Keyword, None);
                     // `(flex& int) -> nothing`: in a task's type, a type follows.
                     if was_type {
@@ -1663,17 +1663,20 @@ impl<'a> Classifier<'a> {
                         // `(flex& int) -> nothing`: how a task's type takes a place.
                         // `[flex& count, @r]`: what a lambda keeps names
                         // variables of the code around it, and declares none.
-                        Token::Flex | Token::Fixed if tokens.in_kept_list(p) => {}
-                        Token::Flex | Token::Fixed if was_type => in_type = true,
-                        Token::Flex | Token::Fixed if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
-                        Token::Fixed | Token::Flex => {
+                        Token::Flex | Token::Fixed | Token::Bind if tokens.in_kept_list(p) => {}
+                        Token::Flex | Token::Fixed | Token::Bind if was_type => in_type = true,
+                        Token::Flex | Token::Fixed | Token::Bind if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
+                        Token::Fixed | Token::Flex | Token::Bind => {
                             // `flex& y = &x` and `fixed& y = &x`: references.
                             let reference = tokens.token(p + 1) == Some(&Token::Amp);
-                            let intro = match (*keyword == Token::Fixed, reference) {
-                                (true, false) => "fixed",
-                                (true, true) => "fixed&",
-                                (false, false) => "flex",
-                                (false, true) => "flex&",
+                            let intro = match (keyword.clone(), reference) {
+                                (Token::Fixed, false) => "fixed",
+                                (Token::Fixed, true) => "fixed&",
+                                (Token::Bind, false) => "bind",
+                                (Token::Bind, true) => "bind&",
+                                (Token::Flex, false) => "flex",
+                                (Token::Flex, true) => "flex&",
+                                _ => unreachable!(),
                             };
                             declaring = Some(intro);
                             declaring_list = Some(intro);

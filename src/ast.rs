@@ -2028,9 +2028,15 @@ impl Mode {
     }
 
     /// Whether the variable's contents may change: fields, items, or what a
-    /// pointer it holds points to.
-    pub fn can_change_contents(self) -> bool {
-        matches!(self, Mode::Bind | Mode::Flex)
+    /// pointer it holds points to. For `bind`, this is true only when the type
+    /// actually has contents that can change; a `bind` of a simple type acts as
+    /// `fixed`.
+    pub fn can_change_contents(self, has_contents: bool) -> bool {
+        match self {
+            Mode::Flex => true,
+            Mode::Fixed => false,
+            Mode::Bind => has_contents,
+        }
     }
 
     /// Whether the variable never changes in any way.

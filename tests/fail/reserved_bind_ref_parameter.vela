@@ -1,4 +1,4 @@
-; error: 4:11: 'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'
+; error: 4:11: expected a name, got 'bind', which is a reserved word
 ; 'bind&' is not the caller's place only read: that is 'fixed&'.
 
 task read(bind& p: int) -> int

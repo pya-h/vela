@@ -1,0 +1,14 @@
+; error: 13:5: 'Color.paint' changes the value it is called on, so it needs a place that can change, and 'c' is 'bind' of a type with no contents that can change, so it acts as 'fixed'
+
+kind Color
+    Red
+    Green
+    alters paint()
+        .this = Color.Green
+    fi
+fi
+
+task main()
+    bind c = Color.Red
+    c.paint()
+fi

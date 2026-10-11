@@ -1,9 +1,0 @@
-; error: 7:5: 'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'
-; Names that take a tuple apart may be written against the word, 'fixed(a, b) = t',
-; so the message names the word to write there too.
-
-task main()
-    fixed t = (1, 2)
-    bind(a, b) = t
-    show(a + b)
-fi

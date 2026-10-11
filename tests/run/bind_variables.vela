@@ -1,0 +1,26 @@
+shape Counter
+    count: int
+    alters bump()
+        .count = .count + 1
+    fi
+fi
+
+shape Point
+    x: int
+fi
+
+task main()
+    region r default
+    bind arr = [0, 0]
+    arr[0] = 1
+    bind xs = [10, 20, ...]
+    xs[1] = 30
+    bind m = new [:int]
+    m["a"] = 5
+    bind p = new Point(Point { x: 1 })
+    p^.x = 7
+    bind c = Counter { count: 0 }
+    c.count = 3
+    c.bump()
+    show(arr[0], " ", xs[1], " ", m["a"], " ", p^.x, " ", c.count)
+fi

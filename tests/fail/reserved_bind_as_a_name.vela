@@ -1,5 +1,5 @@
-; error: 5:11: 'bind' is a reserved word, so it can't be a name
-; 'bind' is a reserved word, so nothing takes it as a name.
+; error: 5:11: expected a name, got 'bind', which is a reserved word
+; 'bind' is a keyword, so nothing takes it as a name.
 
 task main()
     fixed bind = 1

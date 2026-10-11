@@ -1,0 +1,7 @@
+; error: 6:5: 'add' changes 'xs', a 'bind' slice; use 'xs.added(…)' or 'xs.without(…)' for a new one, or keep it in a 'flex' variable
+
+task main()
+    region r default
+    bind xs = [1, 2, ...]
+    xs.add(3)
+fi

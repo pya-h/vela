@@ -1,0 +1,10 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     fixed t = (1, 2)
+    | keyword:fixed  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+  3 |     bind (a, b) = t
+    | keyword:bind  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:=  variable:t
+  4 |     show(a + b)
+    | builtin-fn:show  punctuation:(  variable:a  operator:+  variable:b  punctuation:)
+  5 | fi
+    | keyword:fi

@@ -1,0 +1,6 @@
+; error: 5:5: cannot assign to 'bind' variable 'n' as a whole; a 'bind' name stays bound to one value
+
+task main()
+    bind n = 1
+    n = 2
+fi

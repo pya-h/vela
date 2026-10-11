@@ -1,0 +1,48 @@
+  1 | shape Counter
+    | keyword:shape  type:Counter
+  2 |     count: int
+    | field:count  punctuation::  type-builtin:int
+  3 |     alters bump()
+    | keyword:alters  method:bump  punctuation:(  punctuation:)
+  4 |         .count = .count + 1
+    | punctuation:.  field:count  operator:=  punctuation:.  field:count  operator:+  number:1
+  5 |     fi
+    | keyword:fi
+  6 | fi
+    | keyword:fi
+  8 | shape Point
+    | keyword:shape  type:Point
+  9 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 10 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     region r default
+    | keyword:region  region:r  keyword:default
+ 14 |     bind arr = [0, 0]
+    | keyword:bind  variable:arr  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:]
+ 15 |     arr[0] = 1
+    | variable:arr  punctuation:[  number:0  punctuation:]  operator:=  number:1
+ 16 |     bind xs = [10, 20, ...]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  keyword:...  punctuation:]
+ 17 |     xs[1] = 30
+    | variable:xs  punctuation:[  number:1  punctuation:]  operator:=  number:30
+ 18 |     bind m = new [:int]
+    | keyword:bind  variable:m  operator:=  keyword:new  punctuation:[  punctuation::  type-builtin:int  punctuation:]
+ 19 |     m["a"] = 5
+    | variable:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:5
+ 20 |     bind p = new Point(Point { x: 1 })
+    | keyword:bind  variable:p  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:)
+ 21 |     p^.x = 7
+    | variable:p  operator:^  punctuation:.  field:x  operator:=  number:7
+ 22 |     bind c = Counter { count: 0 }
+    | keyword:bind  variable:c  operator:=  type:Counter  punctuation:{  field:count  punctuation::  number:0  punctuation:}
+ 23 |     c.count = 3
+    | variable:c  punctuation:.  field:count  operator:=  number:3
+ 24 |     c.bump()
+    | variable:c  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 25 |     show(arr[0], " ", xs[1], " ", m["a"], " ", p^.x, " ", c.count)
+    | builtin-fn:show  punctuation:(  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:[  string:"a"  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:p  operator:^  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:count  punctuation:)
+ 26 | fi
+    | keyword:fi

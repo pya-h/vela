@@ -865,13 +865,17 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
       </ul>
 
       <h3>Bindings</h3>
-      <p><code>fixed</code> creates an immutable binding. <code>flex</code> creates a mutable variable. Written
+      <p><code>fixed</code> creates an immutable binding. <code>flex</code> creates a mutable variable. <code>bind</code>
+        creates a name bound to one value: it can never be assigned as a whole, but its contents may change. Written
         <code>fixed&amp;</code> or <code>flex&amp;</code>, either is another name for a place instead (see
-        <a href="#references">References</a>).</p>
+        <a href="#references">References</a>); <code>bind&amp;</code> is not available yet.</p>
       <pre><span class="keyword">fixed</span> pi = 3.14
 <span class="keyword">flex</span> count = 0
 count = count + 1
-<span class="keyword">flex</span> total: float = 0.0     <span class="comment">; the type can be written out</span></pre>
+<span class="keyword">flex</span> total: float = 0.0     <span class="comment">; the type can be written out</span>
+<span class="keyword">bind</span> scores = [<span class="number">0</span>, <span class="number">0</span>, ...] <span class="keyword">at</span> r
+scores[<span class="number">0</span>] = <span class="number">10</span>              <span class="comment">; the slice's items may change</span>
+<span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span></pre>
       <p id="steps">
         <strong>Steps.</strong> <code>x++</code> and <code>x--</code> count a place up or down by one, and
         <code>x += v</code> gives it <code>x + v</code>, as do <code>-=</code>, <code>*=</code>, <code>/=</code>,

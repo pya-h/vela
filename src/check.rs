@@ -4261,7 +4261,8 @@ impl Checker {
                 // what a fixed name owns, and one that never changes owns it too.
                 for (i, bound) in names.iter().enumerate() {
                     let Some(value) = (if forwarded { init.first() } else { init.get(i) }) else { continue };
-                    if mode.can_change_contents() {
+                    let has_contents = bound.ty.as_ref().map_or_else(|| given.get(i).is_some_and(|ty| self.bind_has_contents(ty)), |ty| self.bind_has_contents(ty));
+                    if mode.can_change_contents(has_contents) {
                         if let Some(ty) = given.get(i).filter(|_| bound.name != DISCARD || !bound.parts.is_empty()) {
                             self.hand_as(value, ty, HandedTo::Variable(bound_text(bound)));
                         }
@@ -4276,7 +4277,7 @@ impl Checker {
                 }
                 for (name, at, ty) in declared {
                     // A `[flex @r]` lambda changes what it keeps.
-                    if held_lambda(&ty) && !mode.can_change_contents() {
+                    if held_lambda(&ty) && !mode.can_change_contents(false) {
                         return err(at, format!("'{}' is a '[flex @r]' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex {} = …'", name, name));
                     }
                     if holds_held_lambda(&ty) {
@@ -5109,7 +5110,7 @@ impl Checker {
     /// one name takes the value, and `(a, b)` the items of a tuple. `mode`
     /// is `flex` or `bind` written around them.
     fn bound_names(&self, names: &Names, ty: &Type, mode: Mode) -> Result<Vec<Declared>> {
-        let mode = if names.mode.can_change_contents() { names.mode } else { mode };
+        let mode = if names.mode.can_change_contents(true) { names.mode } else { mode };
         if names.parts.is_empty() {
             return Ok(vec![(names.name.clone(), names.span, ty.clone(), mode)]);
         }
@@ -5156,8 +5157,14 @@ impl Checker {
                     if name == THIS {
                         return Err(self.this_cannot_change(span, &format!("assigning '{}'", THIS)));
                     }
-                    return err(span, format!("cannot assign to immutable variable '{}'{}", name, self.param_hint(name, info)));
+                    let message = if info.mode == Mode::Bind {
+                        format!("cannot assign to 'bind' variable '{}' as a whole; a 'bind' name stays bound to one value", name)
+                    } else {
+                        format!("cannot assign to immutable variable '{}'{}", name, self.param_hint(name, info))
+                    };
+                    return err(span, message);
                 }
+
                 let ty = info.ty.clone();
                 expr.ty = Some(ty.clone());
                 Ok(ty)
@@ -5165,7 +5172,7 @@ impl Checker {
             ExprKind::Field(base, field) => {
                 // A member of the value a method is called on, which only a
                 // method marked `alters` may change.
-                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents()) {
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents(true)) {
                     return Err(self.this_cannot_change(span, &format!("assigning '{}{}'", MODULE_SEPARATOR, field)));
                 }
                 let base_ty = self.check_field_base(base, written)?;
@@ -5252,7 +5259,8 @@ impl Checker {
                 if info.result {
                     return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mode.can_change_contents() && matches!(info.ty, Type::Map(..)) {
+                let has_contents = self.bind_has_contents(&info.ty);
+                if !info.mode.can_change_contents(has_contents) && matches!(info.ty, Type::Map(..)) {
                     // A parameter's hint says how to write one that changes.
                     let hint = match self.param_hint(name, info) {
                         hint if hint.is_empty() => "; keep the map in a 'flex' variable to change it".to_string(),
@@ -5260,7 +5268,7 @@ impl Checker {
                     };
                     return err(base.span, format!("'m[k] = v' changes '{}', which is immutable{}", name, hint));
                 }
-                if !info.mode.can_change_contents() {
+                if !info.mode.can_change_contents(has_contents) {
                     return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
             }
@@ -5293,7 +5301,7 @@ impl Checker {
                 if info.result {
                     return err(place.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mode.can_change_contents() {
+                if !info.mode.can_change_contents(self.bind_has_contents(&info.ty)) {
                     return err(place.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 Ok(())
@@ -5325,7 +5333,7 @@ impl Checker {
         match &place.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, place.span)?;
-                if info.mode.can_change_contents() || info.result {
+                if info.mode.can_change_contents(self.bind_has_contents(&info.ty)) || info.result {
                     return Ok(());
                 }
                 if name == THIS {
@@ -5425,7 +5433,7 @@ impl Checker {
     /// what it keeps, from what it was given; one that is a parameter may
     /// send back anything the caller's lambda keeps.
     fn name_owners(&self, name: &str, info: &VarInfo) -> Vec<Own> {
-        if info.mode.can_change_contents() || info.result {
+        if info.mode.can_change_contents(self.bind_has_contents(&info.ty)) || info.result {
             return Vec::new();
         }
         let mut owners = info.owners.clone();
@@ -5612,6 +5620,18 @@ impl Checker {
         self.twofold(ty) && !holds_twofold(ty, &self.regional, false) && !self.may_hold(ty, false)
     }
 
+    /// Whether a `bind` variable of type `ty` may change its contents: arrays,
+    /// slices, maps, pointers, and shapes have contents that can change; tuples,
+    /// kinds, task values, simple types and text do not.
+    fn bind_has_contents(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => true,
+            Type::Named(name, _) => self.shapes.contains_key(name),
+            Type::Applied(applied) => self.shapes.contains_key(&applied.name),
+            _ => false,
+        }
+    }
+
     /// Whether `ty` holds a type the generic task being checked takes, which
     /// may be given one that holds a slice, a map or a pointer: any but one
     /// that must be `frozen`. With `lambdas`, also one a lambda sends back.
@@ -5648,7 +5668,7 @@ impl Checker {
             if name == DISCARD || !self.twofold(ty) {
                 continue;
             }
-            if mode.can_change_contents() {
+            if mode.can_change_contents(self.bind_has_contents(ty)) {
                 let handed = self.handed(*at, owners.clone(), HandedTo::Variable(name.clone()), &self.copied_text(source), ty);
                 self.handed.push(handed);
             } else {
@@ -5773,7 +5793,7 @@ impl Checker {
         for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
             for name in &kept.uses {
                 let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
-                if info.mode.can_change_contents() || info.result || !holds_twofold(&info.ty, &self.regional, true) {
+                if info.mode.can_change_contents(self.bind_has_contents(&info.ty)) || info.result || !holds_twofold(&info.ty, &self.regional, true) {
                     continue;
                 }
                 let rule = "nothing changes through what a fixed name owns";
@@ -5883,7 +5903,7 @@ impl Checker {
                 if is_shape && info.result {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if is_shape && !info.mode.can_change_contents() {
+                if is_shape && !info.mode.can_change_contents(self.bind_has_contents(&info.ty)) {
                     return err(span, format!("cannot assign to a field of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 self.check_expr(base)
@@ -8237,7 +8257,7 @@ impl Checker {
         }
         // Calling it changes what it keeps, so it is called through a place
         // that changes.
-        if held_lambda(&ty) && !mode.can_change_contents() {
+        if held_lambda(&ty) && !mode.can_change_contents(true) {
             return err(span, format!("'{0}' is a '[flex @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' variable or a 'flex&', which '{0}' isn't", name));
         }
         if self.unset.contains(name) {
@@ -9311,7 +9331,8 @@ impl Checker {
                     );
                 }
                 let needs_flex = matches!(info.ty, Type::Slice(..));
-                if (needs_flex && info.mode != Mode::Flex) || (!needs_flex && !info.mode.can_change_contents() && matches!(info.ty, Type::Map(..))) {
+                let has_contents = self.bind_has_contents(&info.ty);
+                if (needs_flex && info.mode != Mode::Flex) || (!needs_flex && !info.mode.can_change_contents(has_contents) && matches!(info.ty, Type::Map(..))) {
                     if info.param && info.passing == Passing::FixedRef {
                         return err(
                             items.span,
@@ -9323,7 +9344,12 @@ impl Checker {
                         return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, self.param_hint(&name, info)));
                     }
                     let what = if matches!(info.ty, Type::Map(..)) { "map" } else { "slice" };
-                    return err(items.span, format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what));
+                    let message = if info.mode == Mode::Bind {
+                        format!("'{}' changes '{}', a 'bind' {}; use '{}.added(…)' or '{}.without(…)' for a new one, or keep it in a 'flex' variable", word, name, what, name, name)
+                    } else {
+                        format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what)
+                    };
+                    return err(items.span, message);
                 }
                 self.check_expr(items)?
             }
@@ -10926,7 +10952,16 @@ impl Checker {
         match &value.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, value.span)?;
-                if info.mode.can_change_contents() {
+                let has_contents = self.bind_has_contents(&info.ty);
+                if info.mode.can_change_contents(has_contents) {
+                    let kind_name = match &info.ty {
+                        Type::Named(name, _) => Some(name.as_str()),
+                        Type::Applied(applied) => Some(applied.name.as_str()),
+                        _ => None,
+                    };
+                    if info.mode == Mode::Bind && kind_name.is_some_and(|name| self.kinds.contains_key(name)) {
+                        return refuse("it needs a place that can be assigned as a whole, and a 'bind' name can't have that; an 'alters' method of a kind may replace the whole value".to_string());
+                    }
                     return Ok(());
                 }
                 if name == THIS {
@@ -10954,6 +10989,12 @@ impl Checker {
                 // A lambda's copy: the hint says which lambda changes it.
                 if info.kept {
                     return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
+                }
+                if info.mode == Mode::Bind {
+                    return refuse(format!(
+                        "it needs a place that can change, and '{}' is 'bind' of a type with no contents that can change, so it acts as 'fixed'",
+                        name
+                    ));
                 }
                 refuse(format!(
                     "it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can",
@@ -11578,7 +11619,7 @@ impl Checker {
         let ty = self.check_expr(place);
         self.calling = false;
         let ty = ty?;
-        if mode.can_change_contents() {
+        if mode.can_change_contents(true) {
             if let Err(error) = self.given_place(place, &Taker::Reference(&name)) {
                 // A place that only can't change may still be read through one.
                 return match (self.read_place(place), self.resolved_path(place)) {
@@ -11606,7 +11647,7 @@ impl Checker {
         let at = bound.span;
         // A `fixed&` owns what its place is owned by; a `flex&` names a place
         // that changes, unless reached from a value made here.
-        if mode.can_change_contents() {
+        if mode.can_change_contents(true) {
             self.hand_written(place, None);
         } else {
             let owners = self.owners(place);
@@ -11913,7 +11954,7 @@ impl Checker {
                 refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can", name, info.span.line, info.span.col))
             }
             ExprKind::Field(base, field) => {
-                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents()) {
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents(true)) {
                     return Err(self.this_cannot_change(place.span, &taker.using(&format!("{}{}", MODULE_SEPARATOR, field))));
                 }
                 match &base.ty {

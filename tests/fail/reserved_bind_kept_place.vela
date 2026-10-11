@@ -1,4 +1,4 @@
-; error: 7:20: 'bind' is a reserved word with no use yet; a variable that never changes is written 'fixed'
+; error: 7:20: expected an expression, got 'bind'
 ; A lambda keeps a place it only reads as 'fixed&'.
 
 task main()
