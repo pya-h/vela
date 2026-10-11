@@ -8,7 +8,7 @@ use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Passing, Span, Taken, Type, unqualified};
+use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Mode, Passing, Span, Taken, Type, unqualified};
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::TokenClass;
@@ -480,14 +480,14 @@ impl<'a> Knowledge<'a> {
 
     /// The position of the variant's name in the pattern after the `case` or
     /// `is` at `case`: `Circle`, `Shape.Circle`, or `m.Shape.Circle`.
-    /// Whether the pattern name at `name` was written `flex name`, directly or
+    /// The mode of the pattern name at `name`, written `flex name` or
     /// inside a `flex ( … )`, so it can be assigned.
-    pub fn pattern_name_mutable(&self, name: usize) -> bool {
+    pub fn pattern_name_mode(&self, name: usize) -> Mode {
         let line = self.line_start(name);
         let mut at = name;
         loop {
             if at > line && self.token(at - 1) == Some(&Token::Flex) {
-                return true;
+                return Mode::Flex;
             }
             let mut depth = 0usize;
             // The `(` of the group this name is in, if any.
@@ -503,7 +503,7 @@ impl<'a> Knowledge<'a> {
                 }
                 _ => false,
             }) else {
-                return false;
+                return Mode::Fixed;
             };
             at = open;
         }

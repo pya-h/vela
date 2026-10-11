@@ -157,7 +157,7 @@ struct Handed {
 struct VarInfo {
     /// `Type::Region` for a region.
     ty: Type,
-    mutable: bool,
+    mode: Mode,
     /// Where the variable was declared.
     span: Span,
     /// For a region: whether `new` can allocate in it. A region a task only
@@ -208,8 +208,8 @@ enum TargetType {
 }
 
 /// A name a pattern or a plan B declares: its name, where it is written, its
-/// type, and whether it can be assigned (`flex` in a pattern).
-type Declared = (String, Span, Type, bool);
+/// type, and its mode (`flex` or `bind` in a pattern, else `fixed`).
+type Declared = (String, Span, Type, Mode);
 
 /// Where a type is written, which decides the regions it may name.
 #[derive(Clone, Copy, PartialEq)]
@@ -3123,7 +3123,8 @@ impl Checker {
                 // and a parameter the task holds a copy of (`flex x: T`) or the
                 // caller's place (`flex& x: T`).
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                self.define_param(&param.name, known(&param.ty), alters || param.passing.changes(), param.passing, param.span)?;
+                let mode = if alters || param.passing.changes() { Mode::Flex } else { Mode::Fixed };
+                self.define_param(&param.name, known(&param.ty), mode, param.passing, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -3432,7 +3433,7 @@ impl Checker {
         // A name written with `=>` follows the rule of names, as a statement's does.
         if let Some((name, at)) = value.name.as_ref().filter(|_| value.arrow) {
             self.push_scope();
-            let free = self.define(name, Type::Unknown, false, *at);
+            let free = self.define(name, Type::Unknown, Mode::Fixed, *at);
             self.pop_scope();
             free?;
         }
@@ -3698,7 +3699,7 @@ impl Checker {
         let result = bindings
             .into_iter()
             .filter(|(name, _, _, _)| name != DISCARD)
-            .try_for_each(|(name, span, ty, mutable)| self.define(&name, ty, mutable, span))
+            .try_for_each(|(name, span, ty, mode)| self.define(&name, ty, mode, span))
             .and_then(|()| self.check_block(block));
         self.pop_scope();
         result
@@ -3707,7 +3708,7 @@ impl Checker {
     /// Declares a variable in the innermost scope. Vela has no shadowing: a
     /// name cannot be declared while another variable of that name is visible.
     /// (Sibling blocks may reuse names, since neither is visible to the other.)
-    fn define(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
+    fn define(&mut self, name: &str, ty: Type, mode: Mode, span: Span) -> Result<()> {
         // A variable named like a variant would make a bare `Empty` ambiguous.
         if let Some(info) = self.variant_in_scope(name) {
             let at = info.variant.span;
@@ -3775,7 +3776,7 @@ impl Checker {
             Some(i) => self.bound_owners.swap_remove(i).1,
             None => Vec::new(),
         };
-        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false, owners });
+        scope.names.insert(name.to_string(), VarInfo { ty, mode, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false, owners });
         match clash {
             Some(clash) => err(span, clash),
             None => Ok(()),
@@ -3784,8 +3785,8 @@ impl Checker {
 
     /// Declares a parameter, which the task's header gives it. Only the value a
     /// method marked `alters` is called on can change.
-    fn define_param(&mut self, name: &str, ty: Type, mutable: bool, passing: Passing, span: Span) -> Result<()> {
-        self.define(name, ty, mutable, span)?;
+    fn define_param(&mut self, name: &str, ty: Type, mode: Mode, passing: Passing, span: Span) -> Result<()> {
+        self.define(name, ty, mode, span)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.param = true;
             info.passing = passing;
@@ -3796,7 +3797,7 @@ impl Checker {
     /// Declares a named result, which reads like a variable and is set only by
     /// `total <- value`.
     fn define_result(&mut self, name: &str, ty: Type, span: Span) -> Result<()> {
-        self.define(name, ty, false, span)?;
+        self.define(name, ty, Mode::Fixed, span)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.result = true;
         }
@@ -3812,7 +3813,7 @@ impl Checker {
     /// Declares a region in the innermost scope; `allocates` tells whether
     /// `new` can allocate in it.
     fn define_region(&mut self, name: &str, span: Span, allocates: bool) -> Result<()> {
-        self.define(name, Type::Region, false, span)?;
+        self.define(name, Type::Region, Mode::Fixed, span)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.allocates = allocates;
         }
@@ -4016,12 +4017,12 @@ impl Checker {
     /// what a pattern or a loop declares is visible in its own block only, which
     /// the statement checks itself.
     fn declare_unchecked(&mut self, stmt: &Stmt) {
-        let StmtKind::Binding { names, mutable, .. } = &stmt.kind else { return };
+        let StmtKind::Binding { names, mode, .. } = &stmt.kind else { return };
         for bound in names.iter().flat_map(Bound::leaves) {
             if bound.name != DISCARD && self.lookup(&bound.name).is_none() {
                 // A name that can't be declared at all (one already taken by a
                 // variant, say) is the statement's own mistake, already reported.
-                let _ = self.define(&bound.name, Type::Unknown, *mutable, bound.span);
+                let _ = self.define(&bound.name, Type::Unknown, *mode, bound.span);
             }
         }
     }
@@ -4176,8 +4177,8 @@ impl Checker {
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
             }
-            StmtKind::Binding { names, mutable, reference: true, init } => self.check_reference(names, *mutable, init),
-            StmtKind::Binding { names, mutable, init, .. } => {
+            StmtKind::Binding { names, mode, reference: true, init } => self.check_reference(names, *mode, init),
+            StmtKind::Binding { names, mode, init, .. } => {
                 // `fixed r = loop …`: the variable names the loop it gives, and a
                 // `LoopResult` written with no types there takes the loop's,
                 // `fixed r: int ~ LoopResult = loop …`.
@@ -4210,7 +4211,7 @@ impl Checker {
                 }
                 // `flex y = &x`: a copy, where a reference was maybe meant.
                 if let Some(marked) = init.iter().find(|value| matches!(value.kind, ExprKind::Ref(_))) {
-                    let word = if *mutable { "flex" } else { "fixed" };
+                    let word = mode.word();
                     let name = names.first().map_or("y", |bound| bound.name.as_str());
                     return err(marked.span, format!("'{0} {1}' takes a copy, so leave out '&'; '{0}& {1} = &…' is another name for the place", word, name));
                 }
@@ -4256,11 +4257,11 @@ impl Checker {
                     }
                     declared.push((name, at, ty));
                 }
-                // What the names are given: a `flex` one may not take what a
-                // fixed name owns, and one that never changes owns it too.
+                // What the names are given: a `flex` or `bind` one may not take
+                // what a fixed name owns, and one that never changes owns it too.
                 for (i, bound) in names.iter().enumerate() {
                     let Some(value) = (if forwarded { init.first() } else { init.get(i) }) else { continue };
-                    if *mutable {
+                    if mode.can_change_contents() {
                         if let Some(ty) = given.get(i).filter(|_| bound.name != DISCARD || !bound.parts.is_empty()) {
                             self.hand_as(value, ty, HandedTo::Variable(bound_text(bound)));
                         }
@@ -4275,14 +4276,14 @@ impl Checker {
                 }
                 for (name, at, ty) in declared {
                     // A `[flex @r]` lambda changes what it keeps.
-                    if held_lambda(&ty) && !*mutable {
+                    if held_lambda(&ty) && !mode.can_change_contents() {
                         return err(at, format!("'{}' is a '[flex @r]' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex {} = …'", name, name));
                     }
                     if holds_held_lambda(&ty) {
                         return err(at, format!("'{}' would hold a '[flex @r]' lambda inside a value, which is copied with it; a '[flex @r]' lambda is held alone, in a 'flex' variable", name));
                     }
                     if name != DISCARD {
-                        self.define(&name, ty, *mutable, at)?;
+                        self.define(&name, ty, *mode, at)?;
                     }
                 }
                 Ok(())
@@ -4407,7 +4408,7 @@ impl Checker {
                 // The name is one in scope as any other: it may match no name
                 // declared where it is seen, and nothing inside it may take it.
                 self.push_scope();
-                let free = self.define(name, Type::Unknown, false, span);
+                let free = self.define(name, Type::Unknown, Mode::Fixed, span);
                 self.pop_scope();
                 // The loop is still checked, as named, for mistakes of its own.
                 if let Err(error) = free {
@@ -4459,16 +4460,16 @@ impl Checker {
                 self.loops.push(named);
                 self.push_scope();
                 // Its names own what the items are owned by.
-                let mut each_names: Vec<Declared> = vec![(name.clone(), span, item.clone(), false)];
+                let mut each_names: Vec<Declared> = vec![(name.clone(), span, item.clone(), Mode::Fixed)];
                 if let (Some((second, at)), Some(value)) = (second.as_ref(), value.as_ref()) {
-                    each_names.push((second.clone(), *at, value.clone(), false));
+                    each_names.push((second.clone(), *at, value.clone(), Mode::Fixed));
                 }
                 self.bind_from(&each_names, range);
-                let mut result = if name == DISCARD { Ok(()) } else { self.define(name, item, false, span) };
+                let mut result = if name == DISCARD { Ok(()) } else { self.define(name, item, Mode::Fixed, span) };
                 if let (Ok(()), Some((second, at)), Some(value)) = (&result, second.as_ref(), value)
                     && second != DISCARD
                 {
-                    result = self.define(second, value, false, *at);
+                    result = self.define(second, value, Mode::Fixed, *at);
                 }
                 let result = result.and_then(|()| {
                     if !gives {
@@ -4752,9 +4753,9 @@ impl Checker {
                 Some(pattern) => {
                     let bindings = self.part_bindings(&ty, &mut current.value, pattern)?;
                     self.bind_from(&bindings, &current.value);
-                    for (name, span, ty, mutable) in bindings {
+                    for (name, span, ty, mode) in bindings {
                         if name != DISCARD {
-                            self.define(&name, ty, mutable, span)?;
+                            self.define(&name, ty, mode, span)?;
                         }
                     }
                 }
@@ -4774,7 +4775,7 @@ impl Checker {
         let result = bindings
             .into_iter()
             .filter(|(name, _, _, _)| name != DISCARD)
-            .try_for_each(|(name, span, ty, mutable)| self.define(&name, ty, mutable, span))
+            .try_for_each(|(name, span, ty, mode)| self.define(&name, ty, mode, span))
             .and_then(|()| self.value_block_tail(body, at, branches));
         self.pop_scope();
         result
@@ -4935,8 +4936,8 @@ impl Checker {
             TypedForm::Named(names) if !names.parts.is_empty() => {
                 return err(names.span, "the read is a maybe, so one name takes it; to take the item apart, write it in braces, as in 'is maybe (int, text) {(a, b)}'");
             }
-            TypedForm::Named(names) => vec![(names.name.clone(), names.span, Type::Maybe(Box::new(held)), names.mutable)],
-            TypedForm::Value(names) => self.bound_names(names, &held, false)?,
+            TypedForm::Named(names) => vec![(names.name.clone(), names.span, Type::Maybe(Box::new(held)), names.mode)],
+            TypedForm::Value(names) => self.bound_names(names, &held, Mode::Fixed)?,
         };
         Ok(((Type::Maybe(wanted)), bindings))
     }
@@ -5004,7 +5005,7 @@ impl Checker {
         // either; the names the pattern writes are declared without a type, so
         // the block it guards still reads (see `Type::Unknown`).
         if subject.unknown() {
-            return Ok(pattern.bindings().into_iter().map(|names| (names.name.clone(), names.span, Type::Unknown, names.mutable)).collect());
+            return Ok(pattern.bindings().into_iter().map(|names| (names.name.clone(), names.span, Type::Unknown, names.mode)).collect());
         }
         // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
         if let PatternKind::Value(names) | PatternKind::Fail(names) = &pattern.kind
@@ -5035,7 +5036,7 @@ impl Checker {
                 binds
                     .iter()
                     .zip(&variant.payload)
-                    .map(|(names, field)| self.bound_names(names, &self.field_in(&field.ty, region), false))
+                    .map(|(names, field)| self.bound_names(names, &self.field_in(&field.ty, region), Mode::Fixed))
                     .collect::<Result<Vec<_>>>()
                     .map(|bound| bound.concat())
             }
@@ -5059,7 +5060,7 @@ impl Checker {
                     .zip(&variant.payload)
                     .map(|(names_bound, field)| {
                         let ty = field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone()));
-                        self.bound_names(names_bound, &self.field_in(&ty, &applied.region), false)
+                        self.bound_names(names_bound, &self.field_in(&ty, &applied.region), Mode::Fixed)
                     })
                     .collect::<Result<Vec<_>>>()
                     .map(|bound| bound.concat())
@@ -5082,16 +5083,16 @@ impl Checker {
                     err(span, format!("unknown variant '{}'", tag))
                 }
             }
-            (PatternKind::Value(names), Type::Maybe(inner)) => self.bound_names(names, inner, false),
+            (PatternKind::Value(names), Type::Maybe(inner)) => self.bound_names(names, inner, Mode::Fixed),
             (PatternKind::Value(names), Type::Or(value, _)) => {
                 if **value == Type::Nothing && names.name != DISCARD {
                     return err(names.span, "this success has no value to name; write '{_}'");
                 }
-                self.bound_names(names, value, false)
+                self.bound_names(names, value, Mode::Fixed)
             }
-            (PatternKind::Fail(names), Type::Or(_, error)) => self.bound_names(names, error, false),
+            (PatternKind::Fail(names), Type::Or(_, error)) => self.bound_names(names, error, Mode::Fixed),
             // `(x, y)`: the items of a tuple, which always match.
-            (PatternKind::Tuple(names), _) => self.bound_names(names, subject, false),
+            (PatternKind::Tuple(names), _) => self.bound_names(names, subject, Mode::Fixed),
             (PatternKind::Value(_), other) => {
                 err(span, format!("'{{…}}' matches the value in a maybe or a 'T ~ E', but this value is {}", other))
             }
@@ -5105,19 +5106,19 @@ impl Checker {
     }
 
     /// The names `names` binds from a value of type `ty`, with their types:
-    /// one name takes the value, and `(a, b)` the items of a tuple. `mutable`
-    /// is a `flex` written around them.
-    fn bound_names(&self, names: &Names, ty: &Type, mutable: bool) -> Result<Vec<Declared>> {
-        let mutable = mutable || names.mutable;
+    /// one name takes the value, and `(a, b)` the items of a tuple. `mode`
+    /// is `flex` or `bind` written around them.
+    fn bound_names(&self, names: &Names, ty: &Type, mode: Mode) -> Result<Vec<Declared>> {
+        let mode = if names.mode.can_change_contents() { names.mode } else { mode };
         if names.parts.is_empty() {
-            return Ok(vec![(names.name.clone(), names.span, ty.clone(), mutable)]);
+            return Ok(vec![(names.name.clone(), names.span, ty.clone(), mode)]);
         }
         let items = self.tuple_items(ty, names.parts.len(), names.span)?;
         names
             .parts
             .iter()
             .zip(&items)
-            .map(|(part, item)| self.bound_names(part, item, mutable))
+            .map(|(part, item)| self.bound_names(part, item, mode))
             .collect::<Result<Vec<_>>>()
             .map(|bound| bound.concat())
     }
@@ -5151,7 +5152,7 @@ impl Checker {
                 if info.result {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mutable {
+                if !info.mode.can_assign() {
                     if name == THIS {
                         return Err(self.this_cannot_change(span, &format!("assigning '{}'", THIS)));
                     }
@@ -5164,7 +5165,7 @@ impl Checker {
             ExprKind::Field(base, field) => {
                 // A member of the value a method is called on, which only a
                 // method marked `alters` may change.
-                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents()) {
                     return Err(self.this_cannot_change(span, &format!("assigning '{}{}'", MODULE_SEPARATOR, field)));
                 }
                 let base_ty = self.check_field_base(base, written)?;
@@ -5251,7 +5252,7 @@ impl Checker {
                 if info.result {
                     return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mutable && matches!(info.ty, Type::Map(..)) {
+                if !info.mode.can_change_contents() && matches!(info.ty, Type::Map(..)) {
                     // A parameter's hint says how to write one that changes.
                     let hint = match self.param_hint(name, info) {
                         hint if hint.is_empty() => "; keep the map in a 'flex' variable to change it".to_string(),
@@ -5259,7 +5260,7 @@ impl Checker {
                     };
                     return err(base.span, format!("'m[k] = v' changes '{}', which is immutable{}", name, hint));
                 }
-                if !info.mutable {
+                if !info.mode.can_change_contents() {
                     return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
             }
@@ -5292,7 +5293,7 @@ impl Checker {
                 if info.result {
                     return err(place.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mutable {
+                if !info.mode.can_change_contents() {
                     return err(place.span, format!("cannot assign to an item of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 Ok(())
@@ -5324,7 +5325,7 @@ impl Checker {
         match &place.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, place.span)?;
-                if info.mutable || info.result {
+                if info.mode.can_change_contents() || info.result {
                     return Ok(());
                 }
                 if name == THIS {
@@ -5424,7 +5425,7 @@ impl Checker {
     /// what it keeps, from what it was given; one that is a parameter may
     /// send back anything the caller's lambda keeps.
     fn name_owners(&self, name: &str, info: &VarInfo) -> Vec<Own> {
-        if info.mutable || info.result {
+        if info.mode.can_change_contents() || info.result {
             return Vec::new();
         }
         let mut owners = info.owners.clone();
@@ -5643,11 +5644,11 @@ impl Checker {
         if owners.is_empty() {
             return;
         }
-        for (name, at, ty, mutable) in bindings {
+        for (name, at, ty, mode) in bindings {
             if name == DISCARD || !self.twofold(ty) {
                 continue;
             }
-            if *mutable {
+            if mode.can_change_contents() {
                 let handed = self.handed(*at, owners.clone(), HandedTo::Variable(name.clone()), &self.copied_text(source), ty);
                 self.handed.push(handed);
             } else {
@@ -5772,7 +5773,7 @@ impl Checker {
         for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
             for name in &kept.uses {
                 let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
-                if info.mutable || info.result || !holds_twofold(&info.ty, &self.regional, true) {
+                if info.mode.can_change_contents() || info.result || !holds_twofold(&info.ty, &self.regional, true) {
                     continue;
                 }
                 let rule = "nothing changes through what a fixed name owns";
@@ -5882,7 +5883,7 @@ impl Checker {
                 if is_shape && info.result {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if is_shape && !info.mutable {
+                if is_shape && !info.mode.can_change_contents() {
                     return err(span, format!("cannot assign to a field of immutable variable '{}'{}", name, self.param_hint(name, info)));
                 }
                 self.check_expr(base)
@@ -7683,9 +7684,9 @@ impl Checker {
             } else if let Some(place) = kept.places.iter().find(|place| place.name == *name) {
                 // A place: the variable itself, changed only through `flex&`.
                 info.passing = place.passing;
-                info.mutable = place.passing == Passing::FlexRef;
+                info.mode = if place.passing == Passing::FlexRef { Mode::Flex } else { Mode::Fixed };
             } else {
-                info.mutable = kept.flex;
+                info.mode = if kept.flex { Mode::Flex } else { Mode::Fixed };
             }
             around.names.insert(name.clone(), info);
         }
@@ -8222,7 +8223,7 @@ impl Checker {
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
         let calling = std::mem::take(&mut self.calling);
         let info = self.lookup_or_err(name, span)?;
-        let (ty, kept, mutable) = (info.ty.clone(), info.kept, info.mutable);
+        let (ty, kept, mode) = (info.ty.clone(), info.kept, info.mode);
         if kept {
             self.check_kept_use(name, &ty, span)?;
         }
@@ -8236,7 +8237,7 @@ impl Checker {
         }
         // Calling it changes what it keeps, so it is called through a place
         // that changes.
-        if held_lambda(&ty) && !mutable {
+        if held_lambda(&ty) && !mode.can_change_contents() {
             return err(span, format!("'{0}' is a '[flex @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' variable or a 'flex&', which '{0}' isn't", name));
         }
         if self.unset.contains(name) {
@@ -9303,13 +9304,14 @@ impl Checker {
                 }
                 // The lambda's copy of a slice of the code around it shares its
                 // items, not its length.
-                if info.kept && info.passing == Passing::Copy && info.mutable && matches!(info.ty, Type::Slice(..)) {
+                if info.kept && info.passing == Passing::Copy && info.mode == Mode::Flex && matches!(info.ty, Type::Slice(..)) {
                     return err(
                         items.span,
                         format!("'{0}' changes '{1}', the copy this lambda keeps of a slice of the code around it, whose length only the slice itself changes; make the slice inside the lambda, take it as a parameter, 'flex& {1}', or keep the slice as a place, '[flex& {1}, @s]', in a region declared after it", word, name),
                     );
                 }
-                if !info.mutable && matches!(info.ty, Type::Slice(..) | Type::Map(..)) {
+                let needs_flex = matches!(info.ty, Type::Slice(..));
+                if (needs_flex && info.mode != Mode::Flex) || (!needs_flex && !info.mode.can_change_contents() && matches!(info.ty, Type::Map(..))) {
                     if info.param && info.passing == Passing::FixedRef {
                         return err(
                             items.span,
@@ -9962,7 +9964,7 @@ impl Checker {
             if self.variant_in_scope(name).is_some() {
                 return err(*at, format!("'{}' is a variant; to send an error, write '<- fail {}'", name, name));
             }
-            bindings.push((name.clone(), *at, error_ty, false));
+            bindings.push((name.clone(), *at, error_ty, Mode::Fixed));
         }
         // The block runs only when there is nothing to extract, so a result it
         // sets isn't set for certain.
@@ -9971,7 +9973,7 @@ impl Checker {
         let result = bindings
             .into_iter()
             .filter(|(name, _, _, _)| name != DISCARD)
-            .try_for_each(|(name, at, ty, mutable)| self.define(&name, ty, mutable, at))
+            .try_for_each(|(name, at, ty, mode)| self.define(&name, ty, mode, at))
             .and_then(|()| self.check_plan_b_body(span, &extracted, body));
         self.pop_scope();
         self.unset = entry;
@@ -10924,7 +10926,7 @@ impl Checker {
         match &value.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, value.span)?;
-                if info.mutable {
+                if info.mode.can_change_contents() {
                     return Ok(());
                 }
                 if name == THIS {
@@ -11554,8 +11556,12 @@ impl Checker {
     /// and one value, and declares `y`, another name for the place `&x` marks:
     /// one that changes it (`flex&`), or only reads it. `y` is of the place's
     /// type exactly, since what either writes the other reads.
-    fn check_reference(&mut self, names: &mut [Bound], mutable: bool, init: &mut [Expr]) -> Result<()> {
-        let word = if mutable { "flex&" } else { "fixed&" };
+    fn check_reference(&mut self, names: &mut [Bound], mode: Mode, init: &mut [Expr]) -> Result<()> {
+        let word = match mode {
+            Mode::Fixed => "fixed&",
+            Mode::Bind => "bind&",
+            Mode::Flex => "flex&",
+        };
         let (Some(bound), Some(value)) = (names.first_mut(), init.first_mut()) else { return Ok(()) };
         self.resolve_bound_types(bound)?;
         let name = bound.name.clone();
@@ -11572,7 +11578,7 @@ impl Checker {
         let ty = self.check_expr(place);
         self.calling = false;
         let ty = ty?;
-        if mutable {
+        if mode.can_change_contents() {
             if let Err(error) = self.given_place(place, &Taker::Reference(&name)) {
                 // A place that only can't change may still be read through one.
                 return match (self.read_place(place), self.resolved_path(place)) {
@@ -11600,7 +11606,7 @@ impl Checker {
         let at = bound.span;
         // A `fixed&` owns what its place is owned by; a `flex&` names a place
         // that changes, unless reached from a value made here.
-        if mutable {
+        if mode.can_change_contents() {
             self.hand_written(place, None);
         } else {
             let owners = self.owners(place);
@@ -11608,7 +11614,7 @@ impl Checker {
                 self.bound_owners.push((at, owners));
             }
         }
-        self.define(&name, ty, mutable, at)?;
+        self.define(&name, ty, mode, at)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(&name)) {
             info.refers = Some(path);
         }
@@ -11759,7 +11765,7 @@ impl Checker {
     fn chosen_param(&self, e: &Expr) -> Option<(String, Type, Span)> {
         let (name, at) = param_root(e)?;
         let info = self.lookup(name)?;
-        let chosen = info.param && info.passing == Passing::Copy && !info.mutable && info.ty != Type::Region;
+        let chosen = info.param && info.passing == Passing::Copy && info.mode.is_fixed() && info.ty != Type::Region;
         chosen.then(|| (name.to_string(), info.ty.clone(), at))
     }
 
@@ -11879,7 +11885,7 @@ impl Checker {
                 if info.result {
                     return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
                 }
-                if info.mutable {
+                if info.mode == Mode::Flex {
                     return Ok(());
                 }
                 if name == THIS {
@@ -11907,7 +11913,7 @@ impl Checker {
                 refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'flex' can", name, info.span.line, info.span.col))
             }
             ExprKind::Field(base, field) => {
-                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mode.can_change_contents()) {
                     return Err(self.this_cannot_change(place.span, &taker.using(&format!("{}{}", MODULE_SEPARATOR, field))));
                 }
                 match &base.ty {
@@ -13259,7 +13265,7 @@ impl Checker {
             let bound = Bound { name: name.to_string(), span: at, ty: Some(ty.clone()), ty_span: None, parts: Vec::new() };
             let mut value = Expr::new(ExprKind::Var(group_value(values, place)), at);
             value.ty = Some(ty);
-            let mut turn = vec![Stmt::new(StmtKind::Binding { names: vec![bound], mutable: false, reference: false, init: vec![value] }, at)];
+            let mut turn = vec![Stmt::new(StmtKind::Binding { names: vec![bound], mode: Mode::Fixed, reference: false, init: vec![value] }, at)];
             turn.extend(turn_body);
             turns.push(turn);
         }

@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::TokenClass;
 use crate::infer::Knowledge;
 use crate::scan::{LOOP_NAME, Symbol, SymbolKind};
+use vela::ast::Mode;
 
 /// What to show for a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -201,7 +202,7 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
 
 /// A pattern's name, written `flex name` when the pattern can assign it.
 fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
-    if k.pattern_name_mutable(at) {
+    if k.pattern_name_mode(at) != Mode::Fixed {
         return (format!("flex {}", typed), format!("{} It can be assigned.", doc));
     }
     (typed.to_string(), doc.to_string())

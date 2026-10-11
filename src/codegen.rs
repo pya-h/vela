@@ -2201,16 +2201,16 @@ impl Generator {
             // `flex& y = &x`: a pointer to the place, read through it; one that
             // only reads, `fixed& y = &x`, may name a value passed by a hidden
             // pointer, which is `const`.
-            StmtKind::Binding { names, mutable, reference: true, init } => {
+            StmtKind::Binding { names, mode, reference: true, init } => {
                 if let ([bound], [Expr { kind: ExprKind::Ref(place), .. }]) = (names.as_slice(), init.as_slice()) {
                     let address = match &place.kind {
                         ExprKind::Var(_) => self.gen_receiver(place)?,
-                        _ if !*mutable => format!("&{}", self.gen_place(place)?),
+                        _ if mode.is_fixed() => format!("&{}", self.gen_place(place)?),
                         _ => self.gen_receiver(place)?,
                     };
                     // `T const*`, which for a pointer type is a pointer to a
                     // constant pointer, not to what it points to.
-                    let constant = if *mutable { "" } else { " const" };
+                    let constant = if mode.is_fixed() { " const" } else { "" };
                     self.w.line(&format!("{}{}* {} = {};", c_type(place.ty()?), constant, c_ident(&bound.name), address));
                     self.pointers.insert(bound.name.clone());
                 } else {

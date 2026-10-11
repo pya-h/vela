@@ -1565,11 +1565,11 @@ impl Stmt {
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Expr(Expr),
-    /// `fixed` (immutable) or `flex` (mutable), with one name per value:
+    /// `fixed`, `bind`, or `flex`, with one name per value:
     /// `fixed q, r = divmod(17, 5)`.
     Binding {
         names: Vec<Bound>,
-        mutable: bool,
+        mode: Mode,
         /// `flex& y = &x` or `fixed& y = &x`: one name, which is another name for
         /// the place its value marks, changing it (`flex&`) or only reading it.
         reference: bool,
@@ -1832,7 +1832,7 @@ pub enum TypedForm {
 }
 
 /// What a pattern names: one name (or `_`), or `(a, b)`, the names of a
-/// tuple's items. `mutable` is `flex` written before it, which makes every
+/// tuple's items. `mode` is `flex` written before it, which makes every
 /// name it binds a variable that can be assigned.
 #[derive(Debug, Clone)]
 pub struct Names {
@@ -1840,15 +1840,15 @@ pub struct Names {
     pub name: String,
     /// Position of the name, or of `(`.
     pub span: Span,
-    pub mutable: bool,
+    pub mode: Mode,
     /// The names of a tuple's items; empty for one name.
     pub parts: Vec<Names>,
 }
 
 impl Names {
     /// One name, at `span`, which `flex` may make changeable.
-    pub fn one(name: String, span: Span, mutable: bool) -> Names {
-        Names { name, span, mutable, parts: Vec::new() }
+    pub fn one(name: String, span: Span, mode: Mode) -> Names {
+        Names { name, span, mode, parts: Vec::new() }
     }
 
     /// Every name it binds, in order, through the tuples it takes apart.
@@ -1910,10 +1910,10 @@ impl fmt::Display for Pattern {
 }
 
 impl fmt::Display for Names {
-    /// The names as they are written: `value`, `flex value`, or `(a, b)`.
+    /// The names as they are written: `value`, `flex value`, `bind value`, or `(a, b)`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.mutable {
-            write!(f, "flex ")?;
+        if self.mode != Mode::Fixed {
+            write!(f, "{} ", self.mode.word())?;
         }
         if self.parts.is_empty() {
             return write!(f, "{}", self.name);
@@ -2006,6 +2006,44 @@ impl Passing {
             Passing::FlexRef => "flex&",
             Passing::Fixed => "fixed",
             Passing::FixedRef => "fixed&",
+        }
+    }
+}
+
+/// Whether a variable is `fixed`, `bind`, or `flex`. A `fixed` variable never
+/// changes. A `bind` variable is bound to one value: it cannot be assigned as a
+/// whole, but its contents may change. A `flex` variable may be assigned and may
+/// change its contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Fixed,
+    Bind,
+    Flex,
+}
+
+impl Mode {
+    /// Whether the variable may be assigned as a whole (`v = …`).
+    pub fn can_assign(self) -> bool {
+        self == Mode::Flex
+    }
+
+    /// Whether the variable's contents may change: fields, items, or what a
+    /// pointer it holds points to.
+    pub fn can_change_contents(self) -> bool {
+        matches!(self, Mode::Bind | Mode::Flex)
+    }
+
+    /// Whether the variable never changes in any way.
+    pub fn is_fixed(self) -> bool {
+        self == Mode::Fixed
+    }
+
+    /// The keyword written before the name.
+    pub fn word(self) -> &'static str {
+        match self {
+            Mode::Fixed => "fixed",
+            Mode::Bind => "bind",
+            Mode::Flex => "flex",
         }
     }
 }

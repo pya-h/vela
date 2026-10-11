@@ -2111,8 +2111,8 @@ impl Parser {
         self.skip_newlines();
         let span = self.peek_span();
         match self.peek() {
-            Token::Fixed => self.parse_binding(true),
-            Token::Flex => self.parse_binding(false),
+            Token::Fixed => self.parse_binding(Mode::Fixed),
+            Token::Flex => self.parse_binding(Mode::Flex),
             Token::When => self.parse_when(),
             Token::Loop | Token::Endless | Token::Each => {
                 let stmt = match self.peek() {
@@ -2351,18 +2351,18 @@ impl Parser {
 
     /// `fixed name [: type] [, name [: type]]* = values`, or the same with
     /// `flex`. A name may be `_`, which drops its value.
-    fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
-        let word = if immutable { "fixed" } else { "flex" };
+    fn parse_binding(&mut self, mode: Mode) -> Result<Stmt> {
+        let word = mode.word();
         self.advance(); // fixed / flex
         let reference = self.match_reference(word)?;
         let span = self.peek_span();
-        self.parse_binding_names(immutable, reference, span)
+        self.parse_binding_names(mode, reference, span)
     }
 
     /// A binding after its word: its names, `=`, and its values. A loop's
     /// start reads the ones after the first this way, which its word covers.
-    fn parse_binding_names(&mut self, immutable: bool, reference: bool, span: Span) -> Result<Stmt> {
-        let word = if immutable { "fixed" } else { "flex" };
+    fn parse_binding_names(&mut self, mode: Mode, reference: bool, span: Span) -> Result<Stmt> {
+        let word = mode.word();
         let mut names = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
             if reference {
@@ -2378,7 +2378,7 @@ impl Parser {
         if reference && init.len() > 1 {
             return Err(Error::at(init.get(1).map_or(span, |value| value.span), "a reference names one place, so it takes one value, as in '&x'"));
         }
-        let kind = StmtKind::Binding { names, mutable: !immutable, reference, init };
+        let kind = StmtKind::Binding { names, mode, reference, init };
         Ok(Stmt::new(kind, span))
     }
 
@@ -2583,20 +2583,20 @@ impl Parser {
         let step = parts.next().unwrap_or_default();
         // The start: statements, until `flex` or `fixed` declares the names
         // after it, each item one.
-        let mut declaring: Option<bool> = None;
+        let mut declaring: Option<Mode> = None;
         let mut started = Vec::new();
         let items = start.len();
         for (n, (first, last)) in start.into_iter().enumerate() {
             self.pos = first;
             let item = match self.peek() {
                 Token::Flex | Token::Fixed => {
-                    let immutable = self.check(Token::Fixed);
-                    declaring = Some(immutable);
-                    self.parse_binding(immutable)?
+                    let mode = if self.check(Token::Fixed) { Mode::Fixed } else { Mode::Flex };
+                    declaring = Some(mode);
+                    self.parse_binding(mode)?
                 }
                 Token::Newline => return Err(Error::at(self.peek_span(), "an item of a loop's start is missing between two ','s")),
                 _ => match declaring {
-                    Some(immutable) => self.parse_binding_names(immutable, false, self.peek_span())?,
+                    Some(mode) => self.parse_binding_names(mode, false, self.peek_span())?,
                     None => self.parse_stmt()?,
                 },
             };
@@ -2888,16 +2888,16 @@ impl Parser {
     /// items, each of which `flex` may make changeable.
     fn parse_pattern_names(&mut self) -> Result<Names> {
         let span = self.peek_span();
-        let mutable = self.match_token(Token::Flex);
+        let mode = if self.match_token(Token::Flex) { Mode::Flex } else { Mode::Fixed };
         if !self.check(Token::LParen) {
             let (name, at) = self.parse_bound_name()?;
-            return Ok(Names::one(name, at, mutable));
+            return Ok(Names::one(name, at, mode));
         }
         self.advance(); // (
         self.enter()?;
         let parts = self.parse_pattern_parts(span);
         self.leave(1);
-        Ok(Names { name: String::new(), span, mutable, parts: parts? })
+        Ok(Names { name: String::new(), span, mode, parts: parts? })
     }
 
     /// After the `(` at `opened` of a pattern's names: the names and `)`.

@@ -947,13 +947,13 @@ show(label)                <span class="comment">; error: unknown variable 'labe
           <code>fixed&amp;</code> parameter, to a reference, <code>flex&amp; y = &amp;x</code>, or to a lambda keeping
           it.</li>
       </ul>
-      <pre><span class="keyword">flex</span> a = Point { x: <span class="number">1</span> }       <span class="comment">; whole</span>
+      <pre><span class="keyword">flex</span> a = Point { x: <span class="number">1</span>, y: <span class="number">2</span> }  <span class="comment">; whole</span>
 <span class="keyword">flex</span> b = a
-b.x = <span class="number">2</span>                       <span class="comment">; a.x is still 1</span>
-<span class="keyword">flex</span> xs = [<span class="number">1</span>, <span class="number">2</span>, ...]       <span class="comment">; twofold</span>
+b.x = <span class="number">5</span>                         <span class="comment">; a.x is still 1</span>
+<span class="keyword">flex</span> xs = [<span class="number">1</span>, <span class="number">2</span>, ...] <span class="keyword">at</span> r    <span class="comment">; twofold</span>
 <span class="keyword">flex</span> ys = xs
-ys[<span class="number">0</span>] = <span class="number">9</span>                     <span class="comment">; xs is [9, 2] too: one set of items</span>
-<span class="keyword">flex</span> zs = xs.copy() <span class="keyword">at</span> r      <span class="comment">; items of its own, at every depth</span></pre>
+ys[<span class="number">0</span>] = <span class="number">9</span>                       <span class="comment">; xs is [9, 2] too: one set of items</span>
+<span class="keyword">flex</span> zs = xs.copy() <span class="keyword">at</span> r        <span class="comment">; items of its own, at every depth</span></pre>
       <p>
         The rules about change follow from the kind. What a task does to a whole value it was given is its own, so
         <code>flex</code> and <code>fixed</code> matter to others only for twofold values and places: what a fixed name
