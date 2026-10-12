@@ -6,7 +6,7 @@ use std::process;
 
 use vela::driver;
 
-const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--]\n       vela --help | --version";
+const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
 /// What the command line asks for.
@@ -28,6 +28,9 @@ struct Options {
     /// The program writes no notices to standard error, as of a startup
     /// decorator whose failure it passes over.
     no_notices: bool,
+    /// Shows every warning a rule that says something once for each task or
+    /// file holds back (see `check::Checker::warn_once`).
+    repeat_warnings: bool,
 }
 
 fn main() {
@@ -61,6 +64,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut check = false;
     let mut quick = false;
     let mut no_notices = false;
+    let mut repeat_warnings = false;
     let mut version = false;
     let mut only_files = false;
     let mut args = args;
@@ -80,6 +84,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
             "--check" => check = true,
             "--quick" => quick = true,
             "--no-notices" => no_notices = true,
+            "--repeat-warnings" => repeat_warnings = true,
             "-o" => match args.next() {
                 Some(path) if output.is_none() => output = Some(path),
                 Some(_) => return Err("-o given more than once".to_string()),
@@ -106,7 +111,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
         return Err("--no-notices changes the program built, and --check builds none, so they can't be used together".to_string());
     }
     let input = input.ok_or_else(|| "no input file".to_string())?;
-    Ok(Action::Run(Options { input, output, emit_c, check, quick, no_notices }))
+    Ok(Action::Run(Options { input, output, emit_c, check, quick, no_notices, repeat_warnings }))
 }
 
 fn run(opts: &Options) -> Result<(), String> {
@@ -121,7 +126,7 @@ fn run(opts: &Options) -> Result<(), String> {
         if !driver::has_main(&items) {
             return Err(driver::BuildError::NoMain.render(&opts.input, &source));
         }
-        warn(&warnings, &opts.input);
+        warn(&warnings, &opts.input, opts.repeat_warnings);
         return write_stdout(&format!("checked: {}\n", opts.input));
     }
 
@@ -130,12 +135,12 @@ fn run(opts: &Options) -> Result<(), String> {
             Some(output) => {
                 let (c_code, warnings) = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk, !opts.no_notices)
                     .map_err(|e| e.render(&opts.input, &source))?;
-                warn(&warnings, &opts.input);
+                warn(&warnings, &opts.input, opts.repeat_warnings);
                 fs::write(output, c_code).map_err(|e| format!("error: cannot write '{}': {}", output, e))
             }
             None => {
                 let (c_code, warnings) = driver::generate_c_program(path, &source, &mut driver::read_from_disk, !opts.no_notices).map_err(|e| e.render(&opts.input))?;
-                warn(&warnings, &opts.input);
+                warn(&warnings, &opts.input, opts.repeat_warnings);
                 write_stdout(&c_code)
             }
         };
@@ -146,14 +151,15 @@ fn run(opts: &Options) -> Result<(), String> {
     // After every other argument, so it wins over an `-O` in `CC` too.
     let cc = if opts.quick { format!("{} -O0", cc) } else { cc };
     let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc, !opts.no_notices).map_err(|e| e.render(&opts.input, &source))?;
-    warn(&warnings, &opts.input);
+    warn(&warnings, &opts.input, opts.repeat_warnings);
     write_stdout(&format!("compiled: {}\n", output))
 }
 
 /// Writes a program's warnings to standard error, where its mistakes go; the
-/// program builds all the same.
-fn warn(warnings: &driver::Warnings, input: &str) {
-    let rendered = warnings.render(input);
+/// program builds all the same. With `repeat`, it writes the repeats a rule
+/// that says something once holds back too.
+fn warn(warnings: &driver::Warnings, input: &str, repeat: bool) {
+    let rendered = if repeat { warnings.render_repeating(input) } else { warnings.render(input) };
     if !rendered.is_empty() {
         eprintln!("{}", rendered);
     }

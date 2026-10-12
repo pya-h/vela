@@ -177,6 +177,21 @@ struct VarInfo {
     kept: bool,
     /// For a name that never changes: where its value came from (see `Own`).
     owners: Vec<Own>,
+    /// For a slice made of another, `flex ys = xs` or a part `xs[1..3]`, or
+    /// one that one was made of: which slices share items with it, by their
+    /// place in `Checker::slice_families` (see `link_slices`).
+    family: Option<usize>,
+}
+
+/// The slices of one task that were made of one another, so they share items
+/// until an `add` moves one of them, and what was last done to them (see
+/// `Checker::link_slices`).
+#[derive(Default)]
+struct SliceFamily {
+    /// The last `add` on one of them: its name, and where it is.
+    added: Option<(String, Span)>,
+    /// The last `del` on one of them.
+    deleted: Option<(String, Span)>,
 }
 
 /// A lambda that keeps what it uses, `[@r](…)` (see `Checker::kept_lambdas`).
@@ -337,9 +352,16 @@ pub struct Checker {
     /// builds, but whose meaning rests on a choice the compiler made (see
     /// `warn_chosen`).
     warnings: Vec<Error>,
-    /// The files already warned about an array or slice of chars, which is
-    /// said once per file (see `warn_char_array`).
-    char_arrays_warned: HashSet<usize>,
+    /// What the program does that it may not mean, but which a rule says only
+    /// once for each task or file: the repeats it held back, which
+    /// `--repeat-warnings` shows (see `warn_once`).
+    held_back: Vec<Error>,
+    /// The rules that have warned already, each with the task or file it said
+    /// it once for (see `warn_once`).
+    told_once: HashSet<(String, &'static str)>,
+    /// The slices made of one another in the tasks checked, which `VarInfo`
+    /// places each slice in.
+    slice_families: Vec<SliceFamily>,
     /// The tasks, shapes, and kinds whose own declaration has a mistake. What
     /// they promise isn't known, so a use of one is checked as far as it can be
     /// and then left alone: reporting the declaration's mistake again at every
@@ -449,6 +471,9 @@ pub struct Checker {
     /// Whether the variable being checked is read to be called or given as a
     /// place, the only ways a `[flex @r]` lambda's value is read.
     calling: bool,
+    /// Whether the variable being checked is read only for its length, `xs.len`,
+    /// which what is done to another slice's items doesn't change.
+    reading_length: bool,
     /// The region the lambda called through a value keeps what it uses in,
     /// which the call's types name as it is (see `check_invoke`).
     kept_call: Option<String>,
@@ -661,6 +686,14 @@ impl Checker {
     /// `check_program`, with the warnings too: what the program does that it
     /// may not mean, in source order. A program with warnings still builds.
     pub fn check_program_warned(program: &mut Program) -> (Vec<Error>, Vec<Error>) {
+        let (errors, warnings, _) = Checker::check_program_held(program);
+        (errors, warnings)
+    }
+
+    /// `check_program_warned`, with a third list: the warnings a rule that
+    /// says something once for each task or file held back (see `warn_once`),
+    /// in source order, which `--repeat-warnings` adds to the others.
+    pub fn check_program_held(program: &mut Program) -> (Vec<Error>, Vec<Error>, Vec<Error>) {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
@@ -704,6 +737,8 @@ impl Checker {
         let mut errors = std::mem::take(&mut checker.errors);
         let warnings_at = errors.len();
         errors.append(&mut checker.warnings);
+        let held_at = errors.len();
+        errors.append(&mut checker.held_back);
         for error in &mut errors {
             for (name, form) in &made {
                 if error.message.contains(name.as_str()) {
@@ -714,8 +749,9 @@ impl Checker {
                 error.message = scope.spelling.text(&error.message);
             }
         }
+        let held = errors.split_off(held_at);
         let warnings = errors.split_off(warnings_at);
-        (in_source_order(errors), in_source_order(warnings))
+        (in_source_order(errors), in_source_order(warnings), in_source_order(held))
     }
 
     /// Whether a task, shape, kind, or variant name written in the current
@@ -3785,7 +3821,7 @@ impl Checker {
             Some(i) => self.bound_owners.swap_remove(i).1,
             None => Vec::new(),
         };
-        scope.names.insert(name.to_string(), VarInfo { ty, mode, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false, owners });
+        scope.names.insert(name.to_string(), VarInfo { ty, mode, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false, owners, family: None });
         match clash {
             Some(clash) => err(span, clash),
             None => Ok(()),
@@ -4296,6 +4332,14 @@ impl Checker {
                         self.define(&name, ty, *mode, at)?;
                     }
                 }
+                // A slice made of another shares its items.
+                if !forwarded {
+                    for (bound, value) in names.iter().zip(init.iter()) {
+                        if let Some(from) = Checker::shared_slice_of(value) {
+                            self.link_slices(from, &bound.name);
+                        }
+                    }
+                }
                 Ok(())
             }
             StmtKind::Assign(targets, values) => {
@@ -4370,6 +4414,18 @@ impl Checker {
                     };
                     if let Some(value) = if forwarded { values.first() } else { values.get(i) } {
                         self.hand_as(value, &expected, to);
+                    }
+                }
+                // `ys = xs` makes `ys` another slice of those items; any other
+                // value makes it one of its own.
+                if let ([Target::Place(Expr { kind: ExprKind::Var(name), .. })], [value]) = (targets.as_slice(), values.as_slice())
+                    && self.is_slice_var(name)
+                {
+                    let name = name.clone();
+                    self.set_family(&name, None);
+                    if let Some(from) = Checker::shared_slice_of(value) {
+                        let from = from.to_string();
+                        self.link_slices(&from, &name);
                     }
                 }
                 Ok(())
@@ -6068,11 +6124,197 @@ impl Checker {
             },
             _ => false,
         };
-        if chars && self.char_arrays_warned.insert(span.file) {
-            self.warnings.push(Error::at(
-                span,
-                "this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'fixed word = \"abc\"' (said once in each file)",
-            ));
+        if chars {
+            let message = "this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'fixed word = \"abc\"' (said once in each file)";
+            self.warn_once(format!("file {}", span.file), "chars", span, message.to_string());
+        }
+    }
+
+    /// The variable `name` as the innermost scope that has it declares it,
+    /// without `lookup`'s note that a lambda keeps it.
+    fn var_info(&self, name: &str) -> Option<&VarInfo> {
+        self.scopes.iter().rev().find_map(|scope| scope.names.get(name))
+    }
+
+    /// Puts the variable `name` in the family `family` of slices that share
+    /// items, or, with `None`, in none.
+    fn set_family(&mut self, name: &str, family: Option<usize>) {
+        if let Some(info) = self.scopes.iter_mut().rev().find_map(|scope| scope.names.get_mut(name)) {
+            info.family = family;
+        }
+    }
+
+    /// Whether the variable `name` is a slice.
+    fn is_slice_var(&self, name: &str) -> bool {
+        self.var_info(name).is_some_and(|info| matches!(info.ty, Type::Slice(..)))
+    }
+
+    /// Notes that the slice `to` was made of the slice `from`, a copy of it
+    /// (`flex to = from`) or a part (`from[1..3]`), so they share items: an
+    /// `add` on one that finds room in place keeps them on the same items, and
+    /// one that doesn't moves it to a block of its own. Which of the two
+    /// happens is known only when the program runs, so what is done to one is
+    /// said where the other is then used (see `note_slice_write` and
+    /// `note_slice_use`). Only a copy made by a binding or an assignment of
+    /// the slice's own name or a part of it is followed, within the task.
+    fn link_slices(&mut self, from: &str, to: &str) {
+        if !self.is_slice_var(from) || !self.is_slice_var(to) {
+            return;
+        }
+        let family = match self.var_info(from).and_then(|info| info.family) {
+            Some(family) => family,
+            None => {
+                self.slice_families.push(SliceFamily::default());
+                self.slice_families.len() - 1
+            }
+        };
+        self.set_family(from, Some(family));
+        self.set_family(to, Some(family));
+    }
+
+    /// The slice a value is a copy or a part of, if it is one `link_slices`
+    /// follows: `xs`, or `xs[a..b]`.
+    fn shared_slice_of(value: &Expr) -> Option<&str> {
+        match &value.kind {
+            ExprKind::Var(name) => Some(name),
+            ExprKind::Index(base, index) if matches!(index.kind, ExprKind::Range(..)) => match &base.kind {
+                ExprKind::Var(name) => Some(name),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The slice whose own items an assignment to `place` writes: `xs[i]`, or
+    /// a field of such an item or an item of an array in it, but not an item
+    /// of a slice inside it, which is other memory. With where the slice is
+    /// named.
+    fn written_slice(place: &Expr) -> Option<(&str, Span)> {
+        let mut at = place;
+        loop {
+            match &at.kind {
+                ExprKind::Field(base, _) => at = base,
+                ExprKind::Index(base, _) => match (&base.kind, &base.ty) {
+                    (ExprKind::Var(name), Some(Type::Slice(..))) => return Some((name, base.span)),
+                    (_, Some(Type::Array(..))) => at = base,
+                    _ => return None,
+                },
+                _ => return None,
+            }
+        }
+    }
+
+    /// Notes an `add` or a `del` on the slice `name`, at `span`, once it is
+    /// checked. A `flex` parameter is the task's own copy of the caller's
+    /// slice, which the caller's items move under (a `del`) or may stop being
+    /// shared with (an `add`), so the first of each in the task is warned
+    /// of; and a slice made of another, or one made of it, is told of where
+    /// it is next written or used. A `del` with no index takes the last item
+    /// and moves none, so only the parameter's rule follows it (`indexed`
+    /// tells which it is).
+    fn note_slice_edit(&mut self, name: &str, op: EditOp, indexed: bool, span: Span) {
+        let Some(info) = self.var_info(name) else { return };
+        if !matches!(info.ty, Type::Slice(..)) {
+            return;
+        }
+        let (family, flex_param, ty) = (info.family, info.param && info.passing == Passing::Flex, info.ty.clone());
+        if flex_param {
+            let (rule, what) = match op {
+                EditOp::Add => (
+                    "add on a flex parameter",
+                    "an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller",
+                ),
+                EditOp::Del if indexed => (
+                    "del on a flex parameter",
+                    "a 'del' moves the items after the one taken out in the memory the caller's slice shares, so the caller's slice sees them moved, though its length stays as it was",
+                ),
+                EditOp::Del => (
+                    "del on a flex parameter",
+                    "a 'del' gives the last item's space back to the room the caller's slice may share, so a later 'add' may go over an item the caller still counts, though its length stays as it was",
+                ),
+            };
+            let message = format!(
+                "'{0}' is the task's own copy of the caller's slice, and {1}; to change the caller's slice, take the caller's place, 'flex& {0}: {2}', or work on a copy of its own, '{0}.copy() at r'",
+                name, what, ty
+            );
+            self.warn_once(self.current_task.clone(), rule, span, message);
+        }
+        if let Some(family) = family
+            && let Some(shared) = self.slice_families.get_mut(family)
+        {
+            match op {
+                EditOp::Add => shared.added = Some((name.to_string(), span)),
+                // Taking the last item out moves none.
+                EditOp::Del if indexed => shared.deleted = Some((name.to_string(), span)),
+                EditOp::Del => {}
+            }
+        }
+    }
+
+    /// Warns that the slice `name`, at `at`, is used after a `del` on another
+    /// that shares its items, which moved them, once for each task.
+    fn warn_deleted_use(&mut self, name: &str, at: Span, family: usize) {
+        let Some((deleter, deleted_at)) = self.slice_families.get(family).and_then(|shared| shared.deleted.clone()) else { return };
+        if deleter == name {
+            return;
+        }
+        let message = format!(
+            "this uses '{0}' after '{1}.del(…)' at {2}:{3}; '{0}' and '{1}' were made of one slice and share its items, and 'del' moves the items after the one taken out in that shared memory, so '{0}' sees them moved; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'",
+            name, deleter, deleted_at.line, deleted_at.col
+        );
+        self.warn_once(self.current_task.clone(), "use after del", at, message);
+    }
+
+    /// Notes a read of the slice `name` at `span`, for what a `del` on a slice
+    /// that shares its items did to it.
+    fn note_slice_use(&mut self, name: &str, span: Span) {
+        if let Some(info) = self.var_info(name)
+            && matches!(info.ty, Type::Slice(..))
+            && let Some(family) = info.family
+        {
+            self.warn_deleted_use(name, span, family);
+        }
+    }
+
+    /// Notes an assignment to `place`: an item written through a slice that
+    /// shares items with another is told of what an `add` or a `del` on either
+    /// may have done to the sharing.
+    fn note_slice_write(&mut self, place: &Expr) {
+        let Some((name, at)) = Checker::written_slice(place) else { return };
+        let Some(family) = self.var_info(name).and_then(|info| info.family) else { return };
+        let Some(added) = self.slice_families.get(family).and_then(|shared| shared.added.clone()) else {
+            self.warn_deleted_use(name, at, family);
+            return;
+        };
+        let (adder, added_at) = added;
+        let others = if adder == name {
+            format!("a copy or part of '{0}' made earlier shares its items only while an add finds room in place, so the write may or may not be seen through it", name)
+        } else {
+            format!("'{0}' and '{1}' were made of one slice and share items only while an add finds room in place, so the write may or may not be seen through '{1}'", name, adder)
+        };
+        let message = format!(
+            "this writes an item of '{0}' after '{1}.add(…)' at {2}:{3}; {4}; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'",
+            name, adder, added_at.line, added_at.col, others
+        );
+        self.warn_once(self.current_task.clone(), "write after add", at, message);
+        self.warn_deleted_use(name, at, family);
+    }
+
+    /// Warns of `rule` at `span`, but only once for each `scope` (a task, or a
+    /// file) the rule is told apart by: the first goes with the warnings, and
+    /// the repeats are held back, for `--repeat-warnings` to show. A repeat
+    /// of a warning already given, as the copies a task that takes types is
+    /// checked as make of one body, is not a new one.
+    fn warn_once(&mut self, scope: String, rule: &'static str, span: Span, message: String) {
+        let first = self.told_once.insert((scope, rule));
+        if self.warnings.iter().chain(&self.held_back).any(|told| told.span == Some(span) && told.message == message) {
+            return;
+        }
+        let warning = Error::at(span, message);
+        if first {
+            self.warnings.push(warning);
+        } else {
+            self.held_back.push(warning);
         }
     }
 
@@ -6211,7 +6453,9 @@ impl Checker {
                 {
                     return err(place.span, format!("'{}' is already assigned at {}:{}", name, at.line, at.col));
                 }
-                Ok(TargetType::Place(self.check_assign_target(place)?))
+                let ty = self.check_assign_target(place)?;
+                self.note_slice_write(place);
+                Ok(TargetType::Place(ty))
             }
             Target::Tuple(parts, at) => {
                 let at = *at;
@@ -8009,8 +8253,10 @@ impl Checker {
                 if !self.called_on_a_value() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
                     return err(span, self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)));
                 }
-                let base_ty = self.check_expr(base)?;
-                self.field_type(&base_ty, field, span)
+                self.reading_length = field == LEN && matches!(base.kind, ExprKind::Var(_));
+                let base_ty = self.check_expr(base);
+                self.reading_length = false;
+                self.field_type(&base_ty?, field, span)
             }
             ExprKind::Index(base, index) => {
                 let base_ty = self.check_expr(base)?;
@@ -8271,6 +8517,7 @@ impl Checker {
     /// Checks a read of the variable `name`.
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
         let calling = std::mem::take(&mut self.calling);
+        let length_only = std::mem::take(&mut self.reading_length);
         let info = self.lookup_or_err(name, span)?;
         let (ty, kept, mode) = (info.ty.clone(), info.kept, info.mode);
         if kept {
@@ -8297,6 +8544,9 @@ impl Checker {
             && !self.spreading
         {
             return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)', or are counted, '{0}.len'", name, group));
+        }
+        if !length_only {
+            self.note_slice_use(name, span);
         }
         Ok(ty)
     }
@@ -9382,7 +9632,9 @@ impl Checker {
                     let what = if matches!(info.ty, Type::Map(..)) { "map" } else { "slice" };
                     return err(items.span, format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what));
                 }
-                self.check_expr(items)?
+                let checked = self.check_expr(items)?;
+                self.note_slice_edit(&name, op, !args.is_empty(), span);
+                checked
             }
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
                 self.check_expr(items)?;

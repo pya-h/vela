@@ -446,13 +446,16 @@ Press Ctrl+C to stop.</pre>
             a shared field hovers as <code>shared flex made: int</code>, saying who may change it, and a shared method
             as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
             <code>flex</code> and <code>flex&amp;</code>, which make the parameter the task's own copy to change, or
-            the caller's place, and <code>fixed</code> and <code>fixed&amp;</code>, a copy or the caller's place, only
-            read; such a parameter hovers as <code>flex n: int</code> or <code>flex&amp; n: int</code>,
+            the caller's place, <code>bind</code> and <code>bind&amp;</code>, a copy or the caller's place whose
+            contents change but which is never assigned as a whole, and <code>fixed</code> and <code>fixed&amp;</code>,
+            a copy or the caller's place, only read; such a parameter hovers as <code>flex n: int</code>,
+            <code>bind n: int</code> or <code>flex&amp; n: int</code>,
             and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
             <code>flex&amp; y = &amp;x</code> or <code>fixed&amp; y = &amp;x</code>, hovers as <code>flex&amp; y: int</code>
             or <code>fixed&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.
-            <code>bind</code> and <code>hold</code> are reserved words with no use yet: they are colored as keywords
-            and never offered, and one written shows the compiler's error, which names <code>fixed</code> or
+            <code>bind</code> is a variable word like <code>flex</code> and <code>fixed</code>: it is colored, offered where
+            one goes, and hovered. <code>hold</code> is a reserved word with no use yet: it is colored as a keyword and
+            never offered, and one written shows the compiler's error, which names <code>fixed</code> or
             <code>flex</code> where a variable's word goes.</p>
         </div>
         <div class="card">

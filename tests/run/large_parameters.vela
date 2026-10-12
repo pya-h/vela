@@ -1,3 +1,4 @@
+; warning: 59:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [Big]@r', or work on a copy of its own, 'xs.copy() at r'
 ; A parameter that never changes, of a large type (here, a shape of twelve
 ; ints), is passed by a hidden pointer to where the caller keeps it, which is
 ; faster than copying it. Nothing a program can see changes: each task below

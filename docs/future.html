@@ -2449,11 +2449,11 @@ fi
           often enough to pay for that reach.</li>
         <li id="knowing-shallow-copies"><strong>Copies that share, knowingly:</strong> the refactor of the
           variable words (<code>hold</code> became <code>flex</code> and <code>bind</code> became <code>fixed</code>;
-          next, a new <code>bind</code> names one value whose contents may change) is to make <code>fixed</code> fully
+          then a new <code>bind</code> came, naming one value whose contents may change) made <code>fixed</code> fully
           immutable. A slice, a map and a pointer are handles to items kept elsewhere, so a <code>flex</code> copy of a
           <code>fixed</code> one could change the items the <code>fixed</code> name sees. That is closed: giving what a
           <code>fixed</code> name owns, a slice, a map or a pointer, to a <code>flex</code> name is an error (see
-          <a href="vela.html#fixed-owns">What a fixed name owns</a>), and the new <code>bind</code> will follow the
+          <a href="vela.html#fixed-owns">What a fixed name owns</a>), and <code>bind</code> follows the
           same rule, so the program writes a complete copy instead (<code>xs.copy() at r</code>, <code>new [T](xs) at r</code>,
           <code>m.copy() at r</code>, and the planned <code>xs.added(v)</code> and <code>xs.without(i)</code>).
           <p><strong>What a complete copy costs.</strong> <code>copy()</code> and <code>new [T](xs)</code> are complete copies (see

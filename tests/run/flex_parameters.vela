@@ -1,3 +1,4 @@
+; warning: 50:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
 ; A parameter written `flex x: T` is the task's own copy: the task may change
 ; it as it changes any `flex` variable, and the value the caller gave never
 ; changes, so the call needs no mark.

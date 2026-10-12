@@ -1,0 +1,109 @@
+; What the compiler does not warn about, though it looks close to what it
+; does: a slice made of its own items, a place changed through its caller's, a
+; slice read before it changes, and what the program doesn't follow.
+
+; The caller's own place: its changes are the caller's.
+task grow(flex& xs: [int]@r, r: region)
+    xs.add(1)
+    xs.add(2)
+    xs.del(0)
+    xs.del()
+fi
+
+; Its contents change and it keeps its length, so nothing is added or taken.
+task zero(bind xs: [int]@r)
+    xs[0] = 0
+fi
+
+; A complete copy has items of its own.
+task own_items(r: region default) -> int
+    flex xs = [1, 2, 3, ...]
+    flex copy = xs.copy() at r
+    copy.add(4)
+    xs[0] = 9
+    copy[1] = 8
+    xs.del(0)
+    <- copy[0] + xs[0]
+fi
+
+; Written or read before the add and the del, a copy sees the same either way.
+task before() -> int
+    region r default
+    flex xs = [1, 2, 3, ...]
+    flex ys = xs
+    ys[0] = 5
+    xs[1] = 6
+    fixed first = ys[0]
+    xs.add(4)
+    ys.del(1)
+    <- first + xs.len
+fi
+
+; A copy's length is its own, so reading it after a del is no use of the items.
+task lengths() -> int
+    region r default
+    flex xs = [1, 2, 3, ...]
+    flex ys = xs
+    xs.del(0)
+    <- ys.len
+fi
+
+; Taking the last item out moves no item, so the copy is still read as it was.
+task last() -> int
+    region r default
+    flex xs = [1, 2, 3, ...]
+    flex ys = xs
+    xs.del()
+    <- ys[0] + ys[2]
+fi
+
+; A copy given items of its own by an assignment is no longer the slice's copy.
+task apart(r: region default) -> int
+    flex xs = [1, 2, 3, ...]
+    flex ys = xs
+    ys = ys.copy() at r
+    ys.add(4)
+    xs[0] = 9
+    ys[0] = 8
+    <- xs[0] + ys[0]
+fi
+
+; The items of a slice inside the slice are other memory, which an add on the
+; outer slice does not move.
+task inner() -> int
+    region r default
+    flex rows = [[1, 2, ...], [3, ...], ...]
+    flex alias = rows
+    alias.add([5, ...])
+    rows[0][0] = 7
+    <- rows[0][0]
+fi
+
+; What the checker doesn't follow: a copy kept in a field, or one handed to a task.
+shape Holder
+    items: [int]
+fi
+
+task through_field(r: region default) -> int
+    flex xs = [1, 2, ...]
+    flex held: Holder@r = Holder { items: xs }
+    xs.add(3)
+    held.items[0] = 9
+    xs[1] = 8
+    <- xs.len
+fi
+
+task main()
+    region r default
+    flex xs = [1, 2, 3, ...]
+    grow(&xs, r)
+    zero(xs)
+    show(xs)
+    show(own_items(r))
+    show(before())
+    show(lengths())
+    show(last())
+    show(apart(r))
+    show(inner())
+    show(through_field(r))
+fi

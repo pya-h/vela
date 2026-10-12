@@ -590,3 +590,50 @@ fn warnings_go_to_stderr_and_the_program_still_builds() {
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).contains(": error: unknown variable 'missing'") && !stderr(&out).contains(": warning: "), "{}", stderr(&out));
 }
+
+const REPEATED: &str = "task grown(flex xs: [int]@r, r: region)\n    xs.add(1)\n    xs.add(2)\n    xs.del(0)\n    xs.del(0)\nfi\n\ntask main()\n    region r default\n    flex ys = [1, ...]\n    grown(ys, r)\n    show(ys)\nfi\n";
+
+#[test]
+fn a_rule_that_warns_once_holds_back_its_repeats_until_asked() {
+    let dir = temp_dir("repeated");
+    let input = dir.join("repeated.vela");
+    std::fs::write(&input, REPEATED).unwrap();
+    let input = input.to_str().unwrap();
+
+    // The first add and the first del in the task, and no more.
+    let out = vela(&[input, "--check"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stderr(&out).matches(": warning: ").count(), 2, "{}", stderr(&out));
+    assert!(stderr(&out).contains(&format!("{}:2:8: warning: 'xs' is the task's own copy of the caller's slice, and an 'add'", input)), "{}", stderr(&out));
+    assert!(stderr(&out).contains(&format!("{}:4:8: warning: 'xs' is the task's own copy of the caller's slice, and a 'del'", input)), "{}", stderr(&out));
+
+    // With the option, the repeats too, in the order they are written.
+    let out = vela(&[input, "--check", "--repeat-warnings"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let lines: Vec<String> = stderr(&out).lines().filter(|line| line.contains(": warning: ")).map(|line| line.split(": warning: ").next().unwrap().to_string()).collect();
+    let wanted: Vec<String> = [2, 3, 4, 5].iter().map(|line| format!("{}:{}:8", input, line)).collect();
+    assert_eq!(lines, wanted, "{}", stderr(&out));
+
+    // It changes only what is shown: the program builds and runs the same.
+    let exe = dir.join("repeated");
+    let out = vela(&[input, "-o", exe.to_str().unwrap(), "--repeat-warnings"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stderr(&out).matches(": warning: ").count(), 4, "{}", stderr(&out));
+    let run = Command::new(&exe).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "[1, 2]\n");
+    let out = vela(&[input, "--emit-c", "--repeat-warnings"]);
+    assert!(out.status.success() && stderr(&out).matches(": warning: ").count() == 4, "{}", stderr(&out));
+
+    // Every rule of the kind: the chars warning, said once in each file.
+    let chars = dir.join("chars.vela");
+    std::fs::write(&chars, "task main()\n    flex a = ['a', 'b']\n    flex b = ['c', 'd']\n    a[0] = b[0]\nfi\n").unwrap();
+    let chars = chars.to_str().unwrap();
+    let out = vela(&[chars, "--check"]);
+    assert_eq!(stderr(&out).matches(": warning: ").count(), 1, "{}", stderr(&out));
+    let out = vela(&[chars, "--check", "--repeat-warnings"]);
+    assert_eq!(stderr(&out).matches(": warning: ").count(), 2, "{}", stderr(&out));
+
+    // The option takes no value, and the usage names it.
+    let out = vela(&["--help"]);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("[--repeat-warnings]"));
+}

@@ -56,6 +56,9 @@ pub struct Partial {
     /// `check::Checker::check_program_warned`). A program with warnings and
     /// no mistakes builds.
     pub warnings: Vec<Error>,
+    /// The warnings a rule that says something once for each task or file
+    /// held back, in source order: the repeats `--repeat-warnings` shows.
+    pub held_back: Vec<Error>,
     /// The program's files, the main file first; `Span::file` indexes them.
     pub files: Vec<SourceFile>,
     /// How the main file writes the program's names, whose names in `items`
@@ -82,11 +85,11 @@ pub fn front_end_partial(source: &str) -> Partial {
 pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
     let (files, loaded) = modules::load(path, source, loader);
     match loaded {
-        Err(error) => Partial { items: None, errors: vec![error], warnings: Vec::new(), files, spelling: Spelling::default() },
+        Err(error) => Partial { items: None, errors: vec![error], warnings: Vec::new(), held_back: Vec::new(), files, spelling: Spelling::default() },
         Ok(mut program) => {
-            let (errors, warnings) = Checker::check_program_warned(&mut program);
+            let (errors, warnings, held_back) = Checker::check_program_held(&mut program);
             let spelling = program.modules.first().map(|main| main.spelling.clone()).unwrap_or_default();
-            Partial { items: Some(program.items), errors, warnings, files, spelling }
+            Partial { items: Some(program.items), errors, warnings, held_back, files, spelling }
         }
     }
 }
@@ -168,6 +171,9 @@ pub fn render_program_error(main_path: &str, files: &[SourceFile], e: &Error) ->
 #[derive(Debug, Default)]
 pub struct Warnings {
     pub warnings: Vec<Error>,
+    /// The repeats a rule that says something once for each task or file held
+    /// back (see `Partial::held_back`).
+    pub held_back: Vec<Error>,
     /// The program's files, the main file first.
     pub files: Vec<SourceFile>,
 }
@@ -177,8 +183,19 @@ impl Warnings {
     /// message` with the source line (see `render_diagnostic`); `main_path`
     /// names the main file. Empty for none.
     pub fn render(&self, main_path: &str) -> String {
-        let rendered: Vec<String> = self
-            .warnings
+        self.render_of(&self.warnings, main_path)
+    }
+
+    /// `render`, with the repeats those rules held back too (the command's
+    /// `--repeat-warnings`), all in source order.
+    pub fn render_repeating(&self, main_path: &str) -> String {
+        let mut all: Vec<Error> = self.warnings.iter().chain(&self.held_back).cloned().collect();
+        all.sort_by_key(|warning| warning.span.map_or((1, 0, 0, 0), |span| (0, span.file, span.line, span.col)));
+        self.render_of(&all, main_path)
+    }
+
+    fn render_of(&self, warnings: &[Error], main_path: &str) -> String {
+        let rendered: Vec<String> = warnings
             .iter()
             .map(|warning| {
                 let file = warning.span.map_or(0, |span| span.file);
@@ -202,7 +219,7 @@ pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::res
 /// The checked program with its warnings, or every mistake that stopped it.
 fn checked(partial: Partial) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
     match (partial.items, partial.errors) {
-        (Some(items), errors) if errors.is_empty() => Ok((items, Warnings { warnings: partial.warnings, files: partial.files })),
+        (Some(items), errors) if errors.is_empty() => Ok((items, Warnings { warnings: partial.warnings, held_back: partial.held_back, files: partial.files })),
         (_, errors) if errors.is_empty() => Err(ProgramError::one(
             Error::internal("the front end produced neither a program nor an error"),
             partial.files,
