@@ -1,0 +1,196 @@
+  1 | ; What the compiler does not warn about, though it looks close to what it
+    | comment:; What the compiler does not warn about, though it looks close to what it
+  2 | ; does: a slice made of its own items, a place changed through its caller's, a
+    | comment:; does: a slice made of its own items, a place changed through its caller's, a
+  3 | ; slice read before it changes, and what the program doesn't follow.
+    | comment:; slice read before it changes, and what the program doesn't follow.
+  5 | ; The caller's own place: its changes are the caller's.
+    | comment:; The caller's own place: its changes are the caller's.
+  6 | task grow(flex& xs: [int]@r, r: region)
+    | keyword:task  task:grow  punctuation:(  keyword:flex  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
+  7 |     xs.add(1)
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+  8 |     xs.add(2)
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:2  punctuation:)
+  9 |     xs.del(0)
+    | parameter:xs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 10 |     xs.del()
+    | parameter:xs  punctuation:.  field:del  punctuation:(  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | ; Its contents change and it keeps its length, so nothing is added or taken.
+    | comment:; Its contents change and it keeps its length, so nothing is added or taken.
+ 14 | task zero(bind xs: [int]@r)
+    | keyword:task  task:zero  punctuation:(  keyword:bind  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 15 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 16 | fi
+    | keyword:fi
+ 18 | ; A complete copy has items of its own.
+    | comment:; A complete copy has items of its own.
+ 19 | task own_items(r: region default) -> int
+    | keyword:task  task:own_items  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int
+ 20 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 21 |     flex copy = xs.copy() at r
+    | keyword:flex  variable:copy  operator:=  variable:xs  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 22 |     copy.add(4)
+    | variable:copy  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 23 |     xs[0] = 9
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 24 |     copy[1] = 8
+    | variable:copy  punctuation:[  number:1  punctuation:]  operator:=  number:8
+ 25 |     xs.del(0)
+    | variable:xs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 26 |     <- copy[0] + xs[0]
+    | keyword:<-  variable:copy  punctuation:[  number:0  punctuation:]  operator:+  variable:xs  punctuation:[  number:0  punctuation:]
+ 27 | fi
+    | keyword:fi
+ 29 | ; Written or read before the add and the del, a copy sees the same either way.
+    | comment:; Written or read before the add and the del, a copy sees the same either way.
+ 30 | task before() -> int
+    | keyword:task  task:before  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 31 |     region r default
+    | keyword:region  region:r  keyword:default
+ 32 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 33 |     flex ys = xs
+    | keyword:flex  variable:ys  operator:=  variable:xs
+ 34 |     ys[0] = 5
+    | variable:ys  punctuation:[  number:0  punctuation:]  operator:=  number:5
+ 35 |     xs[1] = 6
+    | variable:xs  punctuation:[  number:1  punctuation:]  operator:=  number:6
+ 36 |     fixed first = ys[0]
+    | keyword:fixed  variable:first  operator:=  variable:ys  punctuation:[  number:0  punctuation:]
+ 37 |     xs.add(4)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 38 |     ys.del(1)
+    | variable:ys  punctuation:.  field:del  punctuation:(  number:1  punctuation:)
+ 39 |     <- first + xs.len
+    | keyword:<-  variable:first  operator:+  variable:xs  punctuation:.  field:len
+ 40 | fi
+    | keyword:fi
+ 42 | ; A copy's length is its own, so reading it after a del is no use of the items.
+    | comment:; A copy's length is its own, so reading it after a del is no use of the items.
+ 43 | task lengths() -> int
+    | keyword:task  task:lengths  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 44 |     region r default
+    | keyword:region  region:r  keyword:default
+ 45 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 46 |     flex ys = xs
+    | keyword:flex  variable:ys  operator:=  variable:xs
+ 47 |     xs.del(0)
+    | variable:xs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 48 |     <- ys.len
+    | keyword:<-  variable:ys  punctuation:.  field:len
+ 49 | fi
+    | keyword:fi
+ 51 | ; Taking the last item out moves no item, so the copy is still read as it was.
+    | comment:; Taking the last item out moves no item, so the copy is still read as it was.
+ 52 | task last() -> int
+    | keyword:task  task:last  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 53 |     region r default
+    | keyword:region  region:r  keyword:default
+ 54 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 55 |     flex ys = xs
+    | keyword:flex  variable:ys  operator:=  variable:xs
+ 56 |     xs.del()
+    | variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)
+ 57 |     <- ys[0] + ys[2]
+    | keyword:<-  variable:ys  punctuation:[  number:0  punctuation:]  operator:+  variable:ys  punctuation:[  number:2  punctuation:]
+ 58 | fi
+    | keyword:fi
+ 60 | ; A copy given items of its own by an assignment is no longer the slice's copy.
+    | comment:; A copy given items of its own by an assignment is no longer the slice's copy.
+ 61 | task apart(r: region default) -> int
+    | keyword:task  task:apart  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int
+ 62 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 63 |     flex ys = xs
+    | keyword:flex  variable:ys  operator:=  variable:xs
+ 64 |     ys = ys.copy() at r
+    | variable:ys  operator:=  variable:ys  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 65 |     ys.add(4)
+    | variable:ys  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 66 |     xs[0] = 9
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 67 |     ys[0] = 8
+    | variable:ys  punctuation:[  number:0  punctuation:]  operator:=  number:8
+ 68 |     <- xs[0] + ys[0]
+    | keyword:<-  variable:xs  punctuation:[  number:0  punctuation:]  operator:+  variable:ys  punctuation:[  number:0  punctuation:]
+ 69 | fi
+    | keyword:fi
+ 71 | ; The items of a slice inside the slice are other memory, which an add on the
+    | comment:; The items of a slice inside the slice are other memory, which an add on the
+ 72 | ; outer slice does not move.
+    | comment:; outer slice does not move.
+ 73 | task inner() -> int
+    | keyword:task  task:inner  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 74 |     region r default
+    | keyword:region  region:r  keyword:default
+ 75 |     flex rows = [[1, 2, ...], [3, ...], ...]
+    | keyword:flex  variable:rows  operator:=  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  keyword:...  punctuation:]  punctuation:,  keyword:...  punctuation:]
+ 76 |     flex alias = rows
+    | keyword:flex  variable:alias  operator:=  variable:rows
+ 77 |     alias.add([5, ...])
+    | variable:alias  punctuation:.  field:add  punctuation:(  punctuation:[  number:5  punctuation:,  keyword:...  punctuation:]  punctuation:)
+ 78 |     rows[0][0] = 7
+    | variable:rows  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:7
+ 79 |     <- rows[0][0]
+    | keyword:<-  variable:rows  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]
+ 80 | fi
+    | keyword:fi
+ 82 | ; What the checker doesn't follow: a copy kept in a field, or one handed to a task.
+    | comment:; What the checker doesn't follow: a copy kept in a field, or one handed to a task.
+ 83 | shape Holder
+    | keyword:shape  type:Holder
+ 84 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+ 85 | fi
+    | keyword:fi
+ 87 | task through_field(r: region default) -> int
+    | keyword:task  task:through_field  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int
+ 88 |     flex xs = [1, 2, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 89 |     flex held: Holder@r = Holder { items: xs }
+    | keyword:flex  variable:held  punctuation::  type:Holder  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:items  punctuation::  variable:xs  punctuation:}
+ 90 |     xs.add(3)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
+ 91 |     held.items[0] = 9
+    | variable:held  punctuation:.  field:items  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 92 |     xs[1] = 8
+    | variable:xs  punctuation:[  number:1  punctuation:]  operator:=  number:8
+ 93 |     <- xs.len
+    | keyword:<-  variable:xs  punctuation:.  field:len
+ 94 | fi
+    | keyword:fi
+ 96 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 97 |     region r default
+    | keyword:region  region:r  keyword:default
+ 98 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 99 |     grow(&xs, r)
+    | task:grow  punctuation:(  operator:&  variable:xs  punctuation:,  region:r  punctuation:)
+100 |     zero(xs)
+    | task:zero  punctuation:(  variable:xs  punctuation:)
+101 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+102 |     show(own_items(r))
+    | builtin-fn:show  punctuation:(  task:own_items  punctuation:(  region:r  punctuation:)  punctuation:)
+103 |     show(before())
+    | builtin-fn:show  punctuation:(  task:before  punctuation:(  punctuation:)  punctuation:)
+104 |     show(lengths())
+    | builtin-fn:show  punctuation:(  task:lengths  punctuation:(  punctuation:)  punctuation:)
+105 |     show(last())
+    | builtin-fn:show  punctuation:(  task:last  punctuation:(  punctuation:)  punctuation:)
+106 |     show(apart(r))
+    | builtin-fn:show  punctuation:(  task:apart  punctuation:(  region:r  punctuation:)  punctuation:)
+107 |     show(inner())
+    | builtin-fn:show  punctuation:(  task:inner  punctuation:(  punctuation:)  punctuation:)
+108 |     show(through_field(r))
+    | builtin-fn:show  punctuation:(  task:through_field  punctuation:(  region:r  punctuation:)  punctuation:)
+109 | fi
+    | keyword:fi

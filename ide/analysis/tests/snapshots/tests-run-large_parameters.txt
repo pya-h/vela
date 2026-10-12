@@ -1,278 +1,280 @@
-  1 | ; A parameter that never changes, of a large type (here, a shape of twelve
+  1 | ; warning: 59:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [Big]@r', or work on a copy of its own, 'xs.copy() at r'
+    | comment:; warning: 59:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [Big]@r', or work on a copy of its own, 'xs.copy() at r'
+  2 | ; A parameter that never changes, of a large type (here, a shape of twelve
     | comment:; A parameter that never changes, of a large type (here, a shape of twelve
-  2 | ; ints), is passed by a hidden pointer to where the caller keeps it, which is
+  3 | ; ints), is passed by a hidden pointer to where the caller keeps it, which is
     | comment:; ints), is passed by a hidden pointer to where the caller keeps it, which is
-  3 | ; faster than copying it. Nothing a program can see changes: each task below
+  4 | ; faster than copying it. Nothing a program can see changes: each task below
     | comment:; faster than copying it. Nothing a program can see changes: each task below
-  4 | ; reads the value it was given, as it was when the call began, however the
+  5 | ; reads the value it was given, as it was when the call began, however the
     | comment:; reads the value it was given, as it was when the call began, however the
-  5 | ; program changes the place it came from while the task runs.
+  6 | ; program changes the place it came from while the task runs.
     | comment:; program changes the place it came from while the task runs.
-  7 | shape Big
+  8 | shape Big
     | keyword:shape  type:Big
-  8 |     a: [int#12]
+  9 |     a: [int#12]
     | field:a  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:12  punctuation:]
- 10 |     ; A method that changes nothing reads its value the same way.
+ 11 |     ; A method that changes nothing reads its value the same way.
     | comment:; A method that changes nothing reads its value the same way.
- 11 |     first() -> int
+ 12 |     first() -> int
     | method:first  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 12 |         <- .a[0]
+ 13 |         <- .a[0]
     | keyword:<-  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
- 13 |     fi
+ 14 |     fi
     | keyword:fi
- 15 |     ; Given a copy of the value it changes, which it reads as it was.
+ 16 |     ; Given a copy of the value it changes, which it reads as it was.
     | comment:; Given a copy of the value it changes, which it reads as it was.
- 16 |     alters absorb(other: Big)
+ 17 |     alters absorb(other: Big)
     | keyword:alters  method:absorb  punctuation:(  parameter:other  punctuation::  type:Big  punctuation:)
- 17 |         .a[0] = .a[0] + 100
+ 18 |         .a[0] = .a[0] + 100
     | punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:=  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:+  number:100
- 18 |         .a[0] = .a[0] + other.a[0]
+ 19 |         .a[0] = .a[0] + other.a[0]
     | punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:=  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:+  parameter:other  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
- 19 |     fi
+ 20 |     fi
     | keyword:fi
- 21 |     alters grow(k: int)
+ 22 |     alters grow(k: int)
     | keyword:alters  method:grow  punctuation:(  parameter:k  punctuation::  type-builtin:int  punctuation:)
- 22 |         .a[1] = .a[1] + k
+ 23 |         .a[1] = .a[1] + k
     | punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:=  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:+  parameter:k
- 23 |     fi
+ 24 |     fi
     | keyword:fi
- 24 | fi
+ 25 | fi
     | keyword:fi
- 26 | kind Held
+ 27 | kind Held
     | keyword:kind  type:Held
- 27 |     Nothing
+ 28 |     Nothing
     | variant:Nothing
- 28 |     Some(big: Big)
+ 29 |     Some(big: Big)
     | variant:Some  punctuation:(  field:big  punctuation::  type:Big  punctuation:)
- 29 | fi
+ 30 | fi
     | keyword:fi
- 31 | task make(start: int) -> Big
+ 32 | task make(start: int) -> Big
     | keyword:task  task:make  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Big
- 32 |     flex b = Big { a: [0#12] }
+ 33 |     flex b = Big { a: [0#12] }
     | keyword:flex  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  punctuation:[  number:0  punctuation:#  number:12  punctuation:]  punctuation:}
- 33 |     each i in 0..12
+ 34 |     each i in 0..12
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:12
- 34 |         b.a[i] = start + i
+ 35 |         b.a[i] = start + i
     | variable:b  punctuation:.  field:a  punctuation:[  variable:i  punctuation:]  operator:=  parameter:start  operator:+  variable:i
- 35 |     fi
+ 36 |     fi
     | keyword:fi
- 36 |     <- b
+ 37 |     <- b
     | keyword:<-  variable:b
- 37 | fi
+ 38 | fi
     | keyword:fi
- 39 | task total(b: Big) -> int
+ 40 | task total(b: Big) -> int
     | keyword:task  task:total  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
- 40 |     flex sum = 0
+ 41 |     flex sum = 0
     | keyword:flex  variable:sum  operator:=  number:0
- 41 |     each x in b.a
+ 42 |     each x in b.a
     | keyword:each  variable:x  keyword:in  parameter:b  punctuation:.  field:a
- 42 |         sum = sum + x
+ 43 |         sum = sum + x
     | variable:sum  operator:=  variable:sum  operator:+  variable:x
- 43 |     fi
+ 44 |     fi
     | keyword:fi
- 44 |     <- sum
+ 45 |     <- sum
     | keyword:<-  variable:sum
- 45 | fi
+ 46 | fi
     | keyword:fi
- 47 | ; Given memory in a region, and a pointer to the same memory, which it writes:
+ 48 | ; Given memory in a region, and a pointer to the same memory, which it writes:
     | comment:; Given memory in a region, and a pointer to the same memory, which it writes:
- 48 | ; what it was given stays as it was.
+ 49 | ; what it was given stays as it was.
     | comment:; what it was given stays as it was.
- 49 | task through_pointer(b: Big, flex p: ^Big@r) -> int
+ 50 | task through_pointer(b: Big, flex p: ^Big@r) -> int
     | keyword:task  task:through_pointer  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 50 |     fixed before = b.a[0]
+ 51 |     fixed before = b.a[0]
     | keyword:fixed  variable:before  operator:=  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
- 51 |     p^.a[0] = 1000
+ 52 |     p^.a[0] = 1000
     | parameter:p  operator:^  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:=  number:1000
- 52 |     <- before * 1000 + b.a[0]
+ 53 |     <- before * 1000 + b.a[0]
     | keyword:<-  variable:before  operator:*  number:1000  operator:+  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
- 53 | fi
+ 54 | fi
     | keyword:fi
- 55 | ; Given an item of a slice, and the slice, which it changes and grows.
+ 56 | ; Given an item of a slice, and the slice, which it changes and grows.
     | comment:; Given an item of a slice, and the slice, which it changes and grows.
- 56 | task through_slice(b: Big, flex xs: [Big]@r, r: region) -> int
+ 57 | task through_slice(b: Big, flex xs: [Big]@r, r: region) -> int
     | keyword:task  task:through_slice  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:xs  punctuation::  punctuation:[  type:Big  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
- 57 |     xs[0].a[0] = 2000
+ 58 |     xs[0].a[0] = 2000
     | parameter:xs  punctuation:[  number:0  punctuation:]  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:=  number:2000
- 58 |     xs.add(make(0))
+ 59 |     xs.add(make(0))
     | parameter:xs  punctuation:.  field:add  punctuation:(  task:make  punctuation:(  number:0  punctuation:)  punctuation:)
- 59 |     <- b.a[0]
+ 60 |     <- b.a[0]
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
- 60 | fi
+ 61 | fi
     | keyword:fi
- 62 | ; Given its own place too, through a flex& of the caller's caller.
+ 63 | ; Given its own place too, through a flex& of the caller's caller.
     | comment:; Given its own place too, through a flex& of the caller's caller.
- 63 | task through_reference(b: Big, flex p: ^Big@r) -> int
+ 64 | task through_reference(b: Big, flex p: ^Big@r) -> int
     | keyword:task  task:through_reference  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 64 |     p^.a[1] = 3000
+ 65 |     p^.a[1] = 3000
     | parameter:p  operator:^  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:=  number:3000
- 65 |     <- b.a[1]
+ 66 |     <- b.a[1]
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:1  punctuation:]
- 66 | fi
+ 67 | fi
     | keyword:fi
- 68 | task pass_on(flex& b: Big, flex p: ^Big@r) -> int
+ 69 | task pass_on(flex& b: Big, flex p: ^Big@r) -> int
     | keyword:task  task:pass_on  punctuation:(  keyword:flex  keyword:&  parameter:b  punctuation::  type:Big  punctuation:,  keyword:flex  parameter:p  punctuation::  operator:^  type:Big  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 69 |     <- through_reference(b, p)
+ 70 |     <- through_reference(b, p)
     | keyword:<-  task:through_reference  punctuation:(  parameter:b  punctuation:,  parameter:p  punctuation:)
- 70 | fi
+ 71 | fi
     | keyword:fi
- 72 | ; Changes the variable given to it by the caller.
+ 73 | ; Changes the variable given to it by the caller.
     | comment:; Changes the variable given to it by the caller.
- 73 | task bump(flex& b: Big) -> int
+ 74 | task bump(flex& b: Big) -> int
     | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
- 74 |     b.a[0] = b.a[0] + 500
+ 75 |     b.a[0] = b.a[0] + 500
     | parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:=  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:+  number:500
- 75 |     <- 0
+ 76 |     <- 0
     | keyword:<-  number:0
- 76 | fi
+ 77 | fi
     | keyword:fi
- 78 | ; Passed on, and read after deep recursion.
+ 79 | ; Passed on, and read after deep recursion.
     | comment:; Passed on, and read after deep recursion.
- 79 | task deep(b: Big, n: int) -> int
+ 80 | task deep(b: Big, n: int) -> int
     | keyword:task  task:deep  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 80 |     when n == 0
+ 81 |     when n == 0
     | keyword:when  parameter:n  operator:==  number:0
- 81 |         <- b.a[11]
+ 82 |         <- b.a[11]
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:11  punctuation:]
- 82 |     fi
+ 83 |     fi
     | keyword:fi
- 83 |     <- deep(b, n - 1)
+ 84 |     <- deep(b, n - 1)
     | keyword:<-  task:deep  punctuation:(  parameter:b  punctuation:,  parameter:n  operator:-  number:1  punctuation:)
- 84 | fi
+ 85 | fi
     | keyword:fi
- 86 | task largest<T: ordered>(items: [T#12]) -> T
+ 87 | task largest<T: ordered>(items: [T#12]) -> T
     | keyword:task  task:largest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:items  punctuation::  punctuation:[  type:T  punctuation:#  number:12  punctuation:]  punctuation:)  operator:->  type:T
- 87 |     flex best = items[0]
+ 88 |     flex best = items[0]
     | keyword:flex  variable:best  operator:=  parameter:items  punctuation:[  number:0  punctuation:]
- 88 |     each item in items
+ 89 |     each item in items
     | keyword:each  variable:item  keyword:in  parameter:items
- 89 |         when item > best
+ 90 |         when item > best
     | keyword:when  variable:item  operator:>  variable:best
- 90 |             best = item
+ 91 |             best = item
     | variable:best  operator:=  variable:item
- 91 |         fi
+ 92 |         fi
     | keyword:fi
- 92 |     fi
+ 93 |     fi
     | keyword:fi
- 93 |     <- best
+ 94 |     <- best
     | keyword:<-  variable:best
- 94 | fi
+ 95 | fi
     | keyword:fi
- 96 | task held_total(h: Held, m: maybe Big, extra: int) -> int
+ 97 | task held_total(h: Held, m: maybe Big, extra: int) -> int
     | keyword:task  task:held_total  punctuation:(  parameter:h  punctuation::  type:Held  punctuation:,  parameter:m  punctuation::  keyword:maybe  type:Big  punctuation:,  parameter:extra  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 97 |     flex sum = extra
+ 98 |     flex sum = extra
     | keyword:flex  variable:sum  operator:=  parameter:extra
- 98 |     match h
+ 99 |     match h
     | keyword:match  parameter:h
- 99 |     case Some big
+100 |     case Some big
     | keyword:case  variant:Some  variable:big
-100 |         sum = sum + big.a[0]
+101 |         sum = sum + big.a[0]
     | variable:sum  operator:=  variable:sum  operator:+  variable:big  punctuation:.  field:a  punctuation:[  number:0  punctuation:]
-101 |     case Nothing
+102 |     case Nothing
     | keyword:case  variant:Nothing
-102 |     fi
+103 |     fi
     | keyword:fi
-103 |     when m is {big}
+104 |     when m is {big}
     | keyword:when  parameter:m  keyword:is  punctuation:{  variable:big  punctuation:}
-104 |         sum = sum + big.a[1]
+105 |         sum = sum + big.a[1]
     | variable:sum  operator:=  variable:sum  operator:+  variable:big  punctuation:.  field:a  punctuation:[  number:1  punctuation:]
-105 |     fi
+106 |     fi
     | keyword:fi
-106 |     <- sum
+107 |     <- sum
     | keyword:<-  variable:sum
-107 | fi
+108 | fi
     | keyword:fi
-109 | task main()
+110 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-110 |     flex b = make(1)
+111 |     flex b = make(1)
     | keyword:flex  variable:b  operator:=  task:make  punctuation:(  number:1  punctuation:)
-111 |     show(total(b), " ", b.first(), " ", deep(b, 100), " ", largest(b.a))
+112 |     show(total(b), " ", b.first(), " ", deep(b, 100), " ", largest(b.a))
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  method:first  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  task:deep  punctuation:(  variable:b  punctuation:,  number:100  punctuation:)  punctuation:,  string:" "  punctuation:,  task:largest  punctuation:(  variable:b  punctuation:.  field:a  punctuation:)  punctuation:)
-113 |     region r
+114 |     region r
     | keyword:region  region:r
-114 |     flex p = new Big(make(5)) at r
+115 |     flex p = new Big(make(5)) at r
     | keyword:flex  variable:p  operator:=  keyword:new  type:Big  punctuation:(  task:make  punctuation:(  number:5  punctuation:)  punctuation:)  keyword:at  region:r
-115 |     show(through_pointer(p^, p), " ", p^.a[0])
+116 |     show(through_pointer(p^, p), " ", p^.a[0])
     | builtin-fn:show  punctuation:(  task:through_pointer  punctuation:(  variable:p  operator:^  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  operator:^  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
-116 |     ; A condition read before every round copies what the pointer points to
+117 |     ; A condition read before every round copies what the pointer points to
     | comment:; A condition read before every round copies what the pointer points to
-117 |     ; each time.
+118 |     ; each time.
     | comment:; each time.
-118 |     flex steps = 0
+119 |     flex steps = 0
     | keyword:flex  variable:steps  operator:=  number:0
-119 |     loop total(p^) < 1200
+120 |     loop total(p^) < 1200
     | keyword:loop  task:total  punctuation:(  variable:p  operator:^  punctuation:)  operator:<  number:1200
-120 |         p^.a[1] = p^.a[1] + 20
+121 |         p^.a[1] = p^.a[1] + 20
     | variable:p  operator:^  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:=  variable:p  operator:^  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  operator:+  number:20
-121 |         steps = steps + 1
+122 |         steps = steps + 1
     | variable:steps  operator:=  variable:steps  operator:+  number:1
-122 |     fi
+123 |     fi
     | keyword:fi
-123 |     show(steps, " ", total(p^))
+124 |     show(steps, " ", total(p^))
     | builtin-fn:show  punctuation:(  variable:steps  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:)
-125 |     flex xs = new [Big]() at r
+126 |     flex xs = new [Big]() at r
     | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type:Big  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-126 |     xs.add(make(7))
+127 |     xs.add(make(7))
     | variable:xs  punctuation:.  field:add  punctuation:(  task:make  punctuation:(  number:7  punctuation:)  punctuation:)
-127 |     show(through_slice(xs[0], xs, r), " ", xs[0].a[0])
+128 |     show(through_slice(xs[0], xs, r), " ", xs[0].a[0])
     | builtin-fn:show  punctuation:(  task:through_slice  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:,  variable:xs  punctuation:,  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
-129 |     flex q = new Big(make(9)) at r
+130 |     flex q = new Big(make(9)) at r
     | keyword:flex  variable:q  operator:=  keyword:new  type:Big  punctuation:(  task:make  punctuation:(  number:9  punctuation:)  punctuation:)  keyword:at  region:r
-130 |     show(pass_on(&q^, q), " ", q^.a[1])
+131 |     show(pass_on(&q^, q), " ", q^.a[1])
     | builtin-fn:show  punctuation:(  task:pass_on  punctuation:(  operator:&  variable:q  operator:^  punctuation:,  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:q  operator:^  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  punctuation:)
-132 |     ; Arguments are read left to right: 'b' is read before 'bump' changes it.
+133 |     ; Arguments are read left to right: 'b' is read before 'bump' changes it.
     | comment:; Arguments are read left to right: 'b' is read before 'bump' changes it.
-133 |     show(total(b), " ", total(b) + bump(&b), " ", b.a[0])
+134 |     show(total(b), " ", total(b) + bump(&b), " ", b.a[0])
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:b  punctuation:)  operator:+  task:bump  punctuation:(  operator:&  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
-134 |     show(both(b, bump(&b)), " ", b.a[0])
+135 |     show(both(b, bump(&b)), " ", b.a[0])
     | builtin-fn:show  punctuation:(  task:both  punctuation:(  variable:b  punctuation:,  task:bump  punctuation:(  operator:&  variable:b  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:)
-136 |     show(held_total(Held.Some(b), b, 4))
+137 |     show(held_total(Held.Some(b), b, 4))
     | builtin-fn:show  punctuation:(  task:held_total  punctuation:(  type:Held  punctuation:.  variant:Some  punctuation:(  variable:b  punctuation:)  punctuation:,  variable:b  punctuation:,  number:4  punctuation:)  punctuation:)
-138 |     ; A method that changes its value, given a copy of it or of a part of it.
+139 |     ; A method that changes its value, given a copy of it or of a part of it.
     | comment:; A method that changes its value, given a copy of it or of a part of it.
-139 |     flex c = make(2)
+140 |     flex c = make(2)
     | keyword:flex  variable:c  operator:=  task:make  punctuation:(  number:2  punctuation:)
-140 |     c.absorb(c)
+141 |     c.absorb(c)
     | variable:c  punctuation:.  method:absorb  punctuation:(  variable:c  punctuation:)
-141 |     c.grow(c.a[1])
+142 |     c.grow(c.a[1])
     | variable:c  punctuation:.  method:grow  punctuation:(  variable:c  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  punctuation:)
-142 |     show(c.a[0], " ", c.a[1])
+143 |     show(c.a[0], " ", c.a[1])
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:a  punctuation:[  number:1  punctuation:]  punctuation:)
-144 |     ; A value made by a call that changes a later argument is made first.
+145 |     ; A value made by a call that changes a later argument is made first.
     | comment:; A value made by a call that changes a later argument is made first.
-145 |     flex m = 1
+146 |     flex m = 1
     | keyword:flex  variable:m  operator:=  number:1
-146 |     show(first_and(mk(&m), m), " ", copied(c, r))
+147 |     show(first_and(mk(&m), m), " ", copied(c, r))
     | builtin-fn:show  punctuation:(  task:first_and  punctuation:(  task:mk  punctuation:(  operator:&  variable:m  punctuation:)  punctuation:,  variable:m  punctuation:)  punctuation:,  string:" "  punctuation:,  task:copied  punctuation:(  variable:c  punctuation:,  region:r  punctuation:)  punctuation:)
-147 | fi
+148 | fi
     | keyword:fi
-149 | task mk(flex& n: int) -> Big
+150 | task mk(flex& n: int) -> Big
     | keyword:task  task:mk  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Big
-150 |     n = n + 100
+151 |     n = n + 100
     | parameter:n  operator:=  parameter:n  operator:+  number:100
-151 |     <- make(n)
+152 |     <- make(n)
     | keyword:<-  task:make  punctuation:(  parameter:n  punctuation:)
-152 | fi
+153 | fi
     | keyword:fi
-154 | task first_and(b: Big, k: int) -> int
+155 | task first_and(b: Big, k: int) -> int
     | keyword:task  task:first_and  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  parameter:k  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-155 |     <- b.a[0] * 1000 + k
+156 |     <- b.a[0] * 1000 + k
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:*  number:1000  operator:+  parameter:k
-156 | fi
+157 | fi
     | keyword:fi
-158 | task copied(b: Big, r: region) -> int
+159 | task copied(b: Big, r: region) -> int
     | keyword:task  task:copied  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
-159 |     fixed items = new [int](b.a) at r
+160 |     fixed items = new [int](b.a) at r
     | keyword:fixed  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  parameter:b  punctuation:.  field:a  punctuation:)  keyword:at  region:r
-160 |     <- items[11]
+161 |     <- items[11]
     | keyword:<-  variable:items  punctuation:[  number:11  punctuation:]
-161 | fi
+162 | fi
     | keyword:fi
-163 | ; The first is read before the second changes it.
+164 | ; The first is read before the second changes it.
     | comment:; The first is read before the second changes it.
-164 | task both(b: Big, changed: int) -> int
+165 | task both(b: Big, changed: int) -> int
     | keyword:task  task:both  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:,  parameter:changed  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-165 |     <- b.a[0] + changed
+166 |     <- b.a[0] + changed
     | keyword:<-  parameter:b  punctuation:.  field:a  punctuation:[  number:0  punctuation:]  operator:+  parameter:changed
-166 | fi
+167 | fi
     | keyword:fi

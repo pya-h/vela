@@ -684,7 +684,8 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
           items stays linked or not by where its items happen to be: an <code>add</code> that needs more room copies
           the items to a block of its own, after which writes are no longer seen, while one that finds room, and a
           <code>del</code>, keep the two on the same items (see
-          <a href="vela.html#slices">Copies and parts</a>). A <code>bind</code> slice never adds or takes out items,
+          <a href="vela.html#slices">Copies and parts</a>), and the compiler warns where a task leans on it (see
+          <a href="#slice-views">below</a>). A <code>bind</code> slice never adds or takes out items,
           so its copies stay on the same items, and a task taking one as <code>bind</code> goes where a task type says
           <code>flex</code>.
         </p>
@@ -712,7 +713,7 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
       </div>
 
       <div class="entry" id="slice-views">
-        <h3>A view after its slice changes <span class="badge b-design">by design</span></h3>
+        <h3>A view after its slice changes <span class="badge b-design">by design</span> <span class="badge b-warned">warned</span></h3>
         <p>
           A part of a slice, <code>xs[a..b]</code>, is a view of the items where they were when it was taken. After
           <code>del</code> the items move under it, and it may read one past the slice's new length; after a growth
@@ -728,10 +729,16 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
           there were, so an item deleted during the loop is still read. <code>each v in &amp;xs</code> goes through
           <code>xs</code> as it is at each pass instead (see <a href="vela.html#arrays">Arrays</a>).
         </p>
+        <p>
+          The compiler warns where a task does this: a copy or part used after a <code>del</code> on the slice it was
+          made of, an item written through either after an <code>add</code>, and an <code>add</code> or
+          <code>del</code> on a <code>flex</code> slice parameter, once in each task for each case
+          (<code>--repeat-warnings</code> shows every place; see <a href="vela.html#slice-warnings">Warnings</a>).
+        </p>
         <dl>
           <dt>Ways it could go</dt>
-          <dd>A warning where a view or copy of a <code>flex</code> slice is read after <code>add</code> or
-            <code>del</code> changed that slice in the same block.</dd>
+          <dd>The warning follows copies made in one task by a binding or an assignment; it could follow slices in
+            fields, given to calls, or kept by lambdas, and a loop's next pass.</dd>
         </dl>
       </div>
 

@@ -714,6 +714,28 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         condition that calls a task, or reads through a pointer, a reference or a shared field, is never told, since
         those may change elsewhere.
       </p>
+      <p id="slice-warnings">
+        Others are about slices that share items (see <a href="#slices">Copies and parts</a>), where what is done to
+        one may or may not show in the other, since an <code>add</code> keeps the two on the same items only when it
+        finds room in place, and a <code>del</code> moves items in the memory they share:
+      </p>
+      <ul>
+        <li>An <code>add</code> or a <code>del</code> on a <code>flex</code> slice parameter, the task's own copy of
+          the caller's slice: what the task writes afterwards may or may not reach the caller, and a <code>del</code>
+          moves items the caller sees. The warning says to take the caller's place, <code>flex&amp; xs: [int]@r</code>,
+          or to work on a copy of its own, <code>xs.copy() at r</code>.</li>
+        <li>A slice made of another in the same task, a copy <code>flex ys = xs</code> or a part
+          <code>xs[1..3]</code>: an item written through either after an <code>add</code> on one, and either used after
+          a <code>del</code> (with an index) on the other. Reading only <code>.len</code> is never warned of.</li>
+      </ul>
+      <p>
+        Each of these is said once in each task, for the first place it happens (one warning for the first
+        <code>add</code> on a parameter, one for the first <code>del</code>, and so on), and the char-array warning
+        once in each file (see <a href="#chars">Chars</a>); the build's <code>--repeat-warnings</code> shows every
+        place, each in its line. The compiler follows only copies made by a binding or an assignment of a slice's own
+        name or a part of it, within one task, in the order they are written: not slices in fields, given to a call,
+        or kept by a lambda, and not what a loop's next pass does before an earlier line.
+      </p>
 
       <h3 id="references">References</h3>
       <p>
@@ -1220,7 +1242,8 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
       <p>
         Text already holds characters, with its length, parts, <code>t[i]</code>, joining, and <code>==</code>, so an
         array or slice of chars is text built by hand: the compiler warns about the first one made in each file
-        (<em>this builds text by hand as chars; 'text' holds characters already …</em>) and says nothing about the rest.
+        (<em>this builds text by hand as chars; 'text' holds characters already …</em>) and says nothing about the rest,
+        unless the build is given <code>--repeat-warnings</code>.
       </p>
       <pre><span class="keyword">task</span> shout(c: char) -&gt; char
     <span class="keyword">when</span> c &gt;= <span class="string">'a'</span> <span class="keyword">and</span> c &lt;= <span class="string">'z'</span>
@@ -4515,7 +4538,8 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         block of their own first. Writing an item, <code>del</code>, and <code>add</code> in the middle move items in
         that shared memory, which the other views then see, as they see <code>xs[i] = v</code>. So does
         <code>del</code> at the end: it gives the item's space back to the room, and the next <code>add</code> to that
-        slice goes there, over the item a copy made before the <code>del</code> may still count. After changing a
+        slice goes there, over the item a copy made before the <code>del</code> may still count. The compiler warns
+        where a task leans on this (see <a href="#slice-warnings">Warnings</a>). After changing a
         slice, use the slice you changed, and give a copy that must keep its items of its own:
         <code>xs.copy() at r</code> or <code>new [T](xs) at r</code>, which both copy at every depth.
       </p>
@@ -4933,11 +4957,13 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices] [--]</code>: <code>-o</code> names the executable
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]</code>: <code>-o</code> names the executable
         (<code>a.out</code> by default), <code>--quick</code> builds it without optimizing the C (<code>-O0</code>
         rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--no-notices</code>
         builds a program that writes no notices to standard error, as of a <a href="#decorators">startup decorator</a>
-        whose failure it lets pass (not with <code>--check</code>, which builds none), <code>--emit-c</code> prints the generated C instead of compiling it (or,
+        whose failure it lets pass (not with <code>--check</code>, which builds none), <code>--repeat-warnings</code>
+        shows every place a warning said once for each task or file applies, not only the first (see
+        <a href="#slice-warnings">Warnings</a>), <code>--emit-c</code> prints the generated C instead of compiling it (or,
         with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the

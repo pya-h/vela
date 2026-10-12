@@ -1,0 +1,148 @@
+  1 | ; warning: 17:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+    | comment:; warning: 17:8: 'xs' is the task's own copy of the caller's slice, and an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+  2 | ; warning: 19:8: 'xs' is the task's own copy of the caller's slice, and a 'del' moves the items after the one taken out in the memory the caller's slice shares, so the caller's slice sees them moved, though its length stays as it was; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+    | comment:; warning: 19:8: 'xs' is the task's own copy of the caller's slice, and a 'del' moves the items after the one taken out in the memory the caller's slice shares, so the caller's slice sees them moved, though its length stays as it was; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+  3 | ; warning: 26:11: 'xs' is the task's own copy of the caller's slice, and a 'del' gives the last item's space back to the room the caller's slice may share, so a later 'add' may go over an item the caller still counts, though its length stays as it was; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+    | comment:; warning: 26:11: 'xs' is the task's own copy of the caller's slice, and a 'del' gives the last item's space back to the room the caller's slice may share, so a later 'add' may go over an item the caller still counts, though its length stays as it was; to change the caller's slice, take the caller's place, 'flex& xs: [int]@r', or work on a copy of its own, 'xs.copy() at r'
+  4 | ; warning: 36:5: this writes an item of 'xs' after 'ys.add(…)' at 35:8; 'xs' and 'ys' were made of one slice and share items only while an add finds room in place, so the write may or may not be seen through 'ys'; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+    | comment:; warning: 36:5: this writes an item of 'xs' after 'ys.add(…)' at 35:8; 'xs' and 'ys' were made of one slice and share items only while an add finds room in place, so the write may or may not be seen through 'ys'; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+  5 | ; warning: 49:12: this uses 'part' after 'zs.del(…)' at 47:8; 'part' and 'zs' were made of one slice and share its items, and 'del' moves the items after the one taken out in that shared memory, so 'part' sees them moved; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+    | comment:; warning: 49:12: this uses 'part' after 'zs.del(…)' at 47:8; 'part' and 'zs' were made of one slice and share its items, and 'del' moves the items after the one taken out in that shared memory, so 'part' sees them moved; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+  6 | ; warning: 58:5: this writes an item of 'xs' after 'xs.add(…)' at 57:8; a copy or part of 'xs' made earlier shares its items only while an add finds room in place, so the write may or may not be seen through it; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+    | comment:; warning: 58:5: this writes an item of 'xs' after 'xs.add(…)' at 57:8; a copy or part of 'xs' made earlier shares its items only while an add finds room in place, so the write may or may not be seen through it; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+  7 | ; warning: 69:8: this uses 'ws' after 'vs.del(…)' at 68:8; 'ws' and 'vs' were made of one slice and share its items, and 'del' moves the items after the one taken out in that shared memory, so 'ws' sees them moved; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+    | comment:; warning: 69:8: this uses 'ws' after 'vs.del(…)' at 68:8; 'ws' and 'vs' were made of one slice and share its items, and 'del' moves the items after the one taken out in that shared memory, so 'ws' sees them moved; use the slice you changed, or give the copy items of its own, as in 'flex ys = xs.copy() at r'
+  8 | ; A copy or a part of a slice shares its items with it only while an add finds
+    | comment:; A copy or a part of a slice shares its items with it only while an add finds
+  9 | ; room in place, and a del moves the items they share, so what is done to one
+    | comment:; room in place, and a del moves the items they share, so what is done to one
+ 10 | ; may or may not show in the other. The compiler warns where a program leans on
+    | comment:; may or may not show in the other. The compiler warns where a program leans on
+ 11 | ; that, once in each task for each case; the second of each, marked below, is
+    | comment:; that, once in each task for each case; the second of each, marked below, is
+ 12 | ; held back (`--repeat-warnings` shows it).
+    | comment:; held back (`--repeat-warnings` shows it).
+ 14 | ; The task's own copy of the caller's slice: the first add and the first del
+    | comment:; The task's own copy of the caller's slice: the first add and the first del
+ 15 | ; are warned of, not the second of either.
+    | comment:; are warned of, not the second of either.
+ 16 | task trim(flex xs: [int]@r, r: region) -> int
+    | keyword:task  task:trim  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
+ 17 |     xs.add(1)
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+ 18 |     xs.add(2)                   ; held back
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:2  punctuation:)  comment:; held back
+ 19 |     xs.del(0)
+    | parameter:xs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 20 |     xs.del(0)                   ; held back
+    | parameter:xs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)  comment:; held back
+ 21 |     <- xs.len
+    | keyword:<-  parameter:xs  punctuation:.  field:len
+ 22 | fi
+    | keyword:fi
+ 24 | ; A last item taken out moves no item, but gives its room back.
+    | comment:; A last item taken out moves no item, but gives its room back.
+ 25 | task pop(flex xs: [int]@r) -> int
+    | keyword:task  task:pop  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 26 |     <- xs.del()
+    | keyword:<-  parameter:xs  punctuation:.  field:del  punctuation:(  punctuation:)
+ 27 | fi
+    | keyword:fi
+ 29 | ; A copy, written after an add on the slice it was made of, and through the
+    | comment:; A copy, written after an add on the slice it was made of, and through the
+ 30 | ; slice that was added to.
+    | comment:; slice that was added to.
+ 31 | task add_then_write() -> int
+    | keyword:task  task:add_then_write  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 32 |     region r default
+    | keyword:region  region:r  keyword:default
+ 33 |     flex xs = [1, 2, 3, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 34 |     flex ys = xs
+    | keyword:flex  variable:ys  operator:=  variable:xs
+ 35 |     ys.add(4)
+    | variable:ys  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 36 |     xs[0] = 9
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 37 |     ys[1] = 8                   ; held back
+    | variable:ys  punctuation:[  number:1  punctuation:]  operator:=  number:8  comment:; held back
+ 38 |     <- xs.len + ys.len
+    | keyword:<-  variable:xs  punctuation:.  field:len  operator:+  variable:ys  punctuation:.  field:len
+ 39 | fi
+    | keyword:fi
+ 41 | ; A part, used after a del on the slice it is a part of; its length alone is
+    | comment:; A part, used after a del on the slice it is a part of; its length alone is
+ 42 | ; no use.
+    | comment:; no use.
+ 43 | task del_then_use() -> int
+    | keyword:task  task:del_then_use  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 44 |     region r default
+    | keyword:region  region:r  keyword:default
+ 45 |     flex zs = [1, 2, 3, 4, ...]
+    | keyword:flex  variable:zs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  keyword:...  punctuation:]
+ 46 |     fixed part = zs[1..3]
+    | keyword:fixed  variable:part  operator:=  variable:zs  punctuation:[  number:1  operator:..  number:3  punctuation:]
+ 47 |     zs.del(0)
+    | variable:zs  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 48 |     fixed n = part.len
+    | keyword:fixed  variable:n  operator:=  variable:part  punctuation:.  field:len
+ 49 |     <- n + part[0] + part[1]    ; warned once, at the first read
+    | keyword:<-  variable:n  operator:+  variable:part  punctuation:[  number:0  punctuation:]  operator:+  variable:part  punctuation:[  number:1  punctuation:]  comment:; warned once, at the first read
+ 50 | fi
+    | keyword:fi
+ 52 | ; A fixed copy counts too, and the write is through the slice that was added to.
+    | comment:; A fixed copy counts too, and the write is through the slice that was added to.
+ 53 | task fixed_copy() -> int
+    | keyword:task  task:fixed_copy  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 54 |     region r default
+    | keyword:region  region:r  keyword:default
+ 55 |     flex xs = [1, 2, ...]
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]
+ 56 |     fixed view = xs
+    | keyword:fixed  variable:view  operator:=  variable:xs
+ 57 |     xs.add(3)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
+ 58 |     xs[0] = 7
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:7
+ 59 |     <- view.len
+    | keyword:<-  variable:view  punctuation:.  field:len
+ 60 | fi
+    | keyword:fi
+ 62 | ; A copy made by an assignment.
+    | comment:; A copy made by an assignment.
+ 63 | task assigned() -> int
+    | keyword:task  task:assigned  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 64 |     region r default
+    | keyword:region  region:r  keyword:default
+ 65 |     flex ws = [1, 2, 3, ...]
+    | keyword:flex  variable:ws  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 66 |     flex vs = [5, ...]
+    | keyword:flex  variable:vs  operator:=  punctuation:[  number:5  punctuation:,  keyword:...  punctuation:]
+ 67 |     vs = ws
+    | variable:vs  operator:=  variable:ws
+ 68 |     vs.del(1)
+    | variable:vs  punctuation:.  field:del  punctuation:(  number:1  punctuation:)
+ 69 |     <- ws[0]
+    | keyword:<-  variable:ws  punctuation:[  number:0  punctuation:]
+ 70 | fi
+    | keyword:fi
+ 72 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 73 |     region r default
+    | keyword:region  region:r  keyword:default
+ 74 |     flex nums = [1, 2, 3, ...]
+    | keyword:flex  variable:nums  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 75 |     show(trim(nums, r))
+    | builtin-fn:show  punctuation:(  task:trim  punctuation:(  variable:nums  punctuation:,  region:r  punctuation:)  punctuation:)
+ 76 |     show(pop(nums))
+    | builtin-fn:show  punctuation:(  task:pop  punctuation:(  variable:nums  punctuation:)  punctuation:)
+ 77 |     show(add_then_write())
+    | builtin-fn:show  punctuation:(  task:add_then_write  punctuation:(  punctuation:)  punctuation:)
+ 78 |     show(del_then_use())
+    | builtin-fn:show  punctuation:(  task:del_then_use  punctuation:(  punctuation:)  punctuation:)
+ 79 |     show(fixed_copy())
+    | builtin-fn:show  punctuation:(  task:fixed_copy  punctuation:(  punctuation:)  punctuation:)
+ 80 |     show(assigned())
+    | builtin-fn:show  punctuation:(  task:assigned  punctuation:(  punctuation:)  punctuation:)
+ 81 | fi
+    | keyword:fi
