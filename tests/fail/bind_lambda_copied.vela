@@ -1,0 +1,12 @@
+; error: 10:18: 'inc' is a '[bind @r]' lambda, which changes what it keeps, so it is never copied: call it, 'inc(…)', or give it as a place, '&inc', to a 'flex& f: [bind @r](int) -> nothing' parameter
+; A '[bind @r]' lambda is never copied: a copy would share what it changes.
+
+task main()
+    region r
+    flex xs = [1, ...] at r
+    flex inc = [bind @r](n: int) -> nothing
+        xs[0] = xs[0] + n
+    fi
+    flex other = inc
+    other(2)
+fi

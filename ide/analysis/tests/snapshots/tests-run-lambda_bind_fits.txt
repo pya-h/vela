@@ -1,0 +1,38 @@
+  1 | ; A [@r] lambda goes where a [bind @r] one is expected, and a [bind @r] one
+    | comment:; A [@r] lambda goes where a [bind @r] one is expected, and a [bind @r] one
+  2 | ; where a [flex @r] one is.
+    | comment:; where a [flex @r] one is.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r
+    | keyword:region  region:r
+  6 |     flex xs = [1, ...] at r
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+  7 |     flex g = [bind @r]() -> nothing
+    | keyword:flex  variable:g  operator:=  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing
+  8 |         xs[0] = 5
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:5
+  9 |     fi
+    | keyword:fi
+ 10 |     flex h: [bind @r]() -> nothing = [@r]() -> nothing
+    | keyword:flex  variable:h  punctuation::  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing
+ 11 |         show(xs[0])
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:)
+ 12 |     fi
+    | keyword:fi
+ 13 |     g()
+    | variable:g  punctuation:(  punctuation:)
+ 14 |     h()
+    | variable:h  punctuation:(  punctuation:)
+ 15 |     flex k: [flex @r]() -> nothing = [bind @r]() -> nothing
+    | keyword:flex  variable:k  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing  operator:=  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing
+ 16 |         xs[0] = 6
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  number:6
+ 17 |     fi
+    | keyword:fi
+ 18 |     k()
+    | variable:k  punctuation:(  punctuation:)
+ 19 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 20 | fi
+    | keyword:fi

@@ -1,0 +1,14 @@
+; A task taking a slice as 'bind' changes its items as one taking it as 'flex'
+; may, so it goes where the type says 'flex' (never the other way).
+
+task zero(bind xs: [int]@r) -> nothing
+    xs[0] = 0
+fi
+
+task main()
+    region r
+    fixed f: (flex [int]@r) -> nothing = zero
+    flex xs = [5, 6, ...] at r
+    f(xs)
+    show(xs)
+fi

@@ -1,11 +1,11 @@
-; error: 8:15: a '[bind @r]' lambda may change what its copies hold, so it can't keep a copy of fixed 'xs', and nothing changes through what a fixed name owns; make it a '[@r]' lambda, or keep a copy of its own, as in 'flex mine = xs.copy() at r', and use that
+; error: 8:14: a '[bind @r]' lambda may change what its copies hold, so it can't keep a copy of fixed 'xs', and nothing changes through what a fixed name owns; make it a '[@r]' lambda, or keep a copy of its own, as in 'flex mine = xs.copy() at r', and use that
 ; A '[bind @r]' lambda changes the contents of its copies, and a copy of a
 ; slice shares its items, so it can't keep a copy of a fixed one.
 
 task main()
     region r
     fixed xs = [1, 2, ...] at r
-    fixed f = [bind @r]() -> nothing
+    flex f = [bind @r]() -> nothing
         xs[0] = 9
     fi
     f()

@@ -1,0 +1,24 @@
+  1 | ; A task taking a slice as 'bind' changes its items as one taking it as 'flex'
+    | comment:; A task taking a slice as 'bind' changes its items as one taking it as 'flex'
+  2 | ; may, so it goes where the type says 'flex' (never the other way).
+    | comment:; may, so it goes where the type says 'flex' (never the other way).
+  4 | task zero(bind xs: [int]@r) -> nothing
+    | keyword:task  task:zero  punctuation:(  keyword:bind  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing
+  5 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+  6 | fi
+    | keyword:fi
+  8 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  9 |     region r
+    | keyword:region  region:r
+ 10 |     fixed f: (flex [int]@r) -> nothing = zero
+    | keyword:fixed  variable:f  punctuation::  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:=  task:zero
+ 11 |     flex xs = [5, 6, ...] at r
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 12 |     f(xs)
+    | variable:f  punctuation:(  variable:xs  punctuation:)
+ 13 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 14 | fi
+    | keyword:fi

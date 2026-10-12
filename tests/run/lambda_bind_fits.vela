@@ -1,0 +1,20 @@
+; A [@r] lambda goes where a [bind @r] one is expected, and a [bind @r] one
+; where a [flex @r] one is.
+
+task main()
+    region r
+    flex xs = [1, ...] at r
+    flex g = [bind @r]() -> nothing
+        xs[0] = 5
+    fi
+    flex h: [bind @r]() -> nothing = [@r]() -> nothing
+        show(xs[0])
+    fi
+    g()
+    h()
+    flex k: [flex @r]() -> nothing = [bind @r]() -> nothing
+        xs[0] = 6
+    fi
+    k()
+    show(xs)
+fi

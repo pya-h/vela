@@ -1,0 +1,132 @@
+  1 | ; A scoreboard kept in 'bind' names. Each name is bound to one value for good,
+    | comment:; A scoreboard kept in 'bind' names. Each name is bound to one value for good,
+  2 | ; and only what it holds changes: a team's points, a round's scores, the
+    | comment:; and only what it holds changes: a team's points, a round's scores, the
+  3 | ; entries of a table. 'flex' would also let a name be replaced as a whole, or a
+    | comment:; entries of a table. 'flex' would also let a name be replaced as a whole, or a
+  4 | ; list grow; 'fixed' would let nothing change.
+    | comment:; list grow; 'fixed' would let nothing change.
+  6 | shape Team
+    | keyword:shape  type:Team
+  7 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  8 |     points: [int#4]
+    | field:points  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]
+ 10 |     alters score(player: int, by: int)
+    | keyword:alters  method:score  punctuation:(  parameter:player  punctuation::  type-builtin:int  punctuation:,  parameter:by  punctuation::  type-builtin:int  punctuation:)
+ 11 |         .points[player] = .points[player] + by
+    | punctuation:.  field:points  punctuation:[  parameter:player  punctuation:]  operator:=  punctuation:.  field:points  punctuation:[  parameter:player  punctuation:]  operator:+  parameter:by
+ 12 |     fi
+    | keyword:fi
+ 13 | fi
+    | keyword:fi
+ 15 | shape League
+    | keyword:shape  type:League
+ 16 |     ; Any code may change its items, but no code replaces it.
+    | comment:; Any code may change its items, but no code replaces it.
+ 17 |     shared bind games: [int#2] = [0, 0]
+    | keyword:shared  keyword:bind  field:games  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:]
+ 18 | fi
+    | keyword:fi
+ 20 | task total(t: Team) -> int
+    | keyword:task  task:total  punctuation:(  parameter:t  punctuation::  type:Team  punctuation:)  operator:->  type-builtin:int
+ 21 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+ 22 |     each p in t.points
+    | keyword:each  variable:p  keyword:in  parameter:t  punctuation:.  field:points
+ 23 |         sum += p
+    | variable:sum  operator:+=  variable:p
+ 24 |     fi
+    | keyword:fi
+ 25 |     <- sum
+    | keyword:<-  variable:sum
+ 26 | fi
+    | keyword:fi
+ 28 | ; Doubles every score in place: the items change, the list stays the one given.
+    | comment:; Doubles every score in place: the items change, the list stays the one given.
+ 29 | task double(bind xs: [int]@r)
+    | keyword:task  task:double  punctuation:(  keyword:bind  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
+ 30 |     each i in 0..xs.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:xs  punctuation:.  field:len
+ 31 |         xs[i] = xs[i] * 2
+    | parameter:xs  punctuation:[  variable:i  punctuation:]  operator:=  parameter:xs  punctuation:[  variable:i  punctuation:]  operator:*  number:2
+ 32 |     fi
+    | keyword:fi
+ 33 | fi
+    | keyword:fi
+ 35 | ; A point for every player, through the caller's own team.
+    | comment:; A point for every player, through the caller's own team.
+ 36 | task reward(bind& team: Team)
+    | keyword:task  task:reward  punctuation:(  keyword:bind  keyword:&  parameter:team  punctuation::  type:Team  punctuation:)
+ 37 |     loop flex i = 0 || i < 4 || i++
+    | keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:4  operator:||  variable:i  operator:++
+ 38 |         team.score(i, 1)
+    | parameter:team  punctuation:.  method:score  punctuation:(  variable:i  punctuation:,  number:1  punctuation:)
+ 39 |     fi
+    | keyword:fi
+ 40 | fi
+    | keyword:fi
+ 42 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 43 |     region r default
+    | keyword:region  region:r  keyword:default
+ 44 |     bind home = Team { name: "Home", points: [0, 0, 0, 0] }
+    | keyword:bind  variable:home  operator:=  type:Team  punctuation:{  field:name  punctuation::  string:"Home"  punctuation:,  field:points  punctuation::  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]  punctuation:}
+ 45 |     home.score(0, 3)
+    | variable:home  punctuation:.  method:score  punctuation:(  number:0  punctuation:,  number:3  punctuation:)
+ 46 |     home.points[1] = 2
+    | variable:home  punctuation:.  field:points  punctuation:[  number:1  punctuation:]  operator:=  number:2
+ 47 |     reward(&home)
+    | task:reward  punctuation:(  operator:&  variable:home  punctuation:)
+ 48 |     show(home.name, ": ", total(home))           ; Home: 9
+    | builtin-fn:show  punctuation:(  variable:home  punctuation:.  field:name  punctuation:,  string:": "  punctuation:,  task:total  punctuation:(  variable:home  punctuation:)  punctuation:)  comment:; Home: 9
+ 50 |     bind round = [1, 2, 3, ...]
+    | keyword:bind  variable:round  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]
+ 51 |     double(round)
+    | task:double  punctuation:(  variable:round  punctuation:)
+ 52 |     show(round)                                  ; [2, 4, 6]
+    | builtin-fn:show  punctuation:(  variable:round  punctuation:)  comment:; [2, 4, 6]
+ 54 |     ; A task taking the list as 'bind' goes where a step that changes it is expected.
+    | comment:; A task taking the list as 'bind' goes where a step that changes it is expected.
+ 55 |     fixed step: (flex [int]@r) -> nothing = double
+    | keyword:fixed  variable:step  punctuation::  punctuation:(  keyword:flex  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:=  task:double
+ 56 |     step(round)
+    | variable:step  punctuation:(  variable:round  punctuation:)
+ 57 |     show(round)                                  ; [4, 8, 12]
+    | builtin-fn:show  punctuation:(  variable:round  punctuation:)  comment:; [4, 8, 12]
+ 59 |     bind table = ["home": 0]
+    | keyword:bind  variable:table  operator:=  punctuation:[  string:"home"  punctuation::  number:0  punctuation:]
+ 60 |     table["home"] = total(home)
+    | variable:table  punctuation:[  string:"home"  punctuation:]  operator:=  task:total  punctuation:(  variable:home  punctuation:)
+ 61 |     table["away"] = 1
+    | variable:table  punctuation:[  string:"away"  punctuation:]  operator:=  number:1
+ 62 |     table.del("away")
+    | variable:table  punctuation:.  field:del  punctuation:(  string:"away"  punctuation:)
+ 63 |     show(table)                                  ; ["home": 9]
+    | builtin-fn:show  punctuation:(  variable:table  punctuation:)  comment:; ["home": 9]
+ 65 |     ; A lambda that changes the items of its copy of the list, which are the list's own.
+    | comment:; A lambda that changes the items of its copy of the list, which are the list's own.
+ 66 |     flex bonus = [bind @r](by: int) -> nothing
+    | keyword:flex  variable:bonus  operator:=  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  parameter:by  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+ 67 |         round[0] = round[0] + by
+    | variable:round  punctuation:[  number:0  punctuation:]  operator:=  variable:round  punctuation:[  number:0  punctuation:]  operator:+  parameter:by
+ 68 |     fi
+    | keyword:fi
+ 69 |     bonus(100)
+    | variable:bonus  punctuation:(  number:100  punctuation:)
+ 70 |     show(round)                                  ; [104, 8, 12]
+    | builtin-fn:show  punctuation:(  variable:round  punctuation:)  comment:; [104, 8, 12]
+ 72 |     League.games[0] = 1
+    | type:League  punctuation:.  field:games  punctuation:[  number:0  punctuation:]  operator:=  number:1
+ 73 |     show(League.games)                           ; [1, 0]
+    | builtin-fn:show  punctuation:(  type:League  punctuation:.  field:games  punctuation:)  comment:; [1, 0]
+ 75 |     ; A team that plays until it has 10 points, bound for the whole loop.
+    | comment:; A team that plays until it has 10 points, bound for the whole loop.
+ 76 |     loop bind away = Team { name: "Away", points: [1, 1, 1, 1] } || total(away) < 10 || away.score(0, 2)
+    | keyword:loop  keyword:bind  variable:away  operator:=  type:Team  punctuation:{  field:name  punctuation::  string:"Away"  punctuation:,  field:points  punctuation::  punctuation:[  number:1  punctuation:,  number:1  punctuation:,  number:1  punctuation:,  number:1  punctuation:]  punctuation:}  operator:||  task:total  punctuation:(  variable:away  punctuation:)  operator:<  number:10  operator:||  variable:away  punctuation:.  method:score  punctuation:(  number:0  punctuation:,  number:2  punctuation:)
+ 77 |         show(away.name, ": ", total(away))
+    | builtin-fn:show  punctuation:(  variable:away  punctuation:.  field:name  punctuation:,  string:": "  punctuation:,  task:total  punctuation:(  variable:away  punctuation:)  punctuation:)
+ 78 |     fi
+    | keyword:fi
+ 79 | fi
+    | keyword:fi

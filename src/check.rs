@@ -2357,11 +2357,12 @@ impl Checker {
                 continue;
             }
             let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
-            // A `[flex @r]` lambda changes what it keeps, so it is never copied.
+            // A `[flex @r]` or `[bind @r]` lambda changes what it keeps, so it
+            // is never copied.
             if held_lambda(&ty) && param.passing != Passing::FlexRef {
                 return err(
                     param.span,
-                    format!("'{0}' is a '[flex @r]' lambda, which changes what it keeps and is never copied, so it is given as a place, 'flex& {0}: {1}'", param.name, ty),
+                    format!("'{0}' is a '{2}' lambda, which changes what it keeps and is never copied, so it is given as a place, 'flex& {0}: {1}'", param.name, ty, held_word(&ty)),
                 );
             }
             for region in ty.regions() {
@@ -2747,7 +2748,7 @@ impl Checker {
     /// as the value side of `nothing ~ E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         if holds_held_lambda(ty) {
-            return err(span, format!("{} holds a '[flex @r]' lambda, which changes what it keeps and is never copied, so it is held alone, in a 'flex' variable", ty));
+            return err(span, format!("{} holds a '[flex @r]' or '[bind @r]' lambda, which changes what it keeps and is never copied, so it is held alone, in a 'flex' variable", ty));
         }
         match ty {
             Type::Nothing => err(self.place(span, "nothing"), "'nothing' is only allowed as a return type"),
@@ -4284,12 +4285,12 @@ impl Checker {
                     }
                 }
                 for (name, at, ty) in declared {
-                    // A `[flex @r]` lambda changes what it keeps.
-                    if held_lambda(&ty) && !mode.can_change_contents(false) {
-                        return err(at, format!("'{}' is a '[flex @r]' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex {} = …'", name, name));
+                    // A `[flex @r]` or `[bind @r]` lambda changes what it keeps.
+                    if held_lambda(&ty) && *mode != Mode::Flex {
+                        return err(at, format!("'{0}' is a '{1}' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex {0} = …'", name, held_word(&ty)));
                     }
                     if holds_held_lambda(&ty) {
-                        return err(at, format!("'{}' would hold a '[flex @r]' lambda inside a value, which is copied with it; a '[flex @r]' lambda is held alone, in a 'flex' variable", name));
+                        return err(at, format!("'{}' would hold a '[flex @r]' or '[bind @r]' lambda inside a value, which is copied with it; such a lambda is held alone, in a 'flex' variable", name));
                     }
                     if name != DISCARD {
                         self.define(&name, ty, *mode, at)?;
@@ -7760,7 +7761,7 @@ impl Checker {
             );
         }
         if held_lambda(ty) {
-            return err(span, format!("'{0}' is a '[flex @r]' lambda, which is never copied, so a lambda can't keep a copy of it; give it as a parameter, 'flex& {0}', or keep it as a place, '[flex& {0}, @s]', in a region declared after it", name));
+            return err(span, format!("'{0}' is a '{1}' lambda, which is never copied, so a lambda can't keep a copy of it; give it as a parameter, 'flex& {0}', or keep it as a place, '[flex& {0}, @s]', in a region declared after it", name, held_word(ty)));
         }
         Ok(())
     }
@@ -7789,7 +7790,7 @@ impl Checker {
                             continue;
                         }
                         if held_lambda(&ty) && !refused {
-                            mistakes.push(Error::at(span, format!("this lambda uses '{}', a '[flex @r]' lambda, which the lambda around it would keep a copy of, and it is never copied", name)));
+                            mistakes.push(Error::at(span, format!("this lambda uses '{}', a '{}' lambda, which the lambda around it would keep a copy of, and it is never copied", name, held_word(&ty))));
                             continue;
                         }
                     }
@@ -8275,18 +8276,18 @@ impl Checker {
         if kept {
             self.check_kept_use(name, &ty, span)?;
         }
-        // A `[flex @r]` lambda changes what it keeps, so its value is never
-        // copied: it is called, or given as a place.
+        // A `[flex @r]` or `[bind @r]` lambda changes what it keeps, so its
+        // value is never copied: it is called, or given as a place.
         if held_lambda(&ty) && !calling {
             return err(
                 span,
-                format!("'{0}' is a '[flex @r]' lambda, which changes what it keeps, so it is never copied: call it, '{0}(…)', or give it as a place, '&{0}', to a 'flex& f: {1}' parameter", name, ty),
+                format!("'{0}' is a '{2}' lambda, which changes what it keeps, so it is never copied: call it, '{0}(…)', or give it as a place, '&{0}', to a 'flex& f: {1}' parameter", name, ty, held_word(&ty)),
             );
         }
         // Calling it changes what it keeps, so it is called through a place
         // that changes.
         if held_lambda(&ty) && !mode.can_change_contents(true) {
-            return err(span, format!("'{0}' is a '[flex @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' variable or a 'flex&', which '{0}' isn't", name));
+            return err(span, format!("'{0}' is a '{1}' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' variable or a 'flex&', which '{0}' isn't", name, held_word(&ty)));
         }
         if self.unset.contains(name) {
             return err(span, format!("'{}' might not be set here", name));
@@ -11518,12 +11519,18 @@ impl Checker {
         // it, and the types it names are put in place of the parameters.
         for (param, at) in info.types.iter().zip(&places) {
             if let Some(ty) = given.get(&param.name) {
-                // Its body may copy a value of the type, which a `[flex @r]`
-                // lambda never is.
+                // Its body may copy a value of the type, which a `[flex @r]` or
+                // `[bind @r]` lambda never is.
                 if held_lambda(ty) || holds_held_lambda(ty) || group_items(&given, &param.name).is_some_and(|(types, _)| types.iter().any(|ty| held_lambda(ty) || holds_held_lambda(ty))) {
                     return err(
                         *at,
-                        format!("task '{}' takes '{}' as a type, and is given a '[flex @r]' lambda for it, which changes what it keeps and is never copied, as its body may copy a value of that type; give it a '[@r]' lambda, or a task taking the lambda as 'flex& f: {}'", unqualified(task), param.name, ty),
+                        format!(
+                            "task '{}' takes '{}' as a type, and is given a '{}' lambda for it, which changes what it keeps and is never copied, as its body may copy a value of that type; give it a '[@r]' lambda, or a task taking the lambda as 'flex& f: {}'",
+                            unqualified(task),
+                            param.name,
+                            if held_lambda(ty) { held_word(ty) } else { "[flex @r]' or '[bind @r]" },
+                            ty
+                        ),
                     );
                 }
                 self.check_need("task", task, param, ty, *at)?;
@@ -12951,14 +12958,16 @@ fn ordinal(k: usize) -> String {
 
 /// Whether a task of type `actual` goes where one of type `expected` is: the
 /// same types, each taken the same way, but that a task changing nothing
-/// through a value goes where one that may is expected, `(flex [int]@r)`,
-/// since its callers give it only what may change; never the other way.
+/// through a value goes where one that may is expected, `(flex [int]@r)` or
+/// `(bind [int]@r)`, since its callers give it only what may change, and one
+/// taking it as `bind` goes where `flex` is expected, changing its items as a
+/// `flex` one may (the author, 2026-10-12); never the other way.
 fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
     actual.params == expected.params
         && actual.ret == expected.ret
         && actual.taken.len() == expected.taken.len()
         && actual.taken.iter().zip(&expected.taken).all(|(a, e)| {
-            a == e || (*a == Taken::Value && matches!(e, Taken::Flex | Taken::Bind))
+            a == e || (*a == Taken::Value && matches!(e, Taken::Flex | Taken::Bind)) || (*a == Taken::Bind && *e == Taken::Flex)
         })
 }
 
@@ -13900,10 +13909,20 @@ fn is_task(ty: &Type) -> bool {
     matches!(ty, Type::Task(_))
 }
 
-/// Whether `ty` is the type of a `[flex @r]` lambda, which changes what it
-/// keeps, so a value of it is never copied.
+/// Whether `ty` is the type of a `[flex @r]` or `[bind @r]` lambda, which
+/// changes what it keeps, so a value of it is never copied: a copy would share
+/// what the lambda changes. For `[bind @r]` the author decided so for now
+/// (2026-10-12), as a matter to look at again (see vela.html#lambda-bind).
 fn held_lambda(ty: &Type) -> bool {
-    matches!(ty, Type::Closure(closure) if closure.mode == KeptMode::Flex)
+    matches!(ty, Type::Closure(closure) if closure.mode != KeptMode::Plain)
+}
+
+/// How a lambda `held_lambda` finds is written, for messages.
+fn held_word(ty: &Type) -> &'static str {
+    match ty {
+        Type::Closure(closure) if closure.mode == KeptMode::Bind => "[bind @r]",
+        _ => "[flex @r]",
+    }
 }
 
 /// Whether `ty` is or holds a lambda that keeps what it uses, `[@r](…)`.
@@ -13918,7 +13937,8 @@ fn has_closure(ty: &Type) -> bool {
     }
 }
 
-/// Whether `ty` holds a `[flex @r]` lambda inside it, which is held alone.
+/// Whether `ty` holds a `[flex @r]` or `[bind @r]` lambda inside it, which is
+/// held alone.
 fn holds_held_lambda(ty: &Type) -> bool {
     match ty {
         Type::Closure(_) => false,
@@ -15052,7 +15072,7 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
     };
     if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
         && given.params == wanted.params
-        && given.taken.iter().zip(&wanted.taken).any(|(a, e)| *a == Taken::Flex && *e == Taken::Value)
+        && given.taken.iter().zip(&wanted.taken).any(|(a, e)| *a == Taken::Flex && matches!(e, Taken::Value | Taken::Bind))
     {
         let marked = TaskType { taken: wanted.taken.iter().zip(&given.taken).map(|(e, a)| if *a == Taken::Flex { Taken::Flex } else { e.clone() }).collect(), ..wanted };
         // Written as the type expected is: a lambda's with its region.

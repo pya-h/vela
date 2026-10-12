@@ -1,0 +1,13 @@
+; error: 11:42: expected type (bind [int]@r) -> nothing, got (flex [int]@r) -> nothing; this task changes what a twofold value it is given reaches, a slice, a map or a pointer or what holds one, so it goes only where the type says 'flex' for that value, as in '(flex [int]@r) -> nothing', and nothing a fixed name owns is given to it there
+; A task taking a slice as 'flex' does more than one taking it as 'bind', so it
+; goes only where the type says 'flex'.
+
+task grow(flex xs: [int]@r) -> nothing
+    xs[0] = 1
+fi
+
+task main()
+    region r
+    fixed g: (bind [int]@r) -> nothing = grow
+    show(1)
+fi

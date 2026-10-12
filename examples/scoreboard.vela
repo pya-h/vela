@@ -1,0 +1,79 @@
+; A scoreboard kept in 'bind' names. Each name is bound to one value for good,
+; and only what it holds changes: a team's points, a round's scores, the
+; entries of a table. 'flex' would also let a name be replaced as a whole, or a
+; list grow; 'fixed' would let nothing change.
+
+shape Team
+    name: text
+    points: [int#4]
+
+    alters score(player: int, by: int)
+        .points[player] = .points[player] + by
+    fi
+fi
+
+shape League
+    ; Any code may change its items, but no code replaces it.
+    shared bind games: [int#2] = [0, 0]
+fi
+
+task total(t: Team) -> int
+    flex sum = 0
+    each p in t.points
+        sum += p
+    fi
+    <- sum
+fi
+
+; Doubles every score in place: the items change, the list stays the one given.
+task double(bind xs: [int]@r)
+    each i in 0..xs.len
+        xs[i] = xs[i] * 2
+    fi
+fi
+
+; A point for every player, through the caller's own team.
+task reward(bind& team: Team)
+    loop flex i = 0 || i < 4 || i++
+        team.score(i, 1)
+    fi
+fi
+
+task main()
+    region r default
+    bind home = Team { name: "Home", points: [0, 0, 0, 0] }
+    home.score(0, 3)
+    home.points[1] = 2
+    reward(&home)
+    show(home.name, ": ", total(home))           ; Home: 9
+
+    bind round = [1, 2, 3, ...]
+    double(round)
+    show(round)                                  ; [2, 4, 6]
+
+    ; A task taking the list as 'bind' goes where a step that changes it is expected.
+    fixed step: (flex [int]@r) -> nothing = double
+    step(round)
+    show(round)                                  ; [4, 8, 12]
+
+    bind table = ["home": 0]
+    table["home"] = total(home)
+    table["away"] = 1
+    table.del("away")
+    show(table)                                  ; ["home": 9]
+
+    ; A lambda that changes the items of its copy of the list, which are the list's own.
+    flex bonus = [bind @r](by: int) -> nothing
+        round[0] = round[0] + by
+    fi
+    bonus(100)
+    show(round)                                  ; [104, 8, 12]
+
+    League.games[0] = 1
+    show(League.games)                           ; [1, 0]
+
+    ; A team that plays until it has 10 points, bound for the whole loop.
+    loop bind away = Team { name: "Away", points: [1, 1, 1, 1] } || total(away) < 10 || away.score(0, 2)
+        show(away.name, ": ", total(away))
+    fi
+fi

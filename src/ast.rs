@@ -219,8 +219,8 @@ pub enum Taken {
     Value,
     /// A twofold value the task may change through, `flex [int]@r`: a task
     /// taking `flex xs: [int]@r` changes the items the caller's slice names. A
-    /// task taking it as a `Value` fits where one taking it so is expected, but
-    /// never the other way (see `Checker::task_fits`).
+    /// task taking it as a `Value` or as `Bind` fits where one taking it so is
+    /// expected, but never the other way (see `Checker::task_fits`).
     Flex,
     /// `bind [int]@r`: a value the task changes the contents of, never
     /// assigning it as a whole. As with `Flex`, it is a `Value` before a whole

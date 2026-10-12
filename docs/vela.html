@@ -285,8 +285,8 @@ in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
 block shared type break continue endless fixed flex</pre>
       <p>
-        <code>bind</code> and <code>hold</code> are reserved with no use yet: writing either is an error. Where a
-        variable's word goes, the message names the one to write, <code>fixed</code> or <code>flex</code>.
+        <code>hold</code> is reserved with no use yet: writing it is an error. Where a variable's word goes, the
+        message names the one to write, <code>flex</code>.
       </p>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
@@ -326,7 +326,8 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>width: int = 8</code></td><td>a parameter a call may leave out, one of the last, which is then given the value written (see <a href="#optional-arguments">Optional arguments</a>)</td></tr>
         <tr><td><code>flex x: T</code>, <code>flex&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
         <tr><td><code>fixed x: T</code>, <code>fixed&amp; x: T</code></td><td>a parameter that is always a copy, or the caller's place only read, given as <code>&amp;a</code> (see <a href="#fixed-parameters">Parameters that read</a>)</td></tr>
-        <tr><td><code>flex&amp; y = &amp;x</code>, <code>fixed&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
+        <tr><td><code>bind x: T</code>, <code>bind&amp; x: T</code></td><td>a parameter whose contents the task changes, never assigning it as a whole: its own copy, or the caller's place (see <a href="#bind-parameters">Parameters that bind</a>)</td></tr>
+        <tr><td><code>flex&amp; y = &amp;x</code>, <code>fixed&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it, only reads it, or changes its contents (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
         <tr><td><code>kind Option&lt;T&gt;</code>, <code>Option&lt;int&gt;.None</code></td><td>a kind that takes types, and a variant given them where nothing else says them (see <a href="#generic-kinds">Kinds that take types</a>)</td></tr>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
@@ -343,8 +344,8 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task, a shared method, or a method of every value: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[@r](x: int) -&gt; int … fi</code>, <code>[@r](int) -&gt; int</code></td><td>a lambda that keeps a copy of what it uses of the code around it in region <code>r</code>, and its type (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
-        <tr><td><code>[flex @r](…) … fi</code></td><td>such a lambda that changes its copies, held in a <code>flex</code> variable and never copied</td></tr>
-        <tr><td><code>[flex&amp; count, fixed&amp; big, @r](…) … fi</code></td><td>such a lambda keeping variables themselves, to change or to read in place, with <code>r</code> declared after them (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
+        <tr><td><code>[flex @r](…) … fi</code>, <code>[bind @r](…) … fi</code></td><td>such a lambda that changes its copies, or only their contents, held in a <code>flex</code> variable and never copied</td></tr>
+        <tr><td><code>[flex&amp; count, fixed&amp; big, @r](…) … fi</code></td><td>such a lambda keeping variables themselves, to change or to read in place (or <code>bind&amp; xs</code>, to change their contents), with <code>r</code> declared after them (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
         <tr><td><code>m[k]</code>, <code>m[#k]</code>, <code>m[k] = v</code>, <code>each k, v in m</code></td><td>a key's value, which stops the program without the key; the same as a <code>maybe</code>; the key added or given a new value; the keys and values in the order the keys were added</td></tr>
@@ -585,8 +586,8 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
         Written <code>bind&amp;</code>, a parameter is the caller's place, only its contents may change and it is
         never assigned as a whole. The call marks the place with <code>&amp;</code>, as for <code>flex&amp;</code>.
         A <code>bind&amp;</code> place must be one whose contents can change, so a <code>fixed</code> variable of a
-        twofold type can't be given to it; a fixed value of a simple single type can, since on such types
-        <code>bind&amp;</code> and <code>fixed&amp;</code> act the same.
+        twofold type can't be given to it; a fixed value with no contents, a number or a tuple, say, can, since on
+        such types <code>bind&amp;</code> and <code>fixed&amp;</code> act the same.
       </p>
       <pre><span class="keyword">task</span> set_first(<span class="keyword">bind&amp;</span> xs: [int]@r, v: int)
     xs[<span class="number">0</span>] = v
@@ -601,9 +602,10 @@ pad()                 <span class="comment">; error: task 'pad' expects 1 to 3 a
       <p>
         A <code>bind</code> or <code>bind&amp;</code> parameter can't be assigned as a whole, can't have its length
         changed with <code>add</code> or <code>del</code>, and can't be given to a <code>flex&amp;</code> place, which
-        may be assigned as a whole. Only a parameter is <code>bind</code> or <code>bind&amp;</code>: a shape's field
-        changes where the value it is part of is held. In C, <code>bind</code> is a plain parameter and
-        <code>bind&amp;</code> is a pointer to a mutable place.
+        may be assigned as a whole. A shape's field is never <code>bind</code>: it changes where the value it is part
+        of is held (a <a href="#shared">shared field</a> may be <code>shared bind</code>). In C, <code>bind</code> is
+        a plain parameter and <code>bind&amp;</code> is a pointer to a place that changes, or, of a type with no
+        contents, to one only read, as <code>fixed&amp;</code> is.
       </p>
 
       <h3 id="fixed-parameters">Parameters that read</h3>
@@ -733,7 +735,10 @@ count = count + <span class="number">1</span>
                         <span class="comment">;   'fixed&amp; d = &amp;a' names it only to read it</span></pre>
       <p>
         <code>flex&amp;</code> takes the places a <code>flex&amp;</code> parameter does, and <code>fixed&amp;</code> takes
-        those and also a <code>fixed</code>, a parameter, and another <code>fixed&amp;</code>. Neither names an item of a
+        those and also a <code>fixed</code>, a parameter, and another <code>fixed&amp;</code>. <code>bind&amp; y = &amp;x</code>
+        names a place to change its contents, <code>y.value = 7</code>, never assigning it as a whole: it takes a
+        <code>flex</code> or <code>bind</code> place, and of a type with no contents it only reads, as
+        <code>fixed&amp;</code> does. Neither names an item of a
         slice, which moves when the slice grows, a result, or a value made on the spot. A reference is kept safe by
         what it can't do, so it needs no lifetimes:
       </p>
@@ -912,8 +917,8 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
       <h3>Bindings</h3>
       <p><code>fixed</code> creates an immutable binding. <code>flex</code> creates a mutable variable. <code>bind</code>
         creates a name bound to one value: it can never be assigned as a whole, but its contents may change. Written
-        <code>fixed&amp;</code> or <code>flex&amp;</code>, either is another name for a place instead (see
-        <a href="#references">References</a>); <code>bind&amp;</code> is not available yet.</p>
+        <code>fixed&amp;</code>, <code>flex&amp;</code> or <code>bind&amp;</code>, each is another name for a place
+        instead (see <a href="#references">References</a>).</p>
       <pre><span class="keyword">fixed</span> pi = 3.14
 <span class="keyword">flex</span> count = 0
 count = count + 1
@@ -921,6 +926,29 @@ count = count + 1
 <span class="keyword">bind</span> scores = [<span class="number">0</span>, <span class="number">0</span>, ...] <span class="keyword">at</span> r
 scores[<span class="number">0</span>] = <span class="number">10</span>              <span class="comment">; the slice's items may change</span>
 <span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span></pre>
+      <p id="bind">
+        <strong>What a <code>bind</code> name allows.</strong> Its contents change; it is never assigned as a whole:
+      </p>
+      <ul>
+        <li>The items of an array or a slice, the fields of a shape, and what a pointer points to may be assigned,
+          <code>scores[0] = 10</code>, <code>p.x = 1</code>, <code>ptr^.x = 1</code>; a field may be assigned whole,
+          since it is contents.</li>
+        <li>A slice keeps its length: <code>add</code> and <code>del</code> change the slice itself, so they are
+          refused. A map is one table whatever its keys, so <code>m[k] = v</code> and <code>m.del(k)</code> are
+          allowed.</li>
+        <li>An <code>alters</code> method of a shape may be called on it, but not one of a kind, which may replace the
+          whole value (<code>.this = Green</code>).</li>
+        <li>A value with no contents, a number, a <code>bool</code>, a <code>char</code>, text, a tuple, a kind or a
+          task value, has nothing to change, so a <code>bind</code> of one acts as <code>fixed</code>.</li>
+        <li>It can't be given what a fixed name owns (see <a href="#fixed-owns">What a fixed name owns</a>), and it
+          isn't given to a <code>flex&amp;</code> place, which may assign it as a whole; a <code>bind&amp;</code> one
+          takes it.</li>
+      </ul>
+      <p>
+        <code>bind</code> is written where <code>flex</code> is: before a parameter (see
+        <a href="#bind-parameters">Parameters that bind</a>), a reference, a pattern's names, a loop's start, a shared
+        field, in a lambda's list, and in a task's type, each below.
+      </p>
       <p id="steps">
         <strong>Steps.</strong> <code>x++</code> and <code>x--</code> count a place up or down by one, and
         <code>x += v</code> gives it <code>x + v</code>, as do <code>-=</code>, <code>*=</code>, <code>/=</code>,
@@ -1716,11 +1744,12 @@ m = Meter { label: "gate" }     <span class="comment">; ok: a whole new value, w
       </p>
       <ul>
         <li>A shared field never changes unless it is <code>shared flex</code>, which any code that sees it may
-          change. A value decides whether its own fields change (<code>fixed p</code> or <code>flex p</code>), and no
+          change, or <code>shared bind</code>, whose contents any code may change, <code>Counter.box.value = 5</code>,
+          but which is never assigned as a whole, not by its shape's methods, nor through a <code>flex&amp;</code>. A value decides whether its own fields change (<code>fixed p</code> or <code>flex p</code>), and no
           value owns a shared field, so its declaration says it.</li>
         <li><code>shared read</code> is read anywhere and changed only by the methods of its shape, and
           <code>priv shared</code> is seen only by its own file, as for any field. The words go in that order:
-          <code>priv shared flex f</code>, <code>shared read f</code>.</li>
+          <code>priv shared flex f</code>, <code>priv shared bind f</code>, <code>shared read f</code>.</li>
         <li>It always names its first value, one the compiler works out without running the program, as a field's
           value to fall back on is. That value may name a shared field above it in its shape, or one of another
           shape; ones that name each other in a circle are refused. A field's value to fall back on may name a shared
@@ -2186,8 +2215,10 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           always matches: its block runs with the items named, so a <code>&lt;-</code> in it sends for certain, and an
           <code>else</code> on it, a <code>loop</code> of it, or a <code>match</code> on a tuple, is an error that says to
           use <code>fixed</code>. <code>flex</code> before a name makes it a variable the block can
-          assign (<code>is flex (x, y)</code>, <code>{flex v}</code>, <code>case Circle flex r</code>); assigning
-          it leaves the value matched as it was.</li>
+          assign (<code>is flex (x, y)</code>, <code>{flex v}</code>, <code>case Circle flex r</code>), and
+          <code>bind</code> one whose contents it can change (<code>is bind (x, y)</code>, <code>{bind v}</code>);
+          either is a copy, so changing it leaves the value matched as it was, but for what a
+          <a href="#whole-twofold-place">twofold</a> copy names.</li>
       </ul>
 
       <h3 id="generics">Types a declaration takes</h3>
@@ -2576,6 +2607,11 @@ fi</code></pre>
         says nothing a caller sees, so <code>(flex int) -&gt; int</code> is <code>(int) -&gt; int</code>, which
         <code>task bump(flex n: int)</code> is; <code>fixed</code>, which a plain parameter already is, reads as nothing
         too. The same holds for lambdas, <code>[@r](flex [int]@r) -&gt; nothing</code>, and for wrappers.
+        <code>bind</code> says it for a task taking the value as <code>bind</code>, <code>(bind [int]@r) -&gt; nothing</code>:
+        such a task changes the items as a <code>flex</code> one may, so it also goes where the type says
+        <code>flex</code>, and one that only reads goes where either is said, never the other way. Before a whole
+        value <code>bind</code> reads as nothing, as <code>flex</code> does, and <code>bind&amp;</code> before a type
+        with no contents reads as <code>fixed&amp;</code>, which it acts as.
       </p>
       <pre><code>task zero(flex xs: [int]@r)
     xs[0] = 0
@@ -2756,6 +2792,16 @@ fi</code></pre>
         only through a place that changes, never through a <code>fixed&amp;</code>. A <code>[@r]</code> lambda
         goes where a <code>[flex @r]</code> is expected, never the other way.
       </p>
+      <p id="lambda-bind">
+        <strong>Changing only their contents.</strong> <code>[bind @r]</code> changes the contents of its copies, an
+        item, a field, what a pointer points to, but never assigns one as a whole, as a <code>bind</code> name does; a
+        copy with no contents, a number say, it only reads. It is held as a <code>[flex @r]</code> lambda is, never
+        copied, since a copy would share the copies it changes, and it can't keep a copy of what a fixed name owns. A
+        <code>[@r]</code> lambda goes where a <code>[bind @r]</code> is expected, and a <code>[bind @r]</code> one where
+        a <code>[flex @r]</code> is, never the other way. Whether one that changes only what a twofold copy names,
+        which every copy shares anyway, may be copied is left for later (see
+        <a href="safety.html#bind-lambdas">safety</a>).
+      </p>
       <p>
         <strong>Plain tasks and these.</strong> A task, a task value, or a plain lambda goes where a
         <code>[@r](…)</code> is expected, through a small function the compiler writes: a task or a plain lambda written
@@ -2767,8 +2813,8 @@ fi</code></pre>
       </p>
       <p>
         <strong>Keeping a variable as a place.</strong> A variable named in the list beside the region is kept as the
-        variable itself, not a copy: <code>flex&amp; count</code> changes it, and <code>fixed&amp; big</code> reads it
-        where it is, with no copy of a large value, the words a parameter and a reference use. The lambda keeps a pointer
+        variable itself, not a copy: <code>flex&amp; count</code> changes it, <code>bind&amp; xs</code> changes its
+        contents, and <code>fixed&amp; big</code> reads it where it is, with no copy of a large value, the words a parameter and a reference use. The lambda keeps a pointer
         to the variable, so it must end first: the region it is kept in is declared after the variable, in its block or a
         block inside it, and so ends first, and the lambda with it. A region given to the task, one declared before the
         variable or in a block around it, or one a lambda around this one keeps what it uses in, is refused, so such a
@@ -3431,6 +3477,9 @@ show(total)</pre>
         a condition, tested before each pass as a plain loop's is; and a step, which runs after each pass. The start
         and the step may each hold several items, parted by <code>,</code>, and any part may be empty.
         <code>endless</code> is a loop that never ends by itself, the same as <code>loop || ||</code> said in a word.
+        A name the start declares is <code>flex</code>, <code>fixed</code> or <code>bind</code>; a <code>bind</code>
+        one changes only its contents, <code>loop bind b = Box { value: 1 } || b.value &lt; 5 || b.value++</code>, so
+        <code>loop bind i = 0 || i &lt; 3 || i++</code> is an error.
       </p>
       <pre class="program" data-file="parts.vela"><span class="keyword">task</span> main()
     <span class="comment">; A name of its own, which lives in the loop, and several, side by side.</span>

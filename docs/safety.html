@@ -679,12 +679,34 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
         <p>
           For the same reason, keeping a copy in a variable doesn't separate a slice given twice to a call that
           changes it: <code>flex ys = xs</code> and then <code>f(&amp;xs, &amp;ys)</code> gives two views of the same
-          items. <code>xs.copy() at r</code> makes items of its own.
+          items. <code>xs.copy() at r</code> makes items of its own. A <code>flex</code> copy that adds or takes out
+          items stays linked or not by where its items happen to be: an <code>add</code> that needs more room copies
+          the items to a block of its own, after which writes are no longer seen, while one that finds room, and a
+          <code>del</code>, keep the two on the same items (see
+          <a href="vela.html#slices">Copies and parts</a>). A <code>bind</code> slice never adds or takes out items,
+          so its copies stay on the same items, and a task taking one as <code>bind</code> goes where a task type says
+          <code>flex</code>.
         </p>
         <dl>
           <dt>Ways it could go</dt>
           <dd>The given-twice message could suggest <code>.copy() at r</code> when the place is a slice, and two
             slices coming from the same variable could count as one place.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="bind-lambdas">
+        <h3>A <code>[bind @r]</code> lambda is never copied <span class="badge b-later">later</span></h3>
+        <p>
+          A <code>[bind @r]</code> lambda changes the contents of the copies it keeps, and every copy of the lambda's
+          value would name the same kept copies, so a change through one would be seen through all. For now it is held
+          as a <code>[flex @r]</code> lambda is: in a <code>flex</code> variable, called, or given on as a place, never
+          copied (the author's decision, 2026-10-12). A lambda that changes only the items of a slice it keeps a copy
+          of changes nothing every copy wouldn't share anyway, so the rule refuses some programs that would be safe.
+        </p>
+        <dl>
+          <dt>Ways it could go</dt>
+          <dd>A <code>[bind @r]</code> lambda whose copies are all twofold, changing only what they name, could be
+            copied freely, and only one changing a whole copy's contents, a shape's field say, held.</dd>
         </dl>
       </div>
 
