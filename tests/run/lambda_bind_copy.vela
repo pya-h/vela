@@ -1,0 +1,14 @@
+; A '[bind @r]' lambda changes the contents of what it keeps: the items of
+; its copy of a slice, which are the slice's own.
+
+task main()
+    region r
+    flex xs = new [int]() at r
+    xs.add(1)
+    fixed inc = [bind @r](n: int) -> nothing
+        xs[0] = xs[0] + n
+    fi
+    inc(2)
+    inc(3)
+    show(xs[0])
+fi

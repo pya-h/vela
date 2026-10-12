@@ -331,7 +331,7 @@ impl Generator {
             if let Item::Task(t) = item
                 && t.types.is_empty()
             {
-                self.w.line(&format!("{};", signature(t, self.altering.contains(&t.name), self.hidden_of(&t.name))));
+                self.w.line(&format!("{};", signature(t, self.altering.contains(&t.name), self.hidden_of(&t.name), &|name| self.shapes.contains_key(name))));
             }
         }
         self.w.blank();
@@ -1759,7 +1759,7 @@ impl Generator {
         self.loops.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         self.task = shown_name(&t.name);
-        self.w.open(&signature(t, alters, &hidden));
+        self.w.open(&signature(t, alters, &hidden, &|name| self.shapes.contains_key(name)));
         // A native task's body is the runtime function it stands for, given
         // its parameters as they are (see `ast::NATIVE`).
         if t.native {
@@ -2199,18 +2199,20 @@ impl Generator {
                 }
             }
             // `flex& y = &x`: a pointer to the place, read through it; one that
-            // only reads, `fixed& y = &x`, may name a value passed by a hidden
-            // pointer, which is `const`.
+            // only reads, `fixed& y = &x`, or a `bind&` of a type with no
+            // contents, may name a value passed by a hidden pointer, which is
+            // `const`.
             StmtKind::Binding { names, mode, reference: true, init } => {
                 if let ([bound], [Expr { kind: ExprKind::Ref(place), .. }]) = (names.as_slice(), init.as_slice()) {
+                    let read_only = !mode.can_change_contents(has_contents(place.ty()?, &|name| self.shapes.contains_key(name)));
                     let address = match &place.kind {
                         ExprKind::Var(_) => self.gen_receiver(place)?,
-                        _ if mode.is_fixed() => format!("&{}", self.gen_place(place)?),
+                        _ if read_only => format!("&{}", self.gen_place(place)?),
                         _ => self.gen_receiver(place)?,
                     };
                     // `T const*`, which for a pointer type is a pointer to a
                     // constant pointer, not to what it points to.
-                    let constant = if mode.is_fixed() { " const" } else { "" };
+                    let constant = if read_only { " const" } else { "" };
                     self.w.line(&format!("{}{}* {} = {};", c_type(place.ty()?), constant, c_ident(&bound.name), address));
                     self.pointers.insert(bound.name.clone());
                 } else {
@@ -5381,7 +5383,7 @@ fn kept_task_name(name: &str) -> String {
 const KEPT_PARAM: &str = "vela__kept";
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
-fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
+fn signature(t: &TaskDef, alters: bool, hidden: &[bool], is_shape: &dyn Fn(&str) -> bool) -> String {
     let params: Vec<String> = t
         .params
         .iter()
@@ -5397,8 +5399,9 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             // so is a `flex&` parameter.
             // A `fixed&` one is only read there, so it is given a place that
             // never changes as well: `T const*`, which for a pointer is a
-            // pointer that stays, not what it points to (`T* const*`).
-            if p.passing == Passing::FixedRef {
+            // pointer that stays, not what it points to (`T* const*`). So is a
+            // `bind&` one of a type with no contents, which acts as `fixed&`.
+            if p.passing == Passing::FixedRef || (p.passing == Passing::BindRef && !has_contents(&p.ty, is_shape)) {
                 return format!("{} const* {}", c_type(&p.ty), c_ident(&p.name));
             }
             if is_pointer_param(p, alters) {

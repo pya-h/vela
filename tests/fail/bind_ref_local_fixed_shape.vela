@@ -1,4 +1,4 @@
-; error: 9:16: 'bind& r' names a place to change its contents, so it needs a place that can change, and 'b' never does (declared at 8:11); a value declared with 'flex' or 'bind' can; 'bind& r = &b' names it only to read it
+; error: 9:16: 'bind& r' names a place to change its contents, so it needs a place that can change, and 'b' never does (declared at 8:11); a value declared with 'flex' or 'bind' can; 'fixed& r = &b' names it only to read it
 
 shape Box
     value: int

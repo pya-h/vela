@@ -182,7 +182,7 @@ struct VarInfo {
 /// A lambda that keeps what it uses, `[@r](…)` (see `Checker::kept_lambdas`).
 struct KeptLambda {
     region: String,
-    flex: bool,
+    mode: KeptMode,
     /// Where it is written.
     span: Span,
     /// The variables and region of the code around it where it is written,
@@ -2104,7 +2104,7 @@ impl Checker {
             Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| self.unmade(ty)).collect(), taken: task.taken.clone(), ret: self.unmade(&task.ret) })),
             Type::Closure(closure) => {
                 let task = TaskType { params: closure.task.params.iter().map(|ty| self.unmade(ty)).collect(), taken: closure.task.taken.clone(), ret: self.unmade(&closure.task.ret) };
-                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), flex: closure.flex }))
+                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), mode: closure.mode }))
             }
             other => other.clone(),
         }
@@ -2494,19 +2494,21 @@ impl Checker {
                 format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
             );
         }
-        // `flex` before a whole value says nothing its caller sees, so it reads
-        // as nothing: `(flex int) -> int` is `(int) -> int`.
+        // `flex` or `bind` before a whole value says nothing its caller sees,
+        // so it reads as nothing: `(flex int) -> int` is `(int) -> int`.
         let taken = task.taken.iter().zip(&params).map(|(how, param)| self.taken_for(how, param)).collect();
         Ok(TaskType { params, taken, ret })
     }
 
     /// How a task's type takes a value of type `ty` it is said to take `how`:
-    /// `flex` only before a twofold value, a slice, a map or a pointer or what
-    /// holds one, whose items the task may change; before a whole value it
-    /// changes nothing the caller sees, so it is a value.
+    /// `flex` or `bind` only before a twofold value, a slice, a map or a pointer
+    /// or what holds one, whose items the task may change; before a whole value
+    /// it changes nothing the caller sees, so it is a value. A `bind&` place of a
+    /// type with no contents is only read, so it is a `fixed&` one.
     fn taken_for(&self, how: &Taken, ty: &Type) -> Taken {
         match how {
-            Taken::Flex if !self.twofold(ty) => Taken::Value,
+            Taken::Flex | Taken::Bind if !self.twofold(ty) => Taken::Value,
+            Taken::Place(Passing::BindRef) if !self.bind_has_contents(ty) => Taken::Place(Passing::FixedRef),
             how => how.clone(),
         }
     }
@@ -2685,7 +2687,7 @@ impl Checker {
                     );
                 }
                 let task = self.resolve_task_type(&closure.task, span, Some(&closure.region))?;
-                Ok(Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), flex: closure.flex }.normalized())))
+                Ok(Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), mode: closure.mode }.normalized())))
             }
             Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
             Type::Tuple(items) => Ok(Type::Tuple(items.iter().map(|item| self.resolve_regions(item, span, place, inside)).collect::<Result<_>>()?)),
@@ -5626,18 +5628,10 @@ impl Checker {
         self.twofold(ty) && !holds_twofold(ty, &self.regional, false) && !self.may_hold(ty, false)
     }
 
-    /// Whether a `bind` variable of type `ty` may change its contents: arrays,
-    /// slices, maps, pointers, and shapes have contents that can change; tuples,
-    /// kinds, task values, simple types and text do not.
+    /// Whether a `bind` variable of type `ty` may change its contents (see
+    /// `ast::has_contents`).
     fn bind_has_contents(&self, ty: &Type) -> bool {
-        match ty {
-            Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => true,
-            Type::Maybe(inner) | Type::Fail(inner) => self.bind_has_contents(inner),
-            Type::Or(a, b) => self.bind_has_contents(a) || self.bind_has_contents(b),
-            Type::Named(name, _) => self.shapes.contains_key(name),
-            Type::Applied(applied) => self.shapes.contains_key(&applied.name),
-            _ => false,
-        }
+        has_contents(ty, &|name| self.shapes.contains_key(name))
     }
 
     /// Whether `ty` holds a type the generic task being checked takes, which
@@ -5797,8 +5791,10 @@ impl Checker {
             let message = message.replacen(" owns", &format!(" owns{}", given), 1);
             errors.push(Error::at(handed.span, message));
         }
-        // A `[flex @r]` lambda's copies are its own to change.
-        for kept in self.kept_lambdas.values().filter(|kept| kept.flex) {
+        // A `[flex @r]` lambda's copies are its own to change, and so are the
+        // contents of a `[bind @r]` one's.
+        for kept in self.kept_lambdas.values().filter(|kept| kept.mode != KeptMode::Plain) {
+            let word = if kept.mode == KeptMode::Bind { "bind" } else { "flex" };
             for name in &kept.uses {
                 let Some((_, info)) = kept.outer.iter().find(|(outer, _)| outer == name) else { continue };
                 if info.mode.can_change_contents(self.bind_has_contents(&info.ty)) || info.result || !holds_twofold(&info.ty, &self.regional, true) {
@@ -5808,14 +5804,14 @@ impl Checker {
                 // A lambda kept may send back what it keeps, and can't be copied.
                 let message = if self.only_lambdas(&info.ty) {
                     format!(
-                        "a '[flex @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', a lambda that may send back what a fixed name owns, and {2}; make it a '[@{1}]' lambda",
-                        name, kept.region, rule
+                        "a '[{3} @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', a lambda that may send back what a fixed name owns, and {2}; make it a '[@{1}]' lambda",
+                        name, kept.region, rule, word
                     )
                 } else {
                     let copy = format!("{}.copy() at {}", name, copy_region(&info.ty));
                     format!(
-                        "a '[flex @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', and {3}; make it a '[@{1}]' lambda, or keep a copy of its own, as in 'flex mine = {2}', and use that",
-                        name, kept.region, copy, rule
+                        "a '[{4} @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', and {3}; make it a '[@{1}]' lambda, or keep a copy of its own, as in 'flex mine = {2}', and use that",
+                        name, kept.region, copy, rule, word
                     )
                 };
                 errors.push(Error::at(kept.span, message));
@@ -7595,8 +7591,13 @@ impl Checker {
     /// `[@r](x: int) -> int … fi` at `span`: the value of a lambda that keeps
     /// what it uses of the code around it in region `region`, a copy of each
     /// variable it uses, made here (see `kept_scope`).
-    fn check_closure(&mut self, lambda: &str, region: &str, flex: bool, places: &[KeptPlace], span: Span) -> Result<Type> {
-        let written = if flex { format!("[flex @{}]", region) } else { format!("[@{}]", region) };
+    fn check_closure(&mut self, lambda: &str, region: &str, mode: KeptMode, places: &[KeptPlace], span: Span) -> Result<Type> {
+        let mode_word = match mode {
+            KeptMode::Plain => "",
+            KeptMode::Flex => "flex ",
+            KeptMode::Bind => "bind ",
+        };
+        let written = format!("[{}@{}]", mode_word, region);
         // Where the program starts no region exists yet.
         if self.at_start.is_some() {
             return err(span, format!("'{}' keeps what the lambda uses in a region; give a task by its name, or a plain lambda", written));
@@ -7639,7 +7640,7 @@ impl Checker {
         self.note_lambda_loops(lambda);
         let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
         let owned = outer.iter().map(|(name, info)| (name.clone(), self.name_owners(name, info))).collect();
-        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), flex, span, outer, within, uses: Vec::new(), places: places.to_vec(), owned });
+        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), mode, span, outer, within, uses: Vec::new(), places: places.to_vec(), owned });
         self.kept_order.retain(|name| name != lambda);
         self.kept_order.push(lambda.to_string());
         if self.broken.contains(lambda) {
@@ -7648,7 +7649,7 @@ impl Checker {
         let Some(info) = self.tasks.get(lambda) else { return Err(Error::internal_at(span, format!("no lambda '{}'", lambda))) };
         let (params, taken) = self.task_params_taken(info);
         let task = TaskType { params, taken, ret: info.ret.clone() };
-        Ok(Type::Closure(Box::new(ClosureType { task, region: region.to_string(), flex }.normalized())))
+        Ok(Type::Closure(Box::new(ClosureType { task, region: region.to_string(), mode }.normalized())))
     }
 
     /// Checks `place`, a variable a lambda kept in `region` keeps as a place:
@@ -7674,6 +7675,11 @@ impl Checker {
             let mut var = Expr::new(ExprKind::Var(name.clone()), place.span);
             var.ty = Some(info.ty.clone());
             self.given_place(&var, &Taker::Kept(name)).map_err(|error| Error { span: Some(place.span), ..error })?;
+        } else if place.passing == Passing::BindRef && self.bind_has_contents(&info.ty) {
+            // A `bind&` of a type with no contents only reads, as `fixed&` does.
+            let mut var = Expr::new(ExprKind::Var(name.clone()), place.span);
+            var.ty = Some(info.ty.clone());
+            self.given_place(&var, &Taker::KeptBind(name)).map_err(|error| Error { span: Some(place.span), ..error })?;
         }
         let Some((region_depth, region_info)) = at(region) else { return Ok(()) };
         let refuse = |why: String| {
@@ -7718,9 +7724,17 @@ impl Checker {
             } else if let Some(place) = kept.places.iter().find(|place| place.name == *name) {
                 // A place: the variable itself, changed only through `flex&`.
                 info.passing = place.passing;
-                info.mode = if place.passing == Passing::FlexRef { Mode::Flex } else { Mode::Fixed };
+                info.mode = match place.passing {
+                    Passing::FlexRef => Mode::Flex,
+                    Passing::BindRef => Mode::Bind,
+                    _ => Mode::Fixed,
+                };
             } else {
-                info.mode = if kept.flex { Mode::Flex } else { Mode::Fixed };
+                info.mode = match kept.mode {
+                    KeptMode::Flex => Mode::Flex,
+                    KeptMode::Bind => Mode::Bind,
+                    KeptMode::Plain => Mode::Fixed,
+                };
             }
             around.names.insert(name.clone(), info);
         }
@@ -7958,9 +7972,9 @@ impl Checker {
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
-            ExprKind::Closure { lambda, region, flex, places } => {
-                let (lambda, region, flex, places) = (lambda.clone(), region.clone(), *flex, places.clone());
-                self.check_closure(&lambda, &region, flex, &places, span)
+            ExprKind::Closure { lambda, region, mode, places } => {
+                let (lambda, region, mode, places) = (lambda.clone(), region.clone(), *mode, places.clone());
+                self.check_closure(&lambda, &region, mode, &places, span)
             }
             // Only `coerce` makes one, of a value it checked.
             ExprKind::Kept { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
@@ -9353,10 +9367,11 @@ impl Checker {
                             format!("'{0}' changes '{1}', a 'fixed&' parameter, which only reads the caller's place; one that changes it is written 'flex& {1}: {2}'", word, name, info.ty),
                         );
                     }
-                    if info.mode == Mode::Bind && needs_flex {
+                    // A `bind` map has contents, so only a `bind` slice is here.
+                    if info.mode == Mode::Bind {
                         return err(
                             items.span,
-                            format!("'{0}' changes '{1}', a 'bind' slice; use '{1}.added(…)' or '{1}.without(…)' for a new one, or keep it in a 'flex' variable", word, name),
+                            format!("'{0}' changes the length of '{1}', a 'bind' slice, which stays bound to one value, so only its items change; keep the slice in a 'flex' variable to change its length", word, name),
                         );
                     }
                     if info.param || info.refers.is_some() {
@@ -9364,12 +9379,7 @@ impl Checker {
                         return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, self.param_hint(&name, info)));
                     }
                     let what = if matches!(info.ty, Type::Map(..)) { "map" } else { "slice" };
-                    let message = if info.mode == Mode::Bind {
-                        format!("'{}' changes '{}', a 'bind' {}; use '{}.added(…)' or '{}.without(…)' for a new one, or keep it in a 'flex' variable", word, name, what, name, name)
-                    } else {
-                        format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what)
-                    };
-                    return err(items.span, message);
+                    return err(items.span, format!("'{}' changes '{}', which is immutable; keep the {} in a 'flex' variable to change it", word, name, what));
                 }
                 self.check_expr(items)?
             }
@@ -11671,9 +11681,8 @@ impl Checker {
             };
             if let Err(error) = self.given_place(place, &taker) {
                 // A place that only can't change may still be read through one.
-                let word = if mode == Mode::Bind { "bind&" } else { "fixed&" };
                 return match (self.read_place(place), self.resolved_path(place)) {
-                    (Ok(()), Some(path)) => Err(Error { message: format!("{}; '{} {} = &{}' names it only to read it", error.message, word, name, path_text(&path)), ..error }),
+                    (Ok(()), Some(path)) => Err(Error { message: format!("{}; 'fixed& {} = &{}' names it only to read it", error.message, name, path_text(&path)), ..error }),
                     _ => Err(error),
                 };
             }
@@ -11974,11 +11983,14 @@ impl Checker {
     /// a place that can change, as an assignment writes to, other than an item
     /// of a slice, which may move when the slice grows.
     fn given_place(&self, place: &Expr, taker: &Taker) -> Result<()> {
-        self.given_part(place, taker, &self.written_text(place))
+        self.given_part(place, taker, &self.written_text(place), !taker.is_bind())
     }
 
     /// `given_place` of `place`, part of the place `written`, as written.
-    fn given_part(&self, place: &Expr, taker: &Taker, written: &str) -> Result<()> {
+    /// `whole` is whether the taker may assign `place` as a whole: a `flex&`
+    /// one may assign the place it is given, but of the variable or shared
+    /// field that place is part of, it changes only the contents.
+    fn given_part(&self, place: &Expr, taker: &Taker, written: &str, whole: bool) -> Result<()> {
         let refuse = |why: String| err(place.span, format!("{}, so {}", taker.lead(), why));
         match &place.kind {
             ExprKind::Var(name) => {
@@ -11986,13 +11998,15 @@ impl Checker {
                 if info.result {
                     return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
                 }
-                let bind_taker = matches!(taker, Taker::BindParam(_) | Taker::BindReference(_));
-                if bind_taker {
-                    if info.mode.can_change_contents(true) {
-                        return Ok(());
-                    }
-                } else if info.mode == Mode::Flex {
+                let bind_taker = taker.is_bind();
+                if info.mode == Mode::Flex || (!whole && info.mode.can_change_contents(true)) {
                     return Ok(());
+                }
+                if info.mode == Mode::Bind {
+                    return refuse(format!(
+                        "it needs a place that can be assigned as a whole, and '{}' is a 'bind' name, which stays bound to one value; a 'bind&' takes it to change only its contents",
+                        name
+                    ));
                 }
                 if name == THIS {
                     return Err(self.this_cannot_change(place.span, &taker.using(THIS)));
@@ -12033,7 +12047,7 @@ impl Checker {
                     Some(ty) => self.read_only_field(ty, field, place.span)?,
                     None => {}
                 }
-                self.given_part(base, taker, written)
+                self.given_part(base, taker, written, false)
             }
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
                 refuse("it needs a place that can change, and a part taken of a value is a new value, not a place".to_string())
@@ -12048,10 +12062,10 @@ impl Checker {
                         .to_string(),
                 ),
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
-                _ => self.given_part(base, taker, written),
+                _ => self.given_part(base, taker, written, false),
             },
             ExprKind::Deref(pointer) => self.written_through(pointer, written, None),
-            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead()), false),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead()), whole),
             _ => refuse("it needs a place that can change: a 'flex' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }
     }
@@ -12917,8 +12931,8 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
         (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
         (Type::Tuple(a), Type::Tuple(e)) => a.len() == e.len() && a.iter().zip(e).all(|(a, e)| fits_regions(a, e)),
         // A lambda that only reads what it keeps goes where one that changes
-        // it is expected, never the other way.
-        (Type::Closure(a), Type::Closure(e)) => a.region == e.region && task_fits(&a.task, &e.task) && (!a.flex || e.flex),
+        // it is expected, never the other way; bind is between plain and flex.
+        (Type::Closure(a), Type::Closure(e)) => a.region == e.region && task_fits(&a.task, &e.task) && a.mode <= e.mode,
         (Type::Task(a), Type::Task(e)) => task_fits(a, e),
         _ => actual == expected,
     }
@@ -13889,7 +13903,7 @@ fn is_task(ty: &Type) -> bool {
 /// Whether `ty` is the type of a `[flex @r]` lambda, which changes what it
 /// keeps, so a value of it is never copied.
 fn held_lambda(ty: &Type) -> bool {
-    matches!(ty, Type::Closure(closure) if closure.flex)
+    matches!(ty, Type::Closure(closure) if closure.mode == KeptMode::Flex)
 }
 
 /// Whether `ty` is or holds a lambda that keeps what it uses, `[@r](…)`.
@@ -15061,7 +15075,7 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
             _ => Type::Task(Box::new(marked)),
         };
         return format!(
-            "; this task changes what a value it is given reaches, so it goes only where the type says 'bind' for that value, as in '{}', and nothing a fixed name owns is given to it there",
+            "; this task changes what a twofold value it is given reaches, a slice, a map or a pointer or what holds one, so it goes only where the type says 'bind' for that value, as in '{}', and nothing a fixed name owns is given to it there",
             marked
         );
     }
@@ -16517,9 +16531,16 @@ enum Taker<'a> {
     BindReference(&'a str),
     /// A lambda keeping the variable as a place, `[flex& count, @r]`.
     Kept(&'a str),
+    /// A lambda keeping the variable as a bind place, `[bind& count, @r]`.
+    KeptBind(&'a str),
 }
 
 impl Taker<'_> {
+    /// Whether it changes only the contents of the place, as `bind&` does.
+    fn is_bind(&self) -> bool {
+        matches!(self, Taker::BindParam(_) | Taker::BindReference(_) | Taker::KeptBind(_))
+    }
+
     /// How an error about the place starts.
     fn lead(&self) -> String {
         match self {
@@ -16528,6 +16549,7 @@ impl Taker<'_> {
             Taker::Reference(name) => format!("'flex& {}' names a place to change it", name),
             Taker::BindReference(name) => format!("'bind& {}' names a place to change its contents", name),
             Taker::Kept(name) => format!("this lambda keeps '{0}' as 'flex& {0}', to change it", name),
+            Taker::KeptBind(name) => format!("this lambda keeps '{0}' as 'bind& {0}', to change its contents", name),
         }
     }
 
@@ -16538,6 +16560,7 @@ impl Taker<'_> {
             Taker::Reference(name) => format!("naming '{}' with 'flex& {}'", place, name),
             Taker::BindReference(name) => format!("naming '{}' with 'bind& {}'", place, name),
             Taker::Kept(name) => format!("keeping '{}' as 'flex& {}'", place, name),
+            Taker::KeptBind(name) => format!("keeping '{}' as 'bind& {}'", place, name),
         }
     }
 }

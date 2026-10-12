@@ -8,7 +8,7 @@ use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Mode, Passing, Span, Taken, Type, unqualified};
+use vela::ast::{ANY_REGION, KeptMode, MODULE_SEPARATOR, Mode, Passing, Span, Taken, Type, unqualified};
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::TokenClass;
@@ -984,14 +984,14 @@ impl<'a> Knowledge<'a> {
         // `[@r](x: int) -> int …`: a lambda that keeps what it uses in `r`.
         if self.token(first) == Some(&Token::LBracket)
             && let Some(open) = (first + 1..=last).find(|&q| self.token(q) == Some(&Token::RBracket)).map(|q| q + 1)
-            && let Some((region, flex, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
+            && let Some((region, mode, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
             && self.token(open) == Some(&Token::LParen)
             && let Some(close) = self.matching_close(open, last)
             && self.token(close + 1) == Some(&Token::Arrow)
         {
             let end = (close + 2..=last).find(|&q| matches!(self.token(q), Some(Token::Send | Token::Fi))).map_or(last, |q| q.saturating_sub(1));
             let task = task_value_type_beside(self.source.get(self.range(open).start..self.range(end).end)?, Some(&region))?;
-            return closure_of(task, region, flex);
+            return closure_of(task, region, mode);
         }
         // `(x: int) -> int …`: a lambda, whose header, up to its body, gives
         // its type.
@@ -1635,7 +1635,7 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
     let ret = parse_type_within(ret, depth + 1)?;
     let task = vela::ast::TaskType { params, taken, ret };
     let mut ty = match kept {
-        Some((region, flex, _)) => Type::Closure(Box::new(vela::ast::ClosureType { task, region, flex }.normalized())),
+        Some((region, mode, _)) => Type::Closure(Box::new(vela::ast::ClosureType { task, region, mode }.normalized())),
         None => Type::Task(Box::new(task.normalized())),
     };
     for pointer in prefixes.into_iter().rev() {
@@ -1710,9 +1710,9 @@ fn without_word(item: &str) -> &str {
     ["flex", "fixed", "bind"].iter().find_map(|word| item.strip_prefix(word)).unwrap_or(item)
 }
 
-/// `[@r]` or `[flex @r]` at the start of `text`, what a lambda keeps: the
-/// region, whether it changes what it keeps, and the text after it.
-fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
+/// `[@r]`, `[flex @r]` or `[bind @r]` at the start of `text`, what a lambda
+/// keeps: the region, how it treats what it keeps, and the text after it.
+fn kept_prefix(text: &str) -> Option<(String, KeptMode, &str)> {
     let inner = text.strip_prefix('[')?;
     let close = inner.find(']')?;
     // The region among the places it keeps, `[flex& count, @r]`.
@@ -1723,17 +1723,28 @@ fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
         if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;
         }
-        region = Some(match item.strip_prefix("flex") {
-            Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
-            _ => (false, item),
+        region = Some(if let Some(rest) = item.strip_prefix("flex") {
+            if rest.trim_start().starts_with('@') {
+                (KeptMode::Flex, rest.trim_start())
+            } else {
+                return None;
+            }
+        } else if let Some(rest) = item.strip_prefix("bind") {
+            if rest.trim_start().starts_with('@') {
+                (KeptMode::Bind, rest.trim_start())
+            } else {
+                return None;
+            }
+        } else {
+            (KeptMode::Plain, item)
         });
     }
-    let (flex, region) = region?;
+    let (mode, region) = region?;
     let region = region.strip_prefix('@')?.trim();
     if region.is_empty() || !region.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
-    Some((region.to_string(), flex, inner.get(close + 1..)?))
+    Some((region.to_string(), mode, inner.get(close + 1..)?))
 }
 
 /// The task's type a value of type `ty` is called as, with the region it keeps
@@ -1747,9 +1758,9 @@ fn called_task(ty: Type) -> Option<(vela::ast::TaskType, Option<String>)> {
 }
 
 /// The type of a lambda that keeps what it uses, of a task's type `task`.
-fn closure_of(task: Type, region: String, flex: bool) -> Option<Type> {
+fn closure_of(task: Type, region: String, mode: KeptMode) -> Option<Type> {
     let Type::Task(task) = task else { return None };
-    Some(Type::Closure(Box::new(vela::ast::ClosureType { task: *task, region, flex }.normalized())))
+    Some(Type::Closure(Box::new(vela::ast::ClosureType { task: *task, region, mode }.normalized())))
 }
 
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.

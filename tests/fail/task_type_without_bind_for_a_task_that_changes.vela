@@ -1,0 +1,14 @@
+; error: 11:41: expected type ([int]@r) -> nothing, got (bind [int]@r) -> nothing; this task changes what a twofold value it is given reaches, a slice, a map or a pointer or what holds one, so it goes only where the type says 'bind' for that value, as in '(bind [int]@r) -> nothing', and nothing a fixed name owns is given to it there
+; A task changing the items of a slice it takes as 'bind' goes only where the
+; task type says 'bind' for it.
+
+task zero(bind xs: [int]@r) -> nothing
+    xs[0] = 0
+fi
+
+task main()
+    region r
+    fixed plain: ([int]@r) -> nothing = zero
+    fixed xs = [1, 2, ...] at r
+    show(xs)
+fi

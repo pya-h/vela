@@ -1,0 +1,60 @@
+  1 | ; 'bind' before a whole value in a task's type says nothing its caller sees,
+    | comment:; 'bind' before a whole value in a task's type says nothing its caller sees,
+  2 | ; as 'flex' does, so the type reads as one taking a value; before a twofold
+    | comment:; as 'flex' does, so the type reads as one taking a value; before a twofold
+  3 | ; value it stays, and a task taking the value plainly fits there too.
+    | comment:; value it stays, and a task taking the value plainly fits there too.
+  5 | shape P
+    | keyword:shape  type:P
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task f(bind n: int) -> int
+    | keyword:task  task:f  punctuation:(  keyword:bind  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 11 | fi
+    | keyword:fi
+ 13 | task g(bind p: P) -> int
+    | keyword:task  task:g  punctuation:(  keyword:bind  parameter:p  punctuation::  type:P  punctuation:)  operator:->  type-builtin:int
+ 14 |     p.x = p.x + 1
+    | parameter:p  punctuation:.  field:x  operator:=  parameter:p  punctuation:.  field:x  operator:+  number:1
+ 15 |     <- p.x
+    | keyword:<-  parameter:p  punctuation:.  field:x
+ 16 | fi
+    | keyword:fi
+ 18 | task zero(bind xs: [int]@r) -> nothing
+    | keyword:task  task:zero  punctuation:(  keyword:bind  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing
+ 19 |     xs[0] = 0
+    | parameter:xs  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 20 | fi
+    | keyword:fi
+ 22 | task first(xs: [int]@r) -> nothing
+    | keyword:task  task:first  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing
+ 23 |     show(xs[0], " ")
+    | builtin-fn:show  punctuation:(  parameter:xs  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     fixed h: (int) -> int = f
+    | keyword:fixed  variable:h  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:f
+ 28 |     fixed k: (P) -> int = g
+    | keyword:fixed  variable:k  punctuation::  punctuation:(  type:P  punctuation:)  operator:->  type-builtin:int  operator:=  task:g
+ 29 |     region r
+    | keyword:region  region:r
+ 30 |     fixed m: (bind [int]@r) -> nothing = zero
+    | keyword:fixed  variable:m  punctuation::  punctuation:(  keyword:bind  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:=  task:zero
+ 31 |     fixed n: (bind [int]@r) -> nothing = first
+    | keyword:fixed  variable:n  punctuation::  punctuation:(  keyword:bind  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:=  task:first
+ 32 |     flex xs = [5, 6, ...] at r
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 33 |     n(xs)
+    | variable:n  punctuation:(  variable:xs  punctuation:)
+ 34 |     m(xs)
+    | variable:m  punctuation:(  variable:xs  punctuation:)
+ 35 |     show(h(1), " ", k(P { x: 1 }), " ", xs[0])
+    | builtin-fn:show  punctuation:(  variable:h  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:k  punctuation:(  type:P  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:)
+ 36 | fi
+    | keyword:fi

@@ -1,0 +1,20 @@
+; error: 18:22: 'b' is given the place itself, to change, and 'Counter.box' is a 'shared bind' field, so its contents may change but it is never assigned as a whole; use 'shared flex box' to assign it whole
+; A 'flex&' parameter may assign the place it is given as a whole, which a
+; 'shared bind' field never is.
+
+shape Box
+    value: int
+fi
+
+shape Counter
+    shared bind box: Box = Box { value: 0 }
+fi
+
+task replace(flex& b: Box)
+    b = Box { value: 7 }
+fi
+
+task main()
+    replace(&Counter.box)
+    show(Counter.box.value)
+fi

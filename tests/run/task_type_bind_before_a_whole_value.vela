@@ -1,0 +1,36 @@
+; 'bind' before a whole value in a task's type says nothing its caller sees,
+; as 'flex' does, so the type reads as one taking a value; before a twofold
+; value it stays, and a task taking the value plainly fits there too.
+
+shape P
+    x: int
+fi
+
+task f(bind n: int) -> int
+    <- n + 1
+fi
+
+task g(bind p: P) -> int
+    p.x = p.x + 1
+    <- p.x
+fi
+
+task zero(bind xs: [int]@r) -> nothing
+    xs[0] = 0
+fi
+
+task first(xs: [int]@r) -> nothing
+    show(xs[0], " ")
+fi
+
+task main()
+    fixed h: (int) -> int = f
+    fixed k: (P) -> int = g
+    region r
+    fixed m: (bind [int]@r) -> nothing = zero
+    fixed n: (bind [int]@r) -> nothing = first
+    flex xs = [5, 6, ...] at r
+    n(xs)
+    m(xs)
+    show(h(1), " ", k(P { x: 1 }), " ", xs[0])
+fi

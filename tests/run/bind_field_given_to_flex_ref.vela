@@ -1,0 +1,17 @@
+; A field of a 'bind' value is contents, so it may be given to a 'flex&'
+; parameter, which assigns it as a whole.
+
+shape P
+    x: int
+    y: int
+fi
+
+task set(flex& n: int)
+    n = 9
+fi
+
+task main()
+    bind p = P { x: 1, y: 2 }
+    set(&p.x)
+    show(p.x, " ", p.y)
+fi

@@ -1,0 +1,26 @@
+  1 | ; A '[bind @r]' lambda changes the contents of what it keeps: the items of
+    | comment:; A '[bind @r]' lambda changes the contents of what it keeps: the items of
+  2 | ; its copy of a slice, which are the slice's own.
+    | comment:; its copy of a slice, which are the slice's own.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r
+    | keyword:region  region:r
+  6 |     flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+  7 |     xs.add(1)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+  8 |     fixed inc = [bind @r](n: int) -> nothing
+    | keyword:fixed  variable:inc  operator:=  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+  9 |         xs[0] = xs[0] + n
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:=  variable:xs  punctuation:[  number:0  punctuation:]  operator:+  parameter:n
+ 10 |     fi
+    | keyword:fi
+ 11 |     inc(2)
+    | variable:inc  punctuation:(  number:2  punctuation:)
+ 12 |     inc(3)
+    | variable:inc  punctuation:(  number:3  punctuation:)
+ 13 |     show(xs[0])
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:)
+ 14 | fi
+    | keyword:fi

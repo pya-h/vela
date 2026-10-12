@@ -1,9 +1,0 @@
-; error: 7:20: expected an expression, got 'bind'
-; A lambda keeps a place it only reads as 'fixed&'.
-
-task main()
-    region r
-    fixed big = [1, 2, 3]
-    fixed first = [bind& big, @r]() -> int big[0] fi
-    show(first())
-fi

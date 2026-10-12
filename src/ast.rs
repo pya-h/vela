@@ -157,29 +157,41 @@ pub struct TaskType {
     pub ret: Type,
 }
 
-/// The type of a lambda that keeps what it uses, `[@r](int) -> int` or
-/// `[flex @r](int) -> int` (see `Type::Closure`): the task's type it is called
-/// as, the region it keeps its copies in, and whether it changes them. Its
-/// task's type may name `region`, the one kept, beside regions of its own.
+/// How a lambda that keeps what it uses treats the copies it keeps in its
+/// region: plain fixed copies, `bind` copies whose contents may change but
+/// which it never assigns as a whole, or `flex` copies that it changes. In
+/// that order, each allows more, and a lambda goes where one allowing as much
+/// or more is expected (see `check::fits_regions`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum KeptMode {
+    Plain,
+    Bind,
+    Flex,
+}
+
+/// The type of a lambda that keeps what it uses, `[@r](int) -> int`,
+/// `[flex @r](int) -> int`, or `[bind @r](int) -> int` (see `Type::Closure`):
+/// the task's type it is called as, the region it keeps its copies in, and
+/// how it treats those copies. Its task's type may name `region`, the one
+/// kept, beside regions of its own.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClosureType {
     pub task: TaskType,
     pub region: String,
-    /// `[flex @r]`: it changes its copies, so a value of it is never copied.
-    pub flex: bool,
+    pub mode: KeptMode,
 }
 
 impl ClosureType {
     /// The same type with the task's own regions named in the order they
     /// first appear, the kept one as it is (see `TaskType::normalized`).
     pub fn normalized(&self) -> ClosureType {
-        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), flex: self.flex }
+        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), mode: self.mode }
     }
 
     /// The type with its task's type remade by `f`, as a task type.
     fn with_task(&self, f: impl FnOnce(&Type) -> Type) -> Type {
         match f(&Type::Task(Box::new(self.task.clone()))) {
-            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), flex: self.flex })),
+            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), mode: self.mode })),
             other => other,
         }
     }
@@ -201,7 +213,7 @@ pub const GROUP_SENDS: Type = Type::Results(Vec::new());
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Taken {
     /// A value the task doesn't change through: a whole value, `int`, which the
-    /// task takes as `n: int`, `flex n: int`, or `fixed n: int`, all one to its
+    /// task takes as `n: int`, `flex n: int`, `bind n: int` or `fixed n: int`, all one to its
     /// caller; or a twofold one, a slice, a map or a pointer or what holds one,
     /// taken `xs: [int]@r` or `fixed xs: [int]@r`.
     Value,
@@ -210,11 +222,13 @@ pub enum Taken {
     /// task taking it as a `Value` fits where one taking it so is expected, but
     /// never the other way (see `Checker::task_fits`).
     Flex,
-    /// A value the task may change the contents of, but never assign as a whole.
-    /// The compiler keeps this distinct from `Value` even for simple types.
+    /// `bind [int]@r`: a value the task changes the contents of, never
+    /// assigning it as a whole. As with `Flex`, it is a `Value` before a whole
+    /// value (see `Checker::taken_for`).
     Bind,
-    /// The caller's place, `flex& int` or `fixed& int` (`Passing::FlexRef` or
-    /// `Passing::FixedRef`), which the call marks with `&`.
+    /// The caller's place, `flex& int`, `bind& [int#4]` or `fixed& int`
+    /// (`Passing::FlexRef`, `Passing::BindRef` or `Passing::FixedRef`), which
+    /// the call marks with `&`.
     Place(Passing),
     /// A region, `@r`, whose type in `params` is `Type::Region`.
     Region(String),
@@ -720,7 +734,12 @@ impl Type {
                 task.ret.write(f, None)
             }
             Type::Closure(closure) => {
-                write!(f, "[{}@{}]", if closure.flex { "flex " } else { "" }, closure.region)?;
+                let mode_word = match closure.mode {
+                    KeptMode::Plain => "",
+                    KeptMode::Flex => "flex ",
+                    KeptMode::Bind => "bind ",
+                };
+                write!(f, "[{}@{}]", mode_word, closure.region)?;
                 Type::Task(Box::new(closure.task.clone())).write(f, None)
             }
             Type::Array(inner, count) => {
@@ -894,7 +913,7 @@ impl Type {
                     })
                 };
                 let task = closure.task.map_regions(&mut own);
-                Type::Closure(Box::new(ClosureType { task, region, flex: closure.flex }.normalized()))
+                Type::Closure(Box::new(ClosureType { task, region, mode: closure.mode }.normalized()))
             }
             other => other.clone(),
         }
@@ -1089,7 +1108,7 @@ impl Type {
             }
             Type::Closure(closure) => {
                 let task = TaskType { params: closure.task.params.iter().map(Type::normalized_tasks).collect(), taken: closure.task.taken.clone(), ret: closure.task.ret.normalized_tasks() };
-                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), flex: closure.flex }.normalized()))
+                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), mode: closure.mode }.normalized()))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
@@ -1283,10 +1302,10 @@ pub enum ExprKind {
     /// variable.
     Invoke { callee: Box<Expr>, args: Vec<Expr> },
     /// `[@r](x: int) -> int … fi`: a lambda that keeps what it uses from the
-    /// code around it in region `region`, `flex` for `[flex @r]`, which changes
-    /// its copies. `lambda` names the task it is (see `ast::lambda_name`), and
-    /// the checker gives the shape of what it keeps (see `kept_name`).
-    Closure { lambda: String, region: String, flex: bool, places: Vec<KeptPlace> },
+    /// code around it in region `region`, with `mode` saying how it treats the
+    /// copies it keeps. `lambda` names the task it is (see `ast::lambda_name`),
+    /// and the checker gives the shape of what it keeps (see `kept_name`).
+    Closure { lambda: String, region: String, mode: KeptMode, places: Vec<KeptPlace> },
     /// A plain task value given where a lambda that keeps what it uses is
     /// expected, `[@r](int) -> int`: it keeps only the task, in `region`, or
     /// for a task named here, `None`, where the program keeps it.
@@ -2066,6 +2085,21 @@ impl Mode {
     }
 }
 
+/// Whether a value of type `ty` has contents a `bind` name may change: the
+/// items of an array, a slice or a map, what a pointer points to, or the fields
+/// of a shape (`is_shape` says which names are shapes). Tuples, kinds, task
+/// values, text and simple types have none, so a `bind` of one acts as `fixed`.
+pub fn has_contents(ty: &Type, is_shape: &dyn Fn(&str) -> bool) -> bool {
+    match ty {
+        Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => true,
+        Type::Maybe(inner) | Type::Fail(inner) => has_contents(inner, is_shape),
+        Type::Or(a, b) => has_contents(a, is_shape) || has_contents(b, is_shape),
+        Type::Named(name, _) => is_shape(name),
+        Type::Applied(applied) => is_shape(&applied.name),
+        _ => false,
+    }
+}
+
 /// `include shapes/circle`, `include shapes/circle => round`,
 /// `include geometry (area, Point => Spot)`, or `include geometry {area}`:
 /// another file of the program, whose tasks, shapes, and kinds this file names
@@ -2232,8 +2266,8 @@ pub struct KeptPlace {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Kept {
     pub region: String,
-    /// `[flex @r]`: it changes its copies.
-    pub flex: bool,
+    /// `[flex @r]` changes its copies; `[bind @r]` lets their contents change.
+    pub mode: KeptMode,
     /// `[flex& count, @r]`: the variables it keeps as places.
     pub places: Vec<KeptPlace>,
 }

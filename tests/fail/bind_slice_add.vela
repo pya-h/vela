@@ -1,4 +1,4 @@
-; error: 6:5: 'add' changes 'xs', a 'bind' slice; use 'xs.added(…)' or 'xs.without(…)' for a new one, or keep it in a 'flex' variable
+; error: 6:5: 'add' changes the length of 'xs', a 'bind' slice, which stays bound to one value, so only its items change; keep the slice in a 'flex' variable to change its length
 
 task main()
     region r default

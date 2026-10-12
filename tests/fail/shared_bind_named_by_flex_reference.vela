@@ -1,0 +1,17 @@
+; error: 14:24: 'flex& y' names a place to change it, and 'Counter.box' is a 'shared bind' field, so its contents may change but it is never assigned as a whole; use 'shared flex box' to assign it whole; 'fixed& y = &Counter.box' names it only to read it
+; A 'flex&' reference may assign the place it names as a whole, which a
+; 'shared bind' field never is.
+
+shape Box
+    value: int
+fi
+
+shape Counter
+    shared bind box: Box = Box { value: 0 }
+fi
+
+task main()
+    flex& y = &Counter.box
+    y = Box { value: 8 }
+    show(Counter.box.value)
+fi

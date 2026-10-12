@@ -1,0 +1,28 @@
+  1 | ; A 'bind&' of a type with no contents, a tuple, only reads, as 'fixed&'
+    | comment:; A 'bind&' of a type with no contents, a tuple, only reads, as 'fixed&'
+  2 | ; does, so it may name a large fixed parameter read where the caller keeps it.
+    | comment:; does, so it may name a large fixed parameter read where the caller keeps it.
+  4 | task g(bind& t: (int, int, int, int, int, int, int, int, int, int)) -> int
+    | keyword:task  task:g  punctuation:(  keyword:bind  keyword:&  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:int
+  5 |     fixed (a, _, _, _, _, _, _, _, _, _) = t
+    | keyword:fixed  punctuation:(  variable:a  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:)  operator:=  parameter:t
+  6 |     <- a
+    | keyword:<-  variable:a
+  7 | fi
+    | keyword:fi
+  9 | task f(t: (int, int, int, int, int, int, int, int, int, int)) -> int
+    | keyword:task  task:f  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:int
+ 10 |     bind& y = &t
+    | keyword:bind  keyword:&  variable:y  operator:=  operator:&  parameter:t
+ 11 |     fixed (_, b, _, _, _, _, _, _, _, _) = y
+    | keyword:fixed  punctuation:(  keyword:_  punctuation:,  variable:b  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:,  keyword:_  punctuation:)  operator:=  variable:y
+ 12 |     <- b + g(&t)
+    | keyword:<-  variable:b  operator:+  task:g  punctuation:(  operator:&  parameter:t  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     show(f((1, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
+    | builtin-fn:show  punctuation:(  task:f  punctuation:(  punctuation:(  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:,  number:10  punctuation:)  punctuation:)  punctuation:)
+ 17 | fi
+    | keyword:fi

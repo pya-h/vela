@@ -1758,51 +1758,65 @@ impl Parser {
     }
 
     /// Whether the cursor, at `[`, starts what a lambda keeps: `[@r]`,
-    /// `[flex @r]`, or a place first, `[flex& count, @r]`, before a lambda or
-    /// its type.
+    /// `[flex @r]`, `[bind @r]`, or a place first, `[flex& count, @r]`, before a
+    /// lambda or its type.
     fn at_kept(&self) -> bool {
         match self.tokens.get(self.pos + 1) {
             Some(Token::AtSign) => true,
             Some(Token::Flex) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
+            Some(Token::Bind) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
             Some(Token::Fixed) => self.tokens.get(self.pos + 2) == Some(&Token::Amp),
             _ => false,
         }
     }
 
-    /// At `[`, what a lambda keeps: the region, `@r` or `flex @r` for one that
-    /// changes its copies, and the variables it keeps as places, `flex& count`
-    /// and `fixed& big`, in any order, then `]`.
-    fn parse_kept(&mut self) -> Result<(String, bool, Span, Vec<KeptPlace>)> {
+    /// At `[`, what a lambda keeps: the region, `@r`, `flex @r` or `bind @r`,
+    /// and the variables it keeps as places, `flex& count`, `bind& count` and
+    /// `fixed& big`, in any order, then `]`.
+    fn parse_kept(&mut self) -> Result<(String, KeptMode, Span, Vec<KeptPlace>)> {
         let opened = self.peek_span();
         self.advance(); // [
-        let mut region: Option<(String, bool, Span)> = None;
+        let mut region: Option<(String, KeptMode, Span)> = None;
         let mut places: Vec<KeptPlace> = Vec::new();
         loop {
             let at = self.peek_span();
-            let flex = self.match_token(Token::Flex);
-            let fixed = !flex && self.match_token(Token::Fixed);
-            if (flex || fixed) && self.match_token(Token::Amp) {
+            // `fixed` only starts a place, `fixed& big`; a region is `@r`.
+            let fixed = self.match_token(Token::Fixed);
+            let mode = if fixed {
+                KeptMode::Plain
+            } else if self.match_token(Token::Flex) {
+                KeptMode::Flex
+            } else if self.match_token(Token::Bind) {
+                KeptMode::Bind
+            } else {
+                KeptMode::Plain
+            };
+            if (fixed || mode != KeptMode::Plain) && self.match_token(Token::Amp) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
+                let passing = match mode {
+                    KeptMode::Flex => Passing::FlexRef,
+                    KeptMode::Bind => Passing::BindRef,
+                    KeptMode::Plain => Passing::FixedRef,
+                };
                 if matches!(self.peek(), Token::Dot | Token::LBracket) {
-                    let word = if flex { "flex&" } else { "fixed&" };
-                    return Err(Error::at(span, format!("a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'", word, name)));
+                    return Err(Error::at(span, format!("a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'", passing.word(), name)));
                 }
                 if places.iter().any(|place| place.name == name) {
                     return Err(Error::at(span, format!("'{}' is already in this lambda's list; each place is kept once", name)));
                 }
-                places.push(KeptPlace { name, passing: if flex { Passing::FlexRef } else { Passing::FixedRef }, span });
+                places.push(KeptPlace { name, passing, span });
             } else if !fixed && self.match_token(Token::AtSign) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
                 if region.is_some() {
                     return Err(Error::at(at, "a lambda keeps what it uses in one region, so its list names one, as in '[flex& count, @r]'"));
                 }
-                region = Some((name, flex, span));
+                region = Some((name, mode, span));
             } else {
                 return Err(Error::at(
                     at,
-                    "a lambda's list names the region it keeps what it uses in, '@r' or 'flex @r', and the variables it keeps as places, 'flex& count' or 'fixed& big', as in '[flex& count, @r]'",
+                    "a lambda's list names the region it keeps what it uses in, '@r', 'flex @r' or 'bind @r', and the variables it keeps as places, 'flex& count', 'bind& count' or 'fixed& big', as in '[flex& count, @r]'",
                 ));
             }
             if !self.match_token(Token::Comma) {
@@ -1812,16 +1826,16 @@ impl Parser {
         if !self.match_token(Token::RBracket) {
             return Err(self.unexpected("',' and another item, or ']' to close what the lambda keeps"));
         }
-        let Some((region, flex, at)) = region else {
+        let Some((region, mode, at)) = region else {
             return Err(Error::at(opened, "a lambda keeps what it uses in a region, which its list names, as in '[flex& count, @r]'"));
         };
-        Ok((region, flex, at, places))
+        Ok((region, mode, at, places))
     }
 
     /// `[@r](int) -> int`, at `[` written at `span`: the type of a lambda that
     /// keeps what it uses in `r` (see `Type::Closure`).
     fn parse_closure_type(&mut self, span: Span) -> Result<Type> {
-        let (region, flex, at, places) = self.parse_kept()?;
+        let (region, mode, at, places) = self.parse_kept()?;
         if let Some(place) = places.first() {
             return Err(Error::at(
                 place.span,
@@ -1829,7 +1843,12 @@ impl Parser {
             ));
         }
         self.type_parts.push((format!("@{}", region), at));
-        let written = if flex { format!("[flex @{}]", region) } else { format!("[@{}]", region) };
+        let mode_word = match mode {
+            KeptMode::Plain => "",
+            KeptMode::Flex => "flex ",
+            KeptMode::Bind => "bind ",
+        };
+        let written = format!("[{}@{}]", mode_word, region);
         let opened = self.peek_span();
         let task = match self.match_token(Token::LParen) {
             true => self.parse_tuple_type(opened)?,
@@ -1841,7 +1860,7 @@ impl Parser {
         if task.taken.iter().any(|how| *how == Taken::Region(region.clone())) {
             return Err(Error::at(at, format!("'{}' keeps what the lambda uses in '{}', so a region the lambda takes is named otherwise, as in '@a'", written, region)));
         }
-        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, flex })))
+        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, mode })))
     }
 
     /// A type named at `span` and the cursor, with the types a shape is given.
@@ -3743,13 +3762,19 @@ impl Parser {
     }
 
     /// `[@r](params) -> type`, its body, and `fi`, at `[`: a lambda that keeps
-    /// what it uses from the code around it in region `r`, and with
-    /// `[flex @r]` changes its copies (see `ExprKind::Closure`).
+    /// what it uses from the code around it in region `r`, with `[flex @r]`
+    /// changing its copies and `[bind @r]` letting their contents change (see
+    /// `ExprKind::Closure`).
     fn parse_closure_lambda(&mut self) -> Result<Expr> {
         let span = self.peek_span();
-        let (region, flex, _, places) = self.parse_kept()?;
+        let (region, mode, _, places) = self.parse_kept()?;
         if !(self.check(Token::LParen) && self.at_lambda()) {
-            let written = if flex { format!("[flex @{}]", region) } else { format!("[@{}]", region) };
+            let mode_word = match mode {
+                KeptMode::Plain => "",
+                KeptMode::Flex => "flex ",
+                KeptMode::Bind => "bind ",
+            };
+            let written = format!("[{}@{}]", mode_word, region);
             return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
         }
         let header = self.peek_span();
@@ -3761,11 +3786,11 @@ impl Parser {
         } else {
             self.parse_lambda_line(span)?
         };
-        let kept = Kept { region: region.clone(), flex, places: places.clone() };
+        let kept = Kept { region: region.clone(), mode, places: places.clone() };
         let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept)).kind else {
             return Err(Error::internal_at(span, "a lambda named by no variable"));
         };
-        Ok(Expr::new(ExprKind::Closure { lambda, region, flex, places }, span))
+        Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
     }
 
     /// The header of a lambda at `span` and the cursor, up to its body.

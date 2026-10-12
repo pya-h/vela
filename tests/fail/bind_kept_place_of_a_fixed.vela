@@ -1,0 +1,10 @@
+; error: 8:26: this lambda keeps 'big' as 'bind& big', to change its contents, so it needs a place that can change, and 'big' never does (declared at 7:11); a value declared with 'flex' or 'bind' can
+; A lambda keeps as 'bind&' only a place whose contents may change, and
+; nothing changes through a fixed name.
+
+task main()
+    region r
+    fixed big = [1, 2, 3]
+    fixed first = [bind& big, @r]() -> int big[0] fi
+    show(first())
+fi

@@ -1,0 +1,28 @@
+  1 | ; A field of a 'bind' value is contents, so it may be given to a 'flex&'
+    | comment:; A field of a 'bind' value is contents, so it may be given to a 'flex&'
+  2 | ; parameter, which assigns it as a whole.
+    | comment:; parameter, which assigns it as a whole.
+  4 | shape P
+    | keyword:shape  type:P
+  5 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  6 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task set(flex& n: int)
+    | keyword:task  task:set  punctuation:(  keyword:flex  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 10 |     n = 9
+    | parameter:n  operator:=  number:9
+ 11 | fi
+    | keyword:fi
+ 13 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 14 |     bind p = P { x: 1, y: 2 }
+    | keyword:bind  variable:p  operator:=  type:P  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 15 |     set(&p.x)
+    | task:set  punctuation:(  operator:&  variable:p  punctuation:.  field:x  punctuation:)
+ 16 |     show(p.x, " ", p.y)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:y  punctuation:)
+ 17 | fi
+    | keyword:fi

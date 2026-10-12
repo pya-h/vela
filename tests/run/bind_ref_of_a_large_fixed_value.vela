@@ -1,0 +1,17 @@
+; A 'bind&' of a type with no contents, a tuple, only reads, as 'fixed&'
+; does, so it may name a large fixed parameter read where the caller keeps it.
+
+task g(bind& t: (int, int, int, int, int, int, int, int, int, int)) -> int
+    fixed (a, _, _, _, _, _, _, _, _, _) = t
+    <- a
+fi
+
+task f(t: (int, int, int, int, int, int, int, int, int, int)) -> int
+    bind& y = &t
+    fixed (_, b, _, _, _, _, _, _, _, _) = y
+    <- b + g(&t)
+fi
+
+task main()
+    show(f((1, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
+fi
