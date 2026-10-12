@@ -1,0 +1,5 @@
+task main()
+    flex n = 1
+    bind& m = &n
+    show(m)
+fi

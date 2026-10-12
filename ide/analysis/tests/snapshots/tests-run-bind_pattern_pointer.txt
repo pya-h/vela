@@ -1,0 +1,26 @@
+  1 | shape Box
+    | keyword:shape  type:Box
+  2 |     value: ^int
+    | field:value  punctuation::  operator:^  type-builtin:int
+  3 | fi
+    | keyword:fi
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r
+    | keyword:region  region:r
+  7 |     bind b: maybe Box@r = Box { value: new int(1) at r }
+    | keyword:bind  variable:b  punctuation::  keyword:maybe  type:Box  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r  punctuation:}
+  8 |     when b is {bind found}
+    | keyword:when  variable:b  keyword:is  punctuation:{  keyword:bind  variable:found  punctuation:}
+  9 |         found.value^ = 7
+    | variable:found  punctuation:.  field:value  operator:^  operator:=  number:7
+ 10 |     fi
+    | keyword:fi
+ 11 |     when b is {bind shown}
+    | keyword:when  variable:b  keyword:is  punctuation:{  keyword:bind  variable:shown  punctuation:}
+ 12 |         show(shown.value^)
+    | builtin-fn:show  punctuation:(  variable:shown  punctuation:.  field:value  operator:^  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 | fi
+    | keyword:fi

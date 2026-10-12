@@ -2476,9 +2476,12 @@ pub struct ShapeDef {
 #[derive(Debug, Clone)]
 pub struct SharedField {
     pub field: Field,
-    /// `shared flex f`: any code that sees it may change it. A `read` one only
-    /// the shape's own methods change, and one that is neither never changes.
+    /// `shared flex f`: any code that sees it may change it in every way.
+    /// `shared bind f`: any code may change its contents, but not assign it as a
+    /// whole. A `read` one only the shape's own methods change, and one that is
+    /// neither never changes.
     pub flex: bool,
+    pub bind: bool,
     /// For a value of a wrapper worked out where the program starts (a member
     /// of `START_VALUES`), where it is, as a runtime message names it:
     /// `wrapper 'logged' on task 'sq'`. `None` for a field a program declares.
@@ -2486,10 +2489,16 @@ pub struct SharedField {
 }
 
 impl SharedField {
-    /// Whether anything may ever change it: `flex`, or `read`, which its own
-    /// shape's methods change.
+    /// Whether anything may ever change it: `flex`, `bind`, or `read`, which its
+    /// own shape's methods change.
     pub fn changes(&self) -> bool {
-        self.flex || self.field.read
+        self.flex || self.bind || self.field.read
+    }
+
+    /// Whether code outside the shape's own methods may change it: `flex` or
+    /// `bind`.
+    pub fn can_change_outside(&self) -> bool {
+        self.flex || self.bind
     }
 }
 

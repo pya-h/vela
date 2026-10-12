@@ -1,0 +1,9 @@
+shape Box
+    value: int
+fi
+
+task main()
+    loop bind b = Box { value: 1 } || b.value < 5 || b.value++
+        show(b.value)
+    fi
+fi

@@ -1,0 +1,13 @@
+; error: 12:13: 'Counter.box' is a 'shared bind' field, so its contents may change but it is never assigned as a whole; use 'shared flex box' to assign it whole
+
+shape Box
+    value: int
+fi
+
+shape Counter
+    shared bind box: Box = Box { value: 0 }
+fi
+
+task main()
+    Counter.box = Box { value: 5 }
+fi

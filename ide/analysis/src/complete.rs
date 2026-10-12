@@ -445,7 +445,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // After `shared` in a shape: whether the field changes, and who changes it,
     // or `new`, a shared method's name. (Otherwise its name is being declared.)
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Shape] {
-        return (vec![keyword("flex"), keyword(vela::ast::READ), keyword(vela::ast::NEW_WORD)], word_start, byte);
+        return (vec![keyword("flex"), keyword("bind"), keyword(vela::ast::READ), keyword(vela::ast::NEW_WORD)], word_start, byte);
     }
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Kind] {
         return (vec![keyword(vela::ast::NEW_WORD)], word_start, byte);

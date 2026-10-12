@@ -1,0 +1,20 @@
+  1 | shape Box
+    | keyword:shape  type:Box
+  2 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  3 | fi
+    | keyword:fi
+  5 | shape Counter
+    | keyword:shape  type:Counter
+  6 |     shared bind box: Box = Box { value: 0 }
+    | keyword:shared  keyword:bind  field:box  punctuation::  type:Box  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:0  punctuation:}
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     Counter.box.value = 5
+    | type:Counter  punctuation:.  field:box  punctuation:.  field:value  operator:=  number:5
+ 11 |     show(Counter.box.value)
+    | builtin-fn:show  punctuation:(  type:Counter  punctuation:.  field:box  punctuation:.  field:value  punctuation:)
+ 12 | fi
+    | keyword:fi

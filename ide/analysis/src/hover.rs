@@ -200,12 +200,14 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
     Some((info, token.range.clone()))
 }
 
-/// A pattern's name, written `flex name` when the pattern can assign it.
+/// A pattern's name, written `flex name` when the pattern can assign it,
+/// `bind name` when only its contents may change.
 fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
-    if k.pattern_name_mode(at) != Mode::Fixed {
-        return (format!("flex {}", typed), format!("{} It can be assigned.", doc));
+    match k.pattern_name_mode(at) {
+        Mode::Flex => (format!("flex {}", typed), format!("{} It can be assigned.", doc)),
+        Mode::Bind => (format!("bind {}", typed), format!("{} It is bound to one value; its contents may change, but it is never assigned as a whole.", doc)),
+        Mode::Fixed => (typed.to_string(), doc.to_string()),
     }
-    (typed.to_string(), doc.to_string())
 }
 
 fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
@@ -320,6 +322,8 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             if symbol.shared {
                 let shape = parent.map(|p| p.name.as_str()).unwrap_or("?");
                 let changes = match (symbol.intro, symbol.read) {
+                    (Some("flex"), _) => " Any code that sees it may change it.",
+                    (Some("bind"), _) => " Any code may change its contents, but not assign it as a whole.",
                     (Some(_), _) => " Any code that sees it may change it.",
                     (None, true) => " Any file reads it; only the methods of its shape change it.",
                     (None, false) => " It never changes.",
@@ -482,6 +486,12 @@ fn shared_words(member: &Symbol) -> String {
     if !member.shared {
         return if member.private { private.to_string() } else if member.read { "read ".to_string() } else { String::new() };
     }
-    let change = if member.intro.is_some() { "flex " } else if member.read { "read " } else { "" };
+    let change = if let Some(intro) = member.intro {
+        format!("{} ", intro)
+    } else if member.read {
+        "read ".to_string()
+    } else {
+        String::new()
+    };
     format!("{}shared {}", private, change)
 }

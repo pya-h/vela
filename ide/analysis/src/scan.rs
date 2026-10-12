@@ -854,17 +854,19 @@ fn read_marker(tokens: &Tokens, p: usize) -> bool {
 }
 
 /// Whether the name at `p` is a shape's `shared` field, as in `shared f`,
-/// `shared flex f`, or `shared read f`, with `shared` starting its line (after
-/// `priv`, if it is written); and if so, whether it is `flex`.
-fn shared_marker(tokens: &Tokens, p: usize) -> Option<bool> {
-    let (at, flex) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
-        Some(Token::Shared) => (p - 1, false),
-        Some(Token::Flex) => (p.checked_sub(2)?, true),
-        Some(Token::Ident(word)) if word == READ => (p.checked_sub(2)?, false),
+/// `shared flex f`, `shared bind f` or `shared read f`, with `shared` starting
+/// its line (after `priv`, if it is written); and if so, the word that says how
+/// it changes: "flex", "bind", or none for a plain or read field.
+fn shared_marker(tokens: &Tokens, p: usize) -> Option<Option<&'static str>> {
+    let (at, word) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
+        Some(Token::Shared) => (p - 1, None),
+        Some(Token::Flex) => (p.checked_sub(2)?, Some("flex")),
+        Some(Token::Bind) => (p.checked_sub(2)?, Some("bind")),
+        Some(Token::Ident(word)) if word == READ => (p.checked_sub(2)?, None),
         _ => return None,
     };
     let starts = tokens.starts_line(at) || (tokens.before(at) == Some(&Token::Priv) && tokens.starts_line(at - 1));
-    (tokens.token(at) == Some(&Token::Shared) && starts).then_some(flex)
+    (tokens.token(at) == Some(&Token::Shared) && starts).then_some(word)
 }
 
 /// What ends a shape's field, whose type may be followed by the value a literal
@@ -1135,7 +1137,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         field.default = falls_back;
                         field.read = read_marker(tokens, p) || (shared.is_some() && tokens.ident(p - 1) == Some(READ));
                         field.shared = shared.is_some();
-                        field.intro = shared.filter(|flex| *flex).map(|_| "flex");
+                        field.intro = shared.flatten();
                         // `priv shared f`: `declare` looks only just before the name.
                         if shared.is_some() {
                             let start = (p.saturating_sub(3)..p).find(|q| tokens.token(*q) == Some(&Token::Shared));

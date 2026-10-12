@@ -5204,7 +5204,7 @@ impl Checker {
             ExprKind::Shared { shape, field } => {
                 let (shape, field) = (shape.clone(), field.clone());
                 let ty = self.check_expr(expr)?;
-                self.changeable_shared(&shape, &field, span, "")?;
+                self.changeable_shared(&shape, &field, span, "", true)?;
                 Ok(ty)
             }
             ExprKind::Index(base, index) => {
@@ -5313,7 +5313,7 @@ impl Checker {
                 Ok(())
             }
             ExprKind::Deref(pointer) => self.written_through(pointer, written, None),
-            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, "", false),
             ExprKind::Field(base, field) => {
                 if let Some(ty) = &base.ty {
                     self.read_only_field(ty, field, place.span)?;
@@ -5356,7 +5356,7 @@ impl Checker {
                 err(place.span, format!("{} nothing changes through immutable variable '{}', at any depth{}", change, name, self.param_hint(name, info)))
             }
             ExprKind::Field(base, _) | ExprKind::Index(base, _) | ExprKind::Deref(base) => self.written_through(base, written, method),
-            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, "", false),
             _ => Ok(()),
         }
     }
@@ -5632,6 +5632,8 @@ impl Checker {
     fn bind_has_contents(&self, ty: &Type) -> bool {
         match ty {
             Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => true,
+            Type::Maybe(inner) | Type::Fail(inner) => self.bind_has_contents(inner),
+            Type::Or(a, b) => self.bind_has_contents(a) || self.bind_has_contents(b),
             Type::Named(name, _) => self.shapes.contains_key(name),
             Type::Applied(applied) => self.shapes.contains_key(&applied.name),
             _ => false,
@@ -5914,7 +5916,13 @@ impl Checker {
                 }
                 self.check_expr(base)
             }
-            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_written(base, written, false),
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_written(base, written, false),
+            ExprKind::Shared { shape, field } => {
+                let (shape, field) = (shape.clone(), field.clone());
+                let ty = self.check_expr(base)?;
+                self.changeable_shared(&shape, &field, span, "", false)?;
+                Ok(ty)
+            }
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
     }
@@ -7230,7 +7238,7 @@ impl Checker {
                         passing: Passing::Copy,
                         default: Some(value),
                     };
-                    members.push(SharedField { field, flex: false, start: Some(place) });
+                    members.push(SharedField { field, flex: false, bind: false, start: Some(place) });
                     self.start_values.push(StartValue { task: task.clone(), wrapper: name.clone(), member: member.clone(), span });
                     *arg = Expr::new(ExprKind::Shared { shape: START_VALUES.to_string(), field: member }, span);
                 }
@@ -11028,7 +11036,7 @@ impl Checker {
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written, Some(method)),
             ExprKind::Index(base, _) => self.altered_part(base, method, written),
             ExprKind::Deref(pointer) => self.written_through(pointer, written, Some(method)),
-            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, value.span, &format!("'{}' changes the value it is called on, and ", method)),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, value.span, &format!("'{}' changes the value it is called on, and ", method), false),
             _ => refuse("it needs a place that can change, such as a 'flex' variable, a field or item of one, or what a pointer points to, and not a value made here".to_string()),
         }
     }
@@ -11147,7 +11155,7 @@ impl Checker {
     /// it can't be: one that is neither `flex` nor `read`, and a `read` one
     /// outside the methods of its shape. `lead` starts the message, for a
     /// change that is a call's.
-    fn changeable_shared(&self, shape: &str, field: &str, span: Span, lead: &str) -> Result<()> {
+    fn changeable_shared(&self, shape: &str, field: &str, span: Span, lead: &str, whole: bool) -> Result<()> {
         let Some(member) = self.shapes.get(shape).and_then(|def| def.shared.iter().find(|member| member.field.name == field)) else {
             // `Point.new`, a shared method, named as a value: no place.
             if self.tasks.get(&method_name(shape, field)).is_some_and(|info| info.owner.is_some()) {
@@ -11160,15 +11168,37 @@ impl Checker {
             return err(
                 span,
                 format!(
-                    "{}'{}' never changes (declared at {}:{}); a shared field that changes is 'shared flex {}', or 'shared read {}', which only the methods of '{}' change",
-                    lead, written, member.field.span.line, member.field.span.col, field, field, shape
+                    "{}'{}' never changes (declared at {}:{}); a shared field that changes is 'shared flex {}', 'shared bind {}', or 'shared read {}', which only the methods of '{}' change",
+                    lead, written, member.field.span.line, member.field.span.col, field, field, field, shape
                 ),
             );
         }
-        if !member.flex && self.current_shape.as_deref() != Some(shape) {
-            return err(span, format!("{}'{}' is a read-only shared field, which only the methods of '{}' change", lead, written, shape));
+        let outside = self.current_shape.as_deref() != Some(shape);
+        if whole {
+            if member.flex {
+                return Ok(());
+            }
+            if member.field.read && !outside {
+                return Ok(());
+            }
+            if outside && member.field.read {
+                return err(span, format!("{}'{}' is a read-only shared field, which only the methods of '{}' change", lead, written, shape));
+            }
+            return err(
+                span,
+                format!(
+                    "{}'{}' is a 'shared bind' field, so its contents may change but it is never assigned as a whole; use 'shared flex {}' to assign it whole",
+                    lead, written, field
+                ),
+            );
         }
-        Ok(())
+        if member.can_change_outside() {
+            return Ok(());
+        }
+        if member.field.read && !outside {
+            return Ok(());
+        }
+        err(span, format!("{}'{}' is a read-only shared field, which only the methods of '{}' change", lead, written, shape))
     }
 
     /// The first value of shared field `index` of `shape`, checked, which a use
@@ -12021,7 +12051,7 @@ impl Checker {
                 _ => self.given_part(base, taker, written),
             },
             ExprKind::Deref(pointer) => self.written_through(pointer, written, None),
-            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead()), false),
             _ => refuse("it needs a place that can change: a 'flex' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }
     }

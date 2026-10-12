@@ -489,6 +489,9 @@ impl<'a> Knowledge<'a> {
             if at > line && self.token(at - 1) == Some(&Token::Flex) {
                 return Mode::Flex;
             }
+            if at > line && self.token(at - 1) == Some(&Token::Bind) {
+                return Mode::Bind;
+            }
             let mut depth = 0usize;
             // The `(` of the group this name is in, if any.
             let Some(open) = (line..at).rev().find(|&q| match self.token(q) {

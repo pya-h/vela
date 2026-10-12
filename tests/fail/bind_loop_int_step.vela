@@ -1,0 +1,7 @@
+; error: 4:33: cannot assign to 'bind' variable 'i' as a whole; a 'bind' name stays bound to one value
+
+task main()
+    loop bind i = 0 || i < 3 || i++
+        show(i)
+    fi
+fi

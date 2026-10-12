@@ -1045,25 +1045,30 @@ impl Parser {
         if self.check(Token::Shared) {
             return Err(Error::at(self.peek_span(), "'shared' is already written here"));
         }
-        let flex_at = self.peek_span();
+        let word_at = self.peek_span();
         let flex = self.match_token(Token::Flex);
-        if flex && self.check(Token::Amp) {
-            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared flex', without '&'"));
+        let bind = !flex && self.match_token(Token::Bind);
+        if (flex || bind) && self.check(Token::Amp) {
+            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared flex' or 'shared bind', without '&'"));
         }
-        if flex && self.check(Token::Flex) {
+        if (flex || bind) && self.check(Token::Flex) {
             return Err(Error::at(self.peek_span(), "'flex' is already written here"));
         }
+        if (flex || bind) && self.check(Token::Bind) {
+            return Err(Error::at(self.peek_span(), "'bind' is already written here"));
+        }
         let read = self.match_read(private)?;
-        if flex && read {
+        if (flex || bind) && read {
+            let word = if flex { "flex" } else { "bind" };
             return Err(Error::at(
-                flex_at,
-                format!("a shared field is 'flex' or '{0}', not both: 'flex' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+                word_at,
+                format!("a shared field is '{0}' or '{1}', not both: '{0}' lets any code that sees it change it, and '{1}' only the methods of its shape", word, READ),
             ));
         }
-        if read && self.check(Token::Flex) {
+        if read && (self.check(Token::Flex) || self.check(Token::Bind)) {
             return Err(Error::at(
                 self.peek_span(),
-                format!("a shared field is 'flex' or '{0}', not both: 'flex' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+                format!("a shared field is 'flex' or 'bind' or '{0}', not both: 'flex' or 'bind' lets any code that sees it change it, and '{0}' only the methods of its shape change", READ),
             ));
         }
         if !types.is_empty() {
@@ -1083,7 +1088,7 @@ impl Parser {
         }
         field.private = private;
         field.read = read;
-        Ok(SharedField { field, flex, start: None })
+        Ok(SharedField { field, flex, bind, start: None })
     }
 
     /// Rejects a field written below a method: a shape's or a kind's block reads
@@ -2607,8 +2612,14 @@ impl Parser {
         for (n, (first, last)) in start.into_iter().enumerate() {
             self.pos = first;
             let item = match self.peek() {
-                Token::Flex | Token::Fixed => {
-                    let mode = if self.check(Token::Fixed) { Mode::Fixed } else { Mode::Flex };
+                Token::Flex | Token::Fixed | Token::Bind => {
+                    let mode = if self.check(Token::Fixed) {
+                        Mode::Fixed
+                    } else if self.check(Token::Bind) {
+                        Mode::Bind
+                    } else {
+                        Mode::Flex
+                    };
                     declaring = Some(mode);
                     self.parse_binding(mode)?
                 }
@@ -2805,7 +2816,7 @@ impl Parser {
                         self.expect(Token::RBrace)?;
                         TypedForm::Value(names)
                     }
-                    Token::Ident(_) | Token::Flex | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
+                    Token::Ident(_) | Token::Flex | Token::Bind | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
                     _ => TypedForm::Only,
                 };
                 PatternKind::Typed { ty, form, asks: false }
@@ -2834,8 +2845,8 @@ impl Parser {
             }
             // The verb makes a failure; a pattern names one with the noun.
             Token::Fail => return Err(Error::at(self.peek_span(), FAILURE_NAMES)),
-            // `(x, y)` or `flex (x, y)`: the items of a tuple.
-            Token::LParen | Token::Flex => {
+            // `(x, y)`, `flex (x, y)` or `bind (x, y)`: the items of a tuple.
+            Token::LParen | Token::Flex | Token::Bind => {
                 let names = self.parse_pattern_names()?;
                 if names.parts.is_empty() {
                     return Err(Error::at(
@@ -2888,7 +2899,7 @@ impl Parser {
                     ));
                 }
                 let mut binds = Vec::new();
-                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Flex) {
+                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Flex | Token::Bind) {
                     let names = self.parse_pattern_names()?;
                     if !names.parts.is_empty() {
                         return Err(Error::at(names.span, format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
@@ -2903,10 +2914,17 @@ impl Parser {
     }
 
     /// What a pattern names: `name`, `_`, or `(a, b)`, the names of a tuple's
-    /// items, each of which `flex` may make changeable.
+    /// items, each of which `flex` may make changeable or `bind` may make its
+    /// contents changeable.
     fn parse_pattern_names(&mut self) -> Result<Names> {
         let span = self.peek_span();
-        let mode = if self.match_token(Token::Flex) { Mode::Flex } else { Mode::Fixed };
+        let mode = if self.match_token(Token::Flex) {
+            Mode::Flex
+        } else if self.match_token(Token::Bind) {
+            Mode::Bind
+        } else {
+            Mode::Fixed
+        };
         if !self.check(Token::LParen) {
             let (name, at) = self.parse_bound_name()?;
             return Ok(Names::one(name, at, mode));

@@ -1,0 +1,12 @@
+shape Box
+    value: int
+fi
+
+shape Counter
+    shared bind box: Box = Box { value: 0 }
+fi
+
+task main()
+    Counter.box.value = 5
+    show(Counter.box.value)
+fi

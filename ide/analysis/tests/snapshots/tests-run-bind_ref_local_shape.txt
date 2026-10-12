@@ -1,0 +1,18 @@
+  1 | shape Box
+    | keyword:shape  type:Box
+  2 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  3 | fi
+    | keyword:fi
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     bind b = Box { value: 1 }
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:1  punctuation:}
+  7 |     bind& r = &b
+    | keyword:bind  keyword:&  variable:r  operator:=  operator:&  variable:b
+  8 |     r.value = 7
+    | variable:r  punctuation:.  field:value  operator:=  number:7
+  9 |     show(b.value)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:value  punctuation:)
+ 10 | fi
+    | keyword:fi

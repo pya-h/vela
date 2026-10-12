@@ -1,9 +1,0 @@
-; error: 7:9: a 'bind' reference is not allowed yet; it comes in a later phase
-
-; A reference that only reads its place is 'fixed& y = &x'.
-
-task main()
-    flex n = 1
-    bind& m = &n
-    show(m)
-fi

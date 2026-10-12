@@ -1,0 +1,10 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     fixed n = 5
+    | keyword:fixed  variable:n  operator:=  number:5
+  3 |     bind& r = &n
+    | keyword:bind  keyword:&  variable:r  operator:=  operator:&  variable:n
+  4 |     show(r)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:)
+  5 | fi
+    | keyword:fi

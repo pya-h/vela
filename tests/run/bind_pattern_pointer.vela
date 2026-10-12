@@ -1,0 +1,14 @@
+shape Box
+    value: ^int
+fi
+
+task main()
+    region r
+    bind b: maybe Box@r = Box { value: new int(1) at r }
+    when b is {bind found}
+        found.value^ = 7
+    fi
+    when b is {bind shown}
+        show(shown.value^)
+    fi
+fi

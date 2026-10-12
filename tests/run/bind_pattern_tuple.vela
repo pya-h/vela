@@ -1,0 +1,5 @@
+task main()
+    fixed t = (1, "a")
+    bind (n, s) = t
+    show(n, s)
+fi

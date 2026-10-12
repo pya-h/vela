@@ -1,0 +1,7 @@
+; error: 6:5: cannot assign to 'bind' variable 'x' as a whole; a 'bind' name stays bound to one value
+
+task main()
+    fixed t = (1, "a")
+    bind (x, y) = t
+    x = 5
+fi

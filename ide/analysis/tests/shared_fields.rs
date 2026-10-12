@@ -131,7 +131,7 @@ fn a_literal_never_offers_a_shared_field() {
 #[test]
 fn changing_one_where_it_can_not_be_is_reported() {
     let cases = [
-        ("Meter.start = 1", "'Meter.start' never changes (declared at 3:12); a shared field that changes is 'shared flex start', or 'shared read start', which only the methods of 'Meter' change"),
+        ("Meter.start = 1", "'Meter.start' never changes (declared at 3:12); a shared field that changes is 'shared flex start', 'shared bind start', or 'shared read start', which only the methods of 'Meter' change"),
         ("Meter.seen = 1", "'Meter.seen' is a read-only shared field, which only the methods of 'Meter' change"),
         ("show(meter.made)", "'made' is a shared field of 'Meter', one value for the whole program rather than part of each value, so it is read as 'Meter.made'"),
     ];
@@ -148,8 +148,8 @@ fn a_shapes_member_line_offers_the_words_of_a_shared_field() {
     assert!(labels(&completions(&shape("@@"))).contains(&"shared"));
     assert!(labels(&completions(&shape("priv @@"))).contains(&"shared"));
     // Or `new`, the name of a shared method.
-    assert_eq!(labels(&completions(&shape("shared @@"))), ["flex", "read", "new"]);
-    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["flex", "read", "new"]);
+    assert_eq!(labels(&completions(&shape("shared @@"))), ["flex", "bind", "read", "new"]);
+    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["flex", "bind", "read", "new"]);
     // A kind has no fields, so no shared ones, but shared methods.
     let kind = "kind Mood\n    Calm\n    shared @@\nfi\n";
     assert_eq!(labels(&completions(kind)), ["new"]);
