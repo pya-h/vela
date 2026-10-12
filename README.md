@@ -162,4 +162,5 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 - [Safety](docs/safety.html): what the compiler checks, what stops a running program, and what isn't checked yet
 - [A review](docs/review.html): a read of the whole project, with what is strong, what could be better, and ideas worth trying
 - [Events](docs/events.html): an idea for running work at once, not built
+- [Tricks](docs/tricks.html): small ideas that work by what a word filters out, not built
 - [May waste](docs/maywaste.html): features to keep an eye on, and to merge or drop if they never earn a use
