@@ -1,0 +1,10 @@
+; error: 7:27: 'added' names its region with 'at', as in 'xs.added(v) at r' (or 'xs.added(v)@r'); 'in' counts through a range
+; A new slice names its region with 'at', as a copy does.
+
+task main()
+    region r
+    fixed xs = [1, ...] at r
+    each v in xs.added(2) in r
+        show(v)
+    fi
+fi

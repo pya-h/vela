@@ -4076,7 +4076,16 @@ impl Parser {
         {
             let args = self.parse_arg_list()?;
             let ExprKind::Field(items, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a change without its slice")) };
-            return Ok(Expr::new(ExprKind::Edit { items, op, args }, expr.span));
+            let edit = Expr::new(ExprKind::Edit { items, op, args }, expr.span);
+            // `xs.added(v)` and `xs.without(i)` make a copy, which goes where a
+            // copy goes: the region after them, `at r`, or the place's.
+            if op.makes_copy() {
+                if self.check(Token::In) {
+                    return Err(Error::at(self.peek_span(), format!("'{0}' names its region with 'at', as in 'xs.{0}(v) at r' (or 'xs.{0}(v)@r'); 'in' counts through a range", op.word())));
+                }
+                return Ok(Expr::new(ExprKind::Copy { value: Box::new(edit), region: None, region_span: expr.span }, expr.span));
+            }
+            return Ok(edit);
         }
         // `p.pick<int>(…)`: a task of a module is named before its types (see
         // `value_name`), so what is left here is a method, which takes none of

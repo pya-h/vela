@@ -877,15 +877,21 @@ impl<'a> Knowledge<'a> {
                     return exact(p).or_else(|| Some(self.in_region(&self.expression_type(value, depth + 1)?.without_regions(), ANY_REGION)));
                 }
                 // `xs.add(…)` gives nothing, and `xs.del(…)` the item it takes
-                // out, which the checker records at the word.
+                // out, which the checker records at the word; `xs.added(…)` and
+                // `xs.without(…)` give a new slice, or map, as a copy does.
                 if self.token_before(p) == Some(&Token::Dot)
                     && let Some(op) = vela::ast::EditOp::from_word(word)
-                    && let Some(Type::Slice(items, _)) = p.checked_sub(2).and_then(|base| self.expression_type(base, depth + 1))
+                    && let Some(base @ (Type::Slice(..) | Type::Map(..))) = p.checked_sub(2).and_then(|base| self.expression_type(base, depth + 1))
                 {
-                    return exact(p).or(Some(match op {
-                        vela::ast::EditOp::Add => Type::Nothing,
-                        vela::ast::EditOp::Del => *items,
-                    }));
+                    let given = match (op, base) {
+                        (vela::ast::EditOp::Added | vela::ast::EditOp::Without, base) => Some(self.in_region(&base.without_regions(), ANY_REGION)),
+                        (vela::ast::EditOp::Add, Type::Slice(..)) => Some(Type::Nothing),
+                        (vela::ast::EditOp::Del, Type::Slice(items, _)) => Some(*items),
+                        _ => None,
+                    };
+                    if let Some(given) = given {
+                        return exact(p).or(Some(given));
+                    }
                 }
                 // `c.total()` and `.total()`: what a method sends, which the
                 // checker records at its name.

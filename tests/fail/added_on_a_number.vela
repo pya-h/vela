@@ -1,0 +1,9 @@
+; error: 7:20: 'added' makes a new slice or map, but this value is int
+; 'added' makes a new slice or map, and a number is neither.
+
+task main()
+    region r
+    fixed n = 3
+    fixed more = n.added(1) at r
+    show(more)
+fi

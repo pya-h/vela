@@ -1,0 +1,32 @@
+; A value 'added' puts in its copy is copied into the copy's region too, so it
+; may come from any region, and pointers are followed: the new value shares
+; nothing. A task that takes types makes one as any task does.
+
+shape Point
+    x: int
+fi
+
+task grown<T>(xs: [T]@r, v: T, s: region) -> [T]@s
+    <- xs.added(v)
+fi
+
+task main()
+    region r
+    region s
+    fixed inner = [1, ...] at r
+    fixed nested = [[0, ...] at r, ...] at r
+    flex outer = nested.added(inner) at s
+    outer[1][0] = 9
+    show(inner, " ", outer)
+    fixed ps = [new Point(Point { x: 1 }) at r, ...] at r
+    flex qs = ps.added(new Point(Point { x: 2 }) at r)@s
+    qs[0]^.x = 5
+    show(ps[0]^.x, " ", qs[0]^.x, " ", qs[1]^.x)
+    show(grown(inner, 4, s))
+    fixed word = "w" + "x" at s
+    fixed ws = ["a", ...] at r
+    fixed more: [text]@r = ws.added(word)
+    show(more)
+    fixed f = [@r]() -> int <- inner.added(5)@r.len fi
+    show(f())
+fi

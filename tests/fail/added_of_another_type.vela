@@ -1,0 +1,9 @@
+; error: 7:27: expected type int, got text
+; The value added is of the slice's item type.
+
+task main()
+    region r
+    fixed xs = [1, ...] at r
+    fixed more = xs.added("x") at r
+    show(more)
+fi

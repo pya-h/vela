@@ -303,6 +303,9 @@ pub struct Checker {
     /// Where each `copy()` without a written region is, until the place it goes
     /// gives it one (see `settle_copies`). A statement must settle the ones it has.
     unsettled_copies: Vec<Span>,
+    /// The word of each copy that isn't written `copy()`, `added` or `without`,
+    /// by where it is, for the message that its region isn't settled.
+    copy_words: HashMap<(usize, usize, usize), &'static str>,
     /// Where each call of a generic task whose types aren't all worked out yet
     /// is, with the task's name and the first type still unknown, until the
     /// place its value goes names it (see `settle_types`).
@@ -3968,10 +3971,17 @@ impl Checker {
     /// The error for a `copy()` that nothing gives a region: a copy is the one
     /// thing that allocates without taking a block's default, since the place it
     /// goes says where it belongs, so the message says that where a block has one.
-    fn unsettled_copy(&self) -> String {
-        match self.default_region() {
-            Some(_) => format!("{}{}", UNSETTLED_COPY, COPY_IGNORES_DEFAULT),
+    fn unsettled_copy(&self, at: Span) -> String {
+        let first = match self.copy_words.get(&(at.file, at.line, at.col)) {
+            Some(word) => format!(
+                "can't tell which region the new value goes in, since nothing it goes into names one; name it, as in 'xs.{0}(…) at r' or 'xs.{0}(…)@r'",
+                word
+            ),
             None => UNSETTLED_COPY.to_string(),
+        };
+        match self.default_region() {
+            Some(_) => format!("{}{}", first, COPY_IGNORES_DEFAULT),
+            None => first,
         }
     }
 
@@ -4103,7 +4113,7 @@ impl Checker {
             return err(at, untold_kind_message(&kind, &tag, &param, &example));
         }
         if let Some(at) = unsettled {
-            return err(at, self.unsettled_copy());
+            return err(at, self.unsettled_copy(at));
         }
         match untold {
             Some((at, task, param)) => err(at, self.untold_type(&task, &param)),
@@ -4215,6 +4225,28 @@ impl Checker {
                         Ok(())
                     }
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
+                    // `xs.added(v)` alone: the new slice is dropped, and `xs` never changed.
+                    ExprKind::Copy { value, .. } if matches!(&value.kind, ExprKind::Edit { op, .. } if op.makes_copy()) => {
+                        let ExprKind::Edit { items, op, .. } = &value.kind else { return Ok(()) };
+                        let map = matches!(items.ty, Some(Type::Map(..)));
+                        let what = if map { "map" } else { "slice" };
+                        let change = match (op, map) {
+                            (EditOp::Added, true) => "'m[k] = v'".to_string(),
+                            (_, true) => format!("'{}.del(…)'", self.value_text(items)),
+                            (EditOp::Added, false) => format!("'{}.add(…)'", self.value_text(items)),
+                            (_, false) => format!("'{}.del(…)'", self.value_text(items)),
+                        };
+                        err(
+                            e.span,
+                            format!(
+                                "'{0}' makes a new {1} and leaves '{2}' as it was, so on a line of its own it does nothing; keep the new one, as in 'fixed changed = {2}.{0}(…) at r', or change the {1} itself with {3}",
+                                op.word(),
+                                what,
+                                self.value_text(items),
+                                change
+                            ),
+                        )
+                    }
                     ExprKind::Fail(_) => err(
                         e.span,
                         "'fail …' makes a failure, which a line of its own drops; send it with '<- fail …', or stop a loop that gives a value with 'break = …'",
@@ -4290,7 +4322,7 @@ impl Checker {
                         None if name == DISCARD => actual,
                         // A variable without a type names no region for a copy.
                         None if matches!(init.get(i).filter(|_| !forwarded).map(|value| &value.kind), Some(ExprKind::Copy { region: None, .. })) => {
-                            return err(value_span, self.unsettled_copy());
+                            return err(value_span, self.unsettled_copy(value_span));
                         }
                         None => self.inferred_type(&name, &actual, value_span)?,
                     };
@@ -6213,6 +6245,10 @@ impl Checker {
     /// and moves none, so only the parameter's rule follows it (`indexed`
     /// tells which it is).
     fn note_slice_edit(&mut self, name: &str, op: EditOp, indexed: bool, span: Span) {
+        // `added` and `without` leave the slice as it was.
+        if op.makes_copy() {
+            return;
+        }
         let Some(info) = self.var_info(name) else { return };
         if !matches!(info.ty, Type::Slice(..)) {
             return;
@@ -6220,15 +6256,15 @@ impl Checker {
         let (family, flex_param, ty) = (info.family, info.param && info.passing == Passing::Flex, info.ty.clone());
         if flex_param {
             let (rule, what) = match op {
-                EditOp::Add => (
+                EditOp::Add | EditOp::Added => (
                     "add on a flex parameter",
                     "an 'add' leaves its items shared with the caller's only when it finds room in place; when it needs more room it copies them to a block of its own, so what the task writes afterwards may or may not be seen by the caller",
                 ),
-                EditOp::Del if indexed => (
+                EditOp::Del | EditOp::Without if indexed => (
                     "del on a flex parameter",
                     "a 'del' moves the items after the one taken out in the memory the caller's slice shares, so the caller's slice sees them moved, though its length stays as it was",
                 ),
-                EditOp::Del => (
+                EditOp::Del | EditOp::Without => (
                     "del on a flex parameter",
                     "a 'del' gives the last item's space back to the room the caller's slice may share, so a later 'add' may go over an item the caller still counts, though its length stays as it was",
                 ),
@@ -6246,7 +6282,7 @@ impl Checker {
                 EditOp::Add => shared.added = Some((name.to_string(), span)),
                 // Taking the last item out moves none.
                 EditOp::Del if indexed => shared.deleted = Some((name.to_string(), span)),
-                EditOp::Del => {}
+                EditOp::Del | EditOp::Added | EditOp::Without => {}
             }
         }
     }
@@ -7525,7 +7561,7 @@ impl Checker {
         self.unsettled_types.truncate(types);
         checked.map_err(|error| at_start_error(error, WRAPPER_VALUES))?;
         if let Some(at) = uncopied {
-            return err(at, self.unsettled_copy());
+            return err(at, self.unsettled_copy(at));
         }
         if let Some((at, task, param)) = untold {
             return err(at, self.untold_type(&task, &param));
@@ -9594,6 +9630,9 @@ impl Checker {
     /// need more room.
     fn check_edit(&mut self, span: Span, items: &mut Expr, op: EditOp, args: &mut [Expr]) -> Result<Type> {
         let word = op.word();
+        if op.makes_copy() {
+            return Err(Error::internal_at(span, format!("'{}' outside the copy it makes", word)));
+        }
         let ty = match &items.kind {
             ExprKind::Var(name) => {
                 let name = name.clone();
@@ -9622,7 +9661,12 @@ impl Checker {
                     if info.mode == Mode::Bind {
                         return err(
                             items.span,
-                            format!("'{0}' changes the length of '{1}', a 'bind' slice, which stays bound to one value, so only its items change; keep the slice in a 'flex' variable to change its length", word, name),
+                            format!(
+                                "'{0}' changes the length of '{1}', a 'bind' slice, which stays bound to one value, so only its items change; make a new slice with the change, as in 'fixed changed = {1}.{2}(…) at r', or keep the slice in a 'flex' variable to change its length",
+                                word,
+                                name,
+                                if op == EditOp::Add { "added" } else { "without" }
+                            ),
                         );
                     }
                     if info.param || info.refers.is_some() {
@@ -9672,6 +9716,7 @@ impl Checker {
                 }
                 (EditOp::Del, _) => err(span, format!("'del' takes the key to take out of the map, as in 'm.del(k)', got {}", count(args.len(), "argument"))),
                 (EditOp::Add, _) => err(span, "a map adds a key, or gives it a new value, with 'm[k] = v'"),
+                (EditOp::Added | EditOp::Without, _) => Err(Error::internal_at(span, format!("'{}' outside the copy it makes", word))),
             };
         }
         let (item, region) = match &ty {
@@ -9703,6 +9748,7 @@ impl Checker {
             (EditOp::Del, _) => {
                 return err(span, format!("'del' takes an index, or nothing for the last item, as in 'xs.del(i)' or 'xs.del()', got {}", count(args.len(), "argument")));
             }
+            (EditOp::Added | EditOp::Without, _) => return Err(Error::internal_at(span, format!("'{}' outside the copy it makes", word))),
         };
         if let Some(index) = index {
             let index_ty = self.check_expr(index)?;
@@ -10118,7 +10164,22 @@ impl Checker {
     /// returns its type: the value's, in that region. Without one, the copy is
     /// of `ANY_REGION` and waits for the place it goes to settle its region.
     fn check_copy(&mut self, span: Span, value: &mut Expr, region: Option<&str>, region_span: Span) -> Result<Type> {
-        let ty = self.check_expr(value)?;
+        // `xs.added(v)` and `xs.without(i)`: a copy made with one change.
+        let changed = match &mut value.kind {
+            ExprKind::Edit { items, op, args } if op.makes_copy() => {
+                let op = *op;
+                self.copy_words.insert((span.file, span.line, span.col), op.word());
+                Some((self.check_changed(span, items, op, args)?, op.word()))
+            }
+            _ => None,
+        };
+        let (ty, word) = match changed {
+            Some((ty, word)) => {
+                value.ty = Some(ty.clone());
+                (ty, word)
+            }
+            None => (self.check_expr(value)?, COPY),
+        };
         if ty.unknown() {
             return Ok(Type::Unknown);
         }
@@ -10127,7 +10188,7 @@ impl Checker {
         }
         // What a lambda keeps stays in its region, which its type names.
         if has_closure(&ty) {
-            return err(span, format!("'copy' can't copy {}: what a lambda that keeps what it uses keeps stays in its region, which its type names; make the lambda again in the other region", ty));
+            return err(span, format!("'{}' can't copy {}: what a lambda that keeps what it uses keeps stays in its region, which its type names; make the lambda again in the other region", word, ty));
         }
         if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) && ty.params().is_empty() {
             let what = match ty {
@@ -10147,6 +10208,80 @@ impl Checker {
                 Ok(self.in_region(&bare, ANY_REGION))
             }
         }
+    }
+
+    /// Checks `items.added(…)` or `items.without(…)` at `span`, the value a new
+    /// slice or map is made of and the change, and returns the type of `items`.
+    /// `items` is only read, so any value will do, a `fixed` one too, and so is
+    /// what a fixed name owns: the copy shares nothing with it. A value added is
+    /// copied into the copy's region with it, so it may be of any region.
+    fn check_changed(&mut self, span: Span, items: &mut Expr, op: EditOp, args: &mut [Expr]) -> Result<Type> {
+        let word = op.word();
+        let ty = self.check_expr(items)?;
+        if ty.unknown() {
+            self.check_each(args);
+            return Ok(ty);
+        }
+        match &ty {
+            Type::Map(key, value, _) => {
+                match (op, &mut *args) {
+                    (EditOp::Added, [k, v]) => {
+                        self.check_key(key, k)?;
+                        self.check_copied_into(v, value)?;
+                    }
+                    (EditOp::Without, [k]) => self.check_key(key, k)?,
+                    (EditOp::Added, _) => {
+                        return err(span, format!("'added' on a map takes the key and its value, as in 'm.added(k, v)', got {}", count(args.len(), "argument")));
+                    }
+                    _ => return err(span, format!("'without' on a map takes the key to leave out, as in 'm.without(k)', got {}", count(args.len(), "argument"))),
+                }
+                Ok(ty)
+            }
+            Type::Slice(item, _) => {
+                let item = (**item).clone();
+                let (index, value) = match (op, &mut *args) {
+                    (EditOp::Added, [value]) => (None, Some(value)),
+                    (EditOp::Added, [index, value]) => (Some(index), Some(value)),
+                    (EditOp::Without, []) => (None, None),
+                    (EditOp::Without, [index]) => (Some(index), None),
+                    (EditOp::Added, _) => {
+                        return err(span, format!("'added' takes the value, or an index and the value, as in 'xs.added(v)' or 'xs.added(i, v)', got {}", count(args.len(), "argument")));
+                    }
+                    _ => {
+                        return err(span, format!("'without' takes an index, or nothing for the last item, as in 'xs.without(i)' or 'xs.without()', got {}", count(args.len(), "argument")));
+                    }
+                };
+                if let Some(index) = index {
+                    let index_ty = self.check_expr(index)?;
+                    self.expect_type(&index_ty, &Type::Int, index.span)?;
+                    if let Some(n) = constant_int(index)
+                        && n < 0
+                    {
+                        return err(index.span, format!("index {} is out of range: it is less than 0", n));
+                    }
+                }
+                if let Some(value) = value {
+                    self.check_copied_into(value, &item)?;
+                }
+                Ok(ty)
+            }
+            Type::Array(..) => err(
+                span,
+                format!("an array's length is part of its type, so '{}' can't make one of another length; make a slice in a region, as in 'new [{}](xs) at r'", word, item_type_example(&ty)),
+            ),
+            other => err(span, format!("'{}' makes a new slice or map, but this value is {}{}", word, other, extract_hint(&[other]))),
+        }
+    }
+
+    /// Checks `value`, which goes into a new slice or map as an item, key's
+    /// value, of type `item`: it is copied into the new value's region with it,
+    /// so its own regions don't matter.
+    fn check_copied_into(&mut self, value: &mut Expr, item: &Type) -> Result<()> {
+        let ty = self.check_expr(value)?;
+        if ty.unknown() || item.unknown() || same_ignoring_regions(&ty, item) {
+            return Ok(());
+        }
+        self.coerce(value, item)
     }
 
     /// Gives a `copy()` that `expr` is the region of `expected`, the type of the
@@ -14796,8 +14931,13 @@ fn expr_effects(e: &Expr, names: &[String], inner: &mut Vec<Option<String>>, own
             effects.changes |= place_root(place).is_some_and(|name| names.contains(&name));
             true
         }
-        ExprKind::MethodCall { value, .. } | ExprKind::Edit { items: value, .. } => {
+        ExprKind::MethodCall { value, .. } => {
             effects.changes |= place_root(value).is_some_and(|name| names.contains(&name));
+            true
+        }
+        // `added` and `without` leave the slice as it was.
+        ExprKind::Edit { items: value, op, .. } => {
+            effects.changes |= !op.makes_copy() && place_root(value).is_some_and(|name| names.contains(&name));
             true
         }
         ExprKind::Closure { places, .. } => {

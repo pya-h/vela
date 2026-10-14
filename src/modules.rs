@@ -1472,7 +1472,8 @@ impl Resolver<'_> {
         }
     }
 
-    /// `Kind.add(…)`, `Kind.del(…)`, or `Kind.copy()`, which the parser reads as
+    /// `Kind.add(…)`, `Kind.del(…)`, `Kind.added(…)`, `Kind.without(…)`, or
+    /// `Kind.copy()`, which the parser reads as
     /// a change to a slice or a copy, rewritten to the call of the kind's
     /// variant; whether `expr` was one. No variable can be named like a kind
     /// (see `Checker::define`). (A function of its own: `expr`'s frame is on the
@@ -1480,7 +1481,12 @@ impl Resolver<'_> {
     fn edit_as_variant(&self, expr: &mut Expr) -> Result<bool> {
         let (items, word) = match &expr.kind {
             ExprKind::Edit { items, op, .. } => (items, op.word()),
-            ExprKind::Copy { value, region: None, .. } => (value, COPY),
+            // `Kind.added(…)` and `Kind.without(…)`, which the parser reads as
+            // a copy made with a change.
+            ExprKind::Copy { value, region: None, .. } => match &value.kind {
+                ExprKind::Edit { items, op, .. } if op.makes_copy() => (items, op.word()),
+                _ => (value, COPY),
+            },
             _ => return Ok(false),
         };
         let ExprKind::Var(name) = &items.kind else { return Ok(false) };
@@ -1492,6 +1498,10 @@ impl Resolver<'_> {
         expr.span = items.span;
         let args = match &mut expr.kind {
             ExprKind::Edit { args, .. } => std::mem::take(args),
+            ExprKind::Copy { value, .. } => match &mut value.kind {
+                ExprKind::Edit { args, .. } => std::mem::take(args),
+                _ => Vec::new(),
+            },
             _ => Vec::new(),
         };
         expr.kind = ExprKind::Call { name: written, types: Vec::new(), args };

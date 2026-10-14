@@ -236,7 +236,7 @@ describe("VelaAnalysis", () => {
   it("completes and describes the changes a slice has", () => {
     const source = "task main()\n    region r\n    flex names = new [text]() at r\n    names.add(\"a\")\n    fixed last = names.del()\n    show(last)\n    names.\nfi\n";
     const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
-    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["str", "str() at ${r}"], ["copy", "copy()"], ["type", undefined]]);
+    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["added", "added(${value}) at ${r}"], ["without", "without(${index}) at ${r}"], ["str", "str() at ${r}"], ["copy", "copy()"], ["type", undefined]]);
     expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("fixed last: text@r");
     expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
   });

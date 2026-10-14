@@ -1,0 +1,51 @@
+; The three words for a name, side by side, on one reading list.
+;   fixed  nothing changes through it, at any depth
+;   bind   bound to one value: its items change, the list itself stays
+;   flex   changes in every way: replaced as a whole, grown, shrunk
+; 'added' and 'without' make a new list with one change, a complete copy, and
+; work whatever word holds the list, since the list itself never changes.
+
+shape Book
+    title: text
+    pages: int
+fi
+
+; Only reads the list: a plain parameter is fixed.
+task total(books: [Book]@r) -> int
+    flex sum = 0
+    each b in books
+        sum += b.pages
+    fi
+    <- sum
+fi
+
+; Changes the pages of every book, never the list: a bind parameter.
+task abridge(bind books: [Book]@r)
+    each i in 0..books.len
+        books[i].pages = books[i].pages / 2
+    fi
+fi
+
+task main()
+    region r default
+    ; A fixed list never changes; a list made of it with one more book is new.
+    fixed shelf = [Book { title: "Dune", pages: 600 }, Book { title: "Emma", pages: 400 }, ...]
+    fixed longer: [Book]@r = shelf.added(Book { title: "Ulysses", pages: 700 })
+    show(shelf.len, " ", longer.len, " ", total(shelf), " ", total(longer))     ; 2 3 1000 1700
+
+    ; A bind list keeps its length, but its books may change.
+    bind reading: [Book]@r = longer.without(0)
+    abridge(reading)
+    reading[0].title = "Emma, abridged"
+    show(reading[0].title, " ", total(reading), " ", total(longer))           ; Emma, abridged 550 1700
+
+    ; A flex list grows and is replaced.
+    flex queue: [Book]@r = new [Book]()
+    each b in reading
+        queue.add(b)
+    fi
+    queue.del(0)
+    show(queue.len, " ", total(queue))                                           ; 1 350
+    queue = shelf.added(0, Book { title: "Beowulf", pages: 100 })
+    show(queue[0].title, " ", queue.len)                                         ; Beowulf 3
+fi

@@ -1,0 +1,10 @@
+; error: 8:21: can't tell which region the new value goes in, since nothing it goes into names one; name it, as in 'xs.added(…) at r' or 'xs.added(…)@r'; a copy goes where the value it becomes goes, so a block's default region doesn't settle one
+; A new slice goes where a copy goes; a fixed without a type names no region,
+; and a default region doesn't settle one.
+
+task main()
+    region r default
+    fixed xs = [1, ...]
+    fixed more = xs.added(2)
+    show(more)
+fi

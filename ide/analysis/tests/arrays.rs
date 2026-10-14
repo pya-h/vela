@@ -100,7 +100,7 @@ fn completion_offers_len_on_arrays_and_len_add_del_and_copy_on_slices() {
     for checks in [true, false] {
         assert_eq!(labels(&program(checks, "show(scores.@@)")), ["len", "str", "type"], "checks: {}", checks);
         // A slice of values in a region can be copied too.
-        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del", "str", "copy", "type"], "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del", "added", "without", "str", "copy", "type"], "checks: {}", checks);
         let fields = labels(&program(checks, "show(points[0].@@)"));
         assert!(fields.contains(&"x".to_string()) && fields.contains(&"y".to_string()), "{:?}", fields);
     }
@@ -177,9 +177,30 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
     let (code, doc) = hover(&source, "del(");
     assert_eq!(code, "del(index) or del()");
     assert!(doc.starts_with("Takes the item at the index out"), "{}", doc);
+    // A new slice with one change, which leaves the original as it was.
+    let source = program(true, "fixed more = points.added(Point { x: 1, y: 2 }) at r\n    fixed fewer = more.without(0) at r\n    show(fewer.len)");
+    assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
+    let (code, doc) = hover(&source, "added(");
+    assert_eq!(code, "added(value), added(index, value), or added(key, value) at r");
+    assert!(doc.starts_with("A new slice with the value put last"), "{}", doc);
+    let (code, doc) = hover(&source, "without(");
+    assert_eq!(code, "without(index), without(), or without(key) at r");
+    assert!(doc.starts_with("A new slice without the item"), "{}", doc);
     let items = completions(&program(true, "points.@@"));
     let snippets: Vec<(&str, Option<&str>)> = items.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
-    assert_eq!(snippets, [("len", None), ("add", Some("add(${value})")), ("del", Some("del(${index})")), ("str", Some("str() at ${r}")), ("copy", Some("copy()")), ("type", None)]);
+    assert_eq!(
+        snippets,
+        [
+            ("len", None),
+            ("add", Some("add(${value})")),
+            ("del", Some("del(${index})")),
+            ("added", Some("added(${value}) at ${r}")),
+            ("without", Some("without(${index}) at ${r}")),
+            ("str", Some("str() at ${r}")),
+            ("copy", Some("copy()")),
+            ("type", None)
+        ]
+    );
     // An array can't change its length.
     assert_eq!(labels(&program(true, "scores.@@")), ["len", "str", "type"]);
 }

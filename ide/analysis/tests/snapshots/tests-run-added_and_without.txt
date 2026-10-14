@@ -1,0 +1,64 @@
+  1 | ; 'added' and 'without' make a new slice or map with one change, a complete copy:
+    | comment:; 'added' and 'without' make a new slice or map with one change, a complete copy:
+  2 | ; the original never changes, whatever word holds it, and the copy shares
+    | comment:; the original never changes, whatever word holds it, and the copy shares
+  3 | ; nothing with it, at any depth.
+    | comment:; nothing with it, at any depth.
+  5 | shape Bag
+    | keyword:shape  type:Bag
+  6 |     names: [text]
+    | field:names  punctuation::  punctuation:[  type-builtin:text  punctuation:]
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     region r
+    | keyword:region  region:r
+ 11 |     region s
+    | keyword:region  region:s
+ 12 |     fixed xs = [1, 2, 3, ...] at r
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 13 |     fixed ys: [int]@s = xs.added(4)
+    | keyword:fixed  variable:ys  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:s  operator:=  variable:xs  punctuation:.  field:added  punctuation:(  number:4  punctuation:)
+ 14 |     fixed zs = xs.added(0, 9) at s
+    | keyword:fixed  variable:zs  operator:=  variable:xs  punctuation:.  field:added  punctuation:(  number:0  punctuation:,  number:9  punctuation:)  keyword:at  region:s
+ 15 |     fixed ws = xs.without(1) at r
+    | keyword:fixed  variable:ws  operator:=  variable:xs  punctuation:.  field:without  punctuation:(  number:1  punctuation:)  keyword:at  region:r
+ 16 |     fixed vs = xs.without() at s
+    | keyword:fixed  variable:vs  operator:=  variable:xs  punctuation:.  field:without  punctuation:(  punctuation:)  keyword:at  region:s
+ 17 |     show(xs, " ", ys, " ", zs, " ", ws, " ", vs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:ys  punctuation:,  string:" "  punctuation:,  variable:zs  punctuation:,  string:" "  punctuation:,  variable:ws  punctuation:,  string:" "  punctuation:,  variable:vs  punctuation:)
+ 18 |     fixed words = ["a", "b", ...] at r
+    | keyword:fixed  variable:words  operator:=  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 19 |     fixed more = words.added("c") at s
+    | keyword:fixed  variable:more  operator:=  variable:words  punctuation:.  field:added  punctuation:(  string:"c"  punctuation:)  keyword:at  region:s
+ 20 |     show(words, " ", more)
+    | builtin-fn:show  punctuation:(  variable:words  punctuation:,  string:" "  punctuation:,  variable:more  punctuation:)
+ 21 |     fixed nested = [[1, ...] at r, [2, ...] at r, ...] at r
+    | keyword:fixed  variable:nested  operator:=  punctuation:[  punctuation:[  number:1  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  punctuation:[  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 22 |     flex grown = nested.added([3, ...] at r) at s
+    | keyword:flex  variable:grown  operator:=  variable:nested  punctuation:.  field:added  punctuation:(  punctuation:[  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  keyword:at  region:s
+ 23 |     grown[0][0] = 7
+    | variable:grown  punctuation:[  number:0  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:7
+ 24 |     show(nested, " ", grown)
+    | builtin-fn:show  punctuation:(  variable:nested  punctuation:,  string:" "  punctuation:,  variable:grown  punctuation:)
+ 25 |     fixed m = ["a": 1] at r
+    | keyword:fixed  variable:m  operator:=  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  keyword:at  region:r
+ 26 |     flex m2 = m.added("b", 2) at s
+    | keyword:flex  variable:m2  operator:=  variable:m  punctuation:.  field:added  punctuation:(  string:"b"  punctuation:,  number:2  punctuation:)  keyword:at  region:s
+ 27 |     fixed m3 = m2.without("a") at s
+    | keyword:fixed  variable:m3  operator:=  variable:m2  punctuation:.  field:without  punctuation:(  string:"a"  punctuation:)  keyword:at  region:s
+ 28 |     fixed m4 = m.without("zz") at s
+    | keyword:fixed  variable:m4  operator:=  variable:m  punctuation:.  field:without  punctuation:(  string:"zz"  punctuation:)  keyword:at  region:s
+ 29 |     show(m, " ", m2, " ", m3, " ", m4)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  variable:m2  punctuation:,  string:" "  punctuation:,  variable:m3  punctuation:,  string:" "  punctuation:,  variable:m4  punctuation:)
+ 30 |     bind b = [5, 6, ...] at r
+    | keyword:bind  variable:b  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 31 |     flex c = b.added(7) at r
+    | keyword:flex  variable:c  operator:=  variable:b  punctuation:.  field:added  punctuation:(  number:7  punctuation:)  keyword:at  region:r
+ 32 |     c[0] = 0
+    | variable:c  punctuation:[  number:0  punctuation:]  operator:=  number:0
+ 33 |     show(b, " ", c)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:)
+ 34 | fi
+    | keyword:fi

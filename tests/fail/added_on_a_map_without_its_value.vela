@@ -1,0 +1,9 @@
+; error: 7:20: 'added' on a map takes the key and its value, as in 'm.added(k, v)', got 1 argument
+; 'added' on a map takes the key and its value.
+
+task main()
+    region r
+    fixed m = ["a": 1] at r
+    fixed more = m.added("b") at r
+    show(more)
+fi

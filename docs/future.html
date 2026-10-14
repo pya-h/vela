@@ -2455,7 +2455,8 @@ fi
           <code>fixed</code> name owns, a slice, a map or a pointer, to a <code>flex</code> name is an error (see
           <a href="vela.html#fixed-owns">What a fixed name owns</a>), and <code>bind</code> follows the
           same rule, so the program writes a complete copy instead (<code>xs.copy() at r</code>, <code>new [T](xs) at r</code>,
-          <code>m.copy() at r</code>, and the planned <code>xs.added(v)</code> and <code>xs.without(i)</code>).
+          <code>m.copy() at r</code>, <code>xs.added(v) at r</code> and <code>xs.without(i) at r</code>, built: see
+          <a href="vela.html#added-without">A new slice with one change</a>).
           <p><strong>What a complete copy costs.</strong> <code>copy()</code> and <code>new [T](xs)</code> are complete copies (see
           <a href="vela.html#copy">Copying into another region</a>). It shares nothing with what it copies, at any depth:
           items that are slices or maps are copied too, and so is what each pointer points to. Pointers may form a

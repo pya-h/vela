@@ -3287,6 +3287,11 @@ impl Generator {
     /// `value.copy() at region`, the expression `e`.
     fn gen_copy(&mut self, e: &Expr, value: &Expr, region: Option<&str>) -> Result<String> {
         let region = region.ok_or_else(|| Error::internal_at(e.span, "a copy whose region isn't settled reached code generation"))?;
+        if let ExprKind::Edit { items, op, args } = &value.kind
+            && op.makes_copy()
+        {
+            return self.gen_changed(e.span, items, *op, args, region);
+        }
         let copied = self.gen_expr(value)?;
         // A value that holds nothing in a region is its own copy, as `int` is
         // for a task made from a generic one that copies its values. The region
@@ -3295,6 +3300,56 @@ impl Generator {
             return Ok(format!("((void){}, {})", c_ident(region), parenthesized(&copied)));
         }
         Ok(format!("{}({}, {})", copy_helper("copied", value.ty()?), c_ident(region), copied))
+    }
+
+    /// `items.added(…)` or `items.without(…)` at `span`, a copy in `region` made
+    /// with one change: a complete copy of `items`, as `copy()` makes, then the
+    /// change made to it with the helper `add` or `del` uses, or `m[k] = v` and
+    /// `m.del(k)` for a map. A value added is copied into `region` too, so the
+    /// new value shares nothing with what it was made of. The C expression for
+    /// the copy, made in statements before it.
+    fn gen_changed(&mut self, span: Span, items: &Expr, op: EditOp, args: &[Expr], region: &str) -> Result<String> {
+        let ty = items.ty()?.clone();
+        let operands: Vec<&Expr> = std::iter::once(items).chain(args).collect();
+        let values = self.gen_operands(&operands)?;
+        let Some((source, rest)) = values.split_first() else { return Err(Error::internal_at(span, format!("'{}' without its value", op.word()))) };
+        let r = c_ident(region);
+        let copy = self.fresh_temp("changed");
+        self.w.line(&format!("{} {} = {}({}, {});", c_type(&ty), copy, copy_helper("copied", &ty), r, source));
+        let at = self.location(span);
+        let call = match (&ty, op, rest) {
+            (Type::Slice(item, _), EditOp::Added, [value]) => {
+                let value = self.copied_into(item, &r, value);
+                format!("{}({}, &{}, {})", item_helper("add", &ty), r, copy, value)
+            }
+            (Type::Slice(item, _), EditOp::Added, [index, value]) => {
+                let value = self.copied_into(item, &r, value);
+                format!("{}({}, &{}, {}, {}, {})", item_helper("insert", &ty), r, copy, index, value, at)
+            }
+            (Type::Slice(..), EditOp::Without, []) => {
+                self.w.line(&format!("vela__rt__not_empty_for({}.len, \"without()\", {});", copy, at));
+                format!("(void){}(&{}, {})", item_helper("pop", &ty), copy, at)
+            }
+            (Type::Slice(..), EditOp::Without, [index]) => format!("(void){}(&{}, {}, {})", item_helper("del", &ty), copy, index, at),
+            (Type::Map(key_ty, value_ty, _), EditOp::Added, [key, value]) => {
+                let (key, value) = (self.copied_into(key_ty, &r, key), self.copied_into(value_ty, &r, value));
+                format!("{}({}, {}, {})", item_helper("map_set", &ty.without_regions()), copy, key, value)
+            }
+            (Type::Map(..), EditOp::Without, [key]) => format!("(void){}({}, {})", item_helper("map_del", &ty.without_regions()), copy, key),
+            _ => return Err(Error::internal_at(span, format!("'{}' with {} arguments on a value of type {}", op.word(), rest.len(), ty))),
+        };
+        self.w.line(&format!("{};", call));
+        Ok(copy)
+    }
+
+    /// `value`, a C expression of type `ty`, copied into the region `r` names
+    /// when it holds anything in a region, or as it is.
+    fn copied_into(&self, ty: &Type, r: &str, value: &str) -> String {
+        if self.needs_fix(&fix_type(ty)) {
+            format!("{}({}, {})", copy_helper("copied", ty), r, value)
+        } else {
+            value.to_string()
+        }
     }
 
     /// `scan(prompt) at region`, at `span`, which it writes as a prelude, so it
@@ -5090,12 +5145,23 @@ impl UsedTypes {
             ExprKind::Edit { items, op, args } => {
                 if let Some(slice @ Type::Slice(..)) = &items.ty {
                     let list = match (op, args.len()) {
-                        (EditOp::Add, 1) => &mut self.slice_add,
-                        (EditOp::Add, _) => &mut self.slice_insert,
-                        (EditOp::Del, 0) => &mut self.slice_pop,
-                        (EditOp::Del, _) => &mut self.slice_del,
+                        (EditOp::Add | EditOp::Added, 1) => &mut self.slice_add,
+                        (EditOp::Add | EditOp::Added, _) => &mut self.slice_insert,
+                        (EditOp::Del | EditOp::Without, 0) => &mut self.slice_pop,
+                        (EditOp::Del | EditOp::Without, _) => &mut self.slice_del,
                     };
                     note(list, slice);
+                }
+                // What `added` puts in its copy is copied there with it.
+                if *op == EditOp::Added {
+                    match &items.ty {
+                        Some(Type::Slice(item, _)) => note(&mut self.copied, item),
+                        Some(Type::Map(key, value, _)) => {
+                            note(&mut self.copied, key);
+                            note(&mut self.copied, value);
+                        }
+                        _ => {}
+                    }
                 }
                 self.expr(items);
                 args.iter().for_each(|arg| self.expr(arg));

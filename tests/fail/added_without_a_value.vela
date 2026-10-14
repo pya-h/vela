@@ -1,0 +1,9 @@
+; error: 7:21: 'added' takes the value, or an index and the value, as in 'xs.added(v)' or 'xs.added(i, v)', got 0 arguments
+; 'added' on a slice takes the value, or an index and the value.
+
+task main()
+    region r
+    fixed xs = [1, ...] at r
+    fixed more = xs.added() at r
+    show(more)
+fi

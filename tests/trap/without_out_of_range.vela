@@ -1,0 +1,9 @@
+; trap: index 5 is out of range 0..2 at 7:22 in task 'main'
+; 'without(i)' stops the program when there is no item i, as 'del(i)' does.
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    show(xs.len)
+    fixed fewer = xs.without(5) at r
+    show(fewer)
+fi

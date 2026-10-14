@@ -19,7 +19,8 @@ parameters may name a value a call that leaves them out is given (`task pad(t: t
 `pad("a")`). An `int`
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int#4]`)
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0#n]) at r`
-(or empty, `new [int] at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
+(or empty, `new [int] at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`, or copied with
+one change, `xs.added(v) at r` and `xs.without(i) at r` (maps too: `m.added(k, v)`, `m.without(k)`);
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
 writes a value as text: every value has one (`Point { x: 1, y: 2 }`), and a shape or kind may give its own with a method `str`. `float(n)` and `int(x)` turn a value into a
@@ -52,11 +53,15 @@ name, so only a place that can change may call it. A shape may have `shared` fie
 program, named through it (`Tally.count`, `Point.new(…)`), fields that fall back on a value (`n: int = 0`), and
 `read` fields only its methods change.
 
+A name is `fixed` (nothing changes through it, at any depth), `bind` (bound to one value: its items, fields and what
+its pointers point to change, but it is never assigned as a whole) or `flex` (changes in every way); what a fixed
+name owns is never given to a name that may change it, so a program copies it first.
 A parameter is read and never changed (`x: T`), or says how it is given: `flex x: T` is the task's own copy to
-change, `flex& x: T` changes the caller's place, which the call marks, `f(&a)`, `fixed x: T` is always a copy, and
-`fixed& x: T` reads the caller's place where it is. A call never gives one place twice where it changes it, and a
-plain parameter larger than 64 bytes is read where the caller keeps it when nothing can change it meanwhile, with a
-warning where that choice shows. `flex& y = &x` and `fixed& y = &x` name a place in a block too. `==` compares an
+change, `bind x: T` one whose contents it changes, `flex& x: T` and `bind& x: T` change the caller's place, which the
+call marks, `f(&a)`, `fixed x: T` is always a copy, and `fixed& x: T` reads the caller's place where it is. A call
+never gives one place twice where it changes it, and a plain parameter larger than 64 bytes is read where the caller
+keeps it when nothing can change it meanwhile, with a warning where that choice shows. `flex& y = &x`,
+`bind& y = &x` and `fixed& y = &x` name a place in a block too. `==` compares an
 array, a shape, or a tuple by where it is, and `~=` (and `<>`, its opposite) item by item; a `maybe` is compared
 with `==` only with `none`, and with `~=` with a plain value too, which an empty one never matches. `&x` shows or
 compares where a place is, `x.type` is its type as text, and whole numbers may be written in hex, octal, or

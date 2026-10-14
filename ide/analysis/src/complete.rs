@@ -275,6 +275,22 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                     snippet: Some(format!("{}del(${{index}})", prefix)),
                     boost: LOCAL,
                 });
+                items.push(CompletionItem {
+                    label: "added".to_string(),
+                    kind: CompletionKind::BuiltinFn,
+                    detail: "added(value) or added(index, value) at r, a new slice with it".to_string(),
+                    apply: None,
+                    snippet: Some(format!("{}added(${{value}}) at ${{r}}", prefix)),
+                    boost: LOCAL,
+                });
+                items.push(CompletionItem {
+                    label: "without".to_string(),
+                    kind: CompletionKind::BuiltinFn,
+                    detail: "without(index) or without() at r, a new slice without it".to_string(),
+                    apply: None,
+                    snippet: Some(format!("{}without(${{index}}) at ${{r}}", prefix)),
+                    boost: LOCAL,
+                });
             }
             items
         };
@@ -365,6 +381,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                     member("keys", CompletionKind::Field, "keys at r, the keys as a slice in r, in order", Some("keys at ${r}")),
                     member("values", CompletionKind::Field, "values at r, the values as a slice in r, in order", Some("values at ${r}")),
                     member("del", CompletionKind::BuiltinFn, "del(key), takes the key out and gives its value, or none", Some("del(${key})")),
+                    member("added", CompletionKind::BuiltinFn, "added(key, value) at r, a new map with the key set", Some("added(${key}, ${value}) at ${r}")),
+                    member("without", CompletionKind::BuiltinFn, "without(key) at r, a new map without the key", Some("without(${key}) at ${r}")),
                 ];
                 return (with_copy(items, false), word_start, byte);
             }

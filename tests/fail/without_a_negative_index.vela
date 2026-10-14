@@ -1,0 +1,9 @@
+; error: 7:30: index -1 is out of range: it is less than 0
+; An index written below 0 is refused where it is written.
+
+task main()
+    region r
+    fixed xs = [1, ...] at r
+    fixed fewer = xs.without(-1) at r
+    show(fewer)
+fi

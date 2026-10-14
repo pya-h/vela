@@ -1,0 +1,9 @@
+; error: 7:22: 'without' takes an index, or nothing for the last item, as in 'xs.without(i)' or 'xs.without()', got 2 arguments
+; 'without' on a slice takes an index, or nothing for the last item.
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    fixed fewer = xs.without(0, 1) at r
+    show(fewer)
+fi

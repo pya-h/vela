@@ -1,0 +1,9 @@
+; error: 7:8: 'added' makes a new slice and leaves 'xs' as it was, so on a line of its own it does nothing; keep the new one, as in 'fixed changed = xs.added(…) at r', or change the slice itself with 'xs.add(…)'
+; 'added' leaves the slice as it was, so on a line of its own it does nothing.
+
+task main()
+    region r default
+    flex xs = [1, ...]
+    xs.added(2)
+    show(xs)
+fi

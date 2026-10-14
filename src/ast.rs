@@ -637,7 +637,7 @@ pub fn without_effects(e: &Expr) -> bool {
 
 /// Whether `word`, written after a dot and followed by `(`, is one of the
 /// builtins every value or slice has rather than a kind's variant or a
-/// module's task: `add`, `del`, or `copy`.
+/// module's task: `add`, `del`, `added`, `without`, or `copy`.
 pub fn is_builtin_member(word: &str) -> bool {
     EditOp::from_word(word).is_some() || word == COPY
 }
@@ -1461,7 +1461,9 @@ pub enum ExprKind {
     },
     /// `value.copy()`, `value.copy() at r`, or `value.copy()@r`: a copy of what
     /// the value holds in regions (its text, its slices' items, and what its
-    /// pointers point to, all the way down) in region `r`. Without a region
+    /// pointers point to, all the way down) in region `r`. `xs.added(v)` and
+    /// `xs.without(i)` are copies too, whose `value` is the `ExprKind::Edit`
+    /// saying the change. Without a region
     /// written, the checker sets `region` to the region of the place the copy
     /// goes. The node's span is the word `copy`; `region_span` is the position
     /// of `r`, or of `copy` when none is written.
@@ -1491,7 +1493,10 @@ pub enum ExprKind {
     /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the
     /// slice `items` names, a place that holds it. Not a method: the builtin
     /// changes every slice has, which no method may take the name of. The
-    /// node's span is the word after the dot.
+    /// node's span is the word after the dot. With `added` or `without`
+    /// (`EditOp::makes_copy`) it is the value of an `ExprKind::Copy` instead: a
+    /// new slice or map made of `items` with one change, which `items` itself
+    /// never sees, so it is any value, not a place; its type is that of `items`.
     Edit {
         items: Box<Expr>,
         op: EditOp,
@@ -1530,21 +1535,31 @@ impl MapOp {
     }
 }
 
-/// A change `ExprKind::Edit` makes to a slice.
+/// A change `ExprKind::Edit` makes to a slice, or, for `added` and `without`,
+/// the change a new slice or map is made with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditOp {
     /// `add(v)` puts a value at the end, `add(i, v)` before item `i`.
     Add,
     /// `del(i)` takes item `i` out, `del()` the last item; either gives it.
     Del,
+    /// `xs.added(v)`, `xs.added(i, v)`, `m.added(k, v)`: a complete copy with the
+    /// value put last, before item `i`, or under key `k`. Always inside an
+    /// `ExprKind::Copy`, which says where the copy goes.
+    Added,
+    /// `xs.without(i)`, `xs.without()`, `m.without(k)`: a complete copy without
+    /// item `i`, the last item, or key `k`. Always inside an `ExprKind::Copy`.
+    Without,
 }
 
 impl EditOp {
-    /// The change written after a dot: `add` or `del`.
+    /// The change written after a dot: `add`, `del`, `added`, or `without`.
     pub fn from_word(word: &str) -> Option<EditOp> {
         match word {
             "add" => Some(EditOp::Add),
             "del" => Some(EditOp::Del),
+            "added" => Some(EditOp::Added),
+            "without" => Some(EditOp::Without),
             _ => None,
         }
     }
@@ -1553,7 +1568,15 @@ impl EditOp {
         match self {
             EditOp::Add => "add",
             EditOp::Del => "del",
+            EditOp::Added => "added",
+            EditOp::Without => "without",
         }
+    }
+
+    /// Whether it makes a new slice or map, leaving the one it is written on as
+    /// it was (`added`, `without`), rather than changing that one in place.
+    pub fn makes_copy(self) -> bool {
+        matches!(self, EditOp::Added | EditOp::Without)
     }
 }
 

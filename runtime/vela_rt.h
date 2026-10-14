@@ -789,6 +789,16 @@ static inline _Noreturn void vela__rt__empty_trap(const char* at) {
     abort();
 }
 
+/* Checks that a slice of `len` items has an item to leave out, for `what`
+ * (`without()`), which the message names. */
+static inline void vela__rt__not_empty_for(int64_t len, const char* what, const char* at) {
+    if (len == 0) {
+        fflush(stdout);
+        fprintf(stderr, "vela: %s on an empty slice at %s\n", what, at);
+        abort();
+    }
+}
+
 /* Checks that a slice of `len` items has an item to take out with `del()`. */
 static inline void vela__rt__not_empty(int64_t len, const char* at) {
     if (len == 0) {

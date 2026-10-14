@@ -1,0 +1,34 @@
+; 'added' and 'without' make a new slice or map with one change, a complete copy:
+; the original never changes, whatever word holds it, and the copy shares
+; nothing with it, at any depth.
+
+shape Bag
+    names: [text]
+fi
+
+task main()
+    region r
+    region s
+    fixed xs = [1, 2, 3, ...] at r
+    fixed ys: [int]@s = xs.added(4)
+    fixed zs = xs.added(0, 9) at s
+    fixed ws = xs.without(1) at r
+    fixed vs = xs.without() at s
+    show(xs, " ", ys, " ", zs, " ", ws, " ", vs)
+    fixed words = ["a", "b", ...] at r
+    fixed more = words.added("c") at s
+    show(words, " ", more)
+    fixed nested = [[1, ...] at r, [2, ...] at r, ...] at r
+    flex grown = nested.added([3, ...] at r) at s
+    grown[0][0] = 7
+    show(nested, " ", grown)
+    fixed m = ["a": 1] at r
+    flex m2 = m.added("b", 2) at s
+    fixed m3 = m2.without("a") at s
+    fixed m4 = m.without("zz") at s
+    show(m, " ", m2, " ", m3, " ", m4)
+    bind b = [5, 6, ...] at r
+    flex c = b.added(7) at r
+    c[0] = 0
+    show(b, " ", c)
+fi

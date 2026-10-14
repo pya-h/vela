@@ -1,0 +1,90 @@
+  1 | ; The three words for a name, side by side, on one reading list.
+    | comment:; The three words for a name, side by side, on one reading list.
+  2 | ;   fixed  nothing changes through it, at any depth
+    | comment:;   fixed  nothing changes through it, at any depth
+  3 | ;   bind   bound to one value: its items change, the list itself stays
+    | comment:;   bind   bound to one value: its items change, the list itself stays
+  4 | ;   flex   changes in every way: replaced as a whole, grown, shrunk
+    | comment:;   flex   changes in every way: replaced as a whole, grown, shrunk
+  5 | ; 'added' and 'without' make a new list with one change, a complete copy, and
+    | comment:; 'added' and 'without' make a new list with one change, a complete copy, and
+  6 | ; work whatever word holds the list, since the list itself never changes.
+    | comment:; work whatever word holds the list, since the list itself never changes.
+  8 | shape Book
+    | keyword:shape  type:Book
+  9 |     title: text
+    | field:title  punctuation::  type-builtin:text
+ 10 |     pages: int
+    | field:pages  punctuation::  type-builtin:int
+ 11 | fi
+    | keyword:fi
+ 13 | ; Only reads the list: a plain parameter is fixed.
+    | comment:; Only reads the list: a plain parameter is fixed.
+ 14 | task total(books: [Book]@r) -> int
+    | keyword:task  task:total  punctuation:(  parameter:books  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 15 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+ 16 |     each b in books
+    | keyword:each  variable:b  keyword:in  parameter:books
+ 17 |         sum += b.pages
+    | variable:sum  operator:+=  variable:b  punctuation:.  field:pages
+ 18 |     fi
+    | keyword:fi
+ 19 |     <- sum
+    | keyword:<-  variable:sum
+ 20 | fi
+    | keyword:fi
+ 22 | ; Changes the pages of every book, never the list: a bind parameter.
+    | comment:; Changes the pages of every book, never the list: a bind parameter.
+ 23 | task abridge(bind books: [Book]@r)
+    | keyword:task  task:abridge  punctuation:(  keyword:bind  parameter:books  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  punctuation:)
+ 24 |     each i in 0..books.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:books  punctuation:.  field:len
+ 25 |         books[i].pages = books[i].pages / 2
+    | parameter:books  punctuation:[  variable:i  punctuation:]  punctuation:.  field:pages  operator:=  parameter:books  punctuation:[  variable:i  punctuation:]  punctuation:.  field:pages  operator:/  number:2
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     region r default
+    | keyword:region  region:r  keyword:default
+ 31 |     ; A fixed list never changes; a list made of it with one more book is new.
+    | comment:; A fixed list never changes; a list made of it with one more book is new.
+ 32 |     fixed shelf = [Book { title: "Dune", pages: 600 }, Book { title: "Emma", pages: 400 }, ...]
+    | keyword:fixed  variable:shelf  operator:=  punctuation:[  type:Book  punctuation:{  field:title  punctuation::  string:"Dune"  punctuation:,  field:pages  punctuation::  number:600  punctuation:}  punctuation:,  type:Book  punctuation:{  field:title  punctuation::  string:"Emma"  punctuation:,  field:pages  punctuation::  number:400  punctuation:}  punctuation:,  keyword:...  punctuation:]
+ 33 |     fixed longer: [Book]@r = shelf.added(Book { title: "Ulysses", pages: 700 })
+    | keyword:fixed  variable:longer  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  operator:=  variable:shelf  punctuation:.  field:added  punctuation:(  type:Book  punctuation:{  field:title  punctuation::  string:"Ulysses"  punctuation:,  field:pages  punctuation::  number:700  punctuation:}  punctuation:)
+ 34 |     show(shelf.len, " ", longer.len, " ", total(shelf), " ", total(longer))     ; 2 3 1000 1700
+    | builtin-fn:show  punctuation:(  variable:shelf  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:longer  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:shelf  punctuation:)  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:longer  punctuation:)  punctuation:)  comment:; 2 3 1000 1700
+ 36 |     ; A bind list keeps its length, but its books may change.
+    | comment:; A bind list keeps its length, but its books may change.
+ 37 |     bind reading: [Book]@r = longer.without(0)
+    | keyword:bind  variable:reading  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  operator:=  variable:longer  punctuation:.  field:without  punctuation:(  number:0  punctuation:)
+ 38 |     abridge(reading)
+    | task:abridge  punctuation:(  variable:reading  punctuation:)
+ 39 |     reading[0].title = "Emma, abridged"
+    | variable:reading  punctuation:[  number:0  punctuation:]  punctuation:.  field:title  operator:=  string:"Emma, abridged"
+ 40 |     show(reading[0].title, " ", total(reading), " ", total(longer))           ; Emma, abridged 550 1700
+    | builtin-fn:show  punctuation:(  variable:reading  punctuation:[  number:0  punctuation:]  punctuation:.  field:title  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:reading  punctuation:)  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:longer  punctuation:)  punctuation:)  comment:; Emma, abridged 550 1700
+ 42 |     ; A flex list grows and is replaced.
+    | comment:; A flex list grows and is replaced.
+ 43 |     flex queue: [Book]@r = new [Book]()
+    | keyword:flex  variable:queue  punctuation::  punctuation:[  type:Book  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Book  punctuation:]  punctuation:(  punctuation:)
+ 44 |     each b in reading
+    | keyword:each  variable:b  keyword:in  variable:reading
+ 45 |         queue.add(b)
+    | variable:queue  punctuation:.  field:add  punctuation:(  variable:b  punctuation:)
+ 46 |     fi
+    | keyword:fi
+ 47 |     queue.del(0)
+    | variable:queue  punctuation:.  field:del  punctuation:(  number:0  punctuation:)
+ 48 |     show(queue.len, " ", total(queue))                                           ; 1 350
+    | builtin-fn:show  punctuation:(  variable:queue  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:queue  punctuation:)  punctuation:)  comment:; 1 350
+ 49 |     queue = shelf.added(0, Book { title: "Beowulf", pages: 100 })
+    | variable:queue  operator:=  variable:shelf  punctuation:.  field:added  punctuation:(  number:0  punctuation:,  type:Book  punctuation:{  field:title  punctuation::  string:"Beowulf"  punctuation:,  field:pages  punctuation::  number:100  punctuation:}  punctuation:)
+ 50 |     show(queue[0].title, " ", queue.len)                                         ; Beowulf 3
+    | builtin-fn:show  punctuation:(  variable:queue  punctuation:[  number:0  punctuation:]  punctuation:.  field:title  punctuation:,  string:" "  punctuation:,  variable:queue  punctuation:.  field:len  punctuation:)  comment:; Beowulf 3
+ 51 | fi
+    | keyword:fi

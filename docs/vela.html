@@ -173,7 +173,7 @@
       <h2>Philosophy</h2>
       <ul>
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
-        <li><strong>One way to do it.</strong> Immutability by default with <code>fixed</code>; mutation explicitly opt-in with <code>flex</code>.</li>
+        <li><strong>One way to do it.</strong> Immutability by default with <code>fixed</code>, at any depth; mutation explicitly opt-in, of the contents only with <code>bind</code>, or in every way with <code>flex</code>.</li>
         <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
         <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons ending statements, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
         <li><strong>No GC, no free.</strong> Values live on the stack, and <code>new</code> allocates in a <em>region</em>, which frees everything in it at once when its block closes (see <a href="#regions">Memory and Regions</a>).</li>
@@ -361,6 +361,7 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>x.str() at r</code>, <code>x.str(r)</code>, <code>text(x) at r</code></td><td>a value as text in region <code>r</code> (see <a href="#str">Values as text</a>)</td></tr>
         <tr><td><code>"n = {n}" at r</code>, <code>"n = {n}"@r</code></td><td>text holding values, in region <code>r</code>; <code>\{</code> and <code>\}</code> write braces (see <a href="#interpolation">Text holding values</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
+        <tr><td><code>xs.added(v) at r</code>, <code>xs.without(i) at r</code>, <code>m.added(k, v)</code>, <code>m.without(k)</code></td><td>a new slice or map with one change, a complete copy, leaving the original as it was (see <a href="#added-without">A new slice with one change</a>)</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>#NAME = value</code></td><td>a macro: a name for a value the compiler computes, at the start of a line outside every task (see <a href="#macros">Macros</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
@@ -957,8 +958,9 @@ scores[<span class="number">0</span>] = <span class="number">10</span>          
           <code>scores[0] = 10</code>, <code>p.x = 1</code>, <code>ptr^.x = 1</code>; a field may be assigned whole,
           since it is contents.</li>
         <li>A slice keeps its length: <code>add</code> and <code>del</code> change the slice itself, so they are
-          refused. A map is one table whatever its keys, so <code>m[k] = v</code> and <code>m.del(k)</code> are
-          allowed.</li>
+          refused; <code>xs.added(v) at r</code> and <code>xs.without(i) at r</code> make a new one with the change
+          (see <a href="#added-without">A new slice with one change</a>). A map is one table whatever its keys, so
+          <code>m[k] = v</code> and <code>m.del(k)</code> are allowed.</li>
         <li>An <code>alters</code> method of a shape may be called on it, but not one of a kind, which may replace the
           whole value (<code>.this = Green</code>).</li>
         <li>A value with no contents, a number, a <code>bool</code>, a <code>char</code>, text, a tuple, a kind or a
@@ -1056,7 +1058,7 @@ ys[<span class="number">0</span>] = <span class="number">9</span>               
 <span class="keyword">flex</span> zs = xs.copy() <span class="keyword">at</span> r        <span class="comment">; items of its own, at every depth</span></pre>
       <p>
         The rules about change follow from the kind. What a task does to a whole value it was given is its own, so
-        <code>flex</code> and <code>fixed</code> matter to others only for twofold values and places: what a fixed name
+        <code>flex</code>, <code>bind</code> and <code>fixed</code> matter to others only for twofold values and places: what a fixed name
         owns, a twofold value, is never given to what may change it (below); <code>copy()</code> and
         <code>new [T](xs)</code> copy a twofold value's items too (see <a href="#copy">Copying into another
         region</a>); a task's type says <code>flex</code> for a twofold value the task changes, and
@@ -1086,7 +1088,8 @@ ys[<span class="number">0</span>] = <span class="number">9</span>               
       <p>
         Each is an error where the value is given, which names the owner and the copy to write instead:
         <em>'ys' is given what fixed 'xs' owns, and nothing changes through what a fixed name owns; give it a copy:
-        'xs.copy() at r'</em>. A fixed name owns what is reached from it (its fields, its items, what its pointers
+        'xs.copy() at r'</em>; a new slice with one change, <code>xs.added(v) at r</code>, owns nothing either.
+        A fixed name owns what is reached from it (its fields, its items, what its pointers
         point to), a value made with such a part (a shape, tuple, array or variant holding it, or a plan B or a
         <code>match</code> that may give it), and what a call gives back of it. A task may send back what a parameter
         holds, as <code>first_two(xs)</code> sends <code>xs[0..2]</code>, and then the call's value is what
@@ -3541,7 +3544,7 @@ show(total)</pre>
       <ul>
         <li><strong>The start.</strong> Its names come in two kinds. A name already declared, and changeable, is set
           and keeps its last value after the loop: <code>loop i = 0 || …</code>. A name of the loop's own is declared
-          with <code>flex</code> or <code>fixed</code>, which covers every item after it, so names already declared
+          with <code>flex</code>, <code>bind</code> or <code>fixed</code>, which covers every item after it, so names already declared
           come first: <code>loop i = 0, j = 0, flex x = 2, y = 3 || …</code> sets <code>i</code> and
           <code>j</code> and declares <code>x</code> and <code>y</code>. Those live only in the loop, and a
           <code>fixed</code> one, as <code>gap</code> above, is worked out once and never changes. A loop never
@@ -4503,6 +4506,22 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
           <code>i</code> out and <code>xs.del()</code> the last item; both give the item, which can also be dropped
           (<code>xs.del(0)</code> as a statement). The items after the change move to close or open the gap. They are
           built into every slice, as <code>len</code> is, so no <a href="#methods">method</a> can take their names.</li>
+        <li id="added-without"><strong>A new slice with one change.</strong> <code>xs.added(v)</code> and
+          <code>xs.added(i, v)</code> give a new slice with <code>v</code> last or before item <code>i</code>;
+          <code>xs.without(i)</code> and <code>xs.without()</code> give one without item <code>i</code> or the last.
+          <code>xs</code> never changes, so they work on a <code>fixed</code>, <code>bind</code> or <code>flex</code>
+          name alike, a <code>fixed</code> parameter too. The new slice is a complete copy, as <code>copy()</code>
+          makes: it shares nothing with <code>xs</code>, at any depth, and the value added is copied with it, so it
+          owns nothing a fixed name owns and may go to a <code>flex</code> or <code>bind</code> name (see
+          <a href="#fixed-owns">What a fixed name owns</a>). It goes where a copy goes (see
+          <a href="#copy">Copying into another region</a>): the region of the place it is put in, or the one written
+          after it, <code>xs.added(v) at r</code> or <code>xs.added(v)@r</code>; a block's default region doesn't settle
+          one. An index out of range stops the program, as <code>del(i)</code>'s does, and so does
+          <code>without()</code> on an empty slice. On a line of its own it does nothing, which is an error.
+          <strong>Cost:</strong> each call copies the whole slice (and what its items hold), so building a list with
+          <code>added</code> in a loop takes time growing with the square of its length, and every old copy stays in
+          the region until the region ends; build with <code>add</code> on a <code>flex</code> slice, and use
+          <code>added</code> where the original must stay as it was.</li>
         <li><strong>Where.</strong> The slice changes where it is kept, so it must be in a place that can be assigned: a
           <code>flex</code> variable, a field of one, anything behind a pointer reached from a <code>flex</code> name
           (<code>bag^.items.add(v)</code>), or an item of such a slice. A <code>fixed</code>, a plain or <code>fixed</code> parameter, a result, a call's value, and a part
@@ -4576,7 +4595,10 @@ show(ages[<span class="string">"zed"</span>])                        <span class
           <a href="#safe-index"><code>xs[#i]</code></a> is for an item. <code>m[k] = v</code> adds the key, or gives it a new
           value, on a line of its own. A value in a map is changed in place, as a slice's item is: <code>m[k].x = 1</code>, or
           a method that alters it. <code>m.has(k)</code> is whether the map holds the key, <code>m.del(k)</code> takes it out
-          and gives its value as a <code>maybe</code>, and <code>m.len</code> is how many keys it holds.</li>
+          and gives its value as a <code>maybe</code>, and <code>m.len</code> is how many keys it holds.
+          <code>m.added(k, v)</code> and <code>m.without(k)</code> give a new map with the key set or taken out, a
+          complete copy that leaves <code>m</code> as it was, going where a copy goes, as a slice's
+          <a href="#added-without">added and without</a> do; a key the map doesn't hold gives an unchanged copy.</li>
         <li><strong>Going through it.</strong> <code>each k, v in m</code> goes through the keys and values in the order the
           keys were first added (a key given a new value keeps its place), whatever their hashes, so a program writes the
           same thing every run. <code>_</code> drops either. <code>each k in m.keys</code> and <code>each v in m.values</code>

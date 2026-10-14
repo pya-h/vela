@@ -1,0 +1,58 @@
+  1 | ; A value 'added' puts in its copy is copied into the copy's region too, so it
+    | comment:; A value 'added' puts in its copy is copied into the copy's region too, so it
+  2 | ; may come from any region, and pointers are followed: the new value shares
+    | comment:; may come from any region, and pointers are followed: the new value shares
+  3 | ; nothing. A task that takes types makes one as any task does.
+    | comment:; nothing. A task that takes types makes one as any task does.
+  5 | shape Point
+    | keyword:shape  type:Point
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task grown<T>(xs: [T]@r, v: T, s: region) -> [T]@s
+    | keyword:task  task:grown  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type:T  punctuation:,  region:s  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:s
+ 10 |     <- xs.added(v)
+    | keyword:<-  parameter:xs  punctuation:.  field:added  punctuation:(  parameter:v  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 14 |     region r
+    | keyword:region  region:r
+ 15 |     region s
+    | keyword:region  region:s
+ 16 |     fixed inner = [1, ...] at r
+    | keyword:fixed  variable:inner  operator:=  punctuation:[  number:1  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 17 |     fixed nested = [[0, ...] at r, ...] at r
+    | keyword:fixed  variable:nested  operator:=  punctuation:[  punctuation:[  number:0  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 18 |     flex outer = nested.added(inner) at s
+    | keyword:flex  variable:outer  operator:=  variable:nested  punctuation:.  field:added  punctuation:(  variable:inner  punctuation:)  keyword:at  region:s
+ 19 |     outer[1][0] = 9
+    | variable:outer  punctuation:[  number:1  punctuation:]  punctuation:[  number:0  punctuation:]  operator:=  number:9
+ 20 |     show(inner, " ", outer)
+    | builtin-fn:show  punctuation:(  variable:inner  punctuation:,  string:" "  punctuation:,  variable:outer  punctuation:)
+ 21 |     fixed ps = [new Point(Point { x: 1 }) at r, ...] at r
+    | keyword:fixed  variable:ps  operator:=  punctuation:[  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 22 |     flex qs = ps.added(new Point(Point { x: 2 }) at r)@s
+    | keyword:flex  variable:qs  operator:=  variable:ps  punctuation:.  field:added  punctuation:(  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:)  operator:@  region:s
+ 23 |     qs[0]^.x = 5
+    | variable:qs  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:x  operator:=  number:5
+ 24 |     show(ps[0]^.x, " ", qs[0]^.x, " ", qs[1]^.x)
+    | builtin-fn:show  punctuation:(  variable:ps  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:qs  punctuation:[  number:0  punctuation:]  operator:^  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:qs  punctuation:[  number:1  punctuation:]  operator:^  punctuation:.  field:x  punctuation:)
+ 25 |     show(grown(inner, 4, s))
+    | builtin-fn:show  punctuation:(  task:grown  punctuation:(  variable:inner  punctuation:,  number:4  punctuation:,  region:s  punctuation:)  punctuation:)
+ 26 |     fixed word = "w" + "x" at s
+    | keyword:fixed  variable:word  operator:=  string:"w"  operator:+  string:"x"  keyword:at  region:s
+ 27 |     fixed ws = ["a", ...] at r
+    | keyword:fixed  variable:ws  operator:=  punctuation:[  string:"a"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 28 |     fixed more: [text]@r = ws.added(word)
+    | keyword:fixed  variable:more  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  operator:=  variable:ws  punctuation:.  field:added  punctuation:(  variable:word  punctuation:)
+ 29 |     show(more)
+    | builtin-fn:show  punctuation:(  variable:more  punctuation:)
+ 30 |     fixed f = [@r]() -> int <- inner.added(5)@r.len fi
+    | keyword:fixed  variable:f  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:inner  punctuation:.  field:added  punctuation:(  number:5  punctuation:)  operator:@  region:r  punctuation:.  type:len  keyword:fi
+ 31 |     show(f())
+    | builtin-fn:show  punctuation:(  variable:f  punctuation:(  punctuation:)  punctuation:)
+ 32 | fi
+    | keyword:fi

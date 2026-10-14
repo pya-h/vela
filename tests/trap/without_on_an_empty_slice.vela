@@ -1,0 +1,9 @@
+; trap: without() on an empty slice at 7:22 in task 'main'
+; 'without()' stops the program on an empty slice, which has no last item.
+task main()
+    region r
+    fixed xs = new [int]() at r
+    show(xs.len)
+    fixed fewer = xs.without() at r
+    show(fewer)
+fi

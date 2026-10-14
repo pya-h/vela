@@ -182,6 +182,14 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             "add(value) or add(index, value)".to_string(),
             "Adds a value to a slice: last, or before the item at the index (which may be the length). The slice must be in a place that can change, and the task must have its region; the items stay in that region.".to_string(),
         ),
+        (TokenClass::Field, None) if text == "added" => (
+            "added(value), added(index, value), or added(key, value) at r".to_string(),
+            "A new slice with the value put last, or before the item at the index, or a new map with the key set: a complete copy, sharing nothing with the original, which never changes, so it works on fixed, bind and flex names alike. It goes where a copy goes: the region of the place it is put in, or the one after it, at r. Each call copies the whole value, so build a list with add on a flex one instead.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "without" => (
+            "without(index), without(), or without(key) at r".to_string(),
+            "A new slice without the item at the index, or the last, or a new map without the key: a complete copy, sharing nothing with the original, which never changes. A slice's index out of range stops the program, as del's does; a key the map doesn't hold gives an unchanged copy. It goes where a copy goes, as added does.".to_string(),
+        ),
         (TokenClass::Field, None) if text == "del" => (
             "del(index) or del()".to_string(),
             "Takes the item at the index out of a slice, or the last item, and gives it. The items after it move down.".to_string(),

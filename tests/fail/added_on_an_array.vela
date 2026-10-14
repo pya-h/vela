@@ -1,0 +1,9 @@
+; error: 7:20: an array's length is part of its type, so 'added' can't make one of another length; make a slice in a region, as in 'new [int](xs) at r'
+; An array's length is part of its type.
+
+task main()
+    region r
+    fixed a = [1, 2]
+    fixed more = a.added(3) at r
+    show(more)
+fi
