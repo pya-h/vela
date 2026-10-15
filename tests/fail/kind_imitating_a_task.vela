@@ -1,0 +1,10 @@
+; error: 5:12: 'light' is a task, not a kind; a kind imitates a kind, as in 'kind Lamp::Other'
+task light()
+fi
+
+kind Lamp::light
+    Off
+fi
+
+task main()
+fi

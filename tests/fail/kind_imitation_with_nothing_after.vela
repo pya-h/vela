@@ -1,0 +1,7 @@
+; error: 2:12: expected the kind it imitates after '::', as in 'kind Lamp::Other'
+kind Lamp::
+    Off
+fi
+
+task main()
+fi

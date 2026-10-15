@@ -1,0 +1,15 @@
+; error: 13:29: expected type [Lamp]@r, got [Light]@r; Lamp imitates Light, but only a value of Light itself becomes one, never one inside another value, which would be remade; take it out first, or make the value with Lamp inside
+kind Light
+    Red
+fi
+
+kind Lamp::Light
+    Off
+fi
+
+task main()
+    region r default
+    fixed lights = [Light.Red, ...] at r
+    fixed lamps: [Lamp]@r = lights
+    show(lamps)
+fi

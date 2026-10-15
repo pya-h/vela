@@ -165,7 +165,14 @@ impl<'a> Knowledge<'a> {
     /// The children of `parent` that are of `kind`: a shape's fields, or a
     /// kind's variants, without their methods and the types they take.
     pub fn members(&self, parent: usize, kind: SymbolKind) -> impl Iterator<Item = (usize, &'a Symbol)> {
-        self.children(parent).filter(move |(_, s)| s.kind == kind)
+        // A kind's variants include those it has from the kinds it imitates.
+        if kind == SymbolKind::Variant && self.symbol(parent).is_some_and(|s| !s.bases.is_empty()) {
+            let symbols = &self.scan.symbols;
+            let found: Vec<(usize, &'a Symbol)> =
+                crate::scan::kind_variants(symbols, parent, &|written| self.global(written, SymbolKind::Kind)).into_iter().filter_map(|id| symbols.get(id).map(|s| (id, s))).collect();
+            return found.into_iter();
+        }
+        self.children(parent).filter(|(_, s)| s.kind == kind).collect::<Vec<_>>().into_iter()
     }
 
     /// The first top-level declaration of `kind` called `name`: one of this

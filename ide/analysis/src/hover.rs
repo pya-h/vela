@@ -302,8 +302,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             let private = if symbol.private { "priv " } else { "" };
             // The types a shape takes go on its own line, as written; its
             // fields and a kind's variants each go on a line of their own.
-            let takes = if symbol.detail.starts_with('<') { symbol.detail.as_str() } else { "" };
+            let takes = if symbol.detail.starts_with('<') || symbol.detail.starts_with(':') { symbol.detail.as_str() } else { "" };
             let mut code = format!("{}{} {}{}\n", private, keyword, symbol.name, takes);
+            // A kind's variants from the kinds it imitates come first, each
+            // saying which kind it is from.
+            for (_, variant) in k.members(id, SymbolKind::Variant).filter(|(_, variant)| variant.parent != Some(id)) {
+                let from = variant.parent.and_then(|kind| k.symbol(kind)).map_or("?", |kind| vela::ast::unqualified(&kind.name));
+                code.push_str(&format!("    {}{} ; from {}\n", vela::ast::unqualified(&variant.name), variant.detail, from));
+            }
             for (_, member) in k.children(id) {
                 // Another file's private members are its own, as completion leaves them out too.
                 if member.kind == SymbolKind::TypeParam || (member.private && symbol.module.is_some()) {

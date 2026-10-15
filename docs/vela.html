@@ -212,6 +212,7 @@
         <code>tuples.vela</code> (tuples made, read, and taken apart), <code>maps.vela</code> (words counted in a map), <code>primes.vela</code> (a slice filled by index
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
         slice as it is at each pass</a>), <code>stock.vela</code> (a stock list searched with <a href="#generic-kinds">kinds that take types</a>),
+        <code>kind_imitation.vela</code> (orders refused for reasons of two kinds, one <a href="#kind-imitation">imitating</a> the other),
         <code>seats.vela</code> (a party seated in a hall, with
         <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>),
         <code>collatz.vela</code> (Collatz walks counted with <a href="#loop-parts">a loop in three parts and
@@ -251,7 +252,7 @@
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
         <li><code class="type">T</code> — a type a task, shape or kind takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
-        <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>)</li>
+        <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>), and kinds that imitate others, having their variants (see <a href="#kind-imitation">Kinds that imitate kinds</a>)</li>
         <li><code class="type">Name</code> — a type alias, another name for a type, <code>alias Name =&gt; type</code> (see <a href="#type-aliases">Type aliases</a>)</li>
       </ul>
     </section>
@@ -333,6 +334,7 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>flex&amp; y = &amp;x</code>, <code>fixed&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it, only reads it, or changes its contents (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
         <tr><td><code>kind Option&lt;T&gt;</code>, <code>Option&lt;int&gt;.None</code></td><td>a kind that takes types, and a variant given them where nothing else says them (see <a href="#generic-kinds">Kinds that take types</a>)</td></tr>
+        <tr><td><code>kind OrderError::ReadError</code>, <code>kind A::B &amp; C</code></td><td>a kind that imitates another, or several: it has their variants before its own, and a value of one goes where it is expected (see <a href="#kind-imitation">Kinds that imitate kinds</a>)</td></tr>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
         <tr><td><code>loop flex i = 0 || i &lt; n || i++</code>, <code>endless</code></td><td>a loop in three parts, its start, condition and step, each with several items parted by <code>,</code> or none; a loop that never ends by itself (see <a href="#loop-parts">A loop in three parts</a>)</td></tr>
         <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
@@ -2504,6 +2506,89 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           (<code>orElse</code> above sends a <code>T</code>), its own <code>str</code> writes every kind made from it,
           and <code>==</code> and <code>~=</code> compare by what the kind made carries. As for shapes that take
           types, it has no shared methods yet, and its methods take no wrappers yet.</li>
+      </ul>
+
+      <h3 id="kind-imitation">Kinds that imitate kinds</h3>
+      <p>
+        A kind can have every variant of another kind, written once where that kind is: <code>kind OrderError::ReadError</code>
+        has each variant of <code>ReadError</code>, with the same name and carrying the same values, before the variants
+        it adds below. It <em>imitates</em> the other kind. Only the variants come along: the other kind's methods,
+        shared or not, stay its own, and the new kind may have its own.
+      </p>
+      <pre class="program" data-file="kind_imitation.vela"><span class="keyword">kind</span> ReadError
+    Empty
+    BadDigit(column: int)
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> OrderError::ReadError
+    TooMany(count: int)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> read_count(line: text) -&gt; int ~ ReadError
+    <span class="keyword">when</span> line.len == <span class="number">0</span>
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> Empty
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> line.len
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> order(line: text) -&gt; int ~ OrderError
+    <span class="keyword">fixed</span> count = read_count(line) { <span class="keyword">failure</span> e
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e                       <span class="comment">; a ReadError goes out as an OrderError</span>
+    }
+    <span class="keyword">when</span> count &gt; <span class="number">3</span>
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> TooMany(count)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> count
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> said(e: OrderError) -&gt; int
+    <span class="keyword">&lt;-</span> <span class="keyword">match</span> e                          <span class="comment">; every variant, its ReadError ones too</span>
+    <span class="keyword">case</span> Empty = <span class="number">0</span>
+    <span class="keyword">case</span> BadDigit column = column
+    <span class="keyword">case</span> TooMany count = count
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> first: OrderError = Empty         <span class="comment">; a ReadError where an OrderError goes</span>
+    <span class="keyword">fixed</span> second = OrderError.BadDigit(<span class="number">2</span>)   <span class="comment">; named through the kind that has it</span>
+    show(first, <span class="string">" "</span>, second, <span class="string">" "</span>, first == Empty)   <span class="comment">; Empty BadDigit(2) true</span>
+    <span class="keyword">each</span> line <span class="keyword">in</span> [<span class="string">"ab"</span>, <span class="string">""</span>, <span class="string">"abcde"</span>]
+        <span class="keyword">match</span> order(line)
+        <span class="keyword">case</span> {count}
+            show(<span class="string">"ordered "</span>, count)         <span class="comment">; ordered 2</span>
+        <span class="keyword">case</span> <span class="keyword">failure</span> e
+            show(e, <span class="string">" "</span>, said(e))           <span class="comment">; Empty 0, then TooMany(5) 5</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Where its values go.</strong> A value of the kind imitated goes where one of the imitating kind is
+          expected, since every variant it can be is there, carrying the same values: a name with that type, an
+          argument, what a task sends, an error a task sends (<code>&lt;- fail e</code> above), a field, an item, a
+          value beside one of the imitating kind (<code>[Empty, OrderError.TooMany(4)]</code> is an
+          <code>[OrderError#2]</code>), and either side of <code>==</code> or <code>~=</code>. It is made a value of that
+          kind there, the same variant carrying the same values, which costs a copy. Never the other way round, since
+          a value of the imitating kind may be a variant the other doesn't have (a <code>match</code> makes one from the
+          other), and only the value itself: a value already made is never remade inside (see
+          <a href="#wider">Becoming a wider type</a>), so a <code>maybe ReadError</code> or a <code>[ReadError]@r</code>
+          stays what it is.</li>
+        <li><strong>Naming its variants.</strong> A variant's own name names the variant of the kind it is declared in,
+          as it always did, so <code>Empty</code> is a <code>ReadError</code>; the imitating kind's is named through it,
+          <code>OrderError.Empty</code>. A <code>case</code> names variants of the kind of the value it matches, so
+          <code>case Empty</code> on an <code>OrderError</code> is its own. None of its variants may be named like one it
+          has from a kind it imitates, and a shared method can't be named like any of them.</li>
+        <li><strong>Several, and from anywhere.</strong> A kind may imitate several, joined with <code>&amp;</code>
+          (<code>kind AppError::ReadError &amp; files.FileError</code>), as long as no two of them have a variant of the
+          same name, and each once. The kind imitated may be another file's (<code>errs.Missing</code>, but not one
+          it keeps <code>priv</code>), Vela's library's, a builtin one (<code>kind BadNumber::ParseError</code>), one
+          that imitates others, whose variants all come along, or a type alias of one. No kind imitates itself,
+          through others or not.</li>
+        <li><strong>Kinds that take types.</strong> One that takes types is imitated with them given:
+          <code>kind Counted::Option&lt;int&gt;</code>, or <code>kind Choice&lt;T&gt;::Option&lt;T&gt;</code>, whose
+          variants carry what <code>Option</code>'s carry, with <code>Choice</code>'s <code>T</code> in place of
+          <code>Option</code>'s; an <code>Option&lt;int&gt;</code> then goes where a <code>Choice&lt;int&gt;</code> is
+          expected. The kind imitated names no region, since the variants it gives name none.</li>
       </ul>
 
       <h3 id="macros">Macros</h3>

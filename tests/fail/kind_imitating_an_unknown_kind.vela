@@ -1,0 +1,7 @@
+; error: 2:12: unknown kind 'Nowhere'
+kind Mine::Nowhere
+    One
+fi
+
+task main()
+fi

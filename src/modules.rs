@@ -201,6 +201,19 @@ pub fn load(path: &Path, source: &str, loader: &mut Loader) -> (Vec<SourceFile>,
     (state.files, result)
 }
 
+/// What one walk of a module resolves (see `State::resolve`).
+#[derive(Clone, Copy)]
+enum Pass<'a> {
+    /// The names in the types of its type aliases, which make the program's
+    /// aliases.
+    Aliases,
+    /// The kinds each of its kinds imitates (see `KindDef::imitates`), with the
+    /// program's aliases put in.
+    Imitated(&'a TypeAliases),
+    /// The names in its items, with the program's aliases put in.
+    Items(&'a TypeAliases),
+}
+
 /// A module being loaded.
 struct Module {
     /// Its identity (see `ModuleScope::name`); empty for the main file.
@@ -257,9 +270,10 @@ impl State {
             }
         }
         // The types of the type aliases first, with the names in them written
-        // as the program names them, then the items, with each alias put in.
+        // as the program names them, then the kinds each kind imitates, then
+        // the items, with each alias put in.
         for index in 0..self.modules.len() {
-            self.resolve(index, &tables, &variants, &by_module, None)?;
+            self.resolve(index, &tables, &variants, &by_module, Pass::Aliases)?;
         }
         let aliases: TypeAliases = self.modules.iter().flat_map(|module| &module.type_aliases).map(|alias| (alias.name.clone(), alias.ty.clone())).collect();
         // One that stands for itself, through others or not, is told where it
@@ -267,10 +281,17 @@ impl State {
         for alias in self.modules.iter().flat_map(|module| &module.type_aliases) {
             expand_aliases(&Type::Named(alias.name.clone(), None), &aliases, &mut Vec::new(), &mut Vec::new(), &|_| alias.ty_span)?;
         }
+        for index in 0..self.modules.len() {
+            self.resolve(index, &tables, &variants, &by_module, Pass::Imitated(&aliases))?;
+        }
+        // `Kind.Variant` names a variant a kind has from one it imitates too.
+        let mut variants = variants;
+        imitated_variants(&self.modules, &mut variants)?;
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
-            scopes.push(self.resolve(index, &tables, &variants, &by_module, Some(&aliases))?);
+            scopes.push(self.resolve(index, &tables, &variants, &by_module, Pass::Items(&aliases))?);
         }
+        imitate(&mut self.modules);
         let mut items = Vec::new();
         for index in std::mem::take(&mut self.order) {
             if let Some(module) = self.modules.get_mut(index) {
@@ -417,11 +438,9 @@ impl State {
         format!("modules can't include one another in a circle: {}", chain.join(" -> "))
     }
 
-    /// Resolves the names in module `index`, and returns what the checker needs
-    /// to know about it: with no `aliases` yet, the names in the types of its
-    /// type aliases, which `aliases` is made of; with them, the names in its
-    /// items, where each alias is put in.
-    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants, by_module: &HashMap<&str, Vec<&str>>, aliases: Option<&TypeAliases>) -> Result<ModuleScope> {
+    /// Resolves the names in module `index` that `pass` reads, and returns what
+    /// the checker needs to know about it.
+    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants, by_module: &HashMap<&str, Vec<&str>>, pass: Pass) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
         let mut own = tables.get(index).cloned().unwrap_or_default();
         // The builtin kinds are written like declared ones, in every file: a task
@@ -432,6 +451,10 @@ impl State {
             own.entry(kind.name.clone()).or_insert_with(|| builtin_kind_entry(&kind.name, What::Kind, None));
         }
         let none = TypeAliases::new();
+        let aliases = match pass {
+            Pass::Aliases => None,
+            Pass::Imitated(aliases) | Pass::Items(aliases) => Some(aliases),
+        };
         let mut resolver = Resolver {
             own,
             modules: HashMap::new(),
@@ -537,11 +560,22 @@ impl State {
         resolver.spelling = spelling.clone();
         let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
-        if aliases.is_none() {
-            for alias in &mut module.type_aliases {
-                resolver.type_alias(alias)?;
+        match pass {
+            Pass::Aliases => {
+                for alias in &mut module.type_aliases {
+                    resolver.type_alias(alias)?;
+                }
+                return Ok(scope);
             }
-            return Ok(scope);
+            Pass::Imitated(_) => {
+                for item in &mut module.items {
+                    if let Item::Kind(k) = item {
+                        resolver.imitated(k)?;
+                    }
+                }
+                return Ok(scope);
+            }
+            Pass::Items(_) => {}
         }
         let mut items = std::mem::take(&mut module.items);
         for item in &mut items {
@@ -843,6 +877,165 @@ fn variants_of_kinds(modules: &[Module]) -> Variants {
     variants
 }
 
+/// Adds to `variants` each variant a kind has from the kinds it imitates,
+/// named through it (`AppError.Empty`; see `imitated_variant`), once it is
+/// known that no kind imitates itself, through others or not, that each kind
+/// imitated is given the types it takes, and that no two variants of a kind
+/// share a name.
+fn imitated_variants(modules: &[Module], variants: &mut Variants) -> Result<()> {
+    let builtin = builtin_kinds();
+    let mut kinds: HashMap<String, &KindDef> = builtin.iter().map(|kind| (kind.name.clone(), kind)).collect();
+    let mut order = Vec::new();
+    for module in modules {
+        for item in &module.items {
+            if let Item::Kind(k) = item {
+                let full = if module.id.is_empty() { k.name.clone() } else { format!("{}{}{}", module.id, MODULE_SEPARATOR, k.name) };
+                kinds.entry(full.clone()).or_insert(k);
+                order.push(full);
+            }
+        }
+    }
+    let mut done = HashMap::new();
+    for full in &order {
+        let tags = kind_tags(full, &kinds, &mut done, &mut Vec::new())?;
+        let Some(kind) = kinds.get(full.as_str()) else { continue };
+        let entries = variants.entry(full.clone()).or_default();
+        for (tag, _, at) in tags.iter().take(tags.len().saturating_sub(kind.variants.len())) {
+            let entry = Entry { full: imitated_variant(full, tag), what: What::Variant, private: kind.private, span: *at, kind: Some(full.clone()) };
+            entries.entry(tag.clone()).or_insert(entry);
+        }
+    }
+    Ok(())
+}
+
+/// The names of the variants of kind `full` (its name in the program), those
+/// it has from the kinds it imitates first, each with the kind it is declared
+/// in and where this kind has it from (its own position, for its own). `done`
+/// keeps the kinds already read, and `through` the kinds being read, to find
+/// one that imitates itself.
+fn kind_tags(full: &str, kinds: &HashMap<String, &KindDef>, done: &mut HashMap<String, Vec<(String, String, Span)>>, through: &mut Vec<String>) -> Result<Vec<(String, String, Span)>> {
+    if let Some(tags) = done.get(full) {
+        return Ok(tags.clone());
+    }
+    let Some(kind) = kinds.get(full) else { return Ok(Vec::new()) };
+    let mut tags: Vec<(String, String, Span)> = Vec::new();
+    through.push(full.to_string());
+    for (ty, at) in &kind.imitates {
+        let (source, given) = match ty {
+            Type::Named(name, _) => (name, 0),
+            Type::Applied(applied) => (&applied.name, applied.types.len()),
+            _ => continue,
+        };
+        if source == full {
+            return err(*at, format!("kind '{}' can't imitate itself", unqualified(full)));
+        }
+        if let Some(start) = through.iter().position(|name| name == source) {
+            let mut circle: Vec<&str> = through.iter().skip(start).map(|name| unqualified(name)).collect();
+            circle.push(unqualified(source));
+            return err(*at, format!("kinds can't imitate one another in a circle: {}", circle.join(" -> ")));
+        }
+        if let Some((_, first)) = kind.imitates.iter().take_while(|(_, before)| before != at).find(|(before, _)| base_name(before) == Some(source)) {
+            return err(*at, format!("'{}' is imitated already, at {}:{}; a kind imitates each kind once", unqualified(source), first.line, first.col));
+        }
+        let Some(imitated) = kinds.get(source.as_str()) else { continue };
+        let takes = imitated.types.len();
+        if given != takes {
+            let names: Vec<&str> = imitated.types.iter().map(|param| param.name.as_str()).collect();
+            let message = match (takes, given) {
+                (0, _) => format!("kind '{}' takes no types; leave out '<…>'", unqualified(source)),
+                (1, _) => format!("kind '{0}' takes a type, so name it, as in 'kind {1}::{0}<int>' or 'kind {1}<{2}>::{0}<{2}>'", unqualified(source), unqualified(full), names.join(", ")),
+                _ => format!("kind '{0}' takes {1} types, so name them all, as in 'kind {2}<{3}>::{0}<{3}>'", unqualified(source), takes, unqualified(full), names.join(", ")),
+            };
+            return err(*at, message);
+        }
+        for (tag, from, _) in kind_tags(source, kinds, done, through)? {
+            if let Some((_, other, _)) = tags.iter().find(|(seen, _, _)| *seen == tag) {
+                return err(
+                    *at,
+                    format!("'{}' is a variant of '{}', and of '{}' too, which '{}' also imitates; each variant of a kind has a name of its own", tag, unqualified(&from), unqualified(other), unqualified(full)),
+                );
+            }
+            tags.push((tag, from, *at));
+        }
+    }
+    through.pop();
+    for variant in &kind.variants {
+        if let Some((_, from, at)) = tags.iter().find(|(tag, _, _)| *tag == variant.tag) {
+            return err(
+                variant.span,
+                format!("'{}' is already a variant of '{}', which has it from '{}', imitated at {}:{}", variant.tag, unqualified(full), unqualified(from), at.line, at.col),
+            );
+        }
+        tags.push((variant.tag.clone(), full.to_string(), variant.span));
+    }
+    done.insert(full.to_string(), tags.clone());
+    Ok(tags)
+}
+
+/// The kind a kind imitates names, `Option` in `Option<int>`.
+fn base_name(ty: &Type) -> Option<&String> {
+    match ty {
+        Type::Named(name, _) => Some(name),
+        Type::Applied(applied) => Some(&applied.name),
+        _ => None,
+    }
+}
+
+/// Puts in each kind that imitates others the variants it has from them,
+/// before its own (see `KindDef::imitated`): each carries what it carries in
+/// the kind it comes from, with the types given that kind in place of the
+/// ones it takes, and is written where that kind is named. Every name in the
+/// program is resolved by now, so a variant carries the same types wherever
+/// it is put.
+fn imitate(modules: &mut [Module]) {
+    let mut kinds: HashMap<String, KindDef> = builtin_kinds().into_iter().map(|kind| (kind.name.clone(), kind)).collect();
+    for item in modules.iter().flat_map(|module| &module.items) {
+        if let Item::Kind(k) = item {
+            kinds.entry(k.name.clone()).or_insert_with(|| k.clone());
+        }
+    }
+    let mut done = HashMap::new();
+    for item in modules.iter_mut().flat_map(|module| &mut module.items) {
+        if let Item::Kind(k) = item
+            && !k.imitates.is_empty()
+        {
+            let mut variants = imitated_of(&k.name, &kinds, &mut done);
+            k.imitated = variants.len();
+            variants.append(&mut k.variants);
+            k.variants = variants;
+        }
+    }
+}
+
+/// The variants kind `name` has from the kinds it imitates (see `imitate`).
+fn imitated_of(name: &str, kinds: &HashMap<String, KindDef>, done: &mut HashMap<String, Vec<Variant>>) -> Vec<Variant> {
+    let Some(kind) = kinds.get(name) else { return Vec::new() };
+    let mut variants = Vec::new();
+    for (ty, at) in &kind.imitates {
+        let (source, given) = match ty {
+            Type::Named(name, _) => (name, &[][..]),
+            Type::Applied(applied) => (&applied.name, applied.types.as_slice()),
+            _ => continue,
+        };
+        let Some(imitated) = kinds.get(source) else { continue };
+        let types: HashMap<&str, &Type> = imitated.types.iter().map(|param| param.name.as_str()).zip(given).collect();
+        let all = match done.get(source) {
+            Some(all) => all.clone(),
+            None => {
+                let mut all = imitated_of(source, kinds, done);
+                all.extend(imitated.variants.iter().cloned());
+                done.insert(source.clone(), all.clone());
+                all
+            }
+        };
+        for variant in all {
+            let payload = variant.payload.iter().map(|field| Field { ty: field.ty.replace_names(&|name| types.get(name).map(|ty| (*ty).clone())), span: *at, ty_span: *at, ..field.clone() }).collect();
+            variants.push(Variant { tag: variant.tag, payload, span: *at });
+        }
+    }
+    variants
+}
+
 /// The type each type alias of the program stands for, by the alias's name in
 /// the program, with the names in it written as the program names them and
 /// the aliases in it left as they are (see `expand_aliases`).
@@ -983,6 +1176,64 @@ impl Resolver<'_> {
         alias.name = self.own_full(&alias.name);
         alias.ty = self.names_in(&alias.ty, alias.ty_span)?;
         Ok(())
+    }
+
+    /// The kinds kind `k` imitates, each written as the program names it, with
+    /// the aliases in it put in. Each must name a kind, with no region, since
+    /// the variants it gives name none.
+    fn imitated(&mut self, k: &mut KindDef) -> Result<()> {
+        if k.imitates.is_empty() {
+            return Ok(());
+        }
+        let full = self.own_full(&k.name);
+        self.enter_type_params(&k.types, "kind", &full)?;
+        let kind = k.name.clone();
+        let read = k.imitates.iter_mut().try_for_each(|(ty, at)| {
+            *ty = self.imitated_kind(ty, *at, &kind)?;
+            Ok(())
+        });
+        self.params.clear();
+        read
+    }
+
+    /// `written`, at `at`, a kind kind `kind` imitates, as the program names it.
+    fn imitated_kind(&self, written: &Type, at: Span, kind: &str) -> Result<Type> {
+        let example = format!("as in 'kind {}::Other'", kind);
+        let (name, region) = match written {
+            Type::Named(name, region) => (name, region),
+            Type::Applied(applied) => (&applied.name, &applied.region),
+            _ => return err(at, format!("'{}' is no kind, and a kind imitates only a kind, {}", written, example)),
+        };
+        if self.params.contains(name) {
+            return err(at, format!("'{}' is a type '{}' takes, not a kind; a kind imitates a kind it names, {}", name, kind, example));
+        }
+        if let Some(region) = region {
+            return err(at, format!("a kind has the variants of the kinds it imitates, which name no region; leave out '@{}'", region));
+        }
+        let what = self.lookup(name, at, false)?.map(|entry| entry.what);
+        match what {
+            Some(What::Kind | What::Alias) => {}
+            Some(What::Shape) => return err(at, format!("'{}' is a shape, and a kind imitates only a kind, whose variants it takes", name)),
+            Some(other) => return err(at, format!("'{}' is a {}, not a kind; a kind imitates a kind, {}", name, other.word(), example)),
+            None => return err(at, format!("unknown kind '{}'", name)),
+        }
+        let read = self.ty(written, at)?;
+        let named = match &read {
+            Type::Named(full, None) => Some(full),
+            Type::Applied(applied) if applied.region.is_none() => Some(&applied.name),
+            _ => None,
+        };
+        // A type alias standing for one names it too.
+        if !named.is_some_and(|full| self.is_kind(full)) {
+            return err(at, format!("'{}' is a type alias for {}, which is no kind; a kind imitates only a kind", name, self.spelling.ty(&read)));
+        }
+        Ok(read)
+    }
+
+    /// Whether `full`, a name in the program, is a kind's: a builtin one, or
+    /// one a module declares.
+    fn is_kind(&self, full: &str) -> bool {
+        builtin_kinds().iter().any(|kind| kind.name == full) || std::iter::once(&self.own).chain(self.tables).flat_map(|names| names.values()).any(|entry| entry.full == full && entry.what == What::Kind)
     }
 
     fn item(&mut self, item: &mut Item) -> Result<()> {
@@ -1633,7 +1884,7 @@ impl Resolver<'_> {
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::Construct { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
-            ExprKind::Field(base, _) | ExprKind::Deref(base) | ExprKind::Ref(base) | ExprKind::Unary(_, base) | ExprKind::Fail(base) | ExprKind::Wrap(base) => self.expr(base),
+            ExprKind::Field(base, _) | ExprKind::Deref(base) | ExprKind::Ref(base) | ExprKind::Unary(_, base) | ExprKind::Fail(base) | ExprKind::Wrap(base) | ExprKind::Widen(base) => self.expr(base),
             ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a)?;
                 self.expr(b)

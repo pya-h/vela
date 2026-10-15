@@ -1,0 +1,116 @@
+  1 | ; Layered errors: a kind imitates another to have all its variants, adds its
+    | comment:; Layered errors: a kind imitates another to have all its variants, adds its
+  2 | ; own, and takes the other's failures as its own.
+    | comment:; own, and takes the other's failures as its own.
+  3 | kind ReadError
+    | keyword:kind  type:ReadError
+  4 |     Empty
+    | variant:Empty
+  5 |     NotANumberAt(column: int)
+    | variant:NotANumberAt  punctuation:(  field:column  punctuation::  type-builtin:int  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | kind OrderError::ReadError
+    | keyword:kind  type:OrderError  punctuation::  punctuation::  type:ReadError
+  9 |     TooMany(count: int)
+    | variant:TooMany  punctuation:(  field:count  punctuation::  type-builtin:int  punctuation:)
+ 10 |     Closed
+    | variant:Closed
+ 11 | fi
+    | keyword:fi
+ 13 | task read_count(line: text@r) -> int ~ ReadError
+    | keyword:task  task:read_count  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadError
+ 14 |     when line.len == 0
+    | keyword:when  parameter:line  punctuation:.  field:len  operator:==  number:0
+ 15 |         <- fail Empty
+    | keyword:<-  keyword:fail  variant:Empty
+ 16 |     fi
+    | keyword:fi
+ 17 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 18 |     each i in 0..line.len
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:line  punctuation:.  field:len
+ 19 |         fixed digit = int(line[i]) - int('0')
+    | keyword:fixed  variable:digit  operator:=  type-builtin:int  punctuation:(  parameter:line  punctuation:[  variable:i  punctuation:]  punctuation:)  operator:-  type-builtin:int  punctuation:(  string:'0'  punctuation:)
+ 20 |         when digit < 0 or digit > 9
+    | keyword:when  variable:digit  operator:<  number:0  keyword:or  variable:digit  operator:>  number:9
+ 21 |             <- fail NotANumberAt(i + 1)
+    | keyword:<-  keyword:fail  variant:NotANumberAt  punctuation:(  variable:i  operator:+  number:1  punctuation:)
+ 22 |         fi
+    | keyword:fi
+ 23 |         count = count * 10 + digit
+    | variable:count  operator:=  variable:count  operator:*  number:10  operator:+  variable:digit
+ 24 |     fi
+    | keyword:fi
+ 25 |     <- count
+    | keyword:<-  variable:count
+ 26 | fi
+    | keyword:fi
+ 28 | task order(r: region, line: text@r, open: bool) -> int ~ OrderError
+    | keyword:task  task:order  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:open  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:int  operator:~  type:OrderError
+ 29 |     when not open
+    | keyword:when  keyword:not  parameter:open
+ 30 |         <- fail Closed
+    | keyword:<-  keyword:fail  variant:Closed
+ 31 |     fi
+    | keyword:fi
+ 32 |     ; A ReadError is an OrderError too, so it goes out as one.
+    | comment:; A ReadError is an OrderError too, so it goes out as one.
+ 33 |     fixed count = read_count(line) { failure e
+    | keyword:fixed  variable:count  operator:=  task:read_count  punctuation:(  parameter:line  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 34 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 35 |     }
+    | punctuation:}
+ 36 |     when count > 12
+    | keyword:when  variable:count  operator:>  number:12
+ 37 |         <- fail TooMany(count)
+    | keyword:<-  keyword:fail  variant:TooMany  punctuation:(  variable:count  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 |     <- count
+    | keyword:<-  variable:count
+ 40 | fi
+    | keyword:fi
+ 42 | ; Every variant of an OrderError, its ReadError ones included.
+    | comment:; Every variant of an OrderError, its ReadError ones included.
+ 43 | task said(r: region default, e: OrderError) -> text@r
+    | keyword:task  task:said  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:e  punctuation::  type:OrderError  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 44 |     <- match e
+    | keyword:<-  keyword:match  parameter:e
+ 45 |     case Empty = "nothing written"
+    | keyword:case  variant:Empty  operator:=  string:"nothing written"
+ 46 |     case NotANumberAt column = "not a number at column {column}"
+    | keyword:case  variant:NotANumberAt  variable:column  operator:=  string:"not a number at column {  variable:column  string:}"
+ 47 |     case TooMany count = "{count} is more than 12"
+    | keyword:case  variant:TooMany  variable:count  operator:=  string:"{  variable:count  string:} is more than 12"
+ 48 |     case Closed = "the shop is closed"
+    | keyword:case  variant:Closed  operator:=  string:"the shop is closed"
+ 49 |     fi
+    | keyword:fi
+ 50 | fi
+    | keyword:fi
+ 52 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 53 |     region r default
+    | keyword:region  region:r  keyword:default
+ 54 |     fixed lines = ["3", "", "4x", "40", "7", ...] at r
+    | keyword:fixed  variable:lines  operator:=  punctuation:[  string:"3"  punctuation:,  string:""  punctuation:,  string:"4x"  punctuation:,  string:"40"  punctuation:,  string:"7"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 55 |     each line in lines
+    | keyword:each  variable:line  keyword:in  variable:lines
+ 56 |         match order(r, line, line != "7")
+    | keyword:match  task:order  punctuation:(  region:r  punctuation:,  variable:line  punctuation:,  variable:line  operator:!=  string:"7"  punctuation:)
+ 57 |         case {count}
+    | keyword:case  punctuation:{  variable:count  punctuation:}
+ 58 |             show("ordered ", count)
+    | builtin-fn:show  punctuation:(  string:"ordered "  punctuation:,  variable:count  punctuation:)
+ 59 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+ 60 |             show(said(r, e))
+    | builtin-fn:show  punctuation:(  task:said  punctuation:(  region:r  punctuation:,  variable:e  punctuation:)  punctuation:)
+ 61 |         fi
+    | keyword:fi
+ 62 |     fi
+    | keyword:fi
+ 63 | fi
+    | keyword:fi

@@ -1,0 +1,10 @@
+; error: 6:18: expected '&' and another kind, or the end of the line: the variants of a kind start on the line after its name, got identifier 'Off'
+kind Light
+    Red
+fi
+
+kind Lamp::Light Off
+fi
+
+task main()
+fi

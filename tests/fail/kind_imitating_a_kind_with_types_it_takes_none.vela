@@ -1,0 +1,11 @@
+; error: 6:12: kind 'Light' takes no types; leave out '<…>'
+kind Light
+    Red
+fi
+
+kind Lamp::Light<int>
+    Off
+fi
+
+task main()
+fi

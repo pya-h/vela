@@ -1,0 +1,11 @@
+; error: 6:19: expected another kind after '&', as in 'kind Lamp::Other'
+kind Light
+    Red
+fi
+
+kind Lamp::Light &
+    Off
+fi
+
+task main()
+fi

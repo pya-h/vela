@@ -1,0 +1,7 @@
+; error: 2:18: 'T' is a type 'Wrapper' takes, not a kind; a kind imitates a kind it names, as in 'kind Wrapper::Other'
+kind Wrapper<T>::T
+    Empty
+fi
+
+task main()
+fi

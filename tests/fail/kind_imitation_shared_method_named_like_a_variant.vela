@@ -1,0 +1,15 @@
+; error: 9:12: 'Red' is already a variant of 'Lamp', from 'Light', which it imitates; 'Lamp.Red(…)' makes the variant, so a shared method can't take its name
+kind Light
+    Red
+fi
+
+kind Lamp::Light
+    Off
+
+    shared Red() -> Lamp
+        <- Off
+    fi
+fi
+
+task main()
+fi

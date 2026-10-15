@@ -1,0 +1,149 @@
+; Kind imitation: a kind has every variant of the kinds it imitates, with its
+; own after them, and a value of an imitated kind goes where the imitating one
+; is expected.
+include kind_imitation/errs
+include std/files {FileError}
+
+kind ParseErr
+    Empty
+    Bad(place: int)
+fi
+
+kind AppError::ParseErr & errs.Missing
+    Usage(word: text)
+fi
+
+; One imitating a builtin kind, one of the library, and a chain.
+kind ReadError::ParseError
+    Negative
+fi
+
+kind OpenError::FileError
+    Locked
+fi
+
+kind Base
+    One
+fi
+
+kind Middle::Base
+    Two
+fi
+
+kind Top::Middle
+    Three
+fi
+
+; Kinds that take types, given them or passing their own on.
+kind Option<T>
+    Nothing
+    Some(value: T)
+fi
+
+kind Choice<T>::Option<T>
+    Both(a: T, b: T)
+fi
+
+kind Counted::Option<int>
+    Many(count: int)
+fi
+
+task parse(word: text@r) -> int ~ ParseErr
+    when word.len == 0
+        <- fail Empty
+    fi
+    when word == "x"
+        <- fail Bad(1)
+    fi
+    <- word.len
+fi
+
+; A failure of an imitated kind goes out as the imitating kind's.
+task run(r: region, word: text@r) -> int ~ AppError@r
+    when word == "help"
+        <- fail Usage(word)
+    fi
+    fixed found = errs.find(r, word) { failure e
+        <- fail e
+    }
+    fixed parsed = parse(word) { failure e
+        <- fail e
+    }
+    <- found + parsed
+fi
+
+task said(r: region default, e: AppError@r) -> text@r
+    <- match e
+    case Empty = "empty"
+    case Bad place = "bad at {place}"
+    case NoFile name = "no file {name}"
+    case NoRoom = "no room"
+    case Usage word = "usage: {word}"
+    fi
+fi
+
+task depth(t: Top) -> int
+    <- match t
+    case One = 1
+    case Two = 2
+    case Three = 3
+    fi
+fi
+
+task choose<T>(o: Option<T>@r) -> Choice<T>@r
+    <- o
+fi
+
+task number(word: text) -> int ~ ReadError
+    fixed n = int(word) { failure e
+        <- fail e
+    }
+    when n < 0
+        <- fail Negative
+    fi
+    <- n
+fi
+
+task main()
+    region r default
+    each word in ["help", "none", "", "x", "four"]
+        match run(r, word)
+        case {n}
+            show(word, ": ", n)
+        case failure e
+            show(word, ": ", said(r, e))
+        fi
+    fi
+    ; Where a value goes: a name with a type, an argument, a maybe, a slice,
+    ; an array written out, a value of a when, and a comparison.
+    fixed a: AppError = Empty
+    fixed m: maybe AppError = Bad(2)
+    flex all = new [AppError] at r
+    all.add(a)
+    all.add(errs.NoRoom)
+    all.add(AppError.Usage("go" + "!" at r))
+    fixed pair = [Empty, AppError.NoRoom]
+    fixed one = when all.len > 2
+        Bad(3)
+    else
+        AppError.NoRoom
+    fi
+    show(m, " ", all, " ", pair, " ", one)
+    show(a == Empty, " ", Empty == a, " ", a != Bad(1), " ", pair[1] ~= AppError.NoRoom)
+    show(depth(One), depth(Two), depth(Three), " ", Top.One, " ", Middle.Two)
+    fixed some: Option<int> = Some(4)
+    fixed c: Choice<int> = some
+    fixed n: Counted = some
+    show(c, " ", n, " ", choose(Option<text>.Some("t")), " ", Choice<int>.Both(1, 2), " ", Counted.Many(9))
+    each word in ["12", "-3", "ten"]
+        match number(word)
+        case {value}
+            show(value)
+        case failure e
+            show(e)
+        fi
+    fi
+    fixed locked: OpenError = Locked
+    fixed missing: OpenError = OpenError.NotFound
+    show(locked, " ", missing, " ", errs.Outer.Hidden, " ", errs.Outer.Shown)
+fi

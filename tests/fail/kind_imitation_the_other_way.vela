@@ -1,0 +1,14 @@
+; error: 12:26: expected type Light, got Lamp; Lamp imitates Light, so a value of Light goes where Lamp is expected, but not the other way: a value of Lamp may be a variant Light doesn't have, and a 'match' makes one from the other
+kind Light
+    Red
+fi
+
+kind Lamp::Light
+    Off
+fi
+
+task main()
+    fixed lamp: Lamp = Off
+    fixed light: Light = lamp
+    show(light)
+fi

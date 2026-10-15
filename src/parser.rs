@@ -1338,6 +1338,7 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
+        let imitates = self.parse_imitated(&name)?;
         self.skip_newlines();
         let mut variants = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
@@ -1412,7 +1413,39 @@ impl Parser {
             }
         }
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false })
+        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, imitated: 0 })
+    }
+
+    /// `::Other & Another` after a kind's name and types: the kinds it
+    /// imitates, each a type with where it is written. Empty when no `::`
+    /// follows the name.
+    fn parse_imitated(&mut self, kind: &str) -> Result<Vec<(Type, Span)>> {
+        if !self.check(Token::Colon) {
+            return Ok(Vec::new());
+        }
+        let first = self.peek_span();
+        let doubled = self.tokens.get(self.pos + 1) == Some(&Token::Colon) && self.spans.get(self.pos + 1).is_some_and(|next| next.line == first.line && next.col == first.col + 1);
+        if !doubled {
+            return Err(Error::at(first, format!("a kind imitates another with '::' after its name, as in 'kind {}::Other'", kind)));
+        }
+        self.advance(); // :
+        self.advance(); // :
+        let mut imitated = Vec::new();
+        loop {
+            let at = self.peek_span();
+            if matches!(self.peek(), Token::Newline | Token::Eof) {
+                let expected = if imitated.is_empty() { "the kind it imitates after '::'" } else { "another kind after '&'" };
+                return Err(Error::at(at, format!("expected {}, as in 'kind {}::Other'", expected, kind)));
+            }
+            imitated.push((self.parse_type()?, at));
+            if !self.match_token(Token::Amp) {
+                break;
+            }
+        }
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("'&' and another kind, or the end of the line: the variants of a kind start on the line after its name"));
+        }
+        Ok(imitated)
     }
 
     /// Whether the `(` after a name inside a kind holds a variant's values rather

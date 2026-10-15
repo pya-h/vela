@@ -1,0 +1,11 @@
+; error: 6:12: 'Point' is a shape, and a kind imitates only a kind, whose variants it takes
+shape Point
+    x: int
+fi
+
+kind Spot::Point
+    Here
+fi
+
+task main()
+fi

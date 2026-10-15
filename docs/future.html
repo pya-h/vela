@@ -2439,7 +2439,12 @@ fi
           straight on a <code>T ~ E</code>, which today is <code>case failure e</code> and then a match.</p>
           <p><strong>The question to decide</strong> is whether kinds holding kinds turn out to be common enough in real
           programs to pay for a second spelling and a flattening rule, or whether the two matches are simply what a
-          nested value costs.</p></li>
+          nested value costs.</p>
+          <p><em>Partly answered by <a href="vela.html#kind-imitation">kind imitation</a>, built:</em> a program's own
+          kind that would wrap another can imitate it instead, <code>kind AppError::ParseErr</code>, and has its variants
+          as its own, flat, with one spelling and one <code>match</code>, and a failure of the inner kind is sent on as
+          the outer kind's. The builtin <code>InputError</code> still holds its <code>ParseError</code>, and a kind that
+          holds a value of another kind is still read through two matches.</p></li>
         <li id="undecided-generic-kinds"><strong>Types for kinds:</strong> <em>(done: <a href="vela.html#generic-kinds">Kinds
           that take types</a>, decided for loops that give values, whose result is a kind taking two types)</em> tasks and shapes take types today
           (<a href="#generics">Types a Declaration Takes</a>), which leaves kinds as the one declaration that can't:

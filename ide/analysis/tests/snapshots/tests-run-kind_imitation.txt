@@ -1,0 +1,264 @@
+  1 | ; Kind imitation: a kind has every variant of the kinds it imitates, with its
+    | comment:; Kind imitation: a kind has every variant of the kinds it imitates, with its
+  2 | ; own after them, and a value of an imitated kind goes where the imitating one
+    | comment:; own after them, and a value of an imitated kind goes where the imitating one
+  3 | ; is expected.
+    | comment:; is expected.
+  4 | include kind_imitation/errs
+    | keyword:include  module:kind_imitation  operator:/  module:errs
+  5 | include std/files {FileError}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:FileError  punctuation:}
+  7 | kind ParseErr
+    | keyword:kind  type:ParseErr
+  8 |     Empty
+    | variant:Empty
+  9 |     Bad(place: int)
+    | variant:Bad  punctuation:(  field:place  punctuation::  type-builtin:int  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 12 | kind AppError::ParseErr & errs.Missing
+    | keyword:kind  type:AppError  punctuation::  punctuation::  type:ParseErr  operator:&  module:errs  punctuation:.  type:Missing
+ 13 |     Usage(word: text)
+    | variant:Usage  punctuation:(  field:word  punctuation::  type-builtin:text  punctuation:)
+ 14 | fi
+    | keyword:fi
+ 16 | ; One imitating a builtin kind, one of the library, and a chain.
+    | comment:; One imitating a builtin kind, one of the library, and a chain.
+ 17 | kind ReadError::ParseError
+    | keyword:kind  type:ReadError  punctuation::  punctuation::  type:ParseError
+ 18 |     Negative
+    | variant:Negative
+ 19 | fi
+    | keyword:fi
+ 21 | kind OpenError::FileError
+    | keyword:kind  type:OpenError  punctuation::  punctuation::  type:FileError
+ 22 |     Locked
+    | variant:Locked
+ 23 | fi
+    | keyword:fi
+ 25 | kind Base
+    | keyword:kind  type:Base
+ 26 |     One
+    | variant:One
+ 27 | fi
+    | keyword:fi
+ 29 | kind Middle::Base
+    | keyword:kind  type:Middle  punctuation::  punctuation::  type:Base
+ 30 |     Two
+    | variant:Two
+ 31 | fi
+    | keyword:fi
+ 33 | kind Top::Middle
+    | keyword:kind  type:Top  punctuation::  punctuation::  type:Middle
+ 34 |     Three
+    | variant:Three
+ 35 | fi
+    | keyword:fi
+ 37 | ; Kinds that take types, given them or passing their own on.
+    | comment:; Kinds that take types, given them or passing their own on.
+ 38 | kind Option<T>
+    | keyword:kind  type:Option  punctuation:<  type:T  punctuation:>
+ 39 |     Nothing
+    | variant:Nothing
+ 40 |     Some(value: T)
+    | variant:Some  punctuation:(  field:value  punctuation::  type:T  punctuation:)
+ 41 | fi
+    | keyword:fi
+ 43 | kind Choice<T>::Option<T>
+    | keyword:kind  type:Choice  punctuation:<  type:T  punctuation:>  punctuation::  punctuation::  type:Option  punctuation:<  type:T  punctuation:>
+ 44 |     Both(a: T, b: T)
+    | variant:Both  punctuation:(  field:a  punctuation::  type:T  punctuation:,  field:b  punctuation::  type:T  punctuation:)
+ 45 | fi
+    | keyword:fi
+ 47 | kind Counted::Option<int>
+    | keyword:kind  type:Counted  punctuation::  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>
+ 48 |     Many(count: int)
+    | variant:Many  punctuation:(  field:count  punctuation::  type-builtin:int  punctuation:)
+ 49 | fi
+    | keyword:fi
+ 51 | task parse(word: text@r) -> int ~ ParseErr
+    | keyword:task  task:parse  punctuation:(  parameter:word  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseErr
+ 52 |     when word.len == 0
+    | keyword:when  parameter:word  punctuation:.  field:len  operator:==  number:0
+ 53 |         <- fail Empty
+    | keyword:<-  keyword:fail  variant:Empty
+ 54 |     fi
+    | keyword:fi
+ 55 |     when word == "x"
+    | keyword:when  parameter:word  operator:==  string:"x"
+ 56 |         <- fail Bad(1)
+    | keyword:<-  keyword:fail  variant:Bad  punctuation:(  number:1  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 58 |     <- word.len
+    | keyword:<-  parameter:word  punctuation:.  field:len
+ 59 | fi
+    | keyword:fi
+ 61 | ; A failure of an imitated kind goes out as the imitating kind's.
+    | comment:; A failure of an imitated kind goes out as the imitating kind's.
+ 62 | task run(r: region, word: text@r) -> int ~ AppError@r
+    | keyword:task  task:run  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:word  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppError  operator:@  region:r
+ 63 |     when word == "help"
+    | keyword:when  parameter:word  operator:==  string:"help"
+ 64 |         <- fail Usage(word)
+    | keyword:<-  keyword:fail  variant:Usage  punctuation:(  parameter:word  punctuation:)
+ 65 |     fi
+    | keyword:fi
+ 66 |     fixed found = errs.find(r, word) { failure e
+    | keyword:fixed  variable:found  operator:=  module:errs  punctuation:.  task:find  punctuation:(  region:r  punctuation:,  parameter:word  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 67 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 68 |     }
+    | punctuation:}
+ 69 |     fixed parsed = parse(word) { failure e
+    | keyword:fixed  variable:parsed  operator:=  task:parse  punctuation:(  parameter:word  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 70 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 71 |     }
+    | punctuation:}
+ 72 |     <- found + parsed
+    | keyword:<-  variable:found  operator:+  variable:parsed
+ 73 | fi
+    | keyword:fi
+ 75 | task said(r: region default, e: AppError@r) -> text@r
+    | keyword:task  task:said  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:e  punctuation::  type:AppError  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 76 |     <- match e
+    | keyword:<-  keyword:match  parameter:e
+ 77 |     case Empty = "empty"
+    | keyword:case  variant:Empty  operator:=  string:"empty"
+ 78 |     case Bad place = "bad at {place}"
+    | keyword:case  variant:Bad  variable:place  operator:=  string:"bad at {  variable:place  string:}"
+ 79 |     case NoFile name = "no file {name}"
+    | keyword:case  variant:NoFile  variable:name  operator:=  string:"no file {  variable:name  string:}"
+ 80 |     case NoRoom = "no room"
+    | keyword:case  variant:NoRoom  operator:=  string:"no room"
+ 81 |     case Usage word = "usage: {word}"
+    | keyword:case  variant:Usage  variable:word  operator:=  string:"usage: {  variable:word  string:}"
+ 82 |     fi
+    | keyword:fi
+ 83 | fi
+    | keyword:fi
+ 85 | task depth(t: Top) -> int
+    | keyword:task  task:depth  punctuation:(  parameter:t  punctuation::  type:Top  punctuation:)  operator:->  type-builtin:int
+ 86 |     <- match t
+    | keyword:<-  keyword:match  parameter:t
+ 87 |     case One = 1
+    | keyword:case  variant:One  operator:=  number:1
+ 88 |     case Two = 2
+    | keyword:case  variant:Two  operator:=  number:2
+ 89 |     case Three = 3
+    | keyword:case  variant:Three  operator:=  number:3
+ 90 |     fi
+    | keyword:fi
+ 91 | fi
+    | keyword:fi
+ 93 | task choose<T>(o: Option<T>@r) -> Choice<T>@r
+    | keyword:task  task:choose  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:o  punctuation::  type:Option  punctuation:<  type:T  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type:Choice  punctuation:<  type:T  punctuation:>  operator:@  region:r
+ 94 |     <- o
+    | keyword:<-  parameter:o
+ 95 | fi
+    | keyword:fi
+ 97 | task number(word: text) -> int ~ ReadError
+    | keyword:task  task:number  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadError
+ 98 |     fixed n = int(word) { failure e
+    | keyword:fixed  variable:n  operator:=  type-builtin:int  punctuation:(  parameter:word  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 99 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+100 |     }
+    | punctuation:}
+101 |     when n < 0
+    | keyword:when  variable:n  operator:<  number:0
+102 |         <- fail Negative
+    | keyword:<-  keyword:fail  variant:Negative
+103 |     fi
+    | keyword:fi
+104 |     <- n
+    | keyword:<-  variable:n
+105 | fi
+    | keyword:fi
+107 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+108 |     region r default
+    | keyword:region  region:r  keyword:default
+109 |     each word in ["help", "none", "", "x", "four"]
+    | keyword:each  variable:word  keyword:in  punctuation:[  string:"help"  punctuation:,  string:"none"  punctuation:,  string:""  punctuation:,  string:"x"  punctuation:,  string:"four"  punctuation:]
+110 |         match run(r, word)
+    | keyword:match  task:run  punctuation:(  region:r  punctuation:,  variable:word  punctuation:)
+111 |         case {n}
+    | keyword:case  punctuation:{  variable:n  punctuation:}
+112 |             show(word, ": ", n)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:,  string:": "  punctuation:,  variable:n  punctuation:)
+113 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+114 |             show(word, ": ", said(r, e))
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:,  string:": "  punctuation:,  task:said  punctuation:(  region:r  punctuation:,  variable:e  punctuation:)  punctuation:)
+115 |         fi
+    | keyword:fi
+116 |     fi
+    | keyword:fi
+117 |     ; Where a value goes: a name with a type, an argument, a maybe, a slice,
+    | comment:; Where a value goes: a name with a type, an argument, a maybe, a slice,
+118 |     ; an array written out, a value of a when, and a comparison.
+    | comment:; an array written out, a value of a when, and a comparison.
+119 |     fixed a: AppError = Empty
+    | keyword:fixed  variable:a  punctuation::  type:AppError  operator:=  variant:Empty
+120 |     fixed m: maybe AppError = Bad(2)
+    | keyword:fixed  variable:m  punctuation::  keyword:maybe  type:AppError  operator:=  variant:Bad  punctuation:(  number:2  punctuation:)
+121 |     flex all = new [AppError] at r
+    | keyword:flex  variable:all  operator:=  keyword:new  punctuation:[  type:AppError  punctuation:]  keyword:at  region:r
+122 |     all.add(a)
+    | variable:all  punctuation:.  field:add  punctuation:(  variable:a  punctuation:)
+123 |     all.add(errs.NoRoom)
+    | variable:all  punctuation:.  field:add  punctuation:(  module:errs  punctuation:.  variant:NoRoom  punctuation:)
+124 |     all.add(AppError.Usage("go" + "!" at r))
+    | variable:all  punctuation:.  field:add  punctuation:(  type:AppError  punctuation:.  variant:Usage  punctuation:(  string:"go"  operator:+  string:"!"  keyword:at  region:r  punctuation:)  punctuation:)
+125 |     fixed pair = [Empty, AppError.NoRoom]
+    | keyword:fixed  variable:pair  operator:=  punctuation:[  variant:Empty  punctuation:,  type:AppError  punctuation:.  variant:NoRoom  punctuation:]
+126 |     fixed one = when all.len > 2
+    | keyword:fixed  variable:one  operator:=  keyword:when  variable:all  punctuation:.  field:len  operator:>  number:2
+127 |         Bad(3)
+    | variant:Bad  punctuation:(  number:3  punctuation:)
+128 |     else
+    | keyword:else
+129 |         AppError.NoRoom
+    | type:AppError  punctuation:.  variant:NoRoom
+130 |     fi
+    | keyword:fi
+131 |     show(m, " ", all, " ", pair, " ", one)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  variable:all  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:,  string:" "  punctuation:,  variable:one  punctuation:)
+132 |     show(a == Empty, " ", Empty == a, " ", a != Bad(1), " ", pair[1] ~= AppError.NoRoom)
+    | builtin-fn:show  punctuation:(  variable:a  operator:==  variant:Empty  punctuation:,  string:" "  punctuation:,  variant:Empty  operator:==  variable:a  punctuation:,  string:" "  punctuation:,  variable:a  operator:!=  variant:Bad  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:[  number:1  punctuation:]  operator:~=  type:AppError  punctuation:.  variant:NoRoom  punctuation:)
+133 |     show(depth(One), depth(Two), depth(Three), " ", Top.One, " ", Middle.Two)
+    | builtin-fn:show  punctuation:(  task:depth  punctuation:(  variant:One  punctuation:)  punctuation:,  task:depth  punctuation:(  variant:Two  punctuation:)  punctuation:,  task:depth  punctuation:(  variant:Three  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Top  punctuation:.  variant:One  punctuation:,  string:" "  punctuation:,  type:Middle  punctuation:.  variant:Two  punctuation:)
+134 |     fixed some: Option<int> = Some(4)
+    | keyword:fixed  variable:some  punctuation::  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  variant:Some  punctuation:(  number:4  punctuation:)
+135 |     fixed c: Choice<int> = some
+    | keyword:fixed  variable:c  punctuation::  type:Choice  punctuation:<  type-builtin:int  punctuation:>  operator:=  variable:some
+136 |     fixed n: Counted = some
+    | keyword:fixed  variable:n  punctuation::  type:Counted  operator:=  variable:some
+137 |     show(c, " ", n, " ", choose(Option<text>.Some("t")), " ", Choice<int>.Both(1, 2), " ", Counted.Many(9))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:,  string:" "  punctuation:,  task:choose  punctuation:(  type:Option  punctuation:<  type-builtin:text  punctuation:>  punctuation:.  variant:Some  punctuation:(  string:"t"  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Choice  punctuation:<  type-builtin:int  punctuation:>  punctuation:.  variant:Both  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Counted  punctuation:.  variant:Many  punctuation:(  number:9  punctuation:)  punctuation:)
+138 |     each word in ["12", "-3", "ten"]
+    | keyword:each  variable:word  keyword:in  punctuation:[  string:"12"  punctuation:,  string:"-3"  punctuation:,  string:"ten"  punctuation:]
+139 |         match number(word)
+    | keyword:match  task:number  punctuation:(  variable:word  punctuation:)
+140 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+141 |             show(value)
+    | builtin-fn:show  punctuation:(  variable:value  punctuation:)
+142 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+143 |             show(e)
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:)
+144 |         fi
+    | keyword:fi
+145 |     fi
+    | keyword:fi
+146 |     fixed locked: OpenError = Locked
+    | keyword:fixed  variable:locked  punctuation::  type:OpenError  operator:=  variant:Locked
+147 |     fixed missing: OpenError = OpenError.NotFound
+    | keyword:fixed  variable:missing  punctuation::  type:OpenError  operator:=  type:OpenError  punctuation:.  variant:NotFound
+148 |     show(locked, " ", missing, " ", errs.Outer.Hidden, " ", errs.Outer.Shown)
+    | builtin-fn:show  punctuation:(  variable:locked  punctuation:,  string:" "  punctuation:,  variable:missing  punctuation:,  string:" "  punctuation:,  module:errs  punctuation:.  type:Outer  punctuation:.  variant:Hidden  punctuation:,  string:" "  punctuation:,  module:errs  punctuation:.  type:Outer  punctuation:.  variant:Shown  punctuation:)
+149 | fi
+    | keyword:fi

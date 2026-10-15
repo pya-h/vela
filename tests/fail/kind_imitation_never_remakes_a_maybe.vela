@@ -1,0 +1,14 @@
+; error: 12:30: expected type maybe Lamp, got maybe Light; Lamp imitates Light, but only a value of Light itself becomes one, never one inside another value, which would be remade; take it out first, or make the value with Lamp inside
+kind Light
+    Red
+fi
+
+kind Lamp::Light
+    Off
+fi
+
+task main()
+    fixed light: maybe Light = Red
+    fixed lamp: maybe Lamp = light
+    show(lamp)
+fi

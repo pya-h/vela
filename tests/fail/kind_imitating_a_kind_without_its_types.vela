@@ -1,0 +1,12 @@
+; error: 7:14: kind 'Option' takes a type, so name it, as in 'kind Choice::Option<int>' or 'kind Choice<T>::Option<T>'
+kind Option<T>
+    Empty
+    Some(value: T)
+fi
+
+kind Choice::Option
+    Many
+fi
+
+task main()
+fi

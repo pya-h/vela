@@ -1,0 +1,9 @@
+; error: 4:12: 'Count' is a type alias for int, which is no kind; a kind imitates only a kind
+alias Count => int
+
+kind Lamp::Count
+    Off
+fi
+
+task main()
+fi

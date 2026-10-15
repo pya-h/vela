@@ -1,0 +1,9 @@
+; error: 4:12: 'Inner' is private to module 'library'
+include kind_imitating_a_private_kind/library
+
+kind Mine::library.Inner
+    Shown
+fi
+
+task main()
+fi

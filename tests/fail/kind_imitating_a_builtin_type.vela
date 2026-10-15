@@ -1,0 +1,7 @@
+; error: 2:14: 'int' is no kind, and a kind imitates only a kind, as in 'kind Number::Other'
+kind Number::int
+    One
+fi
+
+task main()
+fi

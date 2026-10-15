@@ -1,0 +1,16 @@
+; error: 14:28: expected type Reply@s, got Note@r
+kind Note
+    Said(words: text)
+fi
+
+kind Reply::Note
+    Silent
+fi
+
+task main()
+    region r default
+    region s
+    fixed note = Said("a" + "b" at r)
+    fixed reply: Reply@s = note
+    show(reply)
+fi

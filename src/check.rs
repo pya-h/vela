@@ -1108,7 +1108,7 @@ impl Checker {
             if private {
                 self.private.insert(item.name().to_string());
                 if let Item::Kind(k) = item {
-                    self.private.extend(k.variants.iter().map(|v| qualify(module_of(&k.name), &v.tag)));
+                    self.private.extend(k.variants.iter().enumerate().map(|(i, v)| variant_name(k, i, v)));
                 }
             }
             // A name already taken is reported, and the declaration taking it
@@ -1134,9 +1134,11 @@ impl Checker {
                     if taken(&k.name, k.span) {
                         continue;
                     }
-                    for v in &k.variants {
-                        let full = qualify(module_of(&k.name), &v.tag);
-                        if taken(&full, v.span) {
+                    for (i, v) in k.variants.iter().enumerate() {
+                        let full = variant_name(k, i, v);
+                        // One it has from a kind it imitates is named through
+                        // it, by no name of the file (see `imitated_variant`).
+                        if i >= k.imitated && taken(&full, v.span) {
                             continue;
                         }
                         let info = VariantInfo { kind: k.name.clone(), variant: v.clone() };
@@ -1381,19 +1383,34 @@ impl Checker {
                     return err(k.span, format!("kind '{}' has no variants", k.name));
                 }
                 // A kind's own types are in scope while its variants are read,
-                // as a shape's are while its fields are.
+                // as a shape's are while its fields are, and the kinds it
+                // imitates, which they may be given.
                 self.enter_type_params(&k.types);
                 let payloads = k.variants.iter_mut().try_for_each(|v| self.check_fields(&mut v.payload));
+                let imitated = payloads.and_then(|()| k.imitates.iter_mut().try_for_each(|(ty, at)| {
+                    *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
+                    Ok(())
+                }));
                 self.type_params.clear();
-                payloads?;
+                imitated?;
                 if let Some(kind) = self.kinds.get_mut(&k.name) {
                     kind.variants = k.variants.clone();
+                    kind.imitates = k.imitates.clone();
                 }
             }
             // A macro whose name was refused has no value to compute.
             Item::Macro(m) if self.macros.contains_key(&m.name) => m.value = self.macro_value(&m.name, &mut Vec::new())?,
             Item::Macro(_) => {}
             Item::Task(t) => {
+                // `Kind.Tag(…)` makes a variant, so a shared method can't take
+                // the name of one its kind has from a kind it imitates, as it
+                // can't take one of its own (see `Parser::parse_kind`).
+                if let (Some(owner), Some(kind)) = (t.owner.as_ref().filter(|owner| owner.shared), t.owner_type().and_then(|kind| self.kinds.get(kind)))
+                    && let Some(variant) = kind.variants.iter().take(kind.imitated).find(|variant| variant.tag == owner.name)
+                {
+                    let from = kind.imitates.iter().find(|(_, at)| *at == variant.span).map_or(String::new(), |(ty, _)| format!(", from '{}', which it imitates", ty));
+                    return err(t.span, format!("'{0}' is already a variant of '{1}'{2}; '{1}.{0}(…)' makes the variant, so a shared method can't take its name", owner.name, unqualified(&kind.name), from));
+                }
                 self.check_header(t)?;
                 if t.name == "main" {
                     if let Some(param) = t.params.first() {
@@ -1839,7 +1856,7 @@ impl Checker {
         let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
         self.written_names.insert(key.clone(), written);
         self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
-        let made = KindDef { name: key.clone(), types: Vec::new(), given: types.clone(), variants: Vec::new(), span: source.span, private: source.private };
+        let made = KindDef { name: key.clone(), types: Vec::new(), given: types.clone(), variants: Vec::new(), span: source.span, private: source.private, imitates: Vec::new(), imitated: source.imitated };
         self.kinds.insert(key.clone(), made);
         self.making_shapes.push(key.clone());
         let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
@@ -5146,7 +5163,7 @@ impl Checker {
                 {
                     return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, subject));
                 }
-                let def = self.kinds.get(&applied.name).cloned().unwrap_or_else(|| KindDef { name: String::new(), types: Vec::new(), given: Vec::new(), variants: Vec::new(), span, private: false });
+                let def = self.kinds.get(&applied.name).cloned().unwrap_or_else(|| KindDef { name: String::new(), types: Vec::new(), given: Vec::new(), variants: Vec::new(), span, private: false, imitates: Vec::new(), imitated: 0 });
                 let variant = def.variants.iter().find(|v| v.tag == *tag).ok_or_else(|| Error::at(span, format!("kind '{}' has no variant '{}'", applied.name, tag)))?;
                 if binds.len() != variant.payload.len() {
                     let what = if in_case { format!("case '{}'", tag) } else { format!("'{}'", tag) };
@@ -5484,6 +5501,7 @@ impl Checker {
             ExprKind::Pairs(pairs) => all(&mut pairs.iter().flat_map(|(key, value)| [key, value])),
             ExprKind::Repeat { value, .. }
             | ExprKind::Wrap(value)
+            | ExprKind::Widen(value)
             | ExprKind::Kept { value, .. }
             | ExprKind::Shortcut { value, .. }
             | ExprKind::Spread(value)
@@ -5623,7 +5641,7 @@ impl Checker {
             }
             ExprKind::Invoke { callee, .. } => format!("{}(…)", self.value_text(callee)),
             ExprKind::MethodCall { name, .. } => format!("….{}(…)", name),
-            ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Kept { value, .. } => self.value_text(value),
+            ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Widen(value) | ExprKind::Kept { value, .. } => self.value_text(value),
             ExprKind::Lookup(base, index) => match index.kind {
                 ExprKind::IntLit(n) => format!("{}[#{}]", self.value_text(base), n),
                 _ => format!("{}[#…]", self.value_text(base)),
@@ -8339,6 +8357,8 @@ impl Checker {
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
+            // Nor `Widen` (see `Checker::widen`).
+            ExprKind::Widen(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a widened value has no type")),
             // `check_method_call` above has made this the call it is, unless the
             // value it is called on has no type it could work out, which is
             // what says which method this is (see `Type::Unknown`).
@@ -8975,7 +8995,29 @@ impl Checker {
                 _ => {}
             }
         }
-        join_types(a, b)
+        // A value of a kind beside one of a kind imitating it: both are values
+        // of the second (see `widen`), alone, in a `maybe`, or as a success.
+        if let Some(joined) = join_types(a, b) {
+            return Some(joined);
+        }
+        let value = |ty: &Type| match ty {
+            Type::Maybe(inner) | Type::Or(inner, _) => inner.as_ref().clone(),
+            other => other.clone(),
+        };
+        // `ty` with its value of type `value(ty)` a value of `into` instead.
+        let into = |ty: &Type, into: &Type| match ty {
+            Type::Maybe(_) => Type::Maybe(Box::new(into.clone())),
+            Type::Or(_, error) => Type::Or(Box::new(into.clone()), error.clone()),
+            _ => into.clone(),
+        };
+        let (left, right) = (value(a), value(b));
+        if self.widens(&left, &right) {
+            return join_types(&into(a, &in_region_of(&right, &left)), b);
+        }
+        if self.widens(&right, &left) {
+            return join_types(a, &into(b, &in_region_of(&left, &right)));
+        }
+        None
     }
 
     /// The type a kind given types takes for one of them, `x` beside `y`
@@ -10317,6 +10359,11 @@ impl Checker {
             (ExprKind::Repeat { value, .. }, Type::Array(items, _)) => self.settle_copies(value, items),
             (ExprKind::Tuple(values), Type::Tuple(items)) => values.iter_mut().zip(items).try_for_each(|(value, item)| self.settle_copies(value, item)),
             (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => self.settle_copies(inner, value),
+            // A value of a kind another kind imitates goes where that one is.
+            (ExprKind::Widen(inner), _) => match inner.ty.as_ref().map(|from| in_region_of(from, expected)) {
+                Some(into) => self.settle_copies(inner, &into),
+                None => Ok(()),
+            },
             // A `when` or `match` giving a value: each branch's value goes
             // where the whole does.
             (ExprKind::Choice(stmt), _) => self.settle_branch_values(stmt, expected),
@@ -10645,6 +10692,17 @@ impl Checker {
                 | BinaryOp::Or => Type::Bool,
                 _ => Type::Unknown,
             });
+        }
+        // A value of a kind compared with one of a kind imitating it is made
+        // a value of the second first (see `widen`).
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar) {
+            if self.widens(&lt, &rt) {
+                self.coerce(l, &in_region_of(&rt, &lt))?;
+                lt = l.ty.clone().unwrap_or(lt);
+            } else if self.widens(&rt, &lt) {
+                self.coerce(r, &in_region_of(&lt, &rt))?;
+                rt = r.ty.clone().unwrap_or(rt);
+            }
         }
         if op == BinaryOp::Add && (matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_))) {
             if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
@@ -12895,6 +12953,11 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return self.settle_copies(expr, expected);
         }
+        // A value of a kind where a kind imitating it is expected becomes a
+        // value of that kind, alone, in a maybe, as a success or as an error.
+        if self.widen(expr, &actual, expected) {
+            return self.coerce(expr, expected);
+        }
         // A plain task value where a lambda that keeps what it uses is
         // expected: it keeps only the task, in the region the type names.
         if let (Type::Task(task), Type::Closure(closure)) = (&actual, expected)
@@ -13010,7 +13073,93 @@ impl Checker {
                 "expected type int, got float: an int raised to an int that may be negative is a float; raise it to a unit, as in 'n ** unit(k)', or to a constant 0 or more, as in 'n ** 2', for an int",
             );
         }
+        // A value of an imitated kind inside another value stays as it is.
+        if let Some((from, to)) = self.widened_inside(&actual, expected) {
+            return err(
+                expr.span,
+                format!("expected type {}, got {}; {} imitates {}, but only a value of {} itself becomes one, never one inside another value, which would be remade; take it out first, or make the value with {} inside", expected, actual, to, from, from, to),
+            );
+        }
+        // The other way round: a kind is no kind imitating it.
+        if self.widens(expected, &actual) {
+            return err(
+                expr.span,
+                format!("expected type {0}, got {1}; {1} imitates {0}, so a value of {0} goes where {1} is expected, but not the other way: a value of {1} may be a variant {0} doesn't have, and a 'match' makes one from the other", expected, actual),
+            );
+        }
         err(expr.span, format!("expected type {}, got {}{}", expected, actual, mismatch_hint(&actual, expected)))
+    }
+
+    /// Makes `expr`, of type `actual`, a value of the kind `expected` names,
+    /// alone, in a `maybe`, as the success of a `T ~ E` or, for a `fail e`, as
+    /// its error, where that kind imitates the value's kind (see
+    /// `ExprKind::Widen`). Whether it did.
+    fn widen(&mut self, expr: &mut Expr, actual: &Type, expected: &Type) -> bool {
+        let target = match expected {
+            _ if self.widens(actual, expected) => expected,
+            Type::Maybe(inner) if self.widens(actual, inner) => inner,
+            Type::Or(value, _) if self.widens(actual, value) => value,
+            Type::Or(_, error) => {
+                let (Type::Fail(given), ExprKind::Fail(inner)) = (actual, &mut expr.kind) else { return false };
+                if !self.widens(given, error) {
+                    return false;
+                }
+                let span = inner.span;
+                let value = std::mem::replace(&mut **inner, Expr::new(ExprKind::NoneLit, span));
+                **inner = Expr { kind: ExprKind::Widen(Box::new(value)), span, ty: Some((**error).clone()) };
+                expr.ty = Some(Type::Fail(error.clone()));
+                return true;
+            }
+            _ => return false,
+        };
+        let value = std::mem::replace(expr, Expr::new(ExprKind::NoneLit, expr.span));
+        *expr = Expr { kind: ExprKind::Widen(Box::new(value)), span: expr.span, ty: Some(target.clone()) };
+        true
+    }
+
+    /// The kinds of the first value inside `from` that would have to become a
+    /// value of the kind beside it in `to`, which imitates it, for `from` to be
+    /// a `to`: a `maybe`'s, a slice's, an array's or a map's, a pointer's, or a
+    /// tuple's item. Nothing remakes a value inside another (see `widen`).
+    fn widened_inside(&self, from: &Type, to: &Type) -> Option<(Type, Type)> {
+        let found = |a: &Type, b: &Type| if self.widens(a, b) { Some((a.without_regions(), b.without_regions())) } else { self.widened_inside(a, b) };
+        match (from, to) {
+            (Type::Maybe(a), Type::Maybe(b)) | (Type::Slice(a, _), Type::Slice(b, _)) | (Type::Ptr(a, _), Type::Ptr(b, _)) | (Type::Array(a, _), Type::Array(b, _)) => found(a, b),
+            (Type::Map(k, a, _), Type::Map(j, b, _)) => found(k, j).or_else(|| found(a, b)),
+            (Type::Tuple(a), Type::Tuple(b)) if a.len() == b.len() => a.iter().zip(b).find_map(|(a, b)| found(a, b)),
+            _ => None,
+        }
+    }
+
+    /// Whether a value of type `from` goes where `to` is expected by becoming
+    /// a value of it: both are kinds, `to` imitates `from`, directly or through
+    /// kinds it imitates, and `from` lives where `to` does.
+    fn widens(&self, from: &Type, to: &Type) -> bool {
+        let (Some(source), Some(target)) = (self.kind_made(from), self.kind_made(to)) else { return false };
+        fits_regions(&in_region_of(to, from), to) && self.imitates(&target, &source, 0)
+    }
+
+    /// The kind a value of type `ty` is, as the kind it is made from and the
+    /// types it is given (none for a kind that takes none), with every kind
+    /// in those types written the same way. `None` when `ty` is no kind.
+    fn kind_made(&self, ty: &Type) -> Option<(String, Vec<Type>)> {
+        match self.unmade(ty) {
+            Type::Named(name, _) if self.kinds.contains_key(&name) => Some((name, Vec::new())),
+            Type::Applied(applied) if self.kinds.contains_key(&applied.name) => Some((applied.name, applied.types.iter().map(Type::without_regions).collect())),
+            _ => None,
+        }
+    }
+
+    /// Whether kind `to` (as `kind_made` gives it) imitates kind `from`, as
+    /// the kinds it imitates are written, with the types it is given in place
+    /// of the ones it takes, or through one of them.
+    fn imitates(&self, to: &(String, Vec<Type>), from: &(String, Vec<Type>), depth: usize) -> bool {
+        let Some(kind) = self.kinds.get(&to.0).filter(|_| depth <= MAX_TYPE_DEPTH) else { return false };
+        let given: HashMap<&str, &Type> = kind.types.iter().map(|param| param.name.as_str()).zip(&to.1).collect();
+        kind.imitates.iter().any(|(base, _)| {
+            let base = base.map_params(&mut |param| given.get(param).map(|ty| (*ty).clone()));
+            self.kind_made(&base).is_some_and(|base| base == *from || self.imitates(&base, from, depth + 1))
+        })
     }
 
     /// Gives a call of a generic task the types no argument named, from the type
@@ -13982,6 +14131,7 @@ impl Checker {
             | ExprKind::Field(inner, _)
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
+            | ExprKind::Widen(inner)
             | ExprKind::Copy { value: inner, .. }
             | ExprKind::Shortcut { value: inner, .. } => self.substitute_expr(inner, given, made),
             ExprKind::Pairs(pairs) => pairs.iter_mut().try_for_each(|(key, value)| {
@@ -16090,7 +16240,7 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
     let each = |values: &[Expr], f: &mut dyn FnMut(&Expr) -> bool| values.iter().for_each(|value| visit_expr(value, f));
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::TaskValue(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Closure { .. } => {}
-        ExprKind::Kept { value: inner, .. } | ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => visit_expr(inner, f),
+        ExprKind::Kept { value: inner, .. } | ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => visit_expr(inner, f),
         ExprKind::New { value, .. } | ExprKind::Copy { value, .. } | ExprKind::Shortcut { value, .. } | ExprKind::ToText { value, .. } => visit_expr(value, f),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             visit_expr(a, f);
@@ -16694,6 +16844,28 @@ const GROUP_ITEM: char = '#';
 
 fn qualify(module: &str, name: &str) -> String {
     if module.is_empty() { name.to_string() } else { format!("{}{}{}", module, MODULE_SEPARATOR, name) }
+}
+
+/// `ty`, a shape or a kind, in the region `of` is in: `AppError@r` for
+/// `AppError` and `ParseErr@r`.
+fn in_region_of(ty: &Type, of: &Type) -> Type {
+    let region = match of {
+        Type::Named(_, region) => region.clone(),
+        Type::Applied(applied) => applied.region.clone(),
+        _ => None,
+    };
+    match ty {
+        Type::Named(name, _) => Type::Named(name.clone(), region),
+        Type::Applied(applied) => Type::Applied(Box::new(Applied { region, ..(**applied).clone() })),
+        other => other.clone(),
+    }
+}
+
+/// The name in the program of `variant`, the `i`th of kind `kind`: its tag in
+/// the kind's module, or, for one the kind has from a kind it imitates, a
+/// name through the kind (see `ast::imitated_variant`).
+fn variant_name(kind: &KindDef, i: usize, variant: &Variant) -> String {
+    if i < kind.imitated { imitated_variant(&kind.name, &variant.tag) } else { qualify(module_of(&kind.name), &variant.tag) }
 }
 
 fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {

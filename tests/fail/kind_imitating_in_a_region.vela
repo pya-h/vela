@@ -1,0 +1,11 @@
+; error: 6:13: a kind has the variants of the kinds it imitates, which name no region; leave out '@r'
+kind Note
+    Said(words: text)
+fi
+
+kind Reply::Note@r
+    Silent
+fi
+
+task main()
+fi

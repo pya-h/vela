@@ -1,0 +1,36 @@
+  1 | ; A kind another file imitates, and one it keeps to itself, which a public
+    | comment:; A kind another file imitates, and one it keeps to itself, which a public
+  2 | ; kind of its own imitates.
+    | comment:; kind of its own imitates.
+  4 | kind Missing
+    | keyword:kind  type:Missing
+  5 |     NoFile(name: text)
+    | variant:NoFile  punctuation:(  field:name  punctuation::  type-builtin:text  punctuation:)
+  6 |     NoRoom
+    | variant:NoRoom
+  7 | fi
+    | keyword:fi
+  9 | priv kind Inner
+    | keyword:priv  keyword:kind  type:Inner
+ 10 |     Hidden
+    | variant:Hidden
+ 11 | fi
+    | keyword:fi
+ 13 | kind Outer::Inner
+    | keyword:kind  type:Outer  punctuation::  punctuation::  type:Inner
+ 14 |     Shown
+    | variant:Shown
+ 15 | fi
+    | keyword:fi
+ 17 | task find(r: region, name: text@r) -> int ~ Missing@r
+    | keyword:task  task:find  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:name  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:Missing  operator:@  region:r
+ 18 |     when name == "none"
+    | keyword:when  parameter:name  operator:==  string:"none"
+ 19 |         <- fail NoFile(name)
+    | keyword:<-  keyword:fail  variant:NoFile  punctuation:(  parameter:name  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- name.len
+    | keyword:<-  parameter:name  punctuation:.  field:len
+ 22 | fi
+    | keyword:fi

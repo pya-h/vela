@@ -469,6 +469,8 @@ pub fn input_error_kind() -> KindDef {
         ],
         span,
         private: false,
+        imitates: Vec::new(),
+        imitated: 0,
     }
 }
 
@@ -491,6 +493,8 @@ pub fn parse_error_kind() -> KindDef {
         variants: vec![variant(NOT_A_NUMBER), variant(TOO_LARGE)],
         span,
         private: false,
+        imitates: Vec::new(),
+        imitated: 0,
     }
 }
 
@@ -567,6 +571,15 @@ pub fn method_name(owner: &str, method: &str) -> String {
     format!("{}__on__{}", owner, method)
 }
 
+/// The name in the program of variant `tag` of kind `kind` (its name in the
+/// program) when the kind has it because it imitates another, as in
+/// `kind AppError::ParseErr`: `AppError__Empty`. Its tag alone names the
+/// variant of the kind it comes from, and no Vela name holds `__`, so this
+/// is no other name; the kind's module stays in front (`errs.AppError__Empty`).
+pub fn imitated_variant(kind: &str, tag: &str) -> String {
+    format!("{}__{}", kind, tag)
+}
+
 /// The name of the task the `n`th lambda of a file becomes: `lambda__1`. No
 /// Vela name holds `__`, so it can be no declaration of a program, and a
 /// module's path stays in front of it (`ops.lambda__1`).
@@ -631,7 +644,7 @@ pub fn method_parts(name: &str) -> Option<(&str, &str)> {
 pub fn without_effects(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
-        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Wrap(inner) | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
+        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
         ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or, a, b) | ExprKind::Range(a, b) => {
             without_effects(a) && without_effects(b)
         }
@@ -946,6 +959,41 @@ impl Type {
             Type::Fail(error) => Type::Fail(boxed(error)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_names(f)).collect()),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_names(f)).collect()),
+            other => other.clone(),
+        }
+    }
+
+    /// The type with each shape or kind name `f` gives a type for replaced by
+    /// that type, in the region the name is written in, if any: `T` replaced by
+    /// `[int]` in `maybe T` gives `maybe [int]`. Names `f` gives none for, and
+    /// the types given to them, are looked at as any part of the type.
+    pub fn replace_names(&self, f: &dyn Fn(&str) -> Option<Type>) -> Type {
+        let boxed = |t: &Type| Box::new(t.replace_names(f));
+        match self {
+            Type::Named(name, region) => match f(name) {
+                Some(ty) => match region {
+                    Some(region) => ty.map_regions_of_names(&mut |_| Some(region.clone())),
+                    None => ty,
+                },
+                None => self.clone(),
+            },
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(|ty| ty.replace_names(f)).collect(),
+                region: applied.region.clone(),
+            })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.replace_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.replace_names(f) })),
+            Type::Closure(closure) => closure.with_task(|task| task.replace_names(f)),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
+            Type::Range(inner) => Type::Range(boxed(inner)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
+            Type::Fail(error) => Type::Fail(boxed(error)),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.replace_names(f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.replace_names(f)).collect()),
             other => other.clone(),
         }
     }
@@ -1409,6 +1457,10 @@ pub enum ExprKind {
         types: Vec<TypeArg>,
     },
     Range(Box<Expr>, Box<Expr>),
+    /// A value of a kind that goes where a kind imitating it is expected
+    /// (`kind AppError::ParseErr`), made a value of that kind, its type: the
+    /// same variant, carrying the same values. Only the checker makes one.
+    Widen(Box<Expr>),
     /// `fail e`: an error value, which fits a `T ~ E`.
     Fail(Box<Expr>),
     /// A plan B, `value { … }`: the value extracted from a `maybe` or a
@@ -2588,6 +2640,16 @@ pub struct KindDef {
     pub span: Span,
     /// `priv kind`: only its own file can name it or its variants.
     pub private: bool,
+    /// `kind AppError::ParseErr & IoErr`: the kinds it imitates, each with
+    /// where it is written, whose variants it has before its own. The resolver
+    /// writes each as the program names it and puts their variants in
+    /// `variants` (see `modules::imitate`); the checker reads a `T` a kind
+    /// taking types gives one as that type (`kind Choice<T>::Option<T>`).
+    pub imitates: Vec<(Type, Span)>,
+    /// How many of `variants`, from the first, come from the kinds it imitates.
+    /// Each is named in the program by `imitated_variant`, not by its tag,
+    /// which names the variant of the kind it comes from.
+    pub imitated: usize,
 }
 
 /// `#P = 3.14159`: a name for a value the compiler computes, outside every

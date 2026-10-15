@@ -511,10 +511,19 @@
         <code>similar</code>, <code>shown</code>, and <code>ordered</code>, where Rust has traits and <code>impl</code> blocks, C++ concepts (or
         nothing, and errors deep inside a template), and Go interfaces used as constraints. That makes generic code
         readable and its errors short, and it is the limit too: there is no way to ask for a type that can be added, or
-        for one that has a method, so a task that needs more than the five words takes concrete types. A kind can't take
-        types yet, where Rust's <code>enum</code> and C++'s templates can. Go's generics
+        for one that has a method, so a task that needs more than the five words takes concrete types. A kind takes
+        types too (<code>kind Option&lt;T&gt;</code>), as Rust's <code>enum</code> does. Go's generics
         arrived late and Vela's are small on purpose; C++ and Rust go much further, with the compile times and the error
         messages that come with it.
+      </p>
+      <p>
+        A kind can <a href="vela.html#kind-imitation">imitate</a> another, having all its variants before its own
+        (<code>kind AppError::ParseErr</code>), and a value of the kind imitated goes where the imitating one is
+        expected, so a task can send on another task's failure as its own. Rust gets there by wrapping one
+        <code>enum</code> in a variant of another and writing a <code>From</code> conversion for <code>?</code>,
+        TypeScript by joining union types (<code>type AppError = ParseErr | Io</code>), and OCaml with polymorphic
+        variants; Go and C have nothing like it, and Java and C# reach for a class hierarchy, whose open set of
+        subclasses no <code>switch</code> can check for every case.
       </p>
       <p>
         Vela's methods are written inside the shape or kind they belong to, as in a C++, Swift, or Kotlin class, but with

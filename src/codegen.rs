@@ -295,6 +295,7 @@ impl Generator {
         self.gen_item_helpers(&used);
         self.gen_map_helpers(&used);
         self.gen_compares(&used)?;
+        self.gen_widens(&used)?;
         // A slice made of another whose items hold anything in a region is
         // copied as `copy()` copies (see `gen_new`).
         let mut copied = used.copied.list.clone();
@@ -1265,6 +1266,37 @@ impl Generator {
             }
             _ => false,
         }
+    }
+
+    /// For each two kinds a value goes from and to (see `ExprKind::Widen`),
+    /// `vela__widen__A__into__B`, which gives the variant of the second that
+    /// has the name of the first's, carrying the same values.
+    fn gen_widens(&mut self, used: &UsedTypes) -> Result<()> {
+        for (from, to) in &used.widened {
+            let (Type::Named(source, _), Type::Named(target, _)) = (from, to) else {
+                return Err(Error::internal(format!("a value of {} made one of {}", from, to)));
+            };
+            let Some(kind) = self.kinds.get(source).cloned() else { return Err(Error::internal(format!("no kind '{}' to widen", source))) };
+            self.w.open(&format!("static {} {}({} v)", c_type(to), widen_helper(from, to), c_type(from)));
+            self.w.open("switch (v.tag)");
+            let last = kind.variants.len().saturating_sub(1);
+            for (i, variant) in kind.variants.iter().enumerate() {
+                // The last one is the rest, so every way through gives a value.
+                let label = if i == last { "default:".to_string() } else { format!("case {}:", tag_value(source, &variant.tag)) };
+                let value = if variant.payload.is_empty() {
+                    format!("({}){{ .tag = {} }}", mangle(target), tag_value(target, &variant.tag))
+                } else {
+                    let tag = c_ident(&variant.tag);
+                    let fields: Vec<String> = variant.payload.iter().map(|field| format!(".{0} = v.data.{1}.{0}", c_ident(&field.name), tag)).collect();
+                    format!("({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }}", mangle(target), tag_value(target, &variant.tag), tag, fields.join(", "))
+                };
+                self.w.line(&label);
+                self.w.line(&format!("    return {};", value));
+            }
+            self.w.close();
+            self.w.close();
+        }
+        Ok(())
     }
 
     /// The body of `vela__same__K` or `vela__similar__K` (by `how`) for the
@@ -3236,6 +3268,7 @@ impl Generator {
             // The error value itself; `Wrap` makes it part of a `T ~ E`.
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
+            ExprKind::Widen(inner) => self.gen_widen(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Choice(stmt) => self.gen_choice(e, stmt),
             ExprKind::LoopValue(value) => self.gen_loop_value(e, value),
@@ -3857,6 +3890,14 @@ impl Generator {
     }
 
     /// A value becoming part of a `maybe` or `T ~ E`, the type of `e`.
+    /// A value of a kind made a value of a kind imitating it (see
+    /// `ExprKind::Widen`), by the function that does so for the two (see
+    /// `gen_widens`).
+    fn gen_widen(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
+        let helper = widen_helper(inner.ty()?, e.ty()?);
+        Ok(format!("{}({})", helper, self.gen_expr(inner)?))
+    }
+
     fn gen_wrap(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
         let target = e.ty()?;
         let ctype = c_type(target);
@@ -4470,7 +4511,7 @@ fn has_prelude(e: &Expr) -> bool {
         // a statement works it out (see `work_out_none`).
         ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && !without_effects(inner) => true,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
         }
         ExprKind::MapOp { map, key: None, .. } => has_prelude(map),
@@ -4567,6 +4608,9 @@ struct UsedTypes {
     /// The tasks named where a lambda that keeps what it uses is expected,
     /// each with the C type of its value (see `ExprKind::Kept`).
     kept_tasks: Vec<(String, String)>,
+    /// Each kind a value goes from, with the kind imitating it that it goes
+    /// to (see `ExprKind::Widen`), without regions, in the order first noted.
+    widened: Vec<(Type, Type)>,
 }
 
 /// Types in the order they were first noted, with a set beside them so that
@@ -4657,6 +4701,7 @@ impl UsedTypes {
             task_words: HashSet::new(),
             task_values: Vec::new(),
             kept_tasks: Vec::new(),
+            widened: Vec::new(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -5041,6 +5086,15 @@ impl UsedTypes {
             }
             ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
+            ExprKind::Widen(inner) => {
+                if let (Some(from), Some(to)) = (&inner.ty, &e.ty) {
+                    let pair = (from.without_regions(), to.without_regions());
+                    if !self.widened.contains(&pair) {
+                        self.widened.push(pair);
+                    }
+                }
+                self.expr(inner)
+            }
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::LoopValue(value) => self.block(std::slice::from_ref(&value.stmt)),
@@ -5242,7 +5296,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         // working it out does (see `work_out_none`).
         ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && without_effects(inner) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
@@ -5398,7 +5452,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
-        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
+        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => changes_nothing(inner),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
         _ => false,
@@ -5671,6 +5725,12 @@ fn lookup_key(ty: &Type) -> Type {
 
 /// The C name of a generated helper for copies of values of type `ty`:
 /// `vela__copied__ptr__n_Node`, `vela__fix__text`.
+/// The C name of the function making a value of kind `from` one of kind `to`,
+/// which imitates it (see `Generator::gen_widens`).
+fn widen_helper(from: &Type, to: &Type) -> String {
+    format!("vela__widen__{}__into__{}", type_word(&from.without_regions()), type_word(&to.without_regions()))
+}
+
 fn copy_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_word(&ty.without_regions()))
 }

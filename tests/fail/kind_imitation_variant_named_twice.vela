@@ -1,0 +1,13 @@
+; error: 9:5: 'Green' is already a variant of 'Lamp', which has it from 'Light', imitated at 7:12
+kind Light
+    Red
+    Green
+fi
+
+kind Lamp::Light
+    Off
+    Green
+fi
+
+task main()
+fi

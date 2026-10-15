@@ -76,7 +76,9 @@ three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and one that never e
 (`LoopResult` of `std/loops`: it never ran, `break = v` stopped it, its final pass ended with `continue`, or its
 last line failed). Kinds take types as
 shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
-`Option<int>.None`. `block … fi` runs
+`Option<int>.None`. A kind can imitate others, `kind OrderError::ReadError & files.FileError`: it has all their
+variants before its own, named through it (`OrderError.Empty`), and a value of one of them goes where an
+`OrderError` is expected, as a failure a task sends on does. `block … fi` runs
 statements in a block of their own.
 
 ```

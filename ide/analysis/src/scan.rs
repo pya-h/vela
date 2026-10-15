@@ -155,6 +155,78 @@ pub(crate) struct Symbol {
     /// is `flex` for one any code may change. A shared method (`shared
     /// new(…)`), called on the shape's or kind's name, has `intro` `shared`.
     pub shared: bool,
+    /// For a kind, the kinds it imitates, as written after its `::`
+    /// (`kind AppError::ParseErr & files.FileError`), without the types given
+    /// them: their variants are its variants too (see `kind_variants`).
+    pub bases: Vec<String>,
+}
+
+/// The names of the kinds a kind imitates, from position `p`, just after its
+/// name: what follows its `::` (past the types it takes, if any), each name
+/// with its module's name in front when it has one, without the types given.
+fn imitated_names(tokens: &Tokens, p: usize) -> Vec<String> {
+    let mut q = p;
+    // `kind Choice<T>::…`: the types the kind takes come first.
+    if tokens.token(q) == Some(&Token::Lt) {
+        while !matches!(tokens.token(q), None | Some(Token::Gt | Token::Newline | Token::Eof)) {
+            q += 1;
+        }
+        q += 1;
+    }
+    if tokens.token(q) != Some(&Token::Colon) || tokens.token(q + 1) != Some(&Token::Colon) {
+        return Vec::new();
+    }
+    q += 2;
+    let mut names = Vec::new();
+    let mut depth = 0usize;
+    let mut name = String::new();
+    while let Some(token) = tokens.token(q) {
+        match token {
+            Token::Newline | Token::Eof => break,
+            Token::Lt => depth += 1,
+            Token::Gt => depth = depth.saturating_sub(1),
+            Token::Ident(word) if depth == 0 => name.push_str(word),
+            Token::Dot if depth == 0 => name.push(MODULE_SEPARATOR),
+            Token::Amp if depth == 0 => names.push(std::mem::take(&mut name)),
+            _ => {}
+        }
+        q += 1;
+    }
+    names.push(name);
+    names.retain(|name| !name.is_empty());
+    names
+}
+
+/// The variants of kind `kind` (an index into `symbols`): those it has from the
+/// kinds it imitates first, in order, then its own. `global` finds a kind by
+/// its name in this file (see `Symbol::bases`); a kind of another module names
+/// the kinds it imitates as its own module does, which this file writes with
+/// that module's name in front.
+pub(crate) fn kind_variants(symbols: &[Symbol], kind: usize, global: &dyn Fn(&str) -> Option<usize>) -> Vec<usize> {
+    let mut variants = Vec::new();
+    let mut through = Vec::new();
+    collect_variants(symbols, kind, global, &mut variants, &mut through);
+    variants
+}
+
+fn collect_variants(symbols: &[Symbol], kind: usize, global: &dyn Fn(&str) -> Option<usize>, variants: &mut Vec<usize>, through: &mut Vec<usize>) {
+    // A kind imitating itself is the compiler's to report; here it ends.
+    if through.contains(&kind) {
+        return;
+    }
+    let Some(symbol) = symbols.get(kind) else { return };
+    through.push(kind);
+    for base in &symbol.bases {
+        let written = match (symbol.module, symbol.name.rsplit_once(MODULE_SEPARATOR)) {
+            (Some(_), Some((module, _))) if !base.contains(MODULE_SEPARATOR) => format!("{}{}{}", module, MODULE_SEPARATOR, base),
+            _ => base.clone(),
+        };
+        let found = symbols.iter().position(|s| s.kind == SymbolKind::Kind && s.name == written).filter(|_| symbol.module.is_some()).or_else(|| global(&written));
+        if let Some(base) = found {
+            collect_variants(symbols, base, global, variants, through);
+        }
+    }
+    variants.extend(symbols.iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.parent == Some(kind)).map(|(id, _)| id));
 }
 
 /// A module the file includes.
@@ -922,7 +994,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let private = tokens.before(p) == Some(&Token::Priv)
             || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv)
             || (native && tokens.before(p - 2) == Some(&Token::Priv));
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false, shared: false });
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false, shared: false, bases: Vec::new() });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -995,11 +1067,14 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 blocks.push(block);
                 if tokens.ident(p + 1).is_some() {
                     // A shape's line holds the types it takes, if any; a
-                    // task's holds its parameters and results too.
-                    let detail = if block == Block::Kind { String::new() } else { tokens.text_after(p + 1, never) };
+                    // task's holds its parameters and results too, and a
+                    // kind's the kinds it imitates.
+                    let bases = if block == Block::Kind { imitated_names(&tokens, p + 2) } else { Vec::new() };
+                    let detail = if block == Block::Kind && bases.is_empty() { String::new() } else { tokens.text_after(p + 1, never) };
                     let id = declare(&mut symbols, p + 1, kind, detail, None);
                     if let Some(symbol) = symbols.get_mut(id) {
                         symbol.range.start = tokens.range(p).start;
+                        symbol.bases = bases;
                     }
                     item = Some(id);
                     // `task first<T: ordered>(…)`: the types the task takes,
@@ -1857,7 +1932,7 @@ impl<'a> Classifier<'a> {
         if before == Some(&Token::Dot)
             && let Some(kind) = self.kind_before()
         {
-            let variant = self.symbols.iter().position(|s| s.kind == SymbolKind::Variant && s.parent == Some(kind) && unqualified(&s.name) == name);
+            let variant = kind_variants(&self.symbols, kind, &|written| self.global(written, &[SymbolKind::Kind])).into_iter().find(|&id| self.symbols.get(id).is_some_and(|s| unqualified(&s.name) == name));
             // `Mode.pick` with no `(`: a shared method as a value, a decorator or a wrapper.
             if variant.is_none()
                 && let Some(method) = self.symbols.iter().position(|s| s.kind == SymbolKind::Method && s.shared && s.parent == Some(kind) && s.name == name)
@@ -2139,7 +2214,7 @@ impl<'a> Classifier<'a> {
         // the case may give its value on the same line: `case Ok v = v * 2`.
         if intro == Some("case") {
             let visible = range.end..tokens.source.len();
-            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
+            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false, bases: Vec::new() });
             let id = self.symbols.len() - 1;
             if let Some(scope) = self.scopes.last_mut() {
                 scope.variables.push(id);
@@ -2207,7 +2282,7 @@ impl<'a> Classifier<'a> {
         };
         let from = joined.or(item_end).map_or(line_end, |end| tokens.range(end).end);
         let visible = from..tokens.source.len();
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false, bases: Vec::new() });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);

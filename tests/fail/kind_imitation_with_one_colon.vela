@@ -1,0 +1,11 @@
+; error: 6:10: a kind imitates another with '::' after its name, as in 'kind Lamp::Other'
+kind Light
+    Red
+fi
+
+kind Lamp:Light
+    Off
+fi
+
+task main()
+fi

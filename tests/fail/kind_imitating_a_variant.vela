@@ -1,0 +1,11 @@
+; error: 6:12: 'Light.Red' is a variant, not a kind; a kind imitates a kind, as in 'kind Lamp::Other'
+kind Light
+    Red
+fi
+
+kind Lamp::Light.Red
+    Off
+fi
+
+task main()
+fi

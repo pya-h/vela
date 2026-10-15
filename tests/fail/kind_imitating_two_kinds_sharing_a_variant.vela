@@ -1,0 +1,16 @@
+; error: 11:22: 'Red' is a variant of 'Paint', and of 'Light' too, which 'Colour' also imitates; each variant of a kind has a name of its own
+kind Light
+    Red
+fi
+
+kind Paint
+    Red
+    Blue
+fi
+
+kind Colour::Light & Paint
+    Black
+fi
+
+task main()
+fi

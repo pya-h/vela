@@ -1,0 +1,7 @@
+; error: 2:12: kind 'Loop' can't imitate itself
+kind Loop::Loop
+    One
+fi
+
+task main()
+fi

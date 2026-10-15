@@ -1,0 +1,15 @@
+; error: 10:13: kinds can't imitate one another in a circle: First -> Second -> Third -> First
+kind First::Second
+    One
+fi
+
+kind Second::Third
+    Two
+fi
+
+kind Third::First
+    Three
+fi
+
+task main()
+fi

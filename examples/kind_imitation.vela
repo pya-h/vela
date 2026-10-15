@@ -1,0 +1,63 @@
+; Layered errors: a kind imitates another to have all its variants, adds its
+; own, and takes the other's failures as its own.
+kind ReadError
+    Empty
+    NotANumberAt(column: int)
+fi
+
+kind OrderError::ReadError
+    TooMany(count: int)
+    Closed
+fi
+
+task read_count(line: text@r) -> int ~ ReadError
+    when line.len == 0
+        <- fail Empty
+    fi
+    flex count = 0
+    each i in 0..line.len
+        fixed digit = int(line[i]) - int('0')
+        when digit < 0 or digit > 9
+            <- fail NotANumberAt(i + 1)
+        fi
+        count = count * 10 + digit
+    fi
+    <- count
+fi
+
+task order(r: region, line: text@r, open: bool) -> int ~ OrderError
+    when not open
+        <- fail Closed
+    fi
+    ; A ReadError is an OrderError too, so it goes out as one.
+    fixed count = read_count(line) { failure e
+        <- fail e
+    }
+    when count > 12
+        <- fail TooMany(count)
+    fi
+    <- count
+fi
+
+; Every variant of an OrderError, its ReadError ones included.
+task said(r: region default, e: OrderError) -> text@r
+    <- match e
+    case Empty = "nothing written"
+    case NotANumberAt column = "not a number at column {column}"
+    case TooMany count = "{count} is more than 12"
+    case Closed = "the shop is closed"
+    fi
+fi
+
+task main()
+    region r default
+    fixed lines = ["3", "", "4x", "40", "7", ...] at r
+    each line in lines
+        match order(r, line, line != "7")
+        case {count}
+            show("ordered ", count)
+        case failure e
+            show(said(r, e))
+        fi
+    fi
+fi

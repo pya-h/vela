@@ -361,8 +361,9 @@ impl Checked {
     }
 
     fn expr(&mut self, e: &Expr, kinds: &Declarations) {
-        // A wrapped value keeps its own type at its position.
-        if let ExprKind::Wrap(inner) = &e.kind {
+        // A wrapped value keeps its own type at its position, as a value of
+        // a kind made one of a kind imitating it does.
+        if let ExprKind::Wrap(inner) | ExprKind::Widen(inner) = &e.kind {
             return self.expr(inner, kinds);
         }
         // So does a value given to `show` that the checker turned into the call
@@ -454,7 +455,7 @@ impl Checked {
                     self.expr(&field.value, kinds);
                 }
             }
-            ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner, kinds),
+            ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => self.expr(inner, kinds),
             ExprKind::PlanB { value, error, body } => {
                 self.expr(value, kinds);
                 if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {

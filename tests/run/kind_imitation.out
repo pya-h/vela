@@ -1,0 +1,13 @@
+help: usage: help
+none: no file none
+: empty
+x: bad at 1
+four: 8
+{ Bad(2) } [Empty, NoRoom, Usage("go!")] [Empty, NoRoom] Bad(3)
+true true true true
+123 One Two
+Some(4) Some(4) Some("t") Both(1, 2) Many(9)
+12
+Negative
+NotANumber
+Locked NotFound Hidden Shown

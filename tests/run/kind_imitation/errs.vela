@@ -1,0 +1,22 @@
+; A kind another file imitates, and one it keeps to itself, which a public
+; kind of its own imitates.
+
+kind Missing
+    NoFile(name: text)
+    NoRoom
+fi
+
+priv kind Inner
+    Hidden
+fi
+
+kind Outer::Inner
+    Shown
+fi
+
+task find(r: region, name: text@r) -> int ~ Missing@r
+    when name == "none"
+        <- fail NoFile(name)
+    fi
+    <- name.len
+fi

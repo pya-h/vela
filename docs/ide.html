@@ -442,7 +442,8 @@ Press Ctrl+C to stop.</pre>
             with <code>flex</code>, <code>read</code>, and <code>new</code> after <code>shared</code> (a kind's, only
             <code>new</code>). After a shape's name and a dot, <code>Point.</code>, its
             <a href="vela.html#shared">shared fields</a> and <a href="vela.html#shared-methods">shared methods</a> are
-            offered, and after a kind's its variants and shared methods, never after a value's name or in a literal;
+            offered, and after a kind's its variants (with those it has from the kinds it
+            <a href="vela.html#kind-imitation">imitates</a>) and shared methods, never after a value's name or in a literal;
             a shared field hovers as <code>shared flex made: int</code>, saying who may change it, and a shared method
             as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
             <code>flex</code> and <code>flex&amp;</code>, which make the parameter the task's own copy to change, or
@@ -471,7 +472,8 @@ Press Ctrl+C to stop.</pre>
             type with <code>@_</code> explains it), a type a task, shape or kind takes (<code>T</code>), which says what the
             word after its <code>:</code> allows, a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
-            of what they do. A method shows its header, which shape or kind it belongs to, and whether it changes the
+            of what they do. A kind that imitates others shows the variants it has from them first, each saying which
+            kind it is from. A method shows its header, which shape or kind it belongs to, and whether it changes the
             value it is called on; <code>.this</code> shows that value's type, and <code>alters</code> and
             <code>@this</code> what they mean. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>

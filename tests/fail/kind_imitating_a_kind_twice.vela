@@ -1,0 +1,11 @@
+; error: 6:20: 'Light' is imitated already, at 6:12; a kind imitates each kind once
+kind Light
+    Red
+fi
+
+kind Lamp::Light & Light
+    Off
+fi
+
+task main()
+fi

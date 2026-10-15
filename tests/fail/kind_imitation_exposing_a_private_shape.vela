@@ -1,0 +1,15 @@
+; error: 10:13: kind 'Shown' is public, but 'Secret' is private to its file, so other files couldn't name it; make it 'priv' too, or the type public
+priv shape Secret
+    code: int
+fi
+
+priv kind Hidden
+    Holds(secret: Secret)
+fi
+
+kind Shown::Hidden
+    Nothing
+fi
+
+task main()
+fi

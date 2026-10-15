@@ -1,0 +1,12 @@
+; error: 7:21: unknown type 'U'
+kind Option<T>
+    Empty
+    Some(value: T)
+fi
+
+kind Choice::Option<U>
+    Many
+fi
+
+task main()
+fi

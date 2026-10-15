@@ -1,0 +1,11 @@
+; error: 6:12: 'maybe Light' is no kind, and a kind imitates only a kind, as in 'kind Lamp::Other'
+kind Light
+    Red
+fi
+
+kind Lamp::maybe Light
+    Off
+fi
+
+task main()
+fi
