@@ -45,6 +45,7 @@ export type SymbolKind =
   | "task"
   | "shape"
   | "kind"
+  | "alias"
   | "variant"
   /** A method of a shape or kind, a child of it in the outline. */
   | "method"

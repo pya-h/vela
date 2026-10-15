@@ -9,6 +9,7 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   task: { text: "T", className: "kind-task" },
   shape: { text: "S", className: "kind-shape" },
   kind: { text: "K", className: "kind-kind" },
+  alias: { text: "A", className: "kind-shape" },
   variant: { text: "V", className: "kind-variant" },
   method: { text: "M", className: "kind-method" },
   field: { text: "F", className: "kind-field" },

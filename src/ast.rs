@@ -523,6 +523,11 @@ pub const READ: &str = "read";
 /// program may still name anything `native`.
 pub const NATIVE: &str = "native";
 
+/// The word that starts a type alias at the start of a line outside every
+/// item, `alias SampleTask => (int) -> int` (see `AliasDef`). Not a keyword,
+/// as `native` is none: a program may still name anything `alias`.
+pub const ALIAS: &str = "alias";
+
 /// The word that marks a block's default region, written after the region's name
 /// in its declaration (`region r default`) or after the type of a region a task
 /// takes (`r: region default`). Allocations that name no region go there. Not a
@@ -2595,5 +2600,21 @@ pub struct MacroDef {
     /// Position of the macro's name.
     pub span: Span,
     /// `priv #P = …`: only its own file can name it.
+    pub private: bool,
+}
+
+/// `alias SampleTask => (int) -> int`: another name for a type, outside every
+/// task, shape, and kind. It is no type of its own: the resolver puts the type
+/// in each place its name is written (see `modules::Resolver::ty`), so the
+/// checker never sees it.
+#[derive(Debug, Clone)]
+pub struct AliasDef {
+    pub name: String,
+    pub ty: Type,
+    /// Position of the alias's name.
+    pub span: Span,
+    /// Position of the type it stands for.
+    pub ty_span: Span,
+    /// `priv alias …`: only its own file can name it.
     pub private: bool,
 }

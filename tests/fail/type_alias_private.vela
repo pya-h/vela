@@ -1,0 +1,5 @@
+; error: 2:37: 'Secret' is private to module 'type_alias_private/library'
+include type_alias_private/library {Secret}
+
+task main()
+fi

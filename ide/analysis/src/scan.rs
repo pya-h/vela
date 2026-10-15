@@ -68,6 +68,8 @@ pub enum SymbolKind {
     Task,
     Shape,
     Kind,
+    /// A type alias, `alias Name => type`; its detail is the type.
+    Alias,
     Variant,
     /// A method of a shape or kind, declared inside it; `intro` is `alters` for
     /// one that changes the value it is called on.
@@ -92,7 +94,7 @@ impl SymbolKind {
     fn class(self) -> TokenClass {
         match self {
             SymbolKind::Task => TokenClass::Task,
-            SymbolKind::Shape | SymbolKind::Kind => TokenClass::Type,
+            SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias => TokenClass::Type,
             SymbolKind::Variant => TokenClass::Variant,
             SymbolKind::Method => TokenClass::Method,
             SymbolKind::Field => TokenClass::Field,
@@ -348,7 +350,7 @@ fn included_modules(
             };
             let types: HashMap<String, String> = theirs
                 .iter()
-                .filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind))
+                .filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias))
                 .map(|s| (s.name.clone(), written_as(&s.name)))
                 .collect();
             // Their own `include` lines aren't this file's modules; indices move past them.
@@ -357,7 +359,7 @@ fn included_modules(
             for &i in &kept {
                 let Some(symbol) = theirs.get(i) else { continue };
                 let mut symbol = symbol.clone();
-                if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant | SymbolKind::Macro) {
+                if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Variant | SymbolKind::Macro) {
                     declared.entry(symbol.name.clone()).or_insert(symbols.len());
                     // A variant keeps its name: only a whole declaration takes an alias.
                     let kind = symbol.parent.and_then(|parent| theirs.get(parent)).map(|kind| kind.name.as_str());
@@ -382,7 +384,7 @@ fn included_modules(
         }
         for written in &line.names {
             let found = declared.get(&written.name).copied().filter(|&id| {
-                symbols.get(id).is_some_and(|s| !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant | SymbolKind::Macro))
+                symbols.get(id).is_some_and(|s| !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Variant | SymbolKind::Macro))
             });
             if let Some(id) = found {
                 declared_at.insert(written.at, id);
@@ -1052,6 +1054,31 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     symbol.range = tokens.range(first).start..tokens.range(last).end;
                 }
             }
+            // `alias Name => type`, or `priv alias …`, as a macro is read.
+            Token::Ident(word)
+                if word == "alias"
+                    && tokens.ident(p + 1).is_some()
+                    && tokens.token(p + 2) == Some(&Token::FatArrow)
+                    && matches!(tokens.before(p), None | Some(Token::Newline | Token::Priv))
+                    && ((item.is_none() && method.is_none() && blocks.is_empty())
+                        || tokens.get(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).is_some_and(|t| t.start.col == 1)) =>
+            {
+                for open in [method.take(), item.take()].into_iter().flatten() {
+                    close(&mut symbols, open, last_end);
+                }
+                methods_above = false;
+                blocks.clear();
+                let detail = tokens.text_after(p + 2, never);
+                let id = declare(&mut symbols, p + 1, SymbolKind::Alias, detail, None);
+                if let Some(symbol) = symbols.get_mut(id) {
+                    let first = if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p };
+                    let mut last = p + 1;
+                    while !matches!(tokens.token(last + 1), None | Some(Token::Newline | Token::Eof)) {
+                        last += 1;
+                    }
+                    symbol.range = tokens.range(first).start..tokens.range(last).end;
+                }
+            }
             Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
             // A lambda is a block of its own, closed by its `fi`.
             Token::LParen if !header && tokens.starts_lambda(p) => {
@@ -1361,7 +1388,11 @@ impl<'a> Classifier<'a> {
                     };
                     self.push(range, class, symbol);
                 }
-                Token::FatArrow => self.push(range, TokenClass::Operator, None),
+                Token::FatArrow => {
+                    self.push(range, TokenClass::Operator, None);
+                    // `alias Name => type`: a type follows.
+                    in_type |= p >= 2 && tokens.ident(p - 2) == Some("alias") && matches!(tokens.before(p - 2), None | Some(Token::Newline | Token::Priv));
+                }
                 Token::LBrace | Token::RBrace if in_include => {
                     self.push(range, TokenClass::Punctuation, None);
                     in_include_names = true;
@@ -1387,6 +1418,10 @@ impl<'a> Classifier<'a> {
                 // `t.at(i)`: the keyword naming the method text has.
                 Token::At if tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen) => {
                     self.push(range, TokenClass::Method, None);
+                }
+                // `alias Name => type`, where `alias` is a word of the line only.
+                Token::Ident(word) if word == "alias" && tokens.ident(p + 1).is_some() && tokens.token(p + 2) == Some(&Token::FatArrow) && matches!(tokens.before(p), None | Some(Token::Newline | Token::Priv)) => {
+                    self.push(range, TokenClass::Keyword, None);
                 }
                 // `outer => loop …`: a loop's name, declared in the loop's scope.
                 Token::Ident(_) if !in_include && tokens.token(p + 1) == Some(&Token::FatArrow) && matches!(tokens.token(p + 2), Some(Token::Loop | Token::Endless | Token::Each)) => {
@@ -1861,7 +1896,7 @@ impl<'a> Classifier<'a> {
             if Type::builtin(name).is_some() {
                 return (TokenClass::TypeBuiltin, None);
             }
-            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
+            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Alias, SymbolKind::TypeParam]));
         }
         // `flex n: int`, `flex& n: int`, `fixed n: int`, `fixed& n: int`,
         // `bind n: int` and `bind& n: int`: the word, and its `&`, before a
@@ -1940,7 +1975,7 @@ impl<'a> Classifier<'a> {
             && (tokens.token(p + 2) == Some(&Token::RBrace)
                 || (tokens.ident(p + 2).is_some() && tokens.token(p + 3) == Some(&Token::Colon)));
         if literal_follows && self.local(name, tokens.range(p).start).is_none() {
-            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
+            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Alias]));
         }
         // A call always names a task or a variant, even when a variable has the
         // same name, and `show(` and `scan(` always the builtin tasks.

@@ -1,4 +1,4 @@
-; error: 2:26: module 'library' has no task, shape, kind, variant, or macro named 'library'
+; error: 2:26: module 'library' has no task, shape, kind, type alias, variant, or macro named 'library'
 include modules/library (library)
 
 task main()

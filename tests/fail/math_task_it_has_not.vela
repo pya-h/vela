@@ -1,4 +1,4 @@
-; error: 5:10: module 'math' has no task, shape, kind, variant, or macro named 'sqrt'
+; error: 5:10: module 'math' has no task, shape, kind, type alias, variant, or macro named 'sqrt'
 include std/math
 
 task main()

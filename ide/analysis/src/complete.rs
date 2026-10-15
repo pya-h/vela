@@ -1677,10 +1677,14 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
             boost: SNIPPET,
         })
         .filter(move |_| after_or);
-    let declared = visible_globals(k, &[SymbolKind::Shape, SymbolKind::Kind]).into_iter().map(|(label, s)| CompletionItem {
+    let declared = visible_globals(k, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Alias]).into_iter().map(|(label, s)| CompletionItem {
         label,
         kind: CompletionKind::Type,
-        detail: if s.kind == SymbolKind::Shape { "shape" } else { "kind" }.to_string(),
+        detail: match s.kind {
+            SymbolKind::Shape => "shape".to_string(),
+            SymbolKind::Alias => format!("alias => {}", s.detail),
+            _ => "kind".to_string(),
+        },
         apply: None,
         snippet: None,
         boost: GLOBAL,
@@ -1841,7 +1845,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
     let Some(index) = k.scan.modules.iter().position(|m| m.symbol == module) else { return Vec::new() };
     let types_only = members == Members::Types;
     let kinds: &[SymbolKind] =
-        if types_only { &[SymbolKind::Shape, SymbolKind::Kind] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Variant, SymbolKind::Macro] };
+        if types_only { &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Alias] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Alias, SymbolKind::Variant, SymbolKind::Macro] };
     let module_name = k.symbol(module).map_or("", |s| s.name.as_str());
     // A declaration's own name, which the file may write another way.
     let own_name = |s: &crate::scan::Symbol| {
@@ -1876,6 +1880,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
                 SymbolKind::Macro => (CompletionKind::Variant, format!("#{} {}", s.name, s.detail), None, None),
                 SymbolKind::Shape if !types_only => (CompletionKind::Type, "shape".to_string(), None, literal_snippet(k, id, &label)),
                 SymbolKind::Shape => (CompletionKind::Type, "shape".to_string(), None, None),
+                SymbolKind::Alias => (CompletionKind::Type, format!("alias => {}", s.detail), None, None),
                 _ => (CompletionKind::Type, "kind".to_string(), None, None),
             };
             // An include line lists names alone: no call or literal.
@@ -1981,6 +1986,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
         snippet("macro", "a value the compiler computes", "#${NAME} = ${value}"),
+        snippet("alias", "another name for a type", "alias ${Name} => ${type}"),
     ]
 }
 

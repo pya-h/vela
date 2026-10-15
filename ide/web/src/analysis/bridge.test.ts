@@ -158,6 +158,22 @@ describe("VelaAnalysis", () => {
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "maybe"]);
   });
 
+  it("analyzes type aliases as declarations and follows their uses", () => {
+    const source =
+      "alias Transform => (int) -> int\n\ntask double(value: int) -> int\n    <- value * 2\nfi\n\ntask main()\n    fixed f: Transform = double\n    show(f(3))\nfi\n";
+    const { tokens, diagnostics, outline } = analysis.file(source);
+    expect(diagnostics).toEqual([]);
+    expect(tokens.find((t) => t.from === source.indexOf("Transform"))?.class).toBe("type");
+    expect(outline.map((item) => [item.name, item.kind, item.detail])).toEqual([
+      ["Transform", "alias", "(int) -> int"],
+      ["double", "task", "(value: int) -> int"],
+      ["main", "task", "()"],
+    ]);
+    const use = source.lastIndexOf("Transform");
+    expect(analysis.definition(source, use)).toEqual({ from: source.indexOf("Transform"), to: source.indexOf("Transform") + "Transform".length });
+    expect(analysis.hover(source, source.indexOf("Transform"))?.code).toBe("alias Transform => (int) -> int");
+  });
+
   it("reads a shape that takes types: highlighting, outline, hover, and completion", () => {
     const source =
       "shape Box<T: frozen>\n    value: T\nfi\n\ntask main()\n    region r\n    fixed kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    fixed count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";

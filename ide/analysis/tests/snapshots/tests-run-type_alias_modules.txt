@@ -1,0 +1,18 @@
+  1 | include type_alias_modules/tools (Step => Transform)
+    | keyword:include  module:type_alias_modules  operator:/  module:tools  punctuation:(  type:Step  operator:=>  type:Transform  punctuation:)
+  3 | alias LocalTransform => Transform
+    | keyword:alias  type:LocalTransform  operator:=>  type:Transform
+  5 | task add_one(value: int) -> int
+    | keyword:task  task:add_one  punctuation:(  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  6 |     <- value + 1
+    | keyword:<-  parameter:value  operator:+  number:1
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     fixed steps: [LocalTransform#2] = [add_one, add_one]
+    | keyword:fixed  variable:steps  punctuation::  punctuation:[  type:LocalTransform  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  task:add_one  punctuation:,  task:add_one  punctuation:]
+ 11 |     show(steps[0](4), " ", steps[1](8))
+    | builtin-fn:show  punctuation:(  variable:steps  punctuation:[  number:0  punctuation:]  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:steps  punctuation:[  number:1  punctuation:]  punctuation:(  number:8  punctuation:)  punctuation:)
+ 12 | fi
+    | keyword:fi

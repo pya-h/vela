@@ -1792,7 +1792,10 @@ show(c.total())</pre>
           (<code>float(n)</code>, <code>int(2.9)</code>, <code>int(ok)</code>), and text is read as one
           (<code>int(line)</code>), from text and from input (<code>scan("Age: ", int)</code>). Rounding another way is
           what is left; see <a href="#conversions">Type conversions</a> below.</li>
-        <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
+        <li><strong>Type aliases:</strong> <span class="badge b-done">Done</span> — <code>alias SampleTask =&gt; (int) -&gt; int</code>,
+          another name for a type, which is that type wherever the name is written (see
+          <a href="vela.html#type-aliases">Type aliases</a>). An alias that takes types, and a distinct type
+          that only looks like another, so that a user's id is no <code>int</code>, are not built.</li>
       </ul>
 
       <h3 id="macro-tasks">Macros that take values</h3>

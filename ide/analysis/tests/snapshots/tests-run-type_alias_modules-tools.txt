@@ -1,0 +1,4 @@
+  1 | priv alias CoreStep => (int) -> int
+    | keyword:priv  keyword:alias  type:CoreStep  operator:=>  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  2 | alias Step => CoreStep
+    | keyword:alias  type:Step  operator:=>  type:CoreStep

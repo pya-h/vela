@@ -237,6 +237,12 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             (format!("include {}", symbol.detail), doc)
         }
         SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
+        SymbolKind::Alias => {
+            let private = if symbol.private { "priv " } else { "" };
+            let doc = format!("A type alias: another name for {}, which it is wherever its name is written.", symbol.detail);
+            let module = from_module(k, symbol);
+            (format!("{}alias {} => {}", private, vela::ast::unqualified(&symbol.name), symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
+        }
         SymbolKind::Macro => {
             let private = if symbol.private { "priv " } else { "" };
             let ty = k.type_of_symbol(id).map_or(String::new(), |ty| format!(", of type {}", ty));

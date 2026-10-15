@@ -11,6 +11,9 @@ const PARTS_AS_OR: &str = "unexpected '||'; Vela writes 'or'";
 /// The mistake of a macro written inside a task, shape, or kind.
 const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line";
 
+/// A type alias inside a block, which names a type for the whole file.
+const MISPLACED_TYPE_ALIAS: &str = "a type alias is written outside every task, shape, and kind, as in 'alias SampleTask => (int) -> int' at the start of a line";
+
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
 /// compiler stage walks the tree recursively, so without a limit deeply nested
@@ -126,6 +129,9 @@ pub struct Parser {
     type_parts: Vec<(String, Span)>,
     /// The file's `include` lines, which come before its items.
     includes: Vec<Include>,
+    /// The file's type aliases, which name types and are no items: the
+    /// resolver puts their types where their names are written.
+    type_aliases: Vec<AliasDef>,
     /// The methods of the shape or kind just read, each a task of its own (see
     /// `method_name`), which the file's items take in after it.
     methods: Vec<Item>,
@@ -151,7 +157,7 @@ impl Parser {
     /// `tokens`, `spans` and `ends` are parallel, as produced by
     /// `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
-        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
     }
 
     /// Whether the file has a loop that gives a value (see `ValueLoop`).
@@ -162,6 +168,11 @@ impl Parser {
     /// The `include` lines of the file parsed.
     pub fn includes(&mut self) -> Vec<Include> {
         std::mem::take(&mut self.includes)
+    }
+
+    /// The type aliases of the file parsed.
+    pub fn type_aliases(&mut self) -> Vec<AliasDef> {
+        std::mem::take(&mut self.type_aliases)
     }
 
     /// Where the parts of every type parsed so far are.
@@ -185,6 +196,12 @@ impl Parser {
         while !self.is_at_end() {
             if self.check(Token::Include) {
                 return Err(Error::at(self.peek_span(), "'include' lines go at the top of the file, before any task, shape, or kind"));
+            }
+            if self.at_type_alias_after(0) || (self.check(Token::Priv) && self.at_type_alias_after(1)) {
+                let alias = self.parse_type_alias()?;
+                self.type_aliases.push(alias);
+                self.skip_newlines();
+                continue;
             }
             items.push(self.parse_item()?);
             // The methods of a shape or a kind are tasks of the file, after it.
@@ -483,6 +500,9 @@ impl Parser {
         if self.at_macro_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_MACRO));
         }
+        if self.at_type_alias_after(first) && self.peek_span().col > 1 {
+            return Err(Error::at(self.peek_span(), MISPLACED_TYPE_ALIAS));
+        }
         if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
             // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
@@ -551,8 +571,8 @@ impl Parser {
         match self.peek() {
             Token::Task | Token::Shape | Token::Kind | Token::Include => true,
             // `priv` also marks a shape's field.
-            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1),
-            _ => self.at_macro_after(0),
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1),
+            _ => self.at_macro_after(0) || (self.at_line_start() && self.at_type_alias_after(0)),
         }
     }
 
@@ -608,6 +628,29 @@ impl Parser {
         Ok(MacroDef { name, value, span, private: false })
     }
 
+    /// Whether the tokens `ahead` of the cursor start a type alias: `alias`
+    /// and a name.
+    fn at_type_alias_after(&self, ahead: usize) -> bool {
+        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == ALIAS) && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
+    }
+
+    /// `alias Name => type`, or `priv alias Name => type`, on a line of its own.
+    fn parse_type_alias(&mut self) -> Result<AliasDef> {
+        let private = self.match_token(Token::Priv);
+        self.advance(); // alias
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        if !self.match_token(Token::FatArrow) {
+            return Err(self.unexpected(&format!("'=>' and the type '{}' stands for, as in 'alias {} => (int) -> int'", name, name)));
+        }
+        let ty_span = self.peek_span();
+        let ty = self.parse_type()?;
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("the end of the line: a type alias is written on a line of its own"));
+        }
+        Ok(AliasDef { name, ty, span, ty_span, private })
+    }
+
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
         if self.check(Token::Dollar) {
@@ -622,7 +665,7 @@ impl Parser {
                 Token::Shape => self.parse_shape().map(Item::Shape)?,
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
                 _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
-                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, or macro, or a shape's field")),
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, type alias, or macro, or a shape's field")),
             };
             match &mut item {
                 Item::Task(t) => t.private = true,
@@ -842,7 +885,7 @@ impl Parser {
         self.skip_newlines();
         // A body written anyway is read, so that loading says what is wrong: in
         // a program, that it has no native tasks at all.
-        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) {
+        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) && !self.at_type_alias_after(0) {
             task.body = self.parse_block()?;
             self.expect_fi("task", opened)?;
         }
@@ -2181,7 +2224,7 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
-            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, or macro, or a shape's field, not a statement")),
+            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, type alias, or macro, or a shape's field, not a statement")),
             _ if self.at_macro_after(0) => Err(Error::at(span, MISPLACED_MACRO)),
             Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
                 Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
@@ -3748,7 +3791,9 @@ impl Parser {
     fn parse_lambda(&mut self) -> Result<Expr> {
         // Its header and the task it becomes are read and made by functions
         // of their own: this one's frame is on the stack once per lambda
-        // nested in another.
+        // nested in another, and it counts as a level of its own, as a block
+        // does, since its frames are larger than a block's.
+        self.enter()?;
         let span = self.peek_span();
         let (params, ret, results) = self.parse_lambda_header(span)?;
         let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
@@ -3758,6 +3803,7 @@ impl Parser {
         } else {
             self.parse_lambda_line(span)?
         };
+        self.leave(1);
         Ok(self.add_lambda(span, params, ret, results, body, None))
     }
 
@@ -3777,6 +3823,8 @@ impl Parser {
             let written = format!("[{}@{}]", mode_word, region);
             return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
         }
+        // A level of its own, as for any lambda (see `parse_lambda`).
+        self.enter()?;
         let header = self.peek_span();
         let (params, ret, results) = self.parse_lambda_header(header)?;
         let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
@@ -3786,6 +3834,7 @@ impl Parser {
         } else {
             self.parse_lambda_line(span)?
         };
+        self.leave(1);
         let kept = Kept { region: region.clone(), mode, places: places.clone() };
         let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept)).kind else {
             return Err(Error::internal_at(span, "a lambda named by no variable"));

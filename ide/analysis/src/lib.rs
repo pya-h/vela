@@ -61,8 +61,8 @@ pub struct Diagnostic {
     pub severity: Severity,
 }
 
-/// A task, shape, or kind, with its fields or variants and its methods as
-/// children (and a variant's payload fields as its children).
+/// A task, shape, kind, type alias, or macro, with its fields or variants and
+/// its methods as children (and a variant's payload fields as its children).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineItem {
@@ -229,7 +229,7 @@ impl Analysis {
         }
     }
 
-    /// The file's tasks, shapes, kinds, and macros, in source order.
+    /// The file's tasks, shapes, kinds, type aliases, and macros, in source order.
     pub fn outline(&self) -> Vec<OutlineItem> {
         let symbols = &self.scan.symbols;
         // Each symbol's children, in order, found in one pass.
@@ -242,7 +242,7 @@ impl Analysis {
         symbols
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Macro))
+            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Macro))
             .map(|(id, _)| self.outline_item(id, &children))
             .collect()
     }

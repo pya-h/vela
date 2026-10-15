@@ -1,0 +1,19 @@
+; Give a short name to a type that appears in several places.
+alias Cents => int
+alias Adjust => (Cents) -> Cents
+alias Adjustments => [Adjust#2]
+
+task add_one(value: Cents) -> Cents
+    <- value + 1
+fi
+
+task double(value: Cents) -> Cents
+    <- value * 2
+fi
+
+task main()
+    region work
+    fixed saved: Adjustments = [add_one, double]
+    flex current: [Adjust]@work = new [Adjust]([double]) at work
+    show(saved[0](40), " ", current[0](21))
+fi

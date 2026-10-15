@@ -1,0 +1,12 @@
+include type_alias_modules/tools (Step => Transform)
+
+alias LocalTransform => Transform
+
+task add_one(value: int) -> int
+    <- value + 1
+fi
+
+task main()
+    fixed steps: [LocalTransform#2] = [add_one, add_one]
+    show(steps[0](4), " ", steps[1](8))
+fi

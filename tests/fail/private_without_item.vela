@@ -1,4 +1,4 @@
-; error: 2:1: 'priv' goes before a task, shape, kind, or macro, or a shape's field
+; error: 2:1: 'priv' goes before a task, shape, kind, type alias, or macro, or a shape's field
 priv
 
 task main()

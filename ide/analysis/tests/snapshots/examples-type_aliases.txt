@@ -1,0 +1,32 @@
+  1 | ; Give a short name to a type that appears in several places.
+    | comment:; Give a short name to a type that appears in several places.
+  2 | alias Cents => int
+    | keyword:alias  type:Cents  operator:=>  type-builtin:int
+  3 | alias Adjust => (Cents) -> Cents
+    | keyword:alias  type:Adjust  operator:=>  punctuation:(  type:Cents  punctuation:)  operator:->  type:Cents
+  4 | alias Adjustments => [Adjust#2]
+    | keyword:alias  type:Adjustments  operator:=>  punctuation:[  type:Adjust  punctuation:#  number:2  punctuation:]
+  6 | task add_one(value: Cents) -> Cents
+    | keyword:task  task:add_one  punctuation:(  parameter:value  punctuation::  type:Cents  punctuation:)  operator:->  type:Cents
+  7 |     <- value + 1
+    | keyword:<-  parameter:value  operator:+  number:1
+  8 | fi
+    | keyword:fi
+ 10 | task double(value: Cents) -> Cents
+    | keyword:task  task:double  punctuation:(  parameter:value  punctuation::  type:Cents  punctuation:)  operator:->  type:Cents
+ 11 |     <- value * 2
+    | keyword:<-  parameter:value  operator:*  number:2
+ 12 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     region work
+    | keyword:region  region:work
+ 16 |     fixed saved: Adjustments = [add_one, double]
+    | keyword:fixed  variable:saved  punctuation::  type:Adjustments  operator:=  punctuation:[  task:add_one  punctuation:,  task:double  punctuation:]
+ 17 |     flex current: [Adjust]@work = new [Adjust]([double]) at work
+    | keyword:flex  variable:current  punctuation::  punctuation:[  type:Adjust  punctuation:]  operator:@  region:work  operator:=  keyword:new  punctuation:[  type:Adjust  punctuation:]  punctuation:(  punctuation:[  task:double  punctuation:]  punctuation:)  keyword:at  region:work
+ 18 |     show(saved[0](40), " ", current[0](21))
+    | builtin-fn:show  punctuation:(  variable:saved  punctuation:[  number:0  punctuation:]  punctuation:(  number:40  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:current  punctuation:[  number:0  punctuation:]  punctuation:(  number:21  punctuation:)  punctuation:)
+ 19 | fi
+    | keyword:fi

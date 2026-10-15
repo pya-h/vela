@@ -1,0 +1,6 @@
+; error: 2:16: type aliases can't stand for one another in a circle: First -> Second -> First
+alias First => Second
+alias Second => First
+
+task main()
+fi

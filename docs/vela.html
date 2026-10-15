@@ -252,6 +252,7 @@
         <li><code class="type">T</code> — a type a task, shape or kind takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
         <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>)</li>
+        <li><code class="type">Name</code> — a type alias, another name for a type, <code>alias Name =&gt; type</code> (see <a href="#type-aliases">Type aliases</a>)</li>
       </ul>
     </section>
 
@@ -299,8 +300,9 @@ block shared type break continue endless fixed flex</pre>
         after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
         <a href="#shared">shared fields</a> <code>Shape.f</code> names. <code>new</code> is reserved everywhere
         but after <code>shared</code> and after a dot, where it names a <a href="#shared-methods">shared method</a>,
-        <code>Point.new(…)</code>. Five words are read by their position and are no more
+        <code>Point.new(…)</code>. Six words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
+        <code>alias</code> at the start of a line outside every item (see <a href="#type-aliases">Type aliases</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>),
         <code>this</code>, and <code>native</code> before a task of the standard library (see
@@ -364,7 +366,8 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>xs.added(v) at r</code>, <code>xs.without(i) at r</code>, <code>m.added(k, v)</code>, <code>m.without(k)</code></td><td>a new slice or map with one change, a complete copy, leaving the original as it was (see <a href="#added-without">A new slice with one change</a>)</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>#NAME = value</code></td><td>a macro: a name for a value the compiler computes, at the start of a line outside every task (see <a href="#macros">Macros</a>)</td></tr>
-        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
+        <tr><td><code>alias Name =&gt; type</code></td><td>a type alias: another name for a type, at the start of a line outside every task (see <a href="#type-aliases">Type aliases</a>)</td></tr>
+        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, type alias, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code>, <code>Shape.m</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it, called or as a value (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
         <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
@@ -2545,6 +2548,55 @@ fi</code></pre>
         the two never meet. A macro is a value, not a place:
         <code>P = 3.0</code> and <code>&amp;P</code> are errors. Macros that take values, as C's
         <code>#define MAX(a, b)</code> does, are an idea for later (see <a href="future.html#macro-tasks">Macros that take values</a>).
+      </p>
+
+      <h3 id="type-aliases">Type aliases</h3>
+      <p>
+        A type alias gives a type another name. It is written outside every task, shape, and kind, at the start of a
+        line, as <code>alias Name =&gt; type</code>, and in each place the name is written, the type is: an alias is no
+        type of its own, so a value of it is a value of that type and goes wherever one goes. A long type is read once,
+        where it is named, and the places that use it say what it is for: <code>[SampleTask#4]</code> is plainly an
+        array of four tasks, where <code>[(int) -&gt; int#4]</code> has to be read twice.
+      </p>
+      <pre><code>alias SampleTask =&gt; (int) -&gt; int
+alias Cents =&gt; int
+alias Prices =&gt; [Cents]
+
+task add_one(n: int) -&gt; int
+    &lt;- n + 1
+fi
+
+task total(prices: Prices@r) -&gt; Cents
+    flex sum = 0
+    each p in prices
+        sum += p
+    fi
+    &lt;- sum
+fi
+
+task main()
+    region r default
+    fixed tasks: [SampleTask#4] = [add_one, add_one, add_one, add_one]   ; an array of four tasks
+    flex later: [SampleTask]@r = new [SampleTask]                         ; a slice of tasks
+    later.add(add_one)
+    fixed prices: Prices@r = [250, 199, ...]
+    fixed cents: int = total(prices)                                       ; a Cents is an int
+    show(tasks[3](1), " ", later[0](5), " ", cents)                        ; 2 6 449
+fi</code></pre>
+      <p>
+        A region written after an alias is the region of the type it stands for, as if that type were written there:
+        <code>Prices@r</code> is <code>[int]@r</code>. An alias of a type that lives in no region takes none, so
+        <code>Cents@r</code> is an error, as <code>int@r</code> is. The type may name shapes, kinds, and other aliases,
+        declared above or below, and give a shape its types (<code>alias Counts =&gt; Box&lt;int&gt;</code>); an alias
+        takes no types itself, and none stands for itself, through others or not.
+      </p>
+      <p>
+        An alias is a name of its file, as a macro is: another file names it <code>m.Name</code>, or <code>Name</code>
+        after <code>include m (Name)</code>, and <code>priv alias Name =&gt; …</code> keeps it to its own file (see
+        <a href="#modules">Modules</a>). It names a type and nothing else: a shape's value is written with the shape's
+        own name, <code>Point { x: 1 }</code>, and <code>Cents(2.5)</code> is no conversion, where <code>int(2.5)</code>
+        is. The checker sees only the type an alias stands for, so a message names that type:
+        <code>fixed c: Cents = "a"</code> says <code>expected type int, got text</code>.
       </p>
 
       <h3 id="task-values">Tasks as values</h3>

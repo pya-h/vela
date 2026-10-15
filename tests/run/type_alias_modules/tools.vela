@@ -1,0 +1,2 @@
+priv alias CoreStep => (int) -> int
+alias Step => CoreStep

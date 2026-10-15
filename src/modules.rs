@@ -210,6 +210,8 @@ struct Module {
     /// For each of `includes`, the module it loads.
     included: Vec<usize>,
     items: Vec<Item>,
+    /// Its type aliases, which name types and are no items (see `TypeAliases`).
+    type_aliases: Vec<AliasDef>,
     /// Whether it has a loop that gives a value (see `Parser::loop_values`).
     loop_values: bool,
 }
@@ -254,9 +256,20 @@ impl State {
                 by_module.entry(id).or_default().push(&entry.full);
             }
         }
+        // The types of the type aliases first, with the names in them written
+        // as the program names them, then the items, with each alias put in.
+        for index in 0..self.modules.len() {
+            self.resolve(index, &tables, &variants, &by_module, None)?;
+        }
+        let aliases: TypeAliases = self.modules.iter().flat_map(|module| &module.type_aliases).map(|alias| (alias.name.clone(), alias.ty.clone())).collect();
+        // One that stands for itself, through others or not, is told where it
+        // is declared, even when nothing names it.
+        for alias in self.modules.iter().flat_map(|module| &module.type_aliases) {
+            expand_aliases(&Type::Named(alias.name.clone(), None), &aliases, &mut Vec::new(), None, &|_| alias.ty_span)?;
+        }
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
-            scopes.push(self.resolve(index, &tables, &variants, &by_module)?);
+            scopes.push(self.resolve(index, &tables, &variants, &by_module, Some(&aliases))?);
         }
         let mut items = Vec::new();
         for index in std::mem::take(&mut self.order) {
@@ -280,10 +293,11 @@ impl State {
         check_natives(&id, &items)?;
         self.type_places.extend(parser.type_places());
         let includes = parser.includes();
+        let type_aliases = parser.type_aliases();
         let loop_values = parser.loop_values();
         let index = self.modules.len();
         self.by_path.insert(key, index);
-        self.modules.push(Module { id, file, includes, included: Vec::new(), items, loop_values });
+        self.modules.push(Module { id, file, includes, included: Vec::new(), items, type_aliases, loop_values });
         Ok(index)
     }
 
@@ -404,8 +418,10 @@ impl State {
     }
 
     /// Resolves the names in module `index`, and returns what the checker needs
-    /// to know about it.
-    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants, by_module: &HashMap<&str, Vec<&str>>) -> Result<ModuleScope> {
+    /// to know about it: with no `aliases` yet, the names in the types of its
+    /// type aliases, which `aliases` is made of; with them, the names in its
+    /// items, where each alias is put in.
+    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants, by_module: &HashMap<&str, Vec<&str>>, aliases: Option<&TypeAliases>) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
         let mut own = tables.get(index).cloned().unwrap_or_default();
         // The builtin kinds are written like declared ones, in every file: a task
@@ -415,8 +431,18 @@ impl State {
         for kind in builtin_kinds() {
             own.entry(kind.name.clone()).or_insert_with(|| builtin_kind_entry(&kind.name, What::Kind, None));
         }
-        let mut resolver =
-            Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, tables, type_places: &self.type_places, params: Vec::new() };
+        let none = TypeAliases::new();
+        let mut resolver = Resolver {
+            own,
+            modules: HashMap::new(),
+            imports: HashMap::new(),
+            unnamed: Vec::new(),
+            variants,
+            tables,
+            type_places: &self.type_places,
+            aliases: aliases.unwrap_or(&none),
+            params: Vec::new(),
+        };
         let mut includes = Vec::new();
         for (include, &target) in module.includes.iter().zip(&module.included) {
             let id = self.modules.get(target).map(|m| m.id.clone()).unwrap_or_default();
@@ -459,7 +485,7 @@ impl State {
                     return err(part.span, format!("'{}' is already listed at {}:{}; a name is brought in once", part.name, earlier.span.line, earlier.span.col));
                 }
                 let Some(entry) = table.and_then(|table| table.get(&part.name)) else {
-                    return err(part.span, format!("module '{}' has no task, shape, kind, variant, or macro named '{}'", label, part.name));
+                    return err(part.span, format!("module '{}' has no task, shape, kind, type alias, variant, or macro named '{}'", label, part.name));
                 };
                 if entry.private {
                     return err(part.span, format!("'{}' is private to module '{}'", part.name, label));
@@ -509,6 +535,12 @@ impl State {
         let spelling = spelling(module, tables.get(index), tables, variants, by_module, &imports, &includes);
         let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
+        if aliases.is_none() {
+            for alias in &mut module.type_aliases {
+                resolver.type_alias(alias)?;
+            }
+            return Ok(scope);
+        }
         let mut items = std::mem::take(&mut module.items);
         for item in &mut items {
             resolver.item(item)?;
@@ -696,6 +728,7 @@ enum What {
     Task,
     Shape,
     Kind,
+    Alias,
     Variant,
     Macro,
 }
@@ -706,13 +739,14 @@ impl What {
             What::Task => "task",
             What::Shape => "shape",
             What::Kind => "kind",
+            What::Alias => "type alias",
             What::Variant => "variant",
             What::Macro => "macro",
         }
     }
 }
 
-/// A task, shape, kind, variant, or macro declared in a module.
+/// A task, shape, kind, type alias, variant, or macro declared in a module.
 #[derive(Debug, Clone)]
 struct Entry {
     /// Its name in the whole program: `shapes/geometry.area`, or `area` in the
@@ -774,6 +808,9 @@ fn own_names(module: &Module) -> Names {
             Item::Macro(m) => add(&m.name, What::Macro, m.private, m.span, None),
         }
     }
+    for alias in &module.type_aliases {
+        add(&alias.name, What::Alias, alias.private, alias.span, None);
+    }
     names
 }
 
@@ -804,6 +841,78 @@ fn variants_of_kinds(modules: &[Module]) -> Variants {
     variants
 }
 
+/// The type each type alias of the program stands for, by the alias's name in
+/// the program, with the names in it written as the program names them and
+/// the aliases in it left as they are (see `expand_aliases`).
+type TypeAliases = HashMap<String, Type>;
+
+/// `ty` with each type alias in it put in its place, and each alias in that
+/// alias's type, as if the type it stands for were written there: `Names@r`,
+/// with `alias Names => [text]`, is `[text]@r`. `stack` holds the aliases being
+/// put in, to find one that stands for itself, `inside` the region of the
+/// slice, map, pointer or shape `ty` is in, and `at` where an alias of the
+/// program is written, for errors.
+fn expand_aliases(ty: &Type, aliases: &TypeAliases, stack: &mut Vec<String>, inside: Option<&str>, at: &dyn Fn(&str) -> Span) -> Result<Type> {
+    let task = |task: &TaskType, stack: &mut Vec<String>| -> Result<TaskType> {
+        let params = task.params.iter().map(|t| expand_aliases(t, aliases, stack, None, at)).collect::<Result<_>>()?;
+        Ok(TaskType { params, taken: task.taken.clone(), ret: expand_aliases(&task.ret, aliases, stack, None, at)? })
+    };
+    let each = |t: &Type, inside: Option<&str>, stack: &mut Vec<String>| expand_aliases(t, aliases, stack, inside, at).map(Box::new);
+    Ok(match ty {
+        Type::Named(name, region) => {
+            let Some(aliased) = aliases.get(name) else { return Ok(ty.clone()) };
+            if let Some(start) = stack.iter().position(|alias| alias == name) {
+                let cycle: Vec<&str> = stack[start..].iter().chain([name]).map(|alias| unqualified(alias)).collect();
+                return err(at(name), format!("type aliases can't stand for one another in a circle: {}", cycle.join(" -> ")));
+            }
+            stack.push(name.clone());
+            let expanded = expand_aliases(aliased, aliases, stack, None, at)?;
+            stack.pop();
+            alias_region(expanded, region.as_deref(), inside).map_err(|message| Error::at(at(name), message))?
+        }
+        Type::Applied(applied) => {
+            let inside = applied.region.as_deref().or(inside);
+            let types = applied.types.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?;
+            Type::Applied(Box::new(Applied { name: applied.name.clone(), types, region: applied.region.clone() }))
+        }
+        Type::Ptr(inner, region) => Type::Ptr(each(inner, region.as_deref().or(inside), stack)?, region.clone()),
+        Type::Slice(inner, region) => Type::Slice(each(inner, region.as_deref().or(inside), stack)?, region.clone()),
+        Type::Map(key, value, region) => Type::Map(each(key, region.as_deref().or(inside), stack)?, each(value, region.as_deref().or(inside), stack)?, region.clone()),
+        Type::Array(inner, count) => Type::Array(each(inner, inside, stack)?, *count),
+        Type::Range(inner) => Type::Range(each(inner, inside, stack)?),
+        Type::Maybe(inner) => Type::Maybe(each(inner, inside, stack)?),
+        Type::Fail(inner) => Type::Fail(each(inner, inside, stack)?),
+        Type::Or(value, error) => Type::Or(each(value, inside, stack)?, each(error, inside, stack)?),
+        Type::Results(types) => Type::Results(types.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?),
+        Type::Task(t) => Type::Task(Box::new(task(t, stack)?)),
+        Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: task(&closure.task, stack)?, region: closure.region.clone(), mode: closure.mode })),
+        other => other.clone(),
+    })
+}
+
+/// The type an alias stands for, `ty`, in the region written after the alias,
+/// `region`, as `parse_type_region` gives a written type one: what has none
+/// takes it. The parser gives a name in a slice, map, pointer or shape in a
+/// region that region too, not knowing it is an alias's (`[Step]@r` is
+/// `[Step@r]@r`), so an alias of a type that lives in no region may have the
+/// one it is in, `inside`, and no other.
+fn alias_region(ty: Type, region: Option<&str>, inside: Option<&str>) -> std::result::Result<Type, String> {
+    let Some(region) = region else { return Ok(ty) };
+    if ty == Type::Region {
+        return Err("a region doesn't live in another region".to_string());
+    }
+    let mut named = !ty.regions().is_empty();
+    let ty = ty.map_regions_of_names(&mut |_| {
+        named = true;
+        Some(region.to_string())
+    });
+    match named || inside == Some(region) {
+        true => Ok(ty),
+        false => Err(format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", ty, region)),
+    }
+}
+
 /// What a file can name of a module it includes under a name.
 struct ModuleNames<'a> {
     names: &'a Names,
@@ -828,12 +937,59 @@ struct Resolver<'a> {
     /// which its file may name with no name of the module (`include m {K}`).
     tables: &'a [Names],
     type_places: &'a TypePlaces,
+    /// The program's type aliases, put in where their names are written; none
+    /// while the types of the aliases themselves are read (see `State::resolve`).
+    aliases: &'a TypeAliases,
     /// The names of the types the declaration being walked takes: they name no
     /// shape or kind, so a written type naming one is left as it is.
     params: Vec<String>,
 }
 
 impl Resolver<'_> {
+    /// A type alias, with its name and the names in its type written as the
+    /// program names them. Each name in the type names a shape, a kind, or
+    /// another alias, since only here is the type of an alias nothing uses
+    /// read; the checker checks the rest of it in each place it is put.
+    fn type_alias(&self, alias: &mut AliasDef) -> Result<()> {
+        let name = alias.name.as_str();
+        if Type::builtin(name).is_some() {
+            return err(alias.span, format!("'{}' is a builtin type and cannot be redefined", name));
+        }
+        if BUILTIN_TASKS.contains(&name) {
+            return err(alias.span, format!("'{}' is a builtin task and cannot be redefined", name));
+        }
+        if BUILTIN_KIND_NAMES.contains(&name) {
+            let what = builtin_kind_of(name).map_or_else(|| "a builtin kind".to_string(), |kind| format!("a variant of the builtin kind '{}'", kind));
+            return err(alias.span, format!("'{}' is {} and cannot be redefined", name, what));
+        }
+        // The checker never sees an alias, so it reports no other declaration
+        // of its name: the later of the two is told here.
+        if let Some(entry) = self.own.get(name).filter(|entry| entry.span != alias.span) {
+            let (at, first) = if (entry.span.line, entry.span.col) < (alias.span.line, alias.span.col) { (alias.span, entry.span) } else { (entry.span, alias.span) };
+            return err(at, format!("'{}' is already defined at {}:{}", name, first.line, first.col));
+        }
+        let written = std::cell::RefCell::new(Vec::new());
+        alias.ty.map_names(&|name| {
+            written.borrow_mut().push(name.to_string());
+            name.to_string()
+        });
+        for name in written.into_inner() {
+            let at = self.place(alias.ty_span, &name);
+            match self.lookup(&name, at, false)? {
+                Some(entry) if matches!(entry.what, What::Shape | What::Kind | What::Alias) => {}
+                Some(entry) if entry.what == What::Variant => {
+                    let kind = entry.kind.as_deref().map_or("", unqualified);
+                    return err(at, format!("'{}' is a variant, not a type; its type is its kind, '{}'", unqualified(&name), kind));
+                }
+                Some(entry) => return err(at, format!("'{}' is a {}, not a type", name, entry.what.word())),
+                None => return err(at, format!("unknown type '{}'", name)),
+            }
+        }
+        alias.name = self.own_full(&alias.name);
+        alias.ty = self.names_in(&alias.ty, alias.ty_span)?;
+        Ok(())
+    }
+
     fn item(&mut self, item: &mut Item) -> Result<()> {
         match item {
             Item::Task(t) => {
@@ -907,7 +1063,7 @@ impl Resolver<'_> {
     fn enter_type_params(&mut self, types: &[TypeParam], what: &str, name: &str) -> Result<()> {
         for param in types {
             if let Some(entry) = self.lookup(&param.name, param.span, false)?
-                && matches!(entry.what, What::Shape | What::Kind)
+                && matches!(entry.what, What::Shape | What::Kind | What::Alias)
             {
                 return err(
                     param.span,
@@ -1017,7 +1173,7 @@ impl Resolver<'_> {
             );
         }
         let Some(entry) = module.names.get(member) else {
-            return err(at, format!("module '{}' has no task, shape, kind, variant, or macro named '{}'", module_name, member));
+            return err(at, format!("module '{}' has no task, shape, kind, type alias, variant, or macro named '{}'", module_name, member));
         };
         if entry.private {
             return err(at, format!("'{}' is private to module '{}'", member, module_name));
@@ -1241,48 +1397,69 @@ impl Resolver<'_> {
         Ok(false)
     }
 
-    /// A written type, at `span`, with its shape and kind names rewritten.
+    /// A written type, at `span`, with its shape and kind names rewritten and
+    /// each type alias put in (see `expand_aliases`).
     fn ty(&self, ty: &Type, span: Span) -> Result<Type> {
+        let ty = self.names_in(ty, span)?;
+        if self.aliases.is_empty() {
+            return Ok(ty);
+        }
+        let at = |alias: &str| self.alias_place(span, alias);
+        expand_aliases(&ty, self.aliases, &mut Vec::new(), None, &at)
+    }
+
+    /// Where the part `name` of the type written at `span` is (see
+    /// `TypePlaces`), or `span` when it has no place of its own.
+    fn place(&self, span: Span, name: &str) -> Span {
+        self.type_places.get(&span.place_key()).and_then(|parts| parts.iter().find(|(part, _)| part == name)).map_or(span, |(_, at)| *at)
+    }
+
+    /// Where the type written at `span` names the type alias `alias` (its name
+    /// in the program), or `span` when it is named in another alias.
+    fn alias_place(&self, span: Span, alias: &str) -> Span {
+        let parts = self.type_places.get(&span.place_key()).map_or(&[][..], Vec::as_slice);
+        parts.iter().find(|(part, at)| self.lookup(part, *at, false).ok().flatten().is_some_and(|entry| entry.full == alias)).map_or(span, |(_, at)| *at)
+    }
+
+    /// A written type, at `span`, with its shape, kind, and type alias names
+    /// rewritten.
+    fn names_in(&self, ty: &Type, span: Span) -> Result<Type> {
+        let task = |task: &TaskType| -> Result<TaskType> {
+            let params = task.params.iter().map(|t| self.names_in(t, span)).collect::<Result<_>>()?;
+            Ok(TaskType { params, taken: task.taken.clone(), ret: self.names_in(&task.ret, span)? })
+        };
         Ok(match ty {
             // A type the declaration takes, not a shape or kind (see
             // `enter_type_params`).
             Type::Named(name, _) if self.params.contains(name) => ty.clone(),
             Type::Applied(applied) => {
-                let at = self
-                    .type_places
-                    .get(&span.place_key())
-                    .and_then(|parts| parts.iter().find(|(part, _)| *part == applied.name))
-                    .map_or(span, |(_, at)| *at);
+                let at = self.place(span, &applied.name);
+                if self.lookup(&applied.name, at, false)?.is_some_and(|entry| entry.what == What::Alias) {
+                    return err(at, format!("type alias '{}' takes no types: it stands for one type, so leave out '<…>'", applied.name));
+                }
                 let mut name = applied.name.clone();
                 self.rename(&mut name, at, &[What::Shape, What::Kind])?;
-                let types = applied.types.iter().map(|ty| self.ty(ty, span)).collect::<Result<_>>()?;
+                let types = applied.types.iter().map(|ty| self.names_in(ty, span)).collect::<Result<_>>()?;
                 Type::Applied(Box::new(Applied { name, types, region: applied.region.clone() }))
             }
             Type::Named(name, region) => {
-                let at = self
-                    .type_places
-                    .get(&span.place_key())
-                    .and_then(|parts| parts.iter().find(|(part, _)| part == name))
-                    .map_or(span, |(_, at)| *at);
+                let at = self.place(span, name);
                 let mut name = name.clone();
-                self.rename(&mut name, at, &[What::Shape, What::Kind])?;
+                self.rename(&mut name, at, &[What::Shape, What::Kind, What::Alias])?;
                 Type::Named(name, region.clone())
             }
-            Type::Ptr(inner, region) => Type::Ptr(Box::new(self.ty(inner, span)?), region.clone()),
-            Type::Maybe(inner) => Type::Maybe(Box::new(self.ty(inner, span)?)),
-            Type::Array(inner, count) => Type::Array(Box::new(self.ty(inner, span)?), *count),
-            Type::Slice(inner, region) => Type::Slice(Box::new(self.ty(inner, span)?), region.clone()),
-            Type::Range(inner) => Type::Range(Box::new(self.ty(inner, span)?)),
-            Type::Fail(inner) => Type::Fail(Box::new(self.ty(inner, span)?)),
-            Type::Or(value, error) => Type::Or(Box::new(self.ty(value, span)?), Box::new(self.ty(error, span)?)),
-            Type::Results(types) => Type::Results(types.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
-            Type::Tuple(items) => Type::Tuple(items.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
-            Type::Map(key, value, region) => Type::Map(Box::new(self.ty(key, span)?), Box::new(self.ty(value, span)?), region.clone()),
-            Type::Task(task) => Type::Task(Box::new(TaskType {
-                params: task.params.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?,
-                taken: task.taken.clone(),
-                ret: self.ty(&task.ret, span)?,
-            })),
+            Type::Ptr(inner, region) => Type::Ptr(Box::new(self.names_in(inner, span)?), region.clone()),
+            Type::Maybe(inner) => Type::Maybe(Box::new(self.names_in(inner, span)?)),
+            Type::Array(inner, count) => Type::Array(Box::new(self.names_in(inner, span)?), *count),
+            Type::Slice(inner, region) => Type::Slice(Box::new(self.names_in(inner, span)?), region.clone()),
+            Type::Range(inner) => Type::Range(Box::new(self.names_in(inner, span)?)),
+            Type::Fail(inner) => Type::Fail(Box::new(self.names_in(inner, span)?)),
+            Type::Or(value, error) => Type::Or(Box::new(self.names_in(value, span)?), Box::new(self.names_in(error, span)?)),
+            Type::Results(types) => Type::Results(types.iter().map(|t| self.names_in(t, span)).collect::<Result<_>>()?),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|t| self.names_in(t, span)).collect::<Result<_>>()?),
+            Type::Map(key, value, region) => Type::Map(Box::new(self.names_in(key, span)?), Box::new(self.names_in(value, span)?), region.clone()),
+            Type::Task(t) => Type::Task(Box::new(task(t)?)),
+            Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: task(&closure.task)?, region: closure.region.clone(), mode: closure.mode })),
             other => other.clone(),
         })
     }
@@ -1407,6 +1584,17 @@ impl Resolver<'_> {
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::StructInit { name, types, fields } => {
+                // An alias names a type, and a value is written with the
+                // shape's own name.
+                if let Some(entry) = self.lookup(name, span, false)?.filter(|entry| entry.what == What::Alias)
+                    && let Some(aliased) = self.aliases.get(&entry.full)
+                {
+                    let message = match aliased {
+                        Type::Named(shape, _) => format!("'{0}' is a type alias, a name for '{1}'; a value is written with the shape's own name, as in '{1} {{ … }}'", name, shape),
+                        _ => format!("'{}' is a type alias, a name for the type '{}', so it makes no value", name, aliased),
+                    };
+                    return err(span, message);
+                }
                 self.rename(name, span, &[What::Shape, What::Kind])?;
                 // The types a literal names are written types too.
                 for (ty, at) in types.iter_mut() {

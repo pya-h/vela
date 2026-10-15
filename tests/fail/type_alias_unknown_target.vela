@@ -1,0 +1,5 @@
+; error: 2:18: unknown type 'NoSuchType'
+alias Missing => NoSuchType
+
+task main()
+fi
