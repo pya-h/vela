@@ -1,0 +1,54 @@
+  1 | ; A type alias written with a region is the type it stands for in that region,
+    | comment:; A type alias written with a region is the type it stands for in that region,
+  2 | ; wherever it is: alone, in a slice, a map, a pointer, a shape, or a tuple.
+    | comment:; wherever it is: alone, in a slice, a map, a pointer, a shape, or a tuple.
+  3 | alias Cents => int
+    | keyword:alias  type:Cents  operator:=>  type-builtin:int
+  4 | alias Names => [text]
+    | keyword:alias  type:Names  operator:=>  punctuation:[  type-builtin:text  punctuation:]
+  5 | alias Label => text
+    | keyword:alias  type:Label  operator:=>  type-builtin:text
+  6 | alias Prices => [text: Cents]
+    | keyword:alias  type:Prices  operator:=>  punctuation:[  type-builtin:text  punctuation::  type:Cents  punctuation:]
+  8 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+  9 |     value: T
+    | field:value  punctuation::  type:T
+ 10 | fi
+    | keyword:fi
+ 12 | shape Item
+    | keyword:shape  type:Item
+ 13 |     name: Label
+    | field:name  punctuation::  type:Label
+ 14 |     cost: Cents
+    | field:cost  punctuation::  type:Cents
+ 15 | fi
+    | keyword:fi
+ 17 | task count(names: Names@r) -> int
+    | keyword:task  task:count  punctuation:(  parameter:names  punctuation::  type:Names  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 18 |     <- names.len
+    | keyword:<-  parameter:names  punctuation:.  field:len
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     region r default
+    | keyword:region  region:r  keyword:default
+ 23 |     fixed names: Names@r = ["ann", "bo", ...]
+    | keyword:fixed  variable:names  punctuation::  type:Names  operator:@  region:r  operator:=  punctuation:[  string:"ann"  punctuation:,  string:"bo"  punctuation:,  keyword:...  punctuation:]
+ 24 |     fixed pair: (Cents, Label)@r = (3, "x" + "y" at r)
+    | keyword:fixed  variable:pair  punctuation::  punctuation:(  type:Cents  punctuation:,  type:Label  punctuation:)  operator:@  region:r  operator:=  punctuation:(  number:3  punctuation:,  string:"x"  operator:+  string:"y"  keyword:at  region:r  punctuation:)
+ 25 |     fixed prices: Prices@r = ["tea": 250]
+    | keyword:fixed  variable:prices  punctuation::  type:Prices  operator:@  region:r  operator:=  punctuation:[  string:"tea"  punctuation::  number:250  punctuation:]
+ 26 |     fixed boxed: Box<Cents> = Box { value: 7 }
+    | keyword:fixed  variable:boxed  punctuation::  type:Box  punctuation:<  type:Cents  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:7  punctuation:}
+ 27 |     fixed shown: Box<Label>@r = Box { value: "box" + "ed" at r }
+    | keyword:fixed  variable:shown  punctuation::  type:Box  punctuation:<  type:Label  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"box"  operator:+  string:"ed"  keyword:at  region:r  punctuation:}
+ 28 |     fixed item: Item@r = Item { name: "pen" + "cil" at r, cost: 90 }
+    | keyword:fixed  variable:item  punctuation::  type:Item  operator:@  region:r  operator:=  type:Item  punctuation:{  field:name  punctuation::  string:"pen"  operator:+  string:"cil"  keyword:at  region:r  punctuation:,  field:cost  punctuation::  number:90  punctuation:}
+ 29 |     fixed costs: ^Cents@r = new Cents(5)
+    | keyword:fixed  variable:costs  punctuation::  operator:^  type:Cents  operator:@  region:r  operator:=  keyword:new  type:Cents  punctuation:(  number:5  punctuation:)
+ 30 |     show(count(names), " ", pair.0, pair.1, " ", prices["tea"], " ", boxed.value, " ", shown.value, " ", item.name, " ", costs^)
+    | builtin-fn:show  punctuation:(  task:count  punctuation:(  variable:names  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  field:0  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:,  string:" "  punctuation:,  variable:prices  punctuation:[  string:"tea"  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:boxed  punctuation:.  field:value  punctuation:,  string:" "  punctuation:,  variable:shown  punctuation:.  field:value  punctuation:,  string:" "  punctuation:,  variable:item  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:costs  operator:^  punctuation:)
+ 31 | fi
+    | keyword:fi

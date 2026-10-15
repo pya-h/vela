@@ -1,0 +1,6 @@
+; error: 5:22: expected type int, got text
+alias Cents => int
+
+task main()
+    fixed c: Cents = "ten"
+fi

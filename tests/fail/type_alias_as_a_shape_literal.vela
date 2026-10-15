@@ -1,0 +1,12 @@
+; error: 11:15: 'Place' is a type alias, a name for 'Point'; a value is written with the shape's own name, as in 'Point { … }'
+shape Point
+    x: int
+    y: int
+fi
+
+alias Spot => Point
+alias Place => Spot
+
+task main()
+    fixed p = Place { x: 1, y: 2 }
+fi

@@ -1,0 +1,7 @@
+; error: 6:18: 'int' holds no pointers or text, so it lives in no region; remove '@r'
+alias Cents => int
+
+task main()
+    region r
+    fixed pair: (Cents, int)@r = (1, 2)
+fi

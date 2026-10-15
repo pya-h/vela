@@ -1,0 +1,31 @@
+; A type alias written with a region is the type it stands for in that region,
+; wherever it is: alone, in a slice, a map, a pointer, a shape, or a tuple.
+alias Cents => int
+alias Names => [text]
+alias Label => text
+alias Prices => [text: Cents]
+
+shape Box<T>
+    value: T
+fi
+
+shape Item
+    name: Label
+    cost: Cents
+fi
+
+task count(names: Names@r) -> int
+    <- names.len
+fi
+
+task main()
+    region r default
+    fixed names: Names@r = ["ann", "bo", ...]
+    fixed pair: (Cents, Label)@r = (3, "x" + "y" at r)
+    fixed prices: Prices@r = ["tea": 250]
+    fixed boxed: Box<Cents> = Box { value: 7 }
+    fixed shown: Box<Label>@r = Box { value: "box" + "ed" at r }
+    fixed item: Item@r = Item { name: "pen" + "cil" at r, cost: 90 }
+    fixed costs: ^Cents@r = new Cents(5)
+    show(count(names), " ", pair.0, pair.1, " ", prices["tea"], " ", boxed.value, " ", shown.value, " ", item.name, " ", costs^)
+fi

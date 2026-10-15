@@ -1,0 +1,6 @@
+; error: 5:14: type alias 'Cents' takes no types: it stands for one type, so leave out '<…>'
+alias Cents => int
+
+task main()
+    fixed c: Cents<int> = 1
+fi

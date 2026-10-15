@@ -265,7 +265,7 @@ impl State {
         // One that stands for itself, through others or not, is told where it
         // is declared, even when nothing names it.
         for alias in self.modules.iter().flat_map(|module| &module.type_aliases) {
-            expand_aliases(&Type::Named(alias.name.clone(), None), &aliases, &mut Vec::new(), None, &|_| alias.ty_span)?;
+            expand_aliases(&Type::Named(alias.name.clone(), None), &aliases, &mut Vec::new(), &mut Vec::new(), &|_| alias.ty_span)?;
         }
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
@@ -442,6 +442,7 @@ impl State {
             type_places: &self.type_places,
             aliases: aliases.unwrap_or(&none),
             params: Vec::new(),
+            spelling: Spelling::default(),
         };
         let mut includes = Vec::new();
         for (include, &target) in module.includes.iter().zip(&module.included) {
@@ -533,6 +534,7 @@ impl State {
             }
         }
         let spelling = spelling(module, tables.get(index), tables, variants, by_module, &imports, &includes);
+        resolver.spelling = spelling.clone();
         let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
         if aliases.is_none() {
@@ -849,68 +851,59 @@ type TypeAliases = HashMap<String, Type>;
 /// `ty` with each type alias in it put in its place, and each alias in that
 /// alias's type, as if the type it stands for were written there: `Names@r`,
 /// with `alias Names => [text]`, is `[text]@r`. `stack` holds the aliases being
-/// put in, to find one that stands for itself, `inside` the region of the
-/// slice, map, pointer or shape `ty` is in, and `at` where an alias of the
-/// program is written, for errors.
-fn expand_aliases(ty: &Type, aliases: &TypeAliases, stack: &mut Vec<String>, inside: Option<&str>, at: &dyn Fn(&str) -> Span) -> Result<Type> {
-    let task = |task: &TaskType, stack: &mut Vec<String>| -> Result<TaskType> {
-        let params = task.params.iter().map(|t| expand_aliases(t, aliases, stack, None, at)).collect::<Result<_>>()?;
-        Ok(TaskType { params, taken: task.taken.clone(), ret: expand_aliases(&task.ret, aliases, stack, None, at)? })
+/// put in, to find one that stands for itself, and `at` where an alias of the
+/// program is written, for errors. An alias written with a region, of a type
+/// that lives in none, adds the region, the alias, and its type to `unplaced`
+/// (see `Resolver::ty`).
+fn expand_aliases(ty: &Type, aliases: &TypeAliases, stack: &mut Vec<String>, unplaced: &mut Vec<(String, String, Type)>, at: &dyn Fn(&str) -> Span) -> Result<Type> {
+    let each = |t: &Type, stack: &mut Vec<String>, unplaced: &mut Vec<(String, String, Type)>| expand_aliases(t, aliases, stack, unplaced, at);
+    let task = |task: &TaskType, stack: &mut Vec<String>, unplaced: &mut Vec<(String, String, Type)>| -> Result<TaskType> {
+        let params = task.params.iter().map(|t| expand_aliases(t, aliases, stack, unplaced, at)).collect::<Result<_>>()?;
+        Ok(TaskType { params, taken: task.taken.clone(), ret: expand_aliases(&task.ret, aliases, stack, unplaced, at)? })
     };
-    let each = |t: &Type, inside: Option<&str>, stack: &mut Vec<String>| expand_aliases(t, aliases, stack, inside, at).map(Box::new);
     Ok(match ty {
         Type::Named(name, region) => {
             let Some(aliased) = aliases.get(name) else { return Ok(ty.clone()) };
             if let Some(start) = stack.iter().position(|alias| alias == name) {
-                let cycle: Vec<&str> = stack[start..].iter().chain([name]).map(|alias| unqualified(alias)).collect();
+                let cycle: Vec<&str> = stack.iter().skip(start).chain([name]).map(|alias| unqualified(alias)).collect();
                 return err(at(name), format!("type aliases can't stand for one another in a circle: {}", cycle.join(" -> ")));
             }
             stack.push(name.clone());
-            let expanded = expand_aliases(aliased, aliases, stack, None, at)?;
+            let expanded = expand_aliases(aliased, aliases, stack, unplaced, at)?;
             stack.pop();
-            alias_region(expanded, region.as_deref(), inside).map_err(|message| Error::at(at(name), message))?
+            let Some(region) = region else { return Ok(expanded) };
+            if expanded == Type::Region {
+                return err(at(name), "a region doesn't live in another region");
+            }
+            // What has no region takes it, as `parse_type_region` gives one.
+            let mut named = !expanded.regions().is_empty();
+            let placed = expanded.map_regions_of_names(&mut |_| {
+                named = true;
+                Some(region.clone())
+            });
+            if !named {
+                unplaced.push((region.clone(), name.clone(), placed.clone()));
+            }
+            placed
         }
         Type::Applied(applied) => {
-            let inside = applied.region.as_deref().or(inside);
-            let types = applied.types.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?;
+            let types = applied.types.iter().map(|t| each(t, stack, unplaced)).collect::<Result<_>>()?;
             Type::Applied(Box::new(Applied { name: applied.name.clone(), types, region: applied.region.clone() }))
         }
-        Type::Ptr(inner, region) => Type::Ptr(each(inner, region.as_deref().or(inside), stack)?, region.clone()),
-        Type::Slice(inner, region) => Type::Slice(each(inner, region.as_deref().or(inside), stack)?, region.clone()),
-        Type::Map(key, value, region) => Type::Map(each(key, region.as_deref().or(inside), stack)?, each(value, region.as_deref().or(inside), stack)?, region.clone()),
-        Type::Array(inner, count) => Type::Array(each(inner, inside, stack)?, *count),
-        Type::Range(inner) => Type::Range(each(inner, inside, stack)?),
-        Type::Maybe(inner) => Type::Maybe(each(inner, inside, stack)?),
-        Type::Fail(inner) => Type::Fail(each(inner, inside, stack)?),
-        Type::Or(value, error) => Type::Or(each(value, inside, stack)?, each(error, inside, stack)?),
-        Type::Results(types) => Type::Results(types.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?),
-        Type::Tuple(items) => Type::Tuple(items.iter().map(|t| expand_aliases(t, aliases, stack, inside, at)).collect::<Result<_>>()?),
-        Type::Task(t) => Type::Task(Box::new(task(t, stack)?)),
-        Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: task(&closure.task, stack)?, region: closure.region.clone(), mode: closure.mode })),
+        Type::Ptr(inner, region) => Type::Ptr(Box::new(each(inner, stack, unplaced)?), region.clone()),
+        Type::Slice(inner, region) => Type::Slice(Box::new(each(inner, stack, unplaced)?), region.clone()),
+        Type::Map(key, value, region) => Type::Map(Box::new(each(key, stack, unplaced)?), Box::new(each(value, stack, unplaced)?), region.clone()),
+        Type::Array(inner, count) => Type::Array(Box::new(each(inner, stack, unplaced)?), *count),
+        Type::Range(inner) => Type::Range(Box::new(each(inner, stack, unplaced)?)),
+        Type::Maybe(inner) => Type::Maybe(Box::new(each(inner, stack, unplaced)?)),
+        Type::Fail(inner) => Type::Fail(Box::new(each(inner, stack, unplaced)?)),
+        Type::Or(value, error) => Type::Or(Box::new(each(value, stack, unplaced)?), Box::new(each(error, stack, unplaced)?)),
+        Type::Results(types) => Type::Results(types.iter().map(|t| each(t, stack, unplaced)).collect::<Result<_>>()?),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(|t| each(t, stack, unplaced)).collect::<Result<_>>()?),
+        Type::Task(t) => Type::Task(Box::new(task(t, stack, unplaced)?)),
+        Type::Closure(closure) => Type::Closure(Box::new(ClosureType { task: task(&closure.task, stack, unplaced)?, region: closure.region.clone(), mode: closure.mode })),
         other => other.clone(),
     })
-}
-
-/// The type an alias stands for, `ty`, in the region written after the alias,
-/// `region`, as `parse_type_region` gives a written type one: what has none
-/// takes it. The parser gives a name in a slice, map, pointer or shape in a
-/// region that region too, not knowing it is an alias's (`[Step]@r` is
-/// `[Step@r]@r`), so an alias of a type that lives in no region may have the
-/// one it is in, `inside`, and no other.
-fn alias_region(ty: Type, region: Option<&str>, inside: Option<&str>) -> std::result::Result<Type, String> {
-    let Some(region) = region else { return Ok(ty) };
-    if ty == Type::Region {
-        return Err("a region doesn't live in another region".to_string());
-    }
-    let mut named = !ty.regions().is_empty();
-    let ty = ty.map_regions_of_names(&mut |_| {
-        named = true;
-        Some(region.to_string())
-    });
-    match named || inside == Some(region) {
-        true => Ok(ty),
-        false => Err(format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", ty, region)),
-    }
 }
 
 /// What a file can name of a module it includes under a name.
@@ -943,6 +936,8 @@ struct Resolver<'a> {
     /// The names of the types the declaration being walked takes: they name no
     /// shape or kind, so a written type naming one is left as it is.
     params: Vec<String>,
+    /// How this file writes the program's names, for errors naming a type.
+    spelling: Spelling,
 }
 
 impl Resolver<'_> {
@@ -1405,7 +1400,18 @@ impl Resolver<'_> {
             return Ok(ty);
         }
         let at = |alias: &str| self.alias_place(span, alias);
-        expand_aliases(&ty, self.aliases, &mut Vec::new(), None, &at)
+        let mut unplaced = Vec::new();
+        let expanded = expand_aliases(&ty, self.aliases, &mut Vec::new(), &mut unplaced, &at)?;
+        // The parser gives a region written after a tuple, an array, a slice,
+        // a map, a pointer or a shape to each name in it too, not knowing which
+        // is an alias's (`(Cents, text)@r` is `(Cents@r, text@r)`), so an alias
+        // of a type that lives in no region may have one only where the rest of
+        // the type lives in it.
+        let regions = expanded.regions();
+        if let Some((region, alias, aliased)) = unplaced.iter().find(|(region, _, _)| !regions.contains(&region.as_str())) {
+            return err(at(alias), format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", aliased, region));
+        }
+        Ok(expanded)
     }
 
     /// Where the part `name` of the type written at `span` is (see
@@ -1587,11 +1593,12 @@ impl Resolver<'_> {
                 // An alias names a type, and a value is written with the
                 // shape's own name.
                 if let Some(entry) = self.lookup(name, span, false)?.filter(|entry| entry.what == What::Alias)
-                    && let Some(aliased) = self.aliases.get(&entry.full)
+                    && self.aliases.contains_key(&entry.full)
                 {
-                    let message = match aliased {
+                    let aliased = expand_aliases(&Type::Named(entry.full, None), self.aliases, &mut Vec::new(), &mut Vec::new(), &|_| span)?;
+                    let message = match self.spelling.ty(&aliased) {
                         Type::Named(shape, _) => format!("'{0}' is a type alias, a name for '{1}'; a value is written with the shape's own name, as in '{1} {{ … }}'", name, shape),
-                        _ => format!("'{}' is a type alias, a name for the type '{}', so it makes no value", name, aliased),
+                        aliased => format!("'{}' is a type alias, a name for the type '{}', so it makes no value", name, aliased),
                     };
                     return err(span, message);
                 }

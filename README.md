@@ -40,7 +40,8 @@ values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word sayi
 (`frozen`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
 from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
 task or shape is made for each set of types used. The types a shape is given name no region, as its fields
-don't: `Box<text>@r` holds its text in `r`. A program can span
+don't: `Box<text>@r` holds its text in `r`. `alias SampleTask => (int) -> int` gives a type another name,
+which is that type wherever it is written, so `[SampleTask#4]` reads as an array of four tasks. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
 another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. Vela's

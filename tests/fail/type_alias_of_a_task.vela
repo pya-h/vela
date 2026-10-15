@@ -1,0 +1,9 @@
+; error: 6:15: 'double' is a task, not a type
+task double(n: int) -> int
+    <- n * 2
+fi
+
+alias Step => double
+
+task main()
+fi

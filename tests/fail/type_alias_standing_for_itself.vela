@@ -1,0 +1,5 @@
+; error: 2:15: type aliases can't stand for one another in a circle: Tree -> Tree
+alias Tree => [Tree]@r
+
+task main()
+fi

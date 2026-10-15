@@ -1,0 +1,10 @@
+; error: 7:17: 'Small' is a variant, not a type; its type is its kind, 'Size'
+kind Size
+    Small
+    Large
+fi
+
+alias Little => Small
+
+task main()
+fi

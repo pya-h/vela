@@ -1,0 +1,5 @@
+; error: 2:13: expected '=>' and the type 'Cents' stands for, as in 'alias Cents => (int) -> int', got '='
+alias Cents = int
+
+task main()
+fi

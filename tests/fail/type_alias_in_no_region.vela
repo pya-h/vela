@@ -1,0 +1,7 @@
+; error: 6:14: 'int' holds no pointers or text, so it lives in no region; remove '@r'
+alias Cents => int
+
+task main()
+    region r
+    fixed c: Cents@r = 1
+fi

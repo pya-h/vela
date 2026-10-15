@@ -1,0 +1,4 @@
+; error: 3:5: a type alias is written outside every task, shape, and kind, as in 'alias SampleTask => (int) -> int' at the start of a line
+task main()
+    alias Cents => int
+fi

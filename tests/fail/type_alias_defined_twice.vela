@@ -1,0 +1,9 @@
+; error: 6:7: 'Cents' is already defined at 2:7
+shape Cents
+    n: int
+fi
+
+alias Cents => int
+
+task main()
+fi

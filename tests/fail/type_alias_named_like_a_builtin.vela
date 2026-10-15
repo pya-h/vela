@@ -1,0 +1,5 @@
+; error: 2:7: 'text' is a builtin type and cannot be redefined
+alias text => int
+
+task main()
+fi
