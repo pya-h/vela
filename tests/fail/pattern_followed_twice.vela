@@ -1,0 +1,14 @@
+; error: 9:24: 'Shaped' is followed already, at 9:15; a shape or kind follows each pattern once
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle::Shaped & Shaped
+    radius: float
+fi
+
+task main()
+fi

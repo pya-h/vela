@@ -510,8 +510,13 @@
         with one of five words rather than a system of its own: <code>frozen</code>, <code>same</code>,
         <code>similar</code>, <code>shown</code>, and <code>ordered</code>, where Rust has traits and <code>impl</code> blocks, C++ concepts (or
         nothing, and errors deep inside a template), and Go interfaces used as constraints. That makes generic code
-        readable and its errors short, and it is the limit too: there is no way to ask for a type that can be added, or
-        for one that has a method, so a task that needs more than the five words takes concrete types. A kind takes
+        readable and its errors short. A type that has a method is asked for by a
+        <a href="vela.html#patterns">pattern</a>, <code>&lt;T: Shaped&gt;</code>, which a shape or kind says it follows
+        (<code>shape Circle::Shaped</code>), much as a Rust type implements a trait, but written in the type's own block,
+        so no other module adds one to it, and with no pattern as the type of a value, where Rust has <code>dyn</code> and
+        Go's interfaces are just that. A pattern may give a method a default body, as a trait does, and ask for fields,
+        which a trait can't and a Swift or Kotlin protocol can. There is still no way to ask for a type that can be
+        added: a task that adds its values takes numbers. A kind takes
         types too (<code>kind Option&lt;T&gt;</code>), as Rust's <code>enum</code> does. Go's generics
         arrived late and Vela's are small on purpose; C++ and Rust go much further, with the compile times and the error
         messages that come with it.

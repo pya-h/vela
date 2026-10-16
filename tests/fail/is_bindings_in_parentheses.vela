@@ -1,4 +1,4 @@
-; error: 9:18: a pattern names its bindings without parentheses, as in 'is Red value'
+; error: 9:18: a case form names its bindings without parentheses, as in 'is Red value'
 kind Light
     Red
     Green

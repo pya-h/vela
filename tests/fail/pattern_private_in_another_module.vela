@@ -1,0 +1,9 @@
+; error: 4:12: 'Hidden' is private to module 'library'
+include pattern_private_in_another_module/library
+
+shape Car::library.Hidden
+    speed: int
+fi
+
+task main()
+fi

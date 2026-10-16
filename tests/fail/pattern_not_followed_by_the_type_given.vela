@@ -1,0 +1,23 @@
+; error: 22:10: task 'measure' takes a type that follows pattern 'Shaped' as 'T', and Circle doesn't; a shape follows it with '::' after its name, as in 'shape Circle::Shaped'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle
+    radius: float
+
+    area() -> float
+        <- .radius
+    fi
+fi
+
+task measure<T: Shaped>(x: T) -> float
+    <- x.area()
+fi
+
+task main()
+    show(measure(Circle { radius: 1.0 }))
+fi

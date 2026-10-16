@@ -1,0 +1,7 @@
+; error: 2:12: unknown pattern 'Nowhere'
+shape Dot::Nowhere
+    y: int
+fi
+
+task main()
+fi

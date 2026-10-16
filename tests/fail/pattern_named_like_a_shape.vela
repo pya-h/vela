@@ -1,0 +1,11 @@
+; error: 6:9: 'Spot' is already defined at 2:7
+shape Spot
+    x: int
+fi
+
+pattern Spot
+    go()
+fi
+
+task main()
+fi

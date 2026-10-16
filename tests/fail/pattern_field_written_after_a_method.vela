@@ -1,0 +1,8 @@
+; error: 4:5: every field of a pattern goes above its methods, and method 'count' is declared at 3:5
+pattern Counted
+    count() -> int
+    total: int
+fi
+
+task main()
+fi

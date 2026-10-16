@@ -1,0 +1,11 @@
+; error: 7:5: 'Grows.grow' changes the value it is called on, so it needs a place that can change, and 'x' is a parameter, which never does; write 'flex x: T' to change the task's own copy, or 'flex& x: T' to change the caller's
+pattern Grows
+    alters grow(by: int)
+fi
+
+task enlarge<T: Grows>(x: T)
+    x.grow(1)
+fi
+
+task main()
+fi

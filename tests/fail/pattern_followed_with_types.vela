@@ -1,0 +1,11 @@
+; error: 6:12: pattern 'Named' takes no types; leave out '<…>'
+pattern Named
+    label() -> int
+fi
+
+shape Tag::Named<int>
+    x: int
+fi
+
+task main()
+fi

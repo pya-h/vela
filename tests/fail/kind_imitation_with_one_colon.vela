@@ -1,4 +1,4 @@
-; error: 6:10: a kind imitates another with '::' after its name, as in 'kind Lamp::Other'
+; error: 6:10: a kind imitates another kind or follows a pattern with '::' after its name, as in 'kind Lamp::Other'
 kind Light
     Red
 fi

@@ -14,6 +14,8 @@ const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and
 /// A type alias inside a block, which names a type for the whole file.
 const MISPLACED_TYPE_ALIAS: &str = "a type alias is written outside every task, shape, and kind, as in 'alias SampleTask => (int) -> int' at the start of a line";
 
+const MISPLACED_PATTERN: &str = "a pattern is written outside every task, shape, and kind, as in 'pattern Shaped' at the start of a line, and closes with 'fi'";
+
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
 /// compiler stage walks the tree recursively, so without a limit deeply nested
@@ -32,14 +34,14 @@ const TUPLE_TRAILING_COMMA: &str = "a tuple has no comma after its last item";
 /// `fail` written where a failure is matched and named. The verb makes a
 /// failure; the noun names one, so every program written before this says
 /// `fail` in a pattern.
-const FAILURE_NAMES: &str = "a pattern names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
+const FAILURE_NAMES: &str = "a case form names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
 
 /// `fail` on the first line of a plan B, where the failure it handles is named.
 const PLAN_B_NAMES: &str =
     "a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'";
 
 /// `failure` written where a value goes: the mirror of `FAILURE_NAMES`.
-const FAIL_MAKES: &str = "'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'";
+const FAIL_MAKES: &str = "'failure' names a failure in a case form; to make one, write 'fail', as in '<- fail e'";
 
 /// A second region after one already written: `f(x)@r at r2`, or `a + b at r at r2`.
 const REGION_ALREADY_NAMED: &str =
@@ -132,6 +134,12 @@ pub struct Parser {
     /// The file's type aliases, which name types and are no items: the
     /// resolver puts their types where their names are written.
     type_aliases: Vec<AliasDef>,
+    /// The file's patterns, which are no items: the checker reads them, and
+    /// the resolver gives each shape and kind following one its defaults.
+    patterns: Vec<PatternDef>,
+    /// Whether the header being read is a pattern's, where a `,` after its
+    /// results may start the next header (see `parse_results`).
+    in_pattern: bool,
     /// The methods of the shape or kind just read, each a task of its own (see
     /// `method_name`), which the file's items take in after it.
     methods: Vec<Item>,
@@ -157,7 +165,7 @@ impl Parser {
     /// `tokens`, `spans` and `ends` are parallel, as produced by
     /// `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
-        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
     }
 
     /// Whether the file has a loop that gives a value (see `ValueLoop`).
@@ -173,6 +181,11 @@ impl Parser {
     /// The type aliases of the file parsed.
     pub fn type_aliases(&mut self) -> Vec<AliasDef> {
         std::mem::take(&mut self.type_aliases)
+    }
+
+    /// The patterns of the file parsed.
+    pub fn patterns(&mut self) -> Vec<PatternDef> {
+        std::mem::take(&mut self.patterns)
     }
 
     /// Where the parts of every type parsed so far are.
@@ -200,6 +213,12 @@ impl Parser {
             if self.at_type_alias_after(0) || (self.check(Token::Priv) && self.at_type_alias_after(1)) {
                 let alias = self.parse_type_alias()?;
                 self.type_aliases.push(alias);
+                self.skip_newlines();
+                continue;
+            }
+            if self.at_pattern_after(0) || (self.check(Token::Priv) && self.at_pattern_after(1)) {
+                let pattern = self.parse_pattern_def()?;
+                self.patterns.push(pattern);
                 self.skip_newlines();
                 continue;
             }
@@ -503,6 +522,9 @@ impl Parser {
         if self.at_type_alias_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_TYPE_ALIAS));
         }
+        if self.at_pattern_after(first) && self.peek_span().col > 1 {
+            return Err(Error::at(self.peek_span(), MISPLACED_PATTERN));
+        }
         if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
             // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
@@ -571,8 +593,8 @@ impl Parser {
         match self.peek() {
             Token::Task | Token::Shape | Token::Kind | Token::Include => true,
             // `priv` also marks a shape's field.
-            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1),
-            _ => self.at_macro_after(0) || (self.at_line_start() && self.at_type_alias_after(0)),
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
+            _ => self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
 
@@ -630,6 +652,12 @@ impl Parser {
 
     /// Whether the tokens `ahead` of the cursor start a type alias: `alias`
     /// and a name.
+    fn at_pattern_after(&self, ahead: usize) -> bool {
+        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == PATTERN)
+            && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
+            && matches!(self.tokens.get(self.pos + ahead + 2), None | Some(Token::Newline | Token::Eof | Token::Colon | Token::Lt))
+    }
+
     fn at_type_alias_after(&self, ahead: usize) -> bool {
         matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == ALIAS) && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
     }
@@ -665,7 +693,7 @@ impl Parser {
                 Token::Shape => self.parse_shape().map(Item::Shape)?,
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
                 _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
-                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, type alias, or macro, or a shape's field")),
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, pattern, type alias, or macro, or a shape's field")),
             };
             match &mut item {
                 Item::Task(t) => t.private = true,
@@ -885,7 +913,7 @@ impl Parser {
         self.skip_newlines();
         // A body written anyway is read, so that loading says what is wrong: in
         // a program, that it has no native tasks at all.
-        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) && !self.at_type_alias_after(0) {
+        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) && !self.at_type_alias_after(0) && !self.at_pattern_after(0) {
             task.body = self.parse_block()?;
             self.expect_fi("task", opened)?;
         }
@@ -931,8 +959,8 @@ impl Parser {
                 }
                 self.advance(); // ...
             }
-            let needs = if self.match_token(Token::Colon) { self.parse_needs()? } else { Vec::new() };
-            params.push(TypeParam { name, span, needs, group });
+            let (needs, patterns) = if self.match_token(Token::Colon) { self.parse_needs()? } else { (Vec::new(), Vec::new()) };
+            params.push(TypeParam { name, span, needs, patterns, group });
             if !self.match_token(Token::Comma) {
                 break;
             }
@@ -944,15 +972,26 @@ impl Parser {
     }
 
     /// The words after a type's `:`, joined by `&`: what every type given for it
-    /// must allow, each one thing. A word another already means is an error,
-    /// since it says nothing new.
-    fn parse_needs(&mut self) -> Result<Vec<(Need, Span)>> {
+    /// must allow, each one thing, and the patterns it must follow, each a name
+    /// that is no word (which the resolver checks names a pattern). A word
+    /// another already means is an error, since it says nothing new.
+    #[allow(clippy::type_complexity)]
+    fn parse_needs(&mut self) -> Result<(Vec<(Need, Span)>, Vec<(String, Span)>)> {
         let mut kept: Vec<(Need, Span)> = Vec::new();
+        let mut patterns: Vec<(String, Span)> = Vec::new();
         loop {
             let span = self.peek_span();
-            let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}", needs_list())))?;
+            let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}, or a pattern it follows", needs_list())))?;
             let Some(need) = Need::from_word(&word) else {
-                return Err(Error::at(span, format!("'{}' isn't something a type can be asked to allow; the words are {}", word, needs_list())));
+                let pattern = self.qualified(word)?;
+                if let Some((_, before)) = patterns.iter().find(|(before, _)| *before == pattern) {
+                    return Err(Error::at(span, format!("'{}' is written twice, at {}:{} too", pattern, before.line, before.col)));
+                }
+                patterns.push((pattern, span));
+                if !self.match_token(Token::Amp) {
+                    return Ok((kept, patterns));
+                }
+                continue;
             };
             if let Some(&(before, _)) = kept.iter().find(|(before, _)| before.means(need) || need.means(*before)) {
                 if before == need {
@@ -963,7 +1002,7 @@ impl Parser {
             }
             kept.push((need, span));
             if !self.match_token(Token::Amp) {
-                return Ok(kept);
+                return Ok((kept, patterns));
             }
         }
     }
@@ -1003,7 +1042,12 @@ impl Parser {
             let ty_span = self.peek_span();
             results.push(ResultDef { name, ty_span });
             types.push(self.parse_type()?);
-            if !self.match_token(Token::Comma) {
+            // In a pattern, `area() -> float, name(r: region) -> text@r`: no
+            // result's type is a name and a `(`, so one starts the next header.
+            let next_header = self.in_pattern
+                && (matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) && matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::Lt))
+                    || matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == ALTERS));
+            if next_header || !self.match_token(Token::Comma) {
                 break;
             }
         }
@@ -1020,6 +1064,7 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
+        let follows = self.parse_after_colons("shape", &name)?;
         self.skip_newlines();
         let mut fields: Vec<Field> = Vec::new();
         let mut shared: Vec<SharedField> = Vec::new();
@@ -1073,7 +1118,7 @@ impl Parser {
         }
         self.expect_fi("shape", opened)?;
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false })
+        Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false, follows })
     }
 
     /// A shape's `shared` field, with the cursor at `shared` and `private` saying
@@ -1338,7 +1383,7 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
-        let imitates = self.parse_imitated(&name)?;
+        let imitates = self.parse_after_colons("kind", &name)?;
         self.skip_newlines();
         let mut variants = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
@@ -1413,39 +1458,281 @@ impl Parser {
             }
         }
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, imitated: 0 })
+        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, follows: Vec::new(), imitated: 0 })
     }
 
-    /// `::Other & Another` after a kind's name and types: the kinds it
-    /// imitates, each a type with where it is written. Empty when no `::`
-    /// follows the name.
-    fn parse_imitated(&mut self, kind: &str) -> Result<Vec<(Type, Span)>> {
+    /// `::Other & Shown` after a kind's or a shape's (`what`) name and types:
+    /// the kinds a kind imitates and the patterns either follows, each a type
+    /// with where it is written, which the resolver tells apart. Empty when no
+    /// `::` follows the name.
+    fn parse_after_colons(&mut self, what: &str, name: &str) -> Result<Vec<(Type, Span)>> {
         if !self.check(Token::Colon) {
             return Ok(Vec::new());
         }
+        let (does, other, members) = match what {
+            "kind" => ("imitates another kind or follows a pattern", "Other", "the variants of a kind start"),
+            _ => ("follows a pattern", "Shaped", "the fields of a shape start"),
+        };
         let first = self.peek_span();
         let doubled = self.tokens.get(self.pos + 1) == Some(&Token::Colon) && self.spans.get(self.pos + 1).is_some_and(|next| next.line == first.line && next.col == first.col + 1);
         if !doubled {
-            return Err(Error::at(first, format!("a kind imitates another with '::' after its name, as in 'kind {}::Other'", kind)));
+            return Err(Error::at(first, format!("a {} {} with '::' after its name, as in '{} {}::{}'", what, does, what, name, other)));
         }
         self.advance(); // :
         self.advance(); // :
-        let mut imitated = Vec::new();
+        let mut after = Vec::new();
         loop {
             let at = self.peek_span();
             if matches!(self.peek(), Token::Newline | Token::Eof) {
-                let expected = if imitated.is_empty() { "the kind it imitates after '::'" } else { "another kind after '&'" };
-                return Err(Error::at(at, format!("expected {}, as in 'kind {}::Other'", expected, kind)));
+                let expected = match (after.is_empty(), what) {
+                    (true, "kind") => "the kind it imitates or the pattern it follows after '::'",
+                    (true, _) => "the pattern it follows after '::'",
+                    (false, "kind") => "another kind or pattern after '&'",
+                    (false, _) => "another pattern after '&'",
+                };
+                return Err(Error::at(at, format!("expected {}, as in '{} {}::{}'", expected, what, name, other)));
             }
-            imitated.push((self.parse_type()?, at));
+            after.push((self.parse_type()?, at));
             if !self.match_token(Token::Amp) {
                 break;
             }
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(self.unexpected("'&' and another kind, or the end of the line: the variants of a kind start on the line after its name"));
+            let more = if what == "kind" { "another kind or pattern" } else { "another pattern" };
+            return Err(self.unexpected(&format!("'&' and {}, or the end of the line: {} on the line after its name", more, members)));
         }
-        Ok(imitated)
+        Ok(after)
+    }
+
+    /// `pattern Shaped … fi`, or `priv pattern …`: its fields, then its methods,
+    /// each line one header, or several parted by `,`. A line of one header
+    /// followed by a line that starts no member (a bare `name()` counts) starts
+    /// that method's default body, closed by `fi`; any other is required.
+    fn parse_pattern_def(&mut self) -> Result<PatternDef> {
+        let private = self.match_token(Token::Priv);
+        let opened = self.peek_span();
+        self.advance(); // pattern
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        if self.check(Token::Lt) {
+            return Err(Error::at(self.peek_span(), "a pattern takes no types yet; the types a task takes follow it, as in 'task f<T: Shaped>(x: T)'"));
+        }
+        if self.check(Token::Colon) {
+            return Err(Error::at(self.peek_span(), format!("a pattern follows no other pattern yet; ask for the other's methods in '{}' too, or have a shape follow both, joined with '&'", name)));
+        }
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("the end of the line: the members of a pattern start on the line after its name"));
+        }
+        self.skip_newlines();
+        let mut fields: Vec<Field> = Vec::new();
+        let mut methods: Vec<TaskDef> = Vec::new();
+        // The last default body that started with a bare call, `reset()`.
+        let mut last_bare: Option<(Span, String, String)> = None;
+        while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
+            self.reject_pattern_words()?;
+            if matches!(self.peek(), Token::Ident(_)) && self.tokens.get(self.pos + 1) == Some(&Token::Colon) {
+                if let Some(first) = methods.first() {
+                    let method = first.owner.as_ref().map_or("", |owner| owner.name.as_str());
+                    return Err(Error::at(self.peek_span(), format!("every field of a pattern goes above its methods, and method '{}' is declared at {}:{}", method, first.span.line, first.span.col)));
+                }
+                let field = self.parse_field(Slot::Field)?;
+                reject_member_named_this(&field.name, field.span, "a field")?;
+                if let Some(before) = fields.iter().find(|before| before.name == field.name) {
+                    return Err(Error::at(field.span, format!("field '{}' is already defined at {}:{}", field.name, before.span.line, before.span.col)));
+                }
+                if field.default.is_some() {
+                    return Err(Error::at(field.ty_span, "a pattern's field names no value it falls back on; the shape following the pattern declares the field, and may give it one"));
+                }
+                fields.push(field);
+                if !matches!(self.peek(), Token::Newline | Token::Eof) {
+                    return Err(self.unexpected("the end of the line: a pattern's field is written on a line of its own"));
+                }
+                self.skip_newlines();
+                continue;
+            }
+            let mut line = vec![self.parse_pattern_header(&fields, &methods)?];
+            while self.match_token(Token::Comma) {
+                let mut above = methods.clone();
+                above.extend(line.iter().cloned());
+                line.push(self.parse_pattern_header(&fields, &above)?);
+            }
+            if !matches!(self.peek(), Token::Newline | Token::Eof) {
+                return Err(self.unexpected("',' and another method, or the end of the line"));
+            }
+            self.skip_newlines();
+            if line.len() == 1 && !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() && !self.at_pattern_member() {
+                // `reset()` alone on the line after a header starts its body;
+                // a mistake after it may mean two headers were meant.
+                let bare = matches!((self.tokens.get(self.pos), self.tokens.get(self.pos + 1), self.tokens.get(self.pos + 2), self.tokens.get(self.pos + 3)), (Some(Token::Ident(_)), Some(Token::LParen), Some(Token::RParen), Some(Token::Newline | Token::Eof)));
+                let bare = bare.then(|| (self.peek_span(), match self.peek() { Token::Ident(name) => name.clone(), _ => String::new() }));
+                let lambdas = self.lambdas.len();
+                let header = line.first().map(|method| (method.span, method.owner.as_ref().map_or(String::new(), |owner| owner.name.clone())));
+                let read = self.parse_block().and_then(|body| match &header {
+                    Some((span, _)) => self.expect_fi("method", *span).map(|()| body),
+                    None => Ok(body),
+                });
+                let body = match (read, &bare, &header) {
+                    (Ok(body), _, _) => body,
+                    (Err(_), Some((at, called)), Some((_, method))) => return Err(Error::at(*at, two_headers(called, method))),
+                    (Err(error), _, _) => return Err(error),
+                };
+                if let Some(Item::Task(lambda)) = self.lambdas.get(lambdas) {
+                    return Err(Error::at(lambda.span, "a pattern's default method holds no lambda yet; write a task outside the pattern, and name it here"));
+                }
+                if let Some(method) = line.first_mut() {
+                    method.body = body;
+                }
+                if let (Some((at, called)), Some((_, method))) = (&bare, &header) {
+                    last_bare = Some((*at, called.clone(), method.clone()));
+                }
+                self.skip_newlines();
+            }
+            methods.append(&mut line);
+        }
+        if !self.check(Token::Fi)
+            && let Some((at, called, method)) = last_bare
+        {
+            return Err(Error::at(at, two_headers(&called, &method)));
+        }
+        self.expect_fi("pattern", opened)?;
+        if fields.is_empty() && methods.is_empty() {
+            return Err(Error::at(span, format!("pattern '{}' asks for nothing; give it a method a shape following it has, as in 'area() -> float'", name)));
+        }
+        Ok(PatternDef { name, fields, methods, span, private })
+    }
+
+    /// Refuses what a pattern's member doesn't take, at its start.
+    fn reject_pattern_words(&self) -> Result<()> {
+        let at = self.peek_span();
+        match self.peek() {
+            Token::Priv => Err(Error::at(at, "a pattern's members are as visible as the pattern; a method a pattern asks for is never 'priv', since any code using the pattern calls it")),
+            Token::Shared => Err(Error::at(at, "a pattern has no shared fields or methods yet; it asks for what each value of a shape has")),
+            Token::Dollar => Err(Error::at(at, "a pattern's method takes no decorators; the method a shape writes for it may")),
+            Token::New => Err(Error::at(at, "a pattern has no shared methods yet, so no 'new'")),
+            Token::Ident(word) if word == READ && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => {
+                Err(Error::at(at, format!("a pattern's field is written without '{}'; the shape following it says who may change it", READ)))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Whether the cursor starts a pattern's member rather than a statement: a
+    /// field, `name: type`, or a method's header that no statement can be, with
+    /// `alters`, a parameter, results, or another header after a `,`. A bare
+    /// `name()` alone on its line is a statement here.
+    fn at_pattern_member(&self) -> bool {
+        let pos = self.pos;
+        let token = |at: usize| self.tokens.get(at);
+        match (token(pos), token(pos + 1)) {
+            (Some(Token::Ident(word)), Some(Token::Ident(_))) if word == ALTERS => true,
+            (Some(Token::Ident(_)), Some(Token::Colon | Token::Lt)) => true,
+            (Some(Token::Ident(_)), Some(Token::LParen)) => {
+                if matches!(token(pos + 2), Some(Token::Flex | Token::Bind | Token::Fixed)) || matches!((token(pos + 2), token(pos + 3)), (Some(Token::Ident(_)), Some(Token::Colon))) {
+                    return true;
+                }
+                let mut depth = 0usize;
+                let mut at = pos + 1;
+                while let Some(token) = token(at) {
+                    match token {
+                        Token::LParen => depth += 1,
+                        Token::RParen => {
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        Token::Newline | Token::Eof => return false,
+                        _ => {}
+                    }
+                    at += 1;
+                }
+                matches!(token(at + 1), Some(Token::Arrow | Token::Comma))
+            }
+            _ => false,
+        }
+    }
+
+    /// A method's header in a pattern, which `parse_method` reads in a shape:
+    /// `alters` maybe, its name, its parameters, and its results. It becomes a
+    /// task named as the method, whose first parameter holds the value it is
+    /// called on, of the type following the pattern; its body is read after.
+    fn parse_pattern_header(&mut self, fields: &[Field], methods: &[TaskDef]) -> Result<TaskDef> {
+        let opened = self.peek_span();
+        let alters_span = match self.peek() {
+            Token::Ident(word) if word == ALTERS => {
+                self.advance();
+                Some(opened)
+            }
+            _ => None,
+        };
+        let span = self.peek_span();
+        if !matches!(self.peek(), Token::Ident(_)) {
+            return Err(self.unexpected("a method's header, as in 'area() -> float', or a field, as in 'name: text'"));
+        }
+        let name = self.expect_ident()?;
+        reject_member_named_this(&name, span, "a method")?;
+        if is_builtin_member(&name) || name == LEN {
+            return Err(Error::at(span, format!("'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that", name)));
+        }
+        if let Some(field) = fields.iter().find(|field| field.name == name) {
+            return Err(Error::at(
+                span,
+                format!("'{0}' is already a field of this pattern, at {1}:{2}; both are written '.{0}', so a field and a method can't share a name", name, field.span.line, field.span.col),
+            ));
+        }
+        if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
+            return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
+        }
+        if self.check(Token::Lt) {
+            return Err(Error::at(self.peek_span(), "a method takes no types of its own yet; write a task that takes them, and call it from the method"));
+        }
+        if !self.check(Token::LParen) {
+            return Err(self.unexpected(&format!("'(' and the parameters of method '{}', as in '{}() -> int'", name, name)));
+        }
+        let mut params = vec![Field {
+            name: THIS.to_string(),
+            ty: Type::Named(THIS_TYPE.to_string(), None),
+            span,
+            ty_span: span,
+            private: false,
+            read: false,
+            default_region: false,
+            passing: Passing::Copy,
+            default: None,
+        }];
+        params.extend(self.parse_field_list(Slot::Param)?);
+        if let Some(param) = params.iter().skip(1).find(|param| param.default.is_some()) {
+            return Err(Error::at(param.span, "a pattern's method names no value a parameter falls back on yet; every call gives each one"));
+        }
+        if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
+            return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
+        }
+        let mut results = Vec::new();
+        let ret = if self.match_token(Token::Arrow) {
+            let outer = std::mem::replace(&mut self.in_pattern, true);
+            let read = self.parse_results(&mut results);
+            self.in_pattern = outer;
+            read?
+        } else {
+            Type::Nothing
+        };
+        Ok(TaskDef {
+            name: name.clone(),
+            types: Vec::new(),
+            given: Vec::new(),
+            params,
+            ret,
+            results,
+            body: Vec::new(),
+            span,
+            private: false,
+            native: false,
+            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: false }),
+            decorators: Vec::new(),
+            passes: Vec::new(),
+            wrappers: Vec::new(),
+            kept: None,
+        })
     }
 
     /// Whether the `(` after a name inside a kind holds a variant's values rather
@@ -2257,7 +2544,7 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
-            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, type alias, or macro, or a shape's field, not a statement")),
+            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, pattern, type alias, or macro, or a shape's field, not a statement")),
             _ if self.at_macro_after(0) => Err(Error::at(span, MISPLACED_MACRO)),
             Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
                 Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
@@ -2947,7 +3234,7 @@ impl Parser {
                     return Err(Error::at(
                         names.span,
                         format!(
-                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{flex {1}}}' for the value inside a maybe or a 'T ~ E', or '{0} flex (x, y)' for a tuple's items",
+                            "'{0}' matches a value, so a name alone isn't a case form: write '{{flex {1}}}' for the value inside a maybe or a 'T ~ E', or '{0} flex (x, y)' for a tuple's items",
                             keyword, names.name
                         ),
                     ));
@@ -2966,7 +3253,7 @@ impl Parser {
                     let kind = written.join(".");
                     return Err(Error::at(
                         self.peek_span(),
-                        format!("a pattern takes the types of '{0}' from the value it matches, so it names none: '{1} {0}.Tag …'", kind, keyword),
+                        format!("a case form takes the types of '{0}' from the value it matches, so it names none: '{1} {0}.Tag …'", kind, keyword),
                     ));
                 }
                 let module_first = written.first().is_some_and(|first| self.is_module(first));
@@ -2977,7 +3264,7 @@ impl Parser {
                     return Err(Error::at(
                         span,
                         format!(
-                            "a pattern names the variant alone or after its kind, as in '{0} {1}' or '{0} Kind.{1}': the value's kind tells which module it is from",
+                            "a case form names the variant alone or after its kind, as in '{0} {1}' or '{0} Kind.{1}': the value's kind tells which module it is from",
                             keyword, tag
                         ),
                     ));
@@ -2990,14 +3277,14 @@ impl Parser {
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag),
+                        format!("a case form names its bindings without parentheses, as in '{} {} value'", keyword, tag),
                     ));
                 }
                 let mut binds = Vec::new();
                 while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Flex | Token::Bind) {
                     let names = self.parse_pattern_names()?;
                     if !names.parts.is_empty() {
-                        return Err(Error::at(names.span, format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
+                        return Err(Error::at(names.span, format!("a case form names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
                     }
                     binds.push(names);
                 }
@@ -4688,7 +4975,16 @@ fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
 
 /// The words a generic type can be asked to allow, for a message, from what
 /// most types allow to what fewest do.
-fn needs_list() -> String {
+/// The error for a bare `called()` read as the first line of the default body
+/// of pattern method `method`, after which the pattern didn't read on.
+fn two_headers(called: &str, method: &str) -> String {
+    format!(
+        "'{0}()' is read as the first line of the body of '{1}', since a line of one header followed by a statement starts that method's body; to ask for both methods, write them on one line, as in '{1}(), {0}()'",
+        called, method
+    )
+}
+
+pub fn needs_list() -> String {
     let words: Vec<String> = [Need::Frozen, Need::Same, Need::Similar, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
 }
@@ -4742,7 +5038,7 @@ fn mentions_region(ty: &Type) -> bool {
 /// position of the method's name. The value names the region it lives in
 /// (`@this`), which the checker drops where the shape or kind lives in none; a
 /// shape that takes types is named with them, as its own fields name them.
-fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
+pub fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
     let region = Some(THIS_WORD.to_string());
     let ty = if types.is_empty() {
         Type::Named(owner.to_string(), region)

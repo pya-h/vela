@@ -1,0 +1,8 @@
+; error: 4:5: 'stop()' is read as the first line of the body of 'start', since a line of one header followed by a statement starts that method's body; to ask for both methods, write them on one line, as in 'start(), stop()'
+pattern Job
+    start()
+    stop()
+fi
+
+task main()
+fi

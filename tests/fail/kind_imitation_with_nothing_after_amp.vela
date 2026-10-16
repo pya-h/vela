@@ -1,4 +1,4 @@
-; error: 6:19: expected another kind after '&', as in 'kind Lamp::Other'
+; error: 6:19: expected another kind or pattern after '&', as in 'kind Lamp::Other'
 kind Light
     Red
 fi

@@ -57,7 +57,9 @@ export type SymbolKind =
   /** A type a task takes, `T` in `task first<T>(…)`. */
   | "type-param"
   /** `#P = 3.14159`: a value the compiler computes. */
-  | "macro";
+  | "macro"
+  /** `pattern Shaped … fi`: what a shape or kind following it has. */
+  | "pattern";
 
 export interface OutlineItem {
   name: string;

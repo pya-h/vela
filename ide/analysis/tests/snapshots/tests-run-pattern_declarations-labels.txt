@@ -1,0 +1,38 @@
+  1 | ; Patterns another file declares, one with a default that calls a task this
+    | comment:; Patterns another file declares, one with a default that calls a task this
+  2 | ; file keeps to itself.
+    | comment:; file keeps to itself.
+  4 | pattern Labelled
+    | keyword:pattern  type:Labelled
+  5 |     tag() -> int
+    | method:tag  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  6 |         <- secret() + 1
+    | keyword:<-  task:secret  punctuation:(  punctuation:)  operator:+  number:1
+  7 |     fi
+    | keyword:fi
+  8 | fi
+    | keyword:fi
+ 10 | pattern Sized
+    | keyword:pattern  type:Sized
+ 11 |     size: int
+    | field:size  punctuation::  type-builtin:int
+ 12 |     bigger(other: this) -> bool
+    | method:bigger  punctuation:(  parameter:other  punctuation::  type:this  punctuation:)  operator:->  type-builtin:bool
+ 13 |         <- .size > other.size
+    | keyword:<-  punctuation:.  field:size  operator:>  parameter:other  punctuation:.  field:size
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | priv task secret() -> int
+    | keyword:priv  keyword:task  task:secret  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 18 |     <- 41
+    | keyword:<-  number:41
+ 19 | fi
+    | keyword:fi
+ 21 | shape Crate::Labelled & Sized
+    | keyword:shape  type:Crate  punctuation::  punctuation::  type:Labelled  operator:&  type:Sized
+ 22 |     size: int
+    | field:size  punctuation::  type-builtin:int
+ 23 | fi
+    | keyword:fi

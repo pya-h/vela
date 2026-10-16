@@ -1,0 +1,18 @@
+; error: 12:5: method 'area' of 'Circle' has another header than pattern 'Shaped' asks for: write it 'area() -> float'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle::Shaped
+    radius: float
+
+    area() -> int
+        <- 1
+    fi
+fi
+
+task main()
+fi

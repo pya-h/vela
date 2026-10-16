@@ -1,0 +1,7 @@
+; error: 3:12: a pattern's field names no value it falls back on; the shape following the pattern declares the field, and may give it one
+pattern Counted
+    count: int = 0
+fi
+
+task main()
+fi

@@ -75,7 +75,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
-    ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
+    ("is", "value is case form", "The condition holds when the case form matches, as {v}, none, or a variant; its names are visible in the block."),
     (
         "$",
         "$d, $d(values), $d?, or $(w1, w2(values), .m)",
@@ -86,8 +86,8 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "P..., args: P..., (P...) -> R, f(args...)",
         "After a type a task takes, a group of types: any number, any mix. args: P... takes the values a call gives after the others, (P...) -> R is a task taking them, and f(args...) gives them on, whole. Each use fills the group in with the types of its values, as it fills in a type, so it costs nothing when the program runs. After the values of a slice, as in [1, 2, ...] at r, it makes a slice of them.",
     ),
-    ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A pattern names a failure with 'failure' instead."),
-    ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
+    ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A case form names a failure with 'failure' instead."),
+    ("failure", "failure e", "Names the failure a case form matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),
     (
         "default",
@@ -297,6 +297,25 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             let gives = if what == "shape" { "each value of it is given" } else { "each call gives it" };
             (code, format!("A type {} {} takes, standing for the type {}. {}", what, task, gives, allows))
         }
+        SymbolKind::Pattern => {
+            let private = if symbol.private { "priv " } else { "" };
+            let mut code = format!("{}pattern {}\n", private, vela::ast::unqualified(&symbol.name));
+            for (_, member) in k.children(id) {
+                let line = match member.kind {
+                    SymbolKind::Field => format!("{}: {}", member.name, member.detail),
+                    _ => {
+                        let alters = member.intro.map_or(String::new(), |word| format!("{} ", word));
+                        let default = if member.default { " ; default" } else { "" };
+                        format!("{}{}{}{}", alters, member.name, member.detail, default)
+                    }
+                };
+                code.push_str(&format!("    {}\n", line));
+            }
+            code.push_str("fi");
+            let doc = "A pattern: what a shape or kind that follows it has, written after its name, as in 'shape Circle::Shaped', and asked of the types a task takes, as in '<T: Shaped>'. A method marked default comes with its body, which a follower has unless it writes its own.";
+            let module = from_module(k, symbol);
+            (code, if module.is_empty() { doc.to_string() } else { format!("{} {}", doc, module) })
+        }
         SymbolKind::Shape | SymbolKind::Kind => {
             let keyword = if symbol.kind == SymbolKind::Shape { "shape" } else { "kind" };
             let private = if symbol.private { "priv " } else { "" };
@@ -309,6 +328,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             for (_, variant) in k.members(id, SymbolKind::Variant).filter(|(_, variant)| variant.parent != Some(id)) {
                 let from = variant.parent.and_then(|kind| k.symbol(kind)).map_or("?", |kind| vela::ast::unqualified(&kind.name));
                 code.push_str(&format!("    {}{} ; from {}\n", vela::ast::unqualified(&variant.name), variant.detail, from));
+            }
+            // The default methods it has from the patterns it follows.
+            let followed = crate::scan::followed_methods(k.symbols(), id, &|written| k.global(written, SymbolKind::Pattern));
+            let mut tail = String::new();
+            for method in followed.iter().filter_map(|&method| k.symbol(method)).filter(|method| method.default) {
+                let from = method.parent.and_then(|pattern| k.symbol(pattern)).map_or("?", |pattern| vela::ast::unqualified(&pattern.name));
+                let alters = method.intro.map_or(String::new(), |word| format!("{} ", word));
+                tail.push_str(&format!("    {}{}{} ; from {}\n", alters, method.name, method.detail, from));
             }
             for (_, member) in k.children(id) {
                 // Another file's private members are its own, as completion leaves them out too.
@@ -324,6 +351,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 };
                 code.push_str(&format!("    {}{}{}{}{}\n", private, alters, vela::ast::unqualified(&member.name), separator, member.detail));
             }
+            code.push_str(&tail);
             code.push_str("fi");
             (code, from_module(k, symbol))
         }

@@ -1,0 +1,11 @@
+; error: 7:10: field 'count' is one pattern 'Counted' asks for, so code using the pattern reads it, and it isn't 'priv'
+pattern Counted
+    count: int
+fi
+
+shape Tally::Counted
+    priv count: int
+fi
+
+task main()
+fi

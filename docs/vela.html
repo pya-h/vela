@@ -172,9 +172,9 @@
     <section>
       <h2>Philosophy</h2>
       <ul>
-        <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
+        <li><strong>Minimal surface.</strong> No classes <em>and</em> structs, no interfaces <em>and</em> traits: one of each. Shapes, kinds, and tasks, and patterns for what several shapes or kinds have in common.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>fixed</code>, at any depth; mutation explicitly opt-in, of the contents only with <code>bind</code>, or in every way with <code>flex</code>.</li>
-        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
+        <li><strong>Safe by design.</strong> Static typing, exhaustive matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
         <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons ending statements, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
         <li><strong>No GC, no free.</strong> Values live on the stack, and <code>new</code> allocates in a <em>region</em>, which frees everything in it at once when its block closes (see <a href="#regions">Memory and Regions</a>).</li>
       </ul>
@@ -213,6 +213,7 @@
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
         slice as it is at each pass</a>), <code>stock.vela</code> (a stock list searched with <a href="#generic-kinds">kinds that take types</a>),
         <code>kind_imitation.vela</code> (orders refused for reasons of two kinds, one <a href="#kind-imitation">imitating</a> the other),
+        <code>patterns.vela</code> (a till ringing up books and lamps, which follow a <a href="#patterns">pattern</a>),
         <code>seats.vela</code> (a party seated in a hall, with
         <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>),
         <code>collatz.vela</code> (Collatz walks counted with <a href="#loop-parts">a loop in three parts and
@@ -254,6 +255,7 @@
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
         <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>), and kinds that imitate others, having their variants (see <a href="#kind-imitation">Kinds that imitate kinds</a>)</li>
         <li><code class="type">Name</code> — a type alias, another name for a type, <code>alias Name =&gt; type</code> (see <a href="#type-aliases">Type aliases</a>)</li>
+        <li>Patterns, which say what a shape or kind following them has, and which a type a task takes may be asked to follow, <code>&lt;T: Shaped&gt;</code> (see <a href="#patterns">Patterns</a>)</li>
       </ul>
     </section>
 
@@ -301,9 +303,10 @@ block shared type break continue endless fixed flex</pre>
         after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
         <a href="#shared">shared fields</a> <code>Shape.f</code> names. <code>new</code> is reserved everywhere
         but after <code>shared</code> and after a dot, where it names a <a href="#shared-methods">shared method</a>,
-        <code>Point.new(…)</code>. Six words are read by their position and are no more
+        <code>Point.new(…)</code>. Seven words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
-        <code>alias</code> at the start of a line outside every item (see <a href="#type-aliases">Type aliases</a>),
+        <code>alias</code> and <code>pattern</code> at the start of a line outside every item (see
+        <a href="#type-aliases">Type aliases</a> and <a href="#patterns">Patterns</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>),
         <code>this</code>, and <code>native</code> before a task of the standard library (see
@@ -369,6 +372,7 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>#NAME = value</code></td><td>a macro: a name for a value the compiler computes, at the start of a line outside every task (see <a href="#macros">Macros</a>)</td></tr>
         <tr><td><code>alias Name =&gt; type</code></td><td>a type alias: another name for a type, at the start of a line outside every task (see <a href="#type-aliases">Type aliases</a>)</td></tr>
+        <tr><td><code>pattern Shaped … fi</code>, <code>shape Circle::Shaped</code>, <code>&lt;T: Shaped&gt;</code></td><td>a pattern, the fields and methods a shape or kind following it has, some with default bodies; a shape following it; a type a task takes that follows it (see <a href="#patterns">Patterns</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, type alias, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code>, <code>Shape.m</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it, called or as a value (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
@@ -976,7 +980,7 @@ scores[<span class="number">0</span>] = <span class="number">10</span>          
       </ul>
       <p>
         <code>bind</code> is written where <code>flex</code> is: before a parameter (see
-        <a href="#bind-parameters">Parameters that bind</a>), a reference, a pattern's names, a loop's start, a shared
+        <a href="#bind-parameters">Parameters that bind</a>), a reference, a case form's names, a loop's start, a shared
         field, in a lambda's list, and in a task's type, each below.
       </p>
       <p id="steps">
@@ -1082,7 +1086,7 @@ ys[<span class="number">0</span>] = <span class="number">9</span>               
       </p>
       <ul>
         <li>a <code>flex</code> variable or name, or one assigned: <code>flex ys = xs</code>, <code>ys = xs</code>, a
-          <code>flex</code> name in a pattern;</li>
+          <code>flex</code> name in a case form;</li>
         <li>a <code>flex</code> parameter: <code>sort(scores)</code>, where <code>sort</code> takes
           <code>flex items: [int]@r</code>;</li>
         <li>a place that changes: a field, an item, a map's value, a slice added to (<code>bag.items = xs</code>,
@@ -1106,7 +1110,7 @@ ys[<span class="number">0</span>] = <span class="number">9</span>               
         where nothing changes it, and what its call gives back is what <code>xs</code> owns, but one that only reads
         <code>xs</code> to make a new slice gives back nothing owned. A whole value, which holds no slice, map or
         pointer, is copied whole, so a <code>fixed</code> number, text, or shape of them may be given anywhere.
-        Parameters not written <code>flex</code>, <code>fixed&amp;</code> references, pattern and loop names without
+        Parameters not written <code>flex</code>, <code>fixed&amp;</code> references, case form and loop names without
         <code>flex</code>, and <code>.this</code> outside <code>alters</code> are fixed names too. In a task or shape
         that takes types, the rule is checked for each set of types it is given, and the message names the set that
         breaks it: <code>flex y = x</code> with <code>x: T</code> is fine where <code>T</code> is <code>int</code>, and
@@ -1909,7 +1913,7 @@ p.x = 5                    <span class="comment">; error: cannot assign to a fie
 
       <h3 id="kinds">Kinds</h3>
       <p>
-        Kinds are tagged unions with exhaustive pattern matching. Each <code>case</code> binds the variant's payload
+        Kinds are tagged unions with exhaustive matching. Each <code>case</code> binds the variant's payload
         fields in order; the bindings are visible only inside that case, so different cases may reuse names.
         A kind value has no fields of its own (<code>s.radius</code> is an error): <code>match</code> is the way to
         read a payload.
@@ -1953,7 +1957,7 @@ p.x = 5                    <span class="comment">; error: cannot assign to a fie
 <span class="keyword">fixed</span> c = Dimmed(3)</pre>
       <p>
         A variant can also be named through its kind: <code>Light.Red</code> and <code>Light.Dimmed(3)</code> are the
-        same values as <code>Red</code> and <code>Dimmed(3)</code>, and a pattern may be written the same way,
+        same values as <code>Red</code> and <code>Dimmed(3)</code>, and a case form may be written the same way,
         <code>case Light.Dimmed level</code> (the kind it names must be the value's). It is how another module's
         variants are named when only their kind is brought in (see <a href="#modules">Modules</a>). Since
         <code>Light.Red</code> reads like a field, no variable can be named like a kind.
@@ -2240,7 +2244,7 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         <li><strong>Where they go.</strong> Anywhere a type does: parameters, results, fields, payloads, arrays and slices
           (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
           and after <code>new</code>.</li>
-        <li><strong>Patterns.</strong> In <code>is</code> and <code>case</code>, braces take the value out of a
+        <li><strong>Case forms.</strong> In <code>is</code> and <code>case</code>, braces take the value out of a
           <code>maybe</code> or a <code>T ~ E</code> and parentheses take a tuple apart, so
           <code>when found is {(name, age)}</code> does both, as do <code>case {(a, b)}</code> and
           <code>case failure (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
@@ -2259,8 +2263,8 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         slice of anything. The names in <code>&lt; &gt;</code> after the task's name are the types it takes, and
         <code>T</code> in its header and body means the type each call gives it. The body is checked once, with
         <code>T</code> standing for that type, and the compiler then makes one task for each set of types the program
-        uses it with, so a call costs nothing more than an ordinary one. A shape takes types the same way
-        (<a href="#generic-shapes">Shapes that take types</a>); a kind can't yet.
+        uses it with, so a call costs nothing more than an ordinary one. A shape and a kind take types the same way
+        (<a href="#generic-shapes">Shapes that take types</a>, <a href="#generic-kinds">Kinds that take types</a>).
       </p>
       <p>
         A word after a type's <code>:</code> says what every type given for it must allow, and so what the body may do
@@ -2289,6 +2293,8 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         '&lt;T: ordered &amp; shown&gt;'</em>. No word asks a type for arithmetic: a task that adds its values takes
         numbers. <code>shown</code> allows every type <code>show</code> writes, a shape or kind with its own
         <a href="#str"><code>str</code></a> or its default one, so a task that prints its values takes almost any of them.
+        Besides the words, the name of a <a href="#patterns">pattern</a> asks every type given to follow it,
+        <code>&lt;T: Shaped&gt;</code>, and lets the body call its methods.
       </p>
       <pre><span class="keyword">task</span> first&lt;T&gt;(xs: [T]@r) -&gt; <span class="keyword">maybe</span> T
     <span class="keyword">each</span> v <span class="keyword">in</span> xs
@@ -2589,6 +2595,120 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           variants carry what <code>Option</code>'s carry, with <code>Choice</code>'s <code>T</code> in place of
           <code>Option</code>'s; an <code>Option&lt;int&gt;</code> then goes where a <code>Choice&lt;int&gt;</code> is
           expected. The kind imitated names no region, since the variants it gives name none.</li>
+      </ul>
+
+      <h3 id="patterns">Patterns</h3>
+      <p>
+        A <em>pattern</em> says what a shape or kind has, so that code can rely on it whichever shape it is given. It is
+        written outside every task, shape, and kind, at the start of a line, as <code>pattern Name … fi</code>, and
+        holds fields and methods. A shape or kind <em>follows</em> it by naming it after <code>::</code>, as in
+        <code>shape Square::Shaped</code>, and a task taking types asks for it after a type's <code>:</code>, as in
+        <code>task total&lt;T: Shaped&gt;(…)</code>, as it asks for a word like <code>shown</code>.
+      </p>
+      <pre class="program" data-file="patterns.vela"><span class="keyword">pattern</span> Shaped
+    name: text
+    area() -&gt; float
+    start(), stop()                 <span class="comment">; two headers alone: each shape writes them</span>
+    describe(r: <span class="keyword">region</span>) -&gt; text@r   <span class="comment">; a default, with its body</span>
+        <span class="keyword">&lt;-</span> <span class="string">"{.name} of area {.area()}"</span> <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+    larger(other: this) -&gt; bool     <span class="comment">; this: the type following the pattern</span>
+        <span class="keyword">&lt;-</span> .area() &gt; other.area()
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Square::Shaped
+    name: text
+    side: float
+
+    area() -&gt; float
+        <span class="keyword">&lt;-</span> .side * .side
+    <span class="keyword">fi</span>
+    start()
+        show(<span class="string">"square starts"</span>)
+    <span class="keyword">fi</span>
+    stop()
+        show(<span class="string">"square stops"</span>)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Circle::Shaped
+    name: text
+    radius: float
+
+    area() -&gt; float
+        <span class="keyword">&lt;-</span> <span class="number">3.0</span> * .radius * .radius
+    <span class="keyword">fi</span>
+    start()
+        show(<span class="string">"circle starts"</span>)
+    <span class="keyword">fi</span>
+    stop()
+        show(<span class="string">"circle stops"</span>)
+    <span class="keyword">fi</span>
+    describe(r: <span class="keyword">region</span>) -&gt; text@r   <span class="comment">; its own, in place of the default</span>
+        <span class="keyword">&lt;-</span> <span class="string">"a circle of radius {.radius}"</span> <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> total&lt;T: Shaped&gt;(xs: [T]@r) -&gt; float   <span class="comment">; any type that follows Shaped</span>
+    <span class="keyword">flex</span> sum = <span class="number">0.0</span>
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        sum += x.area()
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> sum
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> s = Square { name: <span class="string">"tile"</span>, side: <span class="number">2.0</span> }
+    <span class="keyword">fixed</span> c = Circle { name: <span class="string">"ring"</span>, radius: <span class="number">1.0</span> }
+    show(s.describe(r))                         <span class="comment">; tile of area 4</span>
+    show(c.describe(r))                         <span class="comment">; a circle of radius 1</span>
+    show(s.larger(Square { name: <span class="string">"dot"</span>, side: <span class="number">1.0</span> }))   <span class="comment">; true</span>
+    c.start()                                   <span class="comment">; circle starts</span>
+    show(total([s, s, ...] <span class="keyword">at</span> r), <span class="string">" "</span>, total([c, ...] <span class="keyword">at</span> r))   <span class="comment">; 8 3</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Methods a follower writes.</strong> A method's header alone, <code>area() -&gt; float</code>, is one
+          every follower writes, with the same header: the same parameters, each taken the same way, the same results,
+          and <code>alters</code> where the pattern says it; the names of its parameters and of the regions it takes
+          are its own. A follower that lacks one, or writes it otherwise, is an error that shows the header to write.
+          Several headers may share a line, parted by <code>,</code>, as <code>start(), stop()</code> above.</li>
+        <li><strong>Defaults.</strong> A header followed by a body, closed by <code>fi</code>, is a default: each
+          follower has it as its own method unless it writes one of that name, as <code>Circle</code> writes
+          <code>describe</code>. A line holding one header is followed by its body when the next line starts no other
+          member, and a bare <code>name()</code> on the next line counts as a line of that body; to ask for two methods
+          with no values, write them on one line, <code>start(), stop()</code>, which the message for a misread one says
+          too. A default's body has at least one line (<code>&lt;-</code> for one that does nothing). It is checked
+          once, as a task taking the type following the pattern, and again in each follower, as that follower's own
+          method; it reads the value as <code>.this</code>, its fields as <code>.name</code>, and calls the pattern's
+          methods as <code>.area()</code>.</li>
+        <li><strong><code>this</code>.</strong> Inside a pattern, <code>this</code>, and the pattern's own name, are
+          the type following it: <code>larger(other: this)</code> takes a value of the follower's own type, and
+          <code>same(other: Shaped)</code> means the same. In a follower that lives in a region, it is in
+          <code>@this</code>, the region of the value the method is called on, so <code>other</code> lives there too.</li>
+        <li><strong>Fields.</strong> A field in a pattern, <code>name: text</code>, is one each follower declares itself,
+          of the same type and not <code>priv</code>, so a shape's whole layout stays in its own block (a literal gives
+          every field, and every field is there to read); the pattern names no value it falls back on, which the shape
+          may. A kind has no fields, so it follows only a pattern without them.</li>
+        <li><strong>In a task taking types.</strong> <code>&lt;T: Shaped&gt;</code> lets the body call the pattern's
+          methods on a value of <code>T</code>, checked against its headers, and read its fields that hold nothing in a
+          region (an <code>int</code>, say; a value of <code>T</code> lives where the task doesn't know, so text is read
+          through a method). Each use gives a type that follows the pattern, and the task made for it calls that type's
+          own methods, directly, as any call: a pattern costs nothing when the program runs. A pattern joins the words
+          with <code>&amp;</code>, <code>&lt;T: Shaped &amp; shown&gt;</code>, and a shape follows several the same way,
+          <code>shape Circle::Shaped &amp; Counted</code>, as long as no two ask for one name; a kind lists patterns
+          among the kinds it imitates, <code>kind Light::Shown</code>.</li>
+        <li><strong>Following is said, never guessed.</strong> A shape that happens to have an <code>area()</code> but
+          doesn't write <code>::Shaped</code> doesn't follow it, as in Rust, so a task asking for a pattern is given only
+          what was meant for it. A pattern is a name of its file, as a shape is: <code>m.Shaped</code>,
+          <code>include m (Shaped)</code>, and <code>priv pattern</code>; a shape that takes types follows one too, as in
+          <code>shape Box&lt;T: shown&gt;::Shown</code>.</li>
+        <li><strong>Not yet.</strong> A pattern takes no types, follows no other pattern, has no shared methods and
+          gives its methods no decorators or values that parameters fall back on, and its defaults hold no lambdas. A
+          builtin type such as <code>int</code> follows none, since nothing writes that it does. And a pattern is no
+          type of a value: a slice of different shapes that follow one, called through it as it runs, is an idea for
+          later (see <a href="future-2.html#pattern-values">Patterns as the types of values</a>).</li>
       </ul>
 
       <h3 id="macros">Macros</h3>
@@ -3582,15 +3702,15 @@ show(total)</pre>
     show(grade(<span class="number">72</span>))       <span class="comment">; pass</span>
 <span class="keyword">fi</span></pre>
       <p>
-        A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
+        A condition can also test a <em>case form</em> with <code>is</code>, the same forms a <code>case</code> takes (<code>{v}</code>, <code>none</code>, a variant, a tuple taken apart, <code>failure e</code>). The
         names it binds are visible only in the block it guards (not in the <code>else</code>). A name is a
-        <code>fixed</code> unless the pattern writes <code>flex</code> before it, and parentheses take a tuple apart
+        <code>fixed</code> unless the case form writes <code>flex</code> before it, and parentheses take a tuple apart
         (see <a href="#tuples">Tuples</a>).
       </p>
       <p id="is-and">
         An <code>is</code> can be joined with other parts by <code>and</code>, before or after it, in a
         <code>when</code>, an <code>else when</code>, a <code>loop</code>, and a <code>when</code> used as a value.
-        The names a pattern binds are seen by the parts after its <code>and</code> and by the block, and each part
+        The names a case form binds are seen by the parts after its <code>and</code> and by the block, and each part
         is tested only when the ones before it held; the <code>else</code> runs when any of them didn't. An
         <code>is</code> is never joined with <code>or</code>, nor written after <code>not</code>: its names would
         then be bound on one path only. An <code>or</code> in parentheses is one part:

@@ -1,0 +1,15 @@
+; error: 11:7: 'T' follows patterns 'Starts' and 'Runs', which both ask for a method 'go', so this call doesn't say which it is; follow one of them here
+pattern Starts
+    go()
+fi
+
+pattern Runs
+    go()
+fi
+
+task drive<T: Starts & Runs>(x: T)
+    x.go()
+fi
+
+task main()
+fi

@@ -1,0 +1,6 @@
+; error: 3:5: a pattern is written outside every task, shape, and kind, as in 'pattern Shaped' at the start of a line, and closes with 'fi'
+task main()
+    pattern Starts
+        go()
+    fi
+fi

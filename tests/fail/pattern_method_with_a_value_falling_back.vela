@@ -1,0 +1,7 @@
+; error: 3:9: a pattern's method names no value a parameter falls back on yet; every call gives each one
+pattern Pads
+    pad(width: int = 8) -> int
+fi
+
+task main()
+fi

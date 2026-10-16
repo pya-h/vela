@@ -1,0 +1,11 @@
+; error: 6:12: 'Spot' is a shape, and a shape follows only patterns: no shape takes another's fields or methods
+shape Spot
+    x: int
+fi
+
+shape Dot::Spot
+    y: int
+fi
+
+task main()
+fi

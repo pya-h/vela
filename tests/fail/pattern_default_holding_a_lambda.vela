@@ -1,0 +1,10 @@
+; error: 4:19: a pattern's default method holds no lambda yet; write a task outside the pattern, and name it here
+pattern Doubles
+    twice() -> int
+        fixed f = (x: int) -> int <- x * 2 fi
+        <- f(1)
+    fi
+fi
+
+task main()
+fi

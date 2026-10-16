@@ -716,7 +716,7 @@ fi</pre>
             <code>xs.len</code>, but not grown or changed, which answers the mutation concern without copying
             anything (a pointer and a count). <code>case [int#4] xs</code> would match only that count, and give the
             array itself.</li>
-          <li><strong>Taking a tuple apart</strong> could use the pattern Vela already has, <code>case (int, float) (a, b)</code>,
+          <li><strong>Taking a tuple apart</strong> could use the case form Vela already has, <code>case (int, float) (a, b)</code>,
             or the idea's <code>case (int, float) a, b</code>, which reads like <code>fixed a, b = t</code>.</li>
           <li><strong>Shapes and kinds by name:</strong> <code>case Point p</code>, and <code>case maybe int m</code>
             for a <code>maybe</code>. A kind's variants are a value match, which <code>match</code> already does, so a
@@ -774,6 +774,46 @@ fi</pre>
         <div class="note">
           <strong>Why it waits:</strong> naming a region beside the group covers what a wrapper of such a task needs,
           sends in that region included, with no per-use rules about which reads a group allows.
+        </div>
+      </div>
+
+      <div class="option" id="pattern-values">
+        <h3><span aria-hidden="true">🧩</span> Patterns as the Types of Values <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Since 2026-10-16 a <a href="vela.html#patterns">pattern</a> is a requirement on types: a task taking
+          <code>&lt;T: Shaped&gt;</code> is copied for each type it is given, and each copy calls that type's own methods
+          directly. The author asked for the other half to be written down for later: a pattern as the type of a value,
+          so that one slice holds a <code>Circle</code> and a <code>Square</code> side by side, and a call goes to the
+          method of whichever shape each value is when the program runs (Rust's <code>dyn Trait</code>, Go's interfaces,
+          Java's and C#'s interfaces, Swift's existential <code>any Shaped</code>).
+        </p>
+        <pre>fixed shapes: [Shaped]@r = [Circle { … }, Square { … }, ...] at r   ; the idea, not Vela
+each s in shapes
+    show(s.area())          ; Circle.area or Square.area, as each value is
+fi</pre>
+        <p><strong>What it would take.</strong></p>
+        <ul>
+          <li><strong>A value that knows its methods.</strong> Each value of type <code>Shaped</code> would be two words:
+            where the shape's value is, and a table of its methods, one table per shape and pattern, made by the compiler.
+            A call reads the method from the table and calls it, one indirect call, which C can't inline.</li>
+          <li><strong>Where the value is.</strong> Shapes differ in size, so a <code>Shaped</code> can't hold one in place
+            the way an array of <code>Circle</code> does: the value lives in a region and the <code>Shaped</code> points
+            to it, so the type names that region, <code>Shaped@r</code>, and everything the region rules say about
+            pointers applies (it never outlives <code>r</code>, it is never null).</li>
+          <li><strong>What a method may say.</strong> A method taking <code>other: this</code> can't be called through a
+            <code>Shaped</code>, since the other value might be another shape; Rust calls such traits not object-safe.
+            Each pattern would be checked for whether all its methods can be called so, or each method marked.</li>
+          <li><strong>The three words.</strong> <code>fixed</code>, <code>bind</code> and <code>flex</code> would need a
+            rule for a value behind a table: <code>alters</code> methods only through a <code>flex</code> or
+            <code>bind</code> one, as for any value, and a copy copies the pointer, so it is twofold.</li>
+          <li><strong>Getting the shape back.</strong> A <code>match</code> on a <code>Shaped</code> by its shape
+            (<code>case Circle c</code>) would read which table it holds, a type test as <code>t.#k is …</code> is.</li>
+        </ul>
+        <div class="note">
+          <strong>Why it waits:</strong> the static form covers what a task over many shapes needs, at no cost when the
+          program runs, and a kind holding each shape as a variant already holds different shapes in one slice. The
+          dynamic form adds a value of a new sort, a cost on each call, and rules about which methods can be called; it
+          is worth its own Brief once a program wants it.
         </div>
       </div>
 

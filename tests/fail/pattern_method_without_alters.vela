@@ -1,0 +1,15 @@
+; error: 9:5: method 'grow' of 'Plant' has another header than pattern 'Grows' asks for: write it 'alters grow()'
+pattern Grows
+    alters grow()
+fi
+
+shape Plant::Grows
+    height: int
+
+    grow()
+        show(.height)
+    fi
+fi
+
+task main()
+fi

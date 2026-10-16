@@ -1,0 +1,11 @@
+; error: 7:12: field 'count' is float here, and pattern 'Counted', which 'Tally' follows, asks for it as int
+pattern Counted
+    count: int
+fi
+
+shape Tally::Counted
+    count: float
+fi
+
+task main()
+fi

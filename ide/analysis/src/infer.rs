@@ -152,7 +152,7 @@ impl<'a> Knowledge<'a> {
         self.scan
             .symbols
             .iter()
-            .position(|s| s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind) && s.range.start <= byte && byte < s.range.end)
+            .position(|s| s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Pattern) && s.range.start <= byte && byte < s.range.end)
     }
 
     /// The symbols that are children of `parent`, in source order: a shape's
@@ -172,7 +172,13 @@ impl<'a> Knowledge<'a> {
                 crate::scan::kind_variants(symbols, parent, &|written| self.global(written, SymbolKind::Kind)).into_iter().filter_map(|id| symbols.get(id).map(|s| (id, s))).collect();
             return found.into_iter();
         }
-        self.children(parent).filter(|(_, s)| s.kind == kind).collect::<Vec<_>>().into_iter()
+        let mut found: Vec<(usize, &'a Symbol)> = self.children(parent).filter(|(_, s)| s.kind == kind).collect();
+        // A shape's or kind's methods include those it has from the patterns it follows.
+        if kind == SymbolKind::Method && self.symbol(parent).is_some_and(|s| !s.bases.is_empty()) {
+            let symbols = &self.scan.symbols;
+            found.extend(crate::scan::followed_methods(symbols, parent, &|written| self.global(written, SymbolKind::Pattern)).into_iter().filter_map(|id| symbols.get(id).map(|s| (id, s))));
+        }
+        found.into_iter()
     }
 
     /// The first top-level declaration of `kind` called `name`: one of this

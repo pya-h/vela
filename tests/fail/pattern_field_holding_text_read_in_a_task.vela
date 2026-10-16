@@ -1,0 +1,11 @@
+; error: 7:12: field 'name' is text, which lives where the value holding it does, and a task taking T doesn't know where that is; read it through a method the pattern asks for
+pattern Named
+    name: text
+fi
+
+task greet<T: Named>(x: T)
+    show(x.name)
+fi
+
+task main()
+fi

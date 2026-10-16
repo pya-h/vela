@@ -1,0 +1,18 @@
+; error: 12:12: 'area' is a shared method, and pattern 'Shaped', which 'Circle' follows, asks for a method of every value of it, 'area() -> float'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle::Shaped
+    radius: float
+
+    shared area() -> float
+        <- 1.0
+    fi
+fi
+
+task main()
+fi

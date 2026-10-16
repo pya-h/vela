@@ -35,7 +35,7 @@ with a shape's or kind's own `str` in a region it makes for the line and frees a
 whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
-(`fixed name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as
+(`fixed name, age = pair`, or `when found is {(name, age)}` in a case form). A task or a shape can take types as well as
 values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word saying what may be done with them
 (`frozen`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
 from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
@@ -52,7 +52,9 @@ its fields or variants and called on a value (`c.total()`); inside one, `.count`
 the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its
 name, so only a place that can change may call it. A shape may have `shared` fields and methods, one for the whole
 program, named through it (`Tally.count`, `Point.new(…)`), fields that fall back on a value (`n: int = 0`), and
-`read` fields only its methods change.
+`read` fields only its methods change. A `pattern Shaped … fi` lists methods, some with default bodies, and fields
+that a shape or kind following it has (`shape Circle::Shaped`), and a task asks for any type that follows it,
+`task total<T: Shaped>(xs: [T]@r)`, calling its methods with no cost when the program runs.
 
 A name is `fixed` (nothing changes through it, at any depth), `bind` (bound to one value: its items, fields and what
 its pointers point to change, but it is never assigned as a whole) or `flex` (changes in every way); what a fixed

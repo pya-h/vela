@@ -1,0 +1,104 @@
+  1 | ; A till that rings up anything priced: a pattern says what a priced thing has,
+    | comment:; A till that rings up anything priced: a pattern says what a priced thing has,
+  2 | ; shapes follow it, and one task adds up a list of any of them.
+    | comment:; shapes follow it, and one task adds up a list of any of them.
+  3 | pattern Priced
+    | keyword:pattern  type:Priced
+  4 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  5 |     cents() -> int
+    | method:cents  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  6 |     ; A default: each shape has it unless it writes its own.
+    | comment:; A default: each shape has it unless it writes its own.
+  7 |     with_tax(percent: int) -> int
+    | method:with_tax  punctuation:(  parameter:percent  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  8 |         <- .cents() + .cents() * percent / 100
+    | keyword:<-  punctuation:.  method:cents  punctuation:(  punctuation:)  operator:+  punctuation:.  method:cents  punctuation:(  punctuation:)  operator:*  parameter:percent  operator:/  number:100
+  9 |     fi
+    | keyword:fi
+ 10 |     line(r: region) -> text@r
+    | method:line  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 11 |         <- "{.name}: {.cents()} cents" at r
+    | keyword:<-  string:"{  punctuation:.  field:name  string:}: {  punctuation:.  method:cents  punctuation:(  punctuation:)  string:} cents"  keyword:at  region:r
+ 12 |     fi
+    | keyword:fi
+ 13 | fi
+    | keyword:fi
+ 15 | shape Book::Priced
+    | keyword:shape  type:Book  punctuation::  punctuation::  type:Priced
+ 16 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 17 |     pages: int
+    | field:pages  punctuation::  type-builtin:int
+ 19 |     cents() -> int
+    | method:cents  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 20 |         <- 500 + .pages
+    | keyword:<-  number:500  operator:+  punctuation:.  field:pages
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi
+ 24 | shape Lamp::Priced
+    | keyword:shape  type:Lamp  punctuation::  punctuation::  type:Priced
+ 25 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 26 |     watts: int
+    | field:watts  punctuation::  type-builtin:int
+ 28 |     cents() -> int
+    | method:cents  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 29 |         <- 2000 + .watts * 10
+    | keyword:<-  number:2000  operator:+  punctuation:.  field:watts  operator:*  number:10
+ 30 |     fi
+    | keyword:fi
+ 31 |     ; Lamps are taxed twice as much, so a lamp writes its own.
+    | comment:; Lamps are taxed twice as much, so a lamp writes its own.
+ 32 |     with_tax(percent: int) -> int
+    | method:with_tax  punctuation:(  parameter:percent  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 33 |         <- .cents() + .cents() * percent * 2 / 100
+    | keyword:<-  punctuation:.  method:cents  punctuation:(  punctuation:)  operator:+  punctuation:.  method:cents  punctuation:(  punctuation:)  operator:*  parameter:percent  operator:*  number:2  operator:/  number:100
+ 34 |     fi
+    | keyword:fi
+ 35 | fi
+    | keyword:fi
+ 37 | task total<T: Priced>(items: [T]@r, percent: int) -> int
+    | keyword:task  task:total  punctuation:<  type:T  punctuation::  type:Priced  punctuation:>  punctuation:(  parameter:items  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:percent  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 38 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+ 39 |     each item in items
+    | keyword:each  variable:item  keyword:in  parameter:items
+ 40 |         sum += item.with_tax(percent)
+    | variable:sum  operator:+=  variable:item  punctuation:.  method:with_tax  punctuation:(  parameter:percent  punctuation:)
+ 41 |     fi
+    | keyword:fi
+ 42 |     <- sum
+    | keyword:<-  variable:sum
+ 43 | fi
+    | keyword:fi
+ 45 | task receipt<T: Priced>(r: region, items: [T]@r)
+    | keyword:task  task:receipt  punctuation:<  type:T  punctuation::  type:Priced  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:items  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)
+ 46 |     each item in items
+    | keyword:each  variable:item  keyword:in  parameter:items
+ 47 |         show(item.line(r))
+    | builtin-fn:show  punctuation:(  variable:item  punctuation:.  field:line  punctuation:(  region:r  punctuation:)  punctuation:)
+ 48 |     fi
+    | keyword:fi
+ 49 | fi
+    | keyword:fi
+ 51 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 52 |     region r default
+    | keyword:region  region:r  keyword:default
+ 53 |     fixed books = [Book { name: "atlas", pages: 300 }, Book { name: "poems", pages: 80 }, ...] at r
+    | keyword:fixed  variable:books  operator:=  punctuation:[  type:Book  punctuation:{  field:name  punctuation::  string:"atlas"  punctuation:,  field:pages  punctuation::  number:300  punctuation:}  punctuation:,  type:Book  punctuation:{  field:name  punctuation::  string:"poems"  punctuation:,  field:pages  punctuation::  number:80  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 54 |     fixed lamps = [Lamp { name: "desk lamp", watts: 40 }, ...] at r
+    | keyword:fixed  variable:lamps  operator:=  punctuation:[  type:Lamp  punctuation:{  field:name  punctuation::  string:"desk lamp"  punctuation:,  field:watts  punctuation::  number:40  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 55 |     receipt(r, books)
+    | task:receipt  punctuation:(  region:r  punctuation:,  variable:books  punctuation:)
+ 56 |     receipt(r, lamps)
+    | task:receipt  punctuation:(  region:r  punctuation:,  variable:lamps  punctuation:)
+ 57 |     show("books with tax: ", total(books, 10))
+    | builtin-fn:show  punctuation:(  string:"books with tax: "  punctuation:,  task:total  punctuation:(  variable:books  punctuation:,  number:10  punctuation:)  punctuation:)
+ 58 |     show("lamps with tax: ", total(lamps, 10))
+    | builtin-fn:show  punctuation:(  string:"lamps with tax: "  punctuation:,  task:total  punctuation:(  variable:lamps  punctuation:,  number:10  punctuation:)  punctuation:)
+ 59 | fi
+    | keyword:fi

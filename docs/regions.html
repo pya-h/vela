@@ -1967,8 +1967,8 @@ entities.remove(player)
         </p>
       </div>
       <div class="idea">
-        <h4>Typed patterns and region inference for bindings <span class="badge b-rec">Recommended</span></h4>
-        <pre><span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n: ^Node@a} <span class="comment">; the pattern names the region</span>
+        <h4>Typed case forms and region inference for bindings <span class="badge b-rec">Recommended</span></h4>
+        <pre><span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n: ^Node@a} <span class="comment">; the case form names the region</span>
     n^.next = q
 <span class="keyword">fi</span>
 
@@ -1976,7 +1976,7 @@ entities.remove(player)
 head.next = push(nodes, <span class="keyword">none</span>, <span class="number">2</span>)      <span class="comment">; head's region is inferred from this line</span></pre>
         <ul>
           <li>Fixes <a href="#limit-pattern">this limitation</a> and <a href="#limit-binding">this one</a>.</li>
-          <li><strong>Typed patterns</strong> are small: a pattern's name may have a type, which the value must fit (an
+          <li><strong>Typed case forms</strong> are small: a case form's name may have a type, which the value must fit (an
             <code>@_</code> value fits any region).</li>
           <li><strong>Inference</strong> is larger: a binding of a value in no region gets a region variable that the first use
             with a real region settles, checked across the whole task. A variable nothing settles never holds a pointer, so any
@@ -2127,7 +2127,7 @@ head.next = push(nodes, <span class="keyword">none</span>, <span class="number">
       <div class="note">
         <p><strong>A suggested order.</strong></p>
         <ol>
-          <li>Small and safe: result-only regions, typed patterns, the growth lint, the chunk cache, and a first chunk on the stack.</li>
+          <li>Small and safe: result-only regions, typed case forms, the growth lint, the chunk cache, and a first chunk on the stack.</li>
           <li>Region brackets with inferred region arguments, and <code>new</code> taking its region from the type.</li>
           <li>Generated copies and shapes with several regions.</li>
           <li>Owned pointers with <code>drop</code>, or pools, once real programs show which fits better.</li>

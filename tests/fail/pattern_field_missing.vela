@@ -1,0 +1,11 @@
+; error: 6:14: 'Tally' follows pattern 'Counted', which asks for field 'count: int'; declare it in 'Tally'
+pattern Counted
+    count: int
+fi
+
+shape Tally::Counted
+    total: int
+fi
+
+task main()
+fi

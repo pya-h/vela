@@ -1,7 +1,7 @@
-  1 | ; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-    | comment:; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-  2 | ; binding drops a value, and `is` tests one pattern with its names visible
-    | comment:; binding drops a value, and `is` tests one pattern with its names visible
+  1 | ; Case forms in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+    | comment:; Case forms in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+  2 | ; binding drops a value, and `is` tests one case form with its names visible
+    | comment:; binding drops a value, and `is` tests one case form with its names visible
   3 | ; only in the block it guards.
     | comment:; only in the block it guards.
   5 | task half(n: int) -> maybe int

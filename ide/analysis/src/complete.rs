@@ -546,7 +546,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         if declares {
             return match prev_token {
                 // `<T: ` and `<T: frozen & `: what the type must allow.
-                Some(Token::Colon | Token::Amp) => (need_items(), word_start, byte),
+                Some(Token::Colon | Token::Amp) => (need_items(&k), word_start, byte),
                 // A name is being declared.
                 _ => (Vec::new(), word_start, byte),
             };
@@ -1140,7 +1140,9 @@ enum Block {
 /// `prefix` goes before each (`^.` through a pointer). Another module's private
 /// members can't be used here.
 fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionItem> {
+    let followed = k.members(owner, SymbolKind::Method).filter(|(_, method)| method.parent != Some(owner));
     k.children(owner)
+        .chain(followed)
         // A shared field is the shape's own, read through its name.
         .filter(|(_, member)| matches!(member.kind, SymbolKind::Field | SymbolKind::Method) && !member.shared && (member.module.is_none() || !member.private))
         .map(|(_, member)| {
@@ -1744,8 +1746,9 @@ fn before_types(k: &Knowledge, q: usize) -> usize {
     }
 }
 
-/// The words a type a declaration takes can be asked to allow.
-fn need_items() -> Vec<CompletionItem> {
+/// The words a type a declaration takes can be asked to allow, and the
+/// patterns it can be asked to follow.
+fn need_items(k: &Knowledge) -> Vec<CompletionItem> {
     let words = [
         (Need::Frozen, "never changes, so it can be a tuple's item"),
         (Need::Same, "can be compared with == and !="),
@@ -1763,6 +1766,14 @@ fn need_items() -> Vec<CompletionItem> {
             snippet: None,
             boost: SNIPPET,
         })
+        .chain(visible_globals(k, &[SymbolKind::Pattern]).into_iter().map(|(label, _)| CompletionItem {
+            label,
+            kind: CompletionKind::Type,
+            detail: "pattern".to_string(),
+            apply: None,
+            snippet: None,
+            boost: GLOBAL,
+        }))
         .collect()
 }
 
@@ -1987,6 +1998,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
         snippet("macro", "a value the compiler computes", "#${NAME} = ${value}"),
         snippet("alias", "another name for a type", "alias ${Name} => ${type}"),
+        snippet("pattern", "what a shape following it has", "pattern ${Name}\n\t${method}() -> ${type}\nfi"),
     ]
 }
 
@@ -2039,8 +2051,8 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         snippet("when", "a condition", "when ${condition}\n\t${}\nfi"),
         snippet("when … else", "a condition with an alternative", "when ${condition}\n\t${}\nelse\n\t\nfi"),
         snippet("loop", "repeat while a condition holds", "loop ${condition}\n\t${}\nfi"),
-        snippet("when … is", "run a block when a pattern matches", "when ${value} is {${name}}\n\t${}\nfi"),
-        snippet("loop … is", "repeat while a pattern matches", "loop ${value} is {${name}}\n\t${}\nfi"),
+        snippet("when … is", "run a block when a case form matches", "when ${value} is {${name}}\n\t${}\nfi"),
+        snippet("loop … is", "repeat while a case form matches", "loop ${value} is {${name}}\n\t${}\nfi"),
         snippet("loop … || … || …", "a loop with a start, a condition and a step", LOOP_PARTS_SNIPPET),
         snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
         snippet("endless", "a loop that never ends by itself", "endless\n\t${}\nfi"),

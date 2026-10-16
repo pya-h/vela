@@ -1,4 +1,4 @@
-; error: 2:17: 'sortable' isn't something a type can be asked to allow; the words are 'frozen', 'same', 'similar', 'shown', 'ordered'
+; error: 2:17: 'sortable' isn't something a type can be asked to allow; the words are 'frozen', 'same', 'similar', 'shown', 'ordered', or the name of a pattern
 task biggest<T: sortable>(a: T, b: T) -> T
     <- a
 fi

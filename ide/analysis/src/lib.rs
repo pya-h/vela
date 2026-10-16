@@ -242,7 +242,7 @@ impl Analysis {
         symbols
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Macro))
+            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Pattern | SymbolKind::Macro))
             .map(|(id, _)| self.outline_item(id, &children))
             .collect()
     }

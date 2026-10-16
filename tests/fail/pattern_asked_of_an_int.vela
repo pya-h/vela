@@ -1,0 +1,15 @@
+; error: 14:10: task 'measure' takes a type that follows pattern 'Shaped' as 'T', and int doesn't, which only a shape or a kind can
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+task measure<T: Shaped>(x: T) -> float
+    <- x.area()
+fi
+
+task main()
+    show(measure(3))
+fi

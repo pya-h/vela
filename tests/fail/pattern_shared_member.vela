@@ -1,0 +1,7 @@
+; error: 3:5: a pattern has no shared fields or methods yet; it asks for what each value of a shape has
+pattern Made
+    shared new() -> int
+fi
+
+task main()
+fi

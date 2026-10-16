@@ -326,7 +326,8 @@ Press Ctrl+C to stop.</pre>
           spinner while building and Stop while the program runs), open a file by name, and the light/dark theme. A
           <em>No C compiler</em> warning appears here when <code>cc</code> or <code>$CC</code> can't be started.</li>
         <li><strong>Sidebar:</strong> the Explorer (the folder's files) and the Outline (the open file's tasks,
-          shapes, kinds, type aliases, and macros, with a shape's fields, a kind's variants, the methods of both, and the types a task or
+          shapes, kinds, patterns, type aliases, and macros, with a shape's fields, a kind's variants, a pattern's fields
+          and methods, the methods of shapes and kinds, and the types a task or
           shape takes under it;
           the one under the cursor is highlighted). Drag its edge to resize it; double-click the
           edge to reset.</li>
@@ -411,7 +412,7 @@ Press Ctrl+C to stop.</pre>
             <code>none</code>, and <code>failure e</code> (the variants of
             <a href="vela.html#reading-numbers"><code>ParseError</code></a> and
             <a href="vela.html#reading-input"><code>InputError</code></a> among them, which no file declares);
-            the patterns that fit after <code>is</code> (a tuple's names among them); the regions
+            the case forms that fit after <code>is</code> (a tuple's names among them); the regions
             visible after <code>@</code>, and the ones <code>new</code>, <code>scan</code>, or <code>copy</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>,
             <code>copy()@</code>, and a <code>new</code>'s, <code>scan</code>'s, or <code>copy</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
             <code>region</code> as a statement or a parameter's type; <code>when</code> after an <code>else</code>,
@@ -442,7 +443,9 @@ Press Ctrl+C to stop.</pre>
             with <code>flex</code>, <code>read</code>, and <code>new</code> after <code>shared</code> (a kind's, only
             <code>new</code>). After a shape's name and a dot, <code>Point.</code>, its
             <a href="vela.html#shared">shared fields</a> and <a href="vela.html#shared-methods">shared methods</a> are
-            offered, and after a kind's its variants (with those it has from the kinds it
+            offered, and after a value's name its fields and methods, with the default methods it has from the
+            <a href="vela.html#patterns">patterns</a> it follows; after a type's <code>:</code> in <code>&lt; &gt;</code>,
+            the five words and the patterns; after a kind's name its variants (with those it has from the kinds it
             <a href="vela.html#kind-imitation">imitates</a>) and shared methods, never after a value's name or in a literal;
             a shared field hovers as <code>shared flex made: int</code>, saying who may change it, and a shared method
             as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
@@ -473,7 +476,8 @@ Press Ctrl+C to stop.</pre>
             word after its <code>:</code> allows, a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
             of what they do. A kind that imitates others shows the variants it has from them first, each saying which
-            kind it is from. A method shows its header, which shape or kind it belongs to, and whether it changes the
+            kind it is from; a pattern shows its fields and methods, its defaults marked, and a shape or kind following
+            one shows the default methods it has from it. A method shows its header, which shape or kind it belongs to, and whether it changes the
             value it is called on; <code>.this</code> shows that value's type, and <code>alters</code> and
             <code>@this</code> what they mean. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>

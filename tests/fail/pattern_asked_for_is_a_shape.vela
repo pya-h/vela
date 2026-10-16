@@ -1,0 +1,10 @@
+; error: 6:15: 'Spot' is a shape, not something a type can be asked to allow; the words are 'frozen', 'same', 'similar', 'shown', 'ordered', or the name of a pattern
+shape Spot
+    x: int
+fi
+
+task place<T: Spot>(x: T)
+fi
+
+task main()
+fi

@@ -1,0 +1,19 @@
+; error: 10:21: patterns 'Starts' and 'Runs' both ask for 'go'; 'Car' follows each, so it would need two of it
+pattern Starts
+    go()
+fi
+
+pattern Runs
+    go()
+fi
+
+shape Car::Starts & Runs
+    speed: int
+
+    go()
+        show(.speed)
+    fi
+fi
+
+task main()
+fi

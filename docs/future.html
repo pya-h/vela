@@ -721,7 +721,7 @@ fi</pre>
         program's names in it is written as that file writes it (<em>expected type Product, got int</em>), or by its
         path when the file can't write it. In C, the <code>.</code> becomes <code>__0__</code>, each <code>/</code>
         <code>__1__</code>, and each <code>..</code> <code>__2__</code> (<code>vela_shapes__1__geometry__0__area</code>),
-        none of which a Vela name can contain. <strong>Patterns.</strong> A <code>case</code> names a variant alone even
+        none of which a Vela name can contain. <strong>Case forms.</strong> A <code>case</code> names a variant alone even
         for another module's kind, since the matched value's type says whose it is, or through its kind
         (<code>case Size.Large extra</code>), which must be the value's; <code>case geometry.Square</code> (a module, then a
         variant) is an error that says so. A kind listed in <code>include m (…)</code> doesn't bring its variants; they
@@ -874,10 +874,12 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
       <ul>
         <li><strong>Angle brackets, as in the header.</strong> <code>&lt;T&gt;</code> declares the types, and a call that
           writes them uses the same brackets, <code>first&lt;int&gt;(xs)</code>. Brackets (<code>[T]</code>) would read as
-          an index or a slice type, and braces as a plan B, a pattern, or a shape literal. A <code>&lt;</code> after a
+          an index or a slice type, and braces as a plan B, a case form, or a shape literal. A <code>&lt;</code> after a
           name starts types only when the matching <code>&gt;</code> is followed by <code>(</code>, so comparisons still
           read as comparisons.</li>
-        <li><strong>Five words, not traits.</strong> <code>frozen</code>, <code>same</code>, <code>similar</code>,
+        <li><strong>Five words, not traits.</strong> <em>(Patterns came later, 2026-10-16: a pattern's name asks for
+          methods and fields the program declares, <a href="vela.html#patterns">Patterns</a>; the five words stay as
+          they are.)</em> <code>frozen</code>, <code>same</code>, <code>similar</code>,
           <code>shown</code>, and <code>ordered</code> say what a type must allow — be a tuple's item, be compared with
           <code>==</code>, be compared item by item with <code>~=</code>, be shown, be compared with
           <code>&lt;</code> — and each is one thing, joined with <code>&amp;</code> to ask for
@@ -964,7 +966,7 @@ flex y: maybe float = none</pre>
           maybe there.</li>
         <li>The type is a prefix, like <code>^</code>: <code>maybe int</code>, <code>maybe ^Node@r</code>,
           <code>^maybe int@r</code>. A brace form (<code>maybe{int}</code>) was considered and rejected: braces would
-          mean a type argument, a pattern, a plan B, and a shape literal at once, and generics written with braces
+          mean a type argument, a case form, a plan B, and a shape literal at once, and generics written with braces
           would collide with plan B in expressions.</li>
         <li>A <code>maybe</code> can't hold another <code>maybe</code>, or <code>nothing</code>.</li>
         <li>A plain value never becomes a <code>maybe</code> in arithmetic or comparisons: <code>m + 1</code> is an
@@ -1017,7 +1019,7 @@ loop current is {flex item}
     current = item^.next
 fi</pre>
       <p>
-        <code>is</code> takes the same patterns as <code>case</code>, including a kind's variants
+        <code>is</code> takes the same case forms as <code>case</code>, including a kind's variants
         (<code>when light is Dimmed level</code>), and its names are visible only in the block it guards and in
         the parts joined after it with <code>and</code> (<code>when b is {inside} and inside &lt; 0</code>, built
         2026-09-29; see <a href="vela.html#is-and">the guide</a>). Joining it with <code>or</code>, or writing it
@@ -1689,8 +1691,9 @@ show(c.total())</pre>
           it: a <code>similar(other: This) -&gt; bool</code> (with <code>&lt;&gt;</code> its <code>not</code>) could say
           which fields matter, or compare a list by its items rather than the address its pointers hold, as
           <code>str</code> opened printing. Similarity that follows pointers needs a way to stop on a list that points
-          back to itself, which is why <code>~=</code> compares a pointer by its address today. It is also the smallest step towards interfaces, which Vela has no
-          design for yet, since it asks of one method: does this type have a member of this name and header?</li>
+          back to itself, which is why <code>~=</code> compares a pointer by its address today. It is also the smallest step towards interfaces, since it asks of one
+          method: does this type have a member of this name and header? <em>(Patterns now ask that, said where a shape
+          is declared: <a href="vela.html#patterns">Patterns</a>.)</em></li>
         <li id="methods-elsewhere"><strong>Methods from another module:</strong> a shape's block holds every method it
           has, so a module can't add one to a type it includes. That keeps a type honest — everything it does is in one
           place — at the cost of the "extension method" that makes a foreign type fit local code. If Vela ever wants
@@ -1725,15 +1728,15 @@ show(c.total())</pre>
           (not <code>-&gt;</code>, which names a task's result type)
           <em>(done: <a href="vela.html#choices">A match or a when as a value</a>, for <code>when</code> as well,
           where blocks give the value and <code>=</code> is a case's short form)</em></li>
-        <li><strong>Guards in patterns:</strong> <code>case Circle r when r &gt; 0.0</code></li>
+        <li><strong>Guards in case forms:</strong> <code>case Circle r when r &gt; 0.0</code></li>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code>
           <em>(done: <a href="vela.html#control-flow">Control Flow</a>, where one <code>fi</code> closes the chain and
           <code>else if</code> is an error naming <code>else when</code>)</em></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a>
-          <em>(done: <a href="vela.html#tuples">Tuples</a>, including patterns that take them apart,
+          <em>(done: <a href="vela.html#tuples">Tuples</a>, including case forms that take them apart,
           <code>when found is {(name, age)}</code> and <code>when pair is (x, y)</code>, and <code>flex</code> names
-          in any pattern)</em></li>
+          in any case form)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
         <li id="default-arguments"><strong>Default arguments:</strong> <span class="badge b-done">Done</span> — see
@@ -1903,7 +1906,7 @@ fixed age = int("42")               ; text to a number can fail: int ~ ParseErro
         used to be <code>int or ParseError</code>, and the error was named with <code>fail</code> in every position,
         which read badly in two places: <code>or</code> is also the boolean operator, and <code>A or B</code> suggests a
         union of two alike types although the left is the value and the right is the error; and the first line of a plan
-        B, <code>fail e</code>, looked like a declaration although it is a pattern.
+        B, <code>fail e</code>, looked like a declaration although it is a case form.
       </p>
       <ul>
         <li><strong><code>~</code> replaces <code>or</code> in a type.</strong> <span class="badge b-done">Done</span>
@@ -1922,7 +1925,7 @@ fixed age = int("42")               ; text to a number can fail: int ~ ParseErro
       </ul>
       <pre><span class="keyword">task</span> age(line: <span class="type">text</span>) -&gt; <span class="type">int</span> ~ ParseError
     <span class="keyword">fixed</span> years = int(line) {
-        <span class="keyword">failure</span> e                      <span class="comment">; names the failure: a pattern, like a case</span>
+        <span class="keyword">failure</span> e                      <span class="comment">; names the failure: a case form, like a case</span>
         &lt;- <span class="keyword">fail</span> e                     <span class="comment">; makes one: the verb</span>
     }
     <span class="keyword">when</span> years &gt; <span class="number">200</span>
@@ -1938,10 +1941,10 @@ fixed age = int("42")               ; text to a number can fail: int ~ ParseErro
     show(<span class="string">"no age"</span>)
 <span class="keyword">fi</span></pre>
       <p>
-        What it cost: 72 type positions and 65 patterns rewritten in the programs here, plus the lexer, the parser,
-        every message that quotes a type or a pattern, Vela Studio, and every page of these docs. Each old spelling is
+        What it cost: 72 type positions and 65 case forms rewritten in the programs here, plus the lexer, the parser,
+        every message that quotes a type or a case form, Vela Studio, and every page of these docs. Each old spelling is
         an error that teaches the new one, since every program written before used <code>or</code> in a type and
-        <code>fail</code> in a pattern. Four other spellings were weighed and dropped: <code>/</code> (division, and the
+        <code>fail</code> in a case form. Four other spellings were weighed and dropped: <code>/</code> (division, and the
         path separator in <code>include shapes/circle</code>), <code>|</code> (the bitwise or), <code>!</code> (the
         lexer answers it with <em>Vela negates with 'not'</em>, and <code>is !e</code> reads as <em>is not e</em>), and
         <code>$err</code> (<code>$</code> means a variable in shell and PHP, which is backwards for a mark that means
@@ -2133,7 +2136,7 @@ fi</code></pre>
           value in parentheses is only grouped — <code>(int)</code> is <code>int</code>, which is how
           <a href="vela.html#wider"><code>maybe (int ~ text)</code></a> is written. A trailing comma could make a tuple
           of one, <code>(int,)</code> and <code>(2,)</code>, which reads unambiguously beside the grouping. It would
-          need <code>t.0</code>, <code>==</code>, patterns, unpacking and a C layout of its own, and nothing yet asks
+          need <code>t.0</code>, <code>==</code>, case forms, unpacking and a C layout of its own, and nothing yet asks
           for it, so it waits for a use that does.</li>
       </ul>
     </section>
@@ -2451,7 +2454,7 @@ fi
           no <code>kind Result&lt;T&gt;</code> with <code>Ok(value: T)</code> and <code>Err(message: text)</code>, and no
           <code>kind Tree&lt;T&gt;</code>. It would fit the same syntax and the same words, and be made the same way (one
           kind per set of types), so the cost is not the idea but its reach: a kind's variants, their payloads, every
-          <code>match</code> and <code>case</code>, and the patterns Studio offers all follow the types, and
+          <code>match</code> and <code>case</code>, and the case forms Studio offers all follow the types, and
           <code>maybe T</code> and <code>T ~ E</code> already cover what most generic kinds would be used for. The
           question to decide is whether a program that has shapes and tasks taking types still needs kinds taking them
           often enough to pay for that reach.</li>
@@ -2512,7 +2515,7 @@ fi
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
               (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), <s>and type conversions</s> (done: <a href="vela.html#str"><code>text(n) at r</code></a>, <a href="vela.html#conversions"><code>int(x)</code> and <code>float(n)</code></a>, <a href="vela.html#reading-numbers"><code>int(t)</code></a>, <a href="vela.html#reading-input"><code>scan("Age: ", int)</code></a>)</li>
             <li><s>Every mistake in a file reported at once, not only the first</s> (done: <a href="#every-error">one error at a time</a>)</li>
-            <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
+            <li>Small region improvements: result-only regions, typed case forms, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>
             <li>Basic standard library (math, strings, <s>files</s>: done, <a href="std.html#files"><code>std/files</code></a> in <a href="std.html">the library</a>)</li>

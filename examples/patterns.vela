@@ -1,0 +1,59 @@
+; A till that rings up anything priced: a pattern says what a priced thing has,
+; shapes follow it, and one task adds up a list of any of them.
+pattern Priced
+    name: text
+    cents() -> int
+    ; A default: each shape has it unless it writes its own.
+    with_tax(percent: int) -> int
+        <- .cents() + .cents() * percent / 100
+    fi
+    line(r: region) -> text@r
+        <- "{.name}: {.cents()} cents" at r
+    fi
+fi
+
+shape Book::Priced
+    name: text
+    pages: int
+
+    cents() -> int
+        <- 500 + .pages
+    fi
+fi
+
+shape Lamp::Priced
+    name: text
+    watts: int
+
+    cents() -> int
+        <- 2000 + .watts * 10
+    fi
+    ; Lamps are taxed twice as much, so a lamp writes its own.
+    with_tax(percent: int) -> int
+        <- .cents() + .cents() * percent * 2 / 100
+    fi
+fi
+
+task total<T: Priced>(items: [T]@r, percent: int) -> int
+    flex sum = 0
+    each item in items
+        sum += item.with_tax(percent)
+    fi
+    <- sum
+fi
+
+task receipt<T: Priced>(r: region, items: [T]@r)
+    each item in items
+        show(item.line(r))
+    fi
+fi
+
+task main()
+    region r default
+    fixed books = [Book { name: "atlas", pages: 300 }, Book { name: "poems", pages: 80 }, ...] at r
+    fixed lamps = [Lamp { name: "desk lamp", watts: 40 }, ...] at r
+    receipt(r, books)
+    receipt(r, lamps)
+    show("books with tax: ", total(books, 10))
+    show("lamps with tax: ", total(lamps, 10))
+fi

@@ -1,0 +1,11 @@
+; error: 6:13: 'Light' is a kind, and a shape follows only patterns; a kind imitates another kind, as in 'kind Mine::Light'
+kind Light
+    Red
+fi
+
+shape Lamp::Light
+    watts: int
+fi
+
+task main()
+fi

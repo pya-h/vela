@@ -1,0 +1,7 @@
+; error: 3:18: 'this' is the type following this pattern, which takes no types; leave out '<…>'
+pattern Same
+    equal(other: this<int>) -> bool
+fi
+
+task main()
+fi

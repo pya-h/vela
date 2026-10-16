@@ -565,7 +565,7 @@ fi</pre>
       </div>
 
       <div class="entry">
-        <h3>Ranges in patterns: <code>when c is 'a'..'z'</code> <span class="badge b-idea">idea</span> <span class="badge b-small">small</span></h3>
+        <h3>Ranges in case forms: <code>when c is 'a'..'z'</code> <span class="badge b-idea">idea</span> <span class="badge b-small">small</span></h3>
         <p>
           <code>match</code> stays on kinds, and the guide refuses a plain number in a <code>case</code>; but
           <code>is</code> already opens a <code>maybe</code> or a variant in a condition, and ranges already live
@@ -580,7 +580,7 @@ fi</pre>
           <dd>One condition where today a program writes an <code>else when</code> chain, and one case where it
             writes several. The bounds would be constants, as an array's count is.</dd>
           <dt>What it costs</dt>
-          <dd>A pattern that isn't a single value, which the checker's pattern code must carry, and the rule
+          <dd>A case form that isn't a single value, which the checker's code for case forms must carry, and the rule
             that a range's ends are constants so the compiler can order them. Exhaustiveness is untouched: a
             range never covers a kind's variants by itself, so the anything case still does its work.</dd>
         </dl>
@@ -713,7 +713,7 @@ fi</pre>
               <td>Small, measurable, and it touches only the C writer and the trappers.</td></tr>
             <tr><td>4</td><td><code>std/sys</code> and <code>std/slices</code></td>
               <td>Real programs need their own arguments and a sort; both are pure Vela plus two natives.</td></tr>
-            <tr><td>5</td><td><code>each i, v</code>, range patterns, bitwise methods</td>
+            <tr><td>5</td><td><code>each i, v</code>, range case forms, bitwise methods</td>
               <td>Three small language answers to costs the examples pay on every page.</td></tr>
             <tr><td>6</td><td><code>vela fmt</code></td>
               <td>Locks the layout the project already agrees on, and keeps ten docs pages honest with it.</td></tr>
@@ -902,7 +902,7 @@ file.open(mode: FileMode.Write) <span class="keyword">at</span> r</pre>
 
       <h3>Match on numbers and characters</h3>
       <p>
-        GLM proposed range patterns in <code>is</code> and in cases of a kind holding an <code>int</code>. I would go
+        GLM proposed range case forms in <code>is</code> and in cases of a kind holding an <code>int</code>. I would go
         one step further and let <code>match</code> itself work on <code>int</code> and <code>char</code>, with ranges
         and a required anything case:
       </p>
@@ -915,7 +915,7 @@ file.open(mode: FileMode.Write) <span class="keyword">at</span> r</pre>
       <p>
         The checker already knows how to insist on a complete <code>match</code>; ranges just become a compact way to
         cover contiguous values, with the same constant-bound rule arrays have. It is a bigger change than GLM's range
-        patterns, but it is the one that makes <code>match</code> feel universal rather than kind-specific.
+        case forms, but it is the one that makes <code>match</code> feel universal rather than kind-specific.
       </p>
 
       <h3>Format strings inside interpolation</h3>
@@ -1020,7 +1020,7 @@ cli = { git = "https://github.com/example/vela-cli", tag = "v1.2.0" }</pre>
             <tr><td>3</td><td><code>std/sys</code>, <code>std/slices</code>, <code>std/text</code></td><td>GLM</td></tr>
             <tr><td>4</td><td>Doc comments and <code>vela doc</code></td><td>Kimi</td></tr>
             <tr><td>5</td><td>Named/default arguments</td><td>Kimi</td></tr>
-            <tr><td>6</td><td>Bitwise methods, <code>each i, v</code>, range patterns in <code>is</code></td><td>GLM</td></tr>
+            <tr><td>6</td><td>Bitwise methods, <code>each i, v</code>, range case forms in <code>is</code></td><td>GLM</td></tr>
             <tr><td>7</td><td>LSP adapter and Vela Playground</td><td>Kimi</td></tr>
             <tr><td>8</td><td><code>vela fmt</code></td><td>GLM</td></tr>
             <tr><td>9</td><td><code>vela --guard</code></td><td>GLM</td></tr>

@@ -1,4 +1,4 @@
-; error: 12:10: 'Point' isn't a kind, so a pattern can't name a variant of it
+; error: 12:10: 'Point' isn't a kind, so a case form can't name a variant of it
 shape Point
     x: int
 fi

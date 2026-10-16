@@ -1,0 +1,13 @@
+ring of area 3
+a square of side 2
+circle starts
+square stops
+true true
+6 4
+a square of side 5
+2 3
+0
+Red: light Red
+Green: light Green
+Box<int> { value: 3 }: box of 3
+42 true false

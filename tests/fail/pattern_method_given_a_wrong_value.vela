@@ -1,0 +1,11 @@
+; error: 7:15: expected type int, got text
+pattern Adds
+    plus(n: int) -> int
+fi
+
+task more<T: Adds>(x: T) -> int
+    <- x.plus("one")
+fi
+
+task main()
+fi

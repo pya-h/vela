@@ -1,0 +1,145 @@
+; Patterns: what a shape or kind following one has, its default methods, and
+; tasks taking any type that follows one.
+include pattern_declarations/labels => lab (Sized)
+
+pattern Shaped
+    name: text
+    area() -> float
+    start(), stop()
+    alters grow(by: float)
+    describe(r: region) -> text@r
+        <- "{.name} of area {.area()}" at r
+    fi
+    larger(other: this) -> bool
+        <- .area() > other.area()
+    fi
+    same(other: Shaped) -> bool
+        <- not .larger(other) and not other.larger(.this)
+    fi
+fi
+
+pattern Counted
+    count: int
+    alters reset()
+        .count = 0
+    fi
+fi
+
+shape Circle::Shaped & Counted
+    name: text
+    radius: float
+    count: int = 0
+
+    area() -> float
+        <- 3.0 * .radius * .radius
+    fi
+    start()
+        show("circle starts")
+    fi
+    stop()
+        show("circle stops")
+    fi
+    alters grow(by: float)
+        .radius += by
+        .count++
+    fi
+fi
+
+shape Square::Shaped
+    name: text
+    side: float
+
+    area() -> float
+        <- .side * .side
+    fi
+    start()
+        show("square starts")
+    fi
+    stop()
+        show("square stops")
+    fi
+    alters grow(by: float)
+        .side += by
+    fi
+    ; Its own, in place of the pattern's default.
+    describe(r: region) -> text@r
+        <- "a square of side {.side}" at r
+    fi
+fi
+
+; A kind follows patterns too, and a shape taking types.
+pattern Shown
+    label(r: region) -> text@r
+fi
+
+kind Light::Shown
+    Red
+    Green
+
+    label(r: region) -> text@r
+        <- "light {.this}" at r
+    fi
+fi
+
+shape Box<T: shown>::Shown
+    value: T
+
+    label(r: region) -> text@r
+        <- "box of {.value}" at r
+    fi
+fi
+
+task total<T: Shaped>(xs: [T]@r) -> float
+    flex sum = 0.0
+    each x in xs
+        sum += x.area()
+    fi
+    <- sum
+fi
+
+task largest<T: Shaped>(r: region, xs: [T]@r) -> text@r
+    flex best = xs[0]
+    each x in xs
+        when x.larger(best)
+            best = x
+        fi
+    fi
+    <- best.describe(r)
+fi
+
+task grown<T: Shaped & Counted>(flex& x: T, by: float) -> int
+    x.grow(by)
+    x.grow(by)
+    <- x.count
+fi
+
+task labels<S: Shown & shown>(r: region, xs: [S]@r)
+    each x in xs
+        show(x, ": ", x.label(r))
+    fi
+fi
+
+task heavier<B: Sized>(a: B, b: B) -> bool
+    <- a.bigger(b) and a.size > 0
+fi
+
+task main()
+    region r default
+    flex c = Circle { name: "ring", radius: 1.0 }
+    fixed s = Square { name: "tile", side: 2.0 }
+    show(c.describe(r))
+    show(s.describe(r))
+    c.start()
+    s.stop()
+    show(c.larger(Circle { name: "dot", radius: 0.5 }), " ", s.same(s))
+    show(total([c, c, ...] at r), " ", total([s, ...] at r))
+    show(largest(r, [s, Square { name: "big", side: 5.0 }, ...] at r))
+    show(grown(&c, 1.0), " ", c.radius)
+    c.reset()
+    show(c.count)
+    labels(r, [Light.Red, Green, ...] at r)
+    labels(r, [Box { value: 3 }, ...] at r)
+    fixed one = lab.Crate { size: 2 }
+    fixed two = lab.Crate { size: 1 }
+    show(one.tag(), " ", one.bigger(two), " ", heavier(two, one))
+fi

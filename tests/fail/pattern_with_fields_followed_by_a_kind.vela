@@ -1,0 +1,11 @@
+; error: 6:13: pattern 'Counted' asks for field 'count', and a kind has no fields; only a shape follows a pattern with fields
+pattern Counted
+    count: int
+fi
+
+kind Light::Counted
+    Red
+fi
+
+task main()
+fi

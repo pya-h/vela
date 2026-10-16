@@ -174,5 +174,5 @@ fn a_type_that_never_changes_is_asked_for_with_frozen() {
     let wrong = "shape Box<T: fixed>\n    value: T\nfi\n";
     let diagnostics = Analysis::new(wrong).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
-    assert_eq!(diagnostics[0].message, "expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered'");
+    assert_eq!(diagnostics[0].message, "expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered', or a pattern it follows");
 }

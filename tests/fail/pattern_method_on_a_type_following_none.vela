@@ -1,0 +1,14 @@
+; error: 10:10: type T has no methods; a type a declaration takes has the methods of the patterns it follows, and 'Shaped' asks for 'area', as in '<T: Shaped>'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+task measure<T>(x: T) -> float
+    <- x.area()
+fi
+
+task main()
+fi

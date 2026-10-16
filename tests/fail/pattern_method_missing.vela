@@ -1,0 +1,14 @@
+; error: 9:15: 'Circle' follows pattern 'Shaped', which asks for method 'area'; write it in 'Circle', as in 'area() -> float'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle::Shaped
+    radius: float
+fi
+
+task main()
+fi

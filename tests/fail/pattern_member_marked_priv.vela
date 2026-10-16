@@ -1,0 +1,7 @@
+; error: 3:5: a pattern's members are as visible as the pattern; a method a pattern asks for is never 'priv', since any code using the pattern calls it
+pattern Counted
+    priv count() -> int
+fi
+
+task main()
+fi

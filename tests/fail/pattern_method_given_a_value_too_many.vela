@@ -1,0 +1,14 @@
+; error: 10:10: method 'Shaped.area' expects 0 arguments, got 1
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+task measure<T: Shaped>(x: T) -> float
+    <- x.area(2)
+fi
+
+task main()
+fi

@@ -1,0 +1,11 @@
+; error: 6:13: a pattern follows no other pattern yet; ask for the other's methods in 'Runs' too, or have a shape follow both, joined with '&'
+pattern Starts
+    go()
+fi
+
+pattern Runs::Starts
+    run()
+fi
+
+task main()
+fi

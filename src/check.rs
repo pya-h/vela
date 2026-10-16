@@ -250,6 +250,19 @@ enum TypePlace {
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
+    /// The program's patterns, by name, their fields' and methods' types read
+    /// once the declarations are known (see `declare_patterns`).
+    patterns: HashMap<String, PatternDef>,
+    /// Where each task is declared, by its name in the program.
+    task_spans: HashMap<String, Span>,
+    /// The shapes and kinds that lack what a pattern they follow asks for,
+    /// whose copies of its default methods are left unchecked, since they would
+    /// only say the same again (see `check_follows`).
+    unfollowed: HashSet<String>,
+    /// The type a pattern's default method, copied into a shape or kind
+    /// following the pattern, writes `this` for in its body: that follower's
+    /// (see `ast::THIS_TYPE`).
+    this_type: Option<Type>,
     /// Every task's type parameters, parameters (names and types), and return
     /// type.
     tasks: HashMap<String, TaskInfo>,
@@ -700,6 +713,7 @@ impl Checker {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
+        checker.patterns = program.patterns.iter().map(|pattern| (pattern.name.clone(), pattern.clone())).collect();
         add_startups(&mut program.items);
         checker.add_wrappers(&mut program.items);
         checker.check_file(&mut program.items);
@@ -865,6 +879,7 @@ impl Checker {
         self.regional = regional_types(items);
         self.takes_region = textual_types(items).union(&self.regional).cloned().collect();
         self.changeable = types_holding(items, holds_changeable);
+        self.declare_patterns();
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.settle_receiver(t);
@@ -883,19 +898,254 @@ impl Checker {
         // last, each after the ones inside it, so they are checked from the
         // last back.
         let (lambdas, others): (Vec<&mut Item>, Vec<&mut Item>) = items.iter_mut().partition(|item| matches!(item, Item::Task(t) if is_lambda(&t.name)));
-        for item in others.into_iter().chain(lambdas.into_iter().rev()) {
+        // A pattern's default methods are checked once each, as tasks taking
+        // the type following the pattern, before the copies of them shapes and
+        // kinds have (see `modules::follow_patterns`): a mistake one has is told
+        // there, once, and not again for each copy.
+        let (defaults, others): (Vec<&mut Item>, Vec<&mut Item>) = others.into_iter().partition(|item| matches!(item, Item::Task(t) if t.name.contains(DEFAULT_MARK)));
+        let mut failed: HashSet<(usize, usize, usize)> = HashSet::new();
+        let copies_at = self.default_spans();
+        for item in defaults.into_iter().chain(others).chain(lambdas.into_iter().rev()) {
             if let Item::Task(t) = item {
+                // A copy of a default method that was told about already, or
+                // of a shape or kind that lacks what the pattern asks for.
+                let copied = t.owner.is_some() && !t.name.contains(DEFAULT_MARK) && copies_at.contains(&t.span.place_key());
+                if copied && (failed.contains(&t.span.place_key()) || t.owner_type().is_some_and(|owner| self.unfollowed.contains(owner))) {
+                    continue;
+                }
                 self.current_module = module_of(&t.name).to_string();
+                let before = self.errors.len();
                 // A mistake in a body is the body's own: the task's header was
                 // checked with the other declarations, so calls of it elsewhere
                 // are checked as usual.
                 let checked = self.check_task(t);
                 self.keep_going(checked);
+                if t.name.contains(DEFAULT_MARK) && self.errors.len() > before {
+                    failed.insert(t.span.place_key());
+                }
             }
         }
         self.current_module.clear();
         self.finish_kept();
         self.order_start_values(items);
+    }
+
+    /// Reads each pattern's fields' and methods' types, as a shape's and its
+    /// methods' are, with the type following it a type its methods take
+    /// (`THIS_TYPE`), and makes each method known as the generic task that a
+    /// call of it on a value of a type following the pattern is, until a copy
+    /// of the task making the call points it at that type's own method (see
+    /// `ast::pattern_call` and `substitute_expr`). A default method's header is
+    /// told about where it is checked as a task (see `ast::pattern_default`).
+    fn declare_patterns(&mut self) {
+        let mut patterns: Vec<PatternDef> = self.patterns.values().cloned().collect();
+        patterns.sort_by_key(|pattern| (pattern.span.file, pattern.span.line, pattern.span.col));
+        for mut pattern in patterns {
+            let module = std::mem::replace(&mut self.current_module, module_of(&pattern.name).to_string());
+            let this = TypeParam { name: THIS_TYPE.to_string(), span: pattern.span, needs: Vec::new(), patterns: vec![(pattern.name.clone(), pattern.span)], group: false };
+            self.enter_type_params(std::slice::from_ref(&this));
+            for field in &mut pattern.fields {
+                match self.resolve_type(&field.ty, field.ty_span, TypePlace::Field) {
+                    Ok(ty) => field.ty = ty,
+                    Err(error) => self.record(error),
+                }
+            }
+            self.type_params.clear();
+            for method in &mut pattern.methods {
+                let Some(own) = method.owner.as_ref().map(|owner| owner.name.clone()) else { continue };
+                let mut call = method.clone();
+                call.name = pattern_call(&pattern.name, &own);
+                call.types = vec![this.clone()];
+                call.body = Vec::new();
+                self.written_names.insert(call.name.clone(), format!("{}{}{}", unqualified(&pattern.name), MODULE_SEPARATOR, own));
+                match self.check_header(&mut call) {
+                    Ok(()) => {
+                        method.params = call.params;
+                        method.ret = call.ret;
+                    }
+                    Err(error) => {
+                        self.broken.insert(call.name);
+                        if method.body.is_empty() {
+                            self.record(error);
+                        }
+                    }
+                }
+            }
+            self.current_module = module;
+            self.patterns.insert(pattern.name.clone(), pattern);
+        }
+    }
+
+    /// The pattern that type parameter `param` follows whose method `method`
+    /// is, if one is; two that both have it are an error, since the call would
+    /// not say which it is.
+    fn pattern_with_method(&self, param: &str, method: &str, span: Span) -> Result<Option<String>> {
+        let Some(declared) = self.type_param(param) else { return Ok(None) };
+        let found: Vec<&String> = declared.patterns.iter().map(|(pattern, _)| pattern).filter(|pattern| self.patterns.get(*pattern).is_some_and(|def| def.method(method).is_some())).collect();
+        match found.as_slice() {
+            [] => Ok(None),
+            [one] => Ok(Some((*one).clone())),
+            [first, second, ..] => err(
+                span,
+                format!("'{}' follows patterns '{}' and '{}', which both ask for a method '{}', so this call doesn't say which it is; follow one of them here", Type::Param(param.to_string()), unqualified(first), unqualified(second), method),
+            ),
+        }
+    }
+
+    /// The type of field `field` of a value of type parameter `param`: one of
+    /// the patterns it follows asks for it. The value a pattern's default
+    /// method is called on lives in `@this`, as a method's does, so what the
+    /// field holds lives there too; a value of another type a task takes lives
+    /// where the task doesn't know, so only a field holding nothing in a region
+    /// is read there.
+    fn pattern_field(&self, param: &str, field: &str, span: Span) -> Result<Type> {
+        let base = Type::Param(param.to_string());
+        let patterns = self.type_param(param).map(|declared| declared.patterns.clone()).unwrap_or_default();
+        let Some(found) = patterns.iter().find_map(|(pattern, _)| self.patterns.get(pattern).and_then(|def| def.fields.iter().find(|own| own.name == field))) else {
+            if patterns.is_empty() {
+                return err(span, format!("type {} has no fields; a type a declaration takes has the fields of the patterns it follows, as in '<{}: Named>'", base, base));
+            }
+            let names: Vec<&str> = patterns.iter().map(|(pattern, _)| unqualified(pattern)).collect();
+            return err(span, format!("type {} has no field '{}': none of the patterns it follows ({}) asks for one", base, field, names.join(", ")));
+        };
+        let ty = found.ty.map_params(&mut |name| (name == THIS_TYPE).then(|| base.clone()));
+        if param == THIS_TYPE {
+            return Ok(self.field_in(&ty, &Some(THIS_WORD.to_string())));
+        }
+        if holds_text(&ty, &self.takes_region) || holds_pointers(&ty, &self.regional) {
+            return err(
+                span,
+                format!("field '{}' is {}, which lives where the value holding it does, and a task taking {} doesn't know where that is; read it through a method the pattern asks for", field, ty, base),
+            );
+        }
+        Ok(ty)
+    }
+
+    /// Where each default method of the program's patterns is written, which
+    /// is where every copy of it is too.
+    fn default_spans(&self) -> HashSet<(usize, usize, usize)> {
+        self.patterns.values().flat_map(|pattern| &pattern.methods).filter(|method| !method.body.is_empty()).map(|method| method.span.place_key()).collect()
+    }
+
+    /// Whether values of type `ty` follow pattern `pattern`: a shape or kind
+    /// that says it does (the one a shape or kind given types was made from),
+    /// or a type a declaration takes that asks for it.
+    fn follows(&self, ty: &Type, pattern: &str) -> bool {
+        if ty.unknown() || is_untold(ty) {
+            return true;
+        }
+        if let Type::Param(name) | Type::Group(name) = ty {
+            return self.type_param(name).is_some_and(|param| param.patterns.iter().any(|(own, _)| own == pattern));
+        }
+        let Some(owner) = self.owner_of(ty) else { return false };
+        let source = self.made_of.get(&owner).map_or(owner, |made| made.name.clone());
+        let follows = self.shapes.get(&source).map(|shape| &shape.follows).or_else(|| self.kinds.get(&source).map(|kind| &kind.follows));
+        follows.is_some_and(|follows| follows.iter().any(|(followed, _)| matches!(followed, Type::Named(name, _) if name == pattern)))
+    }
+
+    /// Checks that shape or kind `name`, which follows `follows`, has what each
+    /// asks for: each field, declared with the same type and not `priv`, and
+    /// each method, written with the same header (its parameters may be named
+    /// otherwise), not `priv` and not shared, unless it is a default, which the
+    /// resolver copied in (see `modules::follow_patterns`).
+    fn check_follows(&mut self, name: &str, fields: Option<&[Field]>, follows: &[(Type, Span)]) -> Result<()> {
+        let mut asked: HashMap<String, String> = HashMap::new();
+        for (followed, at) in follows {
+            let Type::Named(pattern_name, _) = followed else { continue };
+            let Some(pattern) = self.patterns.get(pattern_name).cloned() else { continue };
+            let written = unqualified(pattern_name);
+            if fields.is_none()
+                && let Some(field) = pattern.fields.first()
+            {
+                return err(*at, format!("pattern '{}' asks for field '{}', and a kind has no fields; only a shape follows a pattern with fields", written, field.name));
+            }
+            for field in &pattern.fields {
+                if let Some(other) = asked.insert(field.name.clone(), written.to_string()) {
+                    return err(*at, format!("patterns '{}' and '{}' both ask for '{}'; '{}' follows each, so it would need two of it", other, written, field.name, unqualified(name)));
+                }
+                let Some(own) = fields.and_then(|fields| fields.iter().find(|own| own.name == field.name)) else {
+                    return err(*at, format!("'{0}' follows pattern '{1}', which asks for field '{2}: {3}'; declare it in '{0}'", unqualified(name), written, field.name, field.ty));
+                };
+                if own.ty.without_regions() != field.ty.without_regions() {
+                    return err(own.ty_span, format!("field '{}' is {} here, and pattern '{}', which '{}' follows, asks for it as {}", own.name, own.ty, written, unqualified(name), field.ty));
+                }
+                if own.private {
+                    return err(own.span, format!("field '{}' is one pattern '{}' asks for, so code using the pattern reads it, and it isn't 'priv'", own.name, written));
+                }
+            }
+            for method in &pattern.methods {
+                let Some(own) = method.owner.as_ref().map(|owner| owner.name.clone()) else { continue };
+                if let Some(other) = asked.insert(own.clone(), written.to_string()) {
+                    return err(*at, format!("patterns '{}' and '{}' both ask for '{}'; '{}' follows each, so it would need two of it", other, written, own, unqualified(name)));
+                }
+                let full = method_name(name, &own);
+                let Some(info) = self.tasks.get(&full).cloned() else {
+                    let header = self.pattern_header(method, name);
+                    return err(*at, format!("'{0}' follows pattern '{1}', which asks for method '{2}'; write it in '{0}', as in '{3}'", unqualified(name), written, own, header));
+                };
+                let span = self.task_spans.get(&full).copied().unwrap_or(*at);
+                let mine = info.owner.clone().unwrap_or(Owner { name: own.clone(), alters: false, alters_span: None, shared: false });
+                if mine.shared {
+                    return err(span, format!("'{}' is a shared method, and pattern '{}', which '{}' follows, asks for a method of every value of it, '{}'", own, written, unqualified(name), self.pattern_header(method, name)));
+                }
+                if self.private.contains(&full) {
+                    return err(span, format!("method '{}' is one pattern '{}' asks for, so code using the pattern calls it, and it isn't 'priv'", own, written));
+                }
+                if self.broken.contains(&full) || self.broken.contains(&pattern_call(pattern_name, &own)) {
+                    continue;
+                }
+                if !self.same_header(method, &info, name) {
+                    return err(span, format!("method '{}' of '{}' has another header than pattern '{}' asks for: write it '{}'", own, unqualified(name), written, self.pattern_header(method, name)));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The header pattern method `method` asks a follower called `owner` to
+    /// write, as it would write it.
+    fn pattern_header(&self, method: &TaskDef, owner: &str) -> String {
+        // In `@this`, as the value the method is called on, where it lives in a region.
+        let this = Type::Named(unqualified(owner).to_string(), self.takes_region.contains(owner).then(|| THIS_WORD.to_string()));
+        let put = |ty: &Type| ty.replace_names(&|name| (name == THIS_TYPE).then(|| this.clone())).map_params(&mut |name| (name == THIS_TYPE).then(|| this.clone()));
+        let params: Vec<String> = method.params.iter().skip(1).map(|param| {
+            let word = match param.passing.word() {
+                "" => String::new(),
+                word => format!("{} ", word),
+            };
+            format!("{}{}: {}", word, param.name, put(&param.ty))
+        }).collect();
+        let alters = if method.owner.as_ref().is_some_and(|owner| owner.alters) { "alters " } else { "" };
+        let name = method.owner.as_ref().map_or("", |owner| owner.name.as_str());
+        let ret = match &method.ret {
+            Type::Nothing => String::new(),
+            Type::Results(types) => format!(" -> {}", types.iter().map(|ty| put(ty).to_string()).collect::<Vec<_>>().join(", ")),
+            other => format!(" -> {}", put(other)),
+        };
+        format!("{}{}({}){}", alters, name, params.join(", "), ret)
+    }
+
+    /// Whether the method `info`, written by the follower `owner`, has the
+    /// header pattern method `method` asks for: the same `alters`, the same
+    /// parameters, each taken the same way, and the same results, with the
+    /// follower in place of the type following the pattern. The names of the
+    /// parameters, and of the regions it takes, are its own.
+    fn same_header(&self, method: &TaskDef, info: &TaskInfo, owner: &str) -> bool {
+        let alters = |owner: Option<&Owner>| owner.is_some_and(|owner| owner.alters);
+        if alters(method.owner.as_ref()) != alters(info.owner.as_ref()) || method.params.len() != info.params.len() {
+            return false;
+        }
+        let this = info.params.first().map_or_else(|| Type::named(owner), |(_, ty)| ty.clone());
+        let put = |ty: &Type| ty.map_params(&mut |name| (name == THIS_TYPE).then(|| this.clone())).replace_names(&|name| (name == THIS_TYPE).then(|| this.clone()));
+        // Each region a header takes, named by where it is taken.
+        let regions = |names: Vec<&str>| -> HashMap<String, String> { names.into_iter().enumerate().map(|(i, name)| (name.to_string(), format!("#{}", i))).collect() };
+        let asked = regions(method.params.iter().filter(|param| param.ty == Type::Region).map(|param| param.name.as_str()).collect());
+        let mine = regions(info.params.iter().filter(|(_, ty)| *ty == Type::Region).map(|(name, _)| name.as_str()).collect());
+        let named = |ty: &Type, names: &HashMap<String, String>| ty.map_regions(&mut |region| Some(names.get(region).cloned().unwrap_or_else(|| region.to_string())));
+        let params = method.params.iter().zip(&info.params).zip(&info.passing).skip(1).all(|((asked_param, (_, ty)), passing)| {
+            asked_param.passing == *passing && named(&put(&asked_param.ty), &asked) == named(ty, &mine)
+        });
+        params && named(&put(&method.ret), &asked) == named(&info.ret, &mine)
     }
 
     /// Checks the types one use gives a generic task against the copies its body
@@ -1150,6 +1400,7 @@ impl Checker {
                     if taken(&t.name, t.span) {
                         continue;
                     }
+                    self.task_spans.insert(t.name.clone(), t.span);
                     // A method is written as a member of its shape or kind, so
                     // every message names it that way (see `written_names`).
                     if let Some(owner) = &t.owner
@@ -1191,6 +1442,23 @@ impl Checker {
                 // What the declaration promises isn't settled, so every use of
                 // it is left alone (see `broken`).
                 self.broken.insert(name);
+            }
+        }
+        // What the patterns a shape or kind follows ask for, once every
+        // method's header is read.
+        for item in items.iter() {
+            let (name, fields, follows) = match item {
+                Item::Shape(s) if !s.follows.is_empty() => (&s.name, Some(s.fields.as_slice()), &s.follows),
+                Item::Kind(k) if !k.follows.is_empty() => (&k.name, None, &k.follows),
+                _ => continue,
+            };
+            if self.broken.contains(name) {
+                continue;
+            }
+            self.current_module = module_of(name).to_string();
+            let followed = self.check_follows(name, fields, follows);
+            if !self.keep_going(followed) {
+                self.unfollowed.insert(name.clone());
             }
         }
         let mut acyclic = HashSet::new();
@@ -1402,24 +1670,35 @@ impl Checker {
             Item::Macro(m) if self.macros.contains_key(&m.name) => m.value = self.macro_value(&m.name, &mut Vec::new())?,
             Item::Macro(_) => {}
             Item::Task(t) => {
-                // `Kind.Tag(…)` makes a variant, so a shared method can't take
-                // the name of one its kind has from a kind it imitates, as it
-                // can't take one of its own (see `Parser::parse_kind`).
-                if let (Some(owner), Some(kind)) = (t.owner.as_ref().filter(|owner| owner.shared), t.owner_type().and_then(|kind| self.kinds.get(kind)))
-                    && let Some(variant) = kind.variants.iter().take(kind.imitated).find(|variant| variant.tag == owner.name)
-                {
-                    let from = kind.imitates.iter().find(|(_, at)| *at == variant.span).map_or(String::new(), |(ty, _)| format!(", from '{}', which it imitates", ty));
-                    return err(t.span, format!("'{0}' is already a variant of '{1}'{2}; '{1}.{0}(…)' makes the variant, so a shared method can't take its name", owner.name, unqualified(&kind.name), from));
-                }
-                self.check_header(t)?;
-                if t.name == "main" {
-                    if let Some(param) = t.params.first() {
-                        return err(param.span, "task 'main' cannot take parameters");
-                    }
-                    if t.ret != Type::Nothing {
-                        return err(t.ret_span(), "task 'main' cannot return a value");
-                    }
-                }
+                // A default method a follower has from a pattern names the
+                // follower `this` in its header too (see `this_type`).
+                self.this_type = method_this(t);
+                let read = self.check_task_declaration(t);
+                self.this_type = None;
+                read?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `check_declaration` for a task.
+    fn check_task_declaration(&mut self, t: &mut TaskDef) -> Result<()> {
+        // `Kind.Tag(…)` makes a variant, so a shared method can't take the name
+        // of one its kind has from a kind it imitates, as it can't take one of
+        // its own (see `Parser::parse_kind`).
+        if let (Some(owner), Some(kind)) = (t.owner.as_ref().filter(|owner| owner.shared), t.owner_type().and_then(|kind| self.kinds.get(kind)))
+            && let Some(variant) = kind.variants.iter().take(kind.imitated).find(|variant| variant.tag == owner.name)
+        {
+            let from = kind.imitates.iter().find(|(_, at)| *at == variant.span).map_or(String::new(), |(ty, _)| format!(", from '{}', which it imitates", ty));
+            return err(t.span, format!("'{0}' is already a variant of '{1}'{2}; '{1}.{0}(…)' makes the variant, so a shared method can't take its name", owner.name, unqualified(&kind.name), from));
+        }
+        self.check_header(t)?;
+        if t.name == "main" {
+            if let Some(param) = t.params.first() {
+                return err(param.span, "task 'main' cannot take parameters");
+            }
+            if t.ret != Type::Nothing {
+                return err(t.ret_span(), "task 'main' cannot return a value");
             }
         }
         Ok(())
@@ -1856,7 +2135,7 @@ impl Checker {
         let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
         self.written_names.insert(key.clone(), written);
         self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
-        let made = KindDef { name: key.clone(), types: Vec::new(), given: types.clone(), variants: Vec::new(), span: source.span, private: source.private, imitates: Vec::new(), imitated: source.imitated };
+        let made = KindDef { name: key.clone(), types: Vec::new(), given: types.clone(), variants: Vec::new(), span: source.span, private: source.private, imitates: Vec::new(), follows: Vec::new(), imitated: source.imitated };
         self.kinds.insert(key.clone(), made);
         self.making_shapes.push(key.clone());
         let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
@@ -1969,7 +2248,7 @@ impl Checker {
         let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
         self.written_names.insert(key.clone(), written);
         self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
-        let made = ShapeDef { name: key.clone(), types: Vec::new(), given: types.clone(), fields: Vec::new(), shared: Vec::new(), span: source.span, private: source.private };
+        let made = ShapeDef { name: key.clone(), types: Vec::new(), given: types.clone(), fields: Vec::new(), shared: Vec::new(), span: source.span, private: source.private, follows: Vec::new() };
         self.shapes.insert(key.clone(), made);
         self.making_shapes.push(key.clone());
         let fields = self.instance_fields(&source, types);
@@ -2520,6 +2799,15 @@ impl Checker {
     /// - a shape or kind without pointers lives in no region, so `Point@r` is
     ///   an error, while the `Point` in `^Point@r` just has its region dropped.
     fn resolve_type(&mut self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
+        // `this` in a default method a follower has from a pattern is the follower.
+        let followed;
+        let ty = match &self.this_type {
+            Some(this) if mentions_name(ty, THIS_TYPE) => {
+                followed = ty.replace_names(&|name| (name == THIS_TYPE).then(|| this.clone()));
+                &followed
+            }
+            _ => ty,
+        };
         self.check_type(ty, span)?;
         // The sizes of shapes and kinds are known inside tasks; fields and
         // headers are checked for size once they are (see `check_task`).
@@ -3138,6 +3426,9 @@ impl Checker {
         self.current_task = task.name.clone();
         self.param_index = task.params.iter().enumerate().map(|(i, param)| (param.name.clone(), i)).collect();
         self.current_method = task.owner.clone();
+        // A method's body may write `this` only where it is a pattern's
+        // default, copied in, as the type of the value it is called on.
+        self.this_type = method_this(task);
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
         self.current_shape = match &task.owner {
@@ -5139,7 +5430,7 @@ impl Checker {
                 if let Some((written, at)) = kind.as_deref()
                     && written != from
                 {
-                    return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, kind_name));
+                    return err(*at, format!("this case form names kind '{}', but the value's kind is '{}'", written, kind_name));
                 }
                 let variant = self.kinds.get(kind_name)
                     .and_then(|kind| kind.variants.iter().find(|v| v.tag == *tag))
@@ -5161,9 +5452,9 @@ impl Checker {
                 if let Some((written, at)) = kind.as_deref()
                     && *written != applied.name
                 {
-                    return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, subject));
+                    return err(*at, format!("this case form names kind '{}', but the value's kind is '{}'", written, subject));
                 }
-                let def = self.kinds.get(&applied.name).cloned().unwrap_or_else(|| KindDef { name: String::new(), types: Vec::new(), given: Vec::new(), variants: Vec::new(), span, private: false, imitates: Vec::new(), imitated: 0 });
+                let def = self.kinds.get(&applied.name).cloned().unwrap_or_else(|| KindDef { name: String::new(), types: Vec::new(), given: Vec::new(), variants: Vec::new(), span, private: false, imitates: Vec::new(), follows: Vec::new(), imitated: 0 });
                 let variant = def.variants.iter().find(|v| v.tag == *tag).ok_or_else(|| Error::at(span, format!("kind '{}' has no variant '{}'", applied.name, tag)))?;
                 if binds.len() != variant.payload.len() {
                     let what = if in_case { format!("case '{}'", tag) } else { format!("'{}'", tag) };
@@ -6793,7 +7084,7 @@ impl Checker {
             if param.name == *group && names.is_empty() {
                 types.push(param.clone());
             } else if param.name == *group {
-                types.extend(names.iter().map(|name| TypeParam { name: name.clone(), span: param.span, needs: param.needs.clone(), group: false }));
+                types.extend(names.iter().map(|name| TypeParam { name: name.clone(), span: param.span, needs: param.needs.clone(), patterns: param.patterns.clone(), group: false }));
             } else {
                 types.push(param.clone());
             }
@@ -7541,7 +7832,7 @@ impl Checker {
         }
         self.current_module.clear();
         if !members.is_empty() {
-            let values = ShapeDef { name: START_VALUES.to_string(), types: Vec::new(), given: Vec::new(), fields: Vec::new(), shared: members, span: Span::default(), private: false };
+            let values = ShapeDef { name: START_VALUES.to_string(), types: Vec::new(), given: Vec::new(), fields: Vec::new(), shared: members, span: Span::default(), private: false, follows: Vec::new() };
             self.shapes.insert(START_VALUES.to_string(), values);
         }
     }
@@ -8143,7 +8434,7 @@ impl Checker {
                     default: None,
                 });
             }
-            let shape = ShapeDef { name: kept_name(lambda), types: Vec::new(), given: Vec::new(), fields, shared: Vec::new(), span: kept.span, private: true };
+            let shape = ShapeDef { name: kept_name(lambda), types: Vec::new(), given: Vec::new(), fields, shared: Vec::new(), span: kept.span, private: true, follows: Vec::new() };
             self.made_shapes.push(Item::Shape(shape));
         }
     }
@@ -10975,6 +11266,8 @@ impl Checker {
             return err(span, format!("'type' is the type of the value ({} here), which never changes", self.written_type(base)));
         }
         match base {
+            // A field a pattern the type follows asks for.
+            Type::Param(param) => self.pattern_field(param, field, span),
             // A shape given a type this declaration takes: its field's type is
             // the shape's with the types given in place of the names it takes.
             Type::Applied(applied) => {
@@ -11169,6 +11462,20 @@ impl Checker {
             }
             return Error::at(span, format!("{} '{}' has no method '{}'", what, written, name));
         }
+        // A type a declaration takes has the methods of the patterns it follows.
+        if let Type::Param(param) = base
+            && name != STR
+        {
+            let followed: Vec<&str> = self.type_param(param).map(|declared| declared.patterns.iter().map(|(pattern, _)| unqualified(pattern)).collect()).unwrap_or_default();
+            if !followed.is_empty() {
+                return Error::at(span, format!("type {} has no method '{}': none of the patterns it follows ({}) asks for one", base, name, followed.join(", ")));
+            }
+            let mut having: Vec<&str> = self.patterns.values().filter(|pattern| pattern.method(name).is_some()).map(|pattern| unqualified(&pattern.name)).collect();
+            having.sort_unstable();
+            if let Some(pattern) = having.first() {
+                return Error::at(span, format!("type {} has no methods; a type a declaration takes has the methods of the patterns it follows, and '{}' asks for '{}', as in '<{}: {}>'", base, pattern, name, base, pattern));
+            }
+        }
         match base {
             Type::Param(_) if name == STR => Error::at(span, format!("'str' turns a value into text, and {} {}", base, self.why_not(Need::Shown, base))),
             _ if name == STR => Error::at(span, format!("'str' can't write {}", self.why_unwritable(base))),
@@ -11268,6 +11575,37 @@ impl Checker {
                 return err(span, format!("'at' takes the index of one byte, as in 't.at(i)', got {}", count(args.len(), "argument")));
             }
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
+            return Ok(());
+        }
+        // `x.area()` with `x: T`, where `T` follows a pattern asking for `area`:
+        // the call of the method each type given for `T` has (see
+        // `ast::pattern_call`), checked against the pattern's header.
+        if let Type::Param(param) = &ty
+            && let Some(pattern) = self.pattern_with_method(param, &name, span)?
+        {
+            let written = format!("{}{}{}", unqualified(&pattern), MODULE_SEPARATOR, name);
+            let takes = self.patterns.get(&pattern).and_then(|def| def.method(&name)).map_or(0, |method| method.params.len().saturating_sub(1));
+            let given = match &expr.kind {
+                ExprKind::MethodCall { args, .. } => args.len(),
+                _ => 0,
+            };
+            if given != takes {
+                return err(span, format!("method '{}' expects {}, got {}", written, count(takes, "argument"), given));
+            }
+            let alters = self.patterns.get(&pattern).and_then(|def| def.method(&name)).and_then(|method| method.owner.as_ref()).is_some_and(|owner| owner.alters);
+            if alters {
+                let ExprKind::MethodCall { value, .. } = &expr.kind else { return Ok(()) };
+                self.altered_place(value, &written)?;
+                self.hand_written(value, Some(&written));
+            }
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::MethodCall { value, args, .. } = taken else {
+                return Err(Error::internal_at(span, "a method call that is no longer one"));
+            };
+            let mut all = Vec::with_capacity(args.len() + 1);
+            all.push(*value);
+            all.extend(args);
+            expr.kind = ExprKind::Call { name: pattern_call(&pattern, &name), types: Vec::new(), args: all };
             return Ok(());
         }
         // `op.run(4, 5)`: a field that holds a task, called, where the value
@@ -12671,6 +13009,25 @@ impl Checker {
     /// Checks that `ty`, given for the type parameter `param`, allows what the
     /// task's header asks of it.
     fn check_need(&self, what: &str, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
+        // The patterns it asks every type given for it to follow.
+        if let Some((pattern, _)) = param.patterns.iter().find(|(pattern, _)| !self.follows(ty, pattern)) {
+            let pattern = unqualified(pattern);
+            let how = match self.owner_of(ty) {
+                Some(owner) if self.shapes.contains_key(&owner) || self.kinds.contains_key(&owner) => {
+                    let source = self.made_of.get(&owner).map_or(owner.clone(), |made| made.name.clone());
+                    let word = if self.kinds.contains_key(&source) { "kind" } else { "shape" };
+                    format!("; a {} follows it with '::' after its name, as in '{} {}::{}'", word, word, unqualified(&source), pattern)
+                }
+                _ => match ty {
+                    Type::Param(name) => format!("; ask for it, as in '<{}: {}>'", name, pattern),
+                    _ => ", which only a shape or a kind can".to_string(),
+                },
+            };
+            if let Some((group, place)) = param.name.split_once(GROUP_ITEM) {
+                return err(at, format!("{} '{}' asks each value of its group '{}...' to follow pattern '{}', and value {} is {}, which doesn't{}", what, unqualified(task), group, pattern, place.parse::<usize>().map_or(0, |i| i + 1), ty, how));
+            }
+            return err(at, format!("{} '{}' takes a type that follows pattern '{}' as '{}', and {} doesn't{}", what, unqualified(task), pattern, param.name, ty, how));
+        }
         let Some(&(need, _)) = param.needs.iter().find(|(need, _)| !self.allows(*need, ty)) else { return Ok(()) };
         // One of the types a call gives a group (see `group_call_info`), named
         // as the group is written and by the value it is for.
@@ -14042,6 +14399,34 @@ impl Checker {
             // No lambda is written in a task that takes types.
             ExprKind::Closure { .. } => Ok(()),
             ExprKind::Call { name, types, args } => {
+                // `x.area()` with `x: T`: the method of the type this copy gives
+                // `T`, which has the header the pattern asks for (see
+                // `check_follows`), made for its types where it takes them.
+                if let Some((_, method)) = pattern_call_parts(name)
+                    && let Some(receiver) = args.first().and_then(|arg| arg.ty.as_ref())
+                {
+                    let method = method.to_string();
+                    let mut receiver = in_copy(receiver, given);
+                    self.settle_applications(&mut receiver, at)?;
+                    // A task taking types is read through this too, as itself,
+                    // where `T` stays as it is.
+                    let owner = match self.owner_of(&receiver) {
+                        Some(owner) => owner,
+                        None if !receiver.params().is_empty() => return args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made)),
+                        None => return Err(Error::internal_at(at, format!("a call of a pattern's method '{}' on {}, which follows no pattern", method, receiver))),
+                    };
+                    // The owner of a shape made for its types is the shape it was made from.
+                    match self.unmade(&receiver) {
+                        Type::Applied(made) => {
+                            *name = method_name(&made.name, &method);
+                            *types = made.types.iter().map(|ty| (ty.without_regions(), at)).collect();
+                        }
+                        _ => {
+                            *name = method_name(&owner, &method);
+                            types.clear();
+                        }
+                    }
+                }
                 // A group's types, kept as a tuple, are as many as the call gives
                 // it; any other tuple of a group's values is at least two items
                 // long, as this copy makes the values (see `in_copy`).
@@ -14771,6 +15156,24 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
 }
 
 /// Every shape or kind a type names, by value or through pointers.
+/// The type `this` stands for in method `t` where it is a pattern's default,
+/// copied in (see `ast::THIS_TYPE`): the type of the value it is called on,
+/// in `@this` where it lives in a region, as its first parameter has it once
+/// settled (see `Checker::settle_receiver`), or its shape or kind's for a
+/// shared method. `None` for a task.
+fn method_this(t: &TaskDef) -> Option<Type> {
+    match &t.owner {
+        Some(owner) if owner.shared => t.owner_type().map(Type::named),
+        Some(_) => t.params.first().map(|this| this.ty.clone()),
+        None => None,
+    }
+}
+
+/// Whether `ty` names the shape or kind `name` anywhere in it.
+fn mentions_name(ty: &Type, name: &str) -> bool {
+    named_types(ty).contains(&name)
+}
+
 fn named_types(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],

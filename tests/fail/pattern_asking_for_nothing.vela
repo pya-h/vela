@@ -1,0 +1,6 @@
+; error: 2:9: pattern 'Empty' asks for nothing; give it a method a shape following it has, as in 'area() -> float'
+pattern Empty
+fi
+
+task main()
+fi

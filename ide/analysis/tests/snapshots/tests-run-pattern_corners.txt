@@ -1,0 +1,112 @@
+  1 | ; Patterns at their edges: an alters default that replaces a kind's whole value, a
+    | comment:; Patterns at their edges: an alters default that replaces a kind's whole value, a
+  2 | ; default in a shape taking types, a group of types following a pattern, and a
+    | comment:; default in a shape taking types, a group of types following a pattern, and a
+  3 | ; field written through a type a task takes.
+    | comment:; field written through a type a task takes.
+  4 | pattern Counted
+    | keyword:pattern  type:Counted
+  5 |     count: int
+    | field:count  punctuation::  type-builtin:int
+  6 |     alters bump()
+    | keyword:alters  method:bump  punctuation:(  punctuation:)
+  7 |         .count++
+    | punctuation:.  field:count  operator:++
+  8 |     fi
+    | keyword:fi
+  9 |     doubled() -> int
+    | method:doubled  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 10 |         <- .count * 2
+    | keyword:<-  punctuation:.  field:count  operator:*  number:2
+ 11 |     fi
+    | keyword:fi
+ 12 | fi
+    | keyword:fi
+ 14 | pattern Cycles
+    | keyword:pattern  type:Cycles
+ 15 |     alters next()
+    | keyword:alters  method:next  punctuation:(  punctuation:)
+ 16 |         .this = .following()
+    | punctuation:.  keyword:this  operator:=  punctuation:.  method:following  punctuation:(  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 |     following() -> this
+    | method:following  punctuation:(  punctuation:)  operator:->  type:this
+ 19 | fi
+    | keyword:fi
+ 21 | kind Light::Cycles
+    | keyword:kind  type:Light  punctuation::  punctuation::  type:Cycles
+ 22 |     Red
+    | variant:Red
+ 23 |     Green
+    | variant:Green
+ 25 |     following() -> Light
+    | method:following  punctuation:(  punctuation:)  operator:->  type:Light
+ 26 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 27 |         case Red = Green
+    | keyword:case  variant:Red  operator:=  variant:Green
+ 28 |         case Green = Red
+    | keyword:case  variant:Green  operator:=  variant:Red
+ 29 |         fi
+    | keyword:fi
+ 30 |     fi
+    | keyword:fi
+ 31 | fi
+    | keyword:fi
+ 33 | shape Box<T: shown>::Counted
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation::  punctuation::  type:Counted
+ 34 |     value: T
+    | field:value  punctuation::  type:T
+ 35 |     count: int
+    | field:count  punctuation::  type-builtin:int
+ 36 | fi
+    | keyword:fi
+ 38 | shape Tally::Counted
+    | keyword:shape  type:Tally  punctuation::  punctuation::  type:Counted
+ 39 |     count: int
+    | field:count  punctuation::  type-builtin:int
+ 40 | fi
+    | keyword:fi
+ 42 | task sum_all<P...: Counted>(args: P...) -> int
+    | keyword:task  task:sum_all  punctuation:<  type:P  keyword:...  punctuation::  type:Counted  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
+ 43 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 44 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 45 |         total += v.doubled()
+    | variable:total  operator:+=  variable:v  punctuation:.  field:doubled  punctuation:(  punctuation:)
+ 46 |     fi
+    | keyword:fi
+ 47 |     <- total
+    | keyword:<-  variable:total
+ 48 | fi
+    | keyword:fi
+ 50 | task set<C: Counted>(flex x: C) -> int
+    | keyword:task  task:set  punctuation:<  type:C  punctuation::  type:Counted  punctuation:>  punctuation:(  keyword:flex  parameter:x  punctuation::  type:C  punctuation:)  operator:->  type-builtin:int
+ 51 |     x.count = 10
+    | parameter:x  punctuation:.  field:count  operator:=  number:10
+ 52 |     x.bump()
+    | parameter:x  punctuation:.  field:bump  punctuation:(  punctuation:)
+ 53 |     <- x.count
+    | keyword:<-  parameter:x  punctuation:.  field:count
+ 54 | fi
+    | keyword:fi
+ 56 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 57 |     flex light = Light.Red
+    | keyword:flex  variable:light  operator:=  type:Light  punctuation:.  variant:Red
+ 58 |     light.next()
+    | variable:light  punctuation:.  method:next  punctuation:(  punctuation:)
+ 59 |     show(light)
+    | builtin-fn:show  punctuation:(  variable:light  punctuation:)
+ 60 |     flex b = Box { value: "x", count: 1 }
+    | keyword:flex  variable:b  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"x"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
+ 61 |     b.bump()
+    | variable:b  punctuation:.  method:bump  punctuation:(  punctuation:)
+ 62 |     show(b.count, " ", b.doubled())
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  method:doubled  punctuation:(  punctuation:)  punctuation:)
+ 63 |     show(sum_all(b, Tally { count: 3 }), " ", set(Tally { count: 0 }), " ", set(b))
+    | builtin-fn:show  punctuation:(  task:sum_all  punctuation:(  variable:b  punctuation:,  type:Tally  punctuation:{  field:count  punctuation::  number:3  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  task:set  punctuation:(  type:Tally  punctuation:{  field:count  punctuation::  number:0  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  task:set  punctuation:(  variable:b  punctuation:)  punctuation:)
+ 64 | fi
+    | keyword:fi

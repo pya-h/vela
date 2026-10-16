@@ -1,5 +1,5 @@
-; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-; binding drops a value, and `is` tests one pattern with its names visible
+; Case forms in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+; binding drops a value, and `is` tests one case form with its names visible
 ; only in the block it guards.
 
 task half(n: int) -> maybe int

@@ -1,0 +1,64 @@
+; Patterns at their edges: an alters default that replaces a kind's whole value, a
+; default in a shape taking types, a group of types following a pattern, and a
+; field written through a type a task takes.
+pattern Counted
+    count: int
+    alters bump()
+        .count++
+    fi
+    doubled() -> int
+        <- .count * 2
+    fi
+fi
+
+pattern Cycles
+    alters next()
+        .this = .following()
+    fi
+    following() -> this
+fi
+
+kind Light::Cycles
+    Red
+    Green
+
+    following() -> Light
+        <- match .this
+        case Red = Green
+        case Green = Red
+        fi
+    fi
+fi
+
+shape Box<T: shown>::Counted
+    value: T
+    count: int
+fi
+
+shape Tally::Counted
+    count: int
+fi
+
+task sum_all<P...: Counted>(args: P...) -> int
+    flex total = 0
+    each v in args
+        total += v.doubled()
+    fi
+    <- total
+fi
+
+task set<C: Counted>(flex x: C) -> int
+    x.count = 10
+    x.bump()
+    <- x.count
+fi
+
+task main()
+    flex light = Light.Red
+    light.next()
+    show(light)
+    flex b = Box { value: "x", count: 1 }
+    b.bump()
+    show(b.count, " ", b.doubled())
+    show(sum_all(b, Tally { count: 3 }), " ", set(Tally { count: 0 }), " ", set(b))
+fi

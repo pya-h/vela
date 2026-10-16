@@ -1,0 +1,8 @@
+; error: 4:5: 'count' is already a field of this pattern, at 3:5; both are written '.count', so a field and a method can't share a name
+pattern Counted
+    count: int
+    count() -> int
+fi
+
+task main()
+fi

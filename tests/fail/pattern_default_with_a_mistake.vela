@@ -1,0 +1,17 @@
+; error: 4:12: unknown variable 'missing'
+pattern Counted
+    count() -> int
+        <- missing
+    fi
+fi
+
+shape First::Counted
+    x: int
+fi
+
+shape Second::Counted
+    y: int
+fi
+
+task main()
+fi

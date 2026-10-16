@@ -470,6 +470,7 @@ pub fn input_error_kind() -> KindDef {
         span,
         private: false,
         imitates: Vec::new(),
+        follows: Vec::new(),
         imitated: 0,
     }
 }
@@ -494,6 +495,7 @@ pub fn parse_error_kind() -> KindDef {
         span,
         private: false,
         imitates: Vec::new(),
+        follows: Vec::new(),
         imitated: 0,
     }
 }
@@ -526,6 +528,16 @@ pub const READ: &str = "read";
 /// with no body and no `fi`. Not a keyword: it means something only there, so a
 /// program may still name anything `native`.
 pub const NATIVE: &str = "native";
+
+/// `pattern Shaped … fi`: a list of methods, and fields, that a shape or kind
+/// following it has (see `PatternDef`). A word only at the start of a line
+/// outside every item, as `alias` is, so a variable may be named `pattern`.
+pub const PATTERN: &str = "pattern";
+
+/// Inside a pattern, the type that follows it, written `this` or the pattern's
+/// own name (see `PatternDef`). It starts with `_`, which no Vela name does, so
+/// it is no other type, and a message writes it `this`.
+pub const THIS_TYPE: &str = "_this";
 
 /// The word that starts a type alias at the start of a line outside every
 /// item, `alias SampleTask => (int) -> int` (see `AliasDef`). Not a keyword,
@@ -569,6 +581,32 @@ pub const SHOWN: &str = ".shown";
 /// (`shapes/counter.Counter__on__step`).
 pub fn method_name(owner: &str, method: &str) -> String {
     format!("{}__on__{}", owner, method)
+}
+
+/// The name of the generic task a default method of pattern `pattern` (its name
+/// in the program) is checked as, once, with the type following the pattern as
+/// the type it takes (see `PatternDef`): `Shaped__default__describe`. No Vela
+/// name holds `__`, so it is no declaration's name, and the program never
+/// calls it, so it generates nothing.
+pub fn pattern_default(pattern: &str, method: &str) -> String {
+    format!("{}{}{}", pattern, DEFAULT_MARK, method)
+}
+
+/// What the name of a pattern's default method, as a task, holds between the
+/// pattern's name and the method's (see `pattern_default`).
+pub const DEFAULT_MARK: &str = "__default__";
+
+/// The name a call of method `method` of pattern `pattern` takes in a task
+/// whose type `T` follows the pattern, `x.area()` for `x: T`, until a copy of
+/// the task made for a type points it at that type's own method (see
+/// `check::Checker::substitute_expr`): `Shaped__call__area`.
+pub fn pattern_call(pattern: &str, method: &str) -> String {
+    format!("{}__call__{}", pattern, method)
+}
+
+/// The pattern and the method a call named by `pattern_call` calls.
+pub fn pattern_call_parts(name: &str) -> Option<(&str, &str)> {
+    name.split_once("__call__")
 }
 
 /// The name in the program of variant `tag` of kind `kind` (its name in the
@@ -706,7 +744,7 @@ impl Type {
                 suffix(f, region)
             }
             Type::Named(name, region) => {
-                write!(f, "{}", name)?;
+                write!(f, "{}", if name == THIS_TYPE { THIS_WORD } else { name })?;
                 suffix(f, region)
             }
             Type::Applied(applied) => {
@@ -723,7 +761,7 @@ impl Type {
             // A type a variant's values didn't tell yet (`Option.None`), which
             // the checker names `?T`: the program never writes it.
             Type::Param(name) if name.starts_with('?') => write!(f, "…"),
-            Type::Param(name) => write!(f, "{}", name),
+            Type::Param(name) => write!(f, "{}", if name == THIS_TYPE { THIS_WORD } else { name }),
             Type::Group(name) => write!(f, "{}...", name),
             // Its regions are its own, so none is left out for an outer one.
             Type::Task(task) => {
@@ -2475,6 +2513,11 @@ pub struct TypeParam {
     /// written: `<T: same & shown>` asks for both. None lets any type fit, and
     /// its values can only be stored, passed, and sent.
     pub needs: Vec<(Need, Span)>,
+    /// The patterns every type given for it follows, joined with the words by
+    /// `&` (`<T: Shaped & shown>`), each with where it is written: the body may
+    /// call their methods and read their fields on a value of it. The resolver
+    /// writes each as the program names it.
+    pub patterns: Vec<(String, Span)>,
     /// `P...`: a group of types, any number and any mix, which a task takes
     /// as its last parameter (`args: P...`) and names in a task's type
     /// (`(P...) -> R`). Each use fills it in with the types of the values it
@@ -2581,6 +2624,10 @@ pub struct ShapeDef {
     pub span: Span,
     /// `priv shape`: only its own file can name it.
     pub private: bool,
+    /// `shape Circle::Shaped & Named`: the patterns it follows, each with where
+    /// it is written, as the program names them once resolved (see
+    /// `PatternDef`).
+    pub follows: Vec<(Type, Span)>,
 }
 
 /// A shape's `shared` field: one value for the whole program, reached only
@@ -2646,6 +2693,9 @@ pub struct KindDef {
     /// `variants` (see `modules::imitate`); the checker reads a `T` a kind
     /// taking types gives one as that type (`kind Choice<T>::Option<T>`).
     pub imitates: Vec<(Type, Span)>,
+    /// The patterns it follows, written among the kinds it imitates
+    /// (`kind Mode::Light & Shown`); the resolver moves each from `imitates`.
+    pub follows: Vec<(Type, Span)>,
     /// How many of `variants`, from the first, come from the kinds it imitates.
     /// Each is named in the program by `imitated_variant`, not by its tag,
     /// which names the variant of the kind it comes from.
@@ -2663,6 +2713,33 @@ pub struct MacroDef {
     pub span: Span,
     /// `priv #P = …`: only its own file can name it.
     pub private: bool,
+}
+
+/// `pattern Shaped … fi`: what a shape or kind that follows it has, outside
+/// every item. Its fields (`name: text`) are ones a shape following it declares
+/// itself, of the same type; each of its methods is a header alone, which the
+/// follower writes with the same header, or a default, with a body, which the
+/// follower has unless it writes its own. Inside it, `this` and its own name are
+/// the type following it (`THIS_TYPE`). Each method is a task as a shape's is,
+/// its own name in `Owner::name` and the value it is called on its first
+/// parameter; a default has a body of at least one line, so a header alone has
+/// none.
+#[derive(Debug, Clone)]
+pub struct PatternDef {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub methods: Vec<TaskDef>,
+    /// Position of the pattern's name.
+    pub span: Span,
+    /// `priv pattern`: only its own file can name it.
+    pub private: bool,
+}
+
+impl PatternDef {
+    /// Its method called `name`.
+    pub fn method(&self, name: &str) -> Option<&TaskDef> {
+        self.methods.iter().find(|method| method.owner.as_ref().is_some_and(|owner| owner.name == name))
+    }
 }
 
 /// `alias SampleTask => (int) -> int`: another name for a type, outside every

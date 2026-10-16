@@ -1,0 +1,23 @@
+; Patterns another file declares, one with a default that calls a task this
+; file keeps to itself.
+
+pattern Labelled
+    tag() -> int
+        <- secret() + 1
+    fi
+fi
+
+pattern Sized
+    size: int
+    bigger(other: this) -> bool
+        <- .size > other.size
+    fi
+fi
+
+priv task secret() -> int
+    <- 41
+fi
+
+shape Crate::Labelled & Sized
+    size: int
+fi

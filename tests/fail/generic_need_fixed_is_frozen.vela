@@ -1,4 +1,4 @@
-; error: 4:14: expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered'
+; error: 4:14: expected what the type must allow: 'frozen', 'same', 'similar', 'shown', 'ordered', or a pattern it follows
 ; A type that never changes is asked for with 'frozen'; 'fixed' is the word for a variable.
 
 task pair<T: fixed>(v: T) -> (T, T)

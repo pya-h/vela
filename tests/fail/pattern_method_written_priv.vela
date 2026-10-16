@@ -1,0 +1,18 @@
+; error: 12:10: method 'area' is one pattern 'Shaped' asks for, so code using the pattern calls it, and it isn't 'priv'
+pattern Shaped
+    area() -> float
+    name(r: region) -> text@r
+        <- "shape {.area()}" at r
+    fi
+fi
+
+shape Circle::Shaped
+    radius: float
+
+    priv area() -> float
+        <- .radius
+    fi
+fi
+
+task main()
+fi

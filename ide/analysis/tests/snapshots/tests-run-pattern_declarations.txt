@@ -1,0 +1,256 @@
+  1 | ; Patterns: what a shape or kind following one has, its default methods, and
+    | comment:; Patterns: what a shape or kind following one has, its default methods, and
+  2 | ; tasks taking any type that follows one.
+    | comment:; tasks taking any type that follows one.
+  3 | include pattern_declarations/labels => lab (Sized)
+    | keyword:include  module:pattern_declarations  operator:/  module:labels  operator:=>  module:lab  punctuation:(  type:Sized  punctuation:)
+  5 | pattern Shaped
+    | keyword:pattern  type:Shaped
+  6 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  7 |     area() -> float
+    | method:area  punctuation:(  punctuation:)  operator:->  type-builtin:float
+  8 |     start(), stop()
+    | method:start  punctuation:(  punctuation:)  punctuation:,  method:stop  punctuation:(  punctuation:)
+  9 |     alters grow(by: float)
+    | keyword:alters  method:grow  punctuation:(  parameter:by  punctuation::  type-builtin:float  punctuation:)
+ 10 |     describe(r: region) -> text@r
+    | method:describe  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 11 |         <- "{.name} of area {.area()}" at r
+    | keyword:<-  string:"{  punctuation:.  field:name  string:} of area {  punctuation:.  method:area  punctuation:(  punctuation:)  string:}"  keyword:at  region:r
+ 12 |     fi
+    | keyword:fi
+ 13 |     larger(other: this) -> bool
+    | method:larger  punctuation:(  parameter:other  punctuation::  type:this  punctuation:)  operator:->  type-builtin:bool
+ 14 |         <- .area() > other.area()
+    | keyword:<-  punctuation:.  method:area  punctuation:(  punctuation:)  operator:>  parameter:other  punctuation:.  method:area  punctuation:(  punctuation:)
+ 15 |     fi
+    | keyword:fi
+ 16 |     same(other: Shaped) -> bool
+    | method:same  punctuation:(  parameter:other  punctuation::  type:Shaped  punctuation:)  operator:->  type-builtin:bool
+ 17 |         <- not .larger(other) and not other.larger(.this)
+    | keyword:<-  keyword:not  punctuation:.  method:larger  punctuation:(  parameter:other  punctuation:)  keyword:and  keyword:not  parameter:other  punctuation:.  method:larger  punctuation:(  punctuation:.  keyword:this  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | pattern Counted
+    | keyword:pattern  type:Counted
+ 22 |     count: int
+    | field:count  punctuation::  type-builtin:int
+ 23 |     alters reset()
+    | keyword:alters  method:reset  punctuation:(  punctuation:)
+ 24 |         .count = 0
+    | punctuation:.  field:count  operator:=  number:0
+ 25 |     fi
+    | keyword:fi
+ 26 | fi
+    | keyword:fi
+ 28 | shape Circle::Shaped & Counted
+    | keyword:shape  type:Circle  punctuation::  punctuation::  type:Shaped  operator:&  type:Counted
+ 29 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 30 |     radius: float
+    | field:radius  punctuation::  type-builtin:float
+ 31 |     count: int = 0
+    | field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 33 |     area() -> float
+    | method:area  punctuation:(  punctuation:)  operator:->  type-builtin:float
+ 34 |         <- 3.0 * .radius * .radius
+    | keyword:<-  number:3.0  operator:*  punctuation:.  field:radius  operator:*  punctuation:.  field:radius
+ 35 |     fi
+    | keyword:fi
+ 36 |     start()
+    | method:start  punctuation:(  punctuation:)
+ 37 |         show("circle starts")
+    | builtin-fn:show  punctuation:(  string:"circle starts"  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 |     stop()
+    | method:stop  punctuation:(  punctuation:)
+ 40 |         show("circle stops")
+    | builtin-fn:show  punctuation:(  string:"circle stops"  punctuation:)
+ 41 |     fi
+    | keyword:fi
+ 42 |     alters grow(by: float)
+    | keyword:alters  method:grow  punctuation:(  parameter:by  punctuation::  type-builtin:float  punctuation:)
+ 43 |         .radius += by
+    | punctuation:.  field:radius  operator:+=  parameter:by
+ 44 |         .count++
+    | punctuation:.  field:count  operator:++
+ 45 |     fi
+    | keyword:fi
+ 46 | fi
+    | keyword:fi
+ 48 | shape Square::Shaped
+    | keyword:shape  type:Square  punctuation::  punctuation::  type:Shaped
+ 49 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 50 |     side: float
+    | field:side  punctuation::  type-builtin:float
+ 52 |     area() -> float
+    | method:area  punctuation:(  punctuation:)  operator:->  type-builtin:float
+ 53 |         <- .side * .side
+    | keyword:<-  punctuation:.  field:side  operator:*  punctuation:.  field:side
+ 54 |     fi
+    | keyword:fi
+ 55 |     start()
+    | method:start  punctuation:(  punctuation:)
+ 56 |         show("square starts")
+    | builtin-fn:show  punctuation:(  string:"square starts"  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 58 |     stop()
+    | method:stop  punctuation:(  punctuation:)
+ 59 |         show("square stops")
+    | builtin-fn:show  punctuation:(  string:"square stops"  punctuation:)
+ 60 |     fi
+    | keyword:fi
+ 61 |     alters grow(by: float)
+    | keyword:alters  method:grow  punctuation:(  parameter:by  punctuation::  type-builtin:float  punctuation:)
+ 62 |         .side += by
+    | punctuation:.  field:side  operator:+=  parameter:by
+ 63 |     fi
+    | keyword:fi
+ 64 |     ; Its own, in place of the pattern's default.
+    | comment:; Its own, in place of the pattern's default.
+ 65 |     describe(r: region) -> text@r
+    | method:describe  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 66 |         <- "a square of side {.side}" at r
+    | keyword:<-  string:"a square of side {  punctuation:.  field:side  string:}"  keyword:at  region:r
+ 67 |     fi
+    | keyword:fi
+ 68 | fi
+    | keyword:fi
+ 70 | ; A kind follows patterns too, and a shape taking types.
+    | comment:; A kind follows patterns too, and a shape taking types.
+ 71 | pattern Shown
+    | keyword:pattern  type:Shown
+ 72 |     label(r: region) -> text@r
+    | method:label  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 73 | fi
+    | keyword:fi
+ 75 | kind Light::Shown
+    | keyword:kind  type:Light  punctuation::  punctuation::  type:Shown
+ 76 |     Red
+    | variant:Red
+ 77 |     Green
+    | variant:Green
+ 79 |     label(r: region) -> text@r
+    | method:label  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 80 |         <- "light {.this}" at r
+    | keyword:<-  string:"light {  punctuation:.  field:this  string:}"  keyword:at  region:r
+ 81 |     fi
+    | keyword:fi
+ 82 | fi
+    | keyword:fi
+ 84 | shape Box<T: shown>::Shown
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation::  punctuation::  type:Shown
+ 85 |     value: T
+    | field:value  punctuation::  type:T
+ 87 |     label(r: region) -> text@r
+    | method:label  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 88 |         <- "box of {.value}" at r
+    | keyword:<-  string:"box of {  punctuation:.  field:value  string:}"  keyword:at  region:r
+ 89 |     fi
+    | keyword:fi
+ 90 | fi
+    | keyword:fi
+ 92 | task total<T: Shaped>(xs: [T]@r) -> float
+    | keyword:task  task:total  punctuation:<  type:T  punctuation::  type:Shaped  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:float
+ 93 |     flex sum = 0.0
+    | keyword:flex  variable:sum  operator:=  number:0.0
+ 94 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 95 |         sum += x.area()
+    | variable:sum  operator:+=  variable:x  punctuation:.  field:area  punctuation:(  punctuation:)
+ 96 |     fi
+    | keyword:fi
+ 97 |     <- sum
+    | keyword:<-  variable:sum
+ 98 | fi
+    | keyword:fi
+100 | task largest<T: Shaped>(r: region, xs: [T]@r) -> text@r
+    | keyword:task  task:largest  punctuation:<  type:T  punctuation::  type:Shaped  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+101 |     flex best = xs[0]
+    | keyword:flex  variable:best  operator:=  parameter:xs  punctuation:[  number:0  punctuation:]
+102 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+103 |         when x.larger(best)
+    | keyword:when  variable:x  punctuation:.  field:larger  punctuation:(  variable:best  punctuation:)
+104 |             best = x
+    | variable:best  operator:=  variable:x
+105 |         fi
+    | keyword:fi
+106 |     fi
+    | keyword:fi
+107 |     <- best.describe(r)
+    | keyword:<-  variable:best  punctuation:.  method:describe  punctuation:(  region:r  punctuation:)
+108 | fi
+    | keyword:fi
+110 | task grown<T: Shaped & Counted>(flex& x: T, by: float) -> int
+    | keyword:task  task:grown  punctuation:<  type:T  punctuation::  type:Shaped  punctuation:&  type:Counted  punctuation:>  punctuation:(  keyword:flex  keyword:&  parameter:x  punctuation::  type:T  punctuation:,  parameter:by  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:int
+111 |     x.grow(by)
+    | parameter:x  punctuation:.  field:grow  punctuation:(  parameter:by  punctuation:)
+112 |     x.grow(by)
+    | parameter:x  punctuation:.  field:grow  punctuation:(  parameter:by  punctuation:)
+113 |     <- x.count
+    | keyword:<-  parameter:x  punctuation:.  field:count
+114 | fi
+    | keyword:fi
+116 | task labels<S: Shown & shown>(r: region, xs: [S]@r)
+    | keyword:task  task:labels  punctuation:<  type:S  punctuation::  type:Shown  punctuation:&  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:S  punctuation:]  operator:@  region:r  punctuation:)
+117 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+118 |         show(x, ": ", x.label(r))
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:,  string:": "  punctuation:,  variable:x  punctuation:.  field:label  punctuation:(  region:r  punctuation:)  punctuation:)
+119 |     fi
+    | keyword:fi
+120 | fi
+    | keyword:fi
+122 | task heavier<B: Sized>(a: B, b: B) -> bool
+    | keyword:task  task:heavier  punctuation:<  type:B  punctuation::  type:Sized  punctuation:>  punctuation:(  parameter:a  punctuation::  type:B  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  type-builtin:bool
+123 |     <- a.bigger(b) and a.size > 0
+    | keyword:<-  parameter:a  punctuation:.  field:bigger  punctuation:(  parameter:b  punctuation:)  keyword:and  parameter:a  punctuation:.  field:size  operator:>  number:0
+124 | fi
+    | keyword:fi
+126 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+127 |     region r default
+    | keyword:region  region:r  keyword:default
+128 |     flex c = Circle { name: "ring", radius: 1.0 }
+    | keyword:flex  variable:c  operator:=  type:Circle  punctuation:{  field:name  punctuation::  string:"ring"  punctuation:,  field:radius  punctuation::  number:1.0  punctuation:}
+129 |     fixed s = Square { name: "tile", side: 2.0 }
+    | keyword:fixed  variable:s  operator:=  type:Square  punctuation:{  field:name  punctuation::  string:"tile"  punctuation:,  field:side  punctuation::  number:2.0  punctuation:}
+130 |     show(c.describe(r))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:describe  punctuation:(  region:r  punctuation:)  punctuation:)
+131 |     show(s.describe(r))
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:.  method:describe  punctuation:(  region:r  punctuation:)  punctuation:)
+132 |     c.start()
+    | variable:c  punctuation:.  method:start  punctuation:(  punctuation:)
+133 |     s.stop()
+    | variable:s  punctuation:.  method:stop  punctuation:(  punctuation:)
+134 |     show(c.larger(Circle { name: "dot", radius: 0.5 }), " ", s.same(s))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:larger  punctuation:(  type:Circle  punctuation:{  field:name  punctuation::  string:"dot"  punctuation:,  field:radius  punctuation::  number:0.5  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:s  punctuation:.  method:same  punctuation:(  variable:s  punctuation:)  punctuation:)
+135 |     show(total([c, c, ...] at r), " ", total([s, ...] at r))
+    | builtin-fn:show  punctuation:(  task:total  punctuation:(  punctuation:[  variable:c  punctuation:,  variable:c  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  punctuation:[  variable:s  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:)
+136 |     show(largest(r, [s, Square { name: "big", side: 5.0 }, ...] at r))
+    | builtin-fn:show  punctuation:(  task:largest  punctuation:(  region:r  punctuation:,  punctuation:[  variable:s  punctuation:,  type:Square  punctuation:{  field:name  punctuation::  string:"big"  punctuation:,  field:side  punctuation::  number:5.0  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)  punctuation:)
+137 |     show(grown(&c, 1.0), " ", c.radius)
+    | builtin-fn:show  punctuation:(  task:grown  punctuation:(  operator:&  variable:c  punctuation:,  number:1.0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:radius  punctuation:)
+138 |     c.reset()
+    | variable:c  punctuation:.  method:reset  punctuation:(  punctuation:)
+139 |     show(c.count)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:count  punctuation:)
+140 |     labels(r, [Light.Red, Green, ...] at r)
+    | task:labels  punctuation:(  region:r  punctuation:,  punctuation:[  type:Light  punctuation:.  variant:Red  punctuation:,  variant:Green  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)
+141 |     labels(r, [Box { value: 3 }, ...] at r)
+    | task:labels  punctuation:(  region:r  punctuation:,  punctuation:[  type:Box  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)
+142 |     fixed one = lab.Crate { size: 2 }
+    | keyword:fixed  variable:one  operator:=  module:lab  punctuation:.  type:Crate  punctuation:{  field:size  punctuation::  number:2  punctuation:}
+143 |     fixed two = lab.Crate { size: 1 }
+    | keyword:fixed  variable:two  operator:=  module:lab  punctuation:.  type:Crate  punctuation:{  field:size  punctuation::  number:1  punctuation:}
+144 |     show(one.tag(), " ", one.bigger(two), " ", heavier(two, one))
+    | builtin-fn:show  punctuation:(  variable:one  punctuation:.  method:tag  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:one  punctuation:.  method:bigger  punctuation:(  variable:two  punctuation:)  punctuation:,  string:" "  punctuation:,  task:heavier  punctuation:(  variable:two  punctuation:,  variable:one  punctuation:)  punctuation:)
+145 | fi
+    | keyword:fi
