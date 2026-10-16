@@ -1,0 +1,11 @@
+; error: 10:5: '|>' gives the value before it to the call after it, so a value comes first, as in 'xs |> total()'; a line starting with it goes on with the chain of a line that ends with a value
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    when true
+        show(1)
+    fi
+    |> double()
+fi

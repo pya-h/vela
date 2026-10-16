@@ -531,6 +531,13 @@
         subclasses no <code>switch</code> can check for every case.
       </p>
       <p>
+        A <a href="vela.html#pipes">pipe</a>, <code>line |&gt; quantity() |&gt; reserve(5)</code>, reads calls in the
+        order they run, as F#, OCaml, and Elixir's <code>|&gt;</code> do; <code>|&gt;&gt;</code> gives the value to the
+        second argument, where Elixir always gives the first and Hack writes a placeholder. A step that fails stops the
+        chain, which then fails with that failure, much as Rust's <code>?</code> leaves a function, but the chain stays
+        a value the task reads, with a plan B or a <code>match</code>, rather than an early return.
+      </p>
+      <p>
         Vela's methods are written inside the shape or kind they belong to, as in a C++, Swift, or Kotlin class, but with
         no inheritance, no constructors, and no hidden receiver: every member of the value is written after a dot
         (<code>.count</code>, <code>.cap()</code>), so nothing comes into scope unseen, where C++ and Java let a bare

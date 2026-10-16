@@ -1,0 +1,16 @@
+; error: 11:8: a pipe gives a value to the call after it, and this is a failure only; send it with '<- fail …'
+kind OrderError
+    Empty
+fi
+
+task reported(e: OrderError) -> int ~ OrderError
+    <- fail e
+fi
+
+task order() -> int ~ OrderError
+    <- fail Empty |> reported()
+fi
+
+task main()
+    show(order() { 0 })
+fi

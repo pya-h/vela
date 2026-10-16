@@ -917,6 +917,12 @@ show(a == b)   ; true, generated automatically</pre>
         <div class="note">
           <strong>Why it's cool:</strong> it gives Vela most of the ergonomics of method chaining without adding methods, receivers, or namespaces.
         </div>
+        <div class="note">
+          <strong>Built</strong> as <a href="vela.html#pipes">call pipes</a>: <code>|&gt;&gt;</code> gives the value to the
+          second argument (one more <code>&gt;</code> per argument), a line starting with <code>|&gt;</code> goes on with
+          the chain, and a step that fails stops it, so the chain fails with that failure. It is not quite a rewrite:
+          the value is worked out before the call's own arguments.
+        </div>
       </div>
     </section>
 

@@ -1879,7 +1879,7 @@ impl<'a> Classifier<'a> {
                     loop_start = false;
                     loop_words = None;
                 }
-                Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent | Token::Eq | Token::Ne
+                Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent | Token::Eq | Token::Ne | Token::Pipe(_)
                 | Token::Increment | Token::Decrement | Token::PlusAssign | Token::MinusAssign | Token::StarAssign
                 | Token::SlashAssign | Token::PercentAssign | Token::PowerAssign
                 | Token::Similar | Token::NotSimilar

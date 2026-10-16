@@ -1,0 +1,8 @@
+; error: 7:15: '|>' gives the value before it to a call, so 'double' is written with parentheses, as in 'double()'
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |> double)
+fi

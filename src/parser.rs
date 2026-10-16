@@ -3017,7 +3017,7 @@ impl Parser {
             // `loop a || b`: a start that only gives a value is a condition,
             // and `||` was meant as 'or'.
             if let StmtKind::Expr(e) = &item.kind
-                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. })
+                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. } | ExprKind::Pipe(_))
             {
                 let bar = if n + 1 == items { last } else { first };
                 return Err(Error::at(
@@ -3511,25 +3511,29 @@ impl Parser {
             Token::Gt => (BinaryOp::Gt, 4),
             Token::Le => (BinaryOp::Le, 4),
             Token::Ge => (BinaryOp::Ge, 4),
-            Token::Plus => (BinaryOp::Add, 6),
-            Token::Minus => (BinaryOp::Sub, 6),
-            Token::Star => (BinaryOp::Mul, 7),
-            Token::Slash => (BinaryOp::Div, 7),
-            Token::Percent => (BinaryOp::Mod, 7),
+            Token::Plus => (BinaryOp::Add, Self::ADD_PRECEDENCE),
+            Token::Minus => (BinaryOp::Sub, Self::ADD_PRECEDENCE),
+            Token::Star => (BinaryOp::Mul, 8),
+            Token::Slash => (BinaryOp::Div, 8),
+            Token::Percent => (BinaryOp::Mod, 8),
             Token::Power => (BinaryOp::Pow, Self::POWER_PRECEDENCE),
             _ => return None,
         })
     }
 
-    /// Precedence of `..`: between comparisons and `+`/`-`.
-    const RANGE_PRECEDENCE: u8 = 5;
+    /// Precedence of `|>`: above comparisons and below `..` and `+`, so
+    /// `a + 1 |> f() == 3` is `f(a + 1) == 3`.
+    const PIPE_PRECEDENCE: u8 = 5;
+
+    /// Precedence of `..`: between pipes and `+`/`-`.
+    const RANGE_PRECEDENCE: u8 = 6;
 
     /// Precedence of `**`, above `*` and below a prefix `-`, which takes only the
     /// value right after it: `-2 ** 2` is `(-2) ** 2`. It groups from the right.
-    const POWER_PRECEDENCE: u8 = 8;
+    const POWER_PRECEDENCE: u8 = 9;
 
     /// Precedence of `+`, whose chains `at r` joins.
-    const ADD_PRECEDENCE: u8 = 6;
+    const ADD_PRECEDENCE: u8 = 7;
 
     /// Parses operators of precedence `min` or higher by precedence climbing,
     /// left-associative, with each node's span at its operator. `a..b` takes one
@@ -3574,6 +3578,21 @@ impl Parser {
                     left = self.parse_call_region(left)?;
                 }
             }
+            // A line that starts with `|>` goes on with the chain before it.
+            if self.check(Token::Newline) && min <= Self::PIPE_PRECEDENCE && !ranged && self.pipe_on_next_line() {
+                while self.check(Token::Newline) {
+                    self.advance();
+                }
+            }
+            if let Token::Pipe(count) = *self.peek()
+                && min <= Self::PIPE_PRECEDENCE
+                && !ranged
+            {
+                self.enter_operator()?;
+                levels += 1;
+                left = self.parse_pipe(left, count)?;
+                continue;
+            }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
                 self.enter_operator()?;
@@ -3602,6 +3621,111 @@ impl Parser {
         }
         self.leave_operators(levels);
         Ok(left)
+    }
+
+    /// Whether the line after the cursor, at the end of a line, starts with
+    /// `|>`, after any blank lines: it goes on with the chain before it.
+    fn pipe_on_next_line(&self) -> bool {
+        let mut at = self.pos;
+        while self.tokens.get(at) == Some(&Token::Newline) {
+            at += 1;
+        }
+        matches!(self.tokens.get(at), Some(Token::Pipe(_)))
+    }
+
+    /// `value |> f(b)`, with the cursor at the `|>` and `count` the number of
+    /// its `>`: the call after it, given `value` as its argument `count`, as a
+    /// `Piped` among the ones it writes (`f(value, b)`; `f(b, value)` for
+    /// `|>>`), in a `Pipe`. A plan B after the call is the pipe's, and so
+    /// handles every step before it as well: `a |> f() { 0 }`.
+    fn parse_pipe(&mut self, value: Expr, count: usize) -> Result<Expr> {
+        let span = self.peek_span();
+        let pipe = Token::Pipe(count).describe();
+        self.advance(); // |>
+        if matches!(self.peek(), Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), format!("{} gives the value before it to the call written after it, as in 'xs |> total()'", pipe)));
+        }
+        let parenthesized = self.check(Token::LParen);
+        let mut step = self.parse_postfix()?;
+        if self.check(Token::At) {
+            step = self.parse_call_region(step)?;
+        }
+        let mut plans = Vec::new();
+        while !parenthesized && matches!(step.kind, ExprKind::PlanB { .. }) {
+            let ExprKind::PlanB { value, error, body } = step.kind else { break };
+            plans.push((error, body, step.span));
+            step = *value;
+        }
+        let callee = match &step.kind {
+            ExprKind::Call { name, .. } => format!("'{}'", name),
+            ExprKind::MethodCall { name, dotted: Some(whole), .. } if whole.ends_with(name.as_str()) => format!("'{}'", whole),
+            ExprKind::MethodCall { name, .. } => format!("'{}'", name),
+            _ => "the task".to_string(),
+        };
+        // `x |> make().larger()` would read as if `make` were given the value.
+        if let ExprKind::MethodCall { value: on, .. } | ExprKind::Invoke { callee: on, .. } = &step.kind
+            && matches!(on.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. })
+        {
+            return Err(Error::at(
+                step.span,
+                format!("{} gives the value before it to one call, and this calls what another call gives, which reads as if that one were given the value; to go on from what the pipe gives, put it in parentheses, as in '(x |> f()).g()'", pipe),
+            ));
+        }
+        let args = match &mut step.kind {
+            ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } if !parenthesized => args,
+            ExprKind::Var(name) if is_lambda(name) => {
+                return Err(Error::at(
+                    step.span,
+                    format!("{} gives the value before it to a call, and a lambda written here is called by nothing; name it first, as in 'fixed twice = (n: int) -> int … fi', then write 'x |> twice()'", pipe),
+                ));
+            }
+            ExprKind::Var(name) => {
+                return Err(Error::at(step.span, format!("{0} gives the value before it to a call, so '{1}' is written with parentheses, as in '{1}()'", pipe, name)));
+            }
+            _ => {
+                return Err(Error::at(
+                    step.span,
+                    format!("{} gives the value before it to the call right after it, as in 'xs |> total()', and this is no call; to go on from what the pipe gives, put it in parentheses, as in '(xs |> total()).str()'", pipe),
+                ));
+            }
+        };
+        // The region written after the call stays its last argument.
+        let written = args.iter().filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_))).count();
+        if count > written + 1 {
+            return Err(Error::at(
+                span,
+                format!(
+                    "{0} gives the value before it to {1} as argument {2}, but the call writes {3}, so argument {4} would be missing; write the arguments before it, or fewer '>'",
+                    pipe,
+                    callee,
+                    count,
+                    match written {
+                        0 => "none".to_string(),
+                        1 => "only 1".to_string(),
+                        n => format!("only {}", n),
+                    },
+                    written + 1
+                ),
+            ));
+        }
+        args.insert(count - 1, Expr::new(ExprKind::Piped(Box::new(value)), span));
+        // `a |> f() + 1`: the call is the whole step.
+        if Self::binary_op(self.peek()).is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE) {
+            let op = self.peek().describe();
+            let symbol = op.trim_matches('\'');
+            return Err(Error::at(
+                self.peek_span(),
+                format!("the call after {0} is the whole of its step, so {1} can't follow it; to work with what the pipe gives, put it in parentheses, as in '(a |> f()) {2} 1'", pipe, op, symbol),
+            ));
+        }
+        if self.check(Token::Range) {
+            return Err(Error::at(self.peek_span(), format!("the call after {} is the whole of its step, so '..' can't follow it; put the pipe in parentheses, as in '(a |> f())..b'", pipe)));
+        }
+        let mut piped = Expr::new(ExprKind::Pipe(Box::new(step)), span);
+        for (error, body, at) in plans.into_iter().rev() {
+            piped = Expr::new(ExprKind::PlanB { value: Box::new(piped), error, body }, at);
+        }
+        Ok(piped)
     }
 
     /// `a + b + c at r`, `(a + b)@r`, `"n = {n}" at r`, or `"n = {n}"@r`, with
@@ -3915,6 +4039,13 @@ impl Parser {
         let span = self.peek_span();
         match self.peek() {
             Token::Parts => Err(Error::at(span, PARTS_AS_OR)),
+            Token::Pipe(_) => Err(Error::at(
+                span,
+                format!(
+                    "{} gives the value before it to the call after it, so a value comes first, as in 'xs |> total()'; a line starting with it goes on with the chain of a line that ends with a value",
+                    self.peek().describe()
+                ),
+            )),
             Token::Interpolated(_) => self.parse_interpolated(span),
             Token::New => self.parse_new(),
             Token::LBracket if self.at_kept() => self.parse_closure_lambda(),

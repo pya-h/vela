@@ -323,6 +323,10 @@ pub struct Checker {
     /// is, with the task's name and the first type still unknown, until the
     /// place its value goes names it (see `settle_types`).
     unsettled_types: Vec<(Span, String, String)>,
+    /// The error the place a chain of pipes goes names, `AppError` in `fixed n:
+    /// int ~ AppError = line |> parse() |> check()`, for the chain's pipes to
+    /// fail with (see `check_pipe`).
+    pipe_target: Option<Type>,
     /// One task to make for each set of types a call gives a generic task: the
     /// name of the task made for them, the generic task's name, the types, and
     /// where the call that needs it is.
@@ -4514,6 +4518,11 @@ impl Checker {
                         err(e.span, ignored_error(&name))
                     }
                     ExprKind::Invoke { .. } => Ok(()),
+                    ExprKind::Pipe(call) if matches!(e.ty, Some(Type::Or(..))) => err(
+                        e.span,
+                        format!("the error this pipe may fail with is ignored; handle it with a plan B after its last step, as in '… |> {}(…) {{ failure e … }}', or with match", piped_name(call)),
+                    ),
+                    ExprKind::Pipe(_) => Ok(()),
                     // `int(x)` and `float(x)` read like calls, but they only give
                     // a number back: on its own, the line does nothing.
                     ExprKind::Call { name, .. } if number_cast(name).is_some() => {
@@ -4600,7 +4609,17 @@ impl Checker {
                     let name = names.first().map_or("y", |bound| bound.name.as_str());
                     return err(marked.span, format!("'{0} {1}' takes a copy, so leave out '&'; '{0}& {1} = &…' is another name for the place", word, name));
                 }
-                let given = self.value_types(init, names.len(), span, true)?;
+                // `fixed n: int ~ AppError = line |> parse()`: the chain fails
+                // with the error named.
+                if let ([bound], [value]) = (names.as_slice(), init.as_slice())
+                    && matches!(value.kind, ExprKind::Pipe(_))
+                    && let Some(Type::Or(_, error)) = &bound.ty
+                {
+                    self.pipe_target = Some((**error).clone());
+                }
+                let given = self.value_types(init, names.len(), span, true);
+                self.pipe_target = None;
+                let given = given?;
                 // A single call sending several values gives them all, and
                 // those values are taken as they are.
                 let forwarded = init.len() < names.len();
@@ -4924,7 +4943,13 @@ impl Checker {
                 // `T ~ E`, or the error of one.
                 if let ([e], [ret]) = (values.as_mut_slice(), expected) {
                     let ret = ret.clone();
-                    let ety = self.check_expr(e)?;
+                    // `<- line |> parse()`: the chain fails with the task's error.
+                    if let (ExprKind::Pipe(_), Type::Or(_, error)) = (&e.kind, &ret) {
+                        self.pipe_target = Some((**error).clone());
+                    }
+                    let ety = self.check_expr(e);
+                    self.pipe_target = None;
+                    let ety = ety?;
                     if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
                         return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
                     }
@@ -5793,6 +5818,8 @@ impl Checker {
             ExprKind::Repeat { value, .. }
             | ExprKind::Wrap(value)
             | ExprKind::Widen(value)
+            | ExprKind::Pipe(value)
+            | ExprKind::Piped(value)
             | ExprKind::Kept { value, .. }
             | ExprKind::Shortcut { value, .. }
             | ExprKind::Spread(value)
@@ -5932,7 +5959,7 @@ impl Checker {
             }
             ExprKind::Invoke { callee, .. } => format!("{}(…)", self.value_text(callee)),
             ExprKind::MethodCall { name, .. } => format!("….{}(…)", name),
-            ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Widen(value) | ExprKind::Kept { value, .. } => self.value_text(value),
+            ExprKind::PlanB { value, .. } | ExprKind::Wrap(value) | ExprKind::Widen(value) | ExprKind::Pipe(value) | ExprKind::Piped(value) | ExprKind::Kept { value, .. } => self.value_text(value),
             ExprKind::Lookup(base, index) => match index.kind {
                 ExprKind::IntLit(n) => format!("{}[#{}]", self.value_text(base), n),
                 _ => format!("{}[#…]", self.value_text(base)),
@@ -8650,6 +8677,9 @@ impl Checker {
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
             // Nor `Widen` (see `Checker::widen`).
             ExprKind::Widen(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a widened value has no type")),
+            ExprKind::Pipe(_) => self.check_pipe(expr),
+            // `check_pipe` checked the value, and gave it what it gives the call.
+            ExprKind::Piped(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a piped value outside its pipe")),
             // `check_method_call` above has made this the call it is, unless the
             // value it is called on has no type it could work out, which is
             // what says which method this is (see `Type::Unknown`).
@@ -9453,6 +9483,111 @@ impl Checker {
         let hint = if matches!(ty, Type::Slice(..)) { "; read an item of a slice with 'xs[i]'" } else { "" };
         ty.ptr_inner().cloned()
             .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}{}", ty, hint)))
+    }
+
+    /// Checks `a |> f(b)` (see `ExprKind::Pipe`), and returns the type it
+    /// gives: the call's, or, where the value before it can fail, the call's
+    /// value `~` the error of either, joined (see `pipe_failure`).
+    fn check_pipe(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let target = self.pipe_target.take();
+        let ExprKind::Pipe(call) = &mut expr.kind else { return Err(Error::internal_at(span, "a pipe that is no pipe")) };
+        let callee = piped_callee(call);
+        let position = piped_position(call);
+        let Some(piped) = piped_arg(call) else { return Err(Error::internal_at(span, "a pipe giving its value to no call")) };
+        let ExprKind::Piped(value) = &mut piped.kind else { return Err(Error::internal_at(span, "a pipe giving its value to no call")) };
+        // The pipes before this one in the chain fail as it does.
+        if matches!(value.kind, ExprKind::Pipe(_)) {
+            self.pipe_target = target.clone();
+        }
+        let checked = self.check_expr_multi(value);
+        self.pipe_target = None;
+        let (given, failure) = match checked? {
+            Type::Or(given, error) => (*given, Some(*error)),
+            Type::Results(types) => {
+                let what = match &value.kind {
+                    ExprKind::Call { name, .. } => format!("'{}'", called_name(name)),
+                    _ => "this call".to_string(),
+                };
+                return err(
+                    value.span,
+                    format!("{} sends {} values, and a pipe gives the call after it one; receive them first, with 'fixed {} = …'", what, types.len(), example_names(types.len())),
+                );
+            }
+            other => (other, None),
+        };
+        if given == Type::Nothing {
+            return err(value.span, format!("this gives nothing when it succeeds, so the pipe has no value to give {}", callee));
+        }
+        if matches!(given, Type::Fail(_)) {
+            return err(value.span, "a pipe gives a value to the call after it, and this is a failure only; send it with '<- fail …'");
+        }
+        piped.ty = Some(given.clone());
+        let call_span = call.span;
+        // A mistake in what the call is given names the pipe, which gives it.
+        let sent = self.check_expr(call).map_err(|error| {
+            let typed = error.span == Some(span) && error.message.starts_with("expected type ");
+            let counted = error.span == Some(call_span) && error.message.contains(" expects ") && error.message.contains(", got ");
+            if typed && matches!(given, Type::Maybe(_)) {
+                let takes = error.message.trim_start_matches("expected type ").split(',').next().unwrap_or("another type").to_string();
+                return Error::at(
+                    span,
+                    format!(
+                        "the pipe gives {} a value of type {} as argument {}, where it takes {}; a pipe carries failures but not absence, so read the maybe in its step with a plan B, as in '… |> f() {{ 0 }} |> g()'",
+                        callee, given, position, takes
+                    ),
+                );
+            }
+            if typed {
+                return Error { message: format!("{}; the pipe gives this value to {} as argument {}", error.message, callee, position), ..error };
+            }
+            if counted {
+                return Error { message: format!("{}, the value the pipe gives as argument {} among them", error.message, position), ..error };
+            }
+            error
+        })?;
+        let Some(failure) = failure else { return Ok(sent) };
+        Ok(match sent {
+            Type::Or(value, error) => Type::Or(value, Box::new(self.pipe_failure(span, &failure, &error, target.as_ref())?)),
+            Type::Unknown => Type::Unknown,
+            other => Type::Or(Box::new(other), Box::new(self.pipe_failure(span, &failure, &failure, target.as_ref())?)),
+        })
+    }
+
+    /// The error a pipe at `span` fails with, where the value before it fails
+    /// with `before` and its call with `after`: the same kind, the one of the
+    /// two that imitates the other, or the kind `target` the place the chain
+    /// goes names, where both are values of it (see `widens`). Each failure
+    /// becomes a value of it where it happens.
+    fn pipe_failure(&self, span: Span, before: &Type, after: &Type, target: Option<&Type>) -> Result<Type> {
+        let fits = |error: &Type, into: &Type| error.unknown() || fits_regions(error, into) || self.widens(error, into);
+        if let Some(target) = target.filter(|target| fits(before, target) && fits(after, target)) {
+            return Ok(target.clone());
+        }
+        if fits(before, after) {
+            return Ok(after.clone());
+        }
+        if fits(after, before) {
+            return Ok(before.clone());
+        }
+        let both = [before, after].map(|error| self.written_type(error));
+        if let Some(target) = target {
+            let target = self.written_type(target);
+            return err(
+                span,
+                format!(
+                    "the steps of this pipe fail with '{0}' and with '{1}', and '{2}', the kind its value goes into, doesn't imitate both; declare it as one that does, as in 'kind {2}::{0} & {1}'",
+                    both[0], both[1], target
+                ),
+            );
+        }
+        err(
+            span,
+            format!(
+                "the steps of this pipe fail with '{0}' and with '{1}', and a pipe fails with one; declare a kind that imitates both, as in 'kind StepError::{0} & {1}', and name it where the pipe's value goes, as in 'fixed v: int ~ StepError = …'",
+                both[0], both[1]
+            ),
+        )
     }
 
     /// Checks `fail error`.
@@ -13667,6 +13802,11 @@ struct CallTypes {
 /// The mistake in `arg`, given without `&` to the `flex&` or `fixed&` parameter
 /// `param` of `callee`.
 fn unmarked_place(arg: &Expr, passing: Passing, callee: &str, param: &str) -> Error {
+    // `x |> f()` with `f(flex& n: int)`.
+    if matches!(arg.kind, ExprKind::Piped(_)) {
+        let does = if passing == Passing::FixedRef { "reads" } else { "changes" };
+        return Error::at(arg.span, format!("{} {} '{}' where the caller keeps it, so it takes a place, and a pipe gives a value; call it with the place marked, as in 'f(&a)'", callee, does, param));
+    }
     let message = match (place_path(arg), passing) {
         (Some(path), Passing::FixedRef) => format!("{} reads '{}' where the caller keeps it, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
         (None, Passing::FixedRef) => {
@@ -14517,6 +14657,8 @@ impl Checker {
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
             | ExprKind::Widen(inner)
+            | ExprKind::Pipe(inner)
+            | ExprKind::Piped(inner)
             | ExprKind::Copy { value: inner, .. }
             | ExprKind::Shortcut { value: inner, .. } => self.substitute_expr(inner, given, made),
             ExprKind::Pairs(pairs) => pairs.iter_mut().try_for_each(|(key, value)| {
@@ -16230,6 +16372,52 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
 }
 
 /// The error for a call whose `T ~ E` result is thrown away.
+/// The argument a pipe's call holds the value before the pipe as, before the
+/// call is checked (see `ExprKind::Pipe`).
+fn piped_arg(call: &mut Expr) -> Option<&mut Expr> {
+    match &mut call.kind {
+        ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } => {
+            args.iter_mut().find(|arg| matches!(arg.kind, ExprKind::Piped(_)))
+        }
+        _ => None,
+    }
+}
+
+/// What a pipe's call calls, checked, as a message's example writes it:
+/// `scale`, `x.plus` for a method called on a value, `Till.opened` for a
+/// shared one.
+fn piped_name(call: &Expr) -> String {
+    match &call.kind {
+        ExprKind::Call { name, args, .. } => match (method_parts(name), args.first()) {
+            (Some((_, method)), Some(value)) if !matches!(value.kind, ExprKind::Piped(_)) => format!("x.{}", method),
+            (Some((owner, method)), _) => format!("{}.{}", unqualified(owner), method),
+            _ => unqualified(name).to_string(),
+        },
+        _ => "f".to_string(),
+    }
+}
+
+/// Which argument of its call the value before a pipe is, counted from 1, as
+/// the call writes them (a method's value not among them).
+fn piped_position(call: &Expr) -> usize {
+    match &call.kind {
+        ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } => {
+            args.iter().position(|arg| matches!(arg.kind, ExprKind::Piped(_))).map_or(1, |at| at + 1)
+        }
+        _ => 1,
+    }
+}
+
+/// What a pipe's call calls, as a message names it: `'scale'`.
+fn piped_callee(call: &Expr) -> String {
+    match &call.kind {
+        ExprKind::Call { name, .. } => format!("'{}'", name),
+        ExprKind::MethodCall { name, .. } => format!("'{}'", name),
+        ExprKind::Construct { tag, .. } => format!("'{}'", tag),
+        _ => "the task after it".to_string(),
+    }
+}
+
 fn ignored_error(task: &str) -> String {
     // A method is called on a value, and written so.
     if let Some((owner, method)) = method_parts(task) {
@@ -16643,7 +16831,7 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
     let each = |values: &[Expr], f: &mut dyn FnMut(&Expr) -> bool| values.iter().for_each(|value| visit_expr(value, f));
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::TaskValue(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Closure { .. } => {}
-        ExprKind::Kept { value: inner, .. } | ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => visit_expr(inner, f),
+        ExprKind::Kept { value: inner, .. } | ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Pipe(inner) | ExprKind::Piped(inner) => visit_expr(inner, f),
         ExprKind::New { value, .. } | ExprKind::Copy { value, .. } | ExprKind::Shortcut { value, .. } | ExprKind::ToText { value, .. } => visit_expr(value, f),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             visit_expr(a, f);

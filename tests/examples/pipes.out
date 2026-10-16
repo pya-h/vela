@@ -1,0 +1,5 @@
+3 -> 825 cents paid
+ -> refused: Empty
+x -> refused: NoCount
+12 -> refused: SoldOut(5)
+1 -> 275 cents paid

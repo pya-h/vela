@@ -1,0 +1,8 @@
+; error: 7:12: expected type text, got int; the pipe gives this value to 'shout' as argument 1
+task shout(word: text) -> int
+    <- word.len
+fi
+
+task main()
+    show(3 |> shout())
+fi

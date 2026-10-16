@@ -1,0 +1,8 @@
+; error: 7:24: the call after '|>' is the whole of its step, so '+' can't follow it; to work with what the pipe gives, put it in parentheses, as in '(a |> f()) + 1'
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |> double() + 1)
+fi

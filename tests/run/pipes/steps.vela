@@ -1,0 +1,20 @@
+; Steps of another module, for the pipes of tests/run/pipes.vela.
+
+kind ReadError
+    Blank
+    Bad(line: text)
+fi
+
+; Reads a count from a line: text in, a number or a ReadError out.
+task read(line: text) -> int ~ ReadError
+    when line.len == 0
+        <- fail Blank
+    fi
+    <- int(line) { failure e
+        <- fail Bad(line)
+    }
+fi
+
+task triple(n: int) -> int
+    <- n * 3
+fi

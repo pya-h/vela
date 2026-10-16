@@ -1,0 +1,184 @@
+; Call pipes: 'a |> f(b)' is 'f(a, b)', each further '>' gives the value to the
+; next argument, a line starting with '|>' goes on with the chain, and a step
+; that fails stops the chain, which then fails with that failure.
+include pipes/steps
+
+kind AppError::steps.ReadError
+    Negative(n: int)
+fi
+
+kind OddError
+    Odd(n: int)
+fi
+
+kind LineError::steps.ReadError & OddError
+fi
+
+shape Till
+    total: int
+
+    shared opened(n: int) -> Till
+        <- Till { total: n }
+    fi
+
+    plus(n: int) -> int
+        <- .total + n
+    fi
+
+    ; '.plus()' inside a method: the value's own method, given the value.
+    twice(n: int) -> int
+        <- n |> .plus() |> .plus()
+    fi
+fi
+
+kind Light
+    Dimmed(level: int)
+    Off
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task scale(by: int, n: int) -> int
+    <- n * by
+fi
+
+task between(low: int, high: int, n: int) -> bool
+    <- n >= low and n <= high
+fi
+
+task positive(n: int) -> int ~ AppError
+    when n < 0
+        <- fail Negative(n)
+    fi
+    <- n
+fi
+
+task even(n: int) -> int ~ OddError
+    when n % 2 == 1
+        <- fail Odd(n)
+    fi
+    <- n
+fi
+
+task noisy(label: text, n: int) -> int
+    show("ran ", label)
+    <- n
+fi
+
+task saved(n: int) -> nothing ~ OddError
+    when n % 2 == 1
+        <- fail Odd(n)
+    fi
+    show("saved ", n)
+    <-
+fi
+
+task first<T>(xs: [T]@r) -> maybe T
+    each x in xs
+        <- x
+    fi
+    <- none
+fi
+
+task half(n: maybe int) -> int
+    <- n { 0 } / 2
+fi
+
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+task twice<T>(x: T, step: (T) -> T) -> T
+    <- x |> step() |> step()
+fi
+
+; A ReadError goes out as an AppError: the pipe fails with the kind that
+; imitates the other.
+task count(line: text) -> int ~ AppError
+    <- line |> steps.read() |> positive()
+fi
+
+; Neither kind imitates the other, so the place the chain goes names one that
+; imitates both.
+task counted_even(line: text) -> int ~ LineError
+    <- line |> steps.read() |> even()
+fi
+
+task main()
+    region r
+    ; Plain steps, and the argument each '>' count gives the value to.
+    show(3 |> double())                         ; 6
+    show(3 |> double() |>> scale(10))           ; 60
+    show(5 |>>> between(1, 9))                  ; true
+    show(a_line_of_steps())                     ; 42
+    ; Steps that can fail: a plan B after a step handles every step before it.
+    show("12" |> steps.read() |> steps.triple() { 0 })    ; 36
+    show("" |> steps.read() |> steps.triple() { 0 })      ; 0
+    fixed n = "60" |> steps.read() |> positive() |> double() { failure e
+        show("failed: ", e)
+        -1
+    }
+    show(n)                                     ; 120
+    show(count("7") { 0 }, " ", count("") { -1 }, " ", count("-3") { -2 })    ; 7 -1 -2
+    match count("x")
+        case {value}
+            show(value)
+        case failure e
+            show("count: ", e)                  ; count: Bad("x")
+    fi
+    show(counted_even("8") { -1 }, " ", counted_even("9") { -1 })              ; 8 -1
+    fixed named: int ~ LineError = "5" |> steps.read() |> even()
+    match named
+        case {value}
+            show(value)
+        case failure e
+            show("named: ", e)                  ; named: Odd(5)
+    fi
+    ; Methods, shared methods, variants, module tasks, generic tasks, task values.
+    fixed till = Till { total: 10 }
+    show(5 |> till.plus(), " ", 1 |> till.twice())      ; 15 21
+    show(4 |> Till.opened() |> in_cents())             ; 400
+    show(5 |> Light.Dimmed())                           ; Dimmed(5)
+    fixed xs = [4, 5, 6, ...] at r
+    show(xs |> first() |> half())                       ; 2
+    show(3 |> twice(double))                            ; 12
+    fixed step = steps.triple
+    show(2 |> step())                                   ; 6
+    ; Text made in a region: 'at r' names the region of the step's call.
+    show(42 |> label() at r, " ", 7 |> label(r))        ; #42 #7
+    ; The value runs first, then the call's own arguments.
+    show(noisy("value", 2) |>> scale(noisy("argument", 5)))     ; ran value, ran argument, 10
+    ; Beside other operators: below '+', above comparisons.
+    show(1 + 2 |> double() == 6)                        ; true
+    fixed off = false
+    show(off and 1 |>> noisy("never") > 0)              ; false
+    flex k = 0
+    loop k |> double() < 7
+        k++
+    fi
+    show(k)                                             ; 4
+    ; A last step that gives nothing, alone on its line.
+    9 |> double() |> show()                             ; 18
+    4 |> saved() { failure e
+        show("not saved: ", e)
+    }
+    7 |> saved() { failure e
+        show("not saved: ", e)                          ; not saved: Odd(7)
+    }
+fi
+
+task in_cents(t: Till) -> int
+    <- t.total * 100
+fi
+
+task a_line_of_steps() -> int
+    ; A line starting with '|>' goes on with the chain above it.
+    fixed n = 7
+        |> double()
+        ; comments and blank lines between steps are passed over
+
+        |>> scale(3)
+    <- n
+fi

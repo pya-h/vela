@@ -1,0 +1,26 @@
+; error: 25:25: the steps of this pipe fail with 'ReadError' and with 'StockError', and a pipe fails with one; declare a kind that imitates both, as in 'kind StepError::ReadError & StockError', and name it where the pipe's value goes, as in 'fixed v: int ~ StepError = …'
+kind ReadError
+    Blank
+fi
+
+kind StockError
+    SoldOut
+fi
+
+task read(line: text) -> int ~ ReadError
+    when line.len == 0
+        <- fail Blank
+    fi
+    <- line.len
+fi
+
+task reserve(n: int) -> int ~ StockError
+    when n > 3
+        <- fail SoldOut
+    fi
+    <- n
+fi
+
+task main()
+    show("ab" |> read() |> reserve() { 0 })
+fi

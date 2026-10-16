@@ -80,7 +80,10 @@ last line failed). Kinds take types as
 shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
 `Option<int>.None`. A kind can imitate others, `kind OrderError::ReadError & files.FileError`: it has all their
 variants before its own, named through it (`OrderError.Empty`), and a value of one of them goes where an
-`OrderError` is expected, as a failure a task sends on does. `block … fi` runs
+`OrderError` is expected, as a failure a task sends on does. A pipe reads calls in the order they run,
+`line |> quantity() |>> price(250)` being `price(250, quantity(line))`: each `>` gives the value one argument
+further, a line starting with `|>` goes on with the chain, and a step that fails stops it, so the chain fails
+with that failure, which one plan B at the end reads. `block … fi` runs
 statements in a block of their own.
 
 ```

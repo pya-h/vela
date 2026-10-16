@@ -1,0 +1,8 @@
+; error: 7:16: '|>' gives the value before it to the call right after it, as in 'xs |> total()', and this is no call; to go on from what the pipe gives, put it in parentheses, as in '(xs |> total()).str()'
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |> (double()))
+fi

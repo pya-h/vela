@@ -2287,7 +2287,9 @@ fi</code></pre>
       <ul>
         <li id="pipes"><strong>Pipes, <code>value |&gt; task(args)</code>:</strong> the value goes to the task's first
           parameter, and <code>|&gt;&gt;</code> to its second, and so on, from the notes that started decorators. It is
-          sugar over calls, and a pipe of tasks held as values (<code>value |&gt; steps[i]</code>) works the same way.</li>
+          sugar over calls, and a pipe of tasks held as values (<code>value |&gt; steps[i]</code>) works the same way.
+          <strong>Built</strong> (see <a href="vela.html#pipes">Call pipes</a>): a step that fails stops the chain, which
+          fails with it, and a task held as a value is called with its parentheses, <code>value |&gt; steps[i]()</code>.</li>
         <li><strong>Calls the compiler can see through.</strong> A task value that is a known task and never changes
           (<code>fixed f = square</code>, a wrapper's <code>next</code>) can be called directly rather than through the
           pointer, which lets C inline it: a higher-order task given a known task then costs what the loop written out

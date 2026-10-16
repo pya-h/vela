@@ -1,0 +1,15 @@
+; error: 14:23: the pipe gives 'double' a value of type maybe int as argument 1, where it takes int; a pipe carries failures but not absence, so read the maybe in its step with a plan B, as in '… |> f() { 0 } |> g()'
+task found(n: int) -> maybe int
+    when n > 0
+        <- n
+    fi
+    <- none
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |> found() |> double())
+fi

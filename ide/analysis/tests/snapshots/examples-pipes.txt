@@ -1,0 +1,106 @@
+  1 | ; An order desk: each line goes through a chain of steps with '|>', the first
+    | comment:; An order desk: each line goes through a chain of steps with '|>', the first
+  2 | ; failure stops it, and one plan B at the end handles every step.
+    | comment:; failure stops it, and one plan B at the end handles every step.
+  3 | kind ReadError
+    | keyword:kind  type:ReadError
+  4 |     Empty
+    | variant:Empty
+  5 |     NoCount
+    | variant:NoCount
+  6 | fi
+    | keyword:fi
+  8 | kind StockError
+    | keyword:kind  type:StockError
+  9 |     SoldOut(left: int)
+    | variant:SoldOut  punctuation:(  field:left  punctuation::  type-builtin:int  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 12 | ; Every failure an order can have: a reading one or a stock one.
+    | comment:; Every failure an order can have: a reading one or a stock one.
+ 13 | kind OrderError::ReadError & StockError
+    | keyword:kind  type:OrderError  punctuation::  punctuation::  type:ReadError  operator:&  type:StockError
+ 14 | fi
+    | keyword:fi
+ 16 | ; How many items a line asks for.
+    | comment:; How many items a line asks for.
+ 17 | task quantity(line: text@r) -> int ~ ReadError
+    | keyword:task  task:quantity  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadError
+ 18 |     when line.len == 0
+    | keyword:when  parameter:line  punctuation:.  field:len  operator:==  number:0
+ 19 |         <- fail Empty
+    | keyword:<-  keyword:fail  variant:Empty
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- int(line) { <- fail NoCount }
+    | keyword:<-  type-builtin:int  punctuation:(  parameter:line  punctuation:)  punctuation:{  keyword:<-  keyword:fail  variant:NoCount  punctuation:}
+ 22 | fi
+    | keyword:fi
+ 24 | ; The items taken from a stock of `left`.
+    | comment:; The items taken from a stock of `left`.
+ 25 | task reserve(wanted: int, left: int) -> int ~ StockError
+    | keyword:task  task:reserve  punctuation:(  parameter:wanted  punctuation::  type-builtin:int  punctuation:,  parameter:left  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:StockError
+ 26 |     when wanted > left
+    | keyword:when  parameter:wanted  operator:>  parameter:left
+ 27 |         <- fail SoldOut(left)
+    | keyword:<-  keyword:fail  variant:SoldOut  punctuation:(  parameter:left  punctuation:)
+ 28 |     fi
+    | keyword:fi
+ 29 |     <- wanted
+    | keyword:<-  parameter:wanted
+ 30 | fi
+    | keyword:fi
+ 32 | ; The price of `count` items at `each_cents` each.
+    | comment:; The price of `count` items at `each_cents` each.
+ 33 | task price(each_cents: int, count: int) -> int
+    | keyword:task  task:price  punctuation:(  parameter:each_cents  punctuation::  type-builtin:int  punctuation:,  parameter:count  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     <- count * each_cents
+    | keyword:<-  parameter:count  operator:*  parameter:each_cents
+ 35 | fi
+    | keyword:fi
+ 37 | task with_tax(cents: int) -> int
+    | keyword:task  task:with_tax  punctuation:(  parameter:cents  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 38 |     <- cents + cents / 10
+    | keyword:<-  parameter:cents  operator:+  parameter:cents  operator:/  number:10
+ 39 | fi
+    | keyword:fi
+ 41 | task receipt(cents: int, r: region) -> text@r
+    | keyword:task  task:receipt  punctuation:(  parameter:cents  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 42 |     <- "{cents} cents paid" at r
+    | keyword:<-  string:"{  parameter:cents  string:} cents paid"  keyword:at  region:r
+ 43 | fi
+    | keyword:fi
+ 45 | ; One line, start to end: read it, reserve the items, price them, add the tax.
+    | comment:; One line, start to end: read it, reserve the items, price them, add the tax.
+ 46 | task total(line: text@r, left: int) -> int ~ OrderError
+    | keyword:task  task:total  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:left  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:OrderError
+ 47 |     <- line
+    | keyword:<-  parameter:line
+ 48 |         |> quantity()
+    | operator:|>  task:quantity  punctuation:(  punctuation:)
+ 49 |         |> reserve(left)
+    | operator:|>  task:reserve  punctuation:(  parameter:left  punctuation:)
+ 50 |         |>> price(250)
+    | operator:|>>  task:price  punctuation:(  number:250  punctuation:)
+ 51 |         |> with_tax()
+    | operator:|>  task:with_tax  punctuation:(  punctuation:)
+ 52 | fi
+    | keyword:fi
+ 54 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 55 |     region r
+    | keyword:region  region:r
+ 56 |     each line in ["3", "", "x", "12", "1", ...] at r
+    | keyword:each  variable:line  keyword:in  punctuation:[  string:"3"  punctuation:,  string:""  punctuation:,  string:"x"  punctuation:,  string:"12"  punctuation:,  string:"1"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 57 |         fixed shown = line |> total(5) |> receipt(r) { failure e
+    | keyword:fixed  variable:shown  operator:=  variable:line  operator:|>  task:total  punctuation:(  number:5  punctuation:)  operator:|>  task:receipt  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 58 |             "refused: {e}" at r
+    | string:"refused: {  variable:e  string:}"  keyword:at  region:r
+ 59 |         }
+    | punctuation:}
+ 60 |         show(line, " -> ", shown)
+    | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" -> "  punctuation:,  variable:shown  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 62 | fi
+    | keyword:fi

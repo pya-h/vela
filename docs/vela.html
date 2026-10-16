@@ -175,7 +175,7 @@
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs, no interfaces <em>and</em> traits: one of each. Shapes, kinds, and tasks, and patterns for what several shapes or kinds have in common.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>fixed</code>, at any depth; mutation explicitly opt-in, of the contents only with <code>bind</code>, or in every way with <code>flex</code>.</li>
         <li><strong>Safe by design.</strong> Static typing, exhaustive matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
-        <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons ending statements, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
+        <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons ending statements, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, <code>&lt;-</code> gives it back, and <code>|&gt;</code> passes a value on to the next call.</li>
         <li><strong>No GC, no free.</strong> Values live on the stack, and <code>new</code> allocates in a <em>region</em>, which frees everything in it at once when its block closes (see <a href="#regions">Memory and Regions</a>).</li>
       </ul>
     </section>
@@ -214,6 +214,7 @@
         slice as it is at each pass</a>), <code>stock.vela</code> (a stock list searched with <a href="#generic-kinds">kinds that take types</a>),
         <code>kind_imitation.vela</code> (orders refused for reasons of two kinds, one <a href="#kind-imitation">imitating</a> the other),
         <code>patterns.vela</code> (a till ringing up books and lamps, which follow a <a href="#patterns">pattern</a>),
+        <code>pipes.vela</code> (orders read, reserved, and priced in a chain of <a href="#pipes">pipes</a>, which one plan B ends),
         <code>seats.vela</code> (a party seated in a hall, with
         <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>),
         <code>collatz.vela</code> (Collatz walks counted with <a href="#loop-parts">a loop in three parts and
@@ -324,6 +325,7 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T ~ E</code>, or else what the block gives</td></tr>
+        <tr><td><code>a |&gt; f(b)</code>, <code>a |&gt;&gt; f(b)</code></td><td>a pipe: the call <code>f(a, b)</code>, or <code>f(b, a)</code>, each <code>&gt;</code> one argument further; a step that fails stops the chain (see <a href="#pipes">Call pipes</a>)</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
@@ -1351,6 +1353,7 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
         <tr><td><code>and</code></td><td></td></tr>
         <tr><td><code>== != ~= &lt;&gt;</code></td><td></td></tr>
         <tr><td><code>&lt; &lt;= &gt; &gt;=</code></td><td><code>1 &lt; 2 &lt; 3</code> is an error: <code>1 &lt; 2</code> is a <code>bool</code></td></tr>
+        <tr><td><code>|&gt; |&gt;&gt; …</code></td><td><code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code> (see <a href="#pipes">Call pipes</a>)</td></tr>
         <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
         <tr><td><code>+ -</code></td><td></td></tr>
         <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
@@ -4286,6 +4289,101 @@ save(500) {
         </p>
       </div>
 
+      <h3 id="pipes">Call pipes</h3>
+      <p>
+        A pipe gives a value to a call written after it, so a chain of calls reads in the order it runs:
+        <code>a |&gt; f(b)</code> is <code>f(a, b)</code>. Each further <code>&gt;</code> gives the value to the next
+        argument instead: <code>a |&gt;&gt; f(b)</code> is <code>f(b, a)</code>, and <code>a |&gt;&gt;&gt; f(b, c)</code>
+        is <code>f(b, c, a)</code>. A line that starts with <code>|&gt;</code> goes on with the chain of the line before
+        it, so a long chain is written one step per line, with comments and blank lines between steps if wanted.
+      </p>
+      <p>
+        A step that can fail, giving <code>T ~ E</code>, gives the next step its <code>T</code>: the next step runs only
+        when it succeeded. The first failure stops the chain, and the chain fails with it; when every step succeeds,
+        the chain's value is the last step's. So a chain with a step that can fail is a <code>T ~ E</code> itself, read
+        as any other is, and a plan B after a step handles that step and every one before it: one plan B at the end
+        handles the whole chain. Steps that cannot fail just pass their value on, and a chain with none that can fail
+        is a plain value.
+      </p>
+      <pre class="program" data-file="pipes.vela"><span class="keyword">kind</span> ReadError
+    Empty
+    NoCount
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> StockError
+    SoldOut(left: int)
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> OrderError::ReadError &amp; StockError
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> quantity(line: text@r) -&gt; int ~ ReadError
+    <span class="keyword">when</span> line.len == <span class="number">0</span>
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> Empty
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> int(line) { <span class="keyword">&lt;-</span> <span class="keyword">fail</span> NoCount }
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> reserve(wanted: int, left: int) -&gt; int ~ StockError
+    <span class="keyword">when</span> wanted &gt; left
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> SoldOut(left)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> wanted
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> price(each_cents: int, count: int) -&gt; int
+    <span class="keyword">&lt;-</span> count * each_cents
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> double(n: int) -&gt; int
+    <span class="keyword">&lt;-</span> n * <span class="number">2</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> total(line: text@r) -&gt; int ~ OrderError
+    <span class="keyword">&lt;-</span> line
+        |&gt; quantity()           <span class="comment">; int ~ ReadError</span>
+        |&gt; reserve(<span class="number">5</span>)           <span class="comment">; reserve(count, 5): int ~ StockError</span>
+        |&gt;&gt; price(<span class="number">250</span>)          <span class="comment">; price(250, count): cannot fail</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    show(<span class="number">3</span> |&gt; double() |&gt; double())        <span class="comment">; 12</span>
+    <span class="keyword">each</span> line <span class="keyword">in</span> [<span class="string">"2"</span>, <span class="string">""</span>, <span class="string">"x"</span>, <span class="string">"9"</span>]
+        <span class="keyword">fixed</span> cents = line |&gt; total() { <span class="keyword">failure</span> e
+            show(<span class="string">"refused: "</span>, e)
+            <span class="number">0</span>
+        }
+        show(cents)     <span class="comment">; 500; refused: Empty, 0; refused: NoCount, 0; refused: SoldOut(5), 0</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        The steps of a chain may fail with different kinds, and a chain fails with one. They join as the branches of a
+        <span class="keyword">when</span> do: the same kind, or the one that <a href="#kind-imitation">imitates</a> the
+        others; or, as here, the kind the place the chain goes names, where it imitates every one of them: the type of
+        a binding (<code>fixed n: int ~ OrderError = line |&gt; quantity() |&gt; reserve(5)</code>) or the task's own
+        when the chain is sent with <code>&lt;-</code>. Each failure becomes a value of that kind where it happens.
+        Steps whose kinds join in none of these ways are an error, which says to declare a kind imitating them.
+      </p>
+      <p>
+        After <code>|&gt;</code> comes one call, written with its parentheses: a task, one of a module
+        (<code>|&gt; steps.read()</code>), a method of another value (<code>|&gt; till.plus()</code>), a shared method,
+        a variant, a task held in a variable, or <code>.m()</code> inside a method. Its <code>at r</code> stays its own:
+        <code>n |&gt; label() at r</code> is <code>label(n, r)</code>. The value is worked out first, then the call's own
+        arguments, left to right, and it fits its parameter as any argument does (it may become a <code>maybe</code>, or
+        a value of a kind imitating its own). A pipe binds below <code>+</code> and above comparisons, so
+        <code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code>; the call is the whole of its step, so
+        <code>a |&gt; f() + 1</code> is an error, written <code>(a |&gt; f()) + 1</code>.
+      </p>
+      <p>
+        Every mistake in a pipe is found while compiling: a position past the arguments written plus one, an argument
+        of the wrong type, the wrong count, a step that gives several results or nothing to the step after it, a
+        <code>flex&amp;</code>, <code>bind&amp;</code> or <code>fixed&amp;</code> parameter (a pipe gives a value, never a
+        place), a call on what another call gives (<code>x |&gt; make().plus()</code>, which reads as if
+        <code>make</code> were given the value), a lambda written after <code>|&gt;</code>, and a chain whose failure is
+        dropped on a line of its own. A pipe carries failures but not absence: a step giving <code>maybe T</code> to one
+        that takes a <code>T</code> is an error, and a plan B in that step reads it (<code>… |&gt; find() { 0 } |&gt; g()</code>).
+      </p>
+
       <h3 id="type-of">The type of a value</h3>
       <p>
         Every value has <code>x.type</code>: its type as code writes it, as text. The compiler knows it, so it costs
@@ -5213,7 +5311,11 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           always works out its values left to right. Otherwise nothing they do can tell the order apart, except
           which of two that would stop the program stops it (see <a href="#int-limits">Numbers</a>), which isn't
           defined.</li>
-        <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
+        <li>An expression, including a shape literal or a call's arguments, must be written on one line, except a chain
+          of <a href="#pipes">pipes</a>, whose lines may start with <code>|&gt;</code>.</li>
+        <li>A pipe gives its value to an argument, never to the value a method is called on (<code>x.m()</code> does
+          that), and a chain's steps failing with different kinds take the kind the place names only from a binding's
+          type or the task's when sent; given as an argument, the kinds must join by themselves.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a

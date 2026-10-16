@@ -1,0 +1,11 @@
+; error: 10:13: 'grow' changes what its parameter 'xs' reaches, so it can't be given what fixed 'xs' owns; give it a copy, 'xs.copy() at r', or keep 'xs' in a flex variable
+task grow(flex xs: [int]@r, r: region) -> int
+    xs.add(1)
+    <- xs.len
+fi
+
+task main()
+    region r
+    fixed xs = [1, 2, ...] at r
+    show(xs |> grow(r))
+fi

@@ -1,0 +1,12 @@
+; error: 11:12: this gives nothing when it succeeds, so the pipe has no value to give 'double'
+task note(n: int)
+    show(n)
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |> note() |> double())
+fi

@@ -1,0 +1,8 @@
+; error: 7:16: task 'double' expects 1 argument, got 2, the value the pipe gives as argument 2 among them
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(3 |>> double(10))
+fi

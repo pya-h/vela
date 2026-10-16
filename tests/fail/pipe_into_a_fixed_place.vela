@@ -1,0 +1,8 @@
+; error: 7:12: task 'peek' reads 'n' where the caller keeps it, so it takes a place, and a pipe gives a value; call it with the place marked, as in 'f(&a)'
+task peek(fixed& n: int) -> int
+    <- n
+fi
+
+task main()
+    show(3 |> peek())
+fi

@@ -1,0 +1,8 @@
+; error: 7:7: task 'bump' changes 'n' where the caller keeps it, so it takes a place, and a pipe gives a value; call it with the place marked, as in 'f(&a)'
+task bump(flex& n: int)
+    n++
+fi
+
+task main()
+    3 |> bump()
+fi

@@ -1,0 +1,12 @@
+; error: 11:10: 'halves' sends 2 values, and a pipe gives the call after it one; receive them first, with 'fixed a, b = …'
+task halves(n: int) -> int, int
+    <- n / 2, n - n / 2
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show(halves(7) |> double())
+fi

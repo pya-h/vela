@@ -682,6 +682,8 @@ pub fn method_parts(name: &str) -> Option<(&str, &str)> {
 pub fn without_effects(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
+        // The value a pipe gives was worked out before its call.
+        ExprKind::Piped(_) => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
         ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or, a, b) | ExprKind::Range(a, b) => {
             without_effects(a) && without_effects(b)
@@ -1499,6 +1501,18 @@ pub enum ExprKind {
     /// (`kind AppError::ParseErr`), made a value of that kind, its type: the
     /// same variant, carrying the same values. Only the checker makes one.
     Widen(Box<Expr>),
+    /// `a |> f(b)` or `a |>> f(b)`: a pipe, holding the call after it, among
+    /// whose arguments the value before it stands as a `Piped`, where the
+    /// count of `>` put it (`f(a, b)`, `f(b, a)`). The value runs first, then
+    /// the call's own arguments. A value that can fail, `T ~ E`, gives the call
+    /// what it holds, and the call runs only when it succeeded: the pipe fails
+    /// with the first failure of its chain, so its type is the call's, or the
+    /// call's value `~` the errors joined (see `Checker::check_pipe`).
+    Pipe(Box<Expr>),
+    /// The value before a `|>`, standing among the arguments of the call after
+    /// it (see `Pipe`). Its type is the value's own, or what it holds when it
+    /// can fail.
+    Piped(Box<Expr>),
     /// `fail e`: an error value, which fits a `T ~ E`.
     Fail(Box<Expr>),
     /// A plan B, `value { … }`: the value extracted from a `maybe` or a

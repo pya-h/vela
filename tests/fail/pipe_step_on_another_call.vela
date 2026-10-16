@@ -1,0 +1,16 @@
+; error: 15:24: '|>' gives the value before it to one call, and this calls what another call gives, which reads as if that one were given the value; to go on from what the pipe gives, put it in parentheses, as in '(x |> f()).g()'
+shape Till
+    total: int
+
+    plus(n: int) -> int
+        <- .total + n
+    fi
+fi
+
+task opened() -> Till
+    <- Till { total: 0 }
+fi
+
+task main()
+    show(5 |> opened().plus())
+fi

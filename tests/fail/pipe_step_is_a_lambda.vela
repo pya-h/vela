@@ -1,0 +1,6 @@
+; error: 3:15: '|>' gives the value before it to a call, and a lambda written here is called by nothing; name it first, as in 'fixed twice = (n: int) -> int … fi', then write 'x |> twice()'
+task main()
+    show(3 |> (n: int) -> int
+        <- n * 2
+    fi)
+fi

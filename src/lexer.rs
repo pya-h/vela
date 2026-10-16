@@ -98,6 +98,10 @@ pub enum Token {
     /// `||`, which parts a loop's start, condition and step:
     /// `loop flex i = 0 || i < 10 || i++`. Nowhere else: Vela writes `or`.
     Parts,
+    /// `|>`, `|>>`, `|>>>`…: a pipe, giving the value before it to the call
+    /// after it as the argument its count of `>` says, `a |>> f(b)` being
+    /// `f(b, a)` (see `ast::ExprKind::Pipe`).
+    Pipe(usize),
     Range,
     /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
     /// of the values rather than an array.
@@ -259,6 +263,7 @@ impl Token {
             Token::Char(_) => return "char literal".to_string(),
             Token::Ident(s) => return format!("identifier '{}'", s),
             Token::Newline => return "end of line".to_string(),
+            Token::Pipe(n) => return format!("'|{}'", ">".repeat(*n)),
             Token::Eof => return "end of file".to_string(),
             Token::LParen => "(",
             Token::RParen => ")",
@@ -723,6 +728,14 @@ impl Lexer {
                 if c == '|' && self.peek() == c {
                     self.advance();
                     Token::Parts
+                } else if c == '|' && self.peek() == '>' {
+                    // `|>>`: as many `>` as the argument the value becomes.
+                    let mut count = 0;
+                    while self.peek() == '>' {
+                        self.advance();
+                        count += 1;
+                    }
+                    Token::Pipe(count)
                 } else if self.peek() == c {
                     self.advance();
                     return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));

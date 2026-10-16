@@ -1,0 +1,15 @@
+; error: 14:7: the error this pipe may fail with is ignored; handle it with a plan B after its last step, as in '… |> reserve(…) { failure e … }', or with match
+kind StockError
+    SoldOut
+fi
+
+task reserve(n: int) -> int ~ StockError
+    when n > 3
+        <- fail SoldOut
+    fi
+    <- n
+fi
+
+task main()
+    5 |> reserve()
+fi

@@ -1,0 +1,62 @@
+; An order desk: each line goes through a chain of steps with '|>', the first
+; failure stops it, and one plan B at the end handles every step.
+kind ReadError
+    Empty
+    NoCount
+fi
+
+kind StockError
+    SoldOut(left: int)
+fi
+
+; Every failure an order can have: a reading one or a stock one.
+kind OrderError::ReadError & StockError
+fi
+
+; How many items a line asks for.
+task quantity(line: text@r) -> int ~ ReadError
+    when line.len == 0
+        <- fail Empty
+    fi
+    <- int(line) { <- fail NoCount }
+fi
+
+; The items taken from a stock of `left`.
+task reserve(wanted: int, left: int) -> int ~ StockError
+    when wanted > left
+        <- fail SoldOut(left)
+    fi
+    <- wanted
+fi
+
+; The price of `count` items at `each_cents` each.
+task price(each_cents: int, count: int) -> int
+    <- count * each_cents
+fi
+
+task with_tax(cents: int) -> int
+    <- cents + cents / 10
+fi
+
+task receipt(cents: int, r: region) -> text@r
+    <- "{cents} cents paid" at r
+fi
+
+; One line, start to end: read it, reserve the items, price them, add the tax.
+task total(line: text@r, left: int) -> int ~ OrderError
+    <- line
+        |> quantity()
+        |> reserve(left)
+        |>> price(250)
+        |> with_tax()
+fi
+
+task main()
+    region r
+    each line in ["3", "", "x", "12", "1", ...] at r
+        fixed shown = line |> total(5) |> receipt(r) { failure e
+            "refused: {e}" at r
+        }
+        show(line, " -> ", shown)
+    fi
+fi

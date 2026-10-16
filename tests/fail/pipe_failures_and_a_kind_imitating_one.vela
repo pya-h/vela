@@ -1,0 +1,31 @@
+; error: 29:48: the steps of this pipe fail with 'ReadError' and with 'StockError', and 'OrderError', the kind its value goes into, doesn't imitate both; declare it as one that does, as in 'kind OrderError::ReadError & StockError'
+kind ReadError
+    Blank
+fi
+
+kind StockError
+    SoldOut
+fi
+
+kind OrderError::ReadError
+    TooMany
+fi
+
+task read(line: text) -> int ~ ReadError
+    when line.len == 0
+        <- fail Blank
+    fi
+    <- line.len
+fi
+
+task reserve(n: int) -> int ~ StockError
+    when n > 3
+        <- fail SoldOut
+    fi
+    <- n
+fi
+
+task main()
+    fixed n: int ~ OrderError = "ab" |> read() |> reserve()
+    show(n { 0 })
+fi

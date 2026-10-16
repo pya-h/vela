@@ -1,0 +1,34 @@
+  1 | ; Steps of another module, for the pipes of tests/run/pipes.vela.
+    | comment:; Steps of another module, for the pipes of tests/run/pipes.vela.
+  3 | kind ReadError
+    | keyword:kind  type:ReadError
+  4 |     Blank
+    | variant:Blank
+  5 |     Bad(line: text)
+    | variant:Bad  punctuation:(  field:line  punctuation::  type-builtin:text  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | ; Reads a count from a line: text in, a number or a ReadError out.
+    | comment:; Reads a count from a line: text in, a number or a ReadError out.
+  9 | task read(line: text) -> int ~ ReadError
+    | keyword:task  task:read  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadError
+ 10 |     when line.len == 0
+    | keyword:when  parameter:line  punctuation:.  field:len  operator:==  number:0
+ 11 |         <- fail Blank
+    | keyword:<-  keyword:fail  variant:Blank
+ 12 |     fi
+    | keyword:fi
+ 13 |     <- int(line) { failure e
+    | keyword:<-  type-builtin:int  punctuation:(  parameter:line  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 14 |         <- fail Bad(line)
+    | keyword:<-  keyword:fail  variant:Bad  punctuation:(  parameter:line  punctuation:)
+ 15 |     }
+    | punctuation:}
+ 16 | fi
+    | keyword:fi
+ 18 | task triple(n: int) -> int
+    | keyword:task  task:triple  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 19 |     <- n * 3
+    | keyword:<-  parameter:n  operator:*  number:3
+ 20 | fi
+    | keyword:fi

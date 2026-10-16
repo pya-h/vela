@@ -1,0 +1,10 @@
+; error: 7:28: the call after '|>' is the whole of its step, so '..' can't follow it; put the pipe in parentheses, as in '(a |> f())..b'
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    each i in 1 |> double()..5
+        show(i)
+    fi
+fi

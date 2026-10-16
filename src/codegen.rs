@@ -82,6 +82,9 @@ pub struct Generator {
     /// the item a step reads, `m[k]` in `m[k] += 1`, read through the
     /// address it was found at (see the `Assign` arm of `gen_stmt`).
     replaced: Option<(*const Expr, String)>,
+    /// The C of the value each pipe being written gives its call, the
+    /// innermost last, which its `Piped` is written as (see `gen_pipe`).
+    piped: Vec<String>,
     kinds: HashMap<String, KindDef>,
     shapes: HashMap<String, ShapeDef>,
     /// The shapes and kinds holding text or pointers, whose values a copy
@@ -168,6 +171,7 @@ impl Default for Generator {
             altering: HashSet::new(),
             pointers: HashSet::new(),
             replaced: None,
+            piped: Vec::new(),
             hidden: HashSet::new(),
             hidden_params: HashMap::new(),
             shown: Vec::new(),
@@ -3269,6 +3273,8 @@ impl Generator {
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::Widen(inner) => self.gen_widen(e, inner),
+            ExprKind::Pipe(call) => self.gen_pipe(e, call),
+            ExprKind::Piped(_) => self.piped.last().cloned().ok_or_else(|| Error::internal_at(e.span, "a piped value outside its pipe")),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Choice(stmt) => self.gen_choice(e, stmt),
             ExprKind::LoopValue(value) => self.gen_loop_value(e, value),
@@ -3898,6 +3904,64 @@ impl Generator {
         Ok(format!("{}({})", helper, self.gen_expr(inner)?))
     }
 
+    /// `a |> f(b)` (see `ExprKind::Pipe`): the value first, in a temporary
+    /// the call's `Piped` is written as, then the call. Where the value can
+    /// fail, the call runs only when it succeeded, and the pipe fails with its
+    /// error otherwise, each error made a value of the one the pipe fails with
+    /// where they differ (see `pipe_widens`).
+    fn gen_pipe(&mut self, e: &Expr, call: &Expr) -> Result<String> {
+        let value = piped_value(call).ok_or_else(|| Error::internal_at(e.span, "a pipe giving its value to no call"))?;
+        let value_ty = value.ty()?.clone();
+        let value_c = self.gen_expr(value)?;
+        let piped = self.fresh_temp("piped");
+        self.w.line(&format!("{} {} = {};", c_type(&value_ty), piped, value_c));
+        let Type::Or(_, before) = &value_ty else {
+            self.piped.push(piped);
+            let called = self.gen_expr(call);
+            self.piped.pop();
+            return called;
+        };
+        let result_ty = e.ty()?.clone();
+        let Type::Or(_, error_ty) = &result_ty else { return Err(Error::internal_at(e.span, format!("a pipe that can fail of type {}", result_ty))) };
+        let ctype = c_type(&result_ty);
+        let result = self.fresh_temp("value");
+        self.w.line(&format!("{} {};", ctype, result));
+        self.w.open(&format!("if ({}.ok)", piped));
+        self.piped.push(format!("{}.value", piped));
+        let called = self.gen_expr(call);
+        self.piped.pop();
+        let called = called?;
+        match call.ty()? {
+            Type::Or(_, after) if after.without_regions() == error_ty.without_regions() => self.w.line(&format!("{} = {};", result, called)),
+            Type::Or(sent, after) => {
+                let step = self.fresh_temp("step");
+                self.w.line(&format!("{} {} = {};", c_type(call.ty()?), step, called));
+                self.w.open(&format!("if ({}.ok)", step));
+                match **sent {
+                    Type::Nothing => self.w.line(&format!("{} = ({}){{ .ok = true }};", result, ctype)),
+                    _ => self.w.line(&format!("{} = ({}){{ .ok = true, .value = {}.value }};", result, ctype, step)),
+                }
+                self.w.reopen("else");
+                self.w.line(&format!("{} = ({}){{ .ok = false, .error = {}({}.error) }};", result, ctype, widen_helper(after, error_ty), step));
+                self.w.close();
+            }
+            Type::Nothing => {
+                // A call giving nothing is a statement of its own.
+                self.w.line(&format!("{};", called));
+                self.w.line(&format!("{} = ({}){{ .ok = true }};", result, ctype));
+            }
+            _ => self.w.line(&format!("{} = ({}){{ .ok = true, .value = {} }};", result, ctype, called)),
+        }
+        self.w.reopen("else");
+        let error = match before.without_regions() == error_ty.without_regions() {
+            true => format!("{}.error", piped),
+            false => format!("{}({}.error)", widen_helper(before, error_ty), piped),
+        };
+        self.w.line(&format!("{} = ({}){{ .ok = false, .error = {} }};", result, ctype, error));
+        self.w.close();
+        Ok(result)
+    }
+
     fn gen_wrap(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
         let target = e.ty()?;
         let ctype = c_type(target);
@@ -4499,7 +4563,9 @@ fn scan_helper(ty: &Type) -> String {
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::Spread(inner) => has_prelude(inner),
-        ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::LoopValue(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
+        ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::LoopValue(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } | ExprKind::Pipe(_) => true,
+        // A temporary its pipe wrote before the call.
+        ExprKind::Piped(_) => false,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) | ExprKind::Closure { .. } => false,
         ExprKind::Kept { value, .. } => has_prelude(value),
@@ -5015,6 +5081,15 @@ impl UsedTypes {
         }
     }
 
+    /// Notes that a value of kind `from` is made one of `to`, the kind
+    /// imitating it (see `widened`).
+    fn widen(&mut self, from: &Type, to: &Type) {
+        let pair = (from.without_regions(), to.without_regions());
+        if !self.widened.contains(&pair) {
+            self.widened.push(pair);
+        }
+    }
+
     fn expr(&mut self, e: &Expr) {
         if let Some(ty) = &e.ty {
             self.add(ty);
@@ -5088,13 +5163,26 @@ impl UsedTypes {
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
             ExprKind::Widen(inner) => {
                 if let (Some(from), Some(to)) = (&inner.ty, &e.ty) {
-                    let pair = (from.without_regions(), to.without_regions());
-                    if !self.widened.contains(&pair) {
-                        self.widened.push(pair);
-                    }
+                    self.widen(from, to);
                 }
                 self.expr(inner)
             }
+            // Each error of a pipe's steps that is not the one it fails with
+            // is made a value of that one (see `gen_pipe`).
+            ExprKind::Pipe(call) => {
+                if let Some(Type::Or(_, error)) = &e.ty {
+                    let before = piped_value(call).and_then(|value| value.ty.as_ref());
+                    for step in [before, call.ty.as_ref()] {
+                        if let Some(Type::Or(_, from)) = step
+                            && from.without_regions() != error.without_regions()
+                        {
+                            self.widen(from, error);
+                        }
+                    }
+                }
+                self.expr(call)
+            }
+            ExprKind::Piped(inner) => self.expr(inner),
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::LoopValue(value) => self.block(std::slice::from_ref(&value.stmt)),
@@ -5296,7 +5384,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         // working it out does (see `work_out_none`).
         ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && without_effects(inner) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => expr_reads(inner, name),
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Pipe(inner) | ExprKind::Piped(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
@@ -5452,6 +5540,8 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
+        // A temporary its pipe wrote before the call.
+        ExprKind::Piped(_) => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => changes_nothing(inner),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
@@ -5727,6 +5817,22 @@ fn lookup_key(ty: &Type) -> Type {
 /// `vela__copied__ptr__n_Node`, `vela__fix__text`.
 /// The C name of the function making a value of kind `from` one of kind `to`,
 /// which imitates it (see `Generator::gen_widens`).
+/// The value a pipe's call holds as its `Piped` argument (see
+/// `ExprKind::Pipe`), where fitting the parameter may have wrapped it.
+fn piped_value(call: &Expr) -> Option<&Expr> {
+    let (ExprKind::Call { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. }) = &call.kind else { return None };
+    args.iter().find_map(|arg| {
+        let mut arg = arg;
+        loop {
+            match &arg.kind {
+                ExprKind::Piped(value) => return Some(value.as_ref()),
+                ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Kept { value: inner, .. } => arg = inner,
+                _ => return None,
+            }
+        }
+    })
+}
+
 fn widen_helper(from: &Type, to: &Type) -> String {
     format!("vela__widen__{}__into__{}", type_word(&from.without_regions()), type_word(&to.without_regions()))
 }

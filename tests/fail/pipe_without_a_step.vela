@@ -1,0 +1,4 @@
+; error: 3:14: '|>' gives the value before it to the call written after it, as in 'xs |> total()'
+task main()
+    show(3 |>)
+fi

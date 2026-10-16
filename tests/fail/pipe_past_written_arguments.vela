@@ -1,0 +1,8 @@
+; error: 7:12: '|>>>' gives the value before it to 'scale' as argument 3, but the call writes only 1, so argument 2 would be missing; write the arguments before it, or fewer '>'
+task scale(by: int, n: int) -> int
+    <- n * by
+fi
+
+task main()
+    show(3 |>>> scale(10))
+fi

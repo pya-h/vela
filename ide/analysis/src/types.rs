@@ -366,6 +366,11 @@ impl Checked {
         if let ExprKind::Wrap(inner) | ExprKind::Widen(inner) = &e.kind {
             return self.expr(inner, kinds);
         }
+        // The value before a pipe stands among its call's arguments, at the
+        // pipe, which has the pipe's own type.
+        if let ExprKind::Piped(inner) = &e.kind {
+            return self.expr(inner, kinds);
+        }
         // So does a value given to `show` that the checker turned into the call
         // of its own `str` (see `check::show_with_str`): the call stands where
         // the value is written, and the editor asks about the value there, not
@@ -455,7 +460,7 @@ impl Checked {
                     self.expr(&field.value, kinds);
                 }
             }
-            ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) => self.expr(inner, kinds),
+            ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Pipe(inner) | ExprKind::Piped(inner) => self.expr(inner, kinds),
             ExprKind::PlanB { value, error, body } => {
                 self.expr(value, kinds);
                 if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {

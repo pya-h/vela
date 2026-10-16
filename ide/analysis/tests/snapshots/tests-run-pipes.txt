@@ -1,0 +1,318 @@
+  1 | ; Call pipes: 'a |> f(b)' is 'f(a, b)', each further '>' gives the value to the
+    | comment:; Call pipes: 'a |> f(b)' is 'f(a, b)', each further '>' gives the value to the
+  2 | ; next argument, a line starting with '|>' goes on with the chain, and a step
+    | comment:; next argument, a line starting with '|>' goes on with the chain, and a step
+  3 | ; that fails stops the chain, which then fails with that failure.
+    | comment:; that fails stops the chain, which then fails with that failure.
+  4 | include pipes/steps
+    | keyword:include  module:pipes  operator:/  module:steps
+  6 | kind AppError::steps.ReadError
+    | keyword:kind  type:AppError  punctuation::  punctuation::  module:steps  punctuation:.  type:ReadError
+  7 |     Negative(n: int)
+    | variant:Negative  punctuation:(  field:n  punctuation::  type-builtin:int  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | kind OddError
+    | keyword:kind  type:OddError
+ 11 |     Odd(n: int)
+    | variant:Odd  punctuation:(  field:n  punctuation::  type-builtin:int  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | kind LineError::steps.ReadError & OddError
+    | keyword:kind  type:LineError  punctuation::  punctuation::  module:steps  punctuation:.  type:ReadError  operator:&  type:OddError
+ 15 | fi
+    | keyword:fi
+ 17 | shape Till
+    | keyword:shape  type:Till
+ 18 |     total: int
+    | field:total  punctuation::  type-builtin:int
+ 20 |     shared opened(n: int) -> Till
+    | keyword:shared  method:opened  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Till
+ 21 |         <- Till { total: n }
+    | keyword:<-  type:Till  punctuation:{  field:total  punctuation::  parameter:n  punctuation:}
+ 22 |     fi
+    | keyword:fi
+ 24 |     plus(n: int) -> int
+    | method:plus  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 25 |         <- .total + n
+    | keyword:<-  punctuation:.  field:total  operator:+  parameter:n
+ 26 |     fi
+    | keyword:fi
+ 28 |     ; '.plus()' inside a method: the value's own method, given the value.
+    | comment:; '.plus()' inside a method: the value's own method, given the value.
+ 29 |     twice(n: int) -> int
+    | method:twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 30 |         <- n |> .plus() |> .plus()
+    | keyword:<-  parameter:n  operator:|>  punctuation:.  method:plus  punctuation:(  punctuation:)  operator:|>  punctuation:.  method:plus  punctuation:(  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | kind Light
+    | keyword:kind  type:Light
+ 35 |     Dimmed(level: int)
+    | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+ 36 |     Off
+    | variant:Off
+ 37 | fi
+    | keyword:fi
+ 39 | task double(n: int) -> int
+    | keyword:task  task:double  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 40 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 41 | fi
+    | keyword:fi
+ 43 | task scale(by: int, n: int) -> int
+    | keyword:task  task:scale  punctuation:(  parameter:by  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 44 |     <- n * by
+    | keyword:<-  parameter:n  operator:*  parameter:by
+ 45 | fi
+    | keyword:fi
+ 47 | task between(low: int, high: int, n: int) -> bool
+    | keyword:task  task:between  punctuation:(  parameter:low  punctuation::  type-builtin:int  punctuation:,  parameter:high  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 48 |     <- n >= low and n <= high
+    | keyword:<-  parameter:n  operator:>=  parameter:low  keyword:and  parameter:n  operator:<=  parameter:high
+ 49 | fi
+    | keyword:fi
+ 51 | task positive(n: int) -> int ~ AppError
+    | keyword:task  task:positive  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppError
+ 52 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 53 |         <- fail Negative(n)
+    | keyword:<-  keyword:fail  variant:Negative  punctuation:(  parameter:n  punctuation:)
+ 54 |     fi
+    | keyword:fi
+ 55 |     <- n
+    | keyword:<-  parameter:n
+ 56 | fi
+    | keyword:fi
+ 58 | task even(n: int) -> int ~ OddError
+    | keyword:task  task:even  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:OddError
+ 59 |     when n % 2 == 1
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:1
+ 60 |         <- fail Odd(n)
+    | keyword:<-  keyword:fail  variant:Odd  punctuation:(  parameter:n  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 62 |     <- n
+    | keyword:<-  parameter:n
+ 63 | fi
+    | keyword:fi
+ 65 | task noisy(label: text, n: int) -> int
+    | keyword:task  task:noisy  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 66 |     show("ran ", label)
+    | builtin-fn:show  punctuation:(  string:"ran "  punctuation:,  parameter:label  punctuation:)
+ 67 |     <- n
+    | keyword:<-  parameter:n
+ 68 | fi
+    | keyword:fi
+ 70 | task saved(n: int) -> nothing ~ OddError
+    | keyword:task  task:saved  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:OddError
+ 71 |     when n % 2 == 1
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:1
+ 72 |         <- fail Odd(n)
+    | keyword:<-  keyword:fail  variant:Odd  punctuation:(  parameter:n  punctuation:)
+ 73 |     fi
+    | keyword:fi
+ 74 |     show("saved ", n)
+    | builtin-fn:show  punctuation:(  string:"saved "  punctuation:,  parameter:n  punctuation:)
+ 75 |     <-
+    | keyword:<-
+ 76 | fi
+    | keyword:fi
+ 78 | task first<T>(xs: [T]@r) -> maybe T
+    | keyword:task  task:first  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  type:T
+ 79 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 80 |         <- x
+    | keyword:<-  variable:x
+ 81 |     fi
+    | keyword:fi
+ 82 |     <- none
+    | keyword:<-  keyword:none
+ 83 | fi
+    | keyword:fi
+ 85 | task half(n: maybe int) -> int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 86 |     <- n { 0 } / 2
+    | keyword:<-  parameter:n  punctuation:{  number:0  punctuation:}  operator:/  number:2
+ 87 | fi
+    | keyword:fi
+ 89 | task label(n: int, r: region) -> text@r
+    | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 90 |     <- "#{n}" at r
+    | keyword:<-  string:"#{  parameter:n  string:}"  keyword:at  region:r
+ 91 | fi
+    | keyword:fi
+ 93 | task twice<T>(x: T, step: (T) -> T) -> T
+    | keyword:task  task:twice  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:,  parameter:step  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:)  operator:->  type:T
+ 94 |     <- x |> step() |> step()
+    | keyword:<-  parameter:x  operator:|>  parameter:step  punctuation:(  punctuation:)  operator:|>  parameter:step  punctuation:(  punctuation:)
+ 95 | fi
+    | keyword:fi
+ 97 | ; A ReadError goes out as an AppError: the pipe fails with the kind that
+    | comment:; A ReadError goes out as an AppError: the pipe fails with the kind that
+ 98 | ; imitates the other.
+    | comment:; imitates the other.
+ 99 | task count(line: text) -> int ~ AppError
+    | keyword:task  task:count  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppError
+100 |     <- line |> steps.read() |> positive()
+    | keyword:<-  parameter:line  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  task:positive  punctuation:(  punctuation:)
+101 | fi
+    | keyword:fi
+103 | ; Neither kind imitates the other, so the place the chain goes names one that
+    | comment:; Neither kind imitates the other, so the place the chain goes names one that
+104 | ; imitates both.
+    | comment:; imitates both.
+105 | task counted_even(line: text) -> int ~ LineError
+    | keyword:task  task:counted_even  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:LineError
+106 |     <- line |> steps.read() |> even()
+    | keyword:<-  parameter:line  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  task:even  punctuation:(  punctuation:)
+107 | fi
+    | keyword:fi
+109 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+110 |     region r
+    | keyword:region  region:r
+111 |     ; Plain steps, and the argument each '>' count gives the value to.
+    | comment:; Plain steps, and the argument each '>' count gives the value to.
+112 |     show(3 |> double())                         ; 6
+    | builtin-fn:show  punctuation:(  number:3  operator:|>  task:double  punctuation:(  punctuation:)  punctuation:)  comment:; 6
+113 |     show(3 |> double() |>> scale(10))           ; 60
+    | builtin-fn:show  punctuation:(  number:3  operator:|>  task:double  punctuation:(  punctuation:)  operator:|>>  task:scale  punctuation:(  number:10  punctuation:)  punctuation:)  comment:; 60
+114 |     show(5 |>>> between(1, 9))                  ; true
+    | builtin-fn:show  punctuation:(  number:5  operator:|>>>  task:between  punctuation:(  number:1  punctuation:,  number:9  punctuation:)  punctuation:)  comment:; true
+115 |     show(a_line_of_steps())                     ; 42
+    | builtin-fn:show  punctuation:(  task:a_line_of_steps  punctuation:(  punctuation:)  punctuation:)  comment:; 42
+116 |     ; Steps that can fail: a plan B after a step handles every step before it.
+    | comment:; Steps that can fail: a plan B after a step handles every step before it.
+117 |     show("12" |> steps.read() |> steps.triple() { 0 })    ; 36
+    | builtin-fn:show  punctuation:(  string:"12"  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  module:steps  punctuation:.  task:triple  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)  comment:; 36
+118 |     show("" |> steps.read() |> steps.triple() { 0 })      ; 0
+    | builtin-fn:show  punctuation:(  string:""  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  module:steps  punctuation:.  task:triple  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)  comment:; 0
+119 |     fixed n = "60" |> steps.read() |> positive() |> double() { failure e
+    | keyword:fixed  variable:n  operator:=  string:"60"  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  task:positive  punctuation:(  punctuation:)  operator:|>  task:double  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+120 |         show("failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"failed: "  punctuation:,  variable:e  punctuation:)
+121 |         -1
+    | operator:-  number:1
+122 |     }
+    | punctuation:}
+123 |     show(n)                                     ; 120
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)  comment:; 120
+124 |     show(count("7") { 0 }, " ", count("") { -1 }, " ", count("-3") { -2 })    ; 7 -1 -2
+    | builtin-fn:show  punctuation:(  task:count  punctuation:(  string:"7"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  task:count  punctuation:(  string:""  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:,  string:" "  punctuation:,  task:count  punctuation:(  string:"-3"  punctuation:)  punctuation:{  operator:-  number:2  punctuation:}  punctuation:)  comment:; 7 -1 -2
+125 |     match count("x")
+    | keyword:match  task:count  punctuation:(  string:"x"  punctuation:)
+126 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+127 |             show(value)
+    | builtin-fn:show  punctuation:(  variable:value  punctuation:)
+128 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+129 |             show("count: ", e)                  ; count: Bad("x")
+    | builtin-fn:show  punctuation:(  string:"count: "  punctuation:,  variable:e  punctuation:)  comment:; count: Bad("x")
+130 |     fi
+    | keyword:fi
+131 |     show(counted_even("8") { -1 }, " ", counted_even("9") { -1 })              ; 8 -1
+    | builtin-fn:show  punctuation:(  task:counted_even  punctuation:(  string:"8"  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:,  string:" "  punctuation:,  task:counted_even  punctuation:(  string:"9"  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)  comment:; 8 -1
+132 |     fixed named: int ~ LineError = "5" |> steps.read() |> even()
+    | keyword:fixed  variable:named  punctuation::  type-builtin:int  operator:~  type:LineError  operator:=  string:"5"  operator:|>  module:steps  punctuation:.  task:read  punctuation:(  punctuation:)  operator:|>  task:even  punctuation:(  punctuation:)
+133 |     match named
+    | keyword:match  variable:named
+134 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+135 |             show(value)
+    | builtin-fn:show  punctuation:(  variable:value  punctuation:)
+136 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+137 |             show("named: ", e)                  ; named: Odd(5)
+    | builtin-fn:show  punctuation:(  string:"named: "  punctuation:,  variable:e  punctuation:)  comment:; named: Odd(5)
+138 |     fi
+    | keyword:fi
+139 |     ; Methods, shared methods, variants, module tasks, generic tasks, task values.
+    | comment:; Methods, shared methods, variants, module tasks, generic tasks, task values.
+140 |     fixed till = Till { total: 10 }
+    | keyword:fixed  variable:till  operator:=  type:Till  punctuation:{  field:total  punctuation::  number:10  punctuation:}
+141 |     show(5 |> till.plus(), " ", 1 |> till.twice())      ; 15 21
+    | builtin-fn:show  punctuation:(  number:5  operator:|>  variable:till  punctuation:.  method:plus  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  number:1  operator:|>  variable:till  punctuation:.  method:twice  punctuation:(  punctuation:)  punctuation:)  comment:; 15 21
+142 |     show(4 |> Till.opened() |> in_cents())             ; 400
+    | builtin-fn:show  punctuation:(  number:4  operator:|>  type:Till  punctuation:.  method:opened  punctuation:(  punctuation:)  operator:|>  task:in_cents  punctuation:(  punctuation:)  punctuation:)  comment:; 400
+143 |     show(5 |> Light.Dimmed())                           ; Dimmed(5)
+    | builtin-fn:show  punctuation:(  number:5  operator:|>  type:Light  punctuation:.  variant:Dimmed  punctuation:(  punctuation:)  punctuation:)  comment:; Dimmed(5)
+144 |     fixed xs = [4, 5, 6, ...] at r
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+145 |     show(xs |> first() |> half())                       ; 2
+    | builtin-fn:show  punctuation:(  variable:xs  operator:|>  task:first  punctuation:(  punctuation:)  operator:|>  task:half  punctuation:(  punctuation:)  punctuation:)  comment:; 2
+146 |     show(3 |> twice(double))                            ; 12
+    | builtin-fn:show  punctuation:(  number:3  operator:|>  task:twice  punctuation:(  task:double  punctuation:)  punctuation:)  comment:; 12
+147 |     fixed step = steps.triple
+    | keyword:fixed  variable:step  operator:=  module:steps  punctuation:.  task:triple
+148 |     show(2 |> step())                                   ; 6
+    | builtin-fn:show  punctuation:(  number:2  operator:|>  variable:step  punctuation:(  punctuation:)  punctuation:)  comment:; 6
+149 |     ; Text made in a region: 'at r' names the region of the step's call.
+    | comment:; Text made in a region: 'at r' names the region of the step's call.
+150 |     show(42 |> label() at r, " ", 7 |> label(r))        ; #42 #7
+    | builtin-fn:show  punctuation:(  number:42  operator:|>  task:label  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  number:7  operator:|>  task:label  punctuation:(  region:r  punctuation:)  punctuation:)  comment:; #42 #7
+151 |     ; The value runs first, then the call's own arguments.
+    | comment:; The value runs first, then the call's own arguments.
+152 |     show(noisy("value", 2) |>> scale(noisy("argument", 5)))     ; ran value, ran argument, 10
+    | builtin-fn:show  punctuation:(  task:noisy  punctuation:(  string:"value"  punctuation:,  number:2  punctuation:)  operator:|>>  task:scale  punctuation:(  task:noisy  punctuation:(  string:"argument"  punctuation:,  number:5  punctuation:)  punctuation:)  punctuation:)  comment:; ran value, ran argument, 10
+153 |     ; Beside other operators: below '+', above comparisons.
+    | comment:; Beside other operators: below '+', above comparisons.
+154 |     show(1 + 2 |> double() == 6)                        ; true
+    | builtin-fn:show  punctuation:(  number:1  operator:+  number:2  operator:|>  task:double  punctuation:(  punctuation:)  operator:==  number:6  punctuation:)  comment:; true
+155 |     fixed off = false
+    | keyword:fixed  variable:off  operator:=  keyword:false
+156 |     show(off and 1 |>> noisy("never") > 0)              ; false
+    | builtin-fn:show  punctuation:(  variable:off  keyword:and  number:1  operator:|>>  task:noisy  punctuation:(  string:"never"  punctuation:)  operator:>  number:0  punctuation:)  comment:; false
+157 |     flex k = 0
+    | keyword:flex  variable:k  operator:=  number:0
+158 |     loop k |> double() < 7
+    | keyword:loop  variable:k  operator:|>  task:double  punctuation:(  punctuation:)  operator:<  number:7
+159 |         k++
+    | variable:k  operator:++
+160 |     fi
+    | keyword:fi
+161 |     show(k)                                             ; 4
+    | builtin-fn:show  punctuation:(  variable:k  punctuation:)  comment:; 4
+162 |     ; A last step that gives nothing, alone on its line.
+    | comment:; A last step that gives nothing, alone on its line.
+163 |     9 |> double() |> show()                             ; 18
+    | number:9  operator:|>  task:double  punctuation:(  punctuation:)  operator:|>  builtin-fn:show  punctuation:(  punctuation:)  comment:; 18
+164 |     4 |> saved() { failure e
+    | number:4  operator:|>  task:saved  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+165 |         show("not saved: ", e)
+    | builtin-fn:show  punctuation:(  string:"not saved: "  punctuation:,  variable:e  punctuation:)
+166 |     }
+    | punctuation:}
+167 |     7 |> saved() { failure e
+    | number:7  operator:|>  task:saved  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+168 |         show("not saved: ", e)                          ; not saved: Odd(7)
+    | builtin-fn:show  punctuation:(  string:"not saved: "  punctuation:,  variable:e  punctuation:)  comment:; not saved: Odd(7)
+169 |     }
+    | punctuation:}
+170 | fi
+    | keyword:fi
+172 | task in_cents(t: Till) -> int
+    | keyword:task  task:in_cents  punctuation:(  parameter:t  punctuation::  type:Till  punctuation:)  operator:->  type-builtin:int
+173 |     <- t.total * 100
+    | keyword:<-  parameter:t  punctuation:.  field:total  operator:*  number:100
+174 | fi
+    | keyword:fi
+176 | task a_line_of_steps() -> int
+    | keyword:task  task:a_line_of_steps  punctuation:(  punctuation:)  operator:->  type-builtin:int
+177 |     ; A line starting with '|>' goes on with the chain above it.
+    | comment:; A line starting with '|>' goes on with the chain above it.
+178 |     fixed n = 7
+    | keyword:fixed  variable:n  operator:=  number:7
+179 |         |> double()
+    | operator:|>  task:double  punctuation:(  punctuation:)
+180 |         ; comments and blank lines between steps are passed over
+    | comment:; comments and blank lines between steps are passed over
+182 |         |>> scale(3)
+    | operator:|>>  task:scale  punctuation:(  number:3  punctuation:)
+183 |     <- n
+    | keyword:<-  variable:n
+184 | fi
+    | keyword:fi
