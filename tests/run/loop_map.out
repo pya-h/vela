@@ -1,0 +1,8 @@
+arr: [10, 20, 30, 40]
+arr: [5, 6, 7]
+slice: [11, 21, 31]
+slice: [0, 2, 4, 6]
+slice: [0, 100, 200]
+skipped
+broke
+slice: [10, 30]

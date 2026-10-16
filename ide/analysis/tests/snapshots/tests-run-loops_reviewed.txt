@@ -116,53 +116,59 @@
     | keyword:fixed  variable:z  operator:=  task:get  punctuation:(  number:5  punctuation:)  punctuation:{
  67 |         each x in 0..3
     | keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
- 68 |             x + 100
-    | variable:x  operator:+  number:100
- 69 |         fi { -1 }
+ 68 |         finally
+    | keyword:finally
+ 69 |             102
+    | number:102
+ 70 |         fi { -1 }
     | keyword:fi  punctuation:{  operator:-  number:1  punctuation:}
- 70 |     }
+ 71 |     }
     | punctuation:}
- 71 |     show(z)
+ 72 |     show(z)
     | builtin-fn:show  punctuation:(  variable:z  punctuation:)
- 73 |     ; A variant on the last line is told by the type the place names.
+ 74 |     ; A variant on the last line is told by the type the place names.
     | comment:; A variant on the last line is told by the type the place names.
- 74 |     fixed opt: Opt<text> ~ LoopResult = each x in 0..2
+ 75 |     fixed opt: Opt<text> ~ LoopResult = each x in 0..2
     | keyword:fixed  variable:opt  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
- 75 |         Opt.No
+ 76 |     finally
+    | keyword:finally
+ 77 |         Opt.No
     | type:Opt  punctuation:.  variant:No
- 76 |     fi
+ 78 |     fi
     | keyword:fi
- 77 |     show(opt { Opt.Yes("none") })
+ 79 |     show(opt { Opt.Yes("none") })
     | builtin-fn:show  punctuation:(  variable:opt  punctuation:{  type:Opt  punctuation:.  variant:Yes  punctuation:(  string:"none"  punctuation:)  punctuation:}  punctuation:)
- 79 |     ; The variable names the loop with a plan B after it too.
+ 81 |     ; The variable names the loop with a plan B after it too.
     | comment:; The variable names the loop with a plan B after it too.
- 80 |     fixed found = each x in 0..10
+ 82 |     fixed found = each x in 0..10
     | keyword:fixed  variable:found  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:10
- 81 |         each y in 0..10
+ 83 |         each y in 0..10
     | keyword:each  variable:y  keyword:in  number:0  operator:..  number:10
- 82 |             when x * y == 12
+ 84 |             when x * y == 12
     | keyword:when  variable:x  operator:*  variable:y  operator:==  number:12
- 83 |                 break found = x
+ 85 |                 break found = x
     | keyword:break  variable:found  operator:=  variable:x
- 84 |             fi
+ 86 |             fi
     | keyword:fi
- 85 |         fi
+ 87 |         fi
     | keyword:fi
- 86 |         -1
+ 88 |     finally
+    | keyword:finally
+ 89 |         -1
     | operator:-  number:1
- 87 |     fi { failure why
+ 90 |     fi { failure why
     | keyword:fi  punctuation:{  keyword:failure  variable:why
- 88 |         match why
+ 91 |         match why
     | keyword:match  variable:why
- 89 |         case Broke b = b { 0 }
+ 92 |         case Broke b = b { 0 }
     | keyword:case  variant:Broke  variable:b  operator:=  variable:b  punctuation:{  number:0  punctuation:}
- 90 |         case _ = -2
+ 93 |         case _ = -2
     | keyword:case  keyword:_  operator:=  operator:-  number:2
- 91 |         fi
+ 94 |         fi
     | keyword:fi
- 92 |     }
+ 95 |     }
     | punctuation:}
- 93 |     show(found)                      ; 2, as 'break found = x' gave
+ 96 |     show(found)                      ; 2, as 'break found = x' gave
     | builtin-fn:show  punctuation:(  variable:found  punctuation:)  comment:; 2, as 'break found = x' gave
- 94 | fi
+ 97 | fi
     | keyword:fi

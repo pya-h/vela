@@ -1972,13 +1972,21 @@ impl Resolver<'_> {
             StmtKind::Block(body) => self.block(body),
             StmtKind::Turns(turns) => turns.iter_mut().try_for_each(|turn| self.block(turn)),
             StmtKind::Named(_, inner) => self.stmt(inner),
-            StmtKind::Loop(cond, body) => {
+            StmtKind::Loop(cond, body, finally) => {
                 self.condition(cond)?;
-                self.block(body)
+                self.block(body)?;
+                if let Some(finally) = finally {
+                    self.block(finally)?;
+                }
+                Ok(())
             }
-            StmtKind::Each(_, _, range, body) => {
+            StmtKind::Each(_, _, range, body, finally) => {
                 self.expr(range)?;
-                self.block(body)
+                self.block(body)?;
+                if let Some(finally) = finally {
+                    self.block(finally)?;
+                }
+                Ok(())
             }
             StmtKind::Parted(parted) => {
                 parted.start.iter_mut().try_for_each(|stmt| self.stmt(stmt))?;
@@ -1986,7 +1994,11 @@ impl Resolver<'_> {
                     self.condition(cond)?;
                 }
                 parted.step.iter_mut().try_for_each(|stmt| self.stmt(stmt))?;
-                self.block(&mut parted.body)
+                self.block(&mut parted.body)?;
+                if let Some(finally) = &mut parted.finally {
+                    self.block(finally)?;
+                }
+                Ok(())
             }
             StmtKind::Match(value, cases) => {
                 self.expr(value)?;

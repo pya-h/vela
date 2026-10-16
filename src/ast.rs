@@ -1715,6 +1715,24 @@ impl Stmt {
     pub fn new(kind: StmtKind, span: Span) -> Self {
         Stmt { kind, span }
     }
+
+    /// The finally block of a loop, if any.
+    pub fn finally(&self) -> Option<&Block> {
+        match &self.kind {
+            StmtKind::Loop(_, _, finally) | StmtKind::Each(_, _, _, _, finally) => finally.as_ref(),
+            StmtKind::Parted(parted) => parted.finally.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The finally block of a loop, for rewriting.
+    pub fn finally_mut(&mut self) -> Option<&mut Block> {
+        match &mut self.kind {
+            StmtKind::Loop(_, _, finally) | StmtKind::Each(_, _, _, _, finally) => finally.as_mut(),
+            StmtKind::Parted(parted) => parted.finally.as_mut(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1743,7 +1761,7 @@ pub enum StmtKind {
     /// is one statement, so every pass goes through its arms in a loop, however
     /// many there are, and a `when` written alone inside an `else` is nested.
     When(Vec<WhenArm>, Option<Block>),
-    Loop(Condition, Block),
+    Loop(Condition, Block, Option<Block>),
     /// `loop start || condition || step`, and `endless` (see `PartedLoop`).
     Parted(Box<PartedLoop>),
     /// `block … fi`: statements in a block of their own, whose names, regions,
@@ -1751,7 +1769,7 @@ pub enum StmtKind {
     Block(Block),
     /// `each v in xs`, and `each k, v in m` for a map: the second name, with
     /// where it is written, is the value that goes with the key.
-    Each(String, Option<(String, Span)>, Expr, Block),
+    Each(String, Option<(String, Span)>, Expr, Block, Option<Block>),
     /// `outer => loop …` or `outer => each …`: a loop, and the name a `break`
     /// or a `continue` inside it may give to stop it or go on with it. The
     /// statement's span is where the name is written.
@@ -1840,6 +1858,7 @@ pub struct PartedLoop {
     pub cond: Option<Condition>,
     pub step: Vec<Stmt>,
     pub body: Block,
+    pub finally: Option<Block>,
     /// Written `endless`.
     pub endless: bool,
 }
@@ -1872,7 +1891,7 @@ impl ValueLoop {
     /// The loop's body.
     pub fn body(&self) -> Option<&Block> {
         match &self.stmt.kind {
-            StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => Some(body),
+            StmtKind::Loop(_, body, _) | StmtKind::Each(_, _, _, body, _) => Some(body),
             StmtKind::Parted(parted) => Some(&parted.body),
             _ => None,
         }
@@ -1880,10 +1899,19 @@ impl ValueLoop {
 
     pub fn body_mut(&mut self) -> Option<&mut Block> {
         match &mut self.stmt.kind {
-            StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => Some(body),
+            StmtKind::Loop(_, body, _) | StmtKind::Each(_, _, _, body, _) => Some(body),
             StmtKind::Parted(parted) => Some(&mut parted.body),
             _ => None,
         }
+    }
+
+    /// The loop's finally block, if any.
+    pub fn finally(&self) -> Option<&Block> {
+        self.stmt.finally()
+    }
+
+    pub fn finally_mut(&mut self) -> Option<&mut Block> {
+        self.stmt.finally_mut()
     }
 }
 

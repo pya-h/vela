@@ -2497,9 +2497,9 @@ impl Parser {
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
-            // `else`, `case`, and `}` can't start a statement: they end an
+            // `else`, `case`, `finally`, and `}` can't start a statement: they end an
             // enclosing block, so this one is missing its end.
-            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::RBrace);
+            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace);
             if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek()) {
                 break;
             }
@@ -2529,6 +2529,7 @@ impl Parser {
             }
             Token::Block => self.parse_plain_block(),
             Token::Break | Token::Continue => self.parse_jump(),
+            Token::Finally => Err(Error::at(span, "'finally' belongs at the end of a loop, before 'fi'")),
             Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
                 let stmt = self.parse_named_loop()?;
                 let StmtKind::Named(name, inner) = stmt.kind else { return Ok(stmt) };
@@ -2863,10 +2864,24 @@ impl Parser {
             ));
         }
         let cond = self.parse_condition()?;
+        let (body, finally) = self.parse_loop_body("loop", span)?;
+        Ok(Stmt::new(StmtKind::Loop(cond, body, finally), span))
+    }
+
+    /// A loop's body and its optional `finally` block, closed by `fi`.
+    fn parse_loop_body(&mut self, word: &str, span: Span) -> Result<(Block, Option<Block>)> {
         self.skip_newlines();
-        let body = self.parse_block()?;
-        self.expect_fi("loop", span)?;
-        Ok(Stmt::new(StmtKind::Loop(cond, body), span))
+        let body = self.parse_block_until(&[Token::Fi, Token::Finally])?;
+        let finally = if self.check(Token::Finally) {
+            self.advance(); // finally
+            self.skip_newlines();
+            let block = self.parse_block()?;
+            Some(block)
+        } else {
+            None
+        };
+        self.expect_fi(word, span)?;
+        Ok((body, finally))
     }
 
     /// `break` or `continue`, and the name of the loop it stops or goes on
@@ -2915,10 +2930,8 @@ impl Parser {
                 "an 'endless' loop takes nothing on its line: it has no condition, and its statements start on the next one",
             ));
         }
-        self.skip_newlines();
-        let body = self.parse_block()?;
-        self.expect_fi("endless", span)?;
-        let parted = PartedLoop { start: Vec::new(), cond: None, step: Vec::new(), body, endless: true };
+        let (body, finally) = self.parse_loop_body("endless", span)?;
+        let parted = PartedLoop { start: Vec::new(), cond: None, step: Vec::new(), body, finally, endless: true };
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
@@ -3054,10 +3067,8 @@ impl Parser {
         while !matches!(self.peek(), Token::Newline | Token::Eof) {
             self.advance();
         }
-        self.skip_newlines();
-        let body = self.parse_block()?;
-        self.expect_fi("loop", span)?;
-        let parted = PartedLoop { start: started, cond, step: steps, body, endless: false };
+        let (body, finally) = self.parse_loop_body("loop", span)?;
+        let parted = PartedLoop { start: started, cond, step: steps, body, finally, endless: false };
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
@@ -3127,10 +3138,8 @@ impl Parser {
         };
         self.expect(Token::In)?;
         let range = self.parse_expr()?;
-        self.skip_newlines();
-        let body = self.parse_block()?;
-        self.expect_fi("each", opened)?;
-        Ok(Stmt::new(StmtKind::Each(name, second, range, body), span))
+        let (body, finally) = self.parse_loop_body("each", opened)?;
+        Ok(Stmt::new(StmtKind::Each(name, second, range, body, finally), span))
     }
 
     /// A `match`. A case written `case p = value` gives that value, and one

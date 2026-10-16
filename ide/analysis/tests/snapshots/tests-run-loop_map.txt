@@ -1,0 +1,212 @@
+  1 | ; Tests for map-form loops gathering values into collections.
+    | comment:; Tests for map-form loops gathering values into collections.
+  2 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  4 | task describe_arr_4(res: [int#4] ~ LoopResult<bool, bool>)
+    | keyword:task  task:describe_arr_4  punctuation:(  parameter:res  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:bool  punctuation:>  punctuation:)
+  5 |     match res
+    | keyword:match  parameter:res
+  6 |     case {arr}
+    | keyword:case  punctuation:{  variable:arr  punctuation:}
+  7 |         show("arr: ", arr)
+    | builtin-fn:show  punctuation:(  string:"arr: "  punctuation:,  variable:arr  punctuation:)
+  8 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+  9 |         match e
+    | keyword:match  variable:e
+ 10 |         case Skipped
+    | keyword:case  variant:Skipped
+ 11 |             show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 12 |         case Broke _
+    | keyword:case  variant:Broke  keyword:_
+ 13 |             show("broke")
+    | builtin-fn:show  punctuation:(  string:"broke"  punctuation:)
+ 14 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 15 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 16 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+ 17 |             show("manual")
+    | builtin-fn:show  punctuation:(  string:"manual"  punctuation:)
+ 18 |         fi
+    | keyword:fi
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | task describe_arr_3(res: [int#3] ~ LoopResult<bool, bool>)
+    | keyword:task  task:describe_arr_3  punctuation:(  parameter:res  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:bool  punctuation:>  punctuation:)
+ 23 |     match res
+    | keyword:match  parameter:res
+ 24 |     case {arr}
+    | keyword:case  punctuation:{  variable:arr  punctuation:}
+ 25 |         show("arr: ", arr)
+    | builtin-fn:show  punctuation:(  string:"arr: "  punctuation:,  variable:arr  punctuation:)
+ 26 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+ 27 |         match e
+    | keyword:match  variable:e
+ 28 |         case Skipped
+    | keyword:case  variant:Skipped
+ 29 |             show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 30 |         case Broke _
+    | keyword:case  variant:Broke  keyword:_
+ 31 |             show("broke")
+    | builtin-fn:show  punctuation:(  string:"broke"  punctuation:)
+ 32 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 33 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 34 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+ 35 |             show("manual")
+    | builtin-fn:show  punctuation:(  string:"manual"  punctuation:)
+ 36 |         fi
+    | keyword:fi
+ 37 |     fi
+    | keyword:fi
+ 38 | fi
+    | keyword:fi
+ 40 | task describe_slice<T: shown>(res: [T]@r ~ LoopResult<bool, bool>)
+    | keyword:task  task:describe_slice  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:res  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:bool  punctuation:>  punctuation:)
+ 41 |     match res
+    | keyword:match  parameter:res
+ 42 |     case {slice}
+    | keyword:case  punctuation:{  variable:slice  punctuation:}
+ 43 |         show("slice: ", slice)
+    | builtin-fn:show  punctuation:(  string:"slice: "  punctuation:,  variable:slice  punctuation:)
+ 44 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+ 45 |         match e
+    | keyword:match  variable:e
+ 46 |         case Skipped
+    | keyword:case  variant:Skipped
+ 47 |             show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 48 |         case Broke _
+    | keyword:case  variant:Broke  keyword:_
+ 49 |             show("broke")
+    | builtin-fn:show  punctuation:(  string:"broke"  punctuation:)
+ 50 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 51 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 52 |         case Manual _
+    | keyword:case  variant:Manual  keyword:_
+ 53 |             show("manual")
+    | builtin-fn:show  punctuation:(  string:"manual"  punctuation:)
+ 54 |         fi
+    | keyword:fi
+ 55 |     fi
+    | keyword:fi
+ 56 | fi
+    | keyword:fi
+ 58 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 59 |     region r default
+    | keyword:region  region:r  keyword:default
+ 61 |     ; 1. Map over constant array produces stack array [T#N].
+    | comment:; 1. Map over constant array produces stack array [T#N].
+ 62 |     fixed xs = [1, 2, 3, 4]
+    | keyword:fixed  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]
+ 63 |     fixed doubled = each x in xs
+    | keyword:fixed  variable:doubled  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+ 64 |         x * 10
+    | variable:x  operator:*  number:10
+ 65 |     fi
+    | keyword:fi
+ 66 |     describe_arr_4(doubled)
+    | task:describe_arr_4  punctuation:(  variable:doubled  punctuation:)
+ 68 |     ; 2. Map over constant range 0..3 produces stack array [T#3].
+    | comment:; 2. Map over constant range 0..3 produces stack array [T#3].
+ 69 |     fixed from_range = each x in 0..3
+    | keyword:fixed  variable:from_range  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
+ 70 |         x + 5
+    | variable:x  operator:+  number:5
+ 71 |     fi
+    | keyword:fi
+ 72 |     describe_arr_3(from_range)
+    | task:describe_arr_3  punctuation:(  variable:from_range  punctuation:)
+ 74 |     ; 3. Map over slice in a region produces slice [T]@r.
+    | comment:; 3. Map over slice in a region produces slice [T]@r.
+ 75 |     fixed sl = [10, 20, 30, ...] at r
+    | keyword:fixed  variable:sl  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 76 |     fixed mapped_sl = each x in sl
+    | keyword:fixed  variable:mapped_sl  operator:=  keyword:each  variable:x  keyword:in  variable:sl
+ 77 |         x + 1
+    | variable:x  operator:+  number:1
+ 78 |     fi
+    | keyword:fi
+ 79 |     describe_slice(mapped_sl)
+    | task:describe_slice  punctuation:(  variable:mapped_sl  punctuation:)
+ 81 |     ; 4. Map over dynamic range 0..n produces slice [T]@r.
+    | comment:; 4. Map over dynamic range 0..n produces slice [T]@r.
+ 82 |     flex n = 4
+    | keyword:flex  variable:n  operator:=  number:4
+ 83 |     fixed mapped_dyn_range = each x in 0..n
+    | keyword:fixed  variable:mapped_dyn_range  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  variable:n
+ 84 |         x * 2
+    | variable:x  operator:*  number:2
+ 85 |     fi
+    | keyword:fi
+ 86 |     describe_slice(mapped_dyn_range)
+    | task:describe_slice  punctuation:(  variable:mapped_dyn_range  punctuation:)
+ 88 |     ; 5. Map over three-part loop produces slice [T]@r.
+    | comment:; 5. Map over three-part loop produces slice [T]@r.
+ 89 |     fixed mapped_parted = loop flex i = 0 || i < 3 || i++
+    | keyword:fixed  variable:mapped_parted  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
+ 90 |         i * 100
+    | variable:i  operator:*  number:100
+ 91 |     fi
+    | keyword:fi
+ 92 |     describe_slice(mapped_parted)
+    | task:describe_slice  punctuation:(  variable:mapped_parted  punctuation:)
+ 94 |     ; 6. Map over empty slice produces Skipped.
+    | comment:; 6. Map over empty slice produces Skipped.
+ 95 |     fixed empty = new [int]() at r
+    | keyword:fixed  variable:empty  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 96 |     fixed mapped_empty = each x in empty
+    | keyword:fixed  variable:mapped_empty  operator:=  keyword:each  variable:x  keyword:in  variable:empty
+ 97 |         x
+    | variable:x
+ 98 |     fi
+    | keyword:fi
+ 99 |     describe_slice(mapped_empty)
+    | task:describe_slice  punctuation:(  variable:mapped_empty  punctuation:)
+101 |     ; 7. Map loop with break produces Broke.
+    | comment:; 7. Map loop with break produces Broke.
+102 |     fixed mapped_broken = each x in xs
+    | keyword:fixed  variable:mapped_broken  operator:=  keyword:each  variable:x  keyword:in  variable:xs
+103 |         when x == 3
+    | keyword:when  variable:x  operator:==  number:3
+104 |             break
+    | keyword:break
+105 |         fi
+    | keyword:fi
+106 |         x
+    | variable:x
+107 |     fi
+    | keyword:fi
+108 |     describe_arr_4(mapped_broken)
+    | task:describe_arr_4  punctuation:(  variable:mapped_broken  punctuation:)
+110 |     ; 8. Map loop over slice with continue skips item.
+    | comment:; 8. Map loop over slice with continue skips item.
+111 |     fixed mapped_filtered = each x in sl
+    | keyword:fixed  variable:mapped_filtered  operator:=  keyword:each  variable:x  keyword:in  variable:sl
+112 |         when x == 20
+    | keyword:when  variable:x  operator:==  number:20
+113 |             continue
+    | keyword:continue
+114 |         fi
+    | keyword:fi
+115 |         x
+    | variable:x
+116 |     fi
+    | keyword:fi
+117 |     describe_slice(mapped_filtered)
+    | task:describe_slice  punctuation:(  variable:mapped_filtered  punctuation:)
+118 | fi
+    | keyword:fi

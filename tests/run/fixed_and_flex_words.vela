@@ -66,6 +66,7 @@ task main()
     show(n)
     fixed total: int ~ LoopResult = loop flex i = 0, sum = 0 || i < 4 || i++
         sum += i
+    finally
         sum
     fi
     show(total { 0 })

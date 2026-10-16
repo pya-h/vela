@@ -65,13 +65,15 @@ task main()
     ; A loop on the last line of a plan B gives its value.
     fixed z = get(5) {
         each x in 0..3
-            x + 100
+        finally
+            102
         fi { -1 }
     }
     show(z)
 
     ; A variant on the last line is told by the type the place names.
     fixed opt: Opt<text> ~ LoopResult = each x in 0..2
+    finally
         Opt.No
     fi
     show(opt { Opt.Yes("none") })
@@ -83,6 +85,7 @@ task main()
                 break found = x
             fi
         fi
+    finally
         -1
     fi { failure why
         match why

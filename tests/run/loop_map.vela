@@ -1,0 +1,118 @@
+; Tests for map-form loops gathering values into collections.
+include std/loops {LoopResult}
+
+task describe_arr_4(res: [int#4] ~ LoopResult<bool, bool>)
+    match res
+    case {arr}
+        show("arr: ", arr)
+    case failure e
+        match e
+        case Skipped
+            show("skipped")
+        case Broke _
+            show("broke")
+        case EndedByContinue
+            show("ended by continue")
+        case Manual _
+            show("manual")
+        fi
+    fi
+fi
+
+task describe_arr_3(res: [int#3] ~ LoopResult<bool, bool>)
+    match res
+    case {arr}
+        show("arr: ", arr)
+    case failure e
+        match e
+        case Skipped
+            show("skipped")
+        case Broke _
+            show("broke")
+        case EndedByContinue
+            show("ended by continue")
+        case Manual _
+            show("manual")
+        fi
+    fi
+fi
+
+task describe_slice<T: shown>(res: [T]@r ~ LoopResult<bool, bool>)
+    match res
+    case {slice}
+        show("slice: ", slice)
+    case failure e
+        match e
+        case Skipped
+            show("skipped")
+        case Broke _
+            show("broke")
+        case EndedByContinue
+            show("ended by continue")
+        case Manual _
+            show("manual")
+        fi
+    fi
+fi
+
+task main()
+    region r default
+
+    ; 1. Map over constant array produces stack array [T#N].
+    fixed xs = [1, 2, 3, 4]
+    fixed doubled = each x in xs
+        x * 10
+    fi
+    describe_arr_4(doubled)
+
+    ; 2. Map over constant range 0..3 produces stack array [T#3].
+    fixed from_range = each x in 0..3
+        x + 5
+    fi
+    describe_arr_3(from_range)
+
+    ; 3. Map over slice in a region produces slice [T]@r.
+    fixed sl = [10, 20, 30, ...] at r
+    fixed mapped_sl = each x in sl
+        x + 1
+    fi
+    describe_slice(mapped_sl)
+
+    ; 4. Map over dynamic range 0..n produces slice [T]@r.
+    flex n = 4
+    fixed mapped_dyn_range = each x in 0..n
+        x * 2
+    fi
+    describe_slice(mapped_dyn_range)
+
+    ; 5. Map over three-part loop produces slice [T]@r.
+    fixed mapped_parted = loop flex i = 0 || i < 3 || i++
+        i * 100
+    fi
+    describe_slice(mapped_parted)
+
+    ; 6. Map over empty slice produces Skipped.
+    fixed empty = new [int]() at r
+    fixed mapped_empty = each x in empty
+        x
+    fi
+    describe_slice(mapped_empty)
+
+    ; 7. Map loop with break produces Broke.
+    fixed mapped_broken = each x in xs
+        when x == 3
+            break
+        fi
+        x
+    fi
+    describe_arr_4(mapped_broken)
+
+    ; 8. Map loop over slice with continue skips item.
+    fixed mapped_filtered = each x in sl
+        when x == 20
+            continue
+        fi
+        x
+    fi
+    describe_slice(mapped_filtered)
+fi

@@ -1,0 +1,11 @@
+; error: 6:39: expected type [int#3] ~ LoopResult<bool, bool>, got int ~ LoopResult<bool, bool>
+; When destination expects a collection, finally returning scalar is a type mismatch.
+include std/loops {LoopResult}
+
+task main()
+    fixed arr: [int#3] ~ LoopResult = each x in 0..3
+    finally
+        42
+    fi
+    show(arr { [0, 0, 0] })
+fi

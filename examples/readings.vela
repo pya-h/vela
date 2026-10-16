@@ -23,6 +23,7 @@ fi
 ; The last reading above the floor, stopping at a broken sensor (a value
 ; below zero), and failing on purpose when the last reading is too high.
 task last_above(readings: [Reading]@r, floor: int) -> int ~ LoopResult<int, text>
+    flex last = 0
     fixed found = loop flex i = 0 || i < readings.len || i++
         fixed reading = readings[i]
         when reading.value < 0
@@ -31,7 +32,9 @@ task last_above(readings: [Reading]@r, floor: int) -> int ~ LoopResult<int, text
         when reading.value <= floor
             continue
         fi
-        when reading.value > 900 fail LoopResult.Manual("too high") else reading.value fi
+        last = reading.value
+    finally
+        when last > 900 fail LoopResult.Manual("too high") else last fi
     fi
     <- found
 fi
@@ -56,6 +59,7 @@ task main()
     ; The sum of the readings, as the value of a loop in three parts.
     fixed sum = loop flex i = 0, total = 0 || i < day.len || i++
         total += day[i].value
+    finally
         total
     fi
     show("day total: ", sum { 0 })

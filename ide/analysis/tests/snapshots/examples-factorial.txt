@@ -4,17 +4,21 @@
     | keyword:endless
   4 |         fixed n = scan("n = ", int) { break }
     | keyword:fixed  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:"n = "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:break  punctuation:}
-  5 |         show(loop flex i = 1, r = 1|| i <= n  || i++, r *= i
-    | builtin-fn:show  punctuation:(  keyword:loop  keyword:flex  variable:i  operator:=  number:1  punctuation:,  variable:r  operator:=  number:1  operator:||  variable:i  operator:<=  variable:n  operator:||  variable:i  operator:++  punctuation:,  variable:r  operator:*=  variable:i
-  6 |             r 
+  5 |         show(loop flex i = 1, r = 1 || i <= n || i++
+    | builtin-fn:show  punctuation:(  keyword:loop  keyword:flex  variable:i  operator:=  number:1  punctuation:,  variable:r  operator:=  number:1  operator:||  variable:i  operator:<=  variable:n  operator:||  variable:i  operator:++
+  6 |             r *= i
+    | variable:r  operator:*=  variable:i
+  7 |         finally
+    | keyword:finally
+  8 |             r
     | variable:r
-  7 |         fi {
+  9 |         fi {
     | keyword:fi  punctuation:{
-  8 |             1
+ 10 |             1
     | number:1
-  9 |         })
+ 11 |         })
     | punctuation:}  punctuation:)
- 10 |     fi
+ 12 |     fi
     | keyword:fi
- 11 | fi
+ 13 | fi
     | keyword:fi

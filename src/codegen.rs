@@ -130,6 +130,15 @@ pub struct Generator {
     loop_giving: Option<Giving>,
 }
 
+#[derive(Clone)]
+struct MapAcc {
+    acc_name: String,
+    coll_ty: Type,
+    item_ty: Type,
+    region: Option<String>,
+    idx_name: String,
+}
+
 /// A loop that gives a value (see `ValueLoop`): the temporary holding it, of
 /// type `ty`, `V ~ LoopResult<B, M>`, and whether its passes give it, each on
 /// its last line, rather than nothing.
@@ -138,6 +147,7 @@ struct Giving {
     result: String,
     ty: Type,
     gives: bool,
+    map_acc: Option<MapAcc>,
 }
 
 /// A loop being generated, which `break` and `continue` leave with a `goto`:
@@ -145,12 +155,15 @@ struct Giving {
 /// and its labels, the one after it and the one at the end of a pass, each
 /// written only where something goes to it, since C warns about a label
 /// nothing goes to.
+#[derive(Clone)]
 struct LoopLabels {
     name: Option<String>,
     giving: Option<Giving>,
     depth: usize,
     stop: String,
     next: String,
+    ran: Option<String>,
+    pass_ok: Option<String>,
     stopped: bool,
     continued: bool,
 }
@@ -929,7 +942,7 @@ impl Generator {
     /// of it, the entries are those there when the loop started, as many as
     /// there were, as a slice's items are; through `&m`, the map as it is at
     /// each pass. An entry taken out is skipped when its turn comes.
-    fn gen_each_map(&mut self, name: &str, second: Option<&str>, items: &Expr, body: &Block, named: (Option<String>, Option<Giving>)) -> Result<()> {
+    fn gen_each_map(&mut self, name: &str, second: Option<&str>, items: &Expr, body: &Block, finally: Option<&[Stmt]>, named: (Option<String>, Option<Giving>)) -> Result<()> {
         let (map, live, only) = match &items.kind {
             ExprKind::MapOp { map, op, .. } => (map.as_ref(), false, Some(*op)),
             ExprKind::Ref(place) => (place.as_ref(), true, None),
@@ -949,7 +962,7 @@ impl Generator {
             self.w.line(&format!("int64_t {} = ({})->used;", count, value));
             (entries.clone(), count.clone())
         };
-        self.enter_loop(named);
+        self.enter_loop(named, finally.is_some());
         self.w.open(&format!("for (int64_t {0} = 0; {0} < {1}; {0}++)", index, count_now));
         self.w.open(&format!("if ({}[{}].hash != 0)", entries_now, index));
         let (first, first_ty, member) = match only {
@@ -968,6 +981,7 @@ impl Generator {
         self.w.close();
         self.end_pass();
         self.w.close();
+        self.finish_loop(finally)?;
         self.leave_loop();
         self.w.close();
         Ok(())
@@ -1990,9 +2004,37 @@ impl Generator {
     /// Starts a loop, named `name` (which `outer =>` gave it) or not: what a
     /// `break` or a `continue` in it goes to. Called once what is found before
     /// the loop starts is found, since a `break` there is not this loop's.
-    fn enter_loop(&mut self, (name, giving): (Option<String>, Option<Giving>)) {
+    fn enter_loop(&mut self, (name, giving): (Option<String>, Option<Giving>), has_finally: bool) {
         let (stop, next) = (self.fresh_temp("stop"), self.fresh_temp("next"));
-        self.loops.push(LoopLabels { name, giving, depth: self.regions.len(), stop, next, stopped: false, continued: false });
+        let ran = if giving.as_ref().is_some_and(|g| g.map_acc.is_some()) {
+            let r = self.fresh_temp("ran");
+            self.w.line(&format!("bool {} = false;", r));
+            Some(r)
+        } else {
+            None
+        };
+        let pass_ok = if has_finally {
+            let p = self.fresh_temp("pass_ok");
+            self.w.line(&format!("bool {} = false;", p));
+            Some(p)
+        } else {
+            None
+        };
+        if let Some(giving) = &giving
+            && let Some(map) = &giving.map_acc
+        {
+            match &map.coll_ty {
+                Type::Array(..) => {
+                    self.w.line(&format!("{} {} = {{ 0 }};", c_type(&map.coll_ty), map.acc_name));
+                    self.w.line(&format!("int64_t {} = 0;", map.idx_name));
+                }
+                Type::Slice(..) => {
+                    self.w.line(&format!("{} {} = (({}){{ .items = vela__rt__no_items(), .len = 0 }});", c_type(&map.coll_ty), map.acc_name, c_type(&map.coll_ty)));
+                }
+                _ => {}
+            }
+        }
+        self.loops.push(LoopLabels { name, giving, depth: self.regions.len(), stop, next, ran, pass_ok, stopped: false, continued: false });
     }
 
     /// The name and what it gives of the loop about to be generated, taken
@@ -2005,15 +2047,82 @@ impl Generator {
     /// gives it on its last line, or, giving nothing, ends the pass with a
     /// success.
     fn gen_pass(&mut self, body: &[Stmt]) -> Result<()> {
-        match self.loops.last().and_then(|innermost| innermost.giving.clone()) {
-            Some(giving) if giving.gives => self.gen_value_block(body, &giving.result),
+        let innermost = self.loops.last().cloned();
+        if let Some(ran) = innermost.as_ref().and_then(|l| l.ran.as_ref()) {
+            self.w.line(&format!("{} = true;", ran));
+        }
+        if let Some(pass_ok) = innermost.as_ref().and_then(|l| l.pass_ok.as_ref()) {
+            self.w.line(&format!("{} = false;", pass_ok));
+        }
+        let res = match innermost.as_ref().and_then(|l| l.giving.as_ref()) {
+            Some(giving) if giving.gives => {
+                if let Some(map) = &giving.map_acc {
+                    let item_temp = self.fresh_temp("item");
+                    self.w.line(&format!("{} {};", c_type(&map.item_ty), item_temp));
+                    self.gen_value_block(body, &item_temp)?;
+                    match &map.coll_ty {
+                        Type::Array(..) => {
+                            self.w.line(&format!("{}.items[{}++] = {};", map.acc_name, map.idx_name, item_temp));
+                        }
+                        Type::Slice(..) => {
+                            let reg = map.region.as_deref().unwrap_or("r");
+                            self.w.line(&format!("{}({}, &{}, {});", item_helper("add", &map.coll_ty), c_ident(reg), map.acc_name, item_temp));
+                        }
+                        _ => {}
+                    }
+                    Ok(())
+                } else {
+                    self.gen_block(body)
+                }
+            }
             Some(giving) => {
                 self.gen_block(body)?;
                 self.w.line(&format!("{} = (({}){{ .ok = true }});", giving.result, c_type(&giving.ty)));
                 Ok(())
             }
             None => self.gen_block(body),
+        };
+        res?;
+        if let Some(pass_ok) = innermost.as_ref().and_then(|l| l.pass_ok.as_ref()) {
+            self.w.line(&format!("{} = true;", pass_ok));
         }
+        Ok(())
+    }
+
+    fn finish_loop(&mut self, finally: Option<&[Stmt]>) -> Result<()> {
+        if let Some(finally) = finally {
+            self.gen_finally(finally)?;
+        } else if let Some(innermost) = self.loops.last()
+            && let Some(giving) = &innermost.giving
+            && let Some(map) = &giving.map_acc
+            && let Some(ran) = &innermost.ran
+        {
+            self.w.open(&format!("if ({})", ran));
+            self.w.line(&format!("{} = (({}){{ .ok = true, .value = {} }});", giving.result, c_type(&giving.ty), map.acc_name));
+            self.w.close();
+        }
+        Ok(())
+    }
+
+    fn gen_finally(&mut self, finally: &[Stmt]) -> Result<()> {
+        let innermost = self.loops.last().cloned();
+        let giving = innermost.as_ref().and_then(|l| l.giving.clone());
+        let pass_ok = innermost.as_ref().and_then(|l| l.pass_ok.clone());
+        if let Some(pass_ok) = &pass_ok {
+            self.w.open(&format!("if ({})", pass_ok));
+        }
+        match giving {
+            Some(giving) if giving.gives => self.gen_value_block(finally, &giving.result)?,
+            Some(giving) => {
+                self.gen_block(finally)?;
+                self.w.line(&format!("{} = (({}){{ .ok = true }});", giving.result, c_type(&giving.ty)));
+            }
+            None => self.gen_block(finally)?,
+        }
+        if pass_ok.is_some() {
+            self.w.close();
+        }
+        Ok(())
     }
 
     /// A loop that gives a value, the expression `e`: a temporary holds it,
@@ -2024,7 +2133,27 @@ impl Generator {
         let skipped = self.loop_failure(&ty, "Skipped", None, e.span)?;
         self.w.line(&format!("{} {} = {};", c_type(&ty), result, skipped));
         self.loop_name = value.name.as_ref().map(|(name, _)| name.clone());
-        self.loop_giving = Some(Giving { result: result.clone(), ty, gives: value.gives });
+        let map_acc = if value.finally().is_none() && value.gives {
+            if let Type::Or(coll_ty, _) = &ty {
+                let (item_ty, region) = match coll_ty.as_ref() {
+                    Type::Array(item, _) => ((**item).clone(), None),
+                    Type::Slice(item, region) => ((**item).clone(), region.clone()),
+                    _ => (Type::Nothing, None),
+                };
+                Some(MapAcc {
+                    acc_name: self.fresh_temp("acc"),
+                    coll_ty: (**coll_ty).clone(),
+                    item_ty,
+                    region,
+                    idx_name: self.fresh_temp("idx"),
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        self.loop_giving = Some(Giving { result: result.clone(), ty, gives: value.gives, map_acc });
         self.gen_stmt(&value.stmt)?;
         Ok(result)
     }
@@ -2371,7 +2500,7 @@ impl Generator {
             // `continue` goes to the end of the one it is in.
             StmtKind::Turns(turns) => {
                 let name = self.take_loop();
-                self.enter_loop(name);
+                self.enter_loop(name, false);
                 for turn in turns {
                     self.w.open("");
                     self.gen_block(turn)?;
@@ -2400,7 +2529,7 @@ impl Generator {
                         }
                     }
                 }
-                self.enter_loop(name);
+                self.enter_loop(name, parted.finally.is_some());
                 self.w.open("while (1)");
                 match &parted.cond {
                     Some(cond) => self.gen_tested_pass(cond, &parted.body)?,
@@ -2411,14 +2540,15 @@ impl Generator {
                     self.gen_stmt(item)?;
                 }
                 self.w.close();
+                self.finish_loop(parted.finally.as_deref())?;
                 self.leave_loop();
                 self.w.close();
             }
-            StmtKind::Loop(cond, body) if !cond.single() => {
+            StmtKind::Loop(cond, body, finally) if !cond.single() => {
                 // `loop m is {x} and x > 0`: each part tested inside the one
                 // before, the body inside them all, and a failed part ends it.
                 let name = self.take_loop();
-                self.enter_loop(name);
+                self.enter_loop(name, finally.is_some());
                 let matched = self.fresh_temp("matched");
                 self.w.open("while (1)");
                 self.w.line(&format!("bool {} = false;", matched));
@@ -2431,13 +2561,14 @@ impl Generator {
                 self.w.close();
                 self.end_pass();
                 self.w.close();
+                self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
             }
-            StmtKind::Loop(cond, body) => {
+            StmtKind::Loop(cond, body, finally) => {
                 // The condition is tested inside the loop, so a `break` in
                 // its plan B stops this one.
                 let name = self.take_loop();
-                self.enter_loop(name);
+                self.enter_loop(name, finally.is_some());
                 match &cond.pattern {
                     None if !has_prelude(&cond.value) => {
                         let c = self.gen_condition(&cond.value)?;
@@ -2466,17 +2597,18 @@ impl Generator {
                 }
                 self.end_pass();
                 self.w.close();
+                self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
             }
             // `each v in &xs`: the place is found once, and its length and
             // items are read through it at each pass, as they are then.
             // `each k, v in m`, `each k in m.keys`, and `each k, v in &m`: the
             // entries in order, skipping those taken out.
-            StmtKind::Each(name, second, items, body) if self.walks_map(items) => {
+            StmtKind::Each(name, second, items, body, finally) if self.walks_map(items) => {
                 let named = self.take_loop();
-                self.gen_each_map(name, second.as_ref().map(|(name, _)| name.as_str()), items, body, named)?;
+                self.gen_each_map(name, second.as_ref().map(|(name, _)| name.as_str()), items, body, finally.as_deref(), named)?;
             }
-            StmtKind::Each(name, _, items, body) if matches!(items.kind, ExprKind::Ref(_)) => {
+            StmtKind::Each(name, _, items, body, finally) if matches!(items.kind, ExprKind::Ref(_)) => {
                 let ExprKind::Ref(place) = &items.kind else { return Err(Error::internal_at(items.span, "each over no place")) };
                 let named = self.take_loop();
                 let ty = items.ty()?.clone();
@@ -2487,20 +2619,21 @@ impl Generator {
                     Type::Slice(item, _) => (item, format!("{}->len", walked)),
                     other => return Err(Error::internal_at(items.span, format!("each over a place of type {}", other))),
                 };
-                let address = self.gen_address(place)?;
+                let address = self.gen_address(place.as_ref())?;
                 self.w.open("");
                 self.w.line(&format!("const {} *{} = {};", c_type(&ty), walked, address));
-                self.enter_loop(named);
+                self.enter_loop(named, finally.is_some());
                 self.w.open(&format!("for (int64_t {0} = 0; {0} < {1}; {0}++)", index, len));
-                self.w.line(&format!("{} {} = {}->items[{}];", c_type(item), c_ident(name), walked, index));
+                self.w.line(&format!("{} {} = {}->items[{}];", c_type(item.as_ref()), c_ident(name), walked, index));
                 self.use_if_unread(name, body);
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
+                self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
                 self.w.close();
             }
-            StmtKind::Each(name, _, items, body) if !matches!(items.kind, ExprKind::Range(..)) => {
+            StmtKind::Each(name, _, items, body, finally) if !matches!(items.kind, ExprKind::Range(..)) => {
                 // What it goes through is found once: an array is copied, and a
                 // slice is a view found then, so the loop goes through the items
                 // where they were when it started, as many as there were.
@@ -2517,17 +2650,18 @@ impl Generator {
                 let len = if len.is_empty() { format!("{}.len", walked) } else { len };
                 self.w.open("");
                 self.w.line(&format!("{} {} = {};", c_type(&ty), walked, value));
-                self.enter_loop(named);
+                self.enter_loop(named, finally.is_some());
                 self.w.open(&format!("for (int64_t {0} = 0; {0} < {1}; {0}++)", index, len));
-                self.w.line(&format!("{} {} = {}.items[{}];", c_type(item), c_ident(name), walked, index));
+                self.w.line(&format!("{} {} = {}.items[{}];", c_type(item.as_ref()), c_ident(name), walked, index));
                 self.use_if_unread(name, body);
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
+                self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
                 self.w.close();
             }
-            StmtKind::Each(name, _, range, body) => {
+            StmtKind::Each(name, _, range, body, finally) => {
                 let named = self.take_loop();
                 let (a, b) = self.gen_range(range)?;
                 // The end of the range is evaluated once, before the first
@@ -2535,7 +2669,7 @@ impl Generator {
                 // refer to a different variable called `name`.)
                 let end = self.fresh_temp("end");
                 let name = c_ident(name);
-                self.enter_loop(named);
+                self.enter_loop(named, finally.is_some());
                 self.w.open(&format!(
                     "for (int64_t {} = {}, {} = {}; {} < {}; {}++)",
                     name, a, end, b, name, end, name
@@ -2543,6 +2677,7 @@ impl Generator {
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
+                self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases, None)?,
@@ -5059,19 +5194,28 @@ impl UsedTypes {
                         self.block(else_b);
                     }
                 }
-                StmtKind::Loop(cond, body) => {
+                StmtKind::Loop(cond, body, finally) => {
                     cond.parts().for_each(|part| self.expr(&part.value));
                     self.block(body);
+                    if let Some(finally) = finally {
+                        self.block(finally);
+                    }
                 }
                 StmtKind::Parted(parted) => {
                     self.block(&parted.start);
                     parted.cond.iter().flat_map(Condition::parts).for_each(|part| self.expr(&part.value));
                     self.block(&parted.step);
                     self.block(&parted.body);
+                    if let Some(finally) = &parted.finally {
+                        self.block(finally);
+                    }
                 }
-                StmtKind::Each(_, _, range, body) => {
+                StmtKind::Each(_, _, range, body, finally) => {
                     self.expr(range);
                     self.block(body);
+                    if let Some(finally) = finally {
+                        self.block(finally);
+                    }
                 }
                 StmtKind::Match(subject, cases) => {
                     self.expr(subject);
@@ -5185,7 +5329,14 @@ impl UsedTypes {
             ExprKind::Piped(inner) => self.expr(inner),
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
-            ExprKind::LoopValue(value) => self.block(std::slice::from_ref(&value.stmt)),
+            ExprKind::LoopValue(value) => {
+                self.block(std::slice::from_ref(&value.stmt));
+                if let Some(Type::Or(coll, _)) = &e.ty
+                    && let Type::Slice(..) = coll.as_ref()
+                {
+                    note(&mut self.slice_add, coll);
+                }
+            }
             ExprKind::Lookup(base, index) => {
                 // A map's lookup is one of its own helpers.
                 if let Some(ty) = base.ty.as_ref().filter(|ty| !matches!(ty, Type::Map(..))) {
@@ -5336,10 +5487,10 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
             targets.iter().any(|target| target_reads(target, name)) || values.iter().any(expr)
         }
         StmtKind::When(arms, else_b) => arms.iter().any(|arm| arm.cond.parts().any(|part| expr(&part.value)) || body(&arm.body)) || else_b.as_ref().is_some_and(body),
-        StmtKind::Loop(cond, b) => cond.parts().any(|part| expr(&part.value)) || body(b),
-        StmtKind::Parted(parted) => body(&parted.start) || parted.cond.iter().flat_map(Condition::parts).any(|part| expr(&part.value)) || body(&parted.step) || body(&parted.body),
+        StmtKind::Loop(cond, b, finally) => cond.parts().any(|part| expr(&part.value)) || body(b) || finally.as_ref().is_some_and(body),
+        StmtKind::Parted(parted) => body(&parted.start) || parted.cond.iter().flat_map(Condition::parts).any(|part| expr(&part.value)) || body(&parted.step) || body(&parted.body) || parted.finally.as_ref().is_some_and(body),
         StmtKind::Block(b) => body(b),
-        StmtKind::Each(_, _, range, b) => expr(range) || body(b),
+        StmtKind::Each(_, _, range, b, finally) => expr(range) || body(b) || finally.as_ref().is_some_and(body),
         StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),
     }
 }

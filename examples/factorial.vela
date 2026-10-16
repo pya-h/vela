@@ -2,8 +2,10 @@
 task main()
     endless
         fixed n = scan("n = ", int) { break }
-        show(loop flex i = 1, r = 1|| i <= n  || i++, r *= i
-            r 
+        show(loop flex i = 1, r = 1 || i <= n || i++
+            r *= i
+        finally
+            r
         fi {
             1
         })

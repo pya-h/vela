@@ -6,7 +6,8 @@ task f() -> total: int
             when k == 1
                 break outer
             fi
-            k
+        finally
+            0
         fi
         show(r { 0 })
     fi

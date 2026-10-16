@@ -1,0 +1,174 @@
+  1 | ; Tests for the finally block on loops giving single summary values.
+    | comment:; Tests for the finally block on loops giving single summary values.
+  2 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  4 | task describe<V: shown, B: shown, M: shown>(a: region, r: V ~ LoopResult<B, M>@a)
+    | keyword:task  task:describe  punctuation:<  type:V  punctuation::  keyword:shown  punctuation:,  type:B  punctuation::  keyword:shown  punctuation:,  type:M  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:a  punctuation::  keyword:region  punctuation:,  parameter:r  punctuation::  type:V  operator:~  type:LoopResult  punctuation:<  type:B  punctuation:,  type:M  punctuation:>  operator:@  region:a  punctuation:)
+  5 |     match r
+    | keyword:match  parameter:r
+  6 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+  7 |         show("result: ", v)
+    | builtin-fn:show  punctuation:(  string:"result: "  punctuation:,  variable:v  punctuation:)
+  8 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+  9 |         match e
+    | keyword:match  variable:e
+ 10 |         case Skipped
+    | keyword:case  variant:Skipped
+ 11 |             show("skipped")
+    | builtin-fn:show  punctuation:(  string:"skipped"  punctuation:)
+ 12 |         case Broke b
+    | keyword:case  variant:Broke  variable:b
+ 13 |             match b
+    | keyword:match  variable:b
+ 14 |             case {val}
+    | keyword:case  punctuation:{  variable:val  punctuation:}
+ 15 |                 show("broke: ", val)
+    | builtin-fn:show  punctuation:(  string:"broke: "  punctuation:,  variable:val  punctuation:)
+ 16 |             case none
+    | keyword:case  keyword:none
+ 17 |                 show("broke")
+    | builtin-fn:show  punctuation:(  string:"broke"  punctuation:)
+ 18 |             fi
+    | keyword:fi
+ 19 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 20 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 21 |         case Manual m
+    | keyword:case  variant:Manual  variable:m
+ 22 |             show("manual: ", m)
+    | builtin-fn:show  punctuation:(  string:"manual: "  punctuation:,  variable:m  punctuation:)
+ 23 |         fi
+    | keyword:fi
+ 24 |     fi
+    | keyword:fi
+ 25 | fi
+    | keyword:fi
+ 27 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 28 |     region r
+    | keyword:region  region:r
+ 30 |     ; 1. Multi-line calculations and local variables inside finally.
+    | comment:; 1. Multi-line calculations and local variables inside finally.
+ 31 |     fixed summary = loop flex i = 1, sum = 0 || i <= 5 || i++
+    | keyword:fixed  variable:summary  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:1  punctuation:,  variable:sum  operator:=  number:0  operator:||  variable:i  operator:<=  number:5  operator:||  variable:i  operator:++
+ 32 |         sum += i
+    | variable:sum  operator:+=  variable:i
+ 33 |     finally
+    | keyword:finally
+ 34 |         fixed avg = sum / 5
+    | keyword:fixed  variable:avg  operator:=  variable:sum  operator:/  number:5
+ 35 |         fixed extra = 10
+    | keyword:fixed  variable:extra  operator:=  number:10
+ 36 |         avg + extra
+    | variable:avg  operator:+  variable:extra
+ 37 |     fi
+    | keyword:fi
+ 38 |     describe(r, summary)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:summary  punctuation:)
+ 40 |     ; 2. State variables declared in parted loop are visible in finally.
+    | comment:; 2. State variables declared in parted loop are visible in finally.
+ 41 |     fixed factor = loop flex k = 1, acc = 1 || k <= 4 || k++
+    | keyword:fixed  variable:factor  operator:=  keyword:loop  keyword:flex  variable:k  operator:=  number:1  punctuation:,  variable:acc  operator:=  number:1  operator:||  variable:k  operator:<=  number:4  operator:||  variable:k  operator:++
+ 42 |         acc *= k
+    | variable:acc  operator:*=  variable:k
+ 43 |     finally
+    | keyword:finally
+ 44 |         acc + k
+    | variable:acc  operator:+  variable:k
+ 45 |     fi
+    | keyword:fi
+ 46 |     describe(r, factor)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:factor  punctuation:)
+ 48 |     ; 3. When loop skips (0 passes): finally does not run -> Skipped.
+    | comment:; 3. When loop skips (0 passes): finally does not run -> Skipped.
+ 49 |     fixed skipped = loop flex i = 10 || i < 5 || i++
+    | keyword:fixed  variable:skipped  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:10  operator:||  variable:i  operator:<  number:5  operator:||  variable:i  operator:++
+ 50 |     finally
+    | keyword:finally
+ 51 |         999
+    | number:999
+ 52 |     fi
+    | keyword:fi
+ 53 |     describe(r, skipped)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:skipped  punctuation:)
+ 55 |     ; 4. When loop breaks: finally does not run -> Broke.
+    | comment:; 4. When loop breaks: finally does not run -> Broke.
+ 56 |     fixed broken = each x in [10, 20, 30]
+    | keyword:fixed  variable:broken  operator:=  keyword:each  variable:x  keyword:in  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
+ 57 |         when x == 20
+    | keyword:when  variable:x  operator:==  number:20
+ 58 |             break = x * 2
+    | keyword:break  operator:=  variable:x  operator:*  number:2
+ 59 |         fi
+    | keyword:fi
+ 60 |     finally
+    | keyword:finally
+ 61 |         999
+    | number:999
+ 62 |     fi
+    | keyword:fi
+ 63 |     describe(r, broken)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:broken  punctuation:)
+ 65 |     ; 5. When final pass continues: finally does not run -> EndedByContinue.
+    | comment:; 5. When final pass continues: finally does not run -> EndedByContinue.
+ 66 |     fixed continued = each x in [1, 2, 3]
+    | keyword:fixed  variable:continued  operator:=  keyword:each  variable:x  keyword:in  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 67 |         when x == 3
+    | keyword:when  variable:x  operator:==  number:3
+ 68 |             continue
+    | keyword:continue
+ 69 |         fi
+    | keyword:fi
+ 70 |     finally
+    | keyword:finally
+ 71 |         999
+    | number:999
+ 72 |     fi
+    | keyword:fi
+ 73 |     describe(r, continued)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:continued  punctuation:)
+ 75 |     ; 6. Manual failure from finally.
+    | comment:; 6. Manual failure from finally.
+ 76 |     fixed manual: int ~ LoopResult<bool, text> = each x in 1..4
+    | keyword:fixed  variable:manual  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:1  operator:..  number:4
+ 77 |     finally
+    | keyword:finally
+ 78 |         when 1 > 0
+    | keyword:when  number:1  operator:>  number:0
+ 79 |             fail LoopResult.Manual("failed in finally")
+    | keyword:fail  type:LoopResult  punctuation:.  variant:Manual  punctuation:(  string:"failed in finally"  punctuation:)
+ 80 |         else
+    | keyword:else
+ 81 |             0
+    | number:0
+ 82 |         fi
+    | keyword:fi
+ 83 |     fi
+    | keyword:fi
+ 84 |     describe(r, manual)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:manual  punctuation:)
+ 86 |     ; 7. Conditional logic in finally returning scalar.
+    | comment:; 7. Conditional logic in finally returning scalar.
+ 87 |     fixed cond_res = each x in [2, 4, 6]
+    | keyword:fixed  variable:cond_res  operator:=  keyword:each  variable:x  keyword:in  punctuation:[  number:2  punctuation:,  number:4  punctuation:,  number:6  punctuation:]
+ 88 |     finally
+    | keyword:finally
+ 89 |         when 2 + 4 + 6 > 10
+    | keyword:when  number:2  operator:+  number:4  operator:+  number:6  operator:>  number:10
+ 90 |             "large"
+    | string:"large"
+ 91 |         else
+    | keyword:else
+ 92 |             "small"
+    | string:"small"
+ 93 |         fi
+    | keyword:fi
+ 94 |     fi
+    | keyword:fi
+ 95 |     describe(r, cond_res)
+    | task:describe  punctuation:(  region:r  punctuation:,  variable:cond_res  punctuation:)
+ 96 | fi
+    | keyword:fi

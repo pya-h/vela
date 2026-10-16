@@ -116,49 +116,51 @@
     | keyword:fixed  variable:total  punctuation::  type-builtin:int  operator:~  type:LoopResult  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  variable:sum  operator:=  number:0  operator:||  variable:i  operator:<  number:4  operator:||  variable:i  operator:++
  68 |         sum += i
     | variable:sum  operator:+=  variable:i
- 69 |         sum
+ 69 |     finally
+    | keyword:finally
+ 70 |         sum
     | variable:sum
- 70 |     fi
+ 71 |     fi
     | keyword:fi
- 71 |     show(total { 0 })
+ 72 |     show(total { 0 })
     | builtin-fn:show  punctuation:(  variable:total  punctuation:{  number:0  punctuation:}  punctuation:)
- 72 |     fixed pair = ("ann", 3)
+ 73 |     fixed pair = ("ann", 3)
     | keyword:fixed  variable:pair  operator:=  punctuation:(  string:"ann"  punctuation:,  number:3  punctuation:)
- 73 |     when pair is flex (name, age)
+ 74 |     when pair is flex (name, age)
     | keyword:when  variable:pair  keyword:is  keyword:flex  punctuation:(  variable:name  punctuation:,  variable:age  punctuation:)
- 74 |         age = age + 1
+ 75 |         age = age + 1
     | variable:age  operator:=  variable:age  operator:+  number:1
- 75 |         show(name, " ", age)
+ 76 |         show(name, " ", age)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:,  string:" "  punctuation:,  variable:age  punctuation:)
- 76 |     fi
+ 77 |     fi
     | keyword:fi
- 77 |     flex sum = 0
+ 78 |     flex sum = 0
     | keyword:flex  variable:sum  operator:=  number:0
- 78 |     region s
+ 79 |     region s
     | keyword:region  region:s
- 79 |     fixed add = [flex& sum, fixed& start, @s](x: int) -> nothing
+ 80 |     fixed add = [flex& sum, fixed& start, @s](x: int) -> nothing
     | keyword:fixed  variable:add  operator:=  punctuation:[  keyword:flex  keyword:&  variable:sum  punctuation:,  keyword:fixed  keyword:&  variable:start  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
- 80 |         sum = sum + x + start
+ 81 |         sum = sum + x + start
     | variable:sum  operator:=  variable:sum  operator:+  parameter:x  operator:+  variable:start
- 81 |     fi
+ 82 |     fi
     | keyword:fi
- 82 |     add(1)
+ 83 |     add(1)
     | variable:add  punctuation:(  number:1  punctuation:)
- 83 |     add(2)
+ 84 |     add(2)
     | variable:add  punctuation:(  number:2  punctuation:)
- 84 |     show(sum)
+ 85 |     show(sum)
     | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
- 85 |     flex seen_calls = 0
+ 86 |     flex seen_calls = 0
     | keyword:flex  variable:seen_calls  operator:=  number:0
- 86 |     flex tick = [flex @r]() -> int
+ 87 |     flex tick = [flex @r]() -> int
     | keyword:flex  variable:tick  operator:=  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 87 |         seen_calls = seen_calls + 1
+ 88 |         seen_calls = seen_calls + 1
     | variable:seen_calls  operator:=  variable:seen_calls  operator:+  number:1
- 88 |         <- seen_calls
+ 89 |         <- seen_calls
     | keyword:<-  variable:seen_calls
- 89 |     fi
+ 90 |     fi
     | keyword:fi
- 90 |     show(tick_twice(&tick), " ", seen_calls)
+ 91 |     show(tick_twice(&tick), " ", seen_calls)
     | builtin-fn:show  punctuation:(  task:tick_twice  punctuation:(  operator:&  variable:tick  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:seen_calls  punctuation:)
- 91 | fi
+ 92 | fi
     | keyword:fi

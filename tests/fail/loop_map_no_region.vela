@@ -1,0 +1,8 @@
+; error: 5:16: map-form loop over a dynamic collection makes a slice, so it needs a region
+; Map-form over dynamic collection without a region is refused.
+task main()
+    flex n = 3
+    fixed sl = each x in 0..n
+        x * 2
+    fi
+fi

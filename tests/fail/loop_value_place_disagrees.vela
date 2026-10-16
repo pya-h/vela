@@ -6,7 +6,8 @@ task main()
         when x == 1
             break = 5
         fi
-        x
+    finally
+        0
     fi
     show(a { 0 })
 fi

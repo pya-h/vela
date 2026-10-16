@@ -11,7 +11,7 @@ pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "when", "loop", "e
 /// Keywords that may come before a block opener on its line, as in `priv task`.
 pub const BLOCK_MODIFIERS: &[&str] = &["priv"];
 /// Keywords that start a new branch inside an open block.
-pub const BRANCH_KEYWORDS: &[&str] = &["else", "case"];
+pub const BRANCH_KEYWORDS: &[&str] = &["else", "case", "finally"];
 /// The keyword that closes a block.
 pub const BLOCK_CLOSER: &str = "fi";
 

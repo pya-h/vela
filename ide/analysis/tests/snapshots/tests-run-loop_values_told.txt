@@ -18,121 +18,137 @@
     | keyword:task  task:last  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:#  number:3  punctuation:]  punctuation:)  operator:->  type:T  operator:~  type:LoopResult  punctuation:<  type:T  punctuation:,  type-builtin:text  punctuation:>  operator:@  region:r
  12 |     <- each x in xs
     | keyword:<-  keyword:each  variable:x  keyword:in  parameter:xs
- 13 |         x
-    | variable:x
- 14 |     fi
+ 13 |     finally
+    | keyword:finally
+ 14 |         xs[2]
+    | parameter:xs  punctuation:[  number:2  punctuation:]
+ 15 |     fi
     | keyword:fi
- 15 | fi
+ 16 | fi
     | keyword:fi
- 17 | kind Opt<T: shown>
+ 18 | kind Opt<T: shown>
     | keyword:kind  type:Opt  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
- 18 |     No
+ 19 |     No
     | variant:No
- 19 |     Yes(v: T)
+ 20 |     Yes(v: T)
     | variant:Yes  punctuation:(  field:v  punctuation::  type:T  punctuation:)
- 20 | fi
+ 21 | fi
     | keyword:fi
- 22 | task firsts(xs: [int#3]) -> int ~ LoopResult<int, text>
+ 23 | task firsts(xs: [int#3]) -> int ~ LoopResult<int, text>
     | keyword:task  task:firsts  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:)  operator:->  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>
- 23 |     <- each x in xs
+ 24 |     <- each x in xs
     | keyword:<-  keyword:each  variable:x  keyword:in  parameter:xs
- 24 |         x * 2
-    | variable:x  operator:*  number:2
- 25 |     fi
+ 25 |     finally
+    | keyword:finally
+ 26 |         xs[2] * 2
+    | parameter:xs  punctuation:[  number:2  punctuation:]  operator:*  number:2
+ 27 |     fi
     | keyword:fi
- 26 | fi
+ 28 | fi
     | keyword:fi
- 28 | task said<V: shown, B: shown, M: shown>(a: region, r: V ~ LoopResult<B, M>@a)
+ 30 | task said<V: shown, B: shown, M: shown>(a: region, r: V ~ LoopResult<B, M>@a)
     | keyword:task  task:said  punctuation:<  type:V  punctuation::  keyword:shown  punctuation:,  type:B  punctuation::  keyword:shown  punctuation:,  type:M  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:a  punctuation::  keyword:region  punctuation:,  parameter:r  punctuation::  type:V  operator:~  type:LoopResult  punctuation:<  type:B  punctuation:,  type:M  punctuation:>  operator:@  region:a  punctuation:)
- 29 |     match r
+ 31 |     match r
     | keyword:match  parameter:r
- 30 |     case {v}
+ 32 |     case {v}
     | keyword:case  punctuation:{  variable:v  punctuation:}
- 31 |         show("gave ", v)
+ 33 |         show("gave ", v)
     | builtin-fn:show  punctuation:(  string:"gave "  punctuation:,  variable:v  punctuation:)
- 32 |     case failure e
+ 34 |     case failure e
     | keyword:case  keyword:failure  variable:e
- 33 |         show(e)
+ 35 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
- 34 |     fi
+ 36 |     fi
     | keyword:fi
- 35 | fi
+ 37 | fi
     | keyword:fi
- 37 | task main()
+ 39 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 38 |     region q
+ 40 |     region q
     | keyword:region  region:q
- 39 |     said(q, firsts([1, 2, 3]))
+ 41 |     said(q, firsts([1, 2, 3]))
     | task:said  punctuation:(  region:q  punctuation:,  task:firsts  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  punctuation:)
- 40 |     fixed a: int ~ LoopResult<text, bool> = each x in 0..3
+ 42 |     fixed a: int ~ LoopResult<text, bool> = each x in 0..3
     | keyword:fixed  variable:a  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:bool  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
- 41 |         when x == 1
+ 43 |         when x == 1
     | keyword:when  variable:x  operator:==  number:1
- 42 |             break
+ 44 |             break
     | keyword:break
- 43 |         fi
+ 45 |         fi
     | keyword:fi
- 44 |         x
-    | variable:x
- 45 |     fi
+ 46 |     finally
+    | keyword:finally
+ 47 |         0
+    | number:0
+ 48 |     fi
     | keyword:fi
- 46 |     said(q, a)
+ 49 |     said(q, a)
     | task:said  punctuation:(  region:q  punctuation:,  variable:a  punctuation:)
- 47 |     fixed b: int ~ LoopResult<bool, text> = each x in 0..0
+ 50 |     fixed b: int ~ LoopResult<bool, text> = each x in 0..0
     | keyword:fixed  variable:b  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:text  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:0
- 48 |         x
-    | variable:x
- 49 |     fi
-    | keyword:fi
- 50 |     said(q, b)
-    | task:said  punctuation:(  region:q  punctuation:,  variable:b  punctuation:)
- 51 |     fixed e: int ~ LoopResult<text, int> = each x in 0..2
-    | keyword:fixed  variable:e  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
- 52 |         x
-    | variable:x
+ 51 |     finally
+    | keyword:finally
+ 52 |         0
+    | number:0
  53 |     fi
     | keyword:fi
- 54 |     said(q, e)
+ 54 |     said(q, b)
+    | task:said  punctuation:(  region:q  punctuation:,  variable:b  punctuation:)
+ 55 |     fixed e: int ~ LoopResult<text, int> = each x in 0..2
+    | keyword:fixed  variable:e  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
+ 56 |     finally
+    | keyword:finally
+ 57 |         1
+    | number:1
+ 58 |     fi
+    | keyword:fi
+ 59 |     said(q, e)
     | task:said  punctuation:(  region:q  punctuation:,  variable:e  punctuation:)
- 55 |     fixed c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
+ 60 |     fixed c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
     | keyword:fixed  variable:c  punctuation::  type:Opt  punctuation:<  type-builtin:text  punctuation:>  operator:~  type:LoopResult  punctuation:<  type-builtin:int  punctuation:,  type-builtin:int  punctuation:>  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
- 56 |         when x == 0
-    | keyword:when  variable:x  operator:==  number:0
- 57 |             Opt.No
+ 61 |     finally
+    | keyword:finally
+ 62 |         when 1 == 0
+    | keyword:when  number:1  operator:==  number:0
+ 63 |             Opt.No
     | type:Opt  punctuation:.  variant:No
- 58 |         else
+ 64 |         else
     | keyword:else
- 59 |             Opt.Yes("y")
+ 65 |             Opt.Yes("y")
     | type:Opt  punctuation:.  variant:Yes  punctuation:(  string:"y"  punctuation:)
- 60 |         fi
+ 66 |         fi
     | keyword:fi
- 61 |     fi
+ 67 |     fi
     | keyword:fi
- 62 |     said(q, c)
+ 68 |     said(q, c)
     | task:said  punctuation:(  region:q  punctuation:,  variable:c  punctuation:)
- 63 |     flex d: int ~ LoopResult<text, text> = 0
+ 69 |     flex d: int ~ LoopResult<text, text> = 0
     | keyword:flex  variable:d  punctuation::  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:text  punctuation:,  type-builtin:text  punctuation:>  operator:=  number:0
- 64 |     d = loop flex i = 0 || i < 3 || i++
+ 70 |     d = loop flex i = 0 || i < 3 || i++
     | variable:d  operator:=  keyword:loop  keyword:flex  variable:i  operator:=  number:0  operator:||  variable:i  operator:<  number:3  operator:||  variable:i  operator:++
- 65 |         when i == 2
+ 71 |         when i == 2
     | keyword:when  variable:i  operator:==  number:2
- 66 |             continue
+ 72 |             continue
     | keyword:continue
- 67 |         fi
+ 73 |         fi
     | keyword:fi
- 68 |         i
-    | variable:i
- 69 |     fi
+ 74 |     finally
+    | keyword:finally
+ 75 |         0
+    | number:0
+ 76 |     fi
     | keyword:fi
- 70 |     said(q, d)
+ 77 |     said(q, d)
     | task:said  punctuation:(  region:q  punctuation:,  variable:d  punctuation:)
- 71 |     show(why(each x in 0..2
+ 78 |     show(why(each x in 0..2
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2
- 72 |         x
-    | variable:x
- 73 |     fi))
+ 79 |     finally
+    | keyword:finally
+ 80 |         1
+    | number:1
+ 81 |     fi))
     | keyword:fi  punctuation:)  punctuation:)
- 74 |     show(last(q, ["a", "b", "c"]) { "none" })
+ 82 |     show(last(q, ["a", "b", "c"]) { "none" })
     | builtin-fn:show  punctuation:(  task:last  punctuation:(  region:q  punctuation:,  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:]  punctuation:)  punctuation:{  string:"none"  punctuation:}  punctuation:)
- 75 | fi
+ 83 | fi
     | keyword:fi

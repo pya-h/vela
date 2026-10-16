@@ -55,6 +55,8 @@ pub enum Token {
     /// Vela writes `and` for both conditions at once.
     Amp,
     Fi,
+    /// `finally`: runs after a loop finishes normally, giving its single value.
+    Finally,
     Maybe,
     Is,
     /// `fail`, the verb: makes a failure, as in `<- fail e`.
@@ -184,6 +186,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("false", Token::False),
     ("none", Token::None),
     ("fi", Token::Fi),
+    ("finally", Token::Finally),
     ("maybe", Token::Maybe),
     ("is", Token::Is),
     ("fail", Token::Fail),

@@ -10,7 +10,8 @@ fi
 
 task last<T>(r: region, xs: [T#3]) -> T ~ LoopResult<T, text>@r
     <- each x in xs
-        x
+    finally
+        xs[2]
     fi
 fi
 
@@ -21,7 +22,8 @@ fi
 
 task firsts(xs: [int#3]) -> int ~ LoopResult<int, text>
     <- each x in xs
-        x * 2
+    finally
+        xs[2] * 2
     fi
 fi
 
@@ -41,19 +43,23 @@ task main()
         when x == 1
             break
         fi
-        x
+    finally
+        0
     fi
     said(q, a)
     fixed b: int ~ LoopResult<bool, text> = each x in 0..0
-        x
+    finally
+        0
     fi
     said(q, b)
     fixed e: int ~ LoopResult<text, int> = each x in 0..2
-        x
+    finally
+        1
     fi
     said(q, e)
     fixed c: Opt<text> ~ LoopResult<int, int> = each x in 0..2
-        when x == 0
+    finally
+        when 1 == 0
             Opt.No
         else
             Opt.Yes("y")
@@ -65,11 +71,13 @@ task main()
         when i == 2
             continue
         fi
-        i
+    finally
+        0
     fi
     said(q, d)
     show(why(each x in 0..2
-        x
+    finally
+        1
     fi))
     show(last(q, ["a", "b", "c"]) { "none" })
 fi

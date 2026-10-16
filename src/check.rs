@@ -577,11 +577,16 @@ struct Branches {
     of: &'static str,
     /// One of its parts: a `case`, or a `when`'s branch.
     each: &'static str,
+    /// Whether giving a value is optional (for loops with finally).
+    optional: bool,
 }
 
-const MATCH_BRANCHES: Branches = Branches { of: "match", each: "case" };
-const WHEN_BRANCHES: Branches = Branches { of: "when", each: "branch" };
-const LOOP_BRANCHES: Branches = Branches { of: "loop", each: "pass" };
+const MATCH_BRANCHES: Branches = Branches { of: "match", each: "case", optional: false };
+const WHEN_BRANCHES: Branches = Branches { of: "when", each: "branch", optional: false };
+const LOOP_BRANCHES: Branches = Branches { of: "loop", each: "pass", optional: false };
+const FINALLY_BRANCHES: Branches = Branches { of: "loop", each: "finally block", optional: false };
+const OPTIONAL_LOOP_BRANCHES: Branches = Branches { of: "loop", each: "pass", optional: true };
+const BOTH_LOOP_FORMS_WARNING: &str = "using both map-form loop values and a finally block; finally overrides the loop body return values";
 
 impl Branches {
     /// What a branch that gives no value is missing.
@@ -3701,7 +3706,7 @@ impl Checker {
         let entry = self.unset.clone();
         let stepping = self.stepping;
         self.loops.push(named);
-        let result = self.check_parted_passes(parted, gives);
+        let result = self.check_parted_passes(parted, gives, span);
         self.loops.pop();
         self.stepping = stepping;
         self.unset = entry;
@@ -3724,10 +3729,27 @@ impl Checker {
     }
 
     /// The condition, the body and the step of a loop in three parts, inside it.
-    fn check_parted_passes(&mut self, parted: &mut PartedLoop, gives: bool) -> Result<()> {
+    fn check_parted_passes(&mut self, parted: &mut PartedLoop, gives: bool, span: Span) -> Result<()> {
+        let has_finally = parted.finally.is_some();
+        let branches = if !gives {
+            None
+        } else if has_finally {
+            Some(OPTIONAL_LOOP_BRANCHES)
+        } else {
+            Some(LOOP_BRANCHES)
+        };
         let given = match &mut parted.cond {
-            Some(cond) => self.check_condition(cond, &mut parted.body, gives.then_some(LOOP_BRANCHES))?,
-            None => self.check_scoped_block(&mut parted.body).map(|()| None)?,
+            Some(cond) => self.check_condition(cond, &mut parted.body, branches)?,
+            None => {
+                if let Some(branches) = branches {
+                    self.push_scope();
+                    let res = self.value_block_tail(&mut parted.body, span, branches);
+                    self.pop_scope();
+                    res?
+                } else {
+                    self.check_scoped_block(&mut parted.body).map(|()| None)?
+                }
+            }
         };
         // The step runs after each pass, where a `continue` of this loop leads,
         // so it can't have one; what it declares ends with it.
@@ -3739,7 +3761,23 @@ impl Checker {
             }
             self.check_stmt(item)?;
         }
-        self.loop_given = given;
+        let body_had_value = given.is_some() || parted.body.last().is_some_and(|last| {
+            gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
+        });
+        let finally_given = if let Some(finally) = &mut parted.finally {
+            if gives {
+                self.value_block_tail(finally, span, FINALLY_BRANCHES)?
+            } else {
+                self.check_block(finally)?;
+                None
+            }
+        } else {
+            None
+        };
+        if body_had_value && finally_given.is_some() {
+            self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
+        }
+        self.loop_given = if has_finally { finally_given } else { given };
         Ok(())
     }
 
@@ -3778,7 +3816,7 @@ impl Checker {
     fn check_loop_value(&mut self, value: &mut ValueLoop, span: Span) -> Result<Type> {
         let never_ends = match &value.stmt.kind {
             StmtKind::Parted(parted) => parted.cond.as_ref().is_none_or(says_true),
-            StmtKind::Loop(cond, _) => says_true(cond),
+            StmtKind::Loop(cond, _, _) => says_true(cond),
             _ => false,
         };
         if never_ends && !value.gives {
@@ -3810,7 +3848,7 @@ impl Checker {
         let given = self.loop_given.take();
         // `each v in args` is written out once per value, each pass its own:
         // said first, as what its passes give is no matter then.
-        if let StmtKind::Each(_, _, range, _) = &value.stmt.kind
+        if let StmtKind::Each(_, _, range, _, _) = &value.stmt.kind
             && matches!(range.ty, Some(Type::Group(_)))
         {
             return err(range.span, "a loop through the values of a group gives no value, since each pass is written out for a value of its own; give the values on to a task, or gather what the passes give in a variable");
@@ -3820,20 +3858,63 @@ impl Checker {
         let (given, at) = match (value.gives, given) {
             (false, _) => (Type::Nothing, span),
             (true, Some(given)) => given,
-            (true, None) => return err(span, "every pass of this loop leaves, with '<-', 'break' or 'continue', so its last line never gives its value"),
+            (true, None) => return err(span, if value.finally().is_some() {
+                "the finally block of this loop never gives its value"
+            } else {
+                "every pass of this loop leaves, with '<-', 'break' or 'continue', so its last line never gives its value"
+            }),
         };
-        let (given, manual) = match given {
-            Type::Or(value, error) => (*value, Some(*error)),
-            Type::Fail(_) => return err(at, "the last line of every pass of this loop fails, so it never gives a value; give one on a path of its own"),
+        let (given, manual_error) = match given {
+            Type::Or(value_ty, error) => (*value_ty, Some(*error)),
+            Type::Fail(_) => return err(at, if value.finally().is_some() {
+                "the finally block of this loop fails, so it never gives a value; give one on a path of its own"
+            } else {
+                "the last line of every pass of this loop fails, so it never gives a value; give one on a path of its own"
+            }),
             other => (other, None),
         };
         if matches!(given, Type::None) {
-            return err(at, "the last line of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'");
+            return err(at, if value.finally().is_some() {
+                "the finally block of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'"
+            } else {
+                "the last line of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'"
+            });
         }
-        value.open = (!breaks.iter().any(|(ty, _)| *ty != Type::None), manual.is_none());
-        let manual = match manual {
+        let pass_item_ty = given.clone();
+        let given = if value.finally().is_some() || !value.gives {
+            given
+        } else {
+            match &value.stmt.kind {
+                StmtKind::Each(_, _, range, _, _) => {
+                    match &range.ty {
+                        Some(Type::Array(_, count)) => Type::Array(Box::new(given), *count),
+                        _ => {
+                            if let ExprKind::Range(start, end) = &range.kind
+                                && let (Some(a), Some(b)) = (constant_int(start), constant_int(end))
+                                && b >= a
+                            {
+                                Type::Array(Box::new(given), (b - a) as u64)
+                            } else {
+                                let region = self.region_or_default(None, span, || {
+                                    "map-form loop over a dynamic collection makes a slice, so it needs a region".to_string()
+                                })?;
+                                Type::Slice(Box::new(given), Some(region))
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    let region = self.region_or_default(None, span, || {
+                        "map-form loop makes a slice, so it needs a region".to_string()
+                    })?;
+                    Type::Slice(Box::new(given), Some(region))
+                }
+            }
+        };
+        value.open = (!breaks.iter().any(|(ty, _)| *ty != Type::None), manual_error.is_none());
+        let manual = match manual_error.as_ref() {
             None => Type::Bool,
-            Some(error) => self.manual_type(&error, value, at)?,
+            Some(error) => self.manual_type(error, value, at)?,
         };
         // What the `break`s give, or `bool` where none does.
         let mut broke: Option<Type> = None;
@@ -3866,7 +3947,9 @@ impl Checker {
         // `LoopResult<B, M>`, in the region of what it holds, which is one, and
         // which outlives every pass, so no pass declares it.
         let mut failures = Vec::new();
-        if let Some(body) = value.body() {
+        if let Some(finally) = value.finally() {
+            last_values(finally, &mut failures);
+        } else if let Some(body) = value.body() {
             last_values(body, &mut failures);
         }
         let manual_at = failures.iter().find(|e| may_fail(e)).map_or(at, |e| e.span);
@@ -3893,10 +3976,16 @@ impl Checker {
         let result = Applied { name: library::LOOP_RESULT.to_string(), types: vec![broke, manual], region: Some(region) };
         let result = self.made_kinds(Type::Applied(Box::new(result)), span)?;
         let ty = Type::Or(Box::new(given), Box::new(result));
-        if value.gives
-            && let Some(body) = value.body_mut()
-        {
-            self.settle_value(body, &ty)?;
+        if value.gives {
+            if let Some(finally) = value.finally_mut() {
+                self.settle_value(finally, &ty)?;
+            } else if let Some(body) = value.body_mut() {
+                let pass_ty = match &manual_error {
+                    Some(err) => Type::Or(Box::new(pass_item_ty), Box::new(err.clone())),
+                    None => pass_item_ty,
+                };
+                self.settle_value(body, &pass_ty)?;
+            }
         }
         // Its value outlives every pass, so it is in no region one declares.
         if let Some(region) = ty.regions().into_iter().find(|region| !unnamed_region(region) && *region != ANY_REGION && self.lookup(region).is_none()) {
@@ -3921,7 +4010,9 @@ impl Checker {
             return wrong();
         }
         let mut failures = Vec::new();
-        if let Some(body) = value.body() {
+        if let Some(finally) = value.finally() {
+            last_values(finally, &mut failures);
+        } else if let Some(body) = value.body() {
             last_values(body, &mut failures);
         }
         for failure in failures {
@@ -4505,71 +4596,7 @@ impl Checker {
                     return err(e.span, format!("'fail {0}' makes a failure, but nothing here is named '{0}'; a plan B names its failure with 'failure {0}' on its first line, and '<- fail {0}' sends one", name));
                 }
                 self.check_expr(e)?;
-                // Of all expressions, only a call, a change to a slice, or a
-                // `scan` can have an effect, and so can a plan B on a call or a
-                // `scan`, or one that gives no value.
-                match &e.kind {
-                    ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
-                    ExprKind::Invoke { callee, .. } if matches!(e.ty, Some(Type::Or(..))) => {
-                        let name = match &callee.kind {
-                            ExprKind::Var(name) => name.clone(),
-                            _ => "this task".to_string(),
-                        };
-                        err(e.span, ignored_error(&name))
-                    }
-                    ExprKind::Invoke { .. } => Ok(()),
-                    ExprKind::Pipe(call) if matches!(e.ty, Some(Type::Or(..))) => err(
-                        e.span,
-                        format!("the error this pipe may fail with is ignored; handle it with a plan B after its last step, as in '… |> {}(…) {{ failure e … }}', or with match", piped_name(call)),
-                    ),
-                    ExprKind::Pipe(_) => Ok(()),
-                    // `int(x)` and `float(x)` read like calls, but they only give
-                    // a number back: on its own, the line does nothing.
-                    ExprKind::Call { name, .. } if number_cast(name).is_some() => {
-                        err(e.span, format!("the number '{}' gives is unused; only a task call can be used as a statement", name))
-                    }
-                    // A line read and dropped is a line dropped on purpose, but
-                    // a number read and dropped drops the error with it.
-                    ExprKind::Scan { .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(SCAN)),
-                    ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
-                    // A method called on a value whose type is unknown stays
-                    // unread, and whatever made the type unknown was reported.
-                    ExprKind::MethodCall { .. } => Ok(()),
-                    // A method call left unread, whose mistake is reported, counts as one.
-                    ExprKind::PlanB { value, .. }
-                        if e.ty == Some(Type::Nothing) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. } | ExprKind::MethodCall { .. } | ExprKind::LoopValue(_)) =>
-                    {
-                        Ok(())
-                    }
-                    ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
-                    // `xs.added(v)` alone: the new slice is dropped, and `xs` never changed.
-                    ExprKind::Copy { value, .. } if matches!(&value.kind, ExprKind::Edit { op, .. } if op.makes_copy()) => {
-                        let ExprKind::Edit { items, op, .. } = &value.kind else { return Ok(()) };
-                        let map = matches!(items.ty, Some(Type::Map(..)));
-                        let what = if map { "map" } else { "slice" };
-                        let change = match (op, map) {
-                            (EditOp::Added, true) => "'m[k] = v'".to_string(),
-                            (_, true) => format!("'{}.del(…)'", self.value_text(items)),
-                            (EditOp::Added, false) => format!("'{}.add(…)'", self.value_text(items)),
-                            (_, false) => format!("'{}.del(…)'", self.value_text(items)),
-                        };
-                        err(
-                            e.span,
-                            format!(
-                                "'{0}' makes a new {1} and leaves '{2}' as it was, so on a line of its own it does nothing; keep the new one, as in 'fixed changed = {2}.{0}(…) at r', or change the {1} itself with {3}",
-                                op.word(),
-                                what,
-                                self.value_text(items),
-                                change
-                            ),
-                        )
-                    }
-                    ExprKind::Fail(_) => err(
-                        e.span,
-                        "'fail …' makes a failure, which a line of its own drops; send it with '<- fail …', or stop a loop that gives a value with 'break = …'",
-                    ),
-                    _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
-                }
+                self.check_expr_stmt(e)
             }
             StmtKind::Binding { names, mode, reference: true, init } => self.check_reference(names, *mode, init),
             StmtKind::Binding { names, mode, init, .. } => {
@@ -4794,7 +4821,7 @@ impl Checker {
             // Its statements run once, as the block around it does, so what they
             // set is set after it; what they declare ends at its `fi`.
             StmtKind::Block(body) => self.check_scoped_block(body),
-            StmtKind::Loop(cond, body) => {
+            StmtKind::Loop(cond, body, finally) => {
                 let gives = std::mem::take(&mut self.loop_gives);
                 if always_holds(cond)
                     && let Some(pattern) = &cond.pattern
@@ -4807,11 +4834,36 @@ impl Checker {
                 // makes its calls what they are.
                 let unchanging = unchanging_reads(cond, body, &[], self.loop_name.as_ref().map(|(name, _)| name.as_str()));
                 let entry = self.unset.clone();
+                let has_finally = finally.is_some();
                 self.enter_loop();
-                let result = self.check_condition(cond, body, gives.then_some(LOOP_BRANCHES));
+                let branches = if !gives {
+                    None
+                } else if has_finally {
+                    Some(OPTIONAL_LOOP_BRANCHES)
+                } else {
+                    Some(LOOP_BRANCHES)
+                };
+                let result = self.check_condition(cond, body, branches);
                 self.loops.pop();
                 self.unset = entry;
-                self.loop_given = result?;
+                let body_given = result?;
+                let body_had_value = body_given.is_some() || body.last().is_some_and(|last| {
+                    gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
+                });
+                let finally_given = if let Some(finally) = finally {
+                    if gives {
+                        self.value_block_tail(finally, span, FINALLY_BRANCHES)?
+                    } else {
+                        self.check_block(finally)?;
+                        None
+                    }
+                } else {
+                    None
+                };
+                if body_had_value && finally_given.is_some() {
+                    self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
+                }
+                self.loop_given = if has_finally { finally_given } else { body_given };
                 // `loop true`: one that never ends by itself says so in a word.
                 if says_true(cond) {
                     self.warnings.push(Error::at(span, ENDLESS_UNSAID));
@@ -4854,7 +4906,7 @@ impl Checker {
                 self.check_jump("continue", name.as_ref(), span)
             }
             StmtKind::Turns(_) => Err(Error::internal_at(span, "a loop written out for a group's values, checked")),
-            StmtKind::Each(name, second, range, body) => {
+            StmtKind::Each(name, second, range, body, finally) => {
                 // What it goes through is found before it starts, outside it,
                 // so a loop in a plan B there takes neither its name nor a `break`.
                 let named = self.loop_name.take();
@@ -4896,12 +4948,18 @@ impl Checker {
                 {
                     result = self.define(second, value, Mode::Fixed, *at);
                 }
+                let has_finally = finally.is_some();
+                let mut body_given = None;
                 let result = result.and_then(|()| {
                     if !gives {
                         return self.check_block(body);
                     }
-                    self.loop_given = self.value_block_tail(body, span, LOOP_BRANCHES)?;
+                    let branches = if has_finally { OPTIONAL_LOOP_BRANCHES } else { LOOP_BRANCHES };
+                    body_given = self.value_block_tail(body, span, branches)?;
                     Ok(())
+                });
+                let body_had_value = body_given.is_some() || body.last().is_some_and(|last| {
+                    gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
                 });
                 self.pop_scope();
                 self.loops.pop();
@@ -4909,7 +4967,22 @@ impl Checker {
                 if turn.is_some() {
                     self.group_turns.pop();
                 }
-                result
+                result?;
+                let finally_given = if let Some(finally) = finally {
+                    if gives {
+                        self.value_block_tail(finally, span, FINALLY_BRANCHES)?
+                    } else {
+                        self.check_block(finally)?;
+                        None
+                    }
+                } else {
+                    None
+                };
+                if body_had_value && finally_given.is_some() {
+                    self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
+                }
+                self.loop_given = if has_finally { finally_given } else { body_given };
+                Ok(())
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
             StmtKind::Send(values) => {
@@ -5212,11 +5285,72 @@ impl Checker {
         result
     }
 
+    /// Checks that an expression used as a statement is allowed (task call, edit, etc.)
+    fn check_expr_stmt(&self, e: &Expr) -> Result<()> {
+        match &e.kind {
+            ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
+            ExprKind::Invoke { callee, .. } if matches!(e.ty, Some(Type::Or(..))) => {
+                let name = match &callee.kind {
+                    ExprKind::Var(name) => name.clone(),
+                    _ => "this task".to_string(),
+                };
+                err(e.span, ignored_error(&name))
+            }
+            ExprKind::Invoke { .. } => Ok(()),
+            ExprKind::Pipe(call) if matches!(e.ty, Some(Type::Or(..))) => err(
+                e.span,
+                format!("the error this pipe may fail with is ignored; handle it with a plan B after its last step, as in '… |> {}(…) {{ failure e … }}', or with match", piped_name(call)),
+            ),
+            ExprKind::Pipe(_) => Ok(()),
+            ExprKind::Call { name, .. } if number_cast(name).is_some() => {
+                err(e.span, format!("the number '{}' gives is unused; only a task call can be used as a statement", name))
+            }
+            ExprKind::Scan { .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(SCAN)),
+            ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
+            ExprKind::MethodCall { .. } => Ok(()),
+            ExprKind::PlanB { value, .. }
+                if e.ty == Some(Type::Nothing) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. } | ExprKind::MethodCall { .. } | ExprKind::LoopValue(_)) =>
+            {
+                Ok(())
+            }
+            ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
+            ExprKind::Copy { value, .. } if matches!(&value.kind, ExprKind::Edit { op, .. } if op.makes_copy()) => {
+                let ExprKind::Edit { items, op, .. } = &value.kind else { return Ok(()) };
+                let map = matches!(items.ty, Some(Type::Map(..)));
+                let what = if map { "map" } else { "slice" };
+                let change = match (op, map) {
+                    (EditOp::Added, true) => "'m[k] = v'".to_string(),
+                    (_, true) => format!("'{}.del(…)'", self.value_text(items)),
+                    (EditOp::Added, false) => format!("'{}.add(…)'", self.value_text(items)),
+                    (_, false) => format!("'{}.del(…)'", self.value_text(items)),
+                };
+                err(
+                    e.span,
+                    format!(
+                        "'{0}' makes a new {1} and leaves '{2}' as it was, so on a line of its own it does nothing; keep the new one, as in 'fixed changed = {2}.{0}(…) at r', or change the {1} itself with {3}",
+                        op.word(),
+                        what,
+                        self.value_text(items),
+                        change
+                    ),
+                )
+            }
+            ExprKind::Fail(_) => err(
+                e.span,
+                "'fail …' makes a failure, which a line of its own drops; send it with '<- fail …', or stop a loop that gives a value with 'break = …'",
+            ),
+            _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
+        }
+    }
+
     /// The statements of a block that gives a value, checked in the scope
     /// `check_value_block` opened: everything but the last line as usual, and the
     /// last line as the value.
     fn value_block_tail(&mut self, body: &mut Block, at: Span, branches: Branches) -> Result<Option<(Type, Span)>> {
         let Some((last, rest)) = body.split_last_mut() else {
+            if branches.optional {
+                return Ok(None);
+            }
             return err(at, branches.needs_value());
         };
         last_loop_gives(last);
@@ -5229,19 +5363,26 @@ impl Checker {
             self.check_stmt(last)?;
             return Ok(None);
         }
-        if gives_value(last) {
+        if gives_value(last) && !branches.optional {
             let span = last.span;
             return Ok(self.check_branching_value(last)?.map(|ty| (ty, span)));
         }
         if let StmtKind::Expr(e) = &mut last.kind {
             let ty = self.check_expr(e)?;
             if ty == Type::Nothing {
+                if branches.optional {
+                    self.check_expr_stmt(e)?;
+                    return Ok(None);
+                }
                 return err(e.span, format!("the last line of a {} gives its value, but this has none", branches.each));
             }
             return Ok(Some((ty, e.span)));
         }
         self.check_stmt(last)?;
         if !always_leaves(body) {
+            if branches.optional {
+                return Ok(None);
+            }
             return err(at, branches.needs_value());
         }
         Ok(None)
@@ -9139,16 +9280,20 @@ impl Checker {
                     Some(told) => self.made_kinds(told, expr.span)?,
                     None => *result,
                 };
-                let own = Type::Or(if told_given { place.clone() } else { given }, Box::new(result.clone()));
-                if let Some(body) = value.body_mut() {
-                    // What the last lines were made part of fails with the
-                    // loop's new result; then the place tells them the rest.
-                    last_values_mut(body, &mut |e| {
+                let own = Type::Or(if told_given { place.clone() } else { given.clone() }, Box::new(result.clone()));
+                if let Some(finally) = value.finally_mut() {
+                    last_values_mut(finally, &mut |e| {
                         if let (ExprKind::Wrap(_), Some(Type::Or(value, _))) = (&e.kind, &e.ty) {
                             e.ty = Some(Type::Or(value.clone(), Box::new(result.clone())));
                         }
                     });
-                    self.settle_value(body, &own)?;
+                    self.settle_value(finally, &own)?;
+                } else if let Some(body) = value.body_mut() {
+                    let item_ty = match &**if told_given { place } else { &given } {
+                        Type::Array(item, _) | Type::Slice(item, _) => (**item).clone(),
+                        other => other.clone(),
+                    };
+                    self.settle_value(body, &item_ty)?;
                 }
                 expr.ty = Some(own);
             }
@@ -14309,9 +14454,13 @@ impl Checker {
                 }
             }
             StmtKind::Block(body) => self.substitute_block(body, given, made),
-            StmtKind::Loop(cond, body) => {
+            StmtKind::Loop(cond, body, finally) => {
                 self.substitute_condition(cond, body, given, made)?;
-                self.substitute_block(body, given, made)
+                self.substitute_block(body, given, made)?;
+                if let Some(finally) = finally {
+                    self.substitute_block(finally, given, made)?;
+                }
+                Ok(())
             }
             StmtKind::Parted(parted) => {
                 self.substitute_block(&mut parted.start, given, made)?;
@@ -14319,16 +14468,24 @@ impl Checker {
                     self.substitute_condition(cond, &mut parted.body, given, made)?;
                 }
                 self.substitute_block(&mut parted.step, given, made)?;
-                self.substitute_block(&mut parted.body, given, made)
+                self.substitute_block(&mut parted.body, given, made)?;
+                if let Some(finally) = &mut parted.finally {
+                    self.substitute_block(finally, given, made)?;
+                }
+                Ok(())
             }
-            StmtKind::Each(name, _, range, body) if matches!(&range.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) => {
+            StmtKind::Each(name, _, range, body, _) if matches!(&range.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) => {
                 let (name, range, body) = (name.clone(), range.clone(), std::mem::take(body));
                 stmt.kind = self.each_of_group(&name, &range, body, given, made, at)?;
                 Ok(())
             }
-            StmtKind::Each(_, _, range, body) => {
+            StmtKind::Each(_, _, range, body, finally) => {
                 self.substitute_expr(range, given, made)?;
-                self.substitute_block(body, given, made)
+                self.substitute_block(body, given, made)?;
+                if let Some(finally) = finally {
+                    self.substitute_block(finally, given, made)?;
+                }
+                Ok(())
             }
             StmtKind::Match(subject, cases) => {
                 self.substitute_expr(subject, given, made)?;
@@ -15396,7 +15553,7 @@ fn always_sends(block: &Block) -> bool {
 /// in it stops it.
 fn never_finishes(stmt: &Stmt, name: Option<&str>) -> bool {
     match &stmt.kind {
-        StmtKind::Loop(cond, body) if says_true(cond) => !stops_loop(&[body], name),
+        StmtKind::Loop(cond, body, _) if says_true(cond) => !stops_loop(&[body], name),
         StmtKind::Parted(parted) if parted.cond.as_ref().is_none_or(says_true) => !stops_loop(&[&parted.start, &parted.step, &parted.body], name),
         _ => false,
     }
@@ -15436,7 +15593,7 @@ fn unused_in_loop(parted: &PartedLoop) -> Option<(String, Span)> {
     }
     if let Some(cond) = &parted.cond {
         let mut reads = Vec::new();
-        walk_block(&[Stmt::new(StmtKind::Loop(cond.clone(), Vec::new()), cond.value.span)], &mut |e| {
+        walk_block(&[Stmt::new(StmtKind::Loop(cond.clone(), Vec::new(), None), cond.value.span)], &mut |e| {
             if let ExprKind::Var(name) = &e.kind {
                 reads.push(name.clone());
             }
@@ -15595,21 +15752,32 @@ fn stmt_effects(stmt: &Stmt, names: &[String], inner: &mut Vec<Option<String>>, 
 fn nested_loop_effects(stmt: &Stmt, name: Option<String>, names: &[String], inner: &mut Vec<Option<String>>, own: Option<&str>, effects: &mut LoopEffects) {
     match &stmt.kind {
         StmtKind::Named(name, nested) => return nested_loop_effects(nested, Some(name.clone()), names, inner, own, effects),
-        StmtKind::Each(_, _, source, _) => expr_effects(source, names, inner, own, effects),
+        StmtKind::Each(_, _, source, _, _) => expr_effects(source, names, inner, own, effects),
         StmtKind::Parted(parted) => loop_effects(&parted.start, names, inner, own, effects),
         _ => {}
     }
     inner.push(name);
     match &stmt.kind {
-        StmtKind::Loop(cond, block) => {
+        StmtKind::Loop(cond, block, finally) => {
             cond.parts().for_each(|part| expr_effects(&part.value, names, inner, own, effects));
             loop_effects(block, names, inner, own, effects);
+            if let Some(finally) = finally {
+                loop_effects(finally, names, inner, own, effects);
+            }
         }
-        StmtKind::Each(_, _, _, block) => loop_effects(block, names, inner, own, effects),
+        StmtKind::Each(_, _, _, block, finally) => {
+            loop_effects(block, names, inner, own, effects);
+            if let Some(finally) = finally {
+                loop_effects(finally, names, inner, own, effects);
+            }
+        }
         StmtKind::Parted(parted) => {
             parted.cond.iter().flat_map(Condition::parts).for_each(|part| expr_effects(&part.value, names, inner, own, effects));
             loop_effects(&parted.step, names, inner, own, effects);
             loop_effects(&parted.body, names, inner, own, effects);
+            if let Some(finally) = &parted.finally {
+                loop_effects(finally, names, inner, own, effects);
+            }
         }
         _ => {}
     }
@@ -16773,22 +16941,31 @@ fn visit_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr) -> bool) {
                 visit_block(block, f);
             }
         }
-        StmtKind::Loop(cond, block) => {
+        StmtKind::Loop(cond, block, finally) => {
             cond.parts().for_each(|part| visit_expr(&part.value, f));
             visit_block(block, f);
+            if let Some(finally) = finally {
+                visit_block(finally, f);
+            }
         }
         StmtKind::Parted(parted) => {
             visit_block(&parted.start, f);
             parted.cond.iter().flat_map(Condition::parts).for_each(|part| visit_expr(&part.value, f));
             visit_block(&parted.step, f);
             visit_block(&parted.body, f);
+            if let Some(finally) = &parted.finally {
+                visit_block(finally, f);
+            }
         }
         StmtKind::Block(block) => visit_block(block, f),
         StmtKind::Turns(turns) => turns.iter().for_each(|turn| visit_block(turn, f)),
         StmtKind::Named(_, inner) => visit_stmt(inner, f),
-        StmtKind::Each(_, _, source, block) => {
+        StmtKind::Each(_, _, source, block, finally) => {
             visit_expr(source, f);
             visit_block(block, f);
+            if let Some(finally) = finally {
+                visit_block(finally, f);
+            }
         }
         StmtKind::Match(subject, cases) => {
             visit_expr(subject, f);
@@ -16981,12 +17158,22 @@ const OWNER_MARK: &str = "\u{0}";
 /// `break = v` in it.
 fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
     match &stmt.kind {
-        StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => {
-            last_values(body, values);
+        StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => {
+            if let Some(finally) = finally {
+                last_values(finally, values);
+                finally.iter().for_each(|stmt| break_values(stmt, values));
+            } else {
+                last_values(body, values);
+            }
             body.iter().for_each(|stmt| break_values(stmt, values));
         }
         StmtKind::Parted(parted) => {
-            last_values(&parted.body, values);
+            if let Some(finally) = &parted.finally {
+                last_values(finally, values);
+                finally.iter().for_each(|stmt| break_values(stmt, values));
+            } else {
+                last_values(&parted.body, values);
+            }
             parted.body.iter().for_each(|stmt| break_values(stmt, values));
         }
         StmtKind::Named(_, inner) => loop_values(inner, values),
@@ -17004,7 +17191,7 @@ fn break_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
             blocks.extend(else_block.iter().map(Vec::as_slice));
         }
         StmtKind::Match(_, cases) => blocks.extend(cases.iter().map(|case| case.body.as_slice())),
-        StmtKind::Block(body) | StmtKind::Loop(_, body) | StmtKind::Each(_, _, _, body) => blocks.push(body),
+        StmtKind::Block(body) | StmtKind::Loop(_, body, _) | StmtKind::Each(_, _, _, body, _) => blocks.push(body),
         StmtKind::Parted(parted) => blocks.push(&parted.body),
         StmtKind::Named(_, inner) => break_values(inner, values),
         _ => {}

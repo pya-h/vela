@@ -17,10 +17,12 @@ task main()
                 break found = x
             fi
         fi
-        x
+    finally
+        0
     fi
     fixed sum: int ~ LoopResult = loop flex i = 0, s = 0 || i < 4 || i++
         s += i
+    finally
         s
     fi
     show(found { 0 }, sum { 0 })

@@ -266,7 +266,7 @@ impl Checked {
             StmtKind::Named(_, inner) => self.statement(inner, kinds),
             StmtKind::Break(_, value) => value.iter().for_each(|value| self.expr(value, kinds)),
             StmtKind::Continue(_) => {}
-            StmtKind::Loop(cond, body) => {
+            StmtKind::Loop(cond, body, finally) => {
                 for part in cond.parts() {
                     self.expr(&part.value, kinds);
                     if let Some(pattern) = &part.pattern {
@@ -274,6 +274,9 @@ impl Checked {
                     }
                 }
                 self.block(body, kinds);
+                if let Some(finally) = finally {
+                    self.block(finally, kinds);
+                }
             }
             StmtKind::Parted(parted) => {
                 self.block(&parted.start, kinds);
@@ -285,8 +288,11 @@ impl Checked {
                 }
                 self.block(&parted.step, kinds);
                 self.block(&parted.body, kinds);
+                if let Some(finally) = &parted.finally {
+                    self.block(finally, kinds);
+                }
             }
-            StmtKind::Each(_, second, range, body) => {
+            StmtKind::Each(_, second, range, body, finally) => {
                 // A counter, an item of an array or slice, or a map's key and
                 // value, once the checker knows which.
                 let (item, value) = match (&range.kind, &range.ty) {
@@ -303,6 +309,9 @@ impl Checked {
                 }
                 self.expr(range, kinds);
                 self.block(body, kinds);
+                if let Some(finally) = finally {
+                    self.block(finally, kinds);
+                }
             }
             StmtKind::Match(subject, cases) => {
                 self.expr(subject, kinds);

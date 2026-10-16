@@ -1,0 +1,96 @@
+; Tests for the finally block on loops giving single summary values.
+include std/loops {LoopResult}
+
+task describe<V: shown, B: shown, M: shown>(a: region, r: V ~ LoopResult<B, M>@a)
+    match r
+    case {v}
+        show("result: ", v)
+    case failure e
+        match e
+        case Skipped
+            show("skipped")
+        case Broke b
+            match b
+            case {val}
+                show("broke: ", val)
+            case none
+                show("broke")
+            fi
+        case EndedByContinue
+            show("ended by continue")
+        case Manual m
+            show("manual: ", m)
+        fi
+    fi
+fi
+
+task main()
+    region r
+
+    ; 1. Multi-line calculations and local variables inside finally.
+    fixed summary = loop flex i = 1, sum = 0 || i <= 5 || i++
+        sum += i
+    finally
+        fixed avg = sum / 5
+        fixed extra = 10
+        avg + extra
+    fi
+    describe(r, summary)
+
+    ; 2. State variables declared in parted loop are visible in finally.
+    fixed factor = loop flex k = 1, acc = 1 || k <= 4 || k++
+        acc *= k
+    finally
+        acc + k
+    fi
+    describe(r, factor)
+
+    ; 3. When loop skips (0 passes): finally does not run -> Skipped.
+    fixed skipped = loop flex i = 10 || i < 5 || i++
+    finally
+        999
+    fi
+    describe(r, skipped)
+
+    ; 4. When loop breaks: finally does not run -> Broke.
+    fixed broken = each x in [10, 20, 30]
+        when x == 20
+            break = x * 2
+        fi
+    finally
+        999
+    fi
+    describe(r, broken)
+
+    ; 5. When final pass continues: finally does not run -> EndedByContinue.
+    fixed continued = each x in [1, 2, 3]
+        when x == 3
+            continue
+        fi
+    finally
+        999
+    fi
+    describe(r, continued)
+
+    ; 6. Manual failure from finally.
+    fixed manual: int ~ LoopResult<bool, text> = each x in 1..4
+    finally
+        when 1 > 0
+            fail LoopResult.Manual("failed in finally")
+        else
+            0
+        fi
+    fi
+    describe(r, manual)
+
+    ; 7. Conditional logic in finally returning scalar.
+    fixed cond_res = each x in [2, 4, 6]
+    finally
+        when 2 + 4 + 6 > 10
+            "large"
+        else
+            "small"
+        fi
+    fi
+    describe(r, cond_res)
+fi

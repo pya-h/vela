@@ -343,7 +343,7 @@ block shared type break continue endless fixed flex</pre>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
         <tr><td><code>loop flex i = 0 || i &lt; n || i++</code>, <code>endless</code></td><td>a loop in three parts, its start, condition and step, each with several items parted by <code>,</code> or none; a loop that never ends by itself (see <a href="#loop-parts">A loop in three parts</a>)</td></tr>
         <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
-        <tr><td><code>fixed r = each x in xs … fi</code>, <code>break = v</code></td><td>a loop that gives a value, its final pass's last line, or fails with <code>LoopResult</code>; a <code>break</code> that stops it with one (see <a href="#loop-values">Loops that give a value</a>)</td></tr>
+        <tr><td><code>fixed r = each x in xs … finally v fi</code>, <code>break = v</code></td><td>a loop that gives a value, via <code>finally</code> or map-form, or fails with <code>LoopResult</code>; a <code>break</code> that stops it with one (see <a href="#loop-values">Loops that give a value</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task, shape or kind takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -3908,9 +3908,11 @@ show(total)</pre>
 
       <h3 id="loop-values">Loops that give a value</h3>
       <p>
-        A <code>loop</code> or an <code>each</code> can be a value, wherever a value goes: <code>fixed r = loop … fi</code>,
-        an argument, a condition, what a task sends. The last line of each pass gives the value, as a plan B's block
-        does, and the loop gives the one of its final pass. A loop may also end without one, and then it fails with
+        A <code>loop</code> or an <code>each</code> can be a value, wherever a value goes: <code>fixed r = loop … finally v fi</code>,
+        an argument, a condition, what a task sends. In single-value form, a <code>finally</code> block before <code>fi</code>
+        runs once after the loop finishes all iterations normally and gives the summary value. In map form, a loop without
+        <code>finally</code> whose passes end with a value collects each pass's value into a collection (an array <code>[T#N]</code>
+        for constant counts, or a slice <code>[T]@r</code> for dynamic counts). A loop may also end without a value, and then it fails with
         <code>LoopResult&lt;B, M&gt;</code>, a kind of Vela's library, <code>std/loops</code>: so its value is a
         <code>V ~ LoopResult&lt;B, M&gt;</code>, read with a plan B, a <code>match</code>, or <code>is</code>.
       </p>
@@ -3918,18 +3920,24 @@ show(total)</pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">fixed</span> xs = [<span class="number">3</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">9</span>, <span class="number">4</span>]
-    <span class="comment">; The final pass's last line is the value.</span>
+    <span class="comment">; The finally block gives the summary value.</span>
+    <span class="keyword">flex</span> last = <span class="number">0</span>
     <span class="keyword">fixed</span> doubled = <span class="keyword">each</span> x <span class="keyword">in</span> xs
-        x * <span class="number">2</span>
+        last = x * <span class="number">2</span>
+    <span class="keyword">finally</span>
+        last
     <span class="keyword">fi</span>
     show(doubled { <span class="number">0</span> })                   <span class="comment">; 8</span>
 
     <span class="comment">; A break stops it with a value, which it fails with.</span>
+    <span class="keyword">flex</span> last_big = <span class="number">0</span>
     <span class="keyword">fixed</span> big = <span class="keyword">each</span> x <span class="keyword">in</span> xs
         <span class="keyword">when</span> x &gt; <span class="number">8</span>
             <span class="keyword">break</span> = x
         <span class="keyword">fi</span>
-        x
+        last_big = x
+    <span class="keyword">finally</span>
+        last_big
     <span class="keyword">fi</span>
     <span class="keyword">match</span> big
     <span class="keyword">case</span> {v}
@@ -3947,10 +3955,13 @@ show(total)</pre>
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
 
-    <span class="comment">; The last line may fail on purpose, and LoopResult written bare</span>
+    <span class="comment">; The finally block may fail on purpose, and LoopResult written bare</span>
     <span class="comment">; on the loop's own variable takes the loop's types.</span>
+    <span class="keyword">flex</span> last_checked = <span class="number">0</span>
     <span class="keyword">fixed</span> checked: int ~ LoopResult = <span class="keyword">loop</span> <span class="keyword">flex</span> i = <span class="number">0</span> || i &lt; xs.len || i++
-        <span class="keyword">when</span> xs[i] == <span class="number">4</span> <span class="keyword">fail</span> LoopResult.Manual(i) <span class="keyword">else</span> xs[i] <span class="keyword">fi</span>
+        last_checked = xs[i]
+    <span class="keyword">finally</span>
+        <span class="keyword">when</span> last_checked == <span class="number">4</span> <span class="keyword">fail</span> LoopResult.Manual(last_checked) <span class="keyword">else</span> last_checked <span class="keyword">fi</span>
     <span class="keyword">fi</span>
     show(checked { -<span class="number">1</span> })                   <span class="comment">; -1: the final pass failed</span>
 
@@ -3961,6 +3972,7 @@ show(total)</pre>
                 <span class="keyword">break</span> pair = a * <span class="number">10</span> + b
             <span class="keyword">fi</span>
         <span class="keyword">fi</span>
+    <span class="keyword">finally</span>
         <span class="number">0</span>
     <span class="keyword">fi</span>
     show(pair { -<span class="number">1</span> })                      <span class="comment">; -1: a break stopped it</span>
@@ -3975,20 +3987,20 @@ show(total)</pre>
     }
 <span class="keyword">fi</span></pre>
       <ul>
-        <li><strong>The last line.</strong> It runs every pass, and the final pass's value is the loop's, so a
-          <code>when</code> or a <code>match</code> there gives it through its branches, one of which may
-          <code>break</code> or <code>continue</code> instead. A failure there, <code>fail LoopResult.Manual(m)</code>,
-          is that pass's value like any other: only the final pass's counts, and the loop then fails with it. A
-          <code>fail …</code> on a line of its own does nothing, and is refused.</li>
+        <li><strong>Single-value and map forms.</strong> A loop returning a single computed value declares a
+          <code>finally</code> block before <code>fi</code>, whose last line gives the scalar result. A loop without
+          <code>finally</code> whose passes end with a value expression is map-form: each pass yields an item into
+          a stack array <code>[T#N]</code> (when count is constant) or a slice <code>[T]@r</code> (when count is dynamic).
+          If both pass-level values and <code>finally</code> are present, <code>finally</code> overrides.</li>
         <li><strong>Why it fails.</strong> <code>Skipped</code>: the body never ran, its condition failing at once or
-          its <code>each</code> having nothing to go through. <code>Broke(maybe B)</code>: a <code>break</code>
-          stopped it, holding what <code>break = v</code> gave, or <code>none</code> for a bare <code>break</code>.
-          <code>EndedByContinue</code>: its final pass ended with <code>continue</code>, before the last line, even
-          when an earlier pass gave a value. <code>Manual(M)</code>: the final pass's last line failed with it. The
-          last line fails only with <code>fail LoopResult.Manual(…)</code> written there; the other three say what the
+          its <code>each</code> having nothing to go through (the <code>finally</code> block does not run). <code>Broke(maybe B)</code>: a <code>break</code>
+          stopped it, holding what <code>break = v</code> gave, or <code>none</code> for a bare <code>break</code> (the <code>finally</code> block does not run).
+          <code>EndedByContinue</code>: its final pass ended with <code>continue</code>, so the last pass did not complete normally.
+          <code>Manual(M)</code>: the <code>finally</code> block's last line failed with <code>fail LoopResult.Manual(m)</code>. The
+          <code>finally</code> block fails only with <code>fail LoopResult.Manual(…)</code> written there; the other three say what the
           loop did, so a value that may fail, as another loop giving a value, takes a plan B on the last line.</li>
-        <li><strong>Its types.</strong> <code>V</code> is what the last lines give, <code>B</code> what the
-          <code>break</code>s give, and <code>M</code> what the last lines fail with. Where nothing in the loop gives
+        <li><strong>Its types.</strong> <code>V</code> is what the <code>finally</code> block (or map-form collection) gives, <code>B</code> what the
+          <code>break</code>s give, and <code>M</code> what the <code>finally</code> block fails with. Where nothing in the loop gives
           one, the place its value goes names it, <code>fixed r: int ~ LoopResult&lt;text, int&gt; = loop …</code>, a
           task's result or a parameter, and where no place does, it is <code>bool</code>. The <code>break</code>s of a loop give one type, and what they and the last lines fail with is in
           one region. A <code>break</code> in a turn of an <code>each</code> over a group gives a loop around it no

@@ -18,11 +18,14 @@ fi
 
 ; In a task that takes types, B is the task's.
 task first_over<T: ordered & shown>(xs: [T]@r, limit: T) -> T ~ bool
+    flex last = xs[0]
     fixed found = each x in xs
         when x > limit
             break = x
         fi
-        x
+        last = x
+    finally
+        last
     fi
     match found
     case {_}
@@ -50,17 +53,23 @@ task main()
     fixed xs = [3, 8, 1, 9, 4]
 
     ; The final pass's last line.
+    flex last = 0
     fixed doubled = each x in xs
-        x * 2
+        last = x * 2
+    finally
+        last
     fi
     show("doubled ", doubled { -1 })
 
     ; A break gives a value it fails with, or none.
+    flex last_big = 0
     fixed big = each x in xs
         when x > 8
             break = x
         fi
-        x
+        last_big = x
+    finally
+        last_big
     fi
     match big
     case {v}
@@ -82,21 +91,29 @@ task main()
     flex n = 10
     fixed none_ran = loop n < 3
         n++
+    finally
         n
     fi
+    flex last_odd = 0
     fixed odd = each x in xs
         when x % 2 == 0
             continue
         fi
-        x
+        last_odd = x
+    finally
+        last_odd
     fi
+    flex last_checked = 0
     fixed checked: int ~ LoopResult<text, int> = each x in xs
         when x > 100
             break = "huge"
-        else when x == 4
-            fail LoopResult.Manual(x)
+        fi
+        last_checked = x
+    finally
+        when last_checked == 4
+            fail LoopResult.Manual(last_checked)
         else
-            x
+            last_checked
         fi
     fi
     show("never ran ", none_ran { -1 }, ", odd ", odd { -1 })
@@ -110,6 +127,7 @@ task main()
     ; Three parts, and a LoopResult written bare takes the loop's types.
     fixed total: int ~ LoopResult = loop flex i = 0, sum = 0 || i < 5 || i++
         sum += i
+    finally
         sum
     fi
     show("total ", total { 0 })
@@ -121,6 +139,7 @@ task main()
                 break pair = a * 10 + b
             fi
         fi
+    finally
         0
     fi
     match pair
@@ -144,29 +163,38 @@ task main()
                 continue rows
             fi
         fi
-        a
+    finally
+        0
     fi
     show("rows ", rows { -1 })
 
     ; Anywhere a value goes: a call, a condition, another loop's last line.
-    show(loop flex k = 0 || k < 3 || k++
-        k * 10
+    show(loop flex k = 0, last_k = 0 || k < 3 || k++
+        last_k = k * 10
+    finally
+        last_k
     fi { 0 })
     when (each x in 0..4
-        x
+    finally
+        3
     fi { 0 }) == 3
         show("three")
     fi
+    flex last_deep = 0
     fixed deep = each a in 1..3
-        each b in 1..3
-            a * b
-        fi { 0 }
+        last_deep = (each b in 1..3
+        finally
+            a * 2
+        fi { 0 })
+    finally
+        last_deep
     fi
     show("deep ", deep { 0 })
     show(first_over([1, 5, 9, ...] at r, 4) { 0 }, " ", first_over(["a", "q", ...] at r, "m") { "" })
     show(apply((m: int) -> int
         fixed s = loop flex i = 0, sum = 0 || i < m || i++
             sum += i
+        finally
             sum
         fi
         <- s { -1 }

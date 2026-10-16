@@ -1,0 +1,11 @@
+; warning: 5:22: using both map-form loop values and a finally block; finally overrides the loop body return values
+include std/loops {LoopResult}
+
+task main()
+    fixed res = each x in 0..3
+        x * 2
+    finally
+        10
+    fi
+    show(res { 0 })
+fi

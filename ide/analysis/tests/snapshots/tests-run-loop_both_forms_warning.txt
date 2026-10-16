@@ -1,0 +1,20 @@
+  1 | ; warning: 5:22: using both map-form loop values and a finally block; finally overrides the loop body return values
+    | comment:; warning: 5:22: using both map-form loop values and a finally block; finally overrides the loop body return values
+  2 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     fixed res = each x in 0..3
+    | keyword:fixed  variable:res  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:3
+  6 |         x * 2
+    | variable:x  operator:*  number:2
+  7 |     finally
+    | keyword:finally
+  8 |         10
+    | number:10
+  9 |     fi
+    | keyword:fi
+ 10 |     show(res { 0 })
+    | builtin-fn:show  punctuation:(  variable:res  punctuation:{  number:0  punctuation:}  punctuation:)
+ 11 | fi
+    | keyword:fi
