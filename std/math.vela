@@ -47,3 +47,22 @@ native task exp(x: float) -> float
 ; one it falls back on, and `log(8.0, 2.0)` is 3. With `e` as the base, it is
 ; the natural logarithm, and bases 2, 10, and `e` are exact.
 native task log(x: float, base: float = 10.0) -> float
+
+; A 512-bit integer, held as 8 64-bit unsigned limbs, least significant first.
+shape Int512
+    limbs: [uint64#8]
+fi
+
+; Creates an Int512 initialized to zero.
+task zero512() -> Int512
+    <- Int512 { limbs: [0, 0, 0, 0, 0, 0, 0, 0] }
+fi
+
+; Creates an Int512 initialized from a 64-bit int.
+task int512(n: int64) -> Int512
+    flex res = zero512()
+    when n >= 0
+        res.limbs[0] = uint64(n)
+    fi
+    <- res
+fi

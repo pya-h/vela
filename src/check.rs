@@ -1780,7 +1780,7 @@ impl Checker {
                 let (a, b) = (self.fold_constant(l, through)?, self.fold_constant(r, through)?);
                 fold_binary(*op, a, b, span)
             }
-            ExprKind::Call { name, args, .. } if [INT_CAST, FLOAT_CAST, CHAR_CAST, UNIT_CAST].contains(&name.as_str()) => {
+            ExprKind::Call { name, args, .. } if number_cast(name).is_some() => {
                 let [arg] = args.as_slice() else { return err(span, format!("'{}(…)' takes one value", name)) };
                 let value = self.fold_constant(arg, through)?;
                 fold_cast(name, value, span)
@@ -10542,7 +10542,8 @@ impl Checker {
     /// written as far as its values go, so it is no reason to refuse.
     fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) | Type::Closure(_) => None,
+            _ if ty.is_numeric() => None,
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) | Type::Closure(_) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
             Type::Map(key, value, _) => self.unwritable_in(key, seen).or_else(|| self.unwritable_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
@@ -11319,21 +11320,19 @@ impl Checker {
             }
             return check_power(l, r, &lt, &rt, span);
         }
-        // `b + 1`, `b < 200`, `m ~= 7`: a number written out beside a unit, or
-        // a maybe of one, is one.
-        let byte_in = |ty: &Type| match ty {
-            Type::Maybe(inner) if inner.is_byte() => Some((**inner).clone()),
-            other if other.is_byte() => Some(other.clone()),
+        let integer_in = |ty: &Type| match ty {
+            Type::Maybe(inner) if inner.is_integer() => Some((**inner).clone()),
+            other if other.is_integer() => Some(other.clone()),
             _ => None,
         };
-        if let Some(byte) = byte_in(&lt)
-            && byte_literal(r, &byte)?
+        if let Some(target) = integer_in(&lt)
+            && numeric_literal(r, &target)?
         {
-            rt = byte;
-        } else if let Some(byte) = byte_in(&rt)
-            && byte_literal(l, &byte)?
+            rt = target;
+        } else if let Some(target) = integer_in(&rt)
+            && numeric_literal(l, &target)?
         {
-            lt = byte;
+            lt = target;
         }
         match op {
             BinaryOp::Pow => Err(Error::internal_at(span, "a power checked as other arithmetic")),
@@ -11345,8 +11344,6 @@ impl Checker {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
                         return err(span, untold);
                     }
-                    // No word asks a type for arithmetic (see `Need`), so a
-                    // task that adds its values is written for numbers.
                     if let Some(name) = [&lt, &rt].iter().find_map(|ty| match ty {
                         Type::Param(name) => Some(name),
                         _ => None,
@@ -11361,36 +11358,42 @@ impl Checker {
                     }
                     return err(span, format!("arithmetic requires numeric operands{}", extract_hint(&[&lt, &rt])));
                 }
-                // An int doesn't become a float on its own: the writer says so
-                // with `float(n)`, as every other place a number goes (a
-                // binding, an argument, a field, an item) already asks.
                 if lt != rt {
                     let at = if lt == Type::Int { l.span } else { r.span };
-                    if !lt.is_byte() && !rt.is_byte() {
+                    if (lt == Type::Int && rt == Type::Float) || (lt == Type::Float && rt == Type::Int) {
                         return err(
                             at,
                             "an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)",
                         );
                     }
-                    let (byte, other) = if lt.is_byte() { (&lt, &rt) } else { (&rt, &lt) };
+                    if (lt == Type::Int && rt == Type::Unit) || (lt == Type::Unit && rt == Type::Int) {
+                        return err(
+                            at,
+                            "an int and a unit don't mix in arithmetic: turn one into the other first, as in 'int(b) + x' or 'b + unit(x)'",
+                        );
+                    }
+                    if (lt == Type::Float && rt == Type::Unit) || (lt == Type::Unit && rt == Type::Float) {
+                        return err(
+                            at,
+                            "a float and a unit don't mix in arithmetic: turn one into the other first, as in 'float(b) + x' or 'b + unit(x)'",
+                        );
+                    }
                     return err(
                         at,
                         format!(
-                            "{0} and a {1} don't mix in arithmetic: turn one into the other first, as in '{2}(b) + x' or 'b + {1}(x)'",
-                            if *other == Type::Int { "an int" } else { "a float" },
-                            byte,
-                            other
+                            "{} and {} don't mix in arithmetic: turn one into the other first, as in '{}(…)'",
+                            lt, rt, lt
                         ),
                     );
                 }
-                if lt.is_byte() {
+                if lt.is_integer() {
+                    check_constant_arithmetic(op, l, r, &lt, span)?;
                     return Ok(lt);
                 }
-                if lt == Type::Float {
-                    return Ok(Type::Float);
+                if lt.is_float() {
+                    return Ok(lt);
                 }
-                check_constant_arithmetic(op, l, r, span)?;
-                Ok(Type::Int)
+                Ok(lt)
             }
             BinaryOp::Eq | BinaryOp::Ne => {
                 let none_and_maybe = matches!((&lt, &rt), (Type::None, Type::Maybe(_)) | (Type::Maybe(_), Type::None));
@@ -11990,27 +11993,25 @@ impl Checker {
             return err(*at, format!("'{0}' takes no types, only the value to turn into {0}, as in '{0}(x)'", into));
         }
         let takes = match into {
-            Type::Int => "'int' takes an int, a unit, a char, a float, a bool, or text",
-            Type::Unit => "'unit' takes an int, a unit, a char, a float, a bool, or text",
-            Type::Char => "'char' takes an int, a unit, or a char, the code of the character",
-            _ => "'float' takes an int, a unit, a float, or text",
+            Type::Int => "'int' takes an int, a unit, a char, a float, a bool, or text".to_string(),
+            Type::Unit => "'unit' takes an int, a unit, a char, a float, a bool, or text".to_string(),
+            Type::Char => "'char' takes an int, a unit, or a char, the code of the character".to_string(),
+            _ if into.is_float() => format!("'{}' takes an int, a unit, a float, or text", into),
+            _ => format!("'{}' takes an int, a unit, a char, a float, a bool, or text", into),
         };
         let [value] = args else {
             return err(span, format!("'{0}(…)' turns one value into {0}, as in '{0}(x)', got {1}", into, count(args.len(), "value")));
         };
         let ty = self.check_expr(value)?;
-        let fits = matches!(
-            (into, &ty),
-            (Type::Int | Type::Unit, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool)
-                | (Type::Float, Type::Int | Type::Unit | Type::Float)
-                | (Type::Char, Type::Int | Type::Unit | Type::Char)
-        );
-        // `unit(300)`: a number written out that a unit can't hold.
-        if (into.is_byte() || *into == Type::Char)
-            && ty == Type::Int
+        let fits = match into {
+            Type::Char => ty.is_integer() || ty == Type::Char,
+            _ if into.is_float() => ty.is_numeric() && ty != Type::Bool,
+            _ => ty.is_numeric() || ty == Type::Bool || ty == Type::Char,
+        };
+        if (into.is_integer() || *into == Type::Char)
             && let Some(n) = constant_int(value)
         {
-            fits_byte(n, into, value.span)?;
+            fits_type(i128::from(n), into, value.span)?;
         }
         if fits || ty.unknown() {
             return Ok(into.clone());
@@ -13361,7 +13362,8 @@ impl Checker {
     /// can fail is read first.
     fn comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) | Type::Task(_) => true,
+            _ if ty.is_numeric() => true,
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) | Type::Task(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
             // `Option<T>` in a task that takes types: what its variants carry,
             // given those types, compares as a made kind's does.
@@ -13445,7 +13447,8 @@ impl Checker {
 
     fn unsimilar_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => None,
+            _ if ty.is_numeric() => None,
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
             Type::Map(key, value, _) => self.unsimilar_in(key, seen).or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
@@ -13576,14 +13579,15 @@ impl Checker {
         }
         self.settle_types(expr, expected)?;
         self.settle_variant(expr, expected)?;
-        // `flex b: unit = 200`: a number written out becomes a unit where one
-        // is expected, alone, in a maybe, or as a success.
-        let byte = match expected {
+        let numeric = match expected {
             Type::Maybe(inner) | Type::Or(inner, _) => inner,
             other => other,
         };
-        if byte.is_byte() {
-            byte_literal(expr, byte)?;
+        if numeric.is_numeric() {
+            numeric_literal(expr, numeric)?;
+            if matches!(expr.kind, ExprKind::FloatLit(_)) && *numeric == Type::Float32 {
+                expr.ty = Some(Type::Float32);
+            }
         }
         let actual = expr.ty()?.clone();
         if fits_regions(&actual, expected) {
@@ -15195,7 +15199,7 @@ fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
 fn is_arithmetic(value: Option<&Expr>) -> bool {
     match value.map(|value| &value.kind) {
         Some(ExprKind::Binary(..) | ExprKind::Unary(..)) => true,
-        Some(ExprKind::Call { name, .. }) => [INT_CAST, FLOAT_CAST, CHAR_CAST, UNIT_CAST].contains(&name.as_str()),
+        Some(ExprKind::Call { name, .. }) => number_cast(name).is_some(),
         _ => false,
     }
 }
@@ -15931,23 +15935,28 @@ fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
     use Constant::*;
     let byte = |n: i64, ty: &str| u8::try_from(n).map_err(|_| Error::at(span, format!("the value, {}, is outside a {}'s 0..255", n, ty)));
     match (name, value) {
-        (INT_CAST, Int(n)) => Ok(Int(n)),
-        (INT_CAST, Unit(n) | Char(n)) => Ok(Int(i64::from(n))),
-        (INT_CAST, Bool(b)) => Ok(Int(i64::from(b))),
+        (INT_CAST | "int64", Int(n)) => Ok(Int(n)),
+        (INT_CAST | "int64", Unit(n) | Char(n)) => Ok(Int(i64::from(n))),
+        (INT_CAST | "int64", Bool(b)) => Ok(Int(i64::from(b))),
         // As `vela__rt__int_of` does: toward zero, and a float outside the ints stops.
-        (INT_CAST, Float(x)) if x.is_finite() && x.trunc() >= -9_223_372_036_854_775_808.0 && x.trunc() < 9_223_372_036_854_775_808.0 => Ok(Int(x.trunc() as i64)),
-        (INT_CAST, Float(_)) => err(span, "the value doesn't fit in an int"),
-        (FLOAT_CAST, Float(x)) => Ok(Float(x)),
-        (FLOAT_CAST, Int(n)) => Ok(Float(n as f64)),
-        (FLOAT_CAST, Unit(n)) => Ok(Float(f64::from(n))),
-        (UNIT_CAST, Int(n)) => Ok(Unit(byte(n, "unit")?)),
-        (UNIT_CAST, Unit(n) | Char(n)) => Ok(Unit(n)),
-        (UNIT_CAST, Bool(b)) => Ok(Unit(u8::from(b))),
-        // Toward zero, as `unit(x)` does when the program runs.
-        (UNIT_CAST, Float(x)) if x.is_finite() && (0.0..256.0).contains(&x.trunc()) => Ok(Unit(x.trunc() as u8)),
-        (UNIT_CAST, Float(x)) => err(span, format!("the value, {}, is outside a unit's 0..255", x.trunc())),
+        (INT_CAST | "int64", Float(x)) if x.is_finite() && x.trunc() >= -9_223_372_036_854_775_808.0 && x.trunc() < 9_223_372_036_854_775_808.0 => Ok(Int(x.trunc() as i64)),
+        (INT_CAST | "int64", Float(_)) => err(span, "the value doesn't fit in an int"),
+        (FLOAT_CAST | "float64" | "float32", Float(x)) => Ok(Float(x)),
+        (FLOAT_CAST | "float64" | "float32", Int(n)) => Ok(Float(n as f64)),
+        (FLOAT_CAST | "float64" | "float32", Unit(n)) => Ok(Float(f64::from(n))),
+        (UNIT_CAST | "uint8", Int(n)) => Ok(Unit(byte(n, "unit")?)),
+        (UNIT_CAST | "uint8", Unit(n) | Char(n)) => Ok(Unit(n)),
+        (UNIT_CAST | "uint8", Bool(b)) => Ok(Unit(u8::from(b))),
+        (UNIT_CAST | "uint8", Float(x)) if x.is_finite() && (0.0..256.0).contains(&x.trunc()) => Ok(Unit(x.trunc() as u8)),
+        (UNIT_CAST | "uint8", Float(x)) => err(span, format!("the value, {}, is outside a unit's 0..255", x.trunc())),
         (CHAR_CAST, Int(n)) => Ok(Char(byte(n, "char")?)),
         (CHAR_CAST, Unit(n) | Char(n)) => Ok(Char(n)),
+        (name, Int(n)) if matches!(number_cast(name), Some(ref ty) if ty.is_integer()) => {
+            if let Some(ty) = number_cast(name) {
+                fits_type(i128::from(n), &ty, span)?;
+            }
+            Ok(Int(n))
+        }
         (_, value) => err(span, format!("'{}(…)' doesn't take a {} in a macro's value", name, value.ty())),
     }
 }
@@ -16114,7 +16123,7 @@ fn constant_int(e: &Expr) -> Option<i64> {
 /// Rejects int arithmetic the program would stop on every time it runs: a
 /// division or remainder by a constant zero, and a constant whose result
 /// doesn't fit in an `int`. Anything else is checked as the program runs.
-fn check_constant_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, span: Span) -> Result<()> {
+fn check_constant_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, ty: &Type, span: Span) -> Result<()> {
     let divisor = constant_int(r);
     if divisor == Some(0) {
         match op {
@@ -16132,7 +16141,11 @@ fn check_constant_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, span: Span) -> Re
         BinaryOp::Div => a / b,
         _ => return Ok(()),
     };
-    fits_int(exact, span)
+    if *ty == Type::Int {
+        fits_int(exact, span)
+    } else {
+        fits_type(exact, ty, span)
+    }
 }
 
 /// A key written out, as text a message can quote: `"a"`, `4`, `'x'`, `true`.
@@ -16153,7 +16166,8 @@ fn constant_key(e: &Expr) -> Option<String> {
 /// checked where a use gives it one (see `settle_applications`).
 fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
     match key {
-        Type::Int | Type::Unit | Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Unknown | Type::Param(_) => None,
+        _ if key.is_integer() => None,
+        Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Unknown | Type::Param(_) => None,
         Type::Named(name, _) if is_param(name) => None,
         Type::Tuple(items) => items.iter().find_map(|item| key_problem(item, is_param)),
         Type::Float => Some("a float, which nan makes unequal to itself".to_string()),
@@ -16161,16 +16175,45 @@ fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
     }
 }
 
-/// Makes `e`, when it is a number written out (`200`, `-1`, `3 - 1`), a value
-/// of the byte type `byte` (a unit), if it fits: whether it did.
-fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
+fn integer_range(ty: &Type) -> Option<(i128, i128)> {
+    match ty {
+        Type::Int8 => Some((i8::MIN as i128, i8::MAX as i128)),
+        Type::Int16 => Some((i16::MIN as i128, i16::MAX as i128)),
+        Type::Int32 => Some((i32::MIN as i128, i32::MAX as i128)),
+        Type::Int => Some((i64::MIN as i128, i64::MAX as i128)),
+        Type::Unit | Type::Char => Some((0, 255)),
+        Type::Uint16 => Some((0, u16::MAX as i128)),
+        Type::Uint32 => Some((0, u32::MAX as i128)),
+        Type::Uint64 => Some((0, u64::MAX as i128)),
+        _ => None,
+    }
+}
+
+fn fits_type(n: i128, ty: &Type, span: Span) -> Result<()> {
+    if let Some((min, max)) = integer_range(ty) {
+        if n >= min && n <= max {
+            return Ok(());
+        }
+        return err(span, format!("{} doesn't fit in a {}, which holds {} to {}", n, ty, min, max));
+    }
+    Ok(())
+}
+
+fn numeric_literal(e: &mut Expr, target: &Type) -> Result<bool> {
     if e.ty != Some(Type::Int) {
         return Ok(false);
     }
+    if !target.is_integer() {
+        return Ok(false);
+    }
     let Some(n) = constant_int(e) else { return Ok(false) };
-    fits_byte(n, byte, e.span)?;
-    e.ty = Some(byte.clone());
+    fits_type(i128::from(n), target, e.span)?;
+    e.ty = Some(target.clone());
     Ok(true)
+}
+
+fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
+    numeric_literal(e, byte)
 }
 
 /// Where a place written by a step (see `Checker::step_to_assignment`) calls a
@@ -16195,7 +16238,7 @@ fn changing_part(e: &Expr) -> Option<Span> {
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Unary(_, inner) => changing_part(inner),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => changing_part(a).or_else(|| changing_part(b)),
         // `xs[int(b)]`: a conversion is no task, and gives the same value each time.
-        ExprKind::Call { name, args, .. } if [INT_CAST, FLOAT_CAST, UNIT_CAST, CHAR_CAST].contains(&name.as_str()) => args.iter().find_map(changing_part),
+        ExprKind::Call { name, args, .. } if number_cast(name).is_some() => args.iter().find_map(changing_part),
         _ => Some(e.span),
     }
 }
@@ -16295,13 +16338,6 @@ fn char_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, lt: &Type, rt: &Type, span:
     Ok(ty)
 }
 
-/// Checks that `n` fits in the byte type `byte`.
-fn fits_byte(n: i64, byte: &Type, span: Span) -> Result<()> {
-    if (0..=255).contains(&n) {
-        return Ok(());
-    }
-    err(span, format!("{} doesn't fit in a {}, which holds 0 to 255", n, byte))
-}
 
 /// Rejects `value`, the exact result of a constant int operation at `span`,
 /// when it doesn't fit in an `int`.
@@ -17090,7 +17126,12 @@ fn add_startups(items: &mut Vec<Item>) {
 
 /// The types written as one word that no declaration makes, which a type
 /// test names after `maybe`.
-pub const BUILTIN_TYPE_WORDS: [&str; 6] = ["int", "float", "text", "bool", "char", "unit"];
+pub const BUILTIN_TYPE_WORDS: &[&str] = &[
+    "int", "int64", "int32", "int16", "int8",
+    "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+    "float", "float64", "float32",
+    "text", "bool", "char",
+];
 
 /// The region of what a type test takes from an item whose type is not known
 /// yet: no name in the task is it, so nothing taken lasts past the call, as

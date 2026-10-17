@@ -3748,22 +3748,46 @@ impl Generator {
         if matches!(from, Type::Text(_)) {
             return Ok(format!("{}({})", read_helper(into), expr));
         }
-        Ok(match (into, &from) {
-            (Type::Int, Type::Int) | (Type::Float, Type::Float) | (Type::Unit, Type::Unit) => expr,
-            (Type::Int, Type::Bool | Type::Unit) => format!("((int64_t){})", parenthesized(&expr)),
-            (Type::Unit, Type::Bool) => format!("((uint8_t){})", parenthesized(&expr)),
-            (Type::Float, Type::Int | Type::Unit) => format!("((double){})", parenthesized(&expr)),
-            (Type::Int, Type::Float) => format!("vela__rt__int_of_float({}, {})", expr, self.location(e.span)),
-            (Type::Unit, Type::Int) => format!("vela__rt__unit_of({}, {})", expr, self.location(e.span)),
-            (Type::Char, Type::Char) | (Type::Char, Type::Unit) | (Type::Unit, Type::Char) => expr,
-            (Type::Int, Type::Char) => format!("((int64_t){})", parenthesized(&expr)),
-            (Type::Char, Type::Int) => format!("vela__rt__char_of({}, {})", expr, self.location(e.span)),
-            (Type::Unit, Type::Float) => {
-                let at = self.location(e.span);
-                format!("vela__rt__unit_of(vela__rt__int_of_float({}, {}), {})", expr, at, at)
+        if into == &from {
+            return Ok(expr);
+        }
+        let at = self.location(e.span);
+        let int_cast_helper = |ty: &Type| match ty {
+            Type::Int8 => Some("vela__rt__int8_of"),
+            Type::Int16 => Some("vela__rt__int16_of"),
+            Type::Int32 => Some("vela__rt__int32_of"),
+            Type::Unit => Some("vela__rt__unit_of"),
+            Type::Uint16 => Some("vela__rt__uint16_of"),
+            Type::Uint32 => Some("vela__rt__uint32_of"),
+            Type::Uint64 => Some("vela__rt__uint64_of"),
+            Type::Char => Some("vela__rt__char_of"),
+            _ => None,
+        };
+
+        if from.is_float() && into.is_integer() {
+            let int64_val = format!("vela__rt__int_of_float({}, {})", expr, at);
+            if let Some(helper) = int_cast_helper(into) {
+                return Ok(format!("{}({}, {})", helper, int64_val, at));
             }
-            _ => return Err(Error::internal_at(e.span, format!("'{}' of a value of type {}", into, from))),
-        })
+            return Ok(int64_val);
+        }
+
+        if into.is_float() {
+            return Ok(format!("(({}){})", c_type(into), parenthesized(&expr)));
+        }
+
+        if from == Type::Bool && into.is_integer() {
+            return Ok(format!("(({}){})", c_type(into), parenthesized(&expr)));
+        }
+
+        if (from.is_integer() || from == Type::Char) && (into.is_integer() || *into == Type::Char) {
+            if let Some(helper) = int_cast_helper(into) {
+                return Ok(format!("{}((int64_t){}, {})", helper, parenthesized(&expr), at));
+            }
+            return Ok(format!("((int64_t){})", parenthesized(&expr)));
+        }
+
+        Err(Error::internal_at(e.span, format!("'{}' of a value of type {}", into, from)))
     }
 
     /// The address of the place a method that changes the value it is called on
@@ -4338,7 +4362,7 @@ impl Generator {
             };
             return Ok(format!("vela__rt__unit_of({}, {})", whole, at));
         }
-        if op == BinaryOp::Mod && *e.ty()? == Type::Float {
+        if op == BinaryOp::Mod && e.ty()?.is_float() {
             // C's `%` is integer-only.
             return Ok(format!("vela__rt__fmod({}, {})", left, right));
         }
@@ -4470,9 +4494,9 @@ fn success(ret: &Type) -> String {
 /// ends the line when `ends`, which the last value `show` is given does.
 fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
-        Type::Int | Type::Unit => "int",
+        ty if ty.is_integer() => "int",
         Type::Char => "char",
-        Type::Float => "float",
+        ty if ty.is_float() => "float",
         Type::Bool => "bool",
         _ => "text",
     };
@@ -4485,7 +4509,7 @@ impl Generator {
     /// anything else through a writer to the output (see `Generator::gen_writer`).
     fn shown(&self, e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
         let written = match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
+            ty if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Text(_)) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
             Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
             Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, self.task_text(ty)),
             Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
@@ -4507,9 +4531,9 @@ impl Generator {
     /// by its type's `write`.
     fn put_item(&self, ty: &Type, value: &str) -> String {
         match ty {
-            Type::Int | Type::Unit => format!("vela__rt__put_int(w, {});", value),
+            ty if ty.is_integer() => format!("vela__rt__put_int(w, (int64_t){});", value),
             Type::Char => format!("vela__rt__put_char(w, {});", value),
-            Type::Float => format!("vela__rt__put_float(w, {});", value),
+            ty if ty.is_float() => format!("vela__rt__put_float(w, (double){});", value),
             Type::Bool => format!("vela__rt__put_bool(w, {});", value),
             Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
             Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
@@ -4546,11 +4570,10 @@ impl Layout<'_> {
     /// generator writes, as a 64-bit target lays it out.
     pub fn of(&self, ty: &Type) -> (usize, usize) {
         match ty {
-            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region | Type::Task(_) => (8, 8),
-            // Its function and what it keeps.
-            Type::Closure(_) => (16, 8),
-            Type::Maybe(inner) if is_pointer(inner) => (8, 8),
-            Type::Bool | Type::Unit | Type::Char => (1, 1),
+            Type::Int | Type::Uint64 | Type::Float | Type::Ptr(..) | Type::None | Type::Region | Type::Task(_) => (8, 8),
+            Type::Int32 | Type::Uint32 | Type::Float32 => (4, 4),
+            Type::Int16 | Type::Uint16 => (2, 2),
+            Type::Int8 | Type::Bool | Type::Unit | Type::Char => (1, 1),
             Type::Nothing => (0, 1),
             Type::Text(_) => (16, 8),
             Type::Slice(..) => (24, 8),
@@ -5893,8 +5916,15 @@ fn c_type(ty: &Type) -> String {
         // program has an error (see `Type::Unknown`).
         Type::Unknown => "/*unknown type*/".to_string(),
         Type::Int => "int64_t".to_string(),
+        Type::Int8 => "int8_t".to_string(),
+        Type::Int16 => "int16_t".to_string(),
+        Type::Int32 => "int32_t".to_string(),
         Type::Unit | Type::Char => "uint8_t".to_string(),
+        Type::Uint16 => "uint16_t".to_string(),
+        Type::Uint32 => "uint32_t".to_string(),
+        Type::Uint64 => "uint64_t".to_string(),
         Type::Float => "double".to_string(),
+        Type::Float32 => "float".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "vela__rt__text".to_string(),
         Type::Nothing => "void".to_string(),

@@ -323,6 +323,60 @@ static inline uint8_t vela__rt__char_of(int64_t x, const char* at) {
     return (uint8_t)x;
 }
 
+static inline int8_t vela__rt__int8_of(int64_t x, const char* at) {
+    if (x < -128 || x > 127) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in an int8", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (int8_t)x;
+}
+
+static inline int16_t vela__rt__int16_of(int64_t x, const char* at) {
+    if (x < -32768 || x > 32767) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in an int16", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (int16_t)x;
+}
+
+static inline int32_t vela__rt__int32_of(int64_t x, const char* at) {
+    if (x < -2147483648LL || x > 2147483647LL) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in an int32", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (int32_t)x;
+}
+
+static inline uint16_t vela__rt__uint16_of(int64_t x, const char* at) {
+    if (x < 0 || x > 65535) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in a uint16", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (uint16_t)x;
+}
+
+static inline uint32_t vela__rt__uint32_of(int64_t x, const char* at) {
+    if (x < 0 || x > 4294967295LL) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in a uint32", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (uint32_t)x;
+}
+
+static inline uint64_t vela__rt__uint64_of(int64_t x, const char* at) {
+    if (x < 0) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in a uint64", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (uint64_t)x;
+}
+
 /* Float remainder (Vela's `%` on floats); the result has the dividend's sign. */
 static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
@@ -1378,6 +1432,171 @@ static inline int vela__rt__float_of_input(vela__rt__text prompt, double* value)
         return VELA__RT__READ_ENDED;
     }
     int read = vela__rt__float_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__int8_of_text(vela__rt__text t, int8_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < -128 || whole > 127) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (int8_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__int8_of_input(vela__rt__text prompt, int8_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__int8_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__int16_of_text(vela__rt__text t, int16_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < -32768 || whole > 32767) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (int16_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__int16_of_input(vela__rt__text prompt, int16_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__int16_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__int32_of_text(vela__rt__text t, int32_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < -2147483648LL || whole > 2147483647LL) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (int32_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__int32_of_input(vela__rt__text prompt, int32_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__int32_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__uint16_of_text(vela__rt__text t, uint16_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < 0 || whole > 65535) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (uint16_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__uint16_of_input(vela__rt__text prompt, uint16_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__uint16_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__uint32_of_text(vela__rt__text t, uint32_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < 0 || whole > 4294967295LL) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (uint32_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__uint32_of_input(vela__rt__text prompt, uint32_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__uint32_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__uint64_of_text(vela__rt__text t, uint64_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < 0) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (uint64_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__uint64_of_input(vela__rt__text prompt, uint64_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__uint64_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__float32_of_text(vela__rt__text t, float* value) {
+    double whole = 0.0;
+    int read = vela__rt__float_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    *value = (float)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__float32_of_input(vela__rt__text prompt, float* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__float32_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
     free(buffer);
     return read;
 }

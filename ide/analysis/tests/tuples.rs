@@ -163,12 +163,23 @@ fn completion_offers_the_patterns_that_take_a_tuple_apart() {
 fn completion_offers_types_inside_a_tuple_type() {
     for checks in [true, false] {
         let labels = |marked: &str| completions(marked).into_iter().map(|item| item.label).collect::<Vec<_>>();
-        let types = ["int".to_string(), "float".to_string(), "bool".to_string(), "text".to_string(), "unit".to_string(), "char".to_string(), "maybe".to_string()];
+        let types = [
+            "int".to_string(), "int64".to_string(), "int32".to_string(), "int16".to_string(), "int8".to_string(),
+            "uint".to_string(), "uint64".to_string(), "uint32".to_string(), "uint16".to_string(), "uint8".to_string(),
+            "unit".to_string(), "float".to_string(), "float64".to_string(), "float32".to_string(),
+            "bool".to_string(), "text".to_string(), "char".to_string(), "maybe".to_string(),
+        ];
         assert_eq!(labels(&program(checks, "fixed typed: (int, @@) = (1, 2)")), types, "checks: {}", checks);
         assert_eq!(labels(&program(checks, "fixed typed: (@@) = (1, 2)")), types, "checks: {}", checks);
         // A parameter, a field, and a result take items of their own.
         assert_eq!(labels("task f(t: (int, @@))\nfi\n"), types);
-        assert_eq!(labels("shape Holder\n    t: (int, @@)\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "Holder", "maybe"]);
+        assert_eq!(
+            labels("shape Holder\n    t: (int, @@)\nfi\n"),
+            [
+                "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+                "float", "float64", "float32", "bool", "text", "char", "Holder", "maybe",
+            ]
+        );
         assert_eq!(labels("task f() -> (int, @@)\nfi\n"), types);
         // A name of a binding, and one of a parameter, are still being declared,
         // and a parameter may be one the task changes.

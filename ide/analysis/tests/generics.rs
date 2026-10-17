@@ -119,10 +119,19 @@ fn the_types_a_task_takes_and_the_words_for_them_are_colored() {
 
 #[test]
 fn a_type_a_task_takes_completes_as_a_type_in_its_own_body() {
-    let types = ["int", "float", "bool", "text", "unit", "char", "T", "maybe"];
+    let types = [
+        "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+        "float", "float64", "float32", "bool", "text", "char", "T", "maybe",
+    ];
     assert_eq!(labels("task first<T>(x: T)\n    fixed y: @@ = x\nfi\n"), types);
     // A task that takes no types has none to offer.
-    assert_eq!(labels("task plain(x: int)\n    fixed y: @@ = x\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "maybe"]);
+    assert_eq!(
+        labels("task plain(x: int)\n    fixed y: @@ = x\nfi\n"),
+        [
+            "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+            "float", "float64", "float32", "bool", "text", "char", "maybe",
+        ]
+    );
 }
 
 #[test]
@@ -138,7 +147,15 @@ fn completion_offers_the_words_a_type_can_be_asked_to_allow() {
 fn completion_offers_types_where_a_call_names_them() {
     for checks in [true, false] {
         let items = labels(&program(checks, "show(first<@@>(ns))"));
-        assert_eq!(items, ["int", "float", "bool", "text", "unit", "char", "maybe"], "checks: {}", checks);
+        assert_eq!(
+            items,
+            [
+                "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+                "float", "float64", "float32", "bool", "text", "char", "maybe",
+            ],
+            "checks: {}",
+            checks
+        );
     }
 }
 
@@ -262,12 +279,21 @@ fn the_types_a_shape_is_given_are_colored_as_types() {
 
 #[test]
 fn completion_offers_types_where_a_shape_is_given_them() {
-    let types = ["int", "float", "bool", "text", "unit", "char", "Box", "Pair", "maybe"];
+    let types = [
+        "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+        "float", "float64", "float32", "bool", "text", "char", "Box", "Pair", "maybe",
+    ];
     // In a written type, and in a literal.
     assert_eq!(labels(&shapes("fixed other: Box<@@> = count")), types);
     assert_eq!(labels(&shapes("fixed other = Box<@@> { value: 1 }")), types);
     // A type the shape takes is a type inside its own fields.
-    assert_eq!(labels("shape Box<T>\n    value: @@\nfi\n"), ["int", "float", "bool", "text", "unit", "char", "T", "Box", "maybe"]);
+    assert_eq!(
+        labels("shape Box<T>\n    value: @@\nfi\n"),
+        [
+            "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
+            "float", "float64", "float32", "bool", "text", "char", "T", "Box", "maybe",
+        ]
+    );
     // The words a type can be asked to allow, and nothing where a name is
     // being declared.
     assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["frozen", "same", "similar", "shown", "ordered"]);

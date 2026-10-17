@@ -1,0 +1,80 @@
+  1 | ; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
+    | comment:; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
+  2 | include std/math (Int512, zero512, int512)
+    | keyword:include  module:std  operator:/  module:math  punctuation:(  type:Int512  punctuation:,  task:zero512  punctuation:,  task:int512  punctuation:)
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     ; Signed integer types
+    | comment:; Signed integer types
+  6 |     fixed s8: int8 = 127
+    | keyword:fixed  variable:s8  punctuation::  type-builtin:int8  operator:=  number:127
+  7 |     fixed s16: int16 = 32767
+    | keyword:fixed  variable:s16  punctuation::  type-builtin:int16  operator:=  number:32767
+  8 |     fixed s32: int32 = 2147483647
+    | keyword:fixed  variable:s32  punctuation::  type-builtin:int32  operator:=  number:2147483647
+  9 |     fixed s64: int64 = 9223372036854775807
+    | keyword:fixed  variable:s64  punctuation::  type-builtin:int64  operator:=  number:9223372036854775807
+ 10 |     show(s8, " ", s16, " ", s32, " ", s64)
+    | builtin-fn:show  punctuation:(  variable:s8  punctuation:,  string:" "  punctuation:,  variable:s16  punctuation:,  string:" "  punctuation:,  variable:s32  punctuation:,  string:" "  punctuation:,  variable:s64  punctuation:)
+ 12 |     ; Unsigned integer types
+    | comment:; Unsigned integer types
+ 13 |     fixed u8: uint8 = 255
+    | keyword:fixed  variable:u8  punctuation::  type-builtin:uint8  operator:=  number:255
+ 14 |     fixed u16: uint16 = 65535
+    | keyword:fixed  variable:u16  punctuation::  type-builtin:uint16  operator:=  number:65535
+ 15 |     fixed u32: uint32 = 4294967295
+    | keyword:fixed  variable:u32  punctuation::  type-builtin:uint32  operator:=  number:4294967295
+ 16 |     fixed u64: uint64 = 9223372036854775807
+    | keyword:fixed  variable:u64  punctuation::  type-builtin:uint64  operator:=  number:9223372036854775807
+ 17 |     show(u8, " ", u16, " ", u32, " ", u64)
+    | builtin-fn:show  punctuation:(  variable:u8  punctuation:,  string:" "  punctuation:,  variable:u16  punctuation:,  string:" "  punctuation:,  variable:u32  punctuation:,  string:" "  punctuation:,  variable:u64  punctuation:)
+ 19 |     ; Aliases
+    | comment:; Aliases
+ 20 |     fixed d_int: int = 1000
+    | keyword:fixed  variable:d_int  punctuation::  type-builtin:int  operator:=  number:1000
+ 21 |     fixed d_unit: unit = 200
+    | keyword:fixed  variable:d_unit  punctuation::  type-builtin:unit  operator:=  number:200
+ 22 |     fixed d_uint: uint = 50000
+    | keyword:fixed  variable:d_uint  punctuation::  type-builtin:uint  operator:=  number:50000
+ 23 |     fixed d_float: float = 3.14
+    | keyword:fixed  variable:d_float  punctuation::  type-builtin:float  operator:=  number:3.14
+ 24 |     show(d_int, " ", d_unit, " ", d_uint, " ", d_float)
+    | builtin-fn:show  punctuation:(  variable:d_int  punctuation:,  string:" "  punctuation:,  variable:d_unit  punctuation:,  string:" "  punctuation:,  variable:d_uint  punctuation:,  string:" "  punctuation:,  variable:d_float  punctuation:)
+ 26 |     ; Floats
+    | comment:; Floats
+ 27 |     fixed f32: float32 = 1.5
+    | keyword:fixed  variable:f32  punctuation::  type-builtin:float32  operator:=  number:1.5
+ 28 |     fixed f64: float64 = 2.5
+    | keyword:fixed  variable:f64  punctuation::  type-builtin:float64  operator:=  number:2.5
+ 29 |     show(f32, " ", f64)
+    | builtin-fn:show  punctuation:(  variable:f32  punctuation:,  string:" "  punctuation:,  variable:f64  punctuation:)
+ 31 |     ; Literal adaptation in arithmetic
+    | comment:; Literal adaptation in arithmetic
+ 32 |     fixed sum_s16 = s16 - 1000
+    | keyword:fixed  variable:sum_s16  operator:=  variable:s16  operator:-  number:1000
+ 33 |     fixed sum_u32 = u32 - 100
+    | keyword:fixed  variable:sum_u32  operator:=  variable:u32  operator:-  number:100
+ 34 |     show(sum_s16, " ", sum_u32)
+    | builtin-fn:show  punctuation:(  variable:sum_s16  punctuation:,  string:" "  punctuation:,  variable:sum_u32  punctuation:)
+ 36 |     ; Casts between types
+    | comment:; Casts between types
+ 37 |     fixed cast_s32 = int32(s8)
+    | keyword:fixed  variable:cast_s32  operator:=  type-builtin:int32  punctuation:(  variable:s8  punctuation:)
+ 38 |     fixed cast_u64 = uint64(u16)
+    | keyword:fixed  variable:cast_u64  operator:=  type-builtin:uint64  punctuation:(  variable:u16  punctuation:)
+ 39 |     fixed cast_f64 = float64(s32)
+    | keyword:fixed  variable:cast_f64  operator:=  type-builtin:float64  punctuation:(  variable:s32  punctuation:)
+ 40 |     fixed cast_s8 = int8(42)
+    | keyword:fixed  variable:cast_s8  operator:=  type-builtin:int8  punctuation:(  number:42  punctuation:)
+ 41 |     show(cast_s32, " ", cast_u64, " ", cast_f64, " ", cast_s8)
+    | builtin-fn:show  punctuation:(  variable:cast_s32  punctuation:,  string:" "  punctuation:,  variable:cast_u64  punctuation:,  string:" "  punctuation:,  variable:cast_f64  punctuation:,  string:" "  punctuation:,  variable:cast_s8  punctuation:)
+ 43 |     ; BigInt Int512 from std/math
+    | comment:; BigInt Int512 from std/math
+ 44 |     fixed b0 = zero512()
+    | keyword:fixed  variable:b0  operator:=  task:zero512  punctuation:(  punctuation:)
+ 45 |     fixed b1 = int512(123456789)
+    | keyword:fixed  variable:b1  operator:=  task:int512  punctuation:(  number:123456789  punctuation:)
+ 46 |     show(b0.limbs[0], " ", b1.limbs[0])
+    | builtin-fn:show  punctuation:(  variable:b0  punctuation:.  field:limbs  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:b1  punctuation:.  field:limbs  punctuation:[  number:0  punctuation:]  punctuation:)
+ 47 | fi
+    | keyword:fi

@@ -34,7 +34,14 @@ impl Span {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
+    Int8,
+    Int16,
+    Int32,
+    Uint16,
+    Uint32,
+    Uint64,
     Float,
+    Float32,
     Bool,
     /// `text`, whose characters last as long as the program (a literal's), or
     /// `text@r`, whose characters are in the region `r`. Text that lasts as
@@ -334,10 +341,21 @@ pub const ANY_REGION: &str = "_";
 /// such as editors use.
 pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("int", Type::Int),
+    ("int64", Type::Int),
+    ("int32", Type::Int32),
+    ("int16", Type::Int16),
+    ("int8", Type::Int8),
+    ("uint", Type::Uint64),
+    ("uint64", Type::Uint64),
+    ("uint32", Type::Uint32),
+    ("uint16", Type::Uint16),
+    ("uint8", Type::Unit),
+    ("unit", Type::Unit),
     ("float", Type::Float),
+    ("float64", Type::Float),
+    ("float32", Type::Float32),
     ("bool", Type::Bool),
     ("text", Type::Text(None)),
-    ("unit", Type::Unit),
     ("char", Type::Char),
     ("nothing", Type::Nothing),
 ];
@@ -391,9 +409,16 @@ pub const AT: &str = "at";
 /// `float(x)`, which make no memory, so they name no region as `text(x)` does.
 pub fn number_cast(name: &str) -> Option<Type> {
     match name {
-        INT_CAST => Some(Type::Int),
-        FLOAT_CAST => Some(Type::Float),
-        UNIT_CAST => Some(Type::Unit),
+        "int" | "int64" => Some(Type::Int),
+        "int8" => Some(Type::Int8),
+        "int16" => Some(Type::Int16),
+        "int32" => Some(Type::Int32),
+        "uint" | "uint64" => Some(Type::Uint64),
+        "uint32" => Some(Type::Uint32),
+        "uint16" => Some(Type::Uint16),
+        "unit" | "uint8" => Some(Type::Unit),
+        "float" | "float64" => Some(Type::Float),
+        "float32" => Some(Type::Float32),
         CHAR_CAST => Some(Type::Char),
         _ => None,
     }
@@ -729,7 +754,14 @@ impl Type {
         };
         match self {
             Type::Int => write!(f, "int"),
+            Type::Int8 => write!(f, "int8"),
+            Type::Int16 => write!(f, "int16"),
+            Type::Int32 => write!(f, "int32"),
+            Type::Uint16 => write!(f, "uint16"),
+            Type::Uint32 => write!(f, "uint32"),
+            Type::Uint64 => write!(f, "uint64"),
             Type::Float => write!(f, "float"),
+            Type::Float32 => write!(f, "float32"),
             Type::Bool => write!(f, "bool"),
             Type::Text(region) => {
                 write!(f, "text")?;
@@ -886,7 +918,45 @@ impl Type {
     }
 
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Type::Int | Type::Float | Type::Unit)
+        matches!(
+            self,
+            Type::Int
+                | Type::Int8
+                | Type::Int16
+                | Type::Int32
+                | Type::Uint16
+                | Type::Uint32
+                | Type::Uint64
+                | Type::Float
+                | Type::Float32
+                | Type::Unit
+        )
+    }
+
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            Type::Int
+                | Type::Int8
+                | Type::Int16
+                | Type::Int32
+                | Type::Uint16
+                | Type::Uint32
+                | Type::Uint64
+                | Type::Unit
+        )
+    }
+
+    pub fn is_signed_int(&self) -> bool {
+        matches!(self, Type::Int | Type::Int8 | Type::Int16 | Type::Int32)
+    }
+
+    pub fn is_unsigned_int(&self) -> bool {
+        matches!(self, Type::Unit | Type::Uint16 | Type::Uint32 | Type::Uint64)
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, Type::Float | Type::Float32)
     }
 
     /// Whether the type is a whole number that fits in a byte, which an int
@@ -909,7 +979,25 @@ impl Type {
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
             Type::Task(task) => task.params.iter().any(Type::unknown) || task.ret.unknown(),
             Type::Closure(closure) => closure.task.params.iter().any(Type::unknown) || closure.task.ret.unknown(),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) | Type::Group(_) => false,
+            Type::Int
+            | Type::Int8
+            | Type::Int16
+            | Type::Int32
+            | Type::Uint16
+            | Type::Uint32
+            | Type::Uint64
+            | Type::Float
+            | Type::Float32
+            | Type::Bool
+            | Type::Text(_)
+            | Type::Unit
+            | Type::Char
+            | Type::Nothing
+            | Type::None
+            | Type::Region
+            | Type::Named(..)
+            | Type::Param(_)
+            | Type::Group(_) => false,
         }
     }
 
@@ -2486,10 +2574,17 @@ pub fn instance_name(name: &str, given: &[Type]) -> String {
 pub fn type_word(ty: &Type) -> String {
     match ty {
         Type::Int => "int".to_string(),
+        Type::Int8 => "int8".to_string(),
+        Type::Int16 => "int16".to_string(),
+        Type::Int32 => "int32".to_string(),
+        Type::Unit => "unit".to_string(),
+        Type::Uint16 => "uint16".to_string(),
+        Type::Uint32 => "uint32".to_string(),
+        Type::Uint64 => "uint64".to_string(),
         Type::Float => "float".to_string(),
+        Type::Float32 => "float32".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "text".to_string(),
-        Type::Unit => "unit".to_string(),
         Type::Char => "char".to_string(),
         Type::Nothing => "nothing".to_string(),
         Type::None => "none".to_string(),

@@ -1644,7 +1644,18 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
     let taken = type_params_here(k, at);
     let descriptions = [
         ("int", "64-bit signed integer"),
+        ("int64", "64-bit signed integer"),
+        ("int32", "32-bit signed integer"),
+        ("int16", "16-bit signed integer"),
+        ("int8", "8-bit signed integer"),
+        ("uint", "64-bit unsigned integer"),
+        ("uint64", "64-bit unsigned integer"),
+        ("uint32", "32-bit unsigned integer"),
+        ("uint16", "16-bit unsigned integer"),
+        ("uint8", "8-bit unsigned integer"),
         ("float", "64-bit floating point"),
+        ("float64", "64-bit floating point"),
+        ("float32", "32-bit floating point"),
         ("bool", "true or false"),
         ("unit", "whole number from 0 to 255, one byte"),
         ("char", "one byte, a character, as 'a'"),

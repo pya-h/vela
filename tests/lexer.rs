@@ -280,8 +280,20 @@ fn every_escape_is_accepted() {
 #[test]
 fn builtin_types_are_named_as_written() {
     for (name, ty) in BUILTIN_TYPES {
-        assert_eq!(ty.to_string(), *name);
         assert_eq!(Type::builtin(name).as_ref(), Some(ty));
+        assert!(
+            ty.to_string() == *name
+                || matches!(
+                    (*name, ty),
+                    ("int64", Type::Int)
+                        | ("uint", Type::Uint64)
+                        | ("uint8", Type::Unit)
+                        | ("float64", Type::Float)
+                ),
+            "expected type {} or its alias to match {}",
+            ty,
+            name
+        );
     }
     assert_eq!(Type::builtin("Point"), None);
 }
