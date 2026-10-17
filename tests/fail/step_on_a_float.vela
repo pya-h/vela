@@ -1,4 +1,4 @@
-; error: 4:6: '++' counts an int, a unit, or a char by one, and this is a float; for a float, write 'x += 1.0'
+; error: 4:6: '++' counts a whole number or a char by one, and this is a float; for a float, write 'x += 1.0'
 task main()
     flex f = 1.5
     f++

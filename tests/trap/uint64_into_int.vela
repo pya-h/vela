@@ -1,0 +1,7 @@
+; trap: 9223372036854775808 does not fit in an int at 6:10 in task 'main'
+; A uint64 past the largest int stops the program when made an int.
+task main()
+    fixed half: uint64 = 9_223_372_036_854_775_807
+    show(int(half))
+    show(int(half + 1))
+fi

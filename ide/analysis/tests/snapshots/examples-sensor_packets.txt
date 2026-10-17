@@ -1,0 +1,70 @@
+  1 | ; Sensor packets: readings kept in numbers of the size each one needs, a
+    | comment:; Sensor packets: readings kept in numbers of the size each one needs, a
+  2 | ; checksum that may grow past what a smaller number holds, and conversions that
+    | comment:; checksum that may grow past what a smaller number holds, and conversions that
+  3 | ; say where one size becomes another.
+    | comment:; say where one size becomes another.
+  5 | shape Reading
+    | keyword:shape  type:Reading
+  6 |     station: uint16
+    | field:station  punctuation::  type-builtin:uint16
+  7 |     celsius: int8
+    | field:celsius  punctuation::  type-builtin:int8
+  8 |     pressure: uint32
+    | field:pressure  punctuation::  type-builtin:uint32
+  9 | fi
+    | keyword:fi
+ 11 | ; A checksum over the readings, in a uint64 so no sum of them overflows.
+    | comment:; A checksum over the readings, in a uint64 so no sum of them overflows.
+ 12 | task checksum(readings: [Reading#3]) -> uint64
+    | keyword:task  task:checksum  punctuation:(  parameter:readings  punctuation::  punctuation:[  type:Reading  punctuation:#  number:3  punctuation:]  punctuation:)  operator:->  type-builtin:uint64
+ 13 |     flex sum: uint64 = 0
+    | keyword:flex  variable:sum  punctuation::  type-builtin:uint64  operator:=  number:0
+ 14 |     each reading in readings
+    | keyword:each  variable:reading  keyword:in  parameter:readings
+ 15 |         sum += uint64(reading.station) * 31 + uint64(reading.pressure)
+    | variable:sum  operator:+=  type-builtin:uint64  punctuation:(  variable:reading  punctuation:.  field:station  punctuation:)  operator:*  number:31  operator:+  type-builtin:uint64  punctuation:(  variable:reading  punctuation:.  field:pressure  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 |     <- sum
+    | keyword:<-  variable:sum
+ 18 | fi
+    | keyword:fi
+ 20 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 21 |     fixed cold = Reading { station: 101, celsius: -12, pressure: 101_325 }
+    | keyword:fixed  variable:cold  operator:=  type:Reading  punctuation:{  field:station  punctuation::  number:101  punctuation:,  field:celsius  punctuation::  operator:-  number:12  punctuation:,  field:pressure  punctuation::  number:101_325  punctuation:}
+ 22 |     fixed mild = Reading { station: 102, celsius: 4, pressure: 99_870 }
+    | keyword:fixed  variable:mild  operator:=  type:Reading  punctuation:{  field:station  punctuation::  number:102  punctuation:,  field:celsius  punctuation::  number:4  punctuation:,  field:pressure  punctuation::  number:99_870  punctuation:}
+ 23 |     fixed hot = Reading { station: 65_535, celsius: 41, pressure: 4_000_000_000 }
+    | keyword:fixed  variable:hot  operator:=  type:Reading  punctuation:{  field:station  punctuation::  number:65_535  punctuation:,  field:celsius  punctuation::  number:41  punctuation:,  field:pressure  punctuation::  number:4_000_000_000  punctuation:}
+ 24 |     fixed readings = [cold, mild, hot]
+    | keyword:fixed  variable:readings  operator:=  punctuation:[  variable:cold  punctuation:,  variable:mild  punctuation:,  variable:hot  punctuation:]
+ 25 |     ; A temperature change fits in an int8 here; one that doesn't stops the program.
+    | comment:; A temperature change fits in an int8 here; one that doesn't stops the program.
+ 26 |     each reading in readings
+    | keyword:each  variable:reading  keyword:in  variable:readings
+ 27 |         fixed warmer: int8 = reading.celsius + 5
+    | keyword:fixed  variable:warmer  punctuation::  type-builtin:int8  operator:=  variable:reading  punctuation:.  field:celsius  operator:+  number:5
+ 28 |         show("station ", reading.station, ": ", reading.celsius, " C, ", warmer, " C after warming")
+    | builtin-fn:show  punctuation:(  string:"station "  punctuation:,  variable:reading  punctuation:.  field:station  punctuation:,  string:": "  punctuation:,  variable:reading  punctuation:.  field:celsius  punctuation:,  string:" C, "  punctuation:,  variable:warmer  punctuation:,  string:" C after warming"  punctuation:)
+ 29 |     fi
+    | keyword:fi
+ 30 |     ; The average pressure, as a float32, from the int it is summed in.
+    | comment:; The average pressure, as a float32, from the int it is summed in.
+ 31 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+ 32 |     each reading in readings
+    | keyword:each  variable:reading  keyword:in  variable:readings
+ 33 |         total += int(reading.pressure)
+    | variable:total  operator:+=  type-builtin:int  punctuation:(  variable:reading  punctuation:.  field:pressure  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 |     fixed average = float32(total) / 3.0
+    | keyword:fixed  variable:average  operator:=  type-builtin:float32  punctuation:(  variable:total  punctuation:)  operator:/  number:3.0
+ 36 |     show("average pressure ", average)
+    | builtin-fn:show  punctuation:(  string:"average pressure "  punctuation:,  variable:average  punctuation:)
+ 37 |     show("checksum ", checksum(readings))
+    | builtin-fn:show  punctuation:(  string:"checksum "  punctuation:,  task:checksum  punctuation:(  variable:readings  punctuation:)  punctuation:)
+ 38 | fi
+    | keyword:fi

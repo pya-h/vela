@@ -1,0 +1,9 @@
+; trap: 128 does not fit in an int8 at 7:11 in task 'main'
+; Two int8s whose sum passes 127 stop the program; it never wraps.
+task main()
+    flex a: int8 = 100
+    fixed b: int8 = 28
+    show(a)
+    a = a + b
+    show(a)
+fi

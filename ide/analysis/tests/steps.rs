@@ -45,5 +45,5 @@ fn a_step_on_a_float_is_an_error_in_the_editor_too() {
     let source = "task main()\n    flex f = 1.5\n    f++\nfi\n";
     let diagnostics = Analysis::new(source).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
-    assert!(diagnostics[0].message.starts_with("'++' counts an int, a unit, or a char by one"), "{:?}", diagnostics);
+    assert!(diagnostics[0].message.starts_with("'++' counts a whole number or a char by one"), "{:?}", diagnostics);
 }

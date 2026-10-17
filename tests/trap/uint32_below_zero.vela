@@ -1,0 +1,9 @@
+; trap: -1 does not fit in a uint32 at 7:7 in task 'main'
+; A uint32 taken below 0 stops the program instead of wrapping.
+task main()
+    flex n: uint32 = 1
+    n -= 1
+    show(n)
+    n -= 1
+    show(n)
+fi

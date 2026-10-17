@@ -1,4 +1,4 @@
-; error: 4:10: '--' counts an int, a unit, or a char by one, and this is a bool
+; error: 4:10: '--' counts a whole number or a char by one, and this is a bool
 task main()
     flex ready = false
     ready--

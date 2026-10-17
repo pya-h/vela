@@ -1,0 +1,111 @@
+; Map-form loops with 'continue', the written type choosing the collection,
+; passes that fail, and the finally block outside its loop.
+include std/loops {LoopResult}
+
+; The task's result says the loop makes a slice, in the region it is given.
+task evens(n: int, r: region) -> [int]@r ~ LoopResult<bool, bool>
+    <- each i in 0..n
+        when i % 2 == 1
+            continue
+        fi
+        i
+    fi
+fi
+
+task main()
+    region r default
+    ; A continue leaves its pass's item none in an array, whose items are maybes.
+    fixed tens = each i in 0..4
+        when i == 2
+            continue
+        fi
+        i * 10
+    fi { [none, none, none, none] }
+    each ten in tens
+        show(ten { -1 })                  ; 0, 10, -1, 30
+    fi
+
+    ; A written slice leaves the pass out.
+    fixed odd: [int]@r = each x in [1, 2, 3, 4, 5]
+        when x % 2 == 0
+            continue
+        fi
+        x
+    fi { new [int]() at r }
+    show(odd.len, " ", odd[2])            ; 3 5
+
+    ; Every pass left: an array of nones, and an empty slice.
+    fixed none_kept = each i in 0..3
+        continue
+        i
+    fi { [none, none, none] }
+    show(none_kept[0] { -1 })             ; -1
+    fixed none_given: [int]@r = each x in odd
+        continue
+        x
+    fi { new [int]() at r }
+    show(none_given.len)                  ; 0
+
+    ; A written array of maybes, with no continue.
+    fixed maybes: [maybe int#3] = each i in 0..3
+        i + 1
+    fi { [none, none, none] }
+    show(maybes[2] { 0 })                 ; 3
+
+    ; A slice in a region the type names, which is not the default.
+    region kept
+    fixed squares: [int]@kept = each i in 0..odd.len
+        odd[i] * odd[i]
+    fi { new [int]() at kept }
+    show(squares[2])                      ; 25
+
+    ; A pass that fails stops the loop, which fails with its failure.
+    fixed halves: [int#4] ~ LoopResult<bool, int> = each i in 0..4
+        when i == 3 fail LoopResult<bool, int>.Manual(i) else i fi
+    fi
+    match halves
+    case {got}
+        show("got ", got[0])
+    case failure e
+        match e
+        case Manual m
+            show("stopped at ", m)        ; stopped at 3
+        case Skipped
+            show("skipped")
+        case Broke _
+            show("broke")
+        case EndedByContinue
+            show("ended by continue")
+        fi
+    fi
+
+    fixed found = evens(7, r) { new [int]() at r }
+    show(found.len, " ", found[3])        ; 4 6
+
+    ; A break or a continue in a finally block is the loop around it's.
+    each k in 0..4
+        fixed sum = loop flex j = 0, s = 0 || j < 3 || j++
+            s += j
+        finally
+            when k == 1
+                continue
+            fi
+            when k == 2
+                break
+            fi
+            s
+        fi { -1 }
+        show(k, " ", sum)                 ; 0 3
+    fi
+
+    ; What a finally block declares ends with it.
+    flex i = 0
+    fixed doubled = loop i < 3
+        i++
+    finally
+        fixed twice = i * 2
+        twice
+    fi { 0 }
+    fixed twice = 1
+    show(doubled + twice)                 ; 7
+fi

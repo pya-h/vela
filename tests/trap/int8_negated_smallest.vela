@@ -1,0 +1,7 @@
+; trap: 128 does not fit in an int8 at 6:10 in task 'main'
+; The smallest int8 negated is 128, which no int8 holds.
+task main()
+    fixed smallest: int8 = -128
+    show(smallest)
+    show(-smallest)
+fi

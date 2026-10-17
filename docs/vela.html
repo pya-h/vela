@@ -236,6 +236,10 @@
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
         <li><code class="type">unit</code> — a whole number from 0 to 255 in one byte (see <a href="#units">Units</a>)</li>
+        <li><code class="type">int8</code>, <code class="type">int16</code>, <code class="type">int32</code>, <code class="type">uint16</code>,
+          <code class="type">uint32</code>, <code class="type">uint64</code>, <code class="type">float32</code> — numbers of a size of their own;
+          <code>int64</code> is another name for <code>int</code>, <code>uint8</code> for <code>unit</code>, <code>uint</code> for
+          <code>uint64</code>, and <code>float64</code> for <code>float</code> (see <a href="#number-sizes">Number sizes</a>)</li>
         <li><code class="type">char</code> — one byte, a character, written <code>'a'</code> (see <a href="#chars">Chars</a>)</li>
         <li><code class="type">text</code> — UTF-8 text that knows its length, <code>t.len</code>, in bytes; <code>==</code> compares contents. <code>text</code> lasts as long
           as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
@@ -289,14 +293,16 @@
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
-block shared type break continue endless fixed flex</pre>
+block shared type break continue endless fixed flex
+finally</pre>
       <p>
         <code>hold</code> is reserved with no use yet: writing it is an error. Where a variable's word goes, the
         message names the one to write, <code>flex</code>.
       </p>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
+        <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>, and the
+        <a href="#number-sizes">sized numbers</a>) aren't reserved words: no task, shape, kind, or
         variant can take their names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
@@ -1002,7 +1008,7 @@ count **= 2                 <span class="comment">; 121</span>
 <span class="keyword">flex</span> c = 'a'
 c++                         <span class="comment">; 'b': a char counts to the next one, and a unit counts too</span>
 <span class="keyword">flex</span> f = 1.5
-f++                         <span class="comment">; error: '++' counts an int, a unit, or a char by one, and this is a float; for a float, write 'x += 1.0'</span>
+f++                         <span class="comment">; error: '++' counts a whole number or a char by one, and this is a float; for a float, write 'x += 1.0'</span>
 words[w] += 1               <span class="comment">; stops when w is no key of the map, as words[w] does</span>
 <span class="keyword">flex</span> t: text@r = "a" + "b" <span class="keyword">at</span> r
 t += "{count}!"             <span class="comment">; "ab121!", joined into r, the region t is in</span></pre>
@@ -1138,7 +1144,7 @@ ys[<span class="number">0</span>] = <span class="number">9</span>               
 
       <h3>Numbers</h3>
       <p>
-        Arithmetic (<code>+ - * / %</code>, and <a href="#powers"><code>**</code></a>) works on <code>int</code>, <code>float</code>, and <a href="#units"><code>unit</code></a>, on two numbers of the same
+        Arithmetic (<code>+ - * / %</code>, and <a href="#powers"><code>**</code></a>) works on <code>int</code>, <code>float</code>, <a href="#units"><code>unit</code></a>, and the <a href="#number-sizes">sized numbers</a>, on two numbers of the same
         type: two <code>int</code>s give an <code>int</code>, with division truncating toward zero, and two
         <code>float</code>s give a <code>float</code>. An <code>int</code> and a <code>float</code> don't mix, so
         <code>n + 2.5</code> is an error that asks for <a href="#conversions"><code>float(n) + 2.5</code></a> (or
@@ -1238,6 +1244,40 @@ show(int(b) + <span class="number">1</span>)             <span class="comment">;
 <span class="keyword">fixed</span> n = <span class="number">3</span>
 show(b + n)                 <span class="comment">; error: an int and a unit don't mix in arithmetic …</span>
 b = b + <span class="number">1</span>                   <span class="comment">; stops: vela: 256 does not fit in a unit …</span></pre>
+      <p id="number-sizes">
+        <strong>Number sizes.</strong> Besides <code>int</code>, <code>float</code> and <code>unit</code>, a number may
+        have a size of its own: the signed <code>int8</code>, <code>int16</code> and <code>int32</code>, the unsigned
+        <code>uint16</code>, <code>uint32</code> and <code>uint64</code>, and <code>float32</code>. Each is C's
+        fixed-width type (<code>int8_t</code> … <code>uint64_t</code>, <code>float</code>). <code>int64</code>,
+        <code>uint8</code> and <code>float64</code> are other names for <code>int</code>, <code>unit</code> and
+        <code>float</code>, and <code>uint</code> is <code>uint64</code>. They follow the rules units do:
+      </p>
+      <ul>
+        <li>A number written out becomes one where one is expected (<code>flex n: int8 = -5</code>, an argument, a
+          field, an item) and beside one (<code>n + 1</code>, <code>n &lt; 100</code>), and one that doesn't fit is an
+          error (<em>300 doesn't fit in an int8, which holds -128 to 127</em>). A float written out becomes a
+          <code>float32</code> the same way (<code>f * 2.5</code>).</li>
+        <li>Two numbers of different types don't mix: <code>int32(a) + b</code> or <code>a + int8(b)</code> says
+          which (<em>an int8 and an int16 don't mix in arithmetic …</em>).</li>
+        <li>Arithmetic, <code>++</code>, <code>--</code> and <code>+=</code> give the same type, and never wrap
+          around: a result that doesn't fit stops the program (<em>vela: 128 does not fit in an int8 at 5:11 in
+          task 'main'</em>, <em>vela: integer overflow …</em> for a <code>uint64</code>). An unsigned number is never
+          negative, so <code>-n</code> on one is an error.</li>
+        <li><code>**</code> raises a sized number to a power of its own type, checked to fit; a signed one's power
+          is a constant 0 or more, since a negative one makes a fraction.</li>
+        <li>A conversion, <code>int8(x)</code>, <code>uint64(x)</code>, <code>float32(x)</code>, stops the program
+          when the value doesn't fit, as <code>unit(x)</code> does; <code>int(n)</code> of a <code>uint64</code> past
+          the largest <code>int</code> stops it too.</li>
+        <li>They compare, order, show and turn into text as numbers do, are keys of a <a href="#maps">map</a>, and
+          a generic's <code>ordered</code> takes them. <code>std/math</code> has <code>Int512</code>, a 512-bit
+          integer that holds a value and has no arithmetic yet (see <a href="std.html#math">std/math</a>).</li>
+      </ul>
+      <pre><span class="keyword">flex</span> small: int8 = <span class="number">100</span>
+small += <span class="number">27</span>                 <span class="comment">; 127</span>
+<span class="keyword">fixed</span> big: uint64 = <span class="number">9_223_372_036_854_775_807</span>
+show(big + big + <span class="number">1</span>)          <span class="comment">; 18446744073709551615</span>
+show(int32(small) ** <span class="number">2</span>)       <span class="comment">; 16129</span>
+small++                     <span class="comment">; stops: vela: 128 does not fit in an int8 …</span></pre>
       <p id="chars">
         <strong>Chars.</strong> A <code>char</code> is one byte, as C's <code>char</code> is: the code of a character,
         from 0 to 255, so it holds any byte of text. It is written between single quotes, <code>'a'</code>, with the
@@ -3987,11 +4027,21 @@ show(total)</pre>
     }
 <span class="keyword">fi</span></pre>
       <ul>
-        <li><strong>Single-value and map forms.</strong> A loop returning a single computed value declares a
-          <code>finally</code> block before <code>fi</code>, whose last line gives the scalar result. A loop without
-          <code>finally</code> whose passes end with a value expression is map-form: each pass yields an item into
-          a stack array <code>[T#N]</code> (when count is constant) or a slice <code>[T]@r</code> (when count is dynamic).
-          If both pass-level values and <code>finally</code> are present, <code>finally</code> overrides.</li>
+        <li><strong>Single-value form.</strong> A loop giving one value has a <code>finally</code> block before
+          <code>fi</code>. It runs once, after the final pass, and its last line gives the value. It is outside the
+          loop: what it declares ends with it, and a <code>break</code> or a <code>continue</code> in it is the loop
+          around it's. Its passes giving values too is a warning, as <code>finally</code> overrides them.</li>
+        <li><strong>Map form.</strong> A loop without <code>finally</code> whose passes end with a value gathers
+          them, one item per pass. An <code>each</code> through an array, or through a range whose ends are constants,
+          makes an array as long (<code>[int#4]</code>); any other loop makes a slice, in the block's default region.
+          A type written where the value goes chooses: a slice there, <code>fixed xs: [int]@r = each …</code> or a
+          task's result, makes a slice in its region. A pass that fails, <code>fail LoopResult.Manual(m)</code> on its
+          last line, stops the loop, which fails with it.</li>
+        <li><strong>Map form and <code>continue</code>.</strong> A <code>continue</code> of the loop, even one that
+          never runs, leaves its pass without an item. A slice leaves it out. An array keeps a place for every pass,
+          so its items are maybes and that one is <code>none</code>: with no type written it is
+          <code>[maybe int#4]</code>, and a written <code>[int#4]</code> is an error that asks for
+          <code>[maybe int#4]</code> or a slice.</li>
         <li><strong>Why it fails.</strong> <code>Skipped</code>: the body never ran, its condition failing at once or
           its <code>each</code> having nothing to go through (the <code>finally</code> block does not run). <code>Broke(maybe B)</code>: a <code>break</code>
           stopped it, holding what <code>break = v</code> gave, or <code>none</code> for a bare <code>break</code> (the <code>finally</code> block does not run).
@@ -4021,8 +4071,10 @@ show(total)</pre>
           loop through the values of a <a href="#type-groups">group</a>, written out once per value, gives none
           either. Its value can't be in a region a pass declares, which is freed when the pass ends. A loop that never
           ends by itself takes no plan B as a statement either, which would run each time it ends.</li>
-        <li><strong>In C.</strong> A temporary holds the value, <code>Skipped</code> until a pass gives one; each
-          pass's last line, a <code>break</code> and a <code>continue</code> set it. No memory is allocated.</li>
+        <li><strong>In C.</strong> A temporary holds the value, <code>Skipped</code> until the loop gives one; a
+          <code>break</code> and a <code>continue</code> set it, and the <code>finally</code> block, or the gathered
+          items when the loop ends, replace it. A map form's array is a temporary on the stack, each pass's item at
+          its own place; its slice grows in its region as an added-to slice does.</li>
       </ul>
 
       <h3 id="choices">A match or a when as a value</h3>
@@ -5328,6 +5380,12 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A pipe gives its value to an argument, never to the value a method is called on (<code>x.m()</code> does
           that), and a chain's steps failing with different kinds take the kind the place names only from a binding's
           type or the task's when sent; given as an argument, the kinds must join by themselves.</li>
+        <li>A number written out is at most the largest <code>int</code>, so a <code>uint64</code> past it is
+          computed (<code>big + big + 1</code>) rather than written. <code>Int512</code> in <code>std/math</code>
+          holds a value and has no arithmetic yet.</li>
+        <li>A loop in map form takes its collection from a type written in a binding or the task's result when it is
+          sent; given as an argument, it makes the collection its loop makes by itself. An array it makes from a range
+          of constant ends is on the C stack, so a very long one may not fit there.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a

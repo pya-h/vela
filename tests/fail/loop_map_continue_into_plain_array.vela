@@ -1,0 +1,11 @@
+; error: 6:13: this 'continue' leaves its pass without an item, and an array of int has one for every pass; write its type with maybe items, as in '[maybe int#4]', where a pass left so is none, or as a slice, as in '[int]@r', which leaves it out
+; A continue leaves a pass without an item, which an array of plain ints has no place for.
+task main()
+    fixed xs: [int#4] = each i in 0..4
+        when i == 1
+            continue
+        fi
+        i
+    fi { [0, 0, 0, 0] }
+    show(xs[0])
+fi

@@ -1,0 +1,8 @@
+; error: 4:25: how many items this loop gives is known only as it runs, so it makes a slice, not an array; write its type as one, as in '[int]@r'
+; A count known only as the loop runs makes a slice, never the array written.
+task count(n: int)
+    fixed xs: [int#3] = each i in 0..n
+        i
+    fi { [0, 0, 0] }
+    show(xs[0])
+fi

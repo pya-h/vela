@@ -1,0 +1,62 @@
+  1 | ; Arithmetic on sized numbers: each type keeps its own, checked to fit as it
+    | comment:; Arithmetic on sized numbers: each type keeps its own, checked to fit as it
+  2 | ; runs, and numbers written out take the type beside them.
+    | comment:; runs, and numbers written out take the type beside them.
+  3 | include std/math (Int512, int512)
+    | keyword:include  module:std  operator:/  module:math  punctuation:(  type:Int512  punctuation:,  task:int512  punctuation:)
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r
+    | keyword:region  region:r
+  7 |     flex small: int8 = 100
+    | keyword:flex  variable:small  punctuation::  type-builtin:int8  operator:=  number:100
+  8 |     small += 27
+    | variable:small  operator:+=  number:27
+  9 |     show(small, " ", -small)              ; 127 -127
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:,  string:" "  punctuation:,  operator:-  variable:small  punctuation:)  comment:; 127 -127
+ 10 |     small--
+    | variable:small  operator:--
+ 11 |     show(small * 1 / 2, " ", small % 10)  ; 63 6
+    | builtin-fn:show  punctuation:(  variable:small  operator:*  number:1  operator:/  number:2  punctuation:,  string:" "  punctuation:,  variable:small  operator:%  number:10  punctuation:)  comment:; 63 6
+ 13 |     fixed wide: uint32 = 4_000_000_000
+    | keyword:fixed  variable:wide  punctuation::  type-builtin:uint32  operator:=  number:4_000_000_000
+ 14 |     show(wide + 294_967_295)              ; 4294967295
+    | builtin-fn:show  punctuation:(  variable:wide  operator:+  number:294_967_295  punctuation:)  comment:; 4294967295
+ 15 |     fixed big: uint64 = 9_223_372_036_854_775_807
+    | keyword:fixed  variable:big  punctuation::  type-builtin:uint64  operator:=  number:9_223_372_036_854_775_807
+ 16 |     fixed bigger = big + big + 1
+    | keyword:fixed  variable:bigger  operator:=  variable:big  operator:+  variable:big  operator:+  number:1
+ 17 |     show(bigger)                          ; 18446744073709551615
+    | builtin-fn:show  punctuation:(  variable:bigger  punctuation:)  comment:; 18446744073709551615
+ 18 |     show("{bigger}" at r, " ", bigger.str() at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:bigger  string:}"  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:bigger  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 19 |     show(bigger / 3, " ", bigger % 10, " ", uint64(3) ** 40)
+    | builtin-fn:show  punctuation:(  variable:bigger  operator:/  number:3  punctuation:,  string:" "  punctuation:,  variable:bigger  operator:%  number:10  punctuation:,  string:" "  punctuation:,  type-builtin:uint64  punctuation:(  number:3  punctuation:)  operator:**  number:40  punctuation:)
+ 21 |     fixed s: int16 = -300
+    | keyword:fixed  variable:s  punctuation::  type-builtin:int16  operator:=  operator:-  number:300
+ 22 |     show(s * 2, " ", int32(s) ** 2)       ; -600 90000, which an int16 does not hold
+    | builtin-fn:show  punctuation:(  variable:s  operator:*  number:2  punctuation:,  string:" "  punctuation:,  type-builtin:int32  punctuation:(  variable:s  punctuation:)  operator:**  number:2  punctuation:)  comment:; -600 90000, which an int16 does not hold
+ 23 |     fixed f: float32 = 1.5
+    | keyword:fixed  variable:f  punctuation::  type-builtin:float32  operator:=  number:1.5
+ 24 |     show(f * -2.0, " ", f ** 2.0, " ", float(f) + 0.25)
+    | builtin-fn:show  punctuation:(  variable:f  operator:*  operator:-  number:2.0  punctuation:,  string:" "  punctuation:,  variable:f  operator:**  number:2.0  punctuation:,  string:" "  punctuation:,  type-builtin:float  punctuation:(  variable:f  punctuation:)  operator:+  number:0.25  punctuation:)
+ 26 |     ; Alike and similar, as any number.
+    | comment:; Alike and similar, as any number.
+ 27 |     fixed a: int8 = 5
+    | keyword:fixed  variable:a  punctuation::  type-builtin:int8  operator:=  number:5
+ 28 |     fixed b: int8 = 5
+    | keyword:fixed  variable:b  punctuation::  type-builtin:int8  operator:=  number:5
+ 29 |     show(a == b, " ", a ~= b, " ", a < 6)
+    | builtin-fn:show  punctuation:(  variable:a  operator:==  variable:b  punctuation:,  string:" "  punctuation:,  variable:a  operator:~=  variable:b  punctuation:,  string:" "  punctuation:,  variable:a  operator:<  number:6  punctuation:)
+ 31 |     ; A uint64 that fits goes into an int.
+    | comment:; A uint64 that fits goes into an int.
+ 32 |     show(int(big) - 7)
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  variable:big  punctuation:)  operator:-  number:7  punctuation:)
+ 34 |     ; Int512 holds a negative number in two's complement.
+    | comment:; Int512 holds a negative number in two's complement.
+ 35 |     fixed minus_one = int512(-1)
+    | keyword:fixed  variable:minus_one  operator:=  task:int512  punctuation:(  operator:-  number:1  punctuation:)
+ 36 |     show(minus_one.limbs[0] == minus_one.limbs[7])
+    | builtin-fn:show  punctuation:(  variable:minus_one  punctuation:.  field:limbs  punctuation:[  number:0  punctuation:]  operator:==  variable:minus_one  punctuation:.  field:limbs  punctuation:[  number:7  punctuation:]  punctuation:)
+ 37 | fi
+    | keyword:fi

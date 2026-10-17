@@ -155,7 +155,7 @@ describe("VelaAnalysis", () => {
     const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
     expect(words).toEqual(["frozen", "same", "similar", "shown", "ordered"]);
     const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
-    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "maybe"]);
+    expect(types.map((i) => i.label)).toEqual(["int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit", "float", "float64", "float32", "bool", "text", "char", "maybe"]);
   });
 
   it("analyzes type aliases as declarations and follows their uses", () => {
@@ -192,7 +192,7 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("kept:"))?.code).toBe("fixed kept: Box<text>@r");
     expect(analysis.hover(source, source.indexOf("count ="))?.code).toBe("fixed count: Box<int>");
     const types = analysis.complete(source.replace("Box<int>", "Box<>"), source.indexOf("Box<int>") + "Box<".length).items;
-    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "Box", "maybe"]);
+    expect(types.map((i) => i.label)).toEqual(["int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit", "float", "float64", "float32", "bool", "text", "char", "Box", "maybe"]);
   });
 
   it("reads methods: highlighting, outline, hover, and completion after a dot", () => {
@@ -329,8 +329,8 @@ describe("VelaAnalysis", () => {
     expect(language.keywords).toEqual(expect.arrayContaining(["bind", "hold"]));
     expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "endless", "each", "block", "match"]);
     expect(language.blockModifiers).toEqual(["priv"]);
-    expect(language.branchKeywords).toEqual(["else", "case"]);
-    expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit", "char", "nothing"]);
+    expect(language.branchKeywords).toEqual(["else", "case", "finally"]);
+    expect(language.builtinTypes).toEqual(["int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit", "float", "float64", "float32", "bool", "text", "char", "nothing"]);
     expect(language.lineComment).toBe(";");
   });
 

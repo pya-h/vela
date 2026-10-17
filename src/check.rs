@@ -327,6 +327,10 @@ pub struct Checker {
     /// int ~ AppError = line |> parse() |> check()`, for the chain's pipes to
     /// fail with (see `check_pipe`).
     pipe_target: Option<Type>,
+    /// The type written where a loop in map form goes, `[int]@r` in `fixed xs:
+    /// [int]@r = each …`, or what a task sends with its `<-`, which says which
+    /// collection it makes (see `map_collection`).
+    loop_place: Option<Type>,
     /// One task to make for each set of types a call gives a generic task: the
     /// name of the task made for them, the generic task's name, the types, and
     /// where the call that needs it is.
@@ -3711,6 +3715,10 @@ impl Checker {
         self.stepping = stepping;
         self.unset = entry;
         result?;
+        if let Some(finally) = &mut parted.finally {
+            let given = self.loop_given.take();
+            self.check_finally(finally, gives, &parted.body, given, span)?;
+        }
         match &parted.cond {
             None if !parted.endless && parted.start.is_empty() && parted.step.is_empty() => self.warnings.push(Error::at(span, ENDLESS_UNSAID)),
             None => {}
@@ -3761,23 +3769,28 @@ impl Checker {
             }
             self.check_stmt(item)?;
         }
-        let body_had_value = given.is_some() || parted.body.last().is_some_and(|last| {
-            gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
-        });
-        let finally_given = if let Some(finally) = &mut parted.finally {
-            if gives {
-                self.value_block_tail(finally, span, FINALLY_BRANCHES)?
-            } else {
-                self.check_block(finally)?;
-                None
-            }
-        } else {
-            None
-        };
-        if body_had_value && finally_given.is_some() {
+        self.loop_given = given;
+        Ok(())
+    }
+
+    /// A loop's `finally` block, checked after its passes and outside it, so a
+    /// `break` or a `continue` there is the loop around it's, in a scope of its
+    /// own. A `break` or no pass at all skips it, so what it sets is not set
+    /// after it. Where the loop `gives` a value, the block's last line gives it,
+    /// and `body_given` is what its passes gave, which the block overrides with
+    /// a warning; the loop then gives what the block does.
+    fn check_finally(&mut self, finally: &mut Block, gives: bool, body: &Block, body_given: Option<(Type, Span)>, span: Span) -> Result<()> {
+        let entry = self.unset.clone();
+        self.push_scope();
+        let given = if gives { self.value_block_tail(finally, span, FINALLY_BRANCHES) } else { self.check_block(finally).map(|()| None) };
+        self.pop_scope();
+        self.unset = entry;
+        let given = given?;
+        let body_gave = body_given.is_some() || body.last().is_some_and(|last| gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing)));
+        if gives && body_gave && given.is_some() {
             self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
         }
-        self.loop_given = if has_finally { finally_given } else { given };
+        self.loop_given = given;
         Ok(())
     }
 
@@ -3814,6 +3827,8 @@ impl Checker {
     /// its `break`s give and `M` what its last lines fail with, each `bool`
     /// where none is given. As a statement with a plan B, it gives nothing.
     fn check_loop_value(&mut self, value: &mut ValueLoop, span: Span) -> Result<Type> {
+        // Taken before the passes are checked, so no loop inside takes it.
+        let place = self.loop_place.take();
         let never_ends = match &value.stmt.kind {
             StmtKind::Parted(parted) => parted.cond.as_ref().is_none_or(says_true),
             StmtKind::Loop(cond, _, _) => says_true(cond),
@@ -3880,37 +3895,7 @@ impl Checker {
                 "the last line of this loop gives only none, which doesn't say its type; give a value, or 'none' beside one in a 'when'"
             });
         }
-        let pass_item_ty = given.clone();
-        let given = if value.finally().is_some() || !value.gives {
-            given
-        } else {
-            match &value.stmt.kind {
-                StmtKind::Each(_, _, range, _, _) => {
-                    match &range.ty {
-                        Some(Type::Array(_, count)) => Type::Array(Box::new(given), *count),
-                        _ => {
-                            if let ExprKind::Range(start, end) = &range.kind
-                                && let (Some(a), Some(b)) = (constant_int(start), constant_int(end))
-                                && b >= a
-                            {
-                                Type::Array(Box::new(given), (b - a) as u64)
-                            } else {
-                                let region = self.region_or_default(None, span, || {
-                                    "map-form loop over a dynamic collection makes a slice, so it needs a region".to_string()
-                                })?;
-                                Type::Slice(Box::new(given), Some(region))
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    let region = self.region_or_default(None, span, || {
-                        "map-form loop makes a slice, so it needs a region".to_string()
-                    })?;
-                    Type::Slice(Box::new(given), Some(region))
-                }
-            }
-        };
+        let given = if value.finally().is_some() || !value.gives { given } else { self.map_collection(value, given, place.as_ref(), span)? };
         value.open = (!breaks.iter().any(|(ty, _)| *ty != Type::None), manual_error.is_none());
         let manual = match manual_error.as_ref() {
             None => Type::Bool,
@@ -3980,11 +3965,8 @@ impl Checker {
             if let Some(finally) = value.finally_mut() {
                 self.settle_value(finally, &ty)?;
             } else if let Some(body) = value.body_mut() {
-                let pass_ty = match &manual_error {
-                    Some(err) => Type::Or(Box::new(pass_item_ty), Box::new(err.clone())),
-                    None => pass_item_ty,
-                };
-                self.settle_value(body, &pass_ty)?;
+                // Each pass gives an item, or fails with the loop's failure.
+                self.settle_value(body, &map_pass(&ty, manual_error.is_some()))?;
             }
         }
         // Its value outlives every pass, so it is in no region one declares.
@@ -3993,6 +3975,64 @@ impl Checker {
             return err(at, format!("this value is in region '{}', which is freed when the pass ends, so it can't be the loop's value", region));
         }
         Ok(ty)
+    }
+
+    /// The collection a loop in map form gives (see `ValueLoop`), whose passes
+    /// give `item`, from `place`, the type written where its value goes, if
+    /// any. A slice where the place is one, in its region; an array as long as
+    /// the count where the loop goes through an array or a range of constant
+    /// ends; and a slice in the block's default region where the count is known
+    /// only as it runs. A `continue` of the loop, even one that never runs,
+    /// leaves its pass out of a slice, and its item `none` in an array, whose
+    /// items are then maybes (the user's rule, 2026-10-17).
+    fn map_collection(&mut self, value: &ValueLoop, item: Type, place: Option<&Type>, span: Span) -> Result<Type> {
+        let count = match &value.stmt.kind {
+            StmtKind::Each(_, _, range, _, _) => match (&range.ty, &range.kind) {
+                (Some(Type::Array(_, count)), _) => Some(*count),
+                (_, ExprKind::Range(start, end)) => match (constant_int(start), constant_int(end)) {
+                    (Some(a), Some(b)) => match b.checked_sub(a).and_then(|n| u64::try_from(n).ok()).filter(|n| *n > 0) {
+                        Some(n) => Some(n),
+                        None => return err(range.span, format!("the range {}..{} is empty, so this loop never runs and has no items to give", a, b)),
+                    },
+                    _ => None,
+                },
+                _ => None,
+            },
+            _ => None,
+        };
+        let maybe_item = || match &item {
+            Type::Maybe(_) => item.clone(),
+            other => Type::Maybe(Box::new(other.clone())),
+        };
+        let continued = continues_loop(value);
+        let in_default = |this: &mut Self| {
+            this.region_or_default(None, span, || "this loop makes a slice, since how many items it gives is known only as it runs, so it needs a region: write its type, as in 'fixed xs: [int]@r = each …'".to_string())
+        };
+        Ok(match (place, count) {
+            (Some(Type::Slice(_, region)), _) => {
+                let region = match region {
+                    Some(region) => region.clone(),
+                    None => in_default(self)?,
+                };
+                Type::Slice(Box::new(item), Some(region))
+            }
+            (Some(Type::Array(..)), None) => {
+                return err(span, "how many items this loop gives is known only as it runs, so it makes a slice, not an array; write its type as one, as in '[int]@r'");
+            }
+            (Some(Type::Array(placed, _)), Some(count)) if matches!(**placed, Type::Maybe(_)) => Type::Array(Box::new(maybe_item()), count),
+            (Some(Type::Array(..)), Some(count)) if let Some(at) = continued => {
+                return err(
+                    at,
+                    format!(
+                        "this 'continue' leaves its pass without an item, and an array of {0} has one for every pass; write its type with maybe items, as in '[maybe {0}#{1}]', where a pass left so is none, or as a slice, as in '[{0}]@r', which leaves it out",
+                        item, count
+                    ),
+                );
+            }
+            (_, Some(count)) if continued.is_some() => Type::Array(Box::new(maybe_item()), count),
+            (_, Some(count)) => Type::Array(Box::new(item), count),
+            (_, None) => Type::Slice(Box::new(item), Some(in_default(self)?)),
+        })
     }
 
     /// `M`, what the last lines of the loop `value` fail with, from `error`,
@@ -4541,16 +4581,16 @@ impl Checker {
         }
         let ty = self.check_expr(&mut target.clone())?;
         let counts = matches!(symbol, "++" | "--");
-        if counts && !matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Unknown) {
+        if counts && !(ty.is_integer() || matches!(ty, Type::Char | Type::Unknown)) {
             let hint = match ty {
-                Type::Float => format!("; for a float, write 'x {} 1.0'", if symbol == "++" { "+=" } else { "-=" }),
+                _ if ty.is_float() => format!("; for a float, write 'x {} 1.0'", if symbol == "++" { "+=" } else { "-=" }),
                 _ => String::new(),
             };
-            return err(at, format!("'{}' counts an int, a unit, or a char by one, and this is {}{}", symbol, a_type(&ty), hint));
+            return err(at, format!("'{}' counts a whole number or a char by one, and this is {}{}", symbol, a_type(&ty), hint));
         }
         // `f += 1`: a whole number written out doesn't become a float (a
         // power's may be an int, `f **= 2`).
-        if ty == Type::Float
+        if ty.is_float()
             && op != BinaryOp::Pow
             && let ExprKind::IntLit(n) = value.kind
         {
@@ -4636,6 +4676,13 @@ impl Checker {
                     let name = names.first().map_or("y", |bound| bound.name.as_str());
                     return err(marked.span, format!("'{0} {1}' takes a copy, so leave out '&'; '{0}& {1} = &…' is another name for the place", word, name));
                 }
+                // `fixed xs: [int]@r = each …`: the type says which collection
+                // the loop makes.
+                if let ([bound], [value]) = (names.as_slice(), init.as_slice())
+                    && let Some(ty) = &bound.ty
+                {
+                    self.loop_place = loop_value(value).map(|_| success_of(ty));
+                }
                 // `fixed n: int ~ AppError = line |> parse()`: the chain fails
                 // with the error named.
                 if let ([bound], [value]) = (names.as_slice(), init.as_slice())
@@ -4646,6 +4693,7 @@ impl Checker {
                 }
                 let given = self.value_types(init, names.len(), span, true);
                 self.pipe_target = None;
+                self.loop_place = None;
                 let given = given?;
                 // A single call sending several values gives them all, and
                 // those values are taken as they are.
@@ -4847,23 +4895,10 @@ impl Checker {
                 self.loops.pop();
                 self.unset = entry;
                 let body_given = result?;
-                let body_had_value = body_given.is_some() || body.last().is_some_and(|last| {
-                    gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
-                });
-                let finally_given = if let Some(finally) = finally {
-                    if gives {
-                        self.value_block_tail(finally, span, FINALLY_BRANCHES)?
-                    } else {
-                        self.check_block(finally)?;
-                        None
-                    }
-                } else {
-                    None
-                };
-                if body_had_value && finally_given.is_some() {
-                    self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
+                match finally {
+                    Some(finally) => self.check_finally(finally, gives, body, body_given, span)?,
+                    None => self.loop_given = body_given,
                 }
-                self.loop_given = if has_finally { finally_given } else { body_given };
                 // `loop true`: one that never ends by itself says so in a word.
                 if says_true(cond) {
                     self.warnings.push(Error::at(span, ENDLESS_UNSAID));
@@ -4958,9 +4993,6 @@ impl Checker {
                     body_given = self.value_block_tail(body, span, branches)?;
                     Ok(())
                 });
-                let body_had_value = body_given.is_some() || body.last().is_some_and(|last| {
-                    gives_value(last) || matches!(&last.kind, StmtKind::Expr(e) if e.ty.as_ref().is_some_and(|t| *t != Type::Nothing))
-                });
                 self.pop_scope();
                 self.loops.pop();
                 self.unset = entry;
@@ -4968,21 +5000,13 @@ impl Checker {
                     self.group_turns.pop();
                 }
                 result?;
-                let finally_given = if let Some(finally) = finally {
-                    if gives {
-                        self.value_block_tail(finally, span, FINALLY_BRANCHES)?
-                    } else {
-                        self.check_block(finally)?;
-                        None
+                match finally {
+                    Some(finally) => self.check_finally(finally, gives, body, body_given, span),
+                    None => {
+                        self.loop_given = body_given;
+                        Ok(())
                     }
-                } else {
-                    None
-                };
-                if body_had_value && finally_given.is_some() {
-                    self.warnings.push(Error::at(span, BOTH_LOOP_FORMS_WARNING));
                 }
-                self.loop_given = if has_finally { finally_given } else { body_given };
-                Ok(())
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
             StmtKind::Send(values) => {
@@ -5020,8 +5044,11 @@ impl Checker {
                     if let (ExprKind::Pipe(_), Type::Or(_, error)) = (&e.kind, &ret) {
                         self.pipe_target = Some((**error).clone());
                     }
+                    // `<- each …`: the task's result says which collection the loop makes.
+                    self.loop_place = loop_value(e).map(|_| success_of(&ret));
                     let ety = self.check_expr(e);
                     self.pipe_target = None;
+                    self.loop_place = None;
                     let ety = ety?;
                     if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
                         return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
@@ -9288,12 +9315,11 @@ impl Checker {
                         }
                     });
                     self.settle_value(finally, &own)?;
-                } else if let Some(body) = value.body_mut() {
-                    let item_ty = match &**if told_given { place } else { &given } {
-                        Type::Array(item, _) | Type::Slice(item, _) => (**item).clone(),
-                        other => other.clone(),
-                    };
-                    self.settle_value(body, &item_ty)?;
+                } else {
+                    let pass = map_pass(&own, !value.open.1);
+                    if let Some(body) = value.body_mut() {
+                        self.settle_value(body, &pass)?;
+                    }
                 }
                 expr.ty = Some(own);
             }
@@ -11187,11 +11213,13 @@ impl Checker {
                 if !ty.is_numeric() {
                     return err(span, format!("negation requires a number, got {}{}", ty, extract_hint(&[&ty])));
                 }
-                if ty.is_byte() {
-                    return err(span, format!("a {0} is never negative, so it can't be negated; turn it into an int first, as in '-int(x)'", ty));
+                if ty.is_unsigned_int() {
+                    return err(span, format!("{} is never negative, so it can't be negated; turn it into an int first, as in '-int(x)'", a_type(&ty)));
                 }
-                if let Some(value) = constant_int(e) {
-                    fits_int(-i128::from(value), span)?;
+                match constant_int(e) {
+                    Some(value) if ty == Type::Int => fits_int(-i128::from(value), span)?,
+                    Some(value) => fits_type(-i128::from(value), &ty, span)?,
+                    None => {}
                 }
                 Ok(ty)
             }
@@ -11315,8 +11343,10 @@ impl Checker {
         if op == BinaryOp::Pow {
             // `b ** 2`: an exponent written out is a unit beside a unit base.
             // A base written out stays an int, so `2 ** b` is an int.
-            if lt == Type::Unit && byte_literal(r, &Type::Unit)? {
-                rt = Type::Unit;
+            if lt.is_integer() && lt != Type::Int && numeric_literal(r, &lt)? {
+                rt = lt.clone();
+            } else if lt == Type::Float32 && float32_literal(r) {
+                rt = Type::Float32;
             }
             return check_power(l, r, &lt, &rt, span);
         }
@@ -11333,6 +11363,11 @@ impl Checker {
             && numeric_literal(l, &target)?
         {
             lt = target;
+        } else if lt == Type::Float32 && float32_literal(r) {
+            // `f * 2.5` with `f: float32`: a float written out is one.
+            rt = Type::Float32;
+        } else if rt == Type::Float32 && float32_literal(l) {
+            lt = Type::Float32;
         }
         match op {
             BinaryOp::Pow => Err(Error::internal_at(span, "a power checked as other arithmetic")),
@@ -11380,10 +11415,7 @@ impl Checker {
                     }
                     return err(
                         at,
-                        format!(
-                            "{} and {} don't mix in arithmetic: turn one into the other first, as in '{}(…)'",
-                            lt, rt, lt
-                        ),
+                        format!("{} and {} don't mix in arithmetic: turn one into the other first, as in '{}(b) + a'", a_type(&lt), a_type(&rt), lt),
                     );
                 }
                 if lt.is_integer() {
@@ -13585,8 +13617,8 @@ impl Checker {
         };
         if numeric.is_numeric() {
             numeric_literal(expr, numeric)?;
-            if matches!(expr.kind, ExprKind::FloatLit(_)) && *numeric == Type::Float32 {
-                expr.ty = Some(Type::Float32);
+            if *numeric == Type::Float32 && expr.ty == Some(Type::Float) {
+                float32_literal(expr);
             }
         }
         let actual = expr.ty()?.clone();
@@ -15674,6 +15706,8 @@ struct LoopEffects {
     changes: bool,
     /// A `break` may stop the loop, or a `continue` go on with one around it.
     stops: bool,
+    /// Where a `continue` goes on with the loop itself, the first one.
+    continued: Option<Span>,
 }
 
 /// What `stmts`, inside a loop, may do to it and to the variables `names`
@@ -15711,6 +15745,13 @@ fn stmt_effects(stmt: &Stmt, names: &[String], inner: &mut Vec<Option<String>>, 
             let stops = name.as_ref().is_some_and(|(name, _)| !within(inner, name) && own != Some(name.as_str()));
             effects.leaves |= stops;
             effects.stops |= stops;
+            let own_pass = match name {
+                None => inner.is_empty(),
+                Some((name, _)) => own == Some(name.as_str()),
+            };
+            if own_pass && effects.continued.is_none() {
+                effects.continued = Some(stmt.span);
+            }
         }
         StmtKind::Assign(targets, values) => {
             let mut set = Vec::new();
@@ -15762,30 +15803,74 @@ fn nested_loop_effects(stmt: &Stmt, name: Option<String>, names: &[String], inne
     }
     inner.push(name);
     match &stmt.kind {
-        StmtKind::Loop(cond, block, finally) => {
+        StmtKind::Loop(cond, block, _) => {
             cond.parts().for_each(|part| expr_effects(&part.value, names, inner, own, effects));
             loop_effects(block, names, inner, own, effects);
-            if let Some(finally) = finally {
-                loop_effects(finally, names, inner, own, effects);
-            }
         }
-        StmtKind::Each(_, _, _, block, finally) => {
-            loop_effects(block, names, inner, own, effects);
-            if let Some(finally) = finally {
-                loop_effects(finally, names, inner, own, effects);
-            }
-        }
+        StmtKind::Each(_, _, _, block, _) => loop_effects(block, names, inner, own, effects),
         StmtKind::Parted(parted) => {
             parted.cond.iter().flat_map(Condition::parts).for_each(|part| expr_effects(&part.value, names, inner, own, effects));
             loop_effects(&parted.step, names, inner, own, effects);
             loop_effects(&parted.body, names, inner, own, effects);
-            if let Some(finally) = &parted.finally {
-                loop_effects(finally, names, inner, own, effects);
-            }
         }
         _ => {}
     }
     inner.pop();
+    // Its `finally` block runs after its passes, outside it, so a `break` or
+    // a `continue` there is the loop around it's.
+    if let Some(finally) = stmt.finally() {
+        loop_effects(finally, names, inner, own, effects);
+    }
+}
+
+/// What each pass of a loop in map form whose value is `ty`, a collection `~
+/// LoopResult<B, M>`, gives: an item, or, where a pass `fails`, an item `~ ` the
+/// loop's own failure, which then stops the loop.
+pub fn map_pass(ty: &Type, fails: bool) -> Type {
+    let (collection, result) = match ty {
+        Type::Or(collection, result) => (collection.as_ref(), Some(result)),
+        other => (other, None),
+    };
+    let item = match collection {
+        Type::Array(item, _) | Type::Slice(item, _) => (**item).clone(),
+        other => other.clone(),
+    };
+    match result {
+        Some(result) if fails => Type::Or(Box::new(item), result.clone()),
+        _ => item,
+    }
+}
+
+/// The loop giving a value that `e` is, alone or with a plan B after it.
+fn loop_value(e: &Expr) -> Option<&ValueLoop> {
+    match &e.kind {
+        ExprKind::LoopValue(value) => Some(value),
+        ExprKind::PlanB { value, .. } => loop_value(value),
+        _ => None,
+    }
+}
+
+/// What a value of `ty` is when it succeeds: `T` of `T ~ E`, or `ty` itself.
+fn success_of(ty: &Type) -> Type {
+    match ty {
+        Type::Or(value, _) => (**value).clone(),
+        other => other.clone(),
+    }
+}
+
+/// Where the loop giving a value `value` has a `continue` of its own, the first
+/// one, even one that never runs: in map form, it leaves its pass without an
+/// item (see `Checker::map_collection`).
+fn continues_loop(value: &ValueLoop) -> Option<Span> {
+    let mut effects = LoopEffects::default();
+    let own = value.name.as_ref().map(|(name, _)| name.as_str());
+    if let StmtKind::Loop(cond, _, _) = &value.stmt.kind {
+        cond.parts().for_each(|part| expr_effects(&part.value, &[], &mut Vec::new(), own, &mut effects));
+    }
+    if let Some(body) = value.body() {
+        loop_effects(body, &[], &mut Vec::new(), own, &mut effects);
+    }
+    effects.continued
 }
 
 /// What the expression `e` may do to the loop it is in (see `loop_effects`):
@@ -16175,6 +16260,8 @@ fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
     }
 }
 
+/// The smallest and the largest value of the whole number type `ty`, or `None`
+/// for any other type.
 fn integer_range(ty: &Type) -> Option<(i128, i128)> {
     match ty {
         Type::Int8 => Some((i8::MIN as i128, i8::MAX as i128)),
@@ -16189,16 +16276,20 @@ fn integer_range(ty: &Type) -> Option<(i128, i128)> {
     }
 }
 
+/// Checks that `n` fits in `ty`, where it is a whole number type.
 fn fits_type(n: i128, ty: &Type, span: Span) -> Result<()> {
     if let Some((min, max)) = integer_range(ty) {
         if n >= min && n <= max {
             return Ok(());
         }
-        return err(span, format!("{} doesn't fit in a {}, which holds {} to {}", n, ty, min, max));
+        return err(span, format!("{} doesn't fit in {}, which holds {} to {}", n, a_type(ty), min, max));
     }
     Ok(())
 }
 
+/// Makes `e`, when it is a whole number written out (`200`, `-1`, `3 - 1`), a
+/// value of the whole number type `target` (`b + 1` with `b: unit`, `flex n:
+/// int8 = -5`), if it fits: whether it was one.
 fn numeric_literal(e: &mut Expr, target: &Type) -> Result<bool> {
     if e.ty != Some(Type::Int) {
         return Ok(false);
@@ -16210,10 +16301,6 @@ fn numeric_literal(e: &mut Expr, target: &Type) -> Result<bool> {
     fits_type(i128::from(n), target, e.span)?;
     e.ty = Some(target.clone());
     Ok(true)
-}
-
-fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
-    numeric_literal(e, byte)
 }
 
 /// Where a place written by a step (see `Checker::step_to_assignment`) calls a
@@ -16247,7 +16334,7 @@ fn changing_part(e: &Expr) -> Option<Span> {
 fn a_type(ty: &Type) -> String {
     match ty {
         Type::Text(_) => "text".to_string(),
-        Type::Int => "an int".to_string(),
+        Type::Int | Type::Int8 | Type::Int16 | Type::Int32 => format!("an {}", ty),
         other => format!("a {}", other),
     }
 }
@@ -16257,7 +16344,7 @@ fn a_type(ty: &Type) -> String {
 /// float; an int raised to a unit or to a constant 0 or more stays an int, and a
 /// unit raised to a unit a unit.
 fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<Type> {
-    let number = |ty: &Type| matches!(ty, Type::Int | Type::Float | Type::Unit);
+    let number = |ty: &Type| ty.is_numeric();
     if !number(lt) || !number(rt) {
         let other = if number(lt) { rt } else { lt };
         let hint = match other {
@@ -16285,8 +16372,36 @@ fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<T
             }
             _ => Ok(Type::Float),
         },
-        _ => Ok(Type::Float),
+        // `x ** 2` with `x: int8`: a sized number raised to a power of its own
+        // type stays one, checked to fit as it runs; a signed one's power is a
+        // constant 0 or more, since a negative one makes a fraction.
+        (Type::Float32, Type::Float32) => Ok(Type::Float32),
+        (sized, power) if sized == power && sized.is_integer() => {
+            if sized.is_signed_int() && !constant_int(r).is_some_and(|exponent| exponent >= 0) {
+                return err(
+                    r.span,
+                    format!("{0} is raised to a constant power 0 or more, as in 'x ** 2', since a negative one makes a fraction; for another power, turn both into floats, as in 'float(x) ** float(k)'", a_type(sized)),
+                );
+            }
+            Ok(sized.clone())
+        }
+        (Type::Int | Type::Float | Type::Unit, Type::Int | Type::Float | Type::Unit) => Ok(Type::Float),
+        _ => err(span, format!("'**' takes a number and a power of one type, and this raises {} to {}; turn one into the other first, as in '{}(k)'", a_type(lt), a_type(rt), lt)),
     }
+}
+
+/// Makes `e`, when it is a float written out (`2.5`, `-0.5`), a `float32`:
+/// whether it was one.
+fn float32_literal(e: &mut Expr) -> bool {
+    let written = match &mut e.kind {
+        ExprKind::FloatLit(_) => true,
+        ExprKind::Unary(UnaryOp::Neg, inner) => float32_literal(inner),
+        _ => false,
+    };
+    if written {
+        e.ty = Some(Type::Float32);
+    }
+    written
 }
 
 /// `base ** exponent` for ints, `exponent` 0 or more, or `None` when it doesn't fit.
@@ -17199,22 +17314,13 @@ const OWNER_MARK: &str = "\u{0}";
 /// `break = v` in it.
 fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
     match &stmt.kind {
+        // A `break` in its `finally` block is the loop around it's.
         StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => {
-            if let Some(finally) = finally {
-                last_values(finally, values);
-                finally.iter().for_each(|stmt| break_values(stmt, values));
-            } else {
-                last_values(body, values);
-            }
+            last_values(finally.as_ref().unwrap_or(body), values);
             body.iter().for_each(|stmt| break_values(stmt, values));
         }
         StmtKind::Parted(parted) => {
-            if let Some(finally) = &parted.finally {
-                last_values(finally, values);
-                finally.iter().for_each(|stmt| break_values(stmt, values));
-            } else {
-                last_values(&parted.body, values);
-            }
+            last_values(parted.finally.as_ref().unwrap_or(&parted.body), values);
             parted.body.iter().for_each(|stmt| break_values(stmt, values));
         }
         StmtKind::Named(_, inner) => loop_values(inner, values),
@@ -17232,8 +17338,9 @@ fn break_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
             blocks.extend(else_block.iter().map(Vec::as_slice));
         }
         StmtKind::Match(_, cases) => blocks.extend(cases.iter().map(|case| case.body.as_slice())),
-        StmtKind::Block(body) | StmtKind::Loop(_, body, _) | StmtKind::Each(_, _, _, body, _) => blocks.push(body),
-        StmtKind::Parted(parted) => blocks.push(&parted.body),
+        StmtKind::Block(body) => blocks.push(body),
+        StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => blocks.extend([Some(body), finally.as_ref()].into_iter().flatten().map(Vec::as_slice)),
+        StmtKind::Parted(parted) => blocks.extend([Some(&parted.body), parted.finally.as_ref()].into_iter().flatten().map(Vec::as_slice)),
         StmtKind::Named(_, inner) => break_values(inner, values),
         _ => {}
     }

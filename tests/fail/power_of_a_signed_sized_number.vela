@@ -1,0 +1,7 @@
+; error: 6:18: an int8 is raised to a constant power 0 or more, as in 'x ** 2', since a negative one makes a fraction; for another power, turn both into floats, as in 'float(x) ** float(k)'
+; A signed int8 raised to a power that may be negative would be a fraction.
+task main()
+    fixed base: int8 = 2
+    fixed power: int8 = 3
+    show(base ** power)
+fi

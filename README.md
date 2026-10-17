@@ -73,10 +73,13 @@ binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `mayb
 started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
 pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. A loop may come in
 three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and one that never ends by itself is written
-`endless`; the compiler warns about a loop that never ends without saying so. A loop can be a value,
-`fixed r = each x in xs … fi`, the last line of its final pass, or a failure that says why it has none
-(`LoopResult` of `std/loops`: it never ran, `break = v` stopped it, its final pass ended with `continue`, or its
-last line failed). Kinds take types as
+`endless`; the compiler warns about a loop that never ends without saying so. A loop can be a value: one,
+`each x in xs … finally total fi`, the last line of a `finally` block run after its final pass, or, without
+`finally`, the values its passes end with gathered into an array or a slice (`fixed doubled = each x in xs` with
+`x * 2` as its last line). Its failure says why it has none (`LoopResult` of `std/loops`: it never ran,
+`break = v` stopped it, its final pass ended with `continue` before `finally`, or a last line failed). Numbers
+have sizes too, `int8` to `int64`, `uint8` to `uint64`, `float32` and `float64`, which never wrap around and mix
+only through a conversion such as `int32(n)`. Kinds take types as
 shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
 `Option<int>.None`. A kind can imitate others, `kind OrderError::ReadError & files.FileError`: it has all their
 variants before its own, named through it (`OrderError.Empty`), and a value of one of them goes where an

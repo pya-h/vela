@@ -33,6 +33,16 @@ static inline void vela__rt__show_int(int64_t x) {
     vela__rt__show_line();
 }
 
+/* A `uint64`, which may pass the largest int. */
+static inline void vela__rt__write_uint(uint64_t x) {
+    printf("%llu", (unsigned long long)x);
+}
+
+static inline void vela__rt__show_uint(uint64_t x) {
+    vela__rt__write_uint(x);
+    vela__rt__show_line();
+}
+
 static inline void vela__rt__write_float(double x) {
     /* C libraries print a NaN's sign inconsistently (`-nan` or `nan`). */
     if (isnan(x)) {
@@ -375,6 +385,69 @@ static inline uint64_t vela__rt__uint64_of(int64_t x, const char* at) {
         vela__rt__int_trap(written, at);
     }
     return (uint64_t)x;
+}
+
+/* A `uint64` as an int, to be read as one or made a smaller whole number: one
+ * past the largest int stops the program. */
+static inline int64_t vela__rt__int_of_uint(uint64_t x, const char* at) {
+    if (x > (uint64_t)INT64_MAX) {
+        char written[64];
+        snprintf(written, sizeof written, "%llu does not fit in an int", (unsigned long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (int64_t)x;
+}
+
+/* Arithmetic on `uint64`s, which never wraps: a result past 0 to the largest
+ * `uint64` stops the program, as integer overflow does. */
+static inline uint64_t vela__rt__uint_add(uint64_t a, uint64_t b, const char* at) {
+    if (a > UINT64_MAX - b) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return a + b;
+}
+
+static inline uint64_t vela__rt__uint_sub(uint64_t a, uint64_t b, const char* at) {
+    if (b > a) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return a - b;
+}
+
+static inline uint64_t vela__rt__uint_mul(uint64_t a, uint64_t b, const char* at) {
+    if (a != 0 && b > UINT64_MAX / a) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return a * b;
+}
+
+static inline uint64_t vela__rt__uint_div(uint64_t a, uint64_t b, const char* at) {
+    if (b == 0) {
+        vela__rt__int_trap("division by zero", at);
+    }
+    return a / b;
+}
+
+static inline uint64_t vela__rt__uint_mod(uint64_t a, uint64_t b, const char* at) {
+    if (b == 0) {
+        vela__rt__int_trap("remainder of division by zero", at);
+    }
+    return a % b;
+}
+
+/* `a ** b` for `uint64`s, by squaring, as `vela__rt__pow` does. */
+static inline uint64_t vela__rt__uint_pow(uint64_t a, uint64_t b, const char* at) {
+    uint64_t result = 1;
+    while (b > 0) {
+        if (b & 1) {
+            result = vela__rt__uint_mul(result, a, at);
+        }
+        b >>= 1;
+        if (b > 0) {
+            a = vela__rt__uint_mul(a, a, at);
+        }
+    }
+    return result;
 }
 
 /* Float remainder (Vela's `%` on floats); the result has the dividend's sign. */
@@ -992,6 +1065,12 @@ static inline vela__rt__text vela__rt__int_str(vela__rt__region* r, int64_t x) {
     return vela__rt__text_in(r, digits, (size_t)len);
 }
 
+static inline vela__rt__text vela__rt__uint_str(vela__rt__region* r, uint64_t x) {
+    char digits[24];
+    int len = snprintf(digits, sizeof digits, "%llu", (unsigned long long)x);
+    return vela__rt__text_in(r, digits, (size_t)len);
+}
+
 static inline vela__rt__text vela__rt__char_str(vela__rt__region* r, uint8_t c) {
     char byte = (char)c;
     return vela__rt__text_in(r, &byte, 1);
@@ -1024,6 +1103,11 @@ static inline vela__rt__text vela__rt__text_str(vela__rt__region* r, vela__rt__t
 
 static inline vela__rt__text vela__rt__int_view(char* room, int64_t x) {
     int len = snprintf(room, VELA__RT__NUMBER_ROOM, "%lld", (long long)x);
+    return (vela__rt__text){ room, (int64_t)len };
+}
+
+static inline vela__rt__text vela__rt__uint_view(char* room, uint64_t x) {
+    int len = snprintf(room, VELA__RT__NUMBER_ROOM, "%llu", (unsigned long long)x);
     return (vela__rt__text){ room, (int64_t)len };
 }
 
@@ -1087,6 +1171,12 @@ static inline void vela__rt__put(vela__rt__writer* w, const char* bytes, size_t 
 static inline void vela__rt__put_int(vela__rt__writer* w, int64_t x) {
     char room[VELA__RT__NUMBER_ROOM];
     vela__rt__text t = vela__rt__int_view(room, x);
+    vela__rt__put(w, t.bytes, (size_t)t.len);
+}
+
+static inline void vela__rt__put_uint(vela__rt__writer* w, uint64_t x) {
+    char room[VELA__RT__NUMBER_ROOM];
+    vela__rt__text t = vela__rt__uint_view(room, x);
     vela__rt__put(w, t.bytes, (size_t)t.len);
 }
 

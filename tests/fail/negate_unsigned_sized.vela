@@ -1,0 +1,6 @@
+; error: 5:10: a uint16 is never negative, so it can't be negated; turn it into an int first, as in '-int(x)'
+; A uint16 is never negative.
+task main()
+    fixed n: uint16 = 7
+    show(-n)
+fi

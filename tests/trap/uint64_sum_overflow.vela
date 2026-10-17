@@ -1,0 +1,8 @@
+; trap: integer overflow at 7:15 in task 'main'
+; A uint64 sum past the largest uint64 stops the program.
+task main()
+    fixed half: uint64 = 9_223_372_036_854_775_807
+    fixed most = half + half + 1
+    show(most)
+    show(most + 1)
+fi

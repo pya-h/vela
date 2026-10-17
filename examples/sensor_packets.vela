@@ -1,0 +1,38 @@
+; Sensor packets: readings kept in numbers of the size each one needs, a
+; checksum that may grow past what a smaller number holds, and conversions that
+; say where one size becomes another.
+
+shape Reading
+    station: uint16
+    celsius: int8
+    pressure: uint32
+fi
+
+; A checksum over the readings, in a uint64 so no sum of them overflows.
+task checksum(readings: [Reading#3]) -> uint64
+    flex sum: uint64 = 0
+    each reading in readings
+        sum += uint64(reading.station) * 31 + uint64(reading.pressure)
+    fi
+    <- sum
+fi
+
+task main()
+    fixed cold = Reading { station: 101, celsius: -12, pressure: 101_325 }
+    fixed mild = Reading { station: 102, celsius: 4, pressure: 99_870 }
+    fixed hot = Reading { station: 65_535, celsius: 41, pressure: 4_000_000_000 }
+    fixed readings = [cold, mild, hot]
+    ; A temperature change fits in an int8 here; one that doesn't stops the program.
+    each reading in readings
+        fixed warmer: int8 = reading.celsius + 5
+        show("station ", reading.station, ": ", reading.celsius, " C, ", warmer, " C after warming")
+    fi
+    ; The average pressure, as a float32, from the int it is summed in.
+    flex total = 0
+    each reading in readings
+        total += int(reading.pressure)
+    fi
+    fixed average = float32(total) / 3.0
+    show("average pressure ", average)
+    show("checksum ", checksum(readings))
+fi

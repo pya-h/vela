@@ -130,11 +130,16 @@ pub struct Generator {
     loop_giving: Option<Giving>,
 }
 
+/// A loop in map form being generated (see `ValueLoop`): the temporary
+/// gathering its items, a collection of type `coll_ty`, an array or a slice in
+/// `region`; what each pass gives, `pass_ty`, an item or an item `~` the loop's
+/// failure; and, for an array, the counter of its passes, each pass's item at
+/// its own place, so a pass a `continue` leaves keeps its `none`.
 #[derive(Clone)]
 struct MapAcc {
     acc_name: String,
     coll_ty: Type,
-    item_ty: Type,
+    pass_ty: Type,
     region: Option<String>,
     idx_name: String,
 }
@@ -1233,7 +1238,7 @@ impl Generator {
     /// either way, and text by its bytes.
     fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) | Type::Task(_) => format!("{} == {}", a, b),
+            _ if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Ptr(..) | Type::Task(_)) => format!("{} == {}", a, b),
             // `==` on maps is which map: the handle.
             Type::Map(..) if how == "same" => format!("{} == {}", a, b),
             Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
@@ -2055,26 +2060,10 @@ impl Generator {
             self.w.line(&format!("{} = false;", pass_ok));
         }
         let res = match innermost.as_ref().and_then(|l| l.giving.as_ref()) {
-            Some(giving) if giving.gives => {
-                if let Some(map) = &giving.map_acc {
-                    let item_temp = self.fresh_temp("item");
-                    self.w.line(&format!("{} {};", c_type(&map.item_ty), item_temp));
-                    self.gen_value_block(body, &item_temp)?;
-                    match &map.coll_ty {
-                        Type::Array(..) => {
-                            self.w.line(&format!("{}.items[{}++] = {};", map.acc_name, map.idx_name, item_temp));
-                        }
-                        Type::Slice(..) => {
-                            let reg = map.region.as_deref().unwrap_or("r");
-                            self.w.line(&format!("{}({}, &{}, {});", item_helper("add", &map.coll_ty), c_ident(reg), map.acc_name, item_temp));
-                        }
-                        _ => {}
-                    }
-                    Ok(())
-                } else {
-                    self.gen_block(body)
-                }
-            }
+            Some(giving) if giving.gives => match &giving.map_acc {
+                Some(map) => self.gen_map_pass(body, map, giving, innermost.as_ref().map_or(0, |l| l.depth)),
+                None => self.gen_block(body),
+            },
             Some(giving) => {
                 self.gen_block(body)?;
                 self.w.line(&format!("{} = (({}){{ .ok = true }});", giving.result, c_type(&giving.ty)));
@@ -2085,6 +2074,42 @@ impl Generator {
         res?;
         if let Some(pass_ok) = innermost.as_ref().and_then(|l| l.pass_ok.as_ref()) {
             self.w.line(&format!("{} = true;", pass_ok));
+        }
+        Ok(())
+    }
+
+    /// A pass of a loop in map form, `map`, giving `giving`: its item is put at
+    /// the pass's place in an array, or added to a slice; a pass that fails
+    /// makes the loop fail with that failure, and stops it, freeing the regions
+    /// opened in the loop, which is `depth` regions deep.
+    fn gen_map_pass(&mut self, body: &[Stmt], map: &MapAcc, giving: &Giving, depth: usize) -> Result<()> {
+        let slot = self.fresh_temp("slot");
+        if matches!(map.coll_ty, Type::Array(..)) {
+            self.w.line(&format!("int64_t {} = {}++;", slot, map.idx_name));
+        }
+        let given = self.fresh_temp("item");
+        self.w.line(&format!("{} {} = {{ 0 }};", c_type(&map.pass_ty), given));
+        self.gen_value_block(body, &given)?;
+        let item = if matches!(map.pass_ty, Type::Or(..)) {
+            self.w.open(&format!("if (!{}.ok)", given));
+            self.w.line(&format!("{} = (({}){{ .ok = false, .error = {}.error }});", giving.result, c_type(&giving.ty), given));
+            let open: Vec<String> = self.regions.iter().skip(depth).flatten().cloned().collect();
+            for region in open.iter().rev() {
+                self.w.line(&format!("vela__rt__region_free({});", c_ident(region)));
+            }
+            let Some(innermost) = self.loops.last_mut() else { return Err(Error::internal_at(body.first().map_or(Span::default(), |s| s.span), "a pass with no loop")) };
+            innermost.stopped = true;
+            let stop = innermost.stop.clone();
+            self.w.line(&format!("goto {};", stop));
+            self.w.close();
+            format!("{}.value", given)
+        } else {
+            given
+        };
+        match (&map.coll_ty, &map.region) {
+            (Type::Array(..), _) => self.w.line(&format!("{}.items[{}] = {};", map.acc_name, slot, item)),
+            (Type::Slice(..), Some(region)) => self.w.line(&format!("{}({}, &{}, {});", item_helper("add", &map.coll_ty), c_ident(region), map.acc_name, item)),
+            _ => return Err(Error::internal_at(body.first().map_or(Span::default(), |s| s.span), "a loop in map form making no array and no slice in a region")),
         }
         Ok(())
     }
@@ -2104,25 +2129,30 @@ impl Generator {
         Ok(())
     }
 
+    /// A loop's `finally` block, after its passes, run when the final one
+    /// ended as passes do. It is outside the loop, so the loop's labels are
+    /// put aside meanwhile: a `break` or a `continue` there is the loop
+    /// around it's.
     fn gen_finally(&mut self, finally: &[Stmt]) -> Result<()> {
-        let innermost = self.loops.last().cloned();
-        let giving = innermost.as_ref().and_then(|l| l.giving.clone());
-        let pass_ok = innermost.as_ref().and_then(|l| l.pass_ok.clone());
-        if let Some(pass_ok) = &pass_ok {
-            self.w.open(&format!("if ({})", pass_ok));
-        }
-        match giving {
-            Some(giving) if giving.gives => self.gen_value_block(finally, &giving.result)?,
-            Some(giving) => {
-                self.gen_block(finally)?;
-                self.w.line(&format!("{} = (({}){{ .ok = true }});", giving.result, c_type(&giving.ty)));
+        let Some(innermost) = self.loops.pop() else { return Err(Error::internal_at(finally.first().map_or(Span::default(), |s| s.span), "a finally block with no loop")) };
+        let giving = innermost.giving.clone();
+        let opened = match &innermost.pass_ok {
+            Some(pass_ok) => {
+                self.w.open(&format!("if ({})", pass_ok));
+                true
             }
-            None => self.gen_block(finally)?,
-        }
-        if pass_ok.is_some() {
+            None => false,
+        };
+        let generated = match giving {
+            Some(giving) if giving.gives => self.gen_value_block(finally, &giving.result),
+            Some(giving) => self.gen_block(finally).map(|()| self.w.line(&format!("{} = (({}){{ .ok = true }});", giving.result, c_type(&giving.ty)))),
+            None => self.gen_block(finally),
+        };
+        if opened {
             self.w.close();
         }
-        Ok(())
+        self.loops.push(innermost);
+        generated
     }
 
     /// A loop that gives a value, the expression `e`: a temporary holds it,
@@ -2135,15 +2165,14 @@ impl Generator {
         self.loop_name = value.name.as_ref().map(|(name, _)| name.clone());
         let map_acc = if value.finally().is_none() && value.gives {
             if let Type::Or(coll_ty, _) = &ty {
-                let (item_ty, region) = match coll_ty.as_ref() {
-                    Type::Array(item, _) => ((**item).clone(), None),
-                    Type::Slice(item, region) => ((**item).clone(), region.clone()),
-                    _ => (Type::Nothing, None),
+                let region = match coll_ty.as_ref() {
+                    Type::Slice(_, region) => region.clone(),
+                    _ => None,
                 };
                 Some(MapAcc {
                     acc_name: self.fresh_temp("acc"),
                     coll_ty: (**coll_ty).clone(),
-                    item_ty,
+                    pass_ty: check::map_pass(&ty, !value.open.1),
                     region,
                     idx_name: self.fresh_temp("idx"),
                 })
@@ -3435,8 +3464,9 @@ impl Generator {
             .iter()
             .map(|part| match &part.kind {
                 ExprKind::ToText { value, .. } => match value.ty {
-                    Some(Type::Int | Type::Unit) => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
-                    Some(Type::Float) => (value.as_ref(), Some("vela__rt__float_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(Type::Uint64) => (value.as_ref(), Some("vela__rt__uint_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(ref ty) if ty.is_integer() => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(ref ty) if ty.is_float() => (value.as_ref(), Some("vela__rt__float_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Char) => (value.as_ref(), Some("vela__rt__char_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Text(_)) => (value.as_ref(), None),
                     _ => (part, None),
@@ -3764,6 +3794,15 @@ impl Generator {
             _ => None,
         };
 
+        // A `uint64` past the largest int stops the program before it is
+        // read as an int, then made the whole number type it goes into.
+        if from == Type::Uint64 && (into.is_integer() || *into == Type::Char) {
+            let whole = format!("vela__rt__int_of_uint({}, {})", expr, at);
+            return Ok(match int_cast_helper(into) {
+                Some(helper) => format!("{}({}, {})", helper, whole, at),
+                None => whole,
+            });
+        }
         if from.is_float() && into.is_integer() {
             let int64_val = format!("vela__rt__int_of_float({}, {})", expr, at);
             if let Some(helper) = int_cast_helper(into) {
@@ -3825,6 +3864,13 @@ impl Generator {
         // negated literal can't be it.
         if op == UnaryOp::Neg && *operand.ty()? == Type::Int && int_constant(operand).is_none() {
             return Ok(format!("vela__rt__neg({}, {})", expr, self.location(e.span)));
+        }
+        // A smaller signed int is negated as an int, and checked to fit:
+        // `-x` of the smallest `int8`, -128, is 128, which doesn't.
+        if op == UnaryOp::Neg
+            && let Some(narrow) = narrow_of(e.ty()?)
+        {
+            return Ok(format!("{}(-(int64_t){}, {})", narrow, parenthesized(&expr), self.location(e.span)));
         }
         let op_s = match op {
             UnaryOp::Neg => "-",
@@ -4312,7 +4358,7 @@ impl Generator {
             let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
                 // A number, a bool, and a pointer are similar when equal.
-                Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) | Type::Task(_) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
+                _ if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Ptr(..) | Type::Task(_)) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
             });
@@ -4338,7 +4384,13 @@ impl Generator {
             return Ok(match e.ty()? {
                 Type::Int => format!("vela__rt__pow({}, (int64_t){}, {})", left, parenthesized(&right), at),
                 Type::Unit => format!("vela__rt__unit_pow({}, {}, {})", left, right, at),
-                _ => format!("pow((double){}, (double){})", parenthesized(&left), parenthesized(&right)),
+                Type::Uint64 => format!("vela__rt__uint_pow({}, {}, {})", left, right, at),
+                Type::Float32 => format!("(float)pow((double){}, (double){})", parenthesized(&left), parenthesized(&right)),
+                // A smaller int is raised as an int, and checked to fit.
+                ty => match narrow_of(ty) {
+                    Some(narrow) => format!("{}(vela__rt__pow((int64_t){}, (int64_t){}, {}), {})", narrow, parenthesized(&left), parenthesized(&right), at, at),
+                    None => format!("pow((double){}, (double){})", parenthesized(&left), parenthesized(&right)),
+                },
             });
         }
         // A char moved by an int is computed as an int, and checked to be a
@@ -4348,19 +4400,36 @@ impl Generator {
             let helper = if op == BinaryOp::Add { "add" } else { "sub" };
             return Ok(format!("vela__rt__char_of(vela__rt__{}({}, {}, {}), {})", helper, left, right, at, at));
         }
-        // Units are computed as ints, where no result of two units overflows,
-        // and the result is checked to fit in a unit.
-        if *e.ty()? == Type::Unit {
+        // Units and the other ints smaller than 64 bits are computed as ints,
+        // where no sum or difference of two of them overflows (a product of
+        // two `uint32`s may, and is checked), and the result is checked to fit.
+        if let Some(narrow) = narrow_of(e.ty()?)
+            && matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod)
+        {
             let at = self.location(e.span);
+            let (a, b) = (format!("(int64_t){}", parenthesized(&left)), format!("(int64_t){}", parenthesized(&right)));
             let whole = match op {
-                BinaryOp::Div => format!("vela__rt__div({}, {}, {})", left, right, at),
-                BinaryOp::Mod => format!("vela__rt__mod({}, {}, {})", left, right, at),
-                BinaryOp::Add => format!("(int64_t){} + (int64_t){}", parenthesized(&left), parenthesized(&right)),
-                BinaryOp::Sub => format!("(int64_t){} - (int64_t){}", parenthesized(&left), parenthesized(&right)),
-                BinaryOp::Mul => format!("(int64_t){} * (int64_t){}", parenthesized(&left), parenthesized(&right)),
-                other => return Err(Error::internal_at(e.span, format!("unit operator {:?}", other))),
+                BinaryOp::Div => format!("vela__rt__div({}, {}, {})", a, b, at),
+                BinaryOp::Mod => format!("vela__rt__mod({}, {}, {})", a, b, at),
+                BinaryOp::Mul => format!("vela__rt__mul({}, {}, {})", a, b, at),
+                BinaryOp::Add => format!("{} + {}", a, b),
+                _ => format!("{} - {}", a, b),
             };
-            return Ok(format!("vela__rt__unit_of({}, {})", whole, at));
+            return Ok(format!("{}({}, {})", narrow, whole, at));
+        }
+        // A `uint64` is computed as one, checked by functions of its own.
+        if *e.ty()? == Type::Uint64 {
+            let helper = match op {
+                BinaryOp::Add => Some("add"),
+                BinaryOp::Sub => Some("sub"),
+                BinaryOp::Mul => Some("mul"),
+                BinaryOp::Div => Some("div"),
+                BinaryOp::Mod => Some("mod"),
+                _ => None,
+            };
+            if let Some(helper) = helper {
+                return Ok(format!("vela__rt__uint_{}({}, {}, {})", helper, left, right, self.location(e.span)));
+            }
         }
         if op == BinaryOp::Mod && e.ty()?.is_float() {
             // C's `%` is integer-only.
@@ -4494,6 +4563,7 @@ fn success(ret: &Type) -> String {
 /// ends the line when `ends`, which the last value `show` is given does.
 fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
+        Type::Uint64 => "uint",
         ty if ty.is_integer() => "int",
         Type::Char => "char",
         ty if ty.is_float() => "float",
@@ -4531,6 +4601,7 @@ impl Generator {
     /// by its type's `write`.
     fn put_item(&self, ty: &Type, value: &str) -> String {
         match ty {
+            Type::Uint64 => format!("vela__rt__put_uint(w, {});", value),
             ty if ty.is_integer() => format!("vela__rt__put_int(w, (int64_t){});", value),
             Type::Char => format!("vela__rt__put_char(w, {});", value),
             ty if ty.is_float() => format!("vela__rt__put_float(w, (double){});", value),
@@ -4571,6 +4642,9 @@ impl Layout<'_> {
     pub fn of(&self, ty: &Type) -> (usize, usize) {
         match ty {
             Type::Int | Type::Uint64 | Type::Float | Type::Ptr(..) | Type::None | Type::Region | Type::Task(_) => (8, 8),
+            // Its function and what it keeps.
+            Type::Closure(_) => (16, 8),
+            Type::Maybe(inner) if is_pointer(inner) => (8, 8),
             Type::Int32 | Type::Uint32 | Type::Float32 => (4, 4),
             Type::Int16 | Type::Uint16 => (2, 2),
             Type::Int8 | Type::Bool | Type::Unit | Type::Char => (1, 1),
@@ -4689,9 +4763,10 @@ fn shown_name(name: &str) -> String {
 /// `f(region, value)`.
 fn text_function(ty: &Type) -> String {
     match ty {
-        Type::Int | Type::Unit => "vela__rt__int_str".to_string(),
+        Type::Uint64 => "vela__rt__uint_str".to_string(),
         Type::Char => "vela__rt__char_str".to_string(),
-        Type::Float => "vela__rt__float_str".to_string(),
+        ty if ty.is_integer() => "vela__rt__int_str".to_string(),
+        ty if ty.is_float() => "vela__rt__float_str".to_string(),
         Type::Bool => "vela__rt__bool_str".to_string(),
         Type::Text(_) => "vela__rt__text_str".to_string(),
         // A pointer is its address, written as a writer does.
@@ -4885,7 +4960,7 @@ impl UsedTypes {
     /// Notes that values of type `ty` are made text in a region (see
     /// `text_function`).
     fn note_text(&mut self, ty: &Type) {
-        if matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_)) {
+        if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Text(_)) {
             return;
         }
         // A shape's or kind's own `str` needs no `write`.
@@ -5092,7 +5167,8 @@ impl UsedTypes {
     fn note_write(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => return,
+            _ if ty.is_numeric() => return,
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => return,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
             Type::Map(key, value, _) => {
                 self.note_write(key);
@@ -5143,7 +5219,8 @@ impl UsedTypes {
     fn note_similar(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => {}
+            _ if ty.is_numeric() => {}
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => {}
             Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => {}
             _ if self.similar.contains(&ty) => {}
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
@@ -6065,6 +6142,21 @@ fn escape_c_string(s: &str) -> String {
 /// operands, `r` the right one), stopping the program when its result doesn't
 /// fit or it divides by zero; `None` when C's operator can't go wrong: `e`
 /// isn't int arithmetic, or it divides by a literal other than 0 and -1.
+/// The runtime function that checks a whole number computed as an int fits in
+/// `ty`, an int type smaller than 64 bits (a unit among them), or `None` for any
+/// other type.
+fn narrow_of(ty: &Type) -> Option<&'static str> {
+    match ty {
+        Type::Int8 => Some("vela__rt__int8_of"),
+        Type::Int16 => Some("vela__rt__int16_of"),
+        Type::Int32 => Some("vela__rt__int32_of"),
+        Type::Unit => Some("vela__rt__unit_of"),
+        Type::Uint16 => Some("vela__rt__uint16_of"),
+        Type::Uint32 => Some("vela__rt__uint32_of"),
+        _ => None,
+    }
+}
+
 fn checked_int_helper(op: BinaryOp, e: &Expr, r: &Expr) -> Result<Option<&'static str>> {
     if *e.ty()? != Type::Int {
         return Ok(None);

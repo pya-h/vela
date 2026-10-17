@@ -1,0 +1,37 @@
+; Arithmetic on sized numbers: each type keeps its own, checked to fit as it
+; runs, and numbers written out take the type beside them.
+include std/math (Int512, int512)
+
+task main()
+    region r
+    flex small: int8 = 100
+    small += 27
+    show(small, " ", -small)              ; 127 -127
+    small--
+    show(small * 1 / 2, " ", small % 10)  ; 63 6
+
+    fixed wide: uint32 = 4_000_000_000
+    show(wide + 294_967_295)              ; 4294967295
+    fixed big: uint64 = 9_223_372_036_854_775_807
+    fixed bigger = big + big + 1
+    show(bigger)                          ; 18446744073709551615
+    show("{bigger}" at r, " ", bigger.str() at r)
+    show(bigger / 3, " ", bigger % 10, " ", uint64(3) ** 40)
+
+    fixed s: int16 = -300
+    show(s * 2, " ", int32(s) ** 2)       ; -600 90000, which an int16 does not hold
+    fixed f: float32 = 1.5
+    show(f * -2.0, " ", f ** 2.0, " ", float(f) + 0.25)
+
+    ; Alike and similar, as any number.
+    fixed a: int8 = 5
+    fixed b: int8 = 5
+    show(a == b, " ", a ~= b, " ", a < 6)
+
+    ; A uint64 that fits goes into an int.
+    show(int(big) - 7)
+
+    ; Int512 holds a negative number in two's complement.
+    fixed minus_one = int512(-1)
+    show(minus_one.limbs[0] == minus_one.limbs[7])
+fi

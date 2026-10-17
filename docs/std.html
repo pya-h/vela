@@ -392,6 +392,8 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <tr><td><code>sinh(x)</code>, <code>cosh(x)</code>, <code>tanh(x)</code></td><td>the hyperbolic sine, cosine, and tangent</td></tr>
         <tr><td><code>exp(x)</code></td><td><code>e</code> raised to the power <code>x</code></td></tr>
         <tr><td><code>log(x, base = 10.0)</code></td><td>the power <code>base</code> is raised to for <code>x</code>, base 10 when the call leaves it out (see <a href="vela.html#optional-arguments">optional arguments</a>); with <code>e</code> it is the natural logarithm. Bases 2, 10, and <code>e</code> are C's own <code>log2</code>, <code>log10</code>, and <code>log</code>, which are exact where a quotient of logarithms may not be.</td></tr>
+        <tr><td><code>Int512</code></td><td>a 512-bit integer, held as eight <code>uint64</code> limbs, <code>limbs: [uint64#8]</code>, lowest first, and a negative one in two's complement (2 ** 512 + n). It is a start: it holds a value, and has no arithmetic and no <code>show</code> yet</td></tr>
+        <tr><td><code>zero512()</code>, <code>int512(n)</code></td><td>an <code>Int512</code> holding 0, or the <code>int64</code> <code>n</code>: <code>int512(-1)</code> has every bit of every limb set</td></tr>
       </table>
       <p>
         A value outside what a task takes gives what C's gives, as float arithmetic does: <code>math.log(-1.0)</code>

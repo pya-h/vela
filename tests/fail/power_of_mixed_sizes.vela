@@ -1,0 +1,7 @@
+; error: 6:15: '**' takes a number and a power of one type, and this raises a uint16 to a uint32; turn one into the other first, as in 'uint16(k)'
+; A power and its number are of one type.
+task main()
+    fixed base: uint16 = 2
+    fixed power: uint32 = 3
+    show(base ** power)
+fi

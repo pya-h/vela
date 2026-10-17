@@ -58,11 +58,20 @@ task zero512() -> Int512
     <- Int512 { limbs: [0, 0, 0, 0, 0, 0, 0, 0] }
 fi
 
-; Creates an Int512 initialized from a 64-bit int.
+; Creates an Int512 initialized from a 64-bit int. A negative one is held in
+; two's complement, as 2 ** 512 + n: its lowest limb is 2 ** 64 + n, and every
+; limb above it has all its bits set.
 task int512(n: int64) -> Int512
     flex res = zero512()
     when n >= 0
         res.limbs[0] = uint64(n)
+    else
+        ; 2 ** 63, which no int64 holds, is the largest int64 and one more.
+        fixed half = uint64(9223372036854775807) + 1
+        res.limbs[0] = uint64(n + 9223372036854775807 + 1) + half
+        each i in 1..8
+            res.limbs[i] = half - 1 + half
+        fi
     fi
     <- res
 fi

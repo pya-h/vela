@@ -28,6 +28,17 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("unit", "A whole number from 0 to 255 in one byte. A number written out becomes one where a unit is expected, and beside one (b + 1); arithmetic that leaves 0 to 255 stops the program. unit(x) turns an int, a float, or a bool into one, and stops the program when it doesn't fit; int(b) and float(b) always work."),
     ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, a + b at r joins text into region r, and \"n = {n}\" at r is text holding values, each turned into text there (\\{ and \\} write braces). text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
     ("nothing", "The return type of a task that sends no value."),
+    ("int64", "Another name for int, a 64-bit signed integer."),
+    ("int32", "A 32-bit signed integer, -2147483648 to 2147483647. A number written out becomes one where an int32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
+    ("int16", "A 16-bit signed integer, -32768 to 32767. A number written out becomes one where an int16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
+    ("int8", "An 8-bit signed integer, -128 to 127. A number written out becomes one where an int8 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int8(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
+    ("uint", "Another name for uint64, a 64-bit unsigned integer."),
+    ("uint64", "A 64-bit unsigned integer, 0 to 18446744073709551615. A number written out becomes one where a uint64 is expected, and beside one (n + 1); arithmetic leaving its range stops the program, and so does int(n) of one past the largest int."),
+    ("uint32", "A 32-bit unsigned integer, 0 to 4294967295. A number written out becomes one where a uint32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
+    ("uint16", "A 16-bit unsigned integer, 0 to 65535. A number written out becomes one where a uint16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
+    ("uint8", "Another name for unit, a whole number from 0 to 255 in one byte."),
+    ("float64", "Another name for float, a 64-bit floating-point number."),
+    ("float32", "A 32-bit floating-point number. A float written out becomes one where a float32 is expected, and beside one (f * 2.5). float32(x) turns a number into one, and float(f) turns one into a float."),
 ];
 
 /// What `int("42")` sends when the text is no number: the builtin kind, which a

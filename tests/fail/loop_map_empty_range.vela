@@ -1,0 +1,8 @@
+; error: 4:27: the range 3..3 is empty, so this loop never runs and has no items to give
+; A constant range with nothing in it gives no items, so it makes no array.
+task main()
+    fixed xs = each i in 3..3
+        i
+    fi { [0] }
+    show(xs[0])
+fi

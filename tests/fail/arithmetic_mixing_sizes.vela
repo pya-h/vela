@@ -1,0 +1,7 @@
+; error: 6:14: an int8 and an int16 don't mix in arithmetic: turn one into the other first, as in 'int8(b) + a'
+; An int8 and an int16 are turned into one type before they are added.
+task main()
+    fixed a: int8 = 1
+    fixed b: int16 = 2
+    show(a + b)
+fi

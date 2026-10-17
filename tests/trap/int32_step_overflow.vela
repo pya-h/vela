@@ -1,0 +1,9 @@
+; trap: 2147483648 does not fit in an int32 at 7:6 in task 'main'
+; Counting an int32 past its largest value stops the program.
+task main()
+    flex n: int32 = 2_147_483_646
+    n++
+    show(n)
+    n++
+    show(n)
+fi
