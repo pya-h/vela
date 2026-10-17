@@ -1,0 +1,132 @@
+  1 | ; Loop result forms: a loop can return a single summary value using a finally
+    | comment:; Loop result forms: a loop can return a single summary value using a finally
+  2 | ; block, or map elements into a collection when its passes end with a value.
+    | comment:; block, or map elements into a collection when its passes end with a value.
+  3 | include std/loops {LoopResult}
+    | keyword:include  module:std  operator:/  module:loops  punctuation:{  type:LoopResult  punctuation:}
+  5 | ; Calculate the average score of passing items, returning a single summary value.
+    | comment:; Calculate the average score of passing items, returning a single summary value.
+  6 | task passing_average(scores: [int]@r) -> int ~ LoopResult<bool, bool>
+    | keyword:task  task:passing_average  punctuation:(  parameter:scores  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int  operator:~  type:LoopResult  punctuation:<  type-builtin:bool  punctuation:,  type-builtin:bool  punctuation:>
+  7 |     <- loop flex i = 0, sum = 0, count = 0 || i < scores.len || i++
+    | keyword:<-  keyword:loop  keyword:flex  variable:i  operator:=  number:0  punctuation:,  variable:sum  operator:=  number:0  punctuation:,  variable:count  operator:=  number:0  operator:||  variable:i  operator:<  parameter:scores  punctuation:.  field:len  operator:||  variable:i  operator:++
+  8 |         fixed score = scores[i]
+    | keyword:fixed  variable:score  operator:=  parameter:scores  punctuation:[  variable:i  punctuation:]
+  9 |         when score >= 50
+    | keyword:when  variable:score  operator:>=  number:50
+ 10 |             sum += score
+    | variable:sum  operator:+=  variable:score
+ 11 |             count++
+    | variable:count  operator:++
+ 12 |         fi
+    | keyword:fi
+ 13 |     finally
+    | keyword:finally
+ 14 |         when count == 0
+    | keyword:when  variable:count  operator:==  number:0
+ 15 |             0
+    | number:0
+ 16 |         else
+    | keyword:else
+ 17 |             sum / count
+    | variable:sum  operator:/  variable:count
+ 18 |         fi
+    | keyword:fi
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 23 |     region r default
+    | keyword:region  region:r  keyword:default
+ 25 |     ; 1. Map-form loop over a fixed array: produces a new stack array.
+    | comment:; 1. Map-form loop over a fixed array: produces a new stack array.
+ 26 |     fixed raw = [12, 25, 40]
+    | keyword:fixed  variable:raw  operator:=  punctuation:[  number:12  punctuation:,  number:25  punctuation:,  number:40  punctuation:]
+ 27 |     fixed doubled = each x in raw
+    | keyword:fixed  variable:doubled  operator:=  keyword:each  variable:x  keyword:in  variable:raw
+ 28 |         x * 2
+    | variable:x  operator:*  number:2
+ 29 |     fi { [0, 0, 0] }
+    | keyword:fi  punctuation:{  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]  punctuation:}
+ 30 |     show("doubled: ", doubled)
+    | builtin-fn:show  punctuation:(  string:"doubled: "  punctuation:,  variable:doubled  punctuation:)
+ 32 |     ; 2. Map-form loop over a slice: produces a slice in region r.
+    | comment:; 2. Map-form loop over a slice: produces a slice in region r.
+ 33 |     fixed measurements = [10, 20, 30, ...] at r
+    | keyword:fixed  variable:measurements  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 34 |     fixed normalized = each m in measurements
+    | keyword:fixed  variable:normalized  operator:=  keyword:each  variable:m  keyword:in  variable:measurements
+ 35 |         m + 5
+    | variable:m  operator:+  number:5
+ 36 |     fi { new [int]() }
+    | keyword:fi  punctuation:{  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  punctuation:}
+ 37 |     show("normalized: ", normalized)
+    | builtin-fn:show  punctuation:(  string:"normalized: "  punctuation:,  variable:normalized  punctuation:)
+ 39 |     ; 3. Single-value loop with finally: produces a summary scalar value.
+    | comment:; 3. Single-value loop with finally: produces a summary scalar value.
+ 40 |     fixed grades = [80, 40, 90, 70, 30, ...] at r
+    | keyword:fixed  variable:grades  operator:=  punctuation:[  number:80  punctuation:,  number:40  punctuation:,  number:90  punctuation:,  number:70  punctuation:,  number:30  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 41 |     fixed avg = passing_average(grades) { 0 }
+    | keyword:fixed  variable:avg  operator:=  task:passing_average  punctuation:(  variable:grades  punctuation:)  punctuation:{  number:0  punctuation:}
+ 42 |     show("passing average: ", avg)
+    | builtin-fn:show  punctuation:(  string:"passing average: "  punctuation:,  variable:avg  punctuation:)
+ 44 |     ; 4. When a loop breaks early, the finally block is bypassed.
+    | comment:; 4. When a loop breaks early, the finally block is bypassed.
+ 45 |     fixed threshold = each g in grades
+    | keyword:fixed  variable:threshold  operator:=  keyword:each  variable:g  keyword:in  variable:grades
+ 46 |         when g > 85
+    | keyword:when  variable:g  operator:>  number:85
+ 47 |             break = g
+    | keyword:break  operator:=  variable:g
+ 48 |         fi
+    | keyword:fi
+ 49 |     finally
+    | keyword:finally
+ 50 |         0
+    | number:0
+ 51 |     fi
+    | keyword:fi
+ 52 |     match threshold
+    | keyword:match  variable:threshold
+ 53 |     case {val}
+    | keyword:case  punctuation:{  variable:val  punctuation:}
+ 54 |         show("first high grade: ", val)
+    | builtin-fn:show  punctuation:(  string:"first high grade: "  punctuation:,  variable:val  punctuation:)
+ 55 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+ 56 |         match e
+    | keyword:match  variable:e
+ 57 |         case Broke val
+    | keyword:case  variant:Broke  variable:val
+ 58 |             match val
+    | keyword:match  variable:val
+ 59 |             case {g}
+    | keyword:case  punctuation:{  variable:g  punctuation:}
+ 60 |                 show("stopped early at: ", g)
+    | builtin-fn:show  punctuation:(  string:"stopped early at: "  punctuation:,  variable:g  punctuation:)
+ 61 |             case none
+    | keyword:case  keyword:none
+ 62 |                 show("broke without value")
+    | builtin-fn:show  punctuation:(  string:"broke without value"  punctuation:)
+ 63 |             fi
+    | keyword:fi
+ 64 |         case Skipped
+    | keyword:case  variant:Skipped
+ 65 |             show("no passes ran")
+    | builtin-fn:show  punctuation:(  string:"no passes ran"  punctuation:)
+ 66 |         case EndedByContinue
+    | keyword:case  variant:EndedByContinue
+ 67 |             show("ended by continue")
+    | builtin-fn:show  punctuation:(  string:"ended by continue"  punctuation:)
+ 68 |         case Manual m
+    | keyword:case  variant:Manual  variable:m
+ 69 |             show("manual failure: ", m)
+    | builtin-fn:show  punctuation:(  string:"manual failure: "  punctuation:,  variable:m  punctuation:)
+ 70 |         fi
+    | keyword:fi
+ 71 |     fi
+    | keyword:fi
+ 72 | fi
+    | keyword:fi

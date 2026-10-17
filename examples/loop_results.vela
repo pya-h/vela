@@ -1,0 +1,72 @@
+; Loop result forms: a loop can return a single summary value using a finally
+; block, or map elements into a collection when its passes end with a value.
+include std/loops {LoopResult}
+
+; Calculate the average score of passing items, returning a single summary value.
+task passing_average(scores: [int]@r) -> int ~ LoopResult<bool, bool>
+    <- loop flex i = 0, sum = 0, count = 0 || i < scores.len || i++
+        fixed score = scores[i]
+        when score >= 50
+            sum += score
+            count++
+        fi
+    finally
+        when count == 0
+            0
+        else
+            sum / count
+        fi
+    fi
+fi
+
+task main()
+    region r default
+
+    ; 1. Map-form loop over a fixed array: produces a new stack array.
+    fixed raw = [12, 25, 40]
+    fixed doubled = each x in raw
+        x * 2
+    fi { [0, 0, 0] }
+    show("doubled: ", doubled)
+
+    ; 2. Map-form loop over a slice: produces a slice in region r.
+    fixed measurements = [10, 20, 30, ...] at r
+    fixed normalized = each m in measurements
+        m + 5
+    fi { new [int]() }
+    show("normalized: ", normalized)
+
+    ; 3. Single-value loop with finally: produces a summary scalar value.
+    fixed grades = [80, 40, 90, 70, 30, ...] at r
+    fixed avg = passing_average(grades) { 0 }
+    show("passing average: ", avg)
+
+    ; 4. When a loop breaks early, the finally block is bypassed.
+    fixed threshold = each g in grades
+        when g > 85
+            break = g
+        fi
+    finally
+        0
+    fi
+    match threshold
+    case {val}
+        show("first high grade: ", val)
+    case failure e
+        match e
+        case Broke val
+            match val
+            case {g}
+                show("stopped early at: ", g)
+            case none
+                show("broke without value")
+            fi
+        case Skipped
+            show("no passes ran")
+        case EndedByContinue
+            show("ended by continue")
+        case Manual m
+            show("manual failure: ", m)
+        fi
+    fi
+fi

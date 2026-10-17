@@ -1,0 +1,4 @@
+doubled: [24, 50, 80]
+normalized: [15, 25, 35]
+passing average: 80
+stopped early at: 90

@@ -2016,7 +2016,7 @@ fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> 
                 }
                 depth -= 1;
             }
-            Some(token @ (Token::Else | Token::Case)) if depth == 0 => return Some(token),
+            Some(token @ (Token::Else | Token::Case | Token::Finally)) if depth == 0 => return Some(token),
             Some(token @ (Token::Task | Token::Shape | Token::Kind)) => return Some(token),
             _ => {}
         }
@@ -2042,6 +2042,8 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         Some(Block::When) if innermost == Some(&Token::Else) => items.push(keyword("fi")),
         Some(Block::When) => items.extend([keyword("fi"), keyword("else")]),
         Some(Block::Match) => items.extend([keyword("fi"), keyword("case")]),
+        Some(Block::Loop) if innermost == Some(&Token::Finally) => items.push(keyword("fi")),
+        Some(Block::Loop) => items.extend([keyword("fi"), keyword("finally")]),
         _ => items.push(keyword("fi")),
     }
     if names_error {

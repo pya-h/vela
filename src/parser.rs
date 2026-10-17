@@ -525,11 +525,12 @@ impl Parser {
         if self.at_pattern_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_PATTERN));
         }
-        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
+        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace) {
             // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
                 Token::Else if opener == "task" => " (or an 'else' without its 'when')",
                 Token::Case if opener == "task" => " (or a 'case' outside a 'match')",
+                Token::Finally if opener == "task" => " (or a 'finally' outside a loop)",
                 _ => "",
             };
             return Err(Error::at(
@@ -2565,7 +2566,7 @@ impl Parser {
         }
         let value = self.loop_value(stmt, name, false, span);
         let value = self.parse_suffixes(value, false)?;
-        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
             return Err(self.unexpected("the end of the line after the loop's plan B"));
         }
         Ok(Stmt::new(StmtKind::Expr(value), span))
@@ -2598,7 +2599,7 @@ impl Parser {
             };
             // A statement ends its line, or a block or plan B on one line:
             // `when ok x++ else x-- fi`, `f() { n++ }`.
-            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
+            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
                 return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
             }
             return Ok(Stmt::new(StmtKind::Step { target: expr, op, value, symbol, at }, span));
@@ -2910,7 +2911,7 @@ impl Parser {
             None
         };
         // Nothing else follows on its line.
-        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
             let what = if stop { "stops" } else { "goes on with" };
             let example = name.as_ref().map_or("outer", |(name, _)| name.as_str());
             let given = if stop { ", and the value it gives after '=', as in 'break = v'" } else { "" };
@@ -3399,7 +3400,7 @@ impl Parser {
             return Err(self.misplaced_send());
         }
         self.advance(); // <-
-        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::RBrace) || self.is_at_end() {
+        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
             let values = self.parse_value_list()?;
