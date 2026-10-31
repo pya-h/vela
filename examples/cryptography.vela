@@ -1,0 +1,99 @@
+; Cryptography pipeline: 512-bit large numbers (std/int512) and shortcut lambdas
+; working together with call pipes to build key generators and digest accumulators.
+include std/int512 {Int512, int512, int512_from_uint64, int512_parse}
+
+; A generic accumulator that folds values using a binary step task or lambda.
+task fold_int512(xs: [Int512]@r, initial: Int512, step: (Int512, Int512) -> Int512) -> Int512
+    flex total = initial
+    each x in xs
+        total = step(total, x)
+    fi
+    <- total
+fi
+
+; Applies a transformation task or plain lambda to a 512-bit integer.
+task transform(val: Int512, op: (Int512) -> Int512) -> Int512
+    <- op(val)
+fi
+
+; Applies a closure that captures values from the surrounding scope in region r.
+task apply_closure(val: Int512, op: [@r](Int512) -> Int512) -> Int512
+    <- op(val)
+fi
+
+; A key provider using a nullary lambda supplier.
+task generate_key(supplier: () -> Int512) -> Int512
+    <- supplier()
+fi
+
+task main()
+    region r
+
+    show("=== 1. 512-Bit Arithmetic & Sized Conversions ===")
+    ; Parsing large multi-limb 512-bit decimal integers from text
+    fixed base_key = int512_parse("10000000000000000000000000000000000000000") { Int512.zero() }
+    fixed modulus = int512_parse("3000000000000000000000000000000000000000") { Int512.zero() }
+
+    ; Conversions from sized numbers (uint64 and int64)
+    fixed half_seed: uint64 = 9_223_372_036_854_775_807
+    fixed seed_u64: uint64 = half_seed + half_seed + 1 ; UINT64_MAX
+    fixed seed = int512_from_uint64(seed_u64)
+    fixed small_scale = int512(250)
+
+    ; Basic arithmetic: plus, minus, times, div, rem
+    fixed expanded = base_key.times(small_scale)
+    fixed combined = expanded.plus(seed)
+    fixed remainder = combined.rem(modulus)
+    fixed quotient = combined.div(modulus)
+
+    show("base key:  ", base_key.str(r))
+    show("seed u64:  ", seed.str(r))
+    show("combined:  ", combined.str(r))
+    show("quotient:  ", quotient.str(r))
+    show("remainder: ", remainder.str(r))
+
+    ; Negation, absolute value, and comparisons
+    fixed neg_key = remainder.neg()
+    fixed abs_key = neg_key.abs()
+    show("negated:   ", neg_key.str(r))
+    show("abs equal: ", abs_key ~= remainder)
+    show("cmp check: ", neg_key.cmp(remainder) < 0)
+
+    show("=== 2. Non-Capturing Shortcut Lambdas ===")
+    ; Bare parameter lambda: x -> expr
+    fixed doubled = transform(remainder, x -> x.times(int512(2)))
+    show("doubled:   ", doubled.str(r))
+
+    ; Parenthesized lambda in a call pipe: val |> transform((x) -> expr)
+    fixed shifted = doubled |> transform((x) -> x.plus(int512(100)))
+    show("shifted:   ", shifted.str(r))
+
+    ; Multi-parameter binary lambda in folding: (acc, x) -> expr
+    fixed items: [Int512]@r = new [Int512]([int512(10), int512(20), int512(30), int512(40)]) at r
+    fixed sum = fold_int512(items, Int512.zero(), (acc, x) -> acc.plus(x))
+    show("folded sum:", sum.str(r))
+
+    ; Nullary shortcut lambda: () -> expr
+    fixed default_key = generate_key(() -> int512(1337))
+    show("from nullary: ", default_key.str(r))
+
+    ; Discard parameter lambda: _ -> expr
+    fixed reset_key = transform(shifted, _ -> Int512.one())
+    show("reset value:  ", reset_key.str(r))
+
+    ; Direct lambda invocation: ((x) -> expr)(arg)
+    fixed direct = ((x) -> x.times(int512(3)))(int512(7))
+    show("direct call:  ", direct.str(r))
+
+    show("=== 3. Capturing Closure Lambdas ([@r]) ===")
+    ; Closure capturing 'salt' and 'factor' from the local scope into region r
+    fixed salt = int512(9999)
+    fixed factor = int512(10)
+    fixed salted = apply_closure(remainder, [@r] x -> x.times(factor).plus(salt))
+    show("salted key:   ", salted.str(r))
+
+    ; Parenthesized closure syntax: [@r](x) -> expr
+    fixed salted_parens = apply_closure(remainder, [@r](x) -> x.times(factor).plus(salt))
+    show("parens salted:", salted_parens.str(r))
+    show("salts equal:  ", salted ~= salted_parens)
+fi

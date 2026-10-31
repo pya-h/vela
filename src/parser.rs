@@ -4293,6 +4293,11 @@ impl Parser {
             || matches!(first_after_arrow, Some(Token::Ident(name)) if is_type_ident(name));
 
         if is_type_start {
+            let is_call = matches!(first_after_arrow, Some(Token::Ident(_)))
+                && line_tokens.get(1).copied() == Some(&Token::LParen);
+            if is_call {
+                return false;
+            }
             let has_expr_op = line_tokens.iter().any(|tok| {
                 matches!(
                     tok,
@@ -4312,7 +4317,21 @@ impl Parser {
                         | Token::Dot
                 )
             });
-            if !has_expr_op {
+            let has_lit = !is_bracket_type
+                && line_tokens.iter().any(|tok| {
+                    matches!(
+                        tok,
+                        Token::Int(_)
+                            | Token::Float(_)
+                            | Token::Text(_)
+                            | Token::Interpolated(_)
+                            | Token::Char(_)
+                            | Token::True
+                            | Token::False
+                            | Token::None
+                    )
+                });
+            if !has_expr_op && !has_lit {
                 return true;
             }
         }
