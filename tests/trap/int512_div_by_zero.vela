@@ -1,0 +1,9 @@
+; trap: division by zero at Int512.div
+include std/int512 {Int512, int512}
+
+task main()
+    fixed a = int512(42)
+    fixed z = Int512.zero()
+    show("before")
+    fixed _ = a.div(z)
+fi

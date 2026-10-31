@@ -14,6 +14,7 @@ pub const ROOT: &str = "std";
 /// Each module of the library: its name after `std/`, and its source.
 pub const MODULES: &[(&str, &str)] = &[
     ("files", include_str!("../std/files.vela")),
+    ("int512", include_str!("../std/int512.vela")),
     ("loops", include_str!("../std/loops.vela")),
     ("math", include_str!("../std/math.vela")),
 ];
@@ -44,6 +45,22 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/files.rename_path", "vela__rt__files_rename"),
     ("std/files.remove_path", "vela__rt__files_remove"),
     ("std/files.status", "vela__rt__files_status"),
+    // `std/int512`'s tasks are 512-bit two's complement arithmetic in `runtime/vela_rt.h`.
+    ("std/int512.native_add", "vela__rt__int512_add"),
+    ("std/int512.native_sub", "vela__rt__int512_sub"),
+    ("std/int512.native_mul", "vela__rt__int512_mul"),
+    ("std/int512.native_div", "vela__rt__int512_div"),
+    ("std/int512.native_rem", "vela__rt__int512_rem"),
+    ("std/int512.native_neg", "vela__rt__int512_neg"),
+    ("std/int512.native_abs", "vela__rt__int512_abs"),
+    ("std/int512.native_cmp", "vela__rt__int512_cmp"),
+    ("std/int512.native_to_int64", "vela__rt__int512_to_int64"),
+    ("std/int512.native_to_uint64", "vela__rt__int512_to_uint64"),
+    ("std/int512.native_from_int64", "vela__rt__int512_from_int64"),
+    ("std/int512.native_from_uint64", "vela__rt__int512_from_uint64"),
+    ("std/int512.native_parse_status", "vela__rt__int512_parse_status"),
+    ("std/int512.native_parse_value", "vela__rt__int512_parse_value"),
+    ("std/int512.native_to_text", "vela__rt__int512_to_text"),
     // `std/math`'s tasks are C's own functions of `math.h`, but for `log`,
     // which takes its base.
     ("std/math.pow", "pow"),

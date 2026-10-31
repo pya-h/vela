@@ -924,6 +924,57 @@ show(a == b)   ; true, generated automatically</pre>
           the value is worked out before the call's own arguments.
         </div>
       </div>
+
+      <div class="option" id="operator-overloading">
+        <h3><span aria-hidden="true">➕</span> Operator Overloading <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Allow custom shapes to implement standard arithmetic, comparison, and unary operators (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code>, <code>-x</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>).
+        </p>
+        <pre>; With operator overloading, mathematical expressions write naturally:
+fixed a = int512("123456789012345678901234567890") ?
+fixed b = int512("987654321098765432109876543210") ?
+fixed sum = a + b              ; Rewritten or dispatched to a.plus(b)
+fixed product = a * b          ; Rewritten or dispatched to a.times(b)
+fixed is_less = a &lt; b          ; Rewritten or dispatched to a.cmp(b) &lt; 0</pre>
+        <p>
+          Without operator overloading, big integers and numeric shapes must rely entirely on chained method calls like <code>a.plus(b).times(c)</code>, which obscures algorithm logic.
+          <code>Int512</code> could (and should) use this feature: mapping <code>+</code> to <code>plus</code>, <code>-</code> to <code>minus</code>, <code>*</code> to <code>times</code>, <code>/</code> to <code>div</code>, <code>%</code> to <code>rem</code>, and comparisons to <code>cmp</code>/<code>less</code>.
+        </p>
+        <p>
+          Operator overloading preserves Vela's strict safety model: overloaded arithmetic operations on <code>Int512</code> and other shapes must still trap immediately on overflow or division by zero, guaranteeing that custom numeric shapes maintain the exact same safety guarantees as primitive sized integers.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> it brings mathematical clarity to complex numeric types like <code>Int512</code>, vectors, matrices, and fixed-point math without sacrificing type safety or runtime speed.
+        </div>
+      </div>
+
+      <div class="option" id="bigint-improvements">
+        <h3><span aria-hidden="true">🔢</span> Big Integer Family &amp; Future Improvements <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Vela introduces <code>Int512</code> (signed two's complement 512-bit integer) with limb-level native operations and shape methods. Future directions expand this foundation into a complete big integer ecosystem:
+        </p>
+        <ul>
+          <li><strong>Unsigned <code>UInt512</code>:</strong> An unsigned 512-bit integer holding non-negative values from 0 up to 2<sup>512</sup> &minus; 1. Essential for cryptography, bitfield manipulation, and hashing where negative signs and two's complement sign-extension are unwanted.</li>
+          <li><strong>Extended Operations:</strong>
+            <ul>
+              <li><strong>Bitwise shifts &amp; logic:</strong> <code>shl</code>, <code>shr</code> (arithmetic vs logical), <code>and</code>, <code>or</code>, <code>xor</code>, <code>not</code> for bitmask manipulation.</li>
+              <li><strong>Power &amp; roots:</strong> <code>pow(exp)</code>, fast modular exponentiation <code>pow_mod(exp, modulus)</code> for cryptographic key exchange, and integer square root <code>isqrt()</code>.</li>
+              <li><strong>Number theory utilities:</strong> greatest common divisor <code>gcd(a, b)</code> and modular inverse.</li>
+            </ul>
+          </li>
+          <li><strong>Sized Big Integer Family:</strong> Expanding beyond 512 bits to standardized widths sharing the same limb-arithmetic engine:
+            <ul>
+              <li><code>Int128</code> / <code>UInt128</code>: Ideal for 128-bit UUIDs, high-precision IPv6 addresses, and nanosecond timestamps.</li>
+              <li><code>Int256</code> / <code>UInt256</code>: The standard integer width for blockchain smart contracts (EVM), 256-bit hash digests, and elliptic curve cryptography (secp256k1, Ed25519).</li>
+              <li><code>Int1024</code> / <code>UInt1024</code>: For RSA key math and ultra-high-precision scientific calculations.</li>
+            </ul>
+          </li>
+          <li><strong>Operator Overloading Synergy:</strong> Unifying all big integer types with Vela's operator overloading (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code>, <code>==</code>, <code>&lt;</code>), so expressions across <code>Int128</code>, <code>Int256</code>, <code>Int512</code>, and <code>Int1024</code> write cleanly with full checked-arithmetic safety.</li>
+        </ul>
+        <div class="note">
+          <strong>Why it's cool:</strong> fixed-width stack-allocated big integers offer zero heap overhead, zero garbage collection pauses, and guaranteed cache locality while covering all modern cryptographic and numeric needs.
+        </div>
+      </div>
     </section>
 
     <section>

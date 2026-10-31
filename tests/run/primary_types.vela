@@ -1,5 +1,5 @@
 ; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
-include std/math (Int512, zero512, int512)
+include std/int512 {Int512, zero512, int512}
 
 task main()
     ; Signed integer types
@@ -40,7 +40,7 @@ task main()
     fixed cast_s8 = int8(42)
     show(cast_s32, " ", cast_u64, " ", cast_f64, " ", cast_s8)
 
-    ; BigInt Int512 from std/math
+    ; BigInt Int512 from std/int512
     fixed b0 = zero512()
     fixed b1 = int512(123456789)
     show(b0.limbs[0], " ", b1.limbs[0])

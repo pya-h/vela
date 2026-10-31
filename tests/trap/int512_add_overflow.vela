@@ -1,0 +1,9 @@
+; trap: integer overflow at Int512.plus
+include std/int512 {Int512}
+
+task main()
+    fixed max_v = Int512.max_value()
+    fixed one = Int512.one()
+    show("before")
+    fixed _ = max_v.plus(one)
+fi

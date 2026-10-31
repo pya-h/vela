@@ -2125,4 +2125,551 @@ static inline _Noreturn void vela__rt__missing_send(const char* task) {
     abort();
 }
 
+/* --------------------------------------------------------------------------
+ * 512-bit signed integer support (std/int512)
+ * Held as 8 64-bit unsigned limbs in two's complement, least significant first.
+ * -------------------------------------------------------------------------- */
+
+typedef struct vela__rt__int512 {
+    uint64_t limbs[8];
+} vela__rt__int512;
+
+#if defined(__SIZEOF_INT128__)
+__extension__ typedef unsigned __int128 vela__rt__u128;
 #endif
+
+#define vela__rt__int512_cast_in(b) \
+    __extension__ ({ \
+        vela__rt__int512 __cin; \
+        memcpy(&__cin, &(b), sizeof(__cin)); \
+        __cin; \
+    })
+#define vela__rt__int512_cast_out(expr) \
+    __extension__ ({ \
+        vela__rt__int512 __val = (expr); \
+        vela_std__1__int512__0__Int512 __ret; \
+        memcpy(&__ret, &__val, sizeof(__ret)); \
+        __ret; \
+    })
+
+static inline bool vela__rt__int512_is_neg(vela__rt__int512 a) {
+    return (a.limbs[7] & 0x8000000000000000ULL) != 0;
+}
+
+static inline bool vela__rt__int512_is_zero(vela__rt__int512 a) {
+    for (int i = 0; i < 8; i++) {
+        if (a.limbs[i] != 0) return false;
+    }
+    return true;
+}
+
+static inline bool vela__rt__int512_is_min(vela__rt__int512 a) {
+    if (a.limbs[7] != 0x8000000000000000ULL) return false;
+    for (int i = 0; i < 7; i++) {
+        if (a.limbs[i] != 0) return false;
+    }
+    return true;
+}
+
+static inline int64_t vela__rt__int512_cmp_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    bool aneg = vela__rt__int512_is_neg(a);
+    bool bneg = vela__rt__int512_is_neg(b);
+    if (aneg != bneg) return aneg ? -1 : 1;
+    for (int i = 7; i >= 0; i--) {
+        if (a.limbs[i] < b.limbs[i]) return -1;
+        if (a.limbs[i] > b.limbs[i]) return 1;
+    }
+    return 0;
+}
+
+static inline int vela__rt__u512_cmp(vela__rt__int512 a, vela__rt__int512 b) {
+    for (int i = 7; i >= 0; i--) {
+        if (a.limbs[i] < b.limbs[i]) return -1;
+        if (a.limbs[i] > b.limbs[i]) return 1;
+    }
+    return 0;
+}
+
+static inline bool vela__rt__u512_add(vela__rt__int512 a, vela__rt__int512 b, vela__rt__int512* out) {
+    uint64_t carry = 0;
+    for (int i = 0; i < 8; i++) {
+#if defined(__SIZEOF_INT128__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+        vela__rt__u128 sum = (vela__rt__u128)a.limbs[i] + b.limbs[i] + carry;
+        out->limbs[i] = (uint64_t)sum;
+        carry = (uint64_t)(sum >> 64);
+#else
+        uint64_t ai = a.limbs[i], bi = b.limbs[i];
+        uint64_t s1 = ai + carry;
+        uint64_t c1 = (s1 < ai) ? 1 : 0;
+        uint64_t s2 = s1 + bi;
+        uint64_t c2 = (s2 < s1) ? 1 : 0;
+        out->limbs[i] = s2;
+        carry = c1 + c2;
+#endif
+    }
+    return carry != 0;
+}
+
+static inline bool vela__rt__u512_sub(vela__rt__int512 a, vela__rt__int512 b, vela__rt__int512* out) {
+    uint64_t borrow = 0;
+    for (int i = 0; i < 8; i++) {
+#if defined(__SIZEOF_INT128__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+        vela__rt__u128 ai = a.limbs[i];
+        vela__rt__u128 sub = (vela__rt__u128)b.limbs[i] + borrow;
+        out->limbs[i] = (uint64_t)(ai - sub);
+        borrow = (ai < sub) ? 1 : 0;
+#else
+        uint64_t ai = a.limbs[i], bi = b.limbs[i];
+        uint64_t d1 = ai - borrow;
+        uint64_t b1 = (ai < borrow) ? 1 : 0;
+        uint64_t d2 = d1 - bi;
+        uint64_t b2 = (d1 < bi) ? 1 : 0;
+        out->limbs[i] = d2;
+        borrow = b1 + b2;
+#endif
+    }
+    return borrow != 0;
+}
+
+static inline vela__rt__int512 vela__rt__u512_neg(vela__rt__int512 a) {
+    vela__rt__int512 zero = {{0}};
+    vela__rt__int512 res;
+    vela__rt__u512_sub(zero, a, &res);
+    return res;
+}
+
+static inline vela__rt__int512 vela__rt__int512_add_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    vela__rt__int512 c;
+    vela__rt__u512_add(a, b, &c);
+    bool ov = (~(a.limbs[7] ^ b.limbs[7]) & (a.limbs[7] ^ c.limbs[7]) & 0x8000000000000000ULL) != 0;
+    if (ov) {
+        vela__rt__int_trap("integer overflow", "Int512.plus");
+    }
+    return c;
+}
+
+static inline vela__rt__int512 vela__rt__int512_sub_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    vela__rt__int512 c;
+    vela__rt__u512_sub(a, b, &c);
+    bool ov = ((a.limbs[7] ^ b.limbs[7]) & (a.limbs[7] ^ c.limbs[7]) & 0x8000000000000000ULL) != 0;
+    if (ov) {
+        vela__rt__int_trap("integer overflow", "Int512.minus");
+    }
+    return c;
+}
+
+static inline vela__rt__int512 vela__rt__int512_neg_impl(vela__rt__int512 a) {
+    if (vela__rt__int512_is_min(a)) {
+        vela__rt__int_trap("integer overflow", "Int512.neg");
+    }
+    return vela__rt__u512_neg(a);
+}
+
+static inline vela__rt__int512 vela__rt__int512_abs_impl(vela__rt__int512 a) {
+    if (vela__rt__int512_is_min(a)) {
+        vela__rt__int_trap("integer overflow", "Int512.abs");
+    }
+    return vela__rt__int512_is_neg(a) ? vela__rt__u512_neg(a) : a;
+}
+
+static inline vela__rt__int512 vela__rt__int512_mul_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    if (vela__rt__int512_is_zero(a) || vela__rt__int512_is_zero(b)) {
+        vela__rt__int512 z = {{0}};
+        return z;
+    }
+    bool amin = vela__rt__int512_is_min(a);
+    bool bmin = vela__rt__int512_is_min(b);
+    if (amin || bmin) {
+        vela__rt__int512 other = amin ? b : a;
+        if (other.limbs[0] == 1) {
+            bool all_zero = true;
+            for (int i = 1; i < 8; i++) if (other.limbs[i] != 0) all_zero = false;
+            if (all_zero) {
+                vela__rt__int512 m = {{0}};
+                m.limbs[7] = 0x8000000000000000ULL;
+                return m;
+            }
+        }
+        vela__rt__int_trap("integer overflow", "Int512.times");
+    }
+
+    bool aneg = vela__rt__int512_is_neg(a);
+    bool bneg = vela__rt__int512_is_neg(b);
+    bool res_neg = aneg ^ bneg;
+
+    vela__rt__int512 ua = aneg ? vela__rt__u512_neg(a) : a;
+    vela__rt__int512 ub = bneg ? vela__rt__u512_neg(b) : b;
+
+    uint64_t prod[16] = {0};
+    for (int i = 0; i < 8; i++) {
+        if (ua.limbs[i] == 0) continue;
+        uint64_t carry = 0;
+        for (int j = 0; j < 8; j++) {
+#if defined(__SIZEOF_INT128__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+            vela__rt__u128 cur = (vela__rt__u128)ua.limbs[i] * ub.limbs[j] + prod[i + j] + carry;
+            prod[i + j] = (uint64_t)cur;
+            carry = (uint64_t)(cur >> 64);
+#else
+            uint64_t u_lo = ua.limbs[i] & 0xFFFFFFFFULL, u_hi = ua.limbs[i] >> 32;
+            uint64_t v_lo = ub.limbs[j] & 0xFFFFFFFFULL, v_hi = ub.limbs[j] >> 32;
+            uint64_t p0 = u_lo * v_lo;
+            uint64_t p1 = u_lo * v_hi;
+            uint64_t p2 = u_hi * v_lo;
+            uint64_t p3 = u_hi * v_hi;
+            uint64_t lo_sum = (prod[i + j] & 0xFFFFFFFFULL) + (p0 & 0xFFFFFFFFULL) + (carry & 0xFFFFFFFFULL);
+            uint64_t mid_sum = (lo_sum >> 32) + (prod[i + j] >> 32) + (p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL) + (carry >> 32);
+            uint64_t hi_sum = (mid_sum >> 32) + (p1 >> 32) + (p2 >> 32) + p3;
+            prod[i + j] = (lo_sum & 0xFFFFFFFFULL) | (mid_sum << 32);
+            carry = hi_sum;
+#endif
+        }
+        prod[i + 8] += carry;
+    }
+
+    bool ov = false;
+    for (int i = 8; i < 16; i++) {
+        if (prod[i] != 0) { ov = true; break; }
+    }
+    vela__rt__int512 res;
+    for (int i = 0; i < 8; i++) res.limbs[i] = prod[i];
+
+    if (!ov) {
+        if (!res_neg) {
+            if ((res.limbs[7] & 0x8000000000000000ULL) != 0) ov = true;
+        } else {
+            if (vela__rt__int512_is_min(res)) {
+                ov = false;
+            } else if ((res.limbs[7] & 0x8000000000000000ULL) != 0) {
+                ov = true;
+            }
+        }
+    }
+
+    if (ov) {
+        vela__rt__int_trap("integer overflow", "Int512.times");
+    }
+    if (res_neg) res = vela__rt__u512_neg(res);
+    return res;
+}
+
+static inline void vela__rt__u512_divrem(vela__rt__int512 u, vela__rt__int512 v, vela__rt__int512* q, vela__rt__int512* r) {
+    vela__rt__int512 zero = {{0}};
+    if (vela__rt__u512_cmp(u, v) < 0) {
+        if (q) *q = zero;
+        if (r) *r = u;
+        return;
+    }
+    bool v_single = true;
+    for (int i = 1; i < 8; i++) {
+        if (v.limbs[i] != 0) { v_single = false; break; }
+    }
+    if (v_single) {
+        uint64_t rem = 0;
+        uint64_t div = v.limbs[0];
+        vela__rt__int512 quot = {{0}};
+        for (int i = 7; i >= 0; i--) {
+#if defined(__SIZEOF_INT128__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+            vela__rt__u128 cur = ((vela__rt__u128)rem << 64) | u.limbs[i];
+            quot.limbs[i] = (uint64_t)(cur / div);
+            rem = (uint64_t)(cur % div);
+#else
+            uint64_t hi = u.limbs[i] >> 32;
+            uint64_t lo = u.limbs[i] & 0xFFFFFFFFULL;
+            uint64_t c1 = ((uint64_t)rem << 32) | hi;
+            uint64_t q1 = c1 / div;
+            rem = c1 % div;
+            uint64_t c2 = ((uint64_t)rem << 32) | lo;
+            uint64_t q2 = c2 / div;
+            rem = c2 % div;
+            quot.limbs[i] = (q1 << 32) | q2;
+#endif
+        }
+        if (q) *q = quot;
+        if (r) {
+            vela__rt__int512 rem_val = {{0}};
+            rem_val.limbs[0] = rem;
+            *r = rem_val;
+        }
+        return;
+    }
+
+    int u_bits = 0;
+    for (int i = 7; i >= 0; i--) {
+        if (u.limbs[i] != 0) {
+            u_bits = i * 64 + (64 - __builtin_clzll(u.limbs[i]));
+            break;
+        }
+    }
+    vela__rt__int512 quot = {{0}};
+    vela__rt__int512 rem = {{0}};
+    for (int bit = u_bits - 1; bit >= 0; bit--) {
+        uint64_t c = 0;
+        for (int i = 0; i < 8; i++) {
+            uint64_t next_c = rem.limbs[i] >> 63;
+            rem.limbs[i] = (rem.limbs[i] << 1) | c;
+            c = next_c;
+        }
+        int limb_idx = bit / 64;
+        int bit_idx = bit % 64;
+        if ((u.limbs[limb_idx] >> bit_idx) & 1) {
+            rem.limbs[0] |= 1;
+        }
+        if (vela__rt__u512_cmp(rem, v) >= 0) {
+            vela__rt__u512_sub(rem, v, &rem);
+            quot.limbs[limb_idx] |= (1ULL << bit_idx);
+        }
+    }
+    if (q) *q = quot;
+    if (r) *r = rem;
+}
+
+static inline vela__rt__int512 vela__rt__int512_div_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    if (vela__rt__int512_is_zero(b)) {
+        vela__rt__int_trap("division by zero", "Int512.div");
+    }
+    if (vela__rt__int512_is_min(a)) {
+        bool b_neg1 = true;
+        for (int i = 0; i < 8; i++) {
+            if (b.limbs[i] != 0xFFFFFFFFFFFFFFFFULL) { b_neg1 = false; break; }
+        }
+        if (b_neg1) {
+            vela__rt__int_trap("integer overflow", "Int512.div");
+        }
+    }
+
+    bool aneg = vela__rt__int512_is_neg(a);
+    bool bneg = vela__rt__int512_is_neg(b);
+    bool res_neg = aneg ^ bneg;
+
+    vela__rt__int512 ua = aneg ? vela__rt__u512_neg(a) : a;
+    vela__rt__int512 ub = bneg ? vela__rt__u512_neg(b) : b;
+
+    vela__rt__int512 q;
+    vela__rt__u512_divrem(ua, ub, &q, NULL);
+    if (res_neg) q = vela__rt__u512_neg(q);
+    return q;
+}
+
+static inline vela__rt__int512 vela__rt__int512_rem_impl(vela__rt__int512 a, vela__rt__int512 b) {
+    if (vela__rt__int512_is_zero(b)) {
+        vela__rt__int_trap("remainder of division by zero", "Int512.rem");
+    }
+    bool aneg = vela__rt__int512_is_neg(a);
+    bool bneg = vela__rt__int512_is_neg(b);
+
+    vela__rt__int512 ua = aneg ? vela__rt__u512_neg(a) : a;
+    vela__rt__int512 ub = bneg ? vela__rt__u512_neg(b) : b;
+
+    vela__rt__int512 r;
+    vela__rt__u512_divrem(ua, ub, NULL, &r);
+    if (aneg) r = vela__rt__u512_neg(r);
+    return r;
+}
+
+static inline int64_t vela__rt__int512_to_int64_impl(vela__rt__int512 a) {
+    bool neg = vela__rt__int512_is_neg(a);
+    if (!neg) {
+        for (int i = 1; i < 8; i++) {
+            if (a.limbs[i] != 0) vela__rt__int_trap("integer overflow", "Int512.to_int64");
+        }
+        if (a.limbs[0] > (uint64_t)INT64_MAX) {
+            vela__rt__int_trap("integer overflow", "Int512.to_int64");
+        }
+        return (int64_t)a.limbs[0];
+    } else {
+        for (int i = 1; i < 8; i++) {
+            if (a.limbs[i] != ~0ULL) vela__rt__int_trap("integer overflow", "Int512.to_int64");
+        }
+        if (a.limbs[0] < (uint64_t)INT64_MIN) {
+            vela__rt__int_trap("integer overflow", "Int512.to_int64");
+        }
+        return (int64_t)a.limbs[0];
+    }
+}
+
+static inline uint64_t vela__rt__int512_to_uint64_impl(vela__rt__int512 a) {
+    if (vela__rt__int512_is_neg(a)) {
+        vela__rt__int_trap("integer overflow", "Int512.to_uint64");
+    }
+    for (int i = 1; i < 8; i++) {
+        if (a.limbs[i] != 0) vela__rt__int_trap("integer overflow", "Int512.to_uint64");
+    }
+    return a.limbs[0];
+}
+
+static inline vela__rt__int512 vela__rt__int512_from_int64_impl(int64_t n) {
+    vela__rt__int512 r = {{0}};
+    r.limbs[0] = (uint64_t)n;
+    if (n < 0) {
+        for (int i = 1; i < 8; i++) r.limbs[i] = ~0ULL;
+    }
+    return r;
+}
+
+static inline vela__rt__int512 vela__rt__int512_from_uint64_impl(uint64_t n) {
+    vela__rt__int512 r = {{0}};
+    r.limbs[0] = n;
+    return r;
+}
+
+static inline vela__rt__int512 vela__rt__int512_of_uint64(uint64_t v) {
+    vela__rt__int512 r = {{0}};
+    r.limbs[0] = v;
+    return r;
+}
+
+static inline int vela__rt__int512_of_text(const char* bytes, size_t len, vela__rt__int512* out) {
+    size_t i = 0;
+    bool negative = false;
+    if (len > 0 && bytes[0] == '-') {
+        negative = true;
+        i = 1;
+    } else if (len > 0 && bytes[0] == '+') {
+        i = 1;
+    }
+    if (i >= len) {
+        return 1; // NOT_A_NUMBER
+    }
+    uint64_t base = 10u;
+    if (len - i > 2 && bytes[i] == '0') {
+        switch (bytes[i + 1]) {
+        case 'x': case 'X': base = 16u; break;
+        case 'o': case 'O': base = 8u; break;
+        case 'b': case 'B': base = 2u; break;
+        default: break;
+        }
+        if (base != 10u) {
+            i += 2;
+        }
+    }
+    if (i >= len) {
+        return 1; // NOT_A_NUMBER
+    }
+
+    vela__rt__int512 limit = {{0}};
+    if (negative) {
+        limit.limbs[7] = 0x8000000000000000ULL;
+    } else {
+        for (int k = 0; k < 7; k++) limit.limbs[k] = ~0ULL;
+        limit.limbs[7] = 0x7FFFFFFFFFFFFFFFULL;
+    }
+
+    vela__rt__int512 mag = {{0}};
+    vela__rt__int512 vbase = vela__rt__int512_of_uint64(base);
+
+    for (; i < len; i++) {
+        unsigned char c = (unsigned char)bytes[i];
+        uint64_t digit = base;
+        if (c >= '0' && c <= '9') {
+            digit = (uint64_t)(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            digit = (uint64_t)(c - 'a') + 10u;
+        } else if (c >= 'A' && c <= 'F') {
+            digit = (uint64_t)(c - 'A') + 10u;
+        }
+        if (digit >= base) {
+            return 1; // NOT_A_NUMBER
+        }
+        vela__rt__int512 vdigit = vela__rt__int512_of_uint64(digit);
+        vela__rt__int512 max_prev;
+        vela__rt__u512_sub(limit, vdigit, &max_prev);
+        vela__rt__int512 max_mag;
+        vela__rt__u512_divrem(max_prev, vbase, &max_mag, NULL);
+        if (vela__rt__u512_cmp(mag, max_mag) > 0) {
+            return 2; // TOO_LARGE
+        }
+        mag = vela__rt__int512_mul_impl(mag, vbase);
+        vela__rt__u512_add(mag, vdigit, &mag);
+    }
+
+    if (negative) {
+        *out = vela__rt__u512_neg(mag);
+    } else {
+        *out = mag;
+    }
+    return 0; // OK
+}
+
+static inline size_t vela__rt__int512_to_str(vela__rt__int512 a, char* buf) {
+    if (vela__rt__int512_is_zero(a)) {
+        buf[0] = '0';
+        buf[1] = '\0';
+        return 1;
+    }
+    bool neg = vela__rt__int512_is_neg(a);
+    vela__rt__int512 mag;
+    if (neg) {
+        mag = vela__rt__u512_neg(a);
+    } else {
+        mag = a;
+    }
+
+    char tmp[200];
+    int pos = 0;
+    vela__rt__int512 ten19 = vela__rt__int512_of_uint64(10000000000000000000ULL);
+
+    while (!vela__rt__int512_is_zero(mag)) {
+        vela__rt__int512 q, r;
+        vela__rt__u512_divrem(mag, ten19, &q, &r);
+        uint64_t chunk = r.limbs[0];
+        mag = q;
+
+        if (vela__rt__int512_is_zero(mag)) {
+            while (chunk > 0) {
+                tmp[pos++] = (char)('0' + (chunk % 10));
+                chunk /= 10;
+            }
+        } else {
+            for (int k = 0; k < 19; k++) {
+                tmp[pos++] = (char)('0' + (chunk % 10));
+                chunk /= 10;
+            }
+        }
+    }
+    if (neg) {
+        tmp[pos++] = '-';
+    }
+
+    for (int k = 0; k < pos; k++) {
+        buf[k] = tmp[pos - 1 - k];
+    }
+    buf[pos] = '\0';
+    return (size_t)pos;
+}
+
+static inline int64_t vela__rt__int512_parse_status_impl(vela__rt__text t) {
+    vela__rt__int512 val;
+    int status = vela__rt__int512_of_text(t.bytes, (size_t)(t.len < 0 ? 0 : t.len), &val);
+    return (int64_t)status;
+}
+
+static inline vela__rt__int512 vela__rt__int512_parse_value_impl(vela__rt__text t) {
+    vela__rt__int512 val = {{0}};
+    vela__rt__int512_of_text(t.bytes, (size_t)(t.len < 0 ? 0 : t.len), &val);
+    return val;
+}
+
+static inline vela__rt__text vela__rt__int512_to_text_impl(vela__rt__int512 a, vela__rt__region* r) {
+    char buf[200];
+    size_t len = vela__rt__int512_to_str(a, buf);
+    return vela__rt__text_in(r, buf, len);
+}
+
+#define vela__rt__int512_add(a, b) vela__rt__int512_cast_out(vela__rt__int512_add_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b)))
+#define vela__rt__int512_sub(a, b) vela__rt__int512_cast_out(vela__rt__int512_sub_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b)))
+#define vela__rt__int512_mul(a, b) vela__rt__int512_cast_out(vela__rt__int512_mul_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b)))
+#define vela__rt__int512_div(a, b) vela__rt__int512_cast_out(vela__rt__int512_div_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b)))
+#define vela__rt__int512_rem(a, b) vela__rt__int512_cast_out(vela__rt__int512_rem_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b)))
+#define vela__rt__int512_neg(a) vela__rt__int512_cast_out(vela__rt__int512_neg_impl(vela__rt__int512_cast_in(a)))
+#define vela__rt__int512_abs(a) vela__rt__int512_cast_out(vela__rt__int512_abs_impl(vela__rt__int512_cast_in(a)))
+#define vela__rt__int512_cmp(a, b) vela__rt__int512_cmp_impl(vela__rt__int512_cast_in(a), vela__rt__int512_cast_in(b))
+#define vela__rt__int512_to_int64(a) vela__rt__int512_to_int64_impl(vela__rt__int512_cast_in(a))
+#define vela__rt__int512_to_uint64(a) vela__rt__int512_to_uint64_impl(vela__rt__int512_cast_in(a))
+#define vela__rt__int512_from_int64(n) vela__rt__int512_cast_out(vela__rt__int512_from_int64_impl(n))
+#define vela__rt__int512_from_uint64(n) vela__rt__int512_cast_out(vela__rt__int512_from_uint64_impl(n))
+#define vela__rt__int512_parse_status(t) vela__rt__int512_parse_status_impl(t)
+#define vela__rt__int512_parse_value(t) vela__rt__int512_cast_out(vela__rt__int512_parse_value_impl(t))
+#define vela__rt__int512_to_text(a, into) vela__rt__int512_to_text_impl(vela__rt__int512_cast_in(a), (into))
+
+#endif
+

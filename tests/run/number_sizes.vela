@@ -1,6 +1,6 @@
 ; Arithmetic on sized numbers: each type keeps its own, checked to fit as it
 ; runs, and numbers written out take the type beside them.
-include std/math (Int512, int512)
+include std/int512 {Int512, int512}
 
 task main()
     region r

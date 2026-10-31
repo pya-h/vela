@@ -326,6 +326,40 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     </section>
 
     <section>
+      <h2 id="int512">std/int512</h2>
+      <p>
+        512-bit signed integers in two's complement, <code>Int512</code>. Brought in with
+        <code>include std/int512 {Int512, int512, zero512}</code>. A value is held across eight 64-bit unsigned limbs,
+        lowest limb first. Every arithmetic operation strictly follows Vela's checked-arithmetic safety: any overflow
+        past 512 bits or division by zero immediately stops the program with an informative runtime trap.
+      </p>
+      <pre><span class="keyword">include</span> std/int512 {Int512, int512, int512_parse}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> a = int512(<span class="number">1000</span>)
+    <span class="keyword">fixed</span> b = int512_parse(<span class="string">"98765432101234567890"</span>) { Int512.zero() }
+    <span class="keyword">fixed</span> c = a.times(b)
+    show(c.str(r))                          <span class="comment">; 98765432101234567890000</span>
+    show(<span class="string">"{a} / 3 = {a.div(int512(3))}"</span> <span class="keyword">at</span> r)
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Operation / Member</th><th>What it does</th></tr>
+        <tr><td><code>plus(other)</code>, <code>minus(other)</code>, <code>times(other)</code></td><td>addition, subtraction, and multiplication; traps on signed overflow</td></tr>
+        <tr><td><code>div(other)</code>, <code>rem(other)</code></td><td>quotient (truncated toward zero) and remainder; traps on division by zero or <code>MIN / -1</code></td></tr>
+        <tr><td><code>neg()</code>, <code>abs()</code></td><td>negation and absolute value; traps on <code>MIN</code></td></tr>
+        <tr><td><code>cmp(other)</code>, <code>less(other)</code></td><td>compares values: <code>cmp</code> gives -1, 0, or 1; <code>less</code> gives <code>bool</code></td></tr>
+        <tr><td><code>to_int64()</code>, <code>to_uint64()</code></td><td>converts to primitive 64-bit integer; traps if the value does not fit</td></tr>
+        <tr><td><code>str(r: region)</code></td><td>formats the integer as decimal text into region <code>r</code></td></tr>
+        <tr><td><code>Int512.zero()</code>, <code>Int512.one()</code></td><td>shared constants for 0 and 1</td></tr>
+        <tr><td><code>Int512.min_value()</code>, <code>Int512.max_value()</code></td><td>the smallest (&minus;2<sup>511</sup>) and largest (2<sup>511</sup> &minus; 1) 512-bit signed integers</td></tr>
+        <tr><td><code>Int512.from_int(n)</code>, <code>int512(n)</code></td><td>creates an <code>Int512</code> from an <code>int64</code></td></tr>
+        <tr><td><code>int512_from_uint64(n)</code></td><td>creates an <code>Int512</code> from a <code>uint64</code></td></tr>
+        <tr><td><code>int512_parse(s)</code>, <code>Int512.parse(s)</code></td><td>parses text (decimal, or base prefix <code>0x</code>, <code>0o</code>, <code>0b</code>); gives <code>Int512 ~ ParseError</code></td></tr>
+      </table>
+    </section>
+
+    <section>
       <h2 id="loops">std/loops</h2>
       <p>
         What a <a href="vela.html#loop-values">loop that gives a value</a> fails with, <code>LoopResult&lt;B, M&gt;</code>:
@@ -392,8 +426,6 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <tr><td><code>sinh(x)</code>, <code>cosh(x)</code>, <code>tanh(x)</code></td><td>the hyperbolic sine, cosine, and tangent</td></tr>
         <tr><td><code>exp(x)</code></td><td><code>e</code> raised to the power <code>x</code></td></tr>
         <tr><td><code>log(x, base = 10.0)</code></td><td>the power <code>base</code> is raised to for <code>x</code>, base 10 when the call leaves it out (see <a href="vela.html#optional-arguments">optional arguments</a>); with <code>e</code> it is the natural logarithm. Bases 2, 10, and <code>e</code> are C's own <code>log2</code>, <code>log10</code>, and <code>log</code>, which are exact where a quotient of logarithms may not be.</td></tr>
-        <tr><td><code>Int512</code></td><td>a 512-bit integer, held as eight <code>uint64</code> limbs, <code>limbs: [uint64#8]</code>, lowest first, and a negative one in two's complement (2 ** 512 + n). It is a start: it holds a value, and has no arithmetic and no <code>show</code> yet</td></tr>
-        <tr><td><code>zero512()</code>, <code>int512(n)</code></td><td>an <code>Int512</code> holding 0, or the <code>int64</code> <code>n</code>: <code>int512(-1)</code> has every bit of every limb set</td></tr>
       </table>
       <p>
         A value outside what a task takes gives what C's gives, as float arithmetic does: <code>math.log(-1.0)</code>

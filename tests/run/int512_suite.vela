@@ -1,0 +1,83 @@
+; Full functional test suite for 512-bit signed integers in std/int512.
+include std/int512 {Int512, int512, int512_from_uint64, int512_parse, zero512}
+
+task parse_check(s: text, into: region) -> text@into
+    match int512_parse(s)
+    case {val}
+        <- val.str(into)
+    case failure e
+        match e
+        case NotANumber
+            <- "NaN"
+        case TooLarge
+            <- "TooLarge"
+        fi
+    fi
+    <- "Unknown"
+fi
+
+task main()
+    region r
+
+    ; 1. Constructors and zero/one constants
+    fixed z = Int512.zero()
+    fixed o = Int512.one()
+    fixed z2 = zero512()
+    show("zero: ", z.str(r), " one: ", o.str(r), " similar: ", z ~= z2, " cmp: ", z.cmp(z2) == 0)
+
+    ; 2. Primitive int conversions
+    fixed pos = int512(1234567890123)
+    fixed neg = int512(-987654321098)
+    show("pos: ", pos.str(r), " to_i64: ", pos.to_int64())
+    show("neg: ", neg.str(r), " to_i64: ", neg.to_int64())
+
+    fixed u_max: uint64 = uint64(9223372036854775807) + 1 + 9223372036854775807
+    fixed from_u = int512_from_uint64(u_max)
+    show("from_u64_max: ", from_u.str(r), " to_u64: ", from_u.to_uint64() == u_max)
+
+    ; 3. Arithmetic operations
+    fixed a = int512(1000)
+    fixed b = int512(300)
+    fixed neg_b = int512(-300)
+
+    show("add: ", a.plus(b).str(r), " ", a.plus(neg_b).str(r))
+    show("sub: ", a.minus(b).str(r), " ", b.minus(a).str(r))
+    show("mul: ", a.times(b).str(r), " ", a.times(neg_b).str(r))
+    show("div: ", a.div(b).str(r), " ", a.div(neg_b).str(r), " ", a.neg().div(b).str(r), " ", a.neg().div(neg_b).str(r))
+    show("rem: ", a.rem(b).str(r), " ", a.rem(neg_b).str(r), " ", a.neg().rem(b).str(r), " ", a.neg().rem(neg_b).str(r))
+
+    show("neg: ", a.neg().str(r), " ", neg.neg().str(r))
+    show("abs: ", a.abs().str(r), " ", neg.abs().str(r))
+
+    ; 4. Comparisons and relations
+    show("cmp: ", a.cmp(b), " ", b.cmp(a), " ", a.cmp(a))
+    show("less: ", b.less(a), " ", a.less(b), " ", a.less(a))
+    show("eq: ", a == a, " ", a == b, " ", a != b)
+
+    ; 5. Big multi-limb multiplication & division
+    fixed big1 = int512_parse("1000000000000000000000000000000") { Int512.zero() }
+    fixed big2 = int512_parse("2000000000000000000000000000000") { Int512.zero() }
+    fixed big_prod = big1.times(big2)
+    show("big_prod: ", big_prod.str(r))
+    fixed big_quot = big_prod.div(big1)
+    fixed big_rem = big_prod.rem(big1)
+    show("big_quot: ", big_quot.str(r), " big_rem: ", big_rem.str(r))
+
+    ; 6. String interpolation and parsing
+    show("{pos} and {neg}" at r)
+    show("parse dec: ", parse_check("9876543210123456789", r))
+    show("parse neg: ", parse_check("-9876543210123456789", r))
+    show("parse hex: ", parse_check("0xDEADBEEFCAFE", r))
+    show("parse bin: ", parse_check("0b110101", r))
+    show("parse oct: ", parse_check("0o777", r))
+    show("parse nan: ", parse_check("123abc456", r))
+    show("parse empty: ", parse_check("", r))
+
+    ; 7. Bound values (min_value and max_value)
+    fixed min_v = Int512.min_value()
+    fixed max_v = Int512.max_value()
+    show("min < max: ", min_v.less(max_v), " max < min: ", max_v.less(min_v))
+    show("min cmp 0: ", min_v.cmp(z), " max cmp 0: ", max_v.cmp(z))
+    show("max + (-1): ", max_v.plus(int512(-1)).less(max_v))
+    show("min + 1: ", min_v.plus(Int512.one()).less(min_v) == false)
+fi

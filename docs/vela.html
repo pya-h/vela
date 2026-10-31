@@ -1269,8 +1269,8 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
           when the value doesn't fit, as <code>unit(x)</code> does; <code>int(n)</code> of a <code>uint64</code> past
           the largest <code>int</code> stops it too.</li>
         <li>They compare, order, show and turn into text as numbers do, are keys of a <a href="#maps">map</a>, and
-          a generic's <code>ordered</code> takes them. <code>std/math</code> has <code>Int512</code>, a 512-bit
-          integer that holds a value and has no arithmetic yet (see <a href="std.html#math">std/math</a>).</li>
+          a generic's <code>ordered</code> takes them. <code>std/int512</code> has <code>Int512</code>, a 512-bit
+          signed integer with full checked arithmetic methods and text formatting (see <a href="std.html#int512">std/int512</a>).</li>
       </ul>
       <pre><span class="keyword">flex</span> small: int8 = <span class="number">100</span>
 small += <span class="number">27</span>                 <span class="comment">; 127</span>
@@ -5381,8 +5381,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           that), and a chain's steps failing with different kinds take the kind the place names only from a binding's
           type or the task's when sent; given as an argument, the kinds must join by themselves.</li>
         <li>A number written out is at most the largest <code>int</code>, so a <code>uint64</code> past it is
-          computed (<code>big + big + 1</code>) rather than written. <code>Int512</code> in <code>std/math</code>
-          holds a value and has no arithmetic yet.</li>
+          computed (<code>big + big + 1</code>) rather than written. <code>Int512</code> in <code>std/int512</code>
+          holds a 512-bit signed integer in two's complement with full checked arithmetic.</li>
         <li>A loop in map form takes its collection from a type written in a binding or the task's result when it is
           sent; given as an argument, it makes the collection its loop makes by itself. An array it makes from a range
           of constant ends is on the C stack, so a very long one may not fit there.</li>
