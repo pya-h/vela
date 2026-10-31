@@ -892,7 +892,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None, shortcut: false })
     }
 
     /// Whether the cursor is at `native task` (see `ast::NATIVE`).
@@ -1375,6 +1375,7 @@ impl Parser {
             passes: Vec::new(),
             wrappers: Vec::new(),
             kept: None,
+            shortcut: false,
         })
     }
 
@@ -1733,6 +1734,7 @@ impl Parser {
             passes: Vec::new(),
             wrappers: Vec::new(),
             kept: None,
+            shortcut: false,
         })
     }
 
@@ -4060,7 +4062,8 @@ impl Parser {
             Token::New => self.parse_new(),
             Token::LBracket if self.at_kept() => self.parse_closure_lambda(),
             Token::LBracket => self.parse_array(),
-            Token::LParen if self.at_lambda() => self.parse_lambda(),
+            Token::LParen if self.at_full_lambda() => self.parse_lambda(),
+            Token::LParen if self.at_shortcut_lambda() => self.parse_shortcut_lambda_parens(None, span),
             Token::LParen => self.parse_parenthesized(),
             Token::Match | Token::When => self.parse_choice(span),
             // A loop that gives a value, and one named so where no variable names it.
@@ -4077,6 +4080,15 @@ impl Parser {
                 }
                 let at = self.peek_span();
                 self.parse_loop_value(at, Some(name))
+            }
+            Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::Arrow)) => {
+                let name = name.clone();
+                self.advance(); // the name
+                self.parse_shortcut_lambda(vec![(name, span)], None, span)
+            }
+            Token::Underscore if matches!(self.tokens.get(self.pos + 1), Some(Token::Arrow)) => {
+                self.advance(); // _
+                self.parse_shortcut_lambda(vec![(DISCARD.to_string(), span)], None, span)
             }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
@@ -4216,33 +4228,131 @@ impl Parser {
         Ok(Expr::new(ExprKind::Scan { args, region: None, region_span }, span))
     }
 
-    /// Whether the cursor, at `(`, starts a lambda: parentheses closed on their
-    /// line and followed by `->`, which follows no value.
-    fn at_lambda(&self) -> bool {
-        // A lambda takes nothing, or starts with a parameter: what follows the
-        // `(` tells first, so that nested parentheses aren't each read to their
-        // end.
+
+    /// Whether the cursor, at `(`, starts a full lambda: parentheses with typed parameters
+    /// or empty parentheses followed by `->` and a return type with `<-` or a multiline block.
+    fn at_full_lambda(&self) -> bool {
         let next = self.tokens.get(self.pos + 1);
-        let takes = matches!(next, Some(Token::RParen | Token::Flex | Token::Fixed))
+        let is_empty = matches!(next, Some(Token::RParen));
+        let takes = is_empty
+            || matches!(next, Some(Token::Flex | Token::Fixed))
             || (matches!(next, Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::Colon));
         if !takes {
             return false;
         }
         let mut depth = 0usize;
+        let mut arrow_at = None;
         for (at, token) in self.tokens.iter().enumerate().skip(self.pos) {
             match token {
                 Token::LParen | Token::LBracket => depth += 1,
                 Token::RParen | Token::RBracket => {
                     depth = depth.saturating_sub(1);
                     if depth == 0 {
-                        return *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow);
+                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow) {
+                            arrow_at = Some(at + 1);
+                        }
+                        break;
                     }
                 }
                 Token::Newline | Token::Eof => return false,
                 _ => {}
             }
         }
+        let Some(arrow) = arrow_at else { return false };
+        if !is_empty {
+            return true;
+        }
+        // At `() ->`: check tokens on the same line after `->`.
+        let mut line_tokens = Vec::new();
+        for token in self.tokens.iter().skip(arrow + 1) {
+            match token {
+                Token::Newline | Token::Eof => break,
+                tok => line_tokens.push(tok),
+            }
+        }
+        if line_tokens.iter().any(|tok| matches!(tok, Token::Send | Token::Fi)) {
+            return true;
+        }
+        let is_type_ident = |name: &str| {
+            matches!(
+                name,
+                "int" | "int8" | "int16" | "int32" | "int64" | "int512" | "Int512"
+                    | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
+                    | "float" | "float32" | "float64"
+                    | "bool" | "char" | "byte" | "text" | "nothing" | "any" | "region"
+            ) || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        };
+        let first_after_arrow = line_tokens.first();
+        let is_bracket_type = matches!(first_after_arrow, Some(Token::LBracket))
+            && line_tokens.get(1).is_some_and(|tok| {
+                matches!(tok, Token::Ident(name) if is_type_ident(name))
+                    || matches!(tok, Token::LBracket)
+            });
+        let is_type_start = is_bracket_type
+            || matches!(first_after_arrow, Some(Token::Maybe))
+            || matches!(first_after_arrow, Some(Token::Ident(name)) if is_type_ident(name));
+
+        if is_type_start {
+            let has_expr_op = line_tokens.iter().any(|tok| {
+                matches!(
+                    tok,
+                    Token::Plus
+                        | Token::Minus
+                        | Token::Star
+                        | Token::Slash
+                        | Token::Percent
+                        | Token::Assign
+                        | Token::Eq
+                        | Token::Ne
+                        | Token::Lt
+                        | Token::Gt
+                        | Token::Le
+                        | Token::Ge
+                        | Token::Pipe(_)
+                        | Token::Dot
+                )
+            });
+            if !has_expr_op {
+                return true;
+            }
+        }
         false
+    }
+
+    /// Whether the cursor, at `(`, starts a shortcut lambda:
+    /// `(x) ->`, `(a, b) ->`, or `() ->` without `<-` on the line.
+    fn at_shortcut_lambda(&self) -> bool {
+        if self.at_full_lambda() {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut arrow_at = None;
+        let mut rparen_at = None;
+        for (at, token) in self.tokens.iter().enumerate().skip(self.pos) {
+            match token {
+                Token::LParen | Token::LBracket => depth += 1,
+                Token::RParen | Token::RBracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow) {
+                            arrow_at = Some(at + 1);
+                            rparen_at = Some(at);
+                        }
+                        break;
+                    }
+                }
+                Token::Newline | Token::Eof => return false,
+                _ => {}
+            }
+        }
+        let (Some(_arrow), Some(rparen)) = (arrow_at, rparen_at) else { return false };
+        // Verify all tokens inside `(...)` are comma-separated idents or underscores
+        for token in &self.tokens[self.pos + 1..rparen] {
+            if !matches!(token, Token::Ident(_) | Token::Underscore | Token::Comma) {
+                return false;
+            }
+        }
+        true
     }
 
     /// `(params) -> type`, then its body on the lines after it or on its own
@@ -4265,7 +4375,7 @@ impl Parser {
             self.parse_lambda_line(span)?
         };
         self.leave(1);
-        Ok(self.add_lambda(span, params, ret, results, body, None))
+        Ok(self.add_lambda(span, params, ret, results, body, None, false))
     }
 
     /// `[@r](params) -> type`, its body, and `fi`, at `[`: a lambda that keeps
@@ -4275,7 +4385,16 @@ impl Parser {
     fn parse_closure_lambda(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         let (region, mode, _, places) = self.parse_kept()?;
-        if !(self.check(Token::LParen) && self.at_lambda()) {
+        let kept = Kept { region: region.clone(), mode, places: places.clone() };
+        if self.check(Token::LParen) && self.at_shortcut_lambda() {
+            return self.parse_shortcut_lambda_parens(Some(kept), span);
+        }
+        if matches!(self.peek(), Token::Ident(_) | Token::Underscore) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
+            let p_span = self.peek_span();
+            let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
+            return self.parse_shortcut_lambda(vec![(name, p_span)], Some(kept), span);
+        }
+        if !(self.check(Token::LParen) && self.at_full_lambda()) {
             let mode_word = match mode {
                 KeptMode::Plain => "",
                 KeptMode::Flex => "flex ",
@@ -4296,11 +4415,70 @@ impl Parser {
             self.parse_lambda_line(span)?
         };
         self.leave(1);
-        let kept = Kept { region: region.clone(), mode, places: places.clone() };
-        let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept)).kind else {
+        let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept), false).kind else {
             return Err(Error::internal_at(span, "a lambda named by no variable"));
         };
         Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
+    }
+
+    /// A shortcut one-line lambda without `<-` or `fi`: `x -> x * 2`, `(a, b) -> a + b`, or `() -> 42`.
+    fn parse_shortcut_lambda(&mut self, params: Vec<(String, Span)>, kept: Option<Kept>, span: Span) -> Result<Expr> {
+        if self.in_generic {
+            return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
+        }
+        self.enter()?;
+        self.expect(Token::Arrow)?;
+        let body_expr = self.parse_expr()?;
+        self.leave(1);
+        let body = vec![Stmt::new(StmtKind::Send(vec![body_expr]), span)];
+        let fields: Vec<Field> = params.into_iter().map(|(name, p_span)| Field {
+            name,
+            ty: Type::Unknown,
+            span: p_span,
+            ty_span: p_span,
+            private: false,
+            read: false,
+            default_region: false,
+            passing: Passing::Copy,
+            default: None,
+        }).collect();
+        let is_closure = kept.is_some();
+        let (region, mode, places) = if let Some(k) = &kept {
+            (k.region.clone(), k.mode, k.places.clone())
+        } else {
+            (String::new(), KeptMode::Plain, Vec::new())
+        };
+        let lambda_expr = self.add_lambda(span, fields, Type::Unknown, Vec::new(), body, kept, true);
+        if is_closure {
+            let ExprKind::Var(lambda) = lambda_expr.kind else {
+                return Err(Error::internal_at(span, "a lambda named by no variable"));
+            };
+            Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
+        } else {
+            Ok(lambda_expr)
+        }
+    }
+
+    /// Parenthesized shortcut lambda: `(x) -> expr`, `(a, b) -> expr`, or `() -> expr`.
+    fn parse_shortcut_lambda_parens(&mut self, kept: Option<Kept>, span: Span) -> Result<Expr> {
+        self.expect(Token::LParen)?;
+        let mut params = Vec::new();
+        if !self.check(Token::RParen) {
+            loop {
+                let p_span = self.peek_span();
+                let name = if self.match_token(Token::Underscore) {
+                    DISCARD.to_string()
+                } else {
+                    self.expect_ident()?
+                };
+                params.push((name, p_span));
+                if !self.match_token(Token::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(Token::RParen)?;
+        self.parse_shortcut_lambda(params, kept, span)
     }
 
     /// The header of a lambda at `span` and the cursor, up to its body.
@@ -4333,7 +4511,7 @@ impl Parser {
 
     /// Makes the lambda at `span` a task of the file, and gives the value
     /// naming it.
-    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>) -> Expr {
+    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>, shortcut: bool) -> Expr {
         self.lambda_count += 1;
         let name = lambda_name(self.lambda_count);
         self.lambdas.push(Item::Task(TaskDef {
@@ -4352,6 +4530,7 @@ impl Parser {
             passes: Vec::new(),
             wrappers: Vec::new(),
             kept,
+            shortcut,
         }));
         Expr::new(ExprKind::Var(name), span)
     }

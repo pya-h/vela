@@ -1848,13 +1848,17 @@ impl Generator {
             }
         }
         for (param, hidden) in t.params.iter().zip(hidden.iter().copied().chain(std::iter::repeat(false))) {
-            if !owns_copy(t, param, alters, hidden) {
+            if param.name == DISCARD || !owns_copy(t, param, alters, hidden) {
                 continue;
             }
             self.w.line(&format!("{} {} = {};", c_type(&param.ty), c_ident(&param.name), given_name(&param.name)));
         }
-        for param in &t.params {
-            self.use_if_unread(&param.name, &t.body);
+        for (i, param) in t.params.iter().enumerate() {
+            if param.name == DISCARD {
+                self.w.line(&format!("(void)vela__discard_{};", i));
+            } else {
+                self.use_if_unread(&param.name, &t.body);
+            }
         }
         // Named results are locals of the task. The checker has made sure none
         // is read before it is set; the zero is there so that a checker of
@@ -5850,10 +5854,15 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool], is_shape: &dyn Fn(&str)
         .iter()
         .enumerate()
         .map(|(i, p)| {
+            let param_name = if p.name == DISCARD {
+                format!("vela__discard_{}", i)
+            } else {
+                c_ident(&p.name)
+            };
             // A large value that never changes is read where the caller keeps
             // it (see `HIDDEN_ABOVE`).
             if hidden.get(i).copied().unwrap_or(false) {
-                return format!("const {}* {}", c_type(&p.ty), c_ident(&p.name));
+                return format!("const {}* {}", c_type(&p.ty), param_name);
             }
             // A method that changes the value it is called on is given the
             // place it is in, so what it writes is what the caller holds, and
@@ -5863,15 +5872,15 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool], is_shape: &dyn Fn(&str)
             // pointer that stays, not what it points to (`T* const*`). So is a
             // `bind&` one of a type with no contents, which acts as `fixed&`.
             if p.passing == Passing::FixedRef || (p.passing == Passing::BindRef && !has_contents(&p.ty, is_shape)) {
-                return format!("{} const* {}", c_type(&p.ty), c_ident(&p.name));
+                return format!("{} const* {}", c_type(&p.ty), param_name);
             }
             if is_pointer_param(p, alters) {
-                return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));
+                return format!("{}* {}", c_type(&p.ty), param_name);
             }
-            if owns_copy(t, p, alters, false) {
+            if p.name != DISCARD && owns_copy(t, p, alters, false) {
                 return format!("{} {}", c_type(&p.ty), given_name(&p.name));
             }
-            format!("{} {}", c_type(&p.ty), c_ident(&p.name))
+            format!("{} {}", c_type(&p.ty), param_name)
         })
         .collect();
     // A lambda that keeps what it uses is given what it keeps first.

@@ -1,0 +1,88 @@
+; Tests for shortcut lambdas:
+; Bare parameter: x -> x * 2
+; Parenthesized: (x) -> x + 5, (a, b) -> a + b, () -> 42
+; Discard parameter: _ -> 99, (_, _) -> 100
+; Closures: [@r] x -> x + offset, [@r](x) -> x + offset, [@r]() -> offset
+; Direct invocation: ((x) -> x * 2)(21)
+; Generic higher-order tasks and pipes
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task binary(f: (int, int) -> int, a: int, b: int) -> int
+    <- f(a, b)
+fi
+
+task supplier(f: () -> int) -> int
+    <- f()
+fi
+
+task ignore_one(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task ignore_two(f: (int, int) -> int, a: int, b: int) -> int
+    <- f(a, b)
+fi
+
+task map_list<T, R>(xs: [T]@r, f: (T) -> R, s: region) -> [R]@s
+    flex res: [R]@s = new [R]() at s
+    each x in xs
+        res.add(f(x))
+    fi
+    <- res
+fi
+
+task filter_list<T>(xs: [T]@r, f: (T) -> bool, s: region) -> [T]@s
+    flex res: [T]@s = new [T]() at s
+    each x in xs
+        when f(x)
+            res.add(x)
+        fi
+    fi
+    <- res
+fi
+
+task main()
+    ; 1. Higher-order function arguments
+    show(apply(x -> x * 2, 21))
+    show(apply((x) -> x + 5, 20))
+    show(binary((a, b) -> a + b, 10, 20))
+    show(supplier(() -> 42))
+    show(ignore_one(_ -> 99, 123))
+    show(ignore_two((_, _) -> 100, 1, 2))
+
+    ; 2. Explicitly typed variable bindings
+    fixed double: (int) -> int = x -> x * 2
+    fixed add: (int, int) -> int = (a, b) -> a + b
+    fixed answer: () -> int = () -> 42
+    show(double(5), " ", add(3, 4), " ", answer())
+
+    ; 3. Nullary untyped variable binding
+    fixed get_num = () -> 77
+    show(get_num())
+
+    ; 4. Direct invocations
+    show(((x) -> x * 2)(21))
+    show(((a, b) -> a * b)(6, 7))
+    show((() -> 42)())
+
+    ; 5. Closures with captures
+    region r
+    fixed offset = 10
+    fixed add_offset: [@r](int) -> int = [@r] x -> x + offset
+    fixed add_offset_parens: [@r](int) -> int = [@r](x) -> x + offset
+    fixed get_offset: [@r]() -> int = [@r]() -> offset
+    fixed add_offset_two: [@r](int, int) -> int = [@r](a, b) -> a + b + offset
+    show(add_offset(5), " ", add_offset_parens(5), " ", get_offset(), " ", add_offset_two(2, 3))
+
+    ; 6. Generic calls and pipes
+    fixed nums: [int]@r = new [int]([1, 2, 3, 4, 5]) at r
+    fixed doubled = map_list(nums, x -> x * 2, r)
+    fixed evens = filter_list(nums, x -> x % 2 == 0, r)
+    show(doubled)
+    show(evens)
+    fixed piped = nums |> map_list(x -> x * 10, r)
+    show(piped)
+fi

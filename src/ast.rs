@@ -2498,6 +2498,8 @@ pub struct TaskDef {
     /// For a lambda that keeps what it uses, `[@r](…)` or `[flex @r](…)`: the
     /// region it keeps its copies in, and whether it changes them.
     pub kept: Option<Kept>,
+    /// Whether this task is a shortcut one-line lambda with inferred types.
+    pub shortcut: bool,
 }
 
 /// A variable a lambda keeps as a place, named in its list beside the region:
