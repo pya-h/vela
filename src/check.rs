@@ -908,8 +908,6 @@ impl Checker {
         self.check_param_defaults(items);
         self.check_shared_fields(items);
         self.check_start_values(items);
-        let nullary_checked = self.infer_nullary_shortcut_lambdas();
-        self.keep_going(nullary_checked);
         // A lambda is checked after the code it is written in, which notes
         // the names around it (see `lambda_outer`): the parser adds lambdas
         // last, each after the ones inside it, so they are checked from the
@@ -3569,12 +3567,12 @@ impl Checker {
             self.check_startup(&mut task.body, &task.passes);
         } else {
             let checked = self.check_block(&mut task.body);
-            if task.shortcut && task.ret.unknown() {
-                if let Some(ret) = self.current_ret.as_ref() {
-                    if !ret.unknown() {
-                        task.ret = ret.clone();
-                    }
-                }
+            if task.shortcut
+                && task.ret.unknown()
+                && let Some(ret) = self.current_ret.as_ref()
+                && !ret.unknown()
+            {
+                task.ret = ret.clone();
             }
             // What a lambda that keeps what it uses keeps: what it used.
             let used = std::mem::take(&mut *self.kept_used.borrow_mut());
@@ -5105,6 +5103,8 @@ impl Checker {
                     }
                     // `<- each …`: the task's result says which collection the loop makes.
                     self.loop_place = loop_value(e).map(|_| success_of(&ret));
+                    // `<- x -> x * 2`: the task's result says what the lambda takes and sends.
+                    self.prepare_shortcut_lambda(e, &ret)?;
                     let ety = self.check_expr(e);
                     self.pipe_target = None;
                     self.loop_place = None;
@@ -6693,6 +6693,9 @@ impl Checker {
 
     /// `check_expr`, which also allows a call that sends several values.
     fn check_expr_multi(&mut self, expr: &mut Expr) -> Result<Type> {
+        // A shortcut lambda no type told about (`fixed f = () -> 42`) is
+        // checked here, its result read from its body.
+        self.prepare_shortcut_lambda(expr, &Type::Unknown)?;
         self.resolve_constructor(expr);
         self.resolve_empty_plan_b(expr);
         self.resolve_task_use(expr);
@@ -7157,10 +7160,10 @@ impl Checker {
                 at,
                 format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int ~ {}'", name, name, error),
             ),
-            Type::Task(task) if task.params.iter().any(|p| p.unknown()) || task.ret.unknown() => {
+            Type::Task(task) if task.params.iter().any(|p| p.unknown()) => {
                 err(at, "cannot infer parameter type in shortcut lambda; specify types with a full lambda, as in '(x: int) -> int <- ... fi', or give the variable a type".to_string())
             }
-            Type::Closure(closure) if closure.task.params.iter().any(|p| p.unknown()) || closure.task.ret.unknown() => {
+            Type::Closure(closure) if closure.task.params.iter().any(|p| p.unknown()) => {
                 err(at, "cannot infer parameter type in shortcut lambda; specify types with a full lambda, as in '(x: int) -> int <- ... fi', or give the variable a type".to_string())
             }
             Type::Nothing => err(at, "this expression has no value (its type is 'nothing')"),
@@ -8496,7 +8499,10 @@ impl Checker {
         self.note_lambda_loops(lambda);
         let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
         let owned = outer.iter().map(|(name, info)| (name.clone(), self.name_owners(name, info))).collect();
-        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), mode, span, outer, within, uses: Vec::new(), places: places.to_vec(), owned });
+        // A shortcut lambda's body may be checked already (see
+        // `prepare_shortcut_lambda`): what it uses stays noted.
+        let uses = self.kept_lambdas.get(lambda).map(|kept| kept.uses.clone()).unwrap_or_default();
+        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), mode, span, outer, within, uses, places: places.to_vec(), owned });
         self.kept_order.retain(|name| name != lambda);
         self.kept_order.push(lambda.to_string());
         if self.broken.contains(lambda) {
@@ -8722,28 +8728,19 @@ impl Checker {
         self.shortcut_lambda_name(expr).is_some()
     }
 
-    fn infer_nullary_shortcut_lambdas(&mut self) -> Result<()> {
-        let nullary: Vec<(String, TaskDef)> = self
-            .shortcut_lambdas
-            .iter()
-            .filter(|(_, t)| t.params.is_empty() && t.kept.is_none())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        for (name, task) in nullary {
-            self.infer_shortcut_lambda(&name, task)?;
-        }
-        Ok(())
-    }
-
     fn prepare_shortcut_lambda(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         let Some(name) = self.shortcut_lambda_name(expr).map(str::to_string) else { return Ok(()); };
+        // Checked once, by the first place that says what it takes.
+        if self.inferred_shortcut_lambdas.contains(&name) {
+            return Ok(());
+        }
         let Some(mut task) = self.shortcut_lambdas.get(&name).cloned() else { return Ok(()); };
 
-        if let ExprKind::Closure { lambda, region, mode, places } = &expr.kind {
-            if !self.kept_lambdas.contains_key(lambda) {
-                let (lambda, region, mode, places) = (lambda.clone(), region.clone(), *mode, places.clone());
-                let _ = self.check_closure(&lambda, &region, mode, &places, expr.span);
-            }
+        if let ExprKind::Closure { lambda, region, mode, places } = &expr.kind
+            && !self.kept_lambdas.contains_key(lambda)
+        {
+            let (lambda, region, mode, places) = (lambda.clone(), region.clone(), *mode, places.clone());
+            let _ = self.check_closure(&lambda, &region, mode, &places, expr.span);
         }
 
         let mut cur_expected = expected;
@@ -8798,10 +8795,16 @@ impl Checker {
             info.ret = task.ret.clone();
         }
 
+        // The names around a plain one, so that using one says why it can't
+        // (see `lambda_outer`).
+        if task.kept.is_none() {
+            let seen = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
+            self.lambda_outer.insert(name.to_string(), seen);
+        }
         let saved_scopes = std::mem::take(&mut self.scopes);
         let saved_current_task = std::mem::replace(&mut self.current_task, task.name.clone());
-        let saved_current_lambda = std::mem::replace(&mut self.current_lambda, Some(task.name.clone()));
-        let saved_current_ret = std::mem::replace(&mut self.current_ret, None);
+        let saved_current_lambda = self.current_lambda.replace(task.name.clone());
+        let saved_current_ret = self.current_ret.take();
         let saved_param_index = std::mem::take(&mut self.param_index);
         let saved_current_method = self.current_method.clone();
         let saved_this_type = self.this_type.clone();
@@ -8816,21 +8819,17 @@ impl Checker {
 
         let res = self.check_task(&mut task);
 
-        if let Some(inferred_ret) = self.current_ret.as_ref() {
-            if !inferred_ret.unknown() {
-                task.ret = inferred_ret.clone();
-            }
+        if let Some(inferred_ret) = self.current_ret.as_ref()
+            && !inferred_ret.unknown()
+        {
+            task.ret = inferred_ret.clone();
         }
-        if task.ret.unknown() {
-            if let Some(Stmt { kind: StmtKind::Send(values), .. }) = task.body.first() {
-                if let Some(val) = values.first() {
-                    if let Some(ty) = &val.ty {
-                        if !ty.unknown() {
-                            task.ret = ty.clone();
-                        }
-                    }
-                }
-            }
+        if task.ret.unknown()
+            && let Some(Stmt { kind: StmtKind::Send(values), .. }) = task.body.first()
+            && let Some(ty) = values.first().and_then(|val| val.ty.as_ref())
+            && !ty.unknown()
+        {
+            task.ret = ty.clone();
         }
 
         self.scopes = saved_scopes;
@@ -8849,6 +8848,8 @@ impl Checker {
         self.loop_name = saved_loop_name;
         self.stepping = saved_stepping;
 
+        // Told about once, even when its body is wrong.
+        self.inferred_shortcut_lambdas.insert(name.to_string());
         res?;
 
         if let Some(info) = self.tasks.get_mut(name) {

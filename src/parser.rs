@@ -4270,76 +4270,7 @@ impl Parser {
                 tok => line_tokens.push(tok),
             }
         }
-        // Nothing after the arrow: the body is on the lines after the header.
-        if line_tokens.is_empty() {
-            return true;
-        }
-        if line_tokens.iter().any(|tok| matches!(tok, Token::Send | Token::Fi)) {
-            return true;
-        }
-        let is_type_ident = |name: &str| {
-            matches!(
-                name,
-                "int" | "int8" | "int16" | "int32" | "int64" | "int512" | "Int512"
-                    | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
-                    | "float" | "float32" | "float64"
-                    | "bool" | "char" | "unit" | "text" | "nothing" | "region"
-            ) || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
-        };
-        let first_after_arrow = line_tokens.first();
-        let is_bracket_type = matches!(first_after_arrow, Some(Token::LBracket))
-            && line_tokens.get(1).is_some_and(|tok| {
-                matches!(tok, Token::Ident(name) if is_type_ident(name))
-                    || matches!(tok, Token::LBracket)
-            });
-        let is_type_start = is_bracket_type
-            || matches!(first_after_arrow, Some(Token::Maybe))
-            || matches!(first_after_arrow, Some(Token::Ident(name)) if is_type_ident(name));
-
-        if is_type_start {
-            let is_call = matches!(first_after_arrow, Some(Token::Ident(_)))
-                && line_tokens.get(1).copied() == Some(&Token::LParen);
-            if is_call {
-                return false;
-            }
-            let has_expr_op = line_tokens.iter().any(|tok| {
-                matches!(
-                    tok,
-                    Token::Plus
-                        | Token::Minus
-                        | Token::Star
-                        | Token::Slash
-                        | Token::Percent
-                        | Token::Assign
-                        | Token::Eq
-                        | Token::Ne
-                        | Token::Lt
-                        | Token::Gt
-                        | Token::Le
-                        | Token::Ge
-                        | Token::Pipe(_)
-                        | Token::Dot
-                )
-            });
-            let has_lit = !is_bracket_type
-                && line_tokens.iter().any(|tok| {
-                    matches!(
-                        tok,
-                        Token::Int(_)
-                            | Token::Float(_)
-                            | Token::Text(_)
-                            | Token::Interpolated(_)
-                            | Token::Char(_)
-                            | Token::True
-                            | Token::False
-                            | Token::None
-                    )
-                });
-            if !has_expr_op && !has_lit {
-                return true;
-            }
-        }
-        false
+        empty_lambda_has_results(&line_tokens)
     }
 
     /// Whether the cursor, at `(`, starts a shortcut lambda:
@@ -4370,7 +4301,7 @@ impl Parser {
         }
         let (Some(_arrow), Some(rparen)) = (arrow_at, rparen_at) else { return false };
         // Verify all tokens inside `(...)` are comma-separated idents or underscores
-        for token in &self.tokens[self.pos + 1..rparen] {
+        for token in self.tokens.get(self.pos + 1..rparen).unwrap_or_default() {
             if !matches!(token, Token::Ident(_) | Token::Underscore | Token::Comma) {
                 return false;
             }
@@ -4534,6 +4465,7 @@ impl Parser {
 
     /// Makes the lambda at `span` a task of the file, and gives the value
     /// naming it.
+    #[allow(clippy::too_many_arguments)]
     fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>, shortcut: bool) -> Expr {
         self.lambda_count += 1;
         let name = lambda_name(self.lambda_count);
@@ -5572,6 +5504,82 @@ fn nests(tokens: &impl LineTokens, p: usize, depth: &mut usize, blocks: &mut usi
     true
 }
 
+/// Whether `() ->` followed by the tokens `line` (the rest of its line) is a
+/// full lambda's header, its result type then its body, rather than a
+/// shortcut lambda's value, as in `() -> 42`. Studio reads it so too.
+pub fn empty_lambda_has_results(line: &[&Token]) -> bool {
+    // Nothing after the arrow: the body is on the lines after the header.
+    if line.is_empty() {
+        return true;
+    }
+    if line.iter().any(|tok| matches!(tok, Token::Send | Token::Fi)) {
+        return true;
+    }
+    let is_type_ident = |name: &str| {
+        matches!(
+            name,
+            "int" | "int8" | "int16" | "int32" | "int64" | "int512" | "Int512"
+                | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
+                | "float" | "float32" | "float64"
+                | "bool" | "char" | "unit" | "text" | "nothing" | "region"
+        ) || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+    };
+    let first_after_arrow = line.first();
+    let is_bracket_type = matches!(first_after_arrow, Some(Token::LBracket))
+        && line.get(1).is_some_and(|tok| {
+            matches!(tok, Token::Ident(name) if is_type_ident(name))
+                || matches!(tok, Token::LBracket)
+        });
+    let is_type_start = is_bracket_type
+        || matches!(first_after_arrow, Some(Token::Maybe))
+        || matches!(first_after_arrow, Some(Token::Ident(name)) if is_type_ident(name));
+
+    if is_type_start {
+        let is_call = matches!(first_after_arrow, Some(Token::Ident(_)))
+            && line.get(1).copied() == Some(&Token::LParen);
+        if is_call {
+            return false;
+        }
+        let has_expr_op = line.iter().any(|tok| {
+            matches!(
+                tok,
+                Token::Plus
+                    | Token::Minus
+                    | Token::Star
+                    | Token::Slash
+                    | Token::Percent
+                    | Token::Assign
+                    | Token::Eq
+                    | Token::Ne
+                    | Token::Lt
+                    | Token::Gt
+                    | Token::Le
+                    | Token::Ge
+                    | Token::Pipe(_)
+                    | Token::Dot
+            )
+        });
+        let has_lit = !is_bracket_type
+            && line.iter().any(|tok| {
+                matches!(
+                    tok,
+                    Token::Int(_)
+                        | Token::Float(_)
+                        | Token::Text(_)
+                        | Token::Interpolated(_)
+                        | Token::Char(_)
+                        | Token::True
+                        | Token::False
+                        | Token::None
+                )
+            });
+        if !has_expr_op && !has_lit {
+            return true;
+        }
+    }
+    false
+}
+
 /// Whether the `(` at `p` starts a lambda, as the parser tells one (see
 /// `Parser::at_lambda`): it takes nothing or starts with a parameter, its
 /// parentheses close on their line, and `->` follows them. One in a type,
@@ -5593,7 +5601,14 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
             Some(Token::RParen | Token::RBracket) => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
-                    return tokens.token_at(q) == Some(&Token::RParen) && tokens.token_at(q + 1) == Some(&Token::Arrow);
+                    let arrow = tokens.token_at(q) == Some(&Token::RParen) && tokens.token_at(q + 1) == Some(&Token::Arrow);
+                    if !arrow || next != Some(&Token::RParen) {
+                        return arrow;
+                    }
+                    // `() -> 42` is a shortcut lambda, which opens no block. A
+                    // comment, which Studio gives no token, ends the line.
+                    let line: Vec<&Token> = (q + 2..).map_while(|at| tokens.token_at(at)).take_while(|token| !matches!(token, Token::Newline | Token::Eof)).collect();
+                    return empty_lambda_has_results(&line);
                 }
             }
             Some(Token::Newline | Token::Eof) => return false,

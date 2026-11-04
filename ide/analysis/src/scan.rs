@@ -658,6 +658,8 @@ impl<'a> Tokens<'a> {
         let mut q = p;
         loop {
             match self.token(q) {
+                // The file ends before the list does, as a half-typed one may.
+                Some(Token::Eof) | None => return false,
                 Some(Token::LParen | Token::LBracket | Token::Lt) => depth += 1,
                 Some(Token::RParen | Token::RBracket | Token::Gt) if depth > 0 => depth -= 1,
                 Some(Token::Ident(_) | Token::Dot | Token::Caret | Token::Maybe | Token::AtSign | Token::Tilde | Token::Hash | Token::Int(_) | Token::Ellipsis | Token::Arrow | Token::Region) => {}
@@ -700,6 +702,51 @@ impl<'a> Tokens<'a> {
     /// Whether position `p` is inside what a lambda keeps, `[flex& count, @r]`.
     pub(crate) fn in_kept_list(&self, p: usize) -> bool {
         (0..p).rev().find(|&q| !self.kept_part(q)).is_some_and(|open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open).is_some_and(|close| close > p))
+    }
+
+    /// The `->` of a shortcut lambda whose parameters start at position `p`,
+    /// as the parser reads one: `x -> x * 2`, `_ -> 0`, `(a, b) -> a + b`, or
+    /// `() -> 42` where no result type follows the arrow (see
+    /// `vela::parser::empty_lambda_has_results`). Only where a value goes.
+    pub(crate) fn shortcut_lambda(&self, p: usize) -> Option<usize> {
+        match self.token(p)? {
+            Token::Ident(_) | Token::Underscore => (self.token(p + 1) == Some(&Token::Arrow)).then_some(p + 1),
+            // A call's or a header's parentheses follow a name.
+            Token::LParen if self.kept_open(p).is_none() && self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New)) => None,
+            Token::LParen => {
+                let close = (p + 1..).find(|&q| !matches!(self.token(q), Some(Token::Ident(_) | Token::Underscore | Token::Comma)))?;
+                if self.token(close) != Some(&Token::RParen) || self.token(close + 1) != Some(&Token::Arrow) {
+                    return None;
+                }
+                if close == p + 1 {
+                    let line: Vec<&Token> = (close + 2..).map_while(|q| self.token(q)).take_while(|token| !matches!(token, Token::Newline | Token::Eof)).collect();
+                    if vela::parser::empty_lambda_has_results(&line) {
+                        return None;
+                    }
+                }
+                Some(close + 1)
+            }
+            _ => None,
+        }
+    }
+
+    /// The end of the body of the shortcut lambda whose `->` is at position
+    /// `arrow`: the byte where a `,`, a closing bracket, or its line ends it, as
+    /// the parser reads its expression, pipes and all.
+    pub(crate) fn shortcut_body_end(&self, arrow: usize) -> usize {
+        let mut depth = 0usize;
+        let mut q = arrow + 1;
+        loop {
+            match self.token(q) {
+                Some(Token::LParen | Token::LBracket | Token::LBrace) => depth += 1,
+                Some(Token::RParen | Token::RBracket | Token::RBrace) if depth > 0 => depth -= 1,
+                Some(Token::Comma | Token::RParen | Token::RBracket | Token::RBrace) if depth == 0 => break,
+                Some(Token::Newline | Token::Eof) | None => break,
+                _ => {}
+            }
+            q += 1;
+        }
+        self.get(q).map_or(self.source.len(), |t| t.range.start)
     }
 
     /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
@@ -1513,6 +1560,9 @@ impl<'a> Classifier<'a> {
         // body starts on their line.
         let mut lambda_params = false;
         let mut lambda_results = false;
+        // The `->` of a shortcut lambda whose parameters are being read, and
+        // the byte its body ends at (see `Tokens::shortcut_lambda`).
+        let mut shortcut: Option<(usize, usize)> = None;
         // In the names of a `fixed` or `flex`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
@@ -1583,6 +1633,7 @@ impl<'a> Classifier<'a> {
                     }
                     lambda_params = false;
                     lambda_results = false;
+                    shortcut = None;
                     in_include = false;
                     in_include_names = false;
                     in_task_header = false;
@@ -1676,6 +1727,22 @@ impl<'a> Classifier<'a> {
                     loop_name = Some((p, self.out.len()));
                     self.push(range, TokenClass::Variable, None);
                 }
+                // `x -> x * 2`, `(a, b) -> a + b`: a shortcut lambda's
+                // parameters, seen in its body only.
+                Token::Ident(_) if !was_type && region_now.is_none() && (shortcut.is_some_and(|(arrow, _)| p < arrow) || tokens.shortcut_lambda(p).is_some()) => {
+                    let arrow = shortcut.map_or(p + 1, |(arrow, _)| arrow);
+                    let end = shortcut.map_or_else(|| tokens.shortcut_body_end(arrow), |(_, end)| end);
+                    shortcut = Some((arrow, end));
+                    let id = self.declare_local(p, SymbolKind::Parameter, None, String::new());
+                    if let Some(param) = self.symbols.get_mut(id) {
+                        param.visible = tokens.range(arrow).end..end;
+                    }
+                    self.push(range, TokenClass::Parameter, Some(id));
+                }
+                Token::Underscore if !was_type && tokens.shortcut_lambda(p).is_some() => {
+                    self.push(range, TokenClass::Keyword, None);
+                    shortcut = Some((p + 1, tokens.shortcut_body_end(p + 1)));
+                }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
                         let symbol = self.region(p, name, in_task_header);
@@ -1729,6 +1796,11 @@ impl<'a> Classifier<'a> {
                 }
                 // `(int) -> int`: a task's type, whose arrow follows the `)` of
                 // the types it takes; any other arrow starts a header's results.
+                // A shortcut lambda's arrow: its body, a value, follows.
+                Token::Arrow if shortcut.is_some_and(|(arrow, _)| arrow == p) => {
+                    self.push(range, TokenClass::Operator, None);
+                    shortcut = None;
+                }
                 Token::Arrow => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = true;
@@ -1788,6 +1860,12 @@ impl<'a> Classifier<'a> {
                 }
                 // `(x: int) -> int … fi`: a lambda, whose header declares its
                 // parameters, which its body sees, as a task's does.
+                Token::LParen if !was_type && tokens.shortcut_lambda(p).is_some() => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    if let Some(arrow) = tokens.shortcut_lambda(p) {
+                        shortcut = Some((arrow, tokens.shortcut_body_end(arrow)));
+                    }
+                }
                 Token::LParen if !was_type && tokens.starts_lambda(p) => {
                     self.push(range, TokenClass::Punctuation, None);
                     self.open(ScopeKind::Other);
@@ -2496,7 +2574,7 @@ impl<'a> Classifier<'a> {
             .rev()
             .flat_map(|scope| scope.variables.iter().rev())
             .copied()
-            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at && (s.intro == Some(LOOP_NAME)) == loop_name))
+            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at && at <= s.visible.end && (s.intro == Some(LOOP_NAME)) == loop_name))
     }
 
     /// The top-level declaration called `name`, if it is one of `kinds`: one of

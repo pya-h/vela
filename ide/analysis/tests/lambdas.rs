@@ -145,3 +145,41 @@ fi
     assert_eq!(Analysis::new(lambda).diagnostics(), Vec::new());
     assert_eq!(Analysis::new(lambda).outline().len(), 2);
 }
+
+#[test]
+fn a_shortcut_lambda_declares_its_parameters_for_its_body_only() {
+    let source = "\
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task main()
+    region r
+    fixed total = 3
+    show(apply(y -> y * total, 2), apply((a) -> a + 1, 2))
+    fixed kept: [@r](int) -> int = [@r] n -> n + total
+    show(kept(1), y)
+fi
+";
+    let index = LineIndex::new(source);
+    let at = |needle: &str| index.utf16_of(source.find(needle).unwrap());
+    let analysis = Analysis::new(source);
+    let tokens = analysis.tokens();
+    let class = |needle: &str| tokens.iter().find(|t| t.from == at(needle)).map(|t| t.class);
+    // The names before the arrow and in the body are its parameters; the body
+    // is a value, not a type.
+    assert_eq!(class("y -> y"), Some(TokenClass::Parameter));
+    assert_eq!(class("y * total"), Some(TokenClass::Parameter));
+    assert_eq!(class("total, 2)"), Some(TokenClass::Variable));
+    assert_eq!(class("a + 1"), Some(TokenClass::Parameter));
+    assert_eq!(class("n + total"), Some(TokenClass::Parameter));
+    let definition = analysis.definition(at("y * total")).expect("a definition");
+    assert_eq!(definition.from, at("y -> y"));
+    // Past the lambda's body the name is gone.
+    assert!(analysis.definition(at("y)\nfi")).is_none());
+    // After the arrow a value goes, so names are offered, not only types.
+    let typing = "task main()\n    fixed total = 3\n    fixed f: (int) -> int = x -> t\nfi\n";
+    let byte = typing.find("-> t\n").unwrap() + 4;
+    let items = Analysis::new(typing).complete(LineIndex::new(typing).utf16_of(byte)).items;
+    assert!(items.iter().any(|item| item.label == "total"), "{:?}", items.iter().map(|item| &item.label).collect::<Vec<_>>());
+}

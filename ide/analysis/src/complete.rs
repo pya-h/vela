@@ -636,7 +636,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
-        (_, Some(Token::Arrow | Token::New)) => true,
+        // A shortcut lambda's body is a value: `x -> x * 2`.
+        (Some(q), Some(Token::Arrow)) => !shortcut_arrow(&k, q),
+        (_, Some(Token::New)) => true,
         // `-> int, int`: another result type follows the comma; so does the
         // next item of a tuple type, `(int, text)`.
         (Some(q), Some(Token::Comma)) => in_result_list(&k, q) || type_paren(&k, q).is_some() || type_angle(&k, q).is_some(),
@@ -877,6 +879,23 @@ fn in_binding_names(k: &Knowledge, q: usize) -> bool {
 /// `[`) is in a type: before it, after any `^`, `maybe`, and `[`, comes `:`
 /// (outside a shape literal), `->`, `new`, `~` after a type, or a module's
 /// name and `.` that are in a type themselves.
+/// Whether the `->` at `q` is a shortcut lambda's, its body a value: after a
+/// parameter's name, `x ->`, or names in parentheses where no type goes,
+/// `(a, b) ->`.
+fn shortcut_arrow(k: &Knowledge, q: usize) -> bool {
+    match q.checked_sub(1).map(|b| (b, k.token(b))) {
+        Some((_, Some(Token::Ident(_) | Token::Underscore))) => true,
+        Some((close, Some(Token::RParen))) => {
+            let mut open = close;
+            while open > 0 && matches!(k.token(open - 1), Some(Token::Ident(_) | Token::Underscore | Token::Comma)) {
+                open -= 1;
+            }
+            open > 0 && open < close && k.token(open - 1) == Some(&Token::LParen) && !starts_type(k, open - 1)
+        }
+        _ => false,
+    }
+}
+
 fn starts_type(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
     while p > 0 && matches!(k.token(p - 1), Some(Token::Caret | Token::Maybe | Token::LBracket)) {
@@ -884,7 +903,8 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     }
     match p.checked_sub(1).map(|b| (b, k.token(b))) {
         Some((b, Some(Token::Colon))) => !unclosed_on_line(k, b, &Token::LBrace, &Token::RBrace),
-        Some((_, Some(Token::Arrow | Token::New))) => true,
+        Some((b, Some(Token::Arrow))) => !shortcut_arrow(k, b),
+        Some((_, Some(Token::New))) => true,
         Some((b, Some(Token::Comma))) => in_result_list(k, b) || type_paren(k, b).is_some(),
         // `(int, text)`: a tuple type's items are types themselves.
         Some((b, Some(Token::LParen))) => starts_type(k, b),

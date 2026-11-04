@@ -1,0 +1,4 @@
+; error: 3:21: unknown variable 'nope'
+task main()
+    fixed k = () -> nope
+fi

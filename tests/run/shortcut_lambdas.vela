@@ -44,6 +44,14 @@ task filter_list<T>(xs: [T]@r, f: (T) -> bool, s: region) -> [T]@s
     <- res
 fi
 
+task sized(f: () -> int8) -> int8
+    <- f()
+fi
+
+task maker() -> () -> unit
+    <- () -> 200
+fi
+
 task main()
     ; 1. Higher-order function arguments
     show(apply(x -> x * 2, 21))
@@ -85,4 +93,8 @@ task main()
     show(evens)
     fixed piped = nums |> map_list(x -> x * 10, r)
     show(piped)
+
+    ; 7. A nullary lambda takes the result the place it goes asks for
+    fixed small: () -> int16 = () -> 300
+    show(sized(() -> 7), " ", small(), " ", maker()())
 fi

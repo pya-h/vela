@@ -359,6 +359,7 @@ finally</pre>
         <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>(@a, P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; one taking a region, then them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task, a shared method, or a method of every value: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
+        <tr><td><code>x -&gt; x * 2</code>, <code>(a, b) -&gt; a + b</code>, <code>() -&gt; 42</code></td><td>a one-line lambda, its types from the place it goes (see <a href="#shortcut-lambdas">One-line lambdas</a>)</td></tr>
         <tr><td><code>[@r](x: int) -&gt; int … fi</code>, <code>[@r](int) -&gt; int</code></td><td>a lambda that keeps a copy of what it uses of the code around it in region <code>r</code>, and its type (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
         <tr><td><code>[flex @r](…) … fi</code>, <code>[bind @r](…) … fi</code></td><td>such a lambda that changes its copies, or only their contents, held in a <code>flex</code> variable and never copied</td></tr>
         <tr><td><code>[flex&amp; count, fixed&amp; big, @r](…) … fi</code></td><td>such a lambda keeping variables themselves, to change or to read in place (or <code>bind&amp; xs</code>, to change their contents), with <code>r</code> declared after them (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
@@ -3057,6 +3058,57 @@ fi</code></pre>
         or nothing; the regions in its header are its own, as a header's are, so
         <code>(t: text@r) -&gt; text@r &lt;- t[0..1] fi</code> takes text of any region. A lambda can't be written inside a
         task or method that takes types yet.
+      </p>
+
+      <h3 id="shortcut-lambdas">One-line lambdas</h3>
+      <p>
+        Where the place a lambda goes already says what it takes and sends, it is written short: its parameters' names,
+        <code>-&gt;</code>, and one expression, its value, with no types, no <code>&lt;-</code> and no <code>fi</code>. One
+        parameter may go without parentheses, <code>x -&gt; x * 2</code>; several, or none, go in them,
+        <code>(a, b) -&gt; a + b</code>, <code>() -&gt; 42</code>; and <code>_</code> names one it doesn't use,
+        <code>_ -&gt; 0</code>, <code>(_, _) -&gt; 1</code>. It is a lambda as any other, a task of the file, so it takes
+        nothing from the code around it, and written after <code>[@r]</code> (or <code>[flex @r]</code>, and the places it
+        keeps) it keeps what it uses, as <a href="#kept-lambdas">below</a>: <code>[@r] x -&gt; x + offset</code>.
+      </p>
+      <pre><code>task apply(f: (int) -&gt; int, x: int) -&gt; int
+    &lt;- f(x)
+fi
+
+task first&lt;T&gt;(xs: [T#3], f: (T) -&gt; bool) -&gt; maybe T
+    each x in xs
+        when f(x)
+            &lt;- x
+        fi
+    fi
+    &lt;- none
+fi
+
+task main()
+    show(apply(x -&gt; x * 2, 21))                   ; 42: f says it takes an int and sends one
+    fixed add: (int, int) -&gt; int = (a, b) -&gt; a + b
+    show(add(3, 4))                               ; 7
+    show(first(["a", "bb", "ccc"], w -&gt; w.len &gt; 1) { "none" })   ; bb: T is text, from the array
+    fixed answer = () -&gt; 42                       ; takes nothing: its type is () -&gt; int
+    show(((x) -&gt; x - 1)(10))                      ; 9: the value given says what x is
+fi</code></pre>
+      <p>
+        <strong>Where its types come from.</strong> The parameter types and the result are those of the task type the
+        place asks for: a task's parameter in a call or a pipe (in a task that takes types, once the other values have
+        said what those types are, so <code>T</code> above is <code>text</code>); a variable written with its type; a
+        shape's field in a literal; a task's <code>&lt;-</code> when the task sends a task; and, for one called where it
+        is written, the values the call gives. Where the place says nothing of its result, the result is the type of the
+        expression. One that takes nothing needs no place at all: <code>fixed answer = () -&gt; 42</code> is a
+        <code>() -&gt; int</code>, and where a place asks for a <code>() -&gt; int8</code> the same lambda sends an
+        <code>int8</code>. Anywhere else, <code>fixed double = x -&gt; x * 2</code> say, nothing says what
+        <code>x</code> is, and the checker says so, asking for a full lambda or a type for the variable; it never guesses.
+      </p>
+      <p>
+        <strong>Where it ends.</strong> Its body is one expression, read as any other, pipes and all: it ends at a
+        <code>,</code> or a closing bracket around it, or with its line. A body that needs statements, or a lambda whose
+        types no place gives, is written in full. <code>() -&gt;</code> followed by a type and a body on the line, as in
+        <code>() -&gt; int &lt;- 42 fi</code>, or by nothing, is a full lambda's header; followed by a value, as in
+        <code>() -&gt; 42</code>, it is a one-line lambda. As every lambda, one can't be written inside a task or method
+        that takes types yet, and one as an item of an array has no place saying its types.
       </p>
 
       <h3 id="kept-lambdas">Lambdas that keep what they use</h3>

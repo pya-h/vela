@@ -1,0 +1,8 @@
+; error: 7:25: 'a' belongs to the code around this lambda, and a lambda takes nothing from it; give 'a' as a parameter, or call a task that takes it; a lambda that keeps what it uses names the region it keeps its copies in, as in '[@r](…)'
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+task main()
+    fixed a = 5
+    show(apply(x -> x + a, 1))
+fi
