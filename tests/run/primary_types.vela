@@ -1,0 +1,47 @@
+; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
+include std/int512 {Int512, zero512, int512}
+
+task main()
+    ; Signed integer types
+    fixed s8: int8 = 127
+    fixed s16: int16 = 32767
+    fixed s32: int32 = 2147483647
+    fixed s64: int64 = 9223372036854775807
+    show(s8, " ", s16, " ", s32, " ", s64)
+
+    ; Unsigned integer types
+    fixed u8: uint8 = 255
+    fixed u16: uint16 = 65535
+    fixed u32: uint32 = 4294967295
+    fixed u64: uint64 = 9223372036854775807
+    show(u8, " ", u16, " ", u32, " ", u64)
+
+    ; Aliases
+    fixed d_int: int = 1000
+    fixed d_unit: unit = 200
+    fixed d_uint: uint = 50000
+    fixed d_float: float = 3.14
+    show(d_int, " ", d_unit, " ", d_uint, " ", d_float)
+
+    ; Floats
+    fixed f32: float32 = 1.5
+    fixed f64: float64 = 2.5
+    show(f32, " ", f64)
+
+    ; Literal adaptation in arithmetic
+    fixed sum_s16 = s16 - 1000
+    fixed sum_u32 = u32 - 100
+    show(sum_s16, " ", sum_u32)
+
+    ; Casts between types
+    fixed cast_s32 = int32(s8)
+    fixed cast_u64 = uint64(u16)
+    fixed cast_f64 = float64(s32)
+    fixed cast_s8 = int8(42)
+    show(cast_s32, " ", cast_u64, " ", cast_f64, " ", cast_s8)
+
+    ; BigInt Int512 from std/int512
+    fixed b0 = zero512()
+    fixed b1 = int512(123456789)
+    show(b0.limbs[0], " ", b1.limbs[0])
+fi

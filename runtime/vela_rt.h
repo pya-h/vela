@@ -2238,6 +2238,38 @@ static inline vela__rt__int512 vela__rt__u512_neg(vela__rt__int512 a) {
     return res;
 }
 
+// The low 512 bits of an unsigned product, with no overflow check: text
+// parsing bounds its values first (see `vela__rt__int512_of_text`), where a
+// checked multiply would trap on the sign bit of a value still in range.
+static inline void vela__rt__u512_mul(vela__rt__int512 a, vela__rt__int512 b, vela__rt__int512* out) {
+    uint64_t prod[16] = {0};
+    for (int i = 0; i < 8; i++) {
+        if (a.limbs[i] == 0) continue;
+        uint64_t carry = 0;
+        for (int j = 0; j < 8; j++) {
+#if defined(__SIZEOF_INT128__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+            vela__rt__u128 cur = (vela__rt__u128)a.limbs[i] * b.limbs[j] + prod[i + j] + carry;
+            prod[i + j] = (uint64_t)cur;
+            carry = (uint64_t)(cur >> 64);
+#else
+            uint64_t u_lo = a.limbs[i] & 0xFFFFFFFFULL, u_hi = a.limbs[i] >> 32;
+            uint64_t v_lo = b.limbs[j] & 0xFFFFFFFFULL, v_hi = b.limbs[j] >> 32;
+            uint64_t p0 = u_lo * v_lo;
+            uint64_t p1 = u_lo * v_hi;
+            uint64_t p2 = u_hi * v_lo;
+            uint64_t p3 = u_hi * v_hi;
+            uint64_t lo_sum = (prod[i + j] & 0xFFFFFFFFULL) + (p0 & 0xFFFFFFFFULL) + (carry & 0xFFFFFFFFULL);
+            uint64_t mid_sum = (lo_sum >> 32) + (prod[i + j] >> 32) + (p0 >> 32) + (p1 & 0xFFFFFFFFULL) + (p2 & 0xFFFFFFFFULL) + (carry >> 32);
+            uint64_t hi_sum = (mid_sum >> 32) + (p1 >> 32) + (p2 >> 32) + p3;
+            prod[i + j] = (lo_sum & 0xFFFFFFFFULL) | (mid_sum << 32);
+            carry = hi_sum;
+#endif
+        }
+        prod[i + 8] += carry;
+    }
+    for (int i = 0; i < 8; i++) out->limbs[i] = prod[i];
+}
+
 static inline vela__rt__int512 vela__rt__int512_add_impl(vela__rt__int512 a, vela__rt__int512 b) {
     vela__rt__int512 c;
     vela__rt__u512_add(a, b, &c);
@@ -2373,14 +2405,29 @@ static inline void vela__rt__u512_divrem(vela__rt__int512 u, vela__rt__int512 v,
             quot.limbs[i] = (uint64_t)(cur / div);
             rem = (uint64_t)(cur % div);
 #else
+            // Without 128-bit integers, divide the 96-bit (rem, limb) by div
+            // 32 quotient bits at a time: rem << 32 alone would lose bits when
+            // div is large, so the running remainder is shifted in single bits.
             uint64_t hi = u.limbs[i] >> 32;
             uint64_t lo = u.limbs[i] & 0xFFFFFFFFULL;
-            uint64_t c1 = ((uint64_t)rem << 32) | hi;
-            uint64_t q1 = c1 / div;
-            rem = c1 % div;
-            uint64_t c2 = ((uint64_t)rem << 32) | lo;
-            uint64_t q2 = c2 / div;
-            rem = c2 % div;
+            uint64_t q1 = 0;
+            for (int k = 31; k >= 0; k--) {
+                uint64_t top = rem >> 63;
+                rem = (rem << 1) | ((hi >> k) & 1);
+                if (top || rem >= div) {
+                    rem -= div;
+                    q1 |= 1ULL << k;
+                }
+            }
+            uint64_t q2 = 0;
+            for (int k = 31; k >= 0; k--) {
+                uint64_t top = rem >> 63;
+                rem = (rem << 1) | ((lo >> k) & 1);
+                if (top || rem >= div) {
+                    rem -= div;
+                    q2 |= 1ULL << k;
+                }
+            }
             quot.limbs[i] = (q1 << 32) | q2;
 #endif
         }
@@ -2578,7 +2625,7 @@ static inline int vela__rt__int512_of_text(const char* bytes, size_t len, vela__
         if (vela__rt__u512_cmp(mag, max_mag) > 0) {
             return 2; // TOO_LARGE
         }
-        mag = vela__rt__int512_mul_impl(mag, vbase);
+        vela__rt__u512_mul(mag, vbase, &mag);
         vela__rt__u512_add(mag, vdigit, &mag);
     }
 

@@ -1,0 +1,158 @@
+  1 | ; Full functional test suite for 512-bit signed integers in std/int512.
+    | comment:; Full functional test suite for 512-bit signed integers in std/int512.
+  2 | include std/int512 {Int512, int512, int512_from_uint64, int512_parse, zero512}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:,  task:int512_from_uint64  punctuation:,  task:int512_parse  punctuation:,  task:zero512  punctuation:}
+  4 | task parse_check(s: text, into: region) -> text@into
+    | keyword:task  task:parse_check  punctuation:(  parameter:s  punctuation::  type-builtin:text  punctuation:,  region:into  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:into
+  5 |     match int512_parse(s)
+    | keyword:match  task:int512_parse  punctuation:(  parameter:s  punctuation:)
+  6 |     case {val}
+    | keyword:case  punctuation:{  variable:val  punctuation:}
+  7 |         <- val.str(into)
+    | keyword:<-  variable:val  punctuation:.  method:str  punctuation:(  region:into  punctuation:)
+  8 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+  9 |         match e
+    | keyword:match  variable:e
+ 10 |         case NotANumber
+    | keyword:case  variant:NotANumber
+ 11 |             <- "NaN"
+    | keyword:<-  string:"NaN"
+ 12 |         case TooLarge
+    | keyword:case  variant:TooLarge
+ 13 |             <- "TooLarge"
+    | keyword:<-  string:"TooLarge"
+ 14 |         fi
+    | keyword:fi
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- "Unknown"
+    | keyword:<-  string:"Unknown"
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     region r
+    | keyword:region  region:r
+ 22 |     ; 1. Constructors and zero/one constants
+    | comment:; 1. Constructors and zero/one constants
+ 23 |     fixed z = Int512.zero()
+    | keyword:fixed  variable:z  operator:=  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)
+ 24 |     fixed o = Int512.one()
+    | keyword:fixed  variable:o  operator:=  type:Int512  punctuation:.  method:one  punctuation:(  punctuation:)
+ 25 |     fixed z2 = zero512()
+    | keyword:fixed  variable:z2  operator:=  task:zero512  punctuation:(  punctuation:)
+ 26 |     show("zero: ", z.str(r), " one: ", o.str(r), " similar: ", z ~= z2, " cmp: ", z.cmp(z2) == 0)
+    | builtin-fn:show  punctuation:(  string:"zero: "  punctuation:,  variable:z  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" one: "  punctuation:,  variable:o  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" similar: "  punctuation:,  variable:z  operator:~=  variable:z2  punctuation:,  string:" cmp: "  punctuation:,  variable:z  punctuation:.  method:cmp  punctuation:(  variable:z2  punctuation:)  operator:==  number:0  punctuation:)
+ 28 |     ; 2. Primitive int conversions
+    | comment:; 2. Primitive int conversions
+ 29 |     fixed pos = int512(1234567890123)
+    | keyword:fixed  variable:pos  operator:=  task:int512  punctuation:(  number:1234567890123  punctuation:)
+ 30 |     fixed neg = int512(-987654321098)
+    | keyword:fixed  variable:neg  operator:=  task:int512  punctuation:(  operator:-  number:987654321098  punctuation:)
+ 31 |     show("pos: ", pos.str(r), " to_i64: ", pos.to_int64())
+    | builtin-fn:show  punctuation:(  string:"pos: "  punctuation:,  variable:pos  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" to_i64: "  punctuation:,  variable:pos  punctuation:.  method:to_int64  punctuation:(  punctuation:)  punctuation:)
+ 32 |     show("neg: ", neg.str(r), " to_i64: ", neg.to_int64())
+    | builtin-fn:show  punctuation:(  string:"neg: "  punctuation:,  variable:neg  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" to_i64: "  punctuation:,  variable:neg  punctuation:.  method:to_int64  punctuation:(  punctuation:)  punctuation:)
+ 34 |     fixed u_max: uint64 = uint64(9223372036854775807) + 1 + 9223372036854775807
+    | keyword:fixed  variable:u_max  punctuation::  type-builtin:uint64  operator:=  type-builtin:uint64  punctuation:(  number:9223372036854775807  punctuation:)  operator:+  number:1  operator:+  number:9223372036854775807
+ 35 |     fixed from_u = int512_from_uint64(u_max)
+    | keyword:fixed  variable:from_u  operator:=  task:int512_from_uint64  punctuation:(  variable:u_max  punctuation:)
+ 36 |     show("from_u64_max: ", from_u.str(r), " to_u64: ", from_u.to_uint64() == u_max)
+    | builtin-fn:show  punctuation:(  string:"from_u64_max: "  punctuation:,  variable:from_u  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" to_u64: "  punctuation:,  variable:from_u  punctuation:.  method:to_uint64  punctuation:(  punctuation:)  operator:==  variable:u_max  punctuation:)
+ 38 |     ; 3. Arithmetic operations
+    | comment:; 3. Arithmetic operations
+ 39 |     fixed a = int512(1000)
+    | keyword:fixed  variable:a  operator:=  task:int512  punctuation:(  number:1000  punctuation:)
+ 40 |     fixed b = int512(300)
+    | keyword:fixed  variable:b  operator:=  task:int512  punctuation:(  number:300  punctuation:)
+ 41 |     fixed neg_b = int512(-300)
+    | keyword:fixed  variable:neg_b  operator:=  task:int512  punctuation:(  operator:-  number:300  punctuation:)
+ 43 |     show("add: ", a.plus(b).str(r), " ", a.plus(neg_b).str(r))
+    | builtin-fn:show  punctuation:(  string:"add: "  punctuation:,  variable:a  punctuation:.  method:plus  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:plus  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 44 |     show("sub: ", a.minus(b).str(r), " ", b.minus(a).str(r))
+    | builtin-fn:show  punctuation:(  string:"sub: "  punctuation:,  variable:a  punctuation:.  method:minus  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  method:minus  punctuation:(  variable:a  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 45 |     show("mul: ", a.times(b).str(r), " ", a.times(neg_b).str(r))
+    | builtin-fn:show  punctuation:(  string:"mul: "  punctuation:,  variable:a  punctuation:.  method:times  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:times  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 46 |     show("div: ", a.div(b).str(r), " ", a.div(neg_b).str(r), " ", a.neg().div(b).str(r), " ", a.neg().div(neg_b).str(r))
+    | builtin-fn:show  punctuation:(  string:"div: "  punctuation:,  variable:a  punctuation:.  method:div  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:div  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:div  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:div  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 47 |     show("rem: ", a.rem(b).str(r), " ", a.rem(neg_b).str(r), " ", a.neg().rem(b).str(r), " ", a.neg().rem(neg_b).str(r))
+    | builtin-fn:show  punctuation:(  string:"rem: "  punctuation:,  variable:a  punctuation:.  method:rem  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:rem  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:rem  punctuation:(  variable:b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:rem  punctuation:(  variable:neg_b  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 49 |     show("neg: ", a.neg().str(r), " ", neg.neg().str(r))
+    | builtin-fn:show  punctuation:(  string:"neg: "  punctuation:,  variable:a  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:neg  punctuation:.  method:neg  punctuation:(  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 50 |     show("abs: ", a.abs().str(r), " ", neg.abs().str(r))
+    | builtin-fn:show  punctuation:(  string:"abs: "  punctuation:,  variable:a  punctuation:.  method:abs  punctuation:(  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:neg  punctuation:.  method:abs  punctuation:(  punctuation:)  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 52 |     ; 4. Comparisons and relations
+    | comment:; 4. Comparisons and relations
+ 53 |     show("cmp: ", a.cmp(b), " ", b.cmp(a), " ", a.cmp(a))
+    | builtin-fn:show  punctuation:(  string:"cmp: "  punctuation:,  variable:a  punctuation:.  method:cmp  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  method:cmp  punctuation:(  variable:a  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:cmp  punctuation:(  variable:a  punctuation:)  punctuation:)
+ 54 |     show("less: ", b.less(a), " ", a.less(b), " ", a.less(a))
+    | builtin-fn:show  punctuation:(  string:"less: "  punctuation:,  variable:b  punctuation:.  method:less  punctuation:(  variable:a  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:less  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:.  method:less  punctuation:(  variable:a  punctuation:)  punctuation:)
+ 55 |     show("eq: ", a == a, " ", a == b, " ", a != b)
+    | builtin-fn:show  punctuation:(  string:"eq: "  punctuation:,  variable:a  operator:==  variable:a  punctuation:,  string:" "  punctuation:,  variable:a  operator:==  variable:b  punctuation:,  string:" "  punctuation:,  variable:a  operator:!=  variable:b  punctuation:)
+ 57 |     ; 5. Big multi-limb multiplication & division
+    | comment:; 5. Big multi-limb multiplication & division
+ 58 |     fixed big1 = int512_parse("1000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:big1  operator:=  task:int512_parse  punctuation:(  string:"1000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 59 |     fixed big2 = int512_parse("2000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:big2  operator:=  task:int512_parse  punctuation:(  string:"2000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 60 |     fixed big_prod = big1.times(big2)
+    | keyword:fixed  variable:big_prod  operator:=  variable:big1  punctuation:.  method:times  punctuation:(  variable:big2  punctuation:)
+ 61 |     show("big_prod: ", big_prod.str(r))
+    | builtin-fn:show  punctuation:(  string:"big_prod: "  punctuation:,  variable:big_prod  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 62 |     fixed big_quot = big_prod.div(big1)
+    | keyword:fixed  variable:big_quot  operator:=  variable:big_prod  punctuation:.  method:div  punctuation:(  variable:big1  punctuation:)
+ 63 |     fixed big_rem = big_prod.rem(big1)
+    | keyword:fixed  variable:big_rem  operator:=  variable:big_prod  punctuation:.  method:rem  punctuation:(  variable:big1  punctuation:)
+ 64 |     show("big_quot: ", big_quot.str(r), " big_rem: ", big_rem.str(r))
+    | builtin-fn:show  punctuation:(  string:"big_quot: "  punctuation:,  variable:big_quot  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" big_rem: "  punctuation:,  variable:big_rem  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 66 |     ; 6. String interpolation and parsing
+    | comment:; 6. String interpolation and parsing
+ 67 |     show("{pos} and {neg}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:pos  string:} and {  variable:neg  string:}"  keyword:at  region:r  punctuation:)
+ 68 |     show("parse dec: ", parse_check("9876543210123456789", r))
+    | builtin-fn:show  punctuation:(  string:"parse dec: "  punctuation:,  task:parse_check  punctuation:(  string:"9876543210123456789"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 69 |     show("parse neg: ", parse_check("-9876543210123456789", r))
+    | builtin-fn:show  punctuation:(  string:"parse neg: "  punctuation:,  task:parse_check  punctuation:(  string:"-9876543210123456789"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 70 |     show("parse hex: ", parse_check("0xDEADBEEFCAFE", r))
+    | builtin-fn:show  punctuation:(  string:"parse hex: "  punctuation:,  task:parse_check  punctuation:(  string:"0xDEADBEEFCAFE"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 71 |     show("parse bin: ", parse_check("0b110101", r))
+    | builtin-fn:show  punctuation:(  string:"parse bin: "  punctuation:,  task:parse_check  punctuation:(  string:"0b110101"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 72 |     show("parse oct: ", parse_check("0o777", r))
+    | builtin-fn:show  punctuation:(  string:"parse oct: "  punctuation:,  task:parse_check  punctuation:(  string:"0o777"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 73 |     show("parse nan: ", parse_check("123abc456", r))
+    | builtin-fn:show  punctuation:(  string:"parse nan: "  punctuation:,  task:parse_check  punctuation:(  string:"123abc456"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 74 |     show("parse empty: ", parse_check("", r))
+    | builtin-fn:show  punctuation:(  string:"parse empty: "  punctuation:,  task:parse_check  punctuation:(  string:""  punctuation:,  region:r  punctuation:)  punctuation:)
+ 76 |     ; 7. Bound values (min_value and max_value)
+    | comment:; 7. Bound values (min_value and max_value)
+ 77 |     fixed min_v = Int512.min_value()
+    | keyword:fixed  variable:min_v  operator:=  type:Int512  punctuation:.  method:min_value  punctuation:(  punctuation:)
+ 78 |     fixed max_v = Int512.max_value()
+    | keyword:fixed  variable:max_v  operator:=  type:Int512  punctuation:.  method:max_value  punctuation:(  punctuation:)
+ 79 |     show("min < max: ", min_v.less(max_v), " max < min: ", max_v.less(min_v))
+    | builtin-fn:show  punctuation:(  string:"min < max: "  punctuation:,  variable:min_v  punctuation:.  method:less  punctuation:(  variable:max_v  punctuation:)  punctuation:,  string:" max < min: "  punctuation:,  variable:max_v  punctuation:.  method:less  punctuation:(  variable:min_v  punctuation:)  punctuation:)
+ 80 |     show("min cmp 0: ", min_v.cmp(z), " max cmp 0: ", max_v.cmp(z))
+    | builtin-fn:show  punctuation:(  string:"min cmp 0: "  punctuation:,  variable:min_v  punctuation:.  method:cmp  punctuation:(  variable:z  punctuation:)  punctuation:,  string:" max cmp 0: "  punctuation:,  variable:max_v  punctuation:.  method:cmp  punctuation:(  variable:z  punctuation:)  punctuation:)
+ 81 |     show("max + (-1): ", max_v.plus(int512(-1)).less(max_v))
+    | builtin-fn:show  punctuation:(  string:"max + (-1): "  punctuation:,  variable:max_v  punctuation:.  method:plus  punctuation:(  task:int512  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)  punctuation:.  method:less  punctuation:(  variable:max_v  punctuation:)  punctuation:)
+ 82 |     show("min + 1: ", min_v.plus(Int512.one()).less(min_v) == false)
+    | builtin-fn:show  punctuation:(  string:"min + 1: "  punctuation:,  variable:min_v  punctuation:.  method:plus  punctuation:(  type:Int512  punctuation:.  method:one  punctuation:(  punctuation:)  punctuation:)  punctuation:.  method:less  punctuation:(  variable:min_v  punctuation:)  operator:==  keyword:false  punctuation:)
+ 84 |     ; 8. Parsing at the bounds: the extreme values in every base, and past them
+    | comment:; 8. Parsing at the bounds: the extreme values in every base, and past them
+ 85 |     show("min dec: ", parse_check("-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048", r))
+    | builtin-fn:show  punctuation:(  string:"min dec: "  punctuation:,  task:parse_check  punctuation:(  string:"-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042048"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 86 |     show("min hex: ", parse_check("-0x80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", r))
+    | builtin-fn:show  punctuation:(  string:"min hex: "  punctuation:,  task:parse_check  punctuation:(  string:"-0x80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 87 |     show("min bin: ", parse_check("-0b10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", r))
+    | builtin-fn:show  punctuation:(  string:"min bin: "  punctuation:,  task:parse_check  punctuation:(  string:"-0b10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 88 |     show("min oct: ", parse_check("-0o200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", r))
+    | builtin-fn:show  punctuation:(  string:"min oct: "  punctuation:,  task:parse_check  punctuation:(  string:"-0o200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 89 |     show("max dec: ", parse_check("6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042047", r))
+    | builtin-fn:show  punctuation:(  string:"max dec: "  punctuation:,  task:parse_check  punctuation:(  string:"6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042047"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 90 |     show("over bin: ", parse_check("0b100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000", r))
+    | builtin-fn:show  punctuation:(  string:"over bin: "  punctuation:,  task:parse_check  punctuation:(  string:"0b100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 91 |     show("under dec: ", parse_check("-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042049", r))
+    | builtin-fn:show  punctuation:(  string:"under dec: "  punctuation:,  task:parse_check  punctuation:(  string:"-6703903964971298549787012499102923063739682910296196688861780721860882015036773488400937149083451713845015929093243025426876941405973284973216824503042049"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 92 | fi
+    | keyword:fi

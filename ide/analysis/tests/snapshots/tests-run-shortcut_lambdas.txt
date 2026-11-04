@@ -1,0 +1,150 @@
+  1 | ; Tests for shortcut lambdas:
+    | comment:; Tests for shortcut lambdas:
+  2 | ; Bare parameter: x -> x * 2
+    | comment:; Bare parameter: x -> x * 2
+  3 | ; Parenthesized: (x) -> x + 5, (a, b) -> a + b, () -> 42
+    | comment:; Parenthesized: (x) -> x + 5, (a, b) -> a + b, () -> 42
+  4 | ; Discard parameter: _ -> 99, (_, _) -> 100
+    | comment:; Discard parameter: _ -> 99, (_, _) -> 100
+  5 | ; Closures: [@r] x -> x + offset, [@r](x) -> x + offset, [@r]() -> offset
+    | comment:; Closures: [@r] x -> x + offset, [@r](x) -> x + offset, [@r]() -> offset
+  6 | ; Direct invocation: ((x) -> x * 2)(21)
+    | comment:; Direct invocation: ((x) -> x * 2)(21)
+  7 | ; Generic higher-order tasks and pipes
+    | comment:; Generic higher-order tasks and pipes
+  9 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | task binary(f: (int, int) -> int, a: int, b: int) -> int
+    | keyword:task  task:binary  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- f(a, b)
+    | keyword:<-  parameter:f  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
+ 15 | fi
+    | keyword:fi
+ 17 | task supplier(f: () -> int) -> int
+    | keyword:task  task:supplier  punctuation:(  parameter:f  punctuation::  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 18 |     <- f()
+    | keyword:<-  parameter:f  punctuation:(  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task ignore_one(f: (int) -> int, x: int) -> int
+    | keyword:task  task:ignore_one  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 23 | fi
+    | keyword:fi
+ 25 | task ignore_two(f: (int, int) -> int, a: int, b: int) -> int
+    | keyword:task  task:ignore_two  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 26 |     <- f(a, b)
+    | keyword:<-  parameter:f  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
+ 27 | fi
+    | keyword:fi
+ 29 | task map_list<T, R>(xs: [T]@r, f: (T) -> R, s: region) -> [R]@s
+    | keyword:task  task:map_list  punctuation:<  type:T  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:R  punctuation:,  region:s  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type:R  punctuation:]  operator:@  region:s
+ 30 |     flex res: [R]@s = new [R]() at s
+    | keyword:flex  variable:res  punctuation::  punctuation:[  type:R  punctuation:]  operator:@  region:s  operator:=  keyword:new  punctuation:[  type:R  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+ 31 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 32 |         res.add(f(x))
+    | variable:res  punctuation:.  field:add  punctuation:(  parameter:f  punctuation:(  variable:x  punctuation:)  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 |     <- res
+    | keyword:<-  variable:res
+ 35 | fi
+    | keyword:fi
+ 37 | task filter_list<T>(xs: [T]@r, f: (T) -> bool, s: region) -> [T]@s
+    | keyword:task  task:filter_list  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:,  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type-builtin:bool  punctuation:,  region:s  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:s
+ 38 |     flex res: [T]@s = new [T]() at s
+    | keyword:flex  variable:res  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:s  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+ 39 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 40 |         when f(x)
+    | keyword:when  parameter:f  punctuation:(  variable:x  punctuation:)
+ 41 |             res.add(x)
+    | variable:res  punctuation:.  field:add  punctuation:(  variable:x  punctuation:)
+ 42 |         fi
+    | keyword:fi
+ 43 |     fi
+    | keyword:fi
+ 44 |     <- res
+    | keyword:<-  variable:res
+ 45 | fi
+    | keyword:fi
+ 47 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 48 |     ; 1. Higher-order function arguments
+    | comment:; 1. Higher-order function arguments
+ 49 |     show(apply(x -> x * 2, 21))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  variable:x  operator:->  type:x  operator:*  number:2  punctuation:,  number:21  punctuation:)  punctuation:)
+ 50 |     show(apply((x) -> x + 5, 20))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  punctuation:(  variable:x  punctuation:)  operator:->  type:x  operator:+  number:5  punctuation:,  number:20  punctuation:)  punctuation:)
+ 51 |     show(binary((a, b) -> a + b, 10, 20))
+    | builtin-fn:show  punctuation:(  task:binary  punctuation:(  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:->  type:a  operator:+  variable:b  punctuation:,  number:10  punctuation:,  number:20  punctuation:)  punctuation:)
+ 52 |     show(supplier(() -> 42))
+    | builtin-fn:show  punctuation:(  task:supplier  punctuation:(  punctuation:(  punctuation:)  operator:->  number:42  punctuation:)  punctuation:)
+ 53 |     show(ignore_one(_ -> 99, 123))
+    | builtin-fn:show  punctuation:(  task:ignore_one  punctuation:(  keyword:_  operator:->  number:99  punctuation:,  number:123  punctuation:)  punctuation:)
+ 54 |     show(ignore_two((_, _) -> 100, 1, 2))
+    | builtin-fn:show  punctuation:(  task:ignore_two  punctuation:(  punctuation:(  keyword:_  punctuation:,  keyword:_  punctuation:)  operator:->  number:100  punctuation:,  number:1  punctuation:,  number:2  punctuation:)  punctuation:)
+ 56 |     ; 2. Explicitly typed variable bindings
+    | comment:; 2. Explicitly typed variable bindings
+ 57 |     fixed double: (int) -> int = x -> x * 2
+    | keyword:fixed  variable:double  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  variable:x  operator:->  type:x  operator:*  number:2
+ 58 |     fixed add: (int, int) -> int = (a, b) -> a + b
+    | keyword:fixed  variable:add  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:->  type:a  operator:+  variable:b
+ 59 |     fixed answer: () -> int = () -> 42
+    | keyword:fixed  variable:answer  punctuation::  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:(  punctuation:)  operator:->  number:42
+ 60 |     show(double(5), " ", add(3, 4), " ", answer())
+    | builtin-fn:show  punctuation:(  variable:double  punctuation:(  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:add  punctuation:(  number:3  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:answer  punctuation:(  punctuation:)  punctuation:)
+ 62 |     ; 3. Nullary untyped variable binding
+    | comment:; 3. Nullary untyped variable binding
+ 63 |     fixed get_num = () -> 77
+    | keyword:fixed  variable:get_num  operator:=  punctuation:(  punctuation:)  operator:->  number:77
+ 64 |     show(get_num())
+    | builtin-fn:show  punctuation:(  variable:get_num  punctuation:(  punctuation:)  punctuation:)
+ 66 |     ; 4. Direct invocations
+    | comment:; 4. Direct invocations
+ 67 |     show(((x) -> x * 2)(21))
+    | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  variable:x  punctuation:)  operator:->  type:x  operator:*  number:2  punctuation:)  punctuation:(  number:21  punctuation:)  punctuation:)
+ 68 |     show(((a, b) -> a * b)(6, 7))
+    | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:->  type:a  operator:*  variable:b  punctuation:)  punctuation:(  number:6  punctuation:,  number:7  punctuation:)  punctuation:)
+ 69 |     show((() -> 42)())
+    | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  punctuation:)  operator:->  number:42  punctuation:)  punctuation:(  punctuation:)  punctuation:)
+ 71 |     ; 5. Closures with captures
+    | comment:; 5. Closures with captures
+ 72 |     region r
+    | keyword:region  region:r
+ 73 |     fixed offset = 10
+    | keyword:fixed  variable:offset  operator:=  number:10
+ 74 |     fixed add_offset: [@r](int) -> int = [@r] x -> x + offset
+    | keyword:fixed  variable:add_offset  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:[  operator:@  region:r  punctuation:]  variable:x  operator:->  type:x  operator:+  variable:offset
+ 75 |     fixed add_offset_parens: [@r](int) -> int = [@r](x) -> x + offset
+    | keyword:fixed  variable:add_offset_parens  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:x  punctuation:)  operator:->  type:x  operator:+  variable:offset
+ 76 |     fixed get_offset: [@r]() -> int = [@r]() -> offset
+    | keyword:fixed  variable:get_offset  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type:offset
+ 77 |     fixed add_offset_two: [@r](int, int) -> int = [@r](a, b) -> a + b + offset
+    | keyword:fixed  variable:add_offset_two  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:->  type:a  operator:+  variable:b  operator:+  variable:offset
+ 78 |     show(add_offset(5), " ", add_offset_parens(5), " ", get_offset(), " ", add_offset_two(2, 3))
+    | builtin-fn:show  punctuation:(  variable:add_offset  punctuation:(  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:add_offset_parens  punctuation:(  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:get_offset  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:add_offset_two  punctuation:(  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
+ 80 |     ; 6. Generic calls and pipes
+    | comment:; 6. Generic calls and pipes
+ 81 |     fixed nums: [int]@r = new [int]([1, 2, 3, 4, 5]) at r
+    | keyword:fixed  variable:nums  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:]  punctuation:)  keyword:at  region:r
+ 82 |     fixed doubled = map_list(nums, x -> x * 2, r)
+    | keyword:fixed  variable:doubled  operator:=  task:map_list  punctuation:(  variable:nums  punctuation:,  variable:x  operator:->  type:x  operator:*  number:2  punctuation:,  type:r  punctuation:)
+ 83 |     fixed evens = filter_list(nums, x -> x % 2 == 0, r)
+    | keyword:fixed  variable:evens  operator:=  task:filter_list  punctuation:(  variable:nums  punctuation:,  variable:x  operator:->  type:x  operator:%  number:2  operator:==  number:0  punctuation:,  type:r  punctuation:)
+ 84 |     show(doubled)
+    | builtin-fn:show  punctuation:(  variable:doubled  punctuation:)
+ 85 |     show(evens)
+    | builtin-fn:show  punctuation:(  variable:evens  punctuation:)
+ 86 |     fixed piped = nums |> map_list(x -> x * 10, r)
+    | keyword:fixed  variable:piped  operator:=  variable:nums  operator:|>  task:map_list  punctuation:(  variable:x  operator:->  type:x  operator:*  number:10  punctuation:,  type:r  punctuation:)
+ 87 |     show(piped)
+    | builtin-fn:show  punctuation:(  variable:piped  punctuation:)
+ 88 | fi
+    | keyword:fi

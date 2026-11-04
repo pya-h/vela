@@ -1,7 +1,7 @@
   1 | ; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
     | comment:; Sized integers, unsigned integers, floats, aliases, casting, and Int512.
-  2 | include std/math (Int512, zero512, int512)
-    | keyword:include  module:std  operator:/  module:math  punctuation:(  type:Int512  punctuation:,  task:zero512  punctuation:,  task:int512  punctuation:)
+  2 | include std/int512 {Int512, zero512, int512}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:zero512  punctuation:,  task:int512  punctuation:}
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     ; Signed integer types
@@ -68,8 +68,8 @@
     | keyword:fixed  variable:cast_s8  operator:=  type-builtin:int8  punctuation:(  number:42  punctuation:)
  41 |     show(cast_s32, " ", cast_u64, " ", cast_f64, " ", cast_s8)
     | builtin-fn:show  punctuation:(  variable:cast_s32  punctuation:,  string:" "  punctuation:,  variable:cast_u64  punctuation:,  string:" "  punctuation:,  variable:cast_f64  punctuation:,  string:" "  punctuation:,  variable:cast_s8  punctuation:)
- 43 |     ; BigInt Int512 from std/math
-    | comment:; BigInt Int512 from std/math
+ 43 |     ; BigInt Int512 from std/int512
+    | comment:; BigInt Int512 from std/int512
  44 |     fixed b0 = zero512()
     | keyword:fixed  variable:b0  operator:=  task:zero512  punctuation:(  punctuation:)
  45 |     fixed b1 = int512(123456789)

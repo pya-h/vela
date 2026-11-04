@@ -2,8 +2,8 @@
     | comment:; Arithmetic on sized numbers: each type keeps its own, checked to fit as it
   2 | ; runs, and numbers written out take the type beside them.
     | comment:; runs, and numbers written out take the type beside them.
-  3 | include std/math (Int512, int512)
-    | keyword:include  module:std  operator:/  module:math  punctuation:(  type:Int512  punctuation:,  task:int512  punctuation:)
+  3 | include std/int512 {Int512, int512}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:}
   5 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   6 |     region r

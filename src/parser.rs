@@ -4270,6 +4270,10 @@ impl Parser {
                 tok => line_tokens.push(tok),
             }
         }
+        // Nothing after the arrow: the body is on the lines after the header.
+        if line_tokens.is_empty() {
+            return true;
+        }
         if line_tokens.iter().any(|tok| matches!(tok, Token::Send | Token::Fi)) {
             return true;
         }
@@ -4279,7 +4283,7 @@ impl Parser {
                 "int" | "int8" | "int16" | "int32" | "int64" | "int512" | "Int512"
                     | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
                     | "float" | "float32" | "float64"
-                    | "bool" | "char" | "byte" | "text" | "nothing" | "any" | "region"
+                    | "bool" | "char" | "unit" | "text" | "nothing" | "region"
             ) || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
         };
         let first_after_arrow = line_tokens.first();

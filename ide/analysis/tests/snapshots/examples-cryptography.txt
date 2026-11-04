@@ -1,0 +1,162 @@
+  1 | ; Cryptography pipeline: 512-bit large numbers (std/int512) and shortcut lambdas
+    | comment:; Cryptography pipeline: 512-bit large numbers (std/int512) and shortcut lambdas
+  2 | ; working together with call pipes to build key generators and digest accumulators.
+    | comment:; working together with call pipes to build key generators and digest accumulators.
+  3 | include std/int512 {Int512, int512, int512_from_uint64, int512_parse}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:,  task:int512_from_uint64  punctuation:,  task:int512_parse  punctuation:}
+  5 | ; A generic accumulator that folds values using a binary step task or lambda.
+    | comment:; A generic accumulator that folds values using a binary step task or lambda.
+  6 | task fold_int512(xs: [Int512]@r, initial: Int512, step: (Int512, Int512) -> Int512) -> Int512
+    | keyword:task  task:fold_int512  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:Int512  punctuation:]  operator:@  region:r  punctuation:,  parameter:initial  punctuation::  type:Int512  punctuation:,  parameter:step  punctuation::  punctuation:(  type:Int512  punctuation:,  type:Int512  punctuation:)  operator:->  type:Int512  punctuation:)  operator:->  type:Int512
+  7 |     flex total = initial
+    | keyword:flex  variable:total  operator:=  parameter:initial
+  8 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+  9 |         total = step(total, x)
+    | variable:total  operator:=  parameter:step  punctuation:(  variable:total  punctuation:,  variable:x  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 11 |     <- total
+    | keyword:<-  variable:total
+ 12 | fi
+    | keyword:fi
+ 14 | ; Applies a transformation task or plain lambda to a 512-bit integer.
+    | comment:; Applies a transformation task or plain lambda to a 512-bit integer.
+ 15 | task transform(val: Int512, op: (Int512) -> Int512) -> Int512
+    | keyword:task  task:transform  punctuation:(  parameter:val  punctuation::  type:Int512  punctuation:,  parameter:op  punctuation::  punctuation:(  type:Int512  punctuation:)  operator:->  type:Int512  punctuation:)  operator:->  type:Int512
+ 16 |     <- op(val)
+    | keyword:<-  parameter:op  punctuation:(  parameter:val  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | ; Applies a closure that captures values from the surrounding scope in region r.
+    | comment:; Applies a closure that captures values from the surrounding scope in region r.
+ 20 | task apply_closure(val: Int512, op: [@r](Int512) -> Int512) -> Int512
+    | keyword:task  task:apply_closure  punctuation:(  parameter:val  punctuation::  type:Int512  punctuation:,  parameter:op  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type:Int512  punctuation:)  operator:->  type:Int512  punctuation:)  operator:->  type:Int512
+ 21 |     <- op(val)
+    | keyword:<-  parameter:op  punctuation:(  parameter:val  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | ; A key provider using a nullary lambda supplier.
+    | comment:; A key provider using a nullary lambda supplier.
+ 25 | task generate_key(supplier: () -> Int512) -> Int512
+    | keyword:task  task:generate_key  punctuation:(  parameter:supplier  punctuation::  punctuation:(  punctuation:)  operator:->  type:Int512  punctuation:)  operator:->  type:Int512
+ 26 |     <- supplier()
+    | keyword:<-  parameter:supplier  punctuation:(  punctuation:)
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     region r
+    | keyword:region  region:r
+ 32 |     show("=== 1. 512-Bit Arithmetic & Sized Conversions ===")
+    | builtin-fn:show  punctuation:(  string:"=== 1. 512-Bit Arithmetic & Sized Conversions ==="  punctuation:)
+ 33 |     ; Parsing large multi-limb 512-bit decimal integers from text
+    | comment:; Parsing large multi-limb 512-bit decimal integers from text
+ 34 |     fixed base_key = int512_parse("10000000000000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:base_key  operator:=  task:int512_parse  punctuation:(  string:"10000000000000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 35 |     fixed modulus = int512_parse("3000000000000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:modulus  operator:=  task:int512_parse  punctuation:(  string:"3000000000000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 37 |     ; Conversions from sized numbers (uint64 and int64)
+    | comment:; Conversions from sized numbers (uint64 and int64)
+ 38 |     fixed half_seed: uint64 = 9_223_372_036_854_775_807
+    | keyword:fixed  variable:half_seed  punctuation::  type-builtin:uint64  operator:=  number:9_223_372_036_854_775_807
+ 39 |     fixed seed_u64: uint64 = half_seed + half_seed + 1 ; UINT64_MAX
+    | keyword:fixed  variable:seed_u64  punctuation::  type-builtin:uint64  operator:=  variable:half_seed  operator:+  variable:half_seed  operator:+  number:1  comment:; UINT64_MAX
+ 40 |     fixed seed = int512_from_uint64(seed_u64)
+    | keyword:fixed  variable:seed  operator:=  task:int512_from_uint64  punctuation:(  variable:seed_u64  punctuation:)
+ 41 |     fixed small_scale = int512(250)
+    | keyword:fixed  variable:small_scale  operator:=  task:int512  punctuation:(  number:250  punctuation:)
+ 43 |     ; Basic arithmetic: plus, minus, times, div, rem
+    | comment:; Basic arithmetic: plus, minus, times, div, rem
+ 44 |     fixed expanded = base_key.times(small_scale)
+    | keyword:fixed  variable:expanded  operator:=  variable:base_key  punctuation:.  method:times  punctuation:(  variable:small_scale  punctuation:)
+ 45 |     fixed combined = expanded.plus(seed)
+    | keyword:fixed  variable:combined  operator:=  variable:expanded  punctuation:.  method:plus  punctuation:(  variable:seed  punctuation:)
+ 46 |     fixed remainder = combined.rem(modulus)
+    | keyword:fixed  variable:remainder  operator:=  variable:combined  punctuation:.  method:rem  punctuation:(  variable:modulus  punctuation:)
+ 47 |     fixed quotient = combined.div(modulus)
+    | keyword:fixed  variable:quotient  operator:=  variable:combined  punctuation:.  method:div  punctuation:(  variable:modulus  punctuation:)
+ 49 |     show("base key:  ", base_key.str(r))
+    | builtin-fn:show  punctuation:(  string:"base key:  "  punctuation:,  variable:base_key  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 50 |     show("seed u64:  ", seed.str(r))
+    | builtin-fn:show  punctuation:(  string:"seed u64:  "  punctuation:,  variable:seed  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 51 |     show("combined:  ", combined.str(r))
+    | builtin-fn:show  punctuation:(  string:"combined:  "  punctuation:,  variable:combined  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 52 |     show("quotient:  ", quotient.str(r))
+    | builtin-fn:show  punctuation:(  string:"quotient:  "  punctuation:,  variable:quotient  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 53 |     show("remainder: ", remainder.str(r))
+    | builtin-fn:show  punctuation:(  string:"remainder: "  punctuation:,  variable:remainder  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 55 |     ; Negation, absolute value, and comparisons
+    | comment:; Negation, absolute value, and comparisons
+ 56 |     fixed neg_key = remainder.neg()
+    | keyword:fixed  variable:neg_key  operator:=  variable:remainder  punctuation:.  method:neg  punctuation:(  punctuation:)
+ 57 |     fixed abs_key = neg_key.abs()
+    | keyword:fixed  variable:abs_key  operator:=  variable:neg_key  punctuation:.  method:abs  punctuation:(  punctuation:)
+ 58 |     show("negated:   ", neg_key.str(r))
+    | builtin-fn:show  punctuation:(  string:"negated:   "  punctuation:,  variable:neg_key  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 59 |     show("abs equal: ", abs_key ~= remainder)
+    | builtin-fn:show  punctuation:(  string:"abs equal: "  punctuation:,  variable:abs_key  operator:~=  variable:remainder  punctuation:)
+ 60 |     show("cmp check: ", neg_key.cmp(remainder) < 0)
+    | builtin-fn:show  punctuation:(  string:"cmp check: "  punctuation:,  variable:neg_key  punctuation:.  method:cmp  punctuation:(  variable:remainder  punctuation:)  operator:<  number:0  punctuation:)
+ 62 |     show("=== 2. Non-Capturing Shortcut Lambdas ===")
+    | builtin-fn:show  punctuation:(  string:"=== 2. Non-Capturing Shortcut Lambdas ==="  punctuation:)
+ 63 |     ; Bare parameter lambda: x -> expr
+    | comment:; Bare parameter lambda: x -> expr
+ 64 |     fixed doubled = transform(remainder, x -> x.times(int512(2)))
+    | keyword:fixed  variable:doubled  operator:=  task:transform  punctuation:(  variable:remainder  punctuation:,  variable:x  operator:->  type:x  punctuation:.  type:times  punctuation:(  task:int512  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
+ 65 |     show("doubled:   ", doubled.str(r))
+    | builtin-fn:show  punctuation:(  string:"doubled:   "  punctuation:,  variable:doubled  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 67 |     ; Parenthesized lambda in a call pipe: val |> transform((x) -> expr)
+    | comment:; Parenthesized lambda in a call pipe: val |> transform((x) -> expr)
+ 68 |     fixed shifted = doubled |> transform((x) -> x.plus(int512(100)))
+    | keyword:fixed  variable:shifted  operator:=  variable:doubled  operator:|>  task:transform  punctuation:(  punctuation:(  variable:x  punctuation:)  operator:->  type:x  punctuation:.  type:plus  punctuation:(  task:int512  punctuation:(  number:100  punctuation:)  punctuation:)  punctuation:)
+ 69 |     show("shifted:   ", shifted.str(r))
+    | builtin-fn:show  punctuation:(  string:"shifted:   "  punctuation:,  variable:shifted  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 71 |     ; Multi-parameter binary lambda in folding: (acc, x) -> expr
+    | comment:; Multi-parameter binary lambda in folding: (acc, x) -> expr
+ 72 |     fixed items: [Int512]@r = new [Int512]([int512(10), int512(20), int512(30), int512(40)]) at r
+    | keyword:fixed  variable:items  punctuation::  punctuation:[  type:Int512  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Int512  punctuation:]  punctuation:(  punctuation:[  task:int512  punctuation:(  number:10  punctuation:)  punctuation:,  task:int512  punctuation:(  number:20  punctuation:)  punctuation:,  task:int512  punctuation:(  number:30  punctuation:)  punctuation:,  task:int512  punctuation:(  number:40  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
+ 73 |     fixed sum = fold_int512(items, Int512.zero(), (acc, x) -> acc.plus(x))
+    | keyword:fixed  variable:sum  operator:=  task:fold_int512  punctuation:(  variable:items  punctuation:,  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:,  punctuation:(  variable:acc  punctuation:,  variable:x  punctuation:)  operator:->  type:acc  punctuation:.  type:plus  punctuation:(  variable:x  punctuation:)  punctuation:)
+ 74 |     show("folded sum:", sum.str(r))
+    | builtin-fn:show  punctuation:(  string:"folded sum:"  punctuation:,  variable:sum  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 76 |     ; Nullary shortcut lambda: () -> expr
+    | comment:; Nullary shortcut lambda: () -> expr
+ 77 |     fixed default_key = generate_key(() -> int512(1337))
+    | keyword:fixed  variable:default_key  operator:=  task:generate_key  punctuation:(  punctuation:(  punctuation:)  operator:->  type:int512  punctuation:(  number:1337  punctuation:)  punctuation:)
+ 78 |     show("from nullary: ", default_key.str(r))
+    | builtin-fn:show  punctuation:(  string:"from nullary: "  punctuation:,  variable:default_key  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 80 |     ; Discard parameter lambda: _ -> expr
+    | comment:; Discard parameter lambda: _ -> expr
+ 81 |     fixed reset_key = transform(shifted, _ -> Int512.one())
+    | keyword:fixed  variable:reset_key  operator:=  task:transform  punctuation:(  variable:shifted  punctuation:,  keyword:_  operator:->  type:Int512  punctuation:.  method:one  punctuation:(  punctuation:)  punctuation:)
+ 82 |     show("reset value:  ", reset_key.str(r))
+    | builtin-fn:show  punctuation:(  string:"reset value:  "  punctuation:,  variable:reset_key  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 84 |     ; Direct lambda invocation: ((x) -> expr)(arg)
+    | comment:; Direct lambda invocation: ((x) -> expr)(arg)
+ 85 |     fixed direct = ((x) -> x.times(int512(3)))(int512(7))
+    | keyword:fixed  variable:direct  operator:=  punctuation:(  punctuation:(  variable:x  punctuation:)  operator:->  type:x  punctuation:.  type:times  punctuation:(  task:int512  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:)  punctuation:(  task:int512  punctuation:(  number:7  punctuation:)  punctuation:)
+ 86 |     show("direct call:  ", direct.str(r))
+    | builtin-fn:show  punctuation:(  string:"direct call:  "  punctuation:,  variable:direct  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 88 |     show("=== 3. Capturing Closure Lambdas ([@r]) ===")
+    | builtin-fn:show  punctuation:(  string:"=== 3. Capturing Closure Lambdas ([@r]) ==="  punctuation:)
+ 89 |     ; Closure capturing 'salt' and 'factor' from the local scope into region r
+    | comment:; Closure capturing 'salt' and 'factor' from the local scope into region r
+ 90 |     fixed salt = int512(9999)
+    | keyword:fixed  variable:salt  operator:=  task:int512  punctuation:(  number:9999  punctuation:)
+ 91 |     fixed factor = int512(10)
+    | keyword:fixed  variable:factor  operator:=  task:int512  punctuation:(  number:10  punctuation:)
+ 92 |     fixed salted = apply_closure(remainder, [@r] x -> x.times(factor).plus(salt))
+    | keyword:fixed  variable:salted  operator:=  task:apply_closure  punctuation:(  variable:remainder  punctuation:,  punctuation:[  operator:@  region:r  punctuation:]  variable:x  operator:->  type:x  punctuation:.  type:times  punctuation:(  variable:factor  punctuation:)  punctuation:.  method:plus  punctuation:(  variable:salt  punctuation:)  punctuation:)
+ 93 |     show("salted key:   ", salted.str(r))
+    | builtin-fn:show  punctuation:(  string:"salted key:   "  punctuation:,  variable:salted  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 95 |     ; Parenthesized closure syntax: [@r](x) -> expr
+    | comment:; Parenthesized closure syntax: [@r](x) -> expr
+ 96 |     fixed salted_parens = apply_closure(remainder, [@r](x) -> x.times(factor).plus(salt))
+    | keyword:fixed  variable:salted_parens  operator:=  task:apply_closure  punctuation:(  variable:remainder  punctuation:,  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:x  punctuation:)  operator:->  type:x  punctuation:.  type:times  punctuation:(  variable:factor  punctuation:)  punctuation:.  method:plus  punctuation:(  variable:salt  punctuation:)  punctuation:)
+ 97 |     show("parens salted:", salted_parens.str(r))
+    | builtin-fn:show  punctuation:(  string:"parens salted:"  punctuation:,  variable:salted_parens  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 98 |     show("salts equal:  ", salted ~= salted_parens)
+    | builtin-fn:show  punctuation:(  string:"salts equal:  "  punctuation:,  variable:salted  operator:~=  variable:salted_parens  punctuation:)
+ 99 | fi
+    | keyword:fi
