@@ -491,6 +491,9 @@ pub struct Checker {
     kept_order: Vec<String>,
     pub shortcut_lambdas: HashMap<String, TaskDef>,
     inferred_shortcut_lambdas: HashSet<String>,
+    /// The one-line lambdas the checker came to where they are written; one it
+    /// never came to is in a statement that failed before it.
+    reached_shortcut_lambdas: HashSet<String>,
     /// The variables of the code around it that the lambda being checked
     /// uses, which it keeps (see `lookup`).
     kept_used: std::cell::RefCell<Vec<String>>,
@@ -928,7 +931,9 @@ impl Checker {
                         t.ret = inferred.ret.clone();
                         t.body = inferred.body.clone();
                     }
-                    if self.inferred_shortcut_lambdas.contains(&t.name) {
+                    // Checked already, or in a statement whose mistake is told
+                    // already, which left its types unknown.
+                    if self.inferred_shortcut_lambdas.contains(&t.name) || !self.reached_shortcut_lambdas.contains(&t.name) {
                         continue;
                     }
                 }
@@ -8730,6 +8735,7 @@ impl Checker {
 
     fn prepare_shortcut_lambda(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         let Some(name) = self.shortcut_lambda_name(expr).map(str::to_string) else { return Ok(()); };
+        self.reached_shortcut_lambdas.insert(name.clone());
         // Checked once, by the first place that says what it takes.
         if self.inferred_shortcut_lambdas.contains(&name) {
             return Ok(());
@@ -12767,7 +12773,31 @@ impl Checker {
             reorder_groups && info.params.get(i).is_some_and(|(_, ty)| group_item(ty)),
             is_shortcut(i),
         ));
+        let shortcuts: Vec<bool> = (0..args.len()).map(is_shortcut).collect();
         for i in order {
+            // A one-line lambda takes its types from the values before it; an
+            // array given for a slice tells none, so it is told about first,
+            // rather than the lambda whose types it left unknown.
+            if shortcuts.get(i).copied().unwrap_or(false)
+                && let Some((at, got)) = (0..args.len()).filter(|&j| !shortcuts.get(j).copied().unwrap_or(false)).find_map(|j| {
+                    let (_, want) = info.params.get(j)?;
+                    let arg = args.get(j)?;
+                    let got = arg.ty.as_ref()?;
+                    matches!((got, want), (Type::Array(..), Type::Slice(..))).then(|| (arg.span, got.clone()))
+                })
+            {
+                // The lambda is left unchecked: what it lacks is this.
+                if let Some(lambda) = args.get(i).and_then(|arg| self.shortcut_lambda_name(arg)).map(str::to_string) {
+                    self.inferred_shortcut_lambdas.insert(lambda);
+                }
+                return err(
+                    at,
+                    format!(
+                        "expected a slice, got {}; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'",
+                        got
+                    ),
+                );
+            }
             let (Some(arg), Some((param, ty)), Some(passing)) = (args.get_mut(i), info.params.get_mut(i), info.passing.get_mut(i)) else { continue };
             if *ty != Type::Region {
                 // A value of a group, which a task value given with it may take

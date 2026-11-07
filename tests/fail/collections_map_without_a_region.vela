@@ -1,0 +1,8 @@
+; error: 7:18: task 'map' takes the region it makes memory in last, as 'r'; name it after the call, as in '… at r' or '…@r', or in the parentheses; or make a region the block's default, as in 'region r default'
+include std/collections (map)
+
+task main()
+    region r
+    fixed nums = new [int]([1, 2]) at r
+    show(nums |> map(n -> n * 2))
+fi

@@ -1,0 +1,76 @@
+  1 | ; Grades: a class's scores read through std/collections, each step a call in a
+    | comment:; Grades: a class's scores read through std/collections, each step a call in a
+  2 | ; pipe with a one-line lambda, its types told by the slice it is given.
+    | comment:; pipe with a one-line lambda, its types told by the slice it is given.
+  3 | include std/collections (map, filter, fold, zip, enumerate, take, skip, find, all, any)
+    | keyword:include  module:std  operator:/  module:collections  punctuation:(  task:map  punctuation:,  task:filter  punctuation:,  task:fold  punctuation:,  task:zip  punctuation:,  task:enumerate  punctuation:,  task:take  punctuation:,  task:skip  punctuation:,  task:find  punctuation:,  task:all  punctuation:,  task:any  punctuation:)
+  5 | shape Student
+    | keyword:shape  type:Student
+  6 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  7 |     score: int
+    | field:score  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | task passed(s: Student@a) -> bool
+    | keyword:task  task:passed  punctuation:(  parameter:s  punctuation::  type:Student  operator:@  region:a  punctuation:)  operator:->  type-builtin:bool
+ 11 |     <- s.score >= 50
+    | keyword:<-  parameter:s  punctuation:.  field:score  operator:>=  number:50
+ 12 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     region r default
+    | keyword:region  region:r  keyword:default
+ 16 |     flex class = new [Student]()
+    | keyword:flex  variable:class  operator:=  keyword:new  punctuation:[  type:Student  punctuation:]  punctuation:(  punctuation:)
+ 17 |     class.add(Student { name: "Ada", score: 91 })
+    | variable:class  punctuation:.  field:add  punctuation:(  type:Student  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:score  punctuation::  number:91  punctuation:}  punctuation:)
+ 18 |     class.add(Student { name: "Ben", score: 47 })
+    | variable:class  punctuation:.  field:add  punctuation:(  type:Student  punctuation:{  field:name  punctuation::  string:"Ben"  punctuation:,  field:score  punctuation::  number:47  punctuation:}  punctuation:)
+ 19 |     class.add(Student { name: "Cy", score: 78 })
+    | variable:class  punctuation:.  field:add  punctuation:(  type:Student  punctuation:{  field:name  punctuation::  string:"Cy"  punctuation:,  field:score  punctuation::  number:78  punctuation:}  punctuation:)
+ 20 |     class.add(Student { name: "Dee", score: 50 })
+    | variable:class  punctuation:.  field:add  punctuation:(  type:Student  punctuation:{  field:name  punctuation::  string:"Dee"  punctuation:,  field:score  punctuation::  number:50  punctuation:}  punctuation:)
+ 21 |     class.add(Student { name: "Eve", score: 33 })
+    | variable:class  punctuation:.  field:add  punctuation:(  type:Student  punctuation:{  field:name  punctuation::  string:"Eve"  punctuation:,  field:score  punctuation::  number:33  punctuation:}  punctuation:)
+ 23 |     ; Who passed, by a named task, then their names.
+    | comment:; Who passed, by a named task, then their names.
+ 24 |     fixed names = class |> filter(passed) |> map(s -> s.name)
+    | keyword:fixed  variable:names  operator:=  variable:class  operator:|>  task:filter  punctuation:(  task:passed  punctuation:)  operator:|>  task:map  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:name  punctuation:)
+ 25 |     show("passed: ", names)
+    | builtin-fn:show  punctuation:(  string:"passed: "  punctuation:,  variable:names  punctuation:)
+ 27 |     ; The total and the best score, with fold.
+    | comment:; The total and the best score, with fold.
+ 28 |     fixed scores = class |> map(s -> s.score)
+    | keyword:fixed  variable:scores  operator:=  variable:class  operator:|>  task:map  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:score  punctuation:)
+ 29 |     fixed total = scores |> fold(0, (sum, n) -> sum + n)
+    | keyword:fixed  variable:total  operator:=  variable:scores  operator:|>  task:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:sum  operator:+  parameter:n  punctuation:)
+ 30 |     fixed best = scores |> fold(0, (top, n) -> when n > top n else top fi)
+    | keyword:fixed  variable:best  operator:=  variable:scores  operator:|>  task:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:top  punctuation:,  parameter:n  punctuation:)  operator:->  keyword:when  parameter:n  operator:>  parameter:top  parameter:n  keyword:else  parameter:top  keyword:fi  punctuation:)
+ 31 |     show("total ", total, ", average ", total / scores.len, ", best ", best)
+    | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:,  string:", average "  punctuation:,  variable:total  operator:/  variable:scores  punctuation:.  field:len  punctuation:,  string:", best "  punctuation:,  variable:best  punctuation:)
+ 33 |     ; Ranks by place, and names beside scores.
+    | comment:; Ranks by place, and names beside scores.
+ 34 |     show(class |> map(s -> s.name) |> enumerate())
+    | builtin-fn:show  punctuation:(  variable:class  operator:|>  task:map  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:name  punctuation:)  operator:|>  task:enumerate  punctuation:(  punctuation:)  punctuation:)
+ 35 |     show(zip(class |> map(s -> s.name), scores))
+    | builtin-fn:show  punctuation:(  task:zip  punctuation:(  variable:class  operator:|>  task:map  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:name  punctuation:)  punctuation:,  variable:scores  punctuation:)  punctuation:)
+ 37 |     ; The first two and the rest, as views of the same slice.
+    | comment:; The first two and the rest, as views of the same slice.
+ 38 |     show("first two: ", scores |> take(2), ", rest: ", scores |> skip(2))
+    | builtin-fn:show  punctuation:(  string:"first two: "  punctuation:,  variable:scores  operator:|>  task:take  punctuation:(  number:2  punctuation:)  punctuation:,  string:", rest: "  punctuation:,  variable:scores  operator:|>  task:skip  punctuation:(  number:2  punctuation:)  punctuation:)
+ 40 |     ; Questions about the whole class.
+    | comment:; Questions about the whole class.
+ 41 |     fixed failing = class |> find(s -> s.score < 40)
+    | keyword:fixed  variable:failing  operator:=  variable:class  operator:|>  task:find  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:score  operator:<  number:40  punctuation:)
+ 42 |     when failing is {s}
+    | keyword:when  variable:failing  keyword:is  punctuation:{  variable:s  punctuation:}
+ 43 |         show("first below 40: ", s.name)
+    | builtin-fn:show  punctuation:(  string:"first below 40: "  punctuation:,  variable:s  punctuation:.  field:name  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 |     show("all above 30: ", class |> all(s -> s.score > 30), ", anyone at 100: ", class |> any(s -> s.score == 100))
+    | builtin-fn:show  punctuation:(  string:"all above 30: "  punctuation:,  variable:class  operator:|>  task:all  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:score  operator:>  number:30  punctuation:)  punctuation:,  string:", anyone at 100: "  punctuation:,  variable:class  operator:|>  task:any  punctuation:(  parameter:s  operator:->  parameter:s  punctuation:.  field:score  operator:==  number:100  punctuation:)  punctuation:)
+ 46 | fi
+    | keyword:fi

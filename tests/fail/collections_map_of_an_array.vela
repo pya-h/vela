@@ -1,0 +1,8 @@
+; error: 7:14: expected a slice, got [int#3]; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'
+include std/collections (map)
+
+task main()
+    region r
+    fixed arr = [1, 2, 3]
+    show(arr |> map(n -> n + 1) at r)
+fi

@@ -1,0 +1,6 @@
+; error: 2:26: 'within' is private to module 'collections'
+include std/collections (within)
+
+task main()
+    show(within(5, 3))
+fi

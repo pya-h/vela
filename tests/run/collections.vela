@@ -1,0 +1,53 @@
+; std/collections: each task through a pipe and as a call, with one-line and
+; full lambdas, empty slices, and take and skip past either end.
+include std/collections (map, filter, fold, zip, enumerate, take, skip, find, all, any)
+
+shape Item
+    name: text
+    price: int
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    region r
+    fixed nums = new [int]([1, 2, 3, 4, 5]) at r
+    fixed none_here = new [int]() at r
+
+    ; map and filter, alone and chained
+    show(nums |> map(n -> n * 10) at r)
+    show(map(nums, double, r))
+    show(nums |> filter(n -> n % 2 == 1) at r)
+    show(nums |> filter(n -> n > 2) at r |> map(n -> n * n) at r)
+    show(none_here |> map(n -> n + 1) at r)
+    fixed big = nums |> map(n -> n > 3) at r
+    show(big)
+
+    ; fold, with another type for what it gathers
+    show(nums |> fold(0, (sum, n) -> sum + n))
+    show(fold(nums, 1, (product: int, n: int) -> int <- product * n fi))
+    show(none_here |> fold(7, (sum, n) -> sum + n))
+
+    ; zip and enumerate
+    fixed names = new [text](["tea", "cake"]) at r
+    show(zip(names, nums) at r)
+    show(names |> enumerate() at r)
+    show(zip(none_here, names) at r)
+
+    ; take and skip are views, with n clamped
+    show(nums |> take(2), " ", nums |> skip(3))
+    show(take(nums, 9), " ", skip(nums, 9), " ", take(nums, -1), " ", skip(nums, -1))
+
+    ; find, all, any
+    show(nums |> find(n -> n > 3) { 0 }, " ", nums |> find(n -> n > 9) { 0 })
+    show(nums |> all(n -> n > 0), " ", nums |> all(n -> n > 1))
+    show(nums |> any(n -> n == 5), " ", nums |> any(n -> n > 5))
+    show(none_here |> all(n -> n > 9), " ", none_here |> any(n -> n > 0))
+
+    ; over shapes
+    fixed items = new [Item]([Item { name: "tea", price: 250 }, Item { name: "cake", price: 700 }]) at r
+    fixed cheap = items |> filter(i -> i.price < 500) at r
+    show(cheap |> map(i -> i.name) at r, " ", items |> fold(0, (sum, i) -> sum + i.price))
+fi

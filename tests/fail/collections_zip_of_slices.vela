@@ -1,0 +1,9 @@
+; error: 8:10: task 'zip' takes a type that is 'frozen' as 'A', and [int]@r holds a slice ([int]@r), whose items can change
+include std/collections (zip)
+
+task main()
+    region r
+    flex rows = new [[int]]() at r
+    rows.add(new [int]([1]) at r)
+    show(zip(rows, rows) at r)
+fi

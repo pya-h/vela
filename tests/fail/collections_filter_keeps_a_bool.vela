@@ -1,0 +1,8 @@
+; error: 7:32: expected type bool, got int
+include std/collections (filter)
+
+task main()
+    region r
+    fixed nums = new [int]([1, 2]) at r
+    show(nums |> filter(n -> n * 2) at r)
+fi

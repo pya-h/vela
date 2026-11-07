@@ -187,6 +187,56 @@
     </section>
 
     <section>
+      <h2 id="collections">std/collections</h2>
+      <p>
+        Tasks over the items of a <a href="vela.html#slices">slice</a>, written to be read in a
+        <a href="vela.html#pipes">pipe</a>. Each takes the slice first, then what it does with an item (a task value, or a
+        <a href="vela.html#shortcut-lambdas">one-line lambda</a>, whose types the slice tells), then, for those that make
+        a new slice, the region it goes in, last, so <code>at r</code> gives it. Brought in with
+        <code>include std/collections (map, filter)</code>, or named <code>collections.map(…)</code> after
+        <code>include std/collections</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/collections (map, filter, fold, take)
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> nums = <span class="keyword">new</span> [<span class="type">int</span>]([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]) <span class="keyword">at</span> r
+    show(nums |&gt; filter(n -&gt; n &gt; <span class="number">2</span>) <span class="keyword">at</span> r |&gt; map(n -&gt; n * <span class="number">10</span>) <span class="keyword">at</span> r)   <span class="comment">; [30, 40, 50]</span>
+    show(nums |&gt; fold(<span class="number">0</span>, (sum, n) -&gt; sum + n))                   <span class="comment">; 15</span>
+    show(nums |&gt; take(<span class="number">2</span>))                                          <span class="comment">; [1, 2], a view of nums</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Task</th><th>What it gives</th></tr>
+        <tr><td><code>map(xs, f, r) -&gt; [R]@r</code></td><td>a new slice in <code>r</code> of what <code>f</code> gives for each item, in order</td></tr>
+        <tr><td><code>filter(xs, keep, r) -&gt; [T]@r</code></td><td>a new slice in <code>r</code> of the items <code>keep</code> holds for, in order</td></tr>
+        <tr><td><code>fold(xs, initial, step) -&gt; A</code></td><td><code>initial</code>, then <code>step</code> of it and each item in turn: <code>fold(xs, 0, (sum, n) -&gt; sum + n)</code> adds them up; makes no memory</td></tr>
+        <tr><td><code>zip(xs, ys, r) -&gt; [(A, B)]@r</code></td><td>a new slice in <code>r</code> of pairs of the items at the same place, as long as the shorter slice</td></tr>
+        <tr><td><code>enumerate(xs, r) -&gt; [(int, T)]@r</code></td><td>a new slice in <code>r</code> of each item with its place, from 0</td></tr>
+        <tr><td><code>take(xs, n) -&gt; [T]@a</code></td><td>the first <code>n</code> items, a view of the same slice; all of them when it has fewer, none when <code>n</code> is below 1</td></tr>
+        <tr><td><code>skip(xs, n) -&gt; [T]@a</code></td><td>the items after the first <code>n</code>, a view of the same slice; none when it has <code>n</code> or fewer</td></tr>
+        <tr><td><code>find(xs, test) -&gt; maybe T</code></td><td>the first item <code>test</code> holds for, or <code>none</code></td></tr>
+        <tr><td><code>all(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for every item; true for none</td></tr>
+        <tr><td><code>any(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for some item; false for none</td></tr>
+      </table>
+      <ul>
+        <li><strong>Eager.</strong> Each task goes through all the items when it is called, and <code>map</code>,
+          <code>filter</code>, <code>zip</code> and <code>enumerate</code> make their slice at once, so a pipe of two of
+          them makes one slice in between. Lazy chains that make nothing until collected are planned (see
+          <a href="future-2.html#iterator-improvements">Iterators &amp; Collection Pipelines</a>).</li>
+        <li><strong>Slices only.</strong> An array never becomes a slice, so <code>[1, 2, 3] |&gt; map(…)</code> is
+          refused with a message saying so: write the values as a slice, <code>[1, 2, 3] at r</code>, or copy them
+          into one.</li>
+        <li><strong><code>zip</code> and <code>enumerate</code> make tuples,</strong> whose items never change, so
+          their items are <code>frozen</code> types: numbers, bools, text, and tuples and shapes of those, not slices
+          or pointers.</li>
+        <li><strong>A lambda takes nothing from the code around it</strong>, so a one-line lambda given here reads
+          only its item and what the file declares, and makes no memory in a region of the caller; one that keeps
+          what it uses (<code>[@r]</code>) goes only where the task's type says <code>[@r]</code>, which these
+          don't.</li>
+      </ul>
+    </section>
+
+    <section>
       <h2 id="files">std/files</h2>
       <p>
         Files on the disk. A <code>File</code> is made from its path, and making one opens nothing: it is a value

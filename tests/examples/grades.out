@@ -1,0 +1,7 @@
+passed: ["Ada", "Cy", "Dee"]
+total 299, average 59, best 91
+[(0, "Ada"), (1, "Ben"), (2, "Cy"), (3, "Dee"), (4, "Eve")]
+[("Ada", 91), ("Ben", 47), ("Cy", 78), ("Dee", 50), ("Eve", 33)]
+first two: [91, 47], rest: [78, 50, 33]
+first below 40: Eve
+all above 30: true, anyone at 100: false

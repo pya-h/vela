@@ -4412,6 +4412,9 @@ save(500) {
         argument instead: <code>a |&gt;&gt; f(b)</code> is <code>f(b, a)</code>, and <code>a |&gt;&gt;&gt; f(b, c)</code>
         is <code>f(b, c, a)</code>. A line that starts with <code>|&gt;</code> goes on with the chain of the line before
         it, so a long chain is written one step per line, with comments and blank lines between steps if wanted.
+        <a href="std.html#collections"><code>std/collections</code></a> has tasks written for pipes, taking the slice
+        first and a <a href="#shortcut-lambdas">one-line lambda</a> after it:
+        <code>nums |&gt; filter(n -&gt; n &gt; 2) at r |&gt; map(n -&gt; n * 10) at r</code>.
       </p>
       <p>
         A step that can fail, giving <code>T ~ E</code>, gives the next step its <code>T</code>: the next step runs only
@@ -5350,8 +5353,12 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <strong>Vela's library.</strong> A path that starts with <code>std</code> names a module of the library that
         comes with the compiler, and is included like any other: <code>include std/files {File}</code>. It is read
         from the compiler, never from the disk, so a folder of the program's own can't be named <code>std</code>, and
-        <code>std</code> is no reserved word: a variable may still be called so. It has two modules:
-        <a href="std.html#files"><code>std/files</code></a>, files on the disk, and
+        <code>std</code> is no reserved word: a variable may still be called so. It has five modules:
+        <a href="std.html#collections"><code>std/collections</code></a>, <code>map</code>, <code>filter</code>,
+        <code>fold</code> and more over a slice's items;
+        <a href="std.html#files"><code>std/files</code></a>, files on the disk;
+        <a href="std.html#int512"><code>std/int512</code></a>, 512-bit integers;
+        <a href="std.html#loops"><code>std/loops</code></a>, what a loop that gives a value fails with; and
         <a href="std.html#math"><code>std/math</code></a>, with <code>math.P</code>, <code>math.e</code>, powers,
         trigonometry, <code>exp</code>, and <code>log</code>. What the library has, and how it is made, is in
         <a href="std.html">Vela Library</a>.

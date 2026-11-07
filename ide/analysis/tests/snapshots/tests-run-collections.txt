@@ -1,0 +1,88 @@
+  1 | ; std/collections: each task through a pipe and as a call, with one-line and
+    | comment:; std/collections: each task through a pipe and as a call, with one-line and
+  2 | ; full lambdas, empty slices, and take and skip past either end.
+    | comment:; full lambdas, empty slices, and take and skip past either end.
+  3 | include std/collections (map, filter, fold, zip, enumerate, take, skip, find, all, any)
+    | keyword:include  module:std  operator:/  module:collections  punctuation:(  task:map  punctuation:,  task:filter  punctuation:,  task:fold  punctuation:,  task:zip  punctuation:,  task:enumerate  punctuation:,  task:take  punctuation:,  task:skip  punctuation:,  task:find  punctuation:,  task:all  punctuation:,  task:any  punctuation:)
+  5 | shape Item
+    | keyword:shape  type:Item
+  6 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  7 |     price: int
+    | field:price  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | task double(n: int) -> int
+    | keyword:task  task:double  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 11 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 12 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     region r
+    | keyword:region  region:r
+ 16 |     fixed nums = new [int]([1, 2, 3, 4, 5]) at r
+    | keyword:fixed  variable:nums  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:]  punctuation:)  keyword:at  region:r
+ 17 |     fixed none_here = new [int]() at r
+    | keyword:fixed  variable:none_here  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 19 |     ; map and filter, alone and chained
+    | comment:; map and filter, alone and chained
+ 20 |     show(nums |> map(n -> n * 10) at r)
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  number:10  punctuation:)  keyword:at  region:r  punctuation:)
+ 21 |     show(map(nums, double, r))
+    | builtin-fn:show  punctuation:(  task:map  punctuation:(  variable:nums  punctuation:,  task:double  punctuation:,  region:r  punctuation:)  punctuation:)
+ 22 |     show(nums |> filter(n -> n % 2 == 1) at r)
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:filter  punctuation:(  parameter:n  operator:->  parameter:n  operator:%  number:2  operator:==  number:1  punctuation:)  keyword:at  region:r  punctuation:)
+ 23 |     show(nums |> filter(n -> n > 2) at r |> map(n -> n * n) at r)
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:filter  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:2  punctuation:)  keyword:at  region:r  operator:|>  task:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  parameter:n  punctuation:)  keyword:at  region:r  punctuation:)
+ 24 |     show(none_here |> map(n -> n + 1) at r)
+    | builtin-fn:show  punctuation:(  variable:none_here  operator:|>  task:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:+  number:1  punctuation:)  keyword:at  region:r  punctuation:)
+ 25 |     fixed big = nums |> map(n -> n > 3) at r
+    | keyword:fixed  variable:big  operator:=  variable:nums  operator:|>  task:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:3  punctuation:)  keyword:at  region:r
+ 26 |     show(big)
+    | builtin-fn:show  punctuation:(  variable:big  punctuation:)
+ 28 |     ; fold, with another type for what it gathers
+    | comment:; fold, with another type for what it gathers
+ 29 |     show(nums |> fold(0, (sum, n) -> sum + n))
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:sum  operator:+  parameter:n  punctuation:)  punctuation:)
+ 30 |     show(fold(nums, 1, (product: int, n: int) -> int <- product * n fi))
+    | builtin-fn:show  punctuation:(  task:fold  punctuation:(  variable:nums  punctuation:,  number:1  punctuation:,  punctuation:(  parameter:product  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:product  operator:*  parameter:n  keyword:fi  punctuation:)  punctuation:)
+ 31 |     show(none_here |> fold(7, (sum, n) -> sum + n))
+    | builtin-fn:show  punctuation:(  variable:none_here  operator:|>  task:fold  punctuation:(  number:7  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:sum  operator:+  parameter:n  punctuation:)  punctuation:)
+ 33 |     ; zip and enumerate
+    | comment:; zip and enumerate
+ 34 |     fixed names = new [text](["tea", "cake"]) at r
+    | keyword:fixed  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"tea"  punctuation:,  string:"cake"  punctuation:]  punctuation:)  keyword:at  region:r
+ 35 |     show(zip(names, nums) at r)
+    | builtin-fn:show  punctuation:(  task:zip  punctuation:(  variable:names  punctuation:,  variable:nums  punctuation:)  keyword:at  region:r  punctuation:)
+ 36 |     show(names |> enumerate() at r)
+    | builtin-fn:show  punctuation:(  variable:names  operator:|>  task:enumerate  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 37 |     show(zip(none_here, names) at r)
+    | builtin-fn:show  punctuation:(  task:zip  punctuation:(  variable:none_here  punctuation:,  variable:names  punctuation:)  keyword:at  region:r  punctuation:)
+ 39 |     ; take and skip are views, with n clamped
+    | comment:; take and skip are views, with n clamped
+ 40 |     show(nums |> take(2), " ", nums |> skip(3))
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:take  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nums  operator:|>  task:skip  punctuation:(  number:3  punctuation:)  punctuation:)
+ 41 |     show(take(nums, 9), " ", skip(nums, 9), " ", take(nums, -1), " ", skip(nums, -1))
+    | builtin-fn:show  punctuation:(  task:take  punctuation:(  variable:nums  punctuation:,  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  task:skip  punctuation:(  variable:nums  punctuation:,  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  task:take  punctuation:(  variable:nums  punctuation:,  operator:-  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:skip  punctuation:(  variable:nums  punctuation:,  operator:-  number:1  punctuation:)  punctuation:)
+ 43 |     ; find, all, any
+    | comment:; find, all, any
+ 44 |     show(nums |> find(n -> n > 3) { 0 }, " ", nums |> find(n -> n > 9) { 0 })
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:find  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:nums  operator:|>  task:find  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:9  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 45 |     show(nums |> all(n -> n > 0), " ", nums |> all(n -> n > 1))
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:all  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nums  operator:|>  task:all  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:1  punctuation:)  punctuation:)
+ 46 |     show(nums |> any(n -> n == 5), " ", nums |> any(n -> n > 5))
+    | builtin-fn:show  punctuation:(  variable:nums  operator:|>  task:any  punctuation:(  parameter:n  operator:->  parameter:n  operator:==  number:5  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nums  operator:|>  task:any  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:5  punctuation:)  punctuation:)
+ 47 |     show(none_here |> all(n -> n > 9), " ", none_here |> any(n -> n > 0))
+    | builtin-fn:show  punctuation:(  variable:none_here  operator:|>  task:all  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:none_here  operator:|>  task:any  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:0  punctuation:)  punctuation:)
+ 49 |     ; over shapes
+    | comment:; over shapes
+ 50 |     fixed items = new [Item]([Item { name: "tea", price: 250 }, Item { name: "cake", price: 700 }]) at r
+    | keyword:fixed  variable:items  operator:=  keyword:new  punctuation:[  type:Item  punctuation:]  punctuation:(  punctuation:[  type:Item  punctuation:{  field:name  punctuation::  string:"tea"  punctuation:,  field:price  punctuation::  number:250  punctuation:}  punctuation:,  type:Item  punctuation:{  field:name  punctuation::  string:"cake"  punctuation:,  field:price  punctuation::  number:700  punctuation:}  punctuation:]  punctuation:)  keyword:at  region:r
+ 51 |     fixed cheap = items |> filter(i -> i.price < 500) at r
+    | keyword:fixed  variable:cheap  operator:=  variable:items  operator:|>  task:filter  punctuation:(  parameter:i  operator:->  parameter:i  punctuation:.  field:price  operator:<  number:500  punctuation:)  keyword:at  region:r
+ 52 |     show(cheap |> map(i -> i.name) at r, " ", items |> fold(0, (sum, i) -> sum + i.price))
+    | builtin-fn:show  punctuation:(  variable:cheap  operator:|>  task:map  punctuation:(  parameter:i  operator:->  parameter:i  punctuation:.  field:name  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:items  operator:|>  task:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:i  punctuation:)  operator:->  parameter:sum  operator:+  parameter:i  punctuation:.  field:price  punctuation:)  punctuation:)
+ 53 | fi
+    | keyword:fi

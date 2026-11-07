@@ -1,0 +1,17 @@
+; error: 16:35: expected type (Student@r) -> bool, got (Student) -> bool; a task's type says which regions its values are in, as its header does: 'text' is text that lasts as long as the program, and 'text@r' text of any region the caller gives
+include std/collections (map, filter)
+
+shape Student
+    name: text
+    score: int
+fi
+
+task passed(s: Student) -> bool
+    <- s.score >= 50
+fi
+
+task main()
+    region r default
+    flex class = new [Student]()
+    fixed names = class |> filter(passed) |> map(s -> s.name)
+fi

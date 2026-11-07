@@ -975,6 +975,40 @@ fixed is_less = a &lt; b          ; Rewritten or dispatched to a.cmp(b) &lt; 0</
           <strong>Why it's cool:</strong> fixed-width stack-allocated big integers offer zero heap overhead, zero garbage collection pauses, and guaranteed cache locality while covering all modern cryptographic and numeric needs.
         </div>
       </div>
+
+      <div class="option" id="iterator-improvements">
+        <h3><span aria-hidden="true">🔁</span> Iterators &amp; Collection Pipelines: After the First Version <span class="badge b-idea">Idea</span></h3>
+        <p>
+          The plan builds pipelines in two steps: eager tasks first (<code>numbers |&gt; filter(n -&gt; n % 2 == 0) at r</code>,
+          each step making a new slice), then lazy ones, once a pattern can take types: <code>pattern Iterator&lt;T&gt;</code>
+          in the library, adapter shapes following it, and chains that start at the collection, <code>xs.map(…).filter(…).collect(r)</code>,
+          allocating nothing until they are collected. The first version stays small on purpose. What may come after it:
+        </p>
+        <ul>
+          <li><strong>Chains kept as values:</strong> holding a lazy chain in a variable, sending it from a task, or
+            giving it to one, with its type written short rather than as nested adapter shapes.</li>
+          <li><strong>One fused loop:</strong> the compiler turning a whole chain into one C loop with each step's
+            lambda written inline, rather than one call through a task value per step and item.</li>
+          <li><strong>Lambdas that keep what they use:</strong> adapters holding <code>[@r]</code> lambdas, so
+            <code>xs.map(x -&gt; x + offset)</code> works, which needs a shape's field to hold one (refused today).</li>
+          <li><strong>More sources:</strong> arrays, ranges (<code>(0..n).map(…)</code>), maps' keys and values, text's
+            characters and lines, and files read line by line.</li>
+          <li><strong>More adapters:</strong> <code>take_while</code>, <code>skip_while</code>, <code>chain</code>,
+            <code>flat_map</code>, <code>windows</code>, <code>chunks</code>, <code>step_by</code>, <code>rev</code> for
+            sources that can go backwards, and <code>peekable</code>.</li>
+          <li><strong>More consumers:</strong> <code>count</code>, <code>sum</code>, <code>min</code>/<code>max</code>
+            for ordered items, <code>position</code>, and collecting into a map.</li>
+          <li><strong>Generators:</strong> a task that yields values one at a time as an iterator
+            (see <em>Lazy streams</em> below), once the C backend can keep a task's place between calls.</li>
+          <li><strong>Arrays in the eager tasks:</strong> today an array never becomes a slice, so the eager tasks take
+            slices; a view of an array as a slice would let them take both.</li>
+        </ul>
+        <div class="note">
+          <strong>Why it's cool:</strong> the same words (<code>map</code>, <code>filter</code>, <code>fold</code>) read
+          the same in a pipe and in a chain, so a program moves from the simple eager form to the lazy one by changing
+          where the chain starts, not how it is written.
+        </div>
+      </div>
     </section>
 
     <section>

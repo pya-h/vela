@@ -1,0 +1,46 @@
+; Grades: a class's scores read through std/collections, each step a call in a
+; pipe with a one-line lambda, its types told by the slice it is given.
+include std/collections (map, filter, fold, zip, enumerate, take, skip, find, all, any)
+
+shape Student
+    name: text
+    score: int
+fi
+
+task passed(s: Student@a) -> bool
+    <- s.score >= 50
+fi
+
+task main()
+    region r default
+    flex class = new [Student]()
+    class.add(Student { name: "Ada", score: 91 })
+    class.add(Student { name: "Ben", score: 47 })
+    class.add(Student { name: "Cy", score: 78 })
+    class.add(Student { name: "Dee", score: 50 })
+    class.add(Student { name: "Eve", score: 33 })
+
+    ; Who passed, by a named task, then their names.
+    fixed names = class |> filter(passed) |> map(s -> s.name)
+    show("passed: ", names)
+
+    ; The total and the best score, with fold.
+    fixed scores = class |> map(s -> s.score)
+    fixed total = scores |> fold(0, (sum, n) -> sum + n)
+    fixed best = scores |> fold(0, (top, n) -> when n > top n else top fi)
+    show("total ", total, ", average ", total / scores.len, ", best ", best)
+
+    ; Ranks by place, and names beside scores.
+    show(class |> map(s -> s.name) |> enumerate())
+    show(zip(class |> map(s -> s.name), scores))
+
+    ; The first two and the rest, as views of the same slice.
+    show("first two: ", scores |> take(2), ", rest: ", scores |> skip(2))
+
+    ; Questions about the whole class.
+    fixed failing = class |> find(s -> s.score < 40)
+    when failing is {s}
+        show("first below 40: ", s.name)
+    fi
+    show("all above 30: ", class |> all(s -> s.score > 30), ", anyone at 100: ", class |> any(s -> s.score == 100))
+fi

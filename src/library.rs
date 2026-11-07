@@ -13,6 +13,7 @@ pub const ROOT: &str = "std";
 
 /// Each module of the library: its name after `std/`, and its source.
 pub const MODULES: &[(&str, &str)] = &[
+    ("collections", include_str!("../std/collections.vela")),
     ("files", include_str!("../std/files.vela")),
     ("int512", include_str!("../std/int512.vela")),
     ("loops", include_str!("../std/loops.vela")),

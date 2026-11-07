@@ -88,7 +88,8 @@ variants before its own, named through it (`OrderError.Empty`), and a value of o
 further, a line starting with `|>` goes on with the chain, and a step that fails stops it, so the chain fails
 with that failure, which one plan B at the end reads. A lambda is a task with no name written where its value
 goes, `(x: int) -> int <- x * 2 fi`, or in one line where that place says its types, `apply(x -> x * 2, 21)`;
-`[@r]` before it keeps what it uses of the code around it in region `r`. `block … fi` runs
+`[@r]` before it keeps what it uses of the code around it in region `r`. The library's `std/collections` has
+`map`, `filter`, `fold`, `zip`, `find` and more, written for pipes: `nums |> filter(n -> n > 2) at r |> map(n -> n * 10) at r`. `block … fi` runs
 statements in a block of their own.
 
 ```
