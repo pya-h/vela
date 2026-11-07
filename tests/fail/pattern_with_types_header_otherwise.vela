@@ -1,0 +1,13 @@
+; error: 7:12: method 'next' of 'Words' has another header than pattern 'Iterator' asks for: write it 'alters next() -> maybe int'
+pattern Iterator<T>
+    alters next() -> maybe T
+fi
+
+shape Words::Iterator<int>
+    alters next() -> maybe text
+        <- none
+    fi
+fi
+
+task main()
+fi

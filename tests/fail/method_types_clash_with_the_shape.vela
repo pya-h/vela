@@ -1,0 +1,11 @@
+; error: 5:10: 'T' is already a type 'Box' takes; name the method's own type otherwise, as in '<R>'
+shape Box<T>
+    v: T
+
+    pick<T>(other: T) -> T
+        <- other
+    fi
+fi
+
+task main()
+fi

@@ -1,0 +1,15 @@
+; error: 9:5: method 'give' of 'Cell' has another header than pattern 'Holder' asks for: write it 'give<R>(f: (int) -> R) -> R'
+pattern Holder<T>
+    give<R>(f: (T) -> R) -> R
+fi
+
+shape Cell::Holder<int>
+    v: int
+
+    give(f: (int) -> int) -> int
+        <- f(.v)
+    fi
+fi
+
+task main()
+fi

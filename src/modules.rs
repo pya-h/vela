@@ -188,6 +188,11 @@ pub struct Program {
     /// Every pattern of every module, its names as the program names them
     /// (see `PatternDef`).
     pub patterns: Vec<PatternDef>,
+    /// For each default method a shape or kind has from a pattern that takes
+    /// types, by the name of its copy: each type the pattern takes, with the
+    /// type the follower gives it, which the copy's types read in its place
+    /// (`T` as `int` in `Countdown`, which follows `Iterator<int>`).
+    pub stand_ins: HashMap<String, Vec<(String, Type)>>,
 }
 
 /// How many modules can include one another in a chain, like `MAX_NESTING` for
@@ -297,7 +302,7 @@ impl State {
             scopes.push(self.resolve(index, &tables, &variants, &by_module, Pass::Items(&aliases))?);
         }
         imitate(&mut self.modules);
-        follow_patterns(&mut self.modules);
+        let stand_ins = follow_patterns(&mut self.modules);
         let patterns = self.modules.iter().flat_map(|module| module.patterns.iter().cloned()).collect();
         let mut items = Vec::new();
         for index in std::mem::take(&mut self.order) {
@@ -305,7 +310,7 @@ impl State {
                 items.append(&mut module.items);
             }
         }
-        Ok(Program { items, modules: scopes, type_places: std::mem::take(&mut self.type_places), patterns })
+        Ok(Program { items, modules: scopes, type_places: std::mem::take(&mut self.type_places), patterns, stand_ins })
     }
 
     /// Lexes and parses `source` as the next file, the module with identity
@@ -1007,7 +1012,8 @@ fn base_name(ty: &Type) -> Option<&String> {
 /// `THIS_TYPE`, which the checker reads as the follower), and adds to
 /// each pattern's module, for each default method, the generic task it is
 /// checked as once (see `pattern_default`).
-fn follow_patterns(modules: &mut [Module]) {
+fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)>> {
+    let mut stand_ins = HashMap::new();
     let patterns: HashMap<String, PatternDef> = modules.iter().flat_map(|module| &module.patterns).map(|pattern| (pattern.name.clone(), pattern.clone())).collect();
     for module in modules.iter_mut() {
         let written: HashSet<String> = module.items.iter().filter_map(|item| if let Item::Task(t) = item && t.owner.is_some() { Some(t.name.clone()) } else { None }).collect();
@@ -1018,7 +1024,8 @@ fn follow_patterns(modules: &mut [Module]) {
                 Item::Kind(k) => (&k.name, &k.types, &k.follows),
                 Item::Task(_) | Item::Macro(_) => continue,
             };
-            for pattern in follows.iter().filter_map(|(ty, _)| if let Type::Named(name, _) = ty { patterns.get(name) } else { None }) {
+            for (followed, pattern) in follows.iter().filter_map(|(ty, _)| followed_name(ty).and_then(|name| patterns.get(name)).map(|pattern| (ty, pattern))) {
+                let given: Vec<(String, Type)> = pattern.types.iter().map(|param| param.name.clone()).zip(followed_types(followed).iter().cloned()).collect();
                 for method in pattern.methods.iter().filter(|method| !method.body.is_empty()) {
                     let Some(own) = method.owner.as_ref().map(|owner| owner.name.as_str()) else { continue };
                     let full = method_name(owner, own);
@@ -1027,9 +1034,13 @@ fn follow_patterns(modules: &mut [Module]) {
                     }
                     let mut copy = method.clone();
                     copy.name = full;
-                    copy.types = types.clone();
+                    // The follower's types, then the method's own.
+                    copy.types = types.iter().cloned().chain(method.types.iter().cloned()).collect();
                     if let Some(first) = copy.params.first_mut() {
                         *first = receiver(owner, types, method.span);
+                    }
+                    if !given.is_empty() {
+                        stand_ins.insert(copy.name.clone(), given.clone());
                     }
                     added.push(copy);
                 }
@@ -1041,11 +1052,15 @@ fn follow_patterns(modules: &mut [Module]) {
                 let Some(own) = method.owner.as_ref().map(|owner| owner.name.as_str()) else { continue };
                 let mut task = method.clone();
                 task.name = pattern_default(&pattern.name, own);
-                task.types = vec![TypeParam { name: THIS_TYPE.to_string(), span: pattern.span, needs: Vec::new(), patterns: vec![(pattern.name.clone(), pattern.span)], group: false }];
+                // The type following it, then the types the pattern takes, which
+                // its body names (`T` of `Iterator<T>`).
+                let this = TypeParam { name: THIS_TYPE.to_string(), span: pattern.span, needs: Vec::new(), patterns: vec![Followed { name: pattern.name.clone(), types: pattern.types.iter().map(|param| Type::Named(param.name.clone(), None)).collect(), span: pattern.span }], group: false };
+                task.types = std::iter::once(this).chain(pattern.types.iter().cloned()).chain(method.types.iter().cloned()).collect();
                 module.items.push(Item::Task(task));
             }
         }
     }
+    stand_ins
 }
 
 /// Puts in each kind that imitates others the variants it has from them,
@@ -1278,7 +1293,16 @@ impl Resolver<'_> {
     }
 
     /// The patterns shape `s` follows, each written as the program names it.
-    fn followed(&self, s: &mut ShapeDef) -> Result<()> {
+    fn followed(&mut self, s: &mut ShapeDef) -> Result<()> {
+        // The types it gives a pattern may be ones it takes: `::Iterator<T>`.
+        let full = self.own_full(&s.name);
+        self.enter_type_params(&s.types, "shape", &full)?;
+        let read = self.followed_in(s);
+        self.params.clear();
+        read
+    }
+
+    fn followed_in(&self, s: &mut ShapeDef) -> Result<()> {
         for (ty, at) in std::mem::take(&mut s.follows) {
             let Some(pattern) = self.followed_pattern(&ty, at, &s.follows)? else {
                 let name = match &ty {
@@ -1310,14 +1334,21 @@ impl Resolver<'_> {
             _ => return Ok(None),
         };
         let Some(entry) = self.lookup(name, at, false)?.filter(|entry| entry.what == What::Pattern) else { return Ok(None) };
-        if types {
-            return err(at, format!("pattern '{}' takes no types; leave out '<…>'", name));
-        }
         if let Some(region) = region {
             return err(at, format!("a pattern says what a type has, and names no region; leave out '@{}'", region));
         }
-        let pattern = Type::Named(entry.full, None);
-        if let Some((_, first)) = before.iter().find(|(followed, _)| *followed == pattern) {
+        // `::Iterator<int>`: the types it gives the pattern, which the checker
+        // matches with those the pattern takes.
+        let pattern = match written {
+            Type::Applied(applied) if types => {
+                let given = applied.types.iter().map(|ty| self.ty(ty, at)).collect::<Result<Vec<Type>>>()?;
+                Type::Applied(Box::new(Applied { name: entry.full.clone(), types: given, region: None }))
+            }
+            _ => Type::Named(entry.full.clone(), None),
+        };
+        // Once, whatever types it is given: `::Iterator<int> & Iterator<text>`
+        // would ask for two `next`.
+        if let Some((_, first)) = before.iter().find(|(followed, _)| followed_name(followed) == Some(entry.full.as_str())) {
             return err(at, format!("'{}' is followed already, at {}:{}; a shape or kind follows each pattern once", name, first.line, first.col));
         }
         Ok(Some(pattern))
@@ -1326,7 +1357,10 @@ impl Resolver<'_> {
     /// The patterns each type a declaration takes must follow, written as the
     /// program names them (see `TypeParam::patterns`).
     fn type_patterns(&self, types: &mut [TypeParam]) -> Result<()> {
-        for (name, at) in types.iter_mut().flat_map(|param| param.patterns.iter_mut()) {
+        for Followed { name, types: given, span: at } in types.iter_mut().flat_map(|param| param.patterns.iter_mut()) {
+            for ty in given.iter_mut() {
+                *ty = self.ty(ty, *at)?;
+            }
             match self.lookup(name, *at, false)? {
                 Some(entry) if entry.what == What::Pattern => *name = entry.full,
                 Some(entry) => {
@@ -1359,8 +1393,10 @@ impl Resolver<'_> {
             return err(at, format!("'{}' is already defined at {}:{}", name, first.line, first.col));
         }
         self.this_names = vec![THIS_WORD.to_string(), pattern.name.clone()];
-        let read = self.pattern_members(pattern);
+        let full = self.own_full(&pattern.name);
+        let read = self.enter_type_params(&pattern.types, "pattern", &full).and_then(|()| self.type_patterns(&mut pattern.types)).and_then(|()| self.pattern_members(pattern));
         self.this_names.clear();
+        self.params.clear();
         read?;
         pattern.name = self.own_full(&pattern.name);
         Ok(())
@@ -1434,8 +1470,8 @@ impl Resolver<'_> {
         match item {
             Item::Task(t) => {
                 t.name = self.own_full(&t.name);
-                self.type_patterns(&mut t.types)?;
                 self.enter_type_params(&t.types, "task", &t.name)?;
+                self.type_patterns(&mut t.types)?;
                 for param in &mut t.params {
                     param.ty = self.ty(&param.ty, param.ty_span)?;
                     // The value a parameter falls back on names the program's
@@ -1462,8 +1498,8 @@ impl Resolver<'_> {
             }
             Item::Shape(s) => {
                 s.name = self.own_full(&s.name);
-                self.type_patterns(&mut s.types)?;
                 self.enter_type_params(&s.types, "shape", &s.name)?;
+                self.type_patterns(&mut s.types)?;
                 for field in &mut s.fields {
                     field.ty = self.ty(&field.ty, field.ty_span)?;
                     // A field's default names the program's things as the body
@@ -1483,8 +1519,8 @@ impl Resolver<'_> {
             }
             Item::Kind(k) => {
                 k.name = self.own_full(&k.name);
-                self.type_patterns(&mut k.types)?;
                 self.enter_type_params(&k.types, "kind", &k.name)?;
+                self.type_patterns(&mut k.types)?;
                 for variant in &mut k.variants {
                     for field in &mut variant.payload {
                         field.ty = self.ty(&field.ty, field.ty_span)?;

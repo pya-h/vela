@@ -382,6 +382,8 @@ finally</pre>
         <tr><td><code>#NAME = value</code></td><td>a macro: a name for a value the compiler computes, at the start of a line outside every task (see <a href="#macros">Macros</a>)</td></tr>
         <tr><td><code>alias Name =&gt; type</code></td><td>a type alias: another name for a type, at the start of a line outside every task (see <a href="#type-aliases">Type aliases</a>)</td></tr>
         <tr><td><code>pattern Shaped … fi</code>, <code>shape Circle::Shaped</code>, <code>&lt;T: Shaped&gt;</code></td><td>a pattern, the fields and methods a shape or kind following it has, some with default bodies; a shape following it; a type a task takes that follows it (see <a href="#patterns">Patterns</a>)</td></tr>
+        <tr><td><code>pattern Iterator&lt;T&gt;</code>, <code>shape Countdown::Iterator&lt;int&gt;</code>, <code>&lt;I: Iterator&lt;T&gt;, T&gt;</code></td><td>a pattern that takes a type; a shape giving it one; a type a task takes that follows it, <code>T</code> worked out from what <code>I</code> follows (see <a href="#pattern-types">Types a pattern takes</a>)</td></tr>
+        <tr><td><code>apply&lt;R&gt;(f: (T) -&gt; R) -&gt; R</code></td><td>a method taking a type of its own, told by a call's values (see <a href="#method-types">Types of its own</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, type alias, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code>, <code>Shape.m</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it, called or as a value (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
@@ -2125,8 +2127,15 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment">; n
           <code>p^.total()</code>. A value of a type without methods says so: <code>type int has no methods</code>.</li>
         <li><strong>Shapes that take types.</strong> A method of <code>shape Box&lt;T&gt;</code> uses <code>T</code> as
           its fields do, and one is made for each set of types the shape is given
-          (see <a href="#generic-shapes">Shapes that take types</a>). A method takes no types of its own yet
-          (<a href="future.html#methods-own-types">an idea for later</a>).</li>
+          (see <a href="#generic-shapes">Shapes that take types</a>).</li>
+        <li id="method-types"><strong>Types of its own.</strong> A method may take types of its own, written after its name as
+          a task's are, <code>apply&lt;R&gt;(f: (T) -&gt; R) -&gt; R</code>, with the words a type must allow,
+          <code>with&lt;A: shown&gt;(…)</code>; they come after the shape's or kind's, and none may have the name of
+          one of those. A call's values tell them, or the place its value goes
+          (<code>fixed x: maybe text = b.nothing_of()</code>), as for a task; they aren't written at a call yet, since
+          <code>b.apply&lt;int&gt;(…)</code> would have to say whose types it lists. One copy is made for each set of
+          types used, as for a task. A pattern may ask for such a method too, and a follower names its own types as it
+          likes, as it names its parameters: <code>give&lt;S&gt;(…)</code> is what <code>give&lt;R&gt;(…)</code> asks.</li>
         <li><strong>Regions.</strong> The region the value lives in is <code>@this</code>, so a method can send what the
           value holds, <code>nameOf() -&gt; text@this</code> (see <a href="#methods-in-regions">Methods and
           regions</a>).</li>
@@ -2748,7 +2757,20 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           what was meant for it. A pattern is a name of its file, as a shape is: <code>m.Shaped</code>,
           <code>include m (Shaped)</code>, and <code>priv pattern</code>; a shape that takes types follows one too, as in
           <code>shape Box&lt;T: shown&gt;::Shown</code>.</li>
-        <li><strong>Not yet.</strong> A pattern takes no types, follows no other pattern, has no shared methods and
+        <li id="pattern-types"><strong>Types a pattern takes.</strong> A pattern may take types, as a shape does,
+          <code>pattern Iterator&lt;T&gt;</code>, with the words they must allow, <code>pattern Ranked&lt;T: ordered&gt;</code>;
+          its fields and methods name them. A shape or kind following it gives them, <code>shape Countdown::Iterator&lt;int&gt;</code>,
+          one for each, and is asked for what the pattern asks with them in place: <code>alters next() -&gt; maybe int</code>.
+          A shape that takes types may give one of its own, <code>shape MapIter&lt;I: Iterator&lt;T&gt;, T, R&gt;::Iterator&lt;R&gt;</code>,
+          and one whose items live where its value does says so, <code>shape Words::Iterator&lt;text@this&gt;</code>, with
+          <code>alters next() -&gt; maybe text@this</code>.
+          A type follows a pattern once, so <code>::Iterator&lt;int&gt; &amp; Iterator&lt;text&gt;</code> is refused, and the
+          defaults it has from the pattern read the types it gave. A task asks for one with the types as types of its own,
+          <code>task first&lt;I: Iterator&lt;T&gt;, T&gt;(flex it: I) -&gt; maybe T</code>, in any order: <code>T</code> is
+          worked out from what the type given for <code>I</code> follows, never from a value, so <code>first(countdown)</code>
+          sends a <code>maybe int</code>, and the same holds for a shape's literal. A bound gives each type what the pattern
+          asks of it: <code>&lt;R: Ranked&lt;T&gt;, T: ordered&gt;</code>.</li>
+        <li><strong>Not yet.</strong> A pattern follows no other pattern, has no shared methods and
           gives its methods no decorators or values that parameters fall back on, and its defaults hold no lambdas. A
           builtin type such as <code>int</code> follows none, since nothing writes that it does. And a pattern is no
           type of a value: a slice of different shapes that follow one, called through it as it runs, is an idea for
@@ -5420,7 +5442,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a
           group's types, a type can't be written <code>(P...)</code>, and a group is given on to a task that calls
           itself only as it came (see <a href="#type-groups">Type groups</a>).</li>
-        <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
+        <li>A method's own types aren't written at a call, only told by its values or the place its value goes (see
+          <a href="#method-types">Types of its own</a>). A method can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>). A method of a shape that takes types takes
           no wrappers, and a method of every value no startup decorators (see

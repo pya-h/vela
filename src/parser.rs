@@ -977,18 +977,20 @@ impl Parser {
     /// that is no word (which the resolver checks names a pattern). A word
     /// another already means is an error, since it says nothing new.
     #[allow(clippy::type_complexity)]
-    fn parse_needs(&mut self) -> Result<(Vec<(Need, Span)>, Vec<(String, Span)>)> {
+    fn parse_needs(&mut self) -> Result<(Vec<(Need, Span)>, Vec<Followed>)> {
         let mut kept: Vec<(Need, Span)> = Vec::new();
-        let mut patterns: Vec<(String, Span)> = Vec::new();
+        let mut patterns: Vec<Followed> = Vec::new();
         loop {
             let span = self.peek_span();
             let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}, or a pattern it follows", needs_list())))?;
             let Some(need) = Need::from_word(&word) else {
                 let pattern = self.qualified(word)?;
-                if let Some((_, before)) = patterns.iter().find(|(before, _)| *before == pattern) {
-                    return Err(Error::at(span, format!("'{}' is written twice, at {}:{} too", pattern, before.line, before.col)));
+                if let Some(before) = patterns.iter().find(|before| before.name == pattern) {
+                    return Err(Error::at(span, format!("'{}' is written twice, at {}:{} too", pattern, before.span.line, before.span.col)));
                 }
-                patterns.push((pattern, span));
+                // `Iterator<T>`: the types it gives the pattern.
+                let types = if self.check(Token::Lt) { self.parse_given_types()? } else { Vec::new() };
+                patterns.push(Followed { name: pattern, types, span });
                 if !self.match_token(Token::Amp) {
                     return Ok((kept, patterns));
                 }
@@ -1331,15 +1333,17 @@ impl Parser {
         if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
             return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
-        if self.check(Token::Lt) {
-            let takes = if types.is_empty() { String::new() } else { format!(" ('{}' already gives it {})", owner, type_param_list(types)) };
-            return Err(Error::at(
-                self.peek_span(),
-                format!("a method takes no types of its own yet{}; write a task that takes them, and call it from here", takes),
-            ));
+        // `map<R>(f: (T) -> R)`: types of its own, after those of the shape
+        // or kind, which the values a call gives tell.
+        let own = self.parse_type_params(false)?;
+        if let Some(clash) = own.iter().find(|param| types.iter().any(|outer| outer.name == param.name)) {
+            return Err(Error::at(clash.span, format!("'{}' is already a type '{}' takes; name the method's own type otherwise, as in '<R>'", clash.name, owner)));
         }
-        // A shared method has no value it is called on.
+        // A shared method has no value it is called on; the one it is called on
+        // is of the shape's types alone.
         let mut params = if is_shared { Vec::new() } else { vec![receiver(owner, types, span)] };
+        let types: Vec<TypeParam> = types.iter().cloned().chain(own).collect();
+        let types = types.as_slice();
         let read = self.parse_field_list(Slot::Param);
         params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
         if let Some(param) = params.iter().skip(usize::from(!is_shared)).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
@@ -1516,9 +1520,7 @@ impl Parser {
         self.advance(); // pattern
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        if self.check(Token::Lt) {
-            return Err(Error::at(self.peek_span(), "a pattern takes no types yet; the types a task takes follow it, as in 'task f<T: Shaped>(x: T)'"));
-        }
+        let types = self.parse_type_params(false)?;
         if self.check(Token::Colon) {
             return Err(Error::at(self.peek_span(), format!("a pattern follows no other pattern yet; ask for the other's methods in '{}' too, or have a shape follow both, joined with '&'", name)));
         }
@@ -1600,7 +1602,7 @@ impl Parser {
         if fields.is_empty() && methods.is_empty() {
             return Err(Error::at(span, format!("pattern '{}' asks for nothing; give it a method a shape following it has, as in 'area() -> float'", name)));
         }
-        Ok(PatternDef { name, fields, methods, span, private })
+        Ok(PatternDef { name, types, fields, methods, span, private })
     }
 
     /// Refuses what a pattern's member doesn't take, at its start.
@@ -1685,9 +1687,8 @@ impl Parser {
         if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
             return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
-        if self.check(Token::Lt) {
-            return Err(Error::at(self.peek_span(), "a method takes no types of its own yet; write a task that takes them, and call it from the method"));
-        }
+        // `fold<A>(…)`: types of its own, which the values a call gives tell.
+        let own = self.parse_type_params(false)?;
         if !self.check(Token::LParen) {
             return Err(self.unexpected(&format!("'(' and the parameters of method '{}', as in '{}() -> int'", name, name)));
         }
@@ -1720,7 +1721,7 @@ impl Parser {
         };
         Ok(TaskDef {
             name: name.clone(),
-            types: Vec::new(),
+            types: own,
             given: Vec::new(),
             params,
             ret,
@@ -4741,7 +4742,7 @@ impl Parser {
             return Err(Error::at(
                 self.peek_span(),
                 format!(
-                    "a method takes no types of its own yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so '{0}' is given none; call it as '{0}(…)'",
+                    "a method's own types are told by the values a call gives, or by the place its value goes, and aren't written at the call yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so '{0}' is given none; call it as '{0}(…)'",
                     member
                 ),
             ));

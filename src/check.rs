@@ -263,6 +263,12 @@ pub struct Checker {
     /// following the pattern, writes `this` for in its body: that follower's
     /// (see `ast::THIS_TYPE`).
     this_type: Option<Type>,
+    /// For each default method a follower has from a pattern that takes types,
+    /// those types with what the follower gives each (see `Program::stand_ins`).
+    stand_ins_of: HashMap<String, Vec<(String, Type)>>,
+    /// Those of the task being read, whose written types read each in place
+    /// of the pattern's name for it (see `resolve_type`).
+    stand_ins: Vec<(String, Type)>,
     /// Every task's type parameters, parameters (names and types), and return
     /// type.
     tasks: HashMap<String, TaskInfo>,
@@ -732,6 +738,7 @@ impl Checker {
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
         checker.patterns = program.patterns.iter().map(|pattern| (pattern.name.clone(), pattern.clone())).collect();
+        checker.stand_ins_of = std::mem::take(&mut program.stand_ins);
         add_startups(&mut program.items);
         checker.add_wrappers(&mut program.items);
         checker.check_file(&mut program.items);
@@ -972,8 +979,10 @@ impl Checker {
         patterns.sort_by_key(|pattern| (pattern.span.file, pattern.span.line, pattern.span.col));
         for mut pattern in patterns {
             let module = std::mem::replace(&mut self.current_module, module_of(&pattern.name).to_string());
-            let this = TypeParam { name: THIS_TYPE.to_string(), span: pattern.span, needs: Vec::new(), patterns: vec![(pattern.name.clone(), pattern.span)], group: false };
-            self.enter_type_params(std::slice::from_ref(&this));
+            let this = TypeParam { name: THIS_TYPE.to_string(), span: pattern.span, needs: Vec::new(), patterns: vec![Followed { name: pattern.name.clone(), types: pattern.types.iter().map(|param| Type::Param(param.name.clone())).collect(), span: pattern.span }], group: false };
+            // The type following it, then those the pattern takes.
+            let types: Vec<TypeParam> = std::iter::once(this.clone()).chain(pattern.types.iter().cloned()).collect();
+            self.enter_type_params(&types);
             for field in &mut pattern.fields {
                 match self.resolve_type(&field.ty, field.ty_span, TypePlace::Field) {
                     Ok(ty) => field.ty = ty,
@@ -985,7 +994,7 @@ impl Checker {
                 let Some(own) = method.owner.as_ref().map(|owner| owner.name.clone()) else { continue };
                 let mut call = method.clone();
                 call.name = pattern_call(&pattern.name, &own);
-                call.types = vec![this.clone()];
+                call.types = types.iter().cloned().chain(method.types.iter().cloned()).collect();
                 call.body = Vec::new();
                 self.written_names.insert(call.name.clone(), format!("{}{}{}", unqualified(&pattern.name), MODULE_SEPARATOR, own));
                 match self.check_header(&mut call) {
@@ -1011,7 +1020,7 @@ impl Checker {
     /// not say which it is.
     fn pattern_with_method(&self, param: &str, method: &str, span: Span) -> Result<Option<String>> {
         let Some(declared) = self.type_param(param) else { return Ok(None) };
-        let found: Vec<&String> = declared.patterns.iter().map(|(pattern, _)| pattern).filter(|pattern| self.patterns.get(*pattern).is_some_and(|def| def.method(method).is_some())).collect();
+        let found: Vec<&String> = declared.patterns.iter().map(|followed| &followed.name).filter(|pattern| self.patterns.get(*pattern).is_some_and(|def| def.method(method).is_some())).collect();
         match found.as_slice() {
             [] => Ok(None),
             [one] => Ok(Some((*one).clone())),
@@ -1031,11 +1040,11 @@ impl Checker {
     fn pattern_field(&self, param: &str, field: &str, span: Span) -> Result<Type> {
         let base = Type::Param(param.to_string());
         let patterns = self.type_param(param).map(|declared| declared.patterns.clone()).unwrap_or_default();
-        let Some(found) = patterns.iter().find_map(|(pattern, _)| self.patterns.get(pattern).and_then(|def| def.fields.iter().find(|own| own.name == field))) else {
+        let Some(found) = patterns.iter().find_map(|followed| self.patterns.get(&followed.name).and_then(|def| def.fields.iter().find(|own| own.name == field))) else {
             if patterns.is_empty() {
                 return err(span, format!("type {} has no fields; a type a declaration takes has the fields of the patterns it follows, as in '<{}: Named>'", base, base));
             }
-            let names: Vec<&str> = patterns.iter().map(|(pattern, _)| unqualified(pattern)).collect();
+            let names: Vec<&str> = patterns.iter().map(|followed| unqualified(&followed.name)).collect();
             return err(span, format!("type {} has no field '{}': none of the patterns it follows ({}) asks for one", base, field, names.join(", ")));
         };
         let ty = found.ty.map_params(&mut |name| (name == THIS_TYPE).then(|| base.clone()));
@@ -1065,12 +1074,47 @@ impl Checker {
             return true;
         }
         if let Type::Param(name) | Type::Group(name) = ty {
-            return self.type_param(name).is_some_and(|param| param.patterns.iter().any(|(own, _)| own == pattern));
+            return self.type_param(name).is_some_and(|param| param.patterns.iter().any(|own| own.name == pattern));
         }
         let Some(owner) = self.owner_of(ty) else { return false };
         let source = self.made_of.get(&owner).map_or(owner, |made| made.name.clone());
         let follows = self.shapes.get(&source).map(|shape| &shape.follows).or_else(|| self.kinds.get(&source).map(|kind| &kind.follows));
-        follows.is_some_and(|follows| follows.iter().any(|(followed, _)| matches!(followed, Type::Named(name, _) if name == pattern)))
+        follows.is_some_and(|follows| follows.iter().any(|(followed, _)| followed_name(followed) == Some(pattern)))
+    }
+
+    /// The types values of type `ty` give pattern `pattern`, which they follow:
+    /// `[int]` for a `Countdown` following `Iterator<int>`, the types its bound
+    /// gives it for a type a declaration takes, and those a shape given types
+    /// gives it with them in place (`[R]` of `MapIter<I, T, R>::Iterator<R>`, as
+    /// `[text]` for a `MapIter<Countdown, int, text>`). None when it doesn't
+    /// follow it, or nothing says.
+    fn followed_by(&self, ty: &Type, pattern: &str) -> Option<Vec<Type>> {
+        if let Type::Param(name) = ty {
+            let declared = self.type_param(name)?;
+            let followed = declared.patterns.iter().find(|followed| followed.name == pattern)?;
+            return Some(followed.types.iter().map(|ty| self.as_params(ty)).collect());
+        }
+        let unmade = self.unmade(ty);
+        let (source, given) = match &unmade {
+            Type::Named(name, _) => (name.clone(), Vec::new()),
+            Type::Applied(applied) => (applied.name.clone(), applied.types.clone()),
+            _ => return None,
+        };
+        let (follows, types) = match (self.shapes.get(&source), self.kinds.get(&source)) {
+            (Some(shape), _) => (&shape.follows, &shape.types),
+            (None, Some(kind)) => (&kind.follows, &kind.types),
+            (None, None) => return None,
+        };
+        let (followed, _) = follows.iter().find(|(followed, _)| followed_name(followed) == Some(pattern))?;
+        let put = |name: &str| types.iter().position(|param| param.name == name).and_then(|i| given.get(i).cloned());
+        Some(followed_types(followed).iter().map(|ty| ty.replace_names(&put).map_params(&mut |name| put(name))).collect())
+    }
+
+    /// `ty`, written in a header, with the names of the types the declaration
+    /// being read takes as those types (`Iterator<T>` in a bound, read before
+    /// the checker reads the header's types).
+    fn as_params(&self, ty: &Type) -> Type {
+        ty.replace_names(&|name| self.type_param(name).map(|param| Type::Param(param.name.clone())))
     }
 
     /// Checks that shape or kind `name`, which follows `follows`, has what each
@@ -1080,10 +1124,34 @@ impl Checker {
     /// resolver copied in (see `modules::follow_patterns`).
     fn check_follows(&mut self, name: &str, fields: Option<&[Field]>, follows: &[(Type, Span)]) -> Result<()> {
         let mut asked: HashMap<String, String> = HashMap::new();
+        // The types the shape or kind takes, which it may give a pattern.
+        let own_types = self.shapes.get(name).map(|shape| shape.types.clone()).or_else(|| self.kinds.get(name).map(|kind| kind.types.clone())).unwrap_or_default();
         for (followed, at) in follows {
-            let Type::Named(pattern_name, _) = followed else { continue };
+            let Some(pattern_name) = followed_name(followed) else { continue };
             let Some(pattern) = self.patterns.get(pattern_name).cloned() else { continue };
             let written = unqualified(pattern_name);
+            // `::Iterator<int>`: one type for each the pattern takes, read in
+            // their place in what it asks for.
+            let given = followed_types(followed);
+            if given.len() != pattern.types.len() {
+                let names: Vec<&str> = pattern.types.iter().map(|param| param.name.as_str()).collect();
+                return err(*at, match (pattern.types.is_empty(), given.is_empty()) {
+                    (true, _) => format!("pattern '{}' takes no types; leave out '<…>'", written),
+                    (false, true) => format!("pattern '{0}' takes {1}, so name {2}, as in '{0}<{3}>'", written, count(names.len(), "type"), if names.len() == 1 { "it" } else { "all of them" }, names.join(", ")),
+                    (false, false) => format!("pattern '{}' takes {}, and is given {}", written, count(names.len(), "type"), given.len()),
+                });
+            }
+            let put: HashMap<String, Type> = pattern.types.iter().map(|param| param.name.clone()).zip(given.iter().map(|ty| named_params(ty, &own_types))).collect();
+            // Each must allow what the pattern asks of it, `<T: ordered>`, as a
+            // type given a shape must; one the follower takes, by what it asks.
+            let outer = std::mem::replace(&mut self.type_params, own_types.clone());
+            let allowed = pattern.types.iter().try_for_each(|param| match put.get(&param.name) {
+                Some(ty) => self.check_need("pattern", pattern_name, param, ty, *at),
+                None => Ok(()),
+            });
+            self.type_params = outer;
+            allowed?;
+            let pattern = with_given(&pattern, &put);
             if fields.is_none()
                 && let Some(field) = pattern.fields.first()
             {
@@ -1121,7 +1189,9 @@ impl Checker {
                 if self.private.contains(&full) {
                     return err(span, format!("method '{}' is one pattern '{}' asks for, so code using the pattern calls it, and it isn't 'priv'", own, written));
                 }
-                if self.broken.contains(&full) || self.broken.contains(&pattern_call(pattern_name, &own)) {
+                // A default copied in is the pattern's own header, with the
+                // follower's types in place.
+                if self.broken.contains(&full) || self.broken.contains(&pattern_call(pattern_name, &own)) || (!method.body.is_empty() && span.place_key() == method.span.place_key()) {
                     continue;
                 }
                 if !self.same_header(method, &info, name) {
@@ -1152,7 +1222,11 @@ impl Checker {
             Type::Results(types) => format!(" -> {}", types.iter().map(|ty| put(ty).to_string()).collect::<Vec<_>>().join(", ")),
             other => format!(" -> {}", put(other)),
         };
-        format!("{}{}({}){}", alters, name, params.join(", "), ret)
+        let own = match method.types.is_empty() {
+            true => String::new(),
+            false => format!("<{}>", method.types.iter().map(|param| param.name.as_str()).collect::<Vec<_>>().join(", ")),
+        };
+        format!("{}{}{}({}){}", alters, name, own, params.join(", "), ret)
     }
 
     /// Whether the method `info`, written by the follower `owner`, has the
@@ -1165,8 +1239,25 @@ impl Checker {
         if alters(method.owner.as_ref()) != alters(info.owner.as_ref()) || method.params.len() != info.params.len() {
             return false;
         }
+        // Its own types, `<R>`, by where they are taken: the follower may name
+        // them otherwise, as it may its parameters.
+        let owner_types = self.shapes.get(owner).map(|shape| shape.types.len()).or_else(|| self.kinds.get(owner).map(|kind| kind.types.len())).unwrap_or(0);
+        let mine_own: Vec<&str> = info.types.iter().skip(owner_types).map(|param| param.name.as_str()).collect();
+        if mine_own.len() != method.types.len() {
+            return false;
+        }
+        let own_place = |names: Vec<&str>| -> HashMap<String, Type> { names.into_iter().enumerate().map(|(i, name)| (name.to_string(), Type::Param(format!("#{}", i)))).collect() };
+        let asked_own = own_place(method.types.iter().map(|param| param.name.as_str()).collect());
+        let mine_own = own_place(mine_own);
         let this = info.params.first().map_or_else(|| Type::named(owner), |(_, ty)| ty.clone());
-        let put = |ty: &Type| ty.map_params(&mut |name| (name == THIS_TYPE).then(|| this.clone())).replace_names(&|name| (name == THIS_TYPE).then(|| this.clone()));
+        let put = |ty: &Type| {
+            ty.map_params(&mut |name| if name == THIS_TYPE { Some(this.clone()) } else { asked_own.get(name).cloned() }).replace_names(&|name| (name == THIS_TYPE).then(|| this.clone()))
+        };
+        let info = &TaskInfo {
+            params: info.params.iter().map(|(name, ty)| (name.clone(), ty.map_params(&mut |name| mine_own.get(name).cloned()))).collect(),
+            ret: info.ret.map_params(&mut |name| mine_own.get(name).cloned()),
+            ..info.clone()
+        };
         // Each region a header takes, named by where it is taken.
         let regions = |names: Vec<&str>| -> HashMap<String, String> { names.into_iter().enumerate().map(|(i, name)| (name.to_string(), format!("#{}", i))).collect() };
         let asked = regions(method.params.iter().filter(|param| param.ty == Type::Region).map(|param| param.name.as_str()).collect());
@@ -1706,8 +1797,10 @@ impl Checker {
                 // A default method a follower has from a pattern names the
                 // follower `this` in its header too (see `this_type`).
                 self.this_type = method_this(t);
+                self.stand_ins = self.stand_ins_of.get(&t.name).cloned().unwrap_or_default();
                 let read = self.check_task_declaration(t);
                 self.this_type = None;
+                self.stand_ins.clear();
                 read?;
             }
         }
@@ -2351,6 +2444,9 @@ impl Checker {
                 self.check_need("shape", name, param, ty, *at)?;
                 given.insert(param.name.clone(), ty.clone());
             }
+            for ((ty, at), param) in written.iter().zip(&shape.types) {
+                self.check_bound_types(name, &shape.types, param, ty, &given, *at)?;
+            }
             return Ok(shape.types.iter().filter_map(|param| given.get(&param.name).cloned()).collect());
         }
         // Nothing written: the values say which types they are. They are checked
@@ -2362,6 +2458,13 @@ impl Checker {
         let mut found = Ok(());
         for field in fields.iter_mut() {
             let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else { continue };
+            // `f: n -> n * 10`: the types the other fields told, and those their
+            // bounds tell from them, say what a one-line lambda takes.
+            self.solve_bounds(&shape.types, &mut given);
+            if let Err(error) = self.prepare_shortcut_lambda(&mut field.value, &in_copy(&declared.ty, &given)) {
+                found = Err(error);
+                break;
+            }
             match self.check_expr(&mut field.value) {
                 Ok(ty) => {
                     // A variant whose types it didn't tell, `Option.None`,
@@ -2384,6 +2487,7 @@ impl Checker {
         self.unsettled_types.truncate(untold);
         self.untold_kinds.truncate(kinds);
         found?;
+        self.solve_bounds(&shape.types, &mut given);
         let mut types = Vec::new();
         for param in &shape.types {
             let Some(ty) = given.get(&param.name) else {
@@ -2667,7 +2771,7 @@ impl Checker {
         self.enter_type_params(&t.types);
         // The task's types are out of scope after its header, whether or not
         // it checks, so a declaration after it can't name them.
-        let checked = self.check_header_in_scope(t);
+        let checked = self.check_bounds_allow(&t.types).and_then(|()| self.check_header_in_scope(t));
         self.type_params.clear();
         checked
     }
@@ -2832,6 +2936,20 @@ impl Checker {
     /// - a shape or kind without pointers lives in no region, so `Point@r` is
     ///   an error, while the `Point` in `^Point@r` just has its region dropped.
     fn resolve_type(&mut self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
+        // A type a pattern takes, in a default method a follower has from it,
+        // is the type the follower gives it: `T` of `Iterator<T>` is `int`.
+        // The follower's own type, the method's receiver, names its own types,
+        // which may have the same names, so it is read as written; so is
+        // `this`, put in after.
+        let given;
+        let ty = match self.stand_ins.as_slice() {
+            [] => ty,
+            _ if self.this_type.as_ref() == Some(ty) => ty,
+            stand_ins => {
+                given = ty.replace_names(&|name| stand_ins.iter().find(|(param, _)| param == name).map(|(_, ty)| ty.clone()));
+                &given
+            }
+        };
         // `this` in a default method a follower has from a pattern is the follower.
         let followed;
         let ty = match &self.this_type {
@@ -3475,6 +3593,7 @@ impl Checker {
         // A method's body may write `this` only where it is a pattern's
         // default, copied in, as the type of the value it is called on.
         self.this_type = method_this(task);
+        self.stand_ins = self.stand_ins_of.get(&task.name).cloned().unwrap_or_default();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
         self.current_shape = match &task.owner {
@@ -12030,7 +12149,7 @@ impl Checker {
         if let Type::Param(param) = base
             && name != STR
         {
-            let followed: Vec<&str> = self.type_param(param).map(|declared| declared.patterns.iter().map(|(pattern, _)| unqualified(pattern)).collect()).unwrap_or_default();
+            let followed: Vec<&str> = self.type_param(param).map(|declared| declared.patterns.iter().map(|followed| unqualified(&followed.name)).collect()).unwrap_or_default();
             if !followed.is_empty() {
                 return Error::at(span, format!("type {} has no method '{}': none of the patterns it follows ({}) asks for one", base, name, followed.join(", ")));
             }
@@ -12169,7 +12288,14 @@ impl Checker {
             let mut all = Vec::with_capacity(args.len() + 1);
             all.push(*value);
             all.extend(args);
-            expr.kind = ExprKind::Call { name: pattern_call(&pattern, &name), types: Vec::new(), args: all };
+            // `I: Iterator<T>`: the call is given `I`, then the types the bound
+            // gives the pattern, which its header names (`maybe T`).
+            let bound: Vec<Type> = self.type_param(param).and_then(|declared| declared.patterns.iter().find(|followed| followed.name == pattern)).map(|followed| followed.types.clone()).unwrap_or_default();
+            let types = match bound.is_empty() {
+                true => Vec::new(),
+                false => std::iter::once(Type::Param(param.clone())).chain(bound).map(|ty| (ty, span)).collect(),
+            };
+            expr.kind = ExprKind::Call { name: pattern_call(&pattern, &name), types, args: all };
             return Ok(());
         }
         // `op.run(4, 5)`: a field that holds a task, called, where the value
@@ -12836,6 +12962,7 @@ impl Checker {
                 }
                 self.match_params(ty, &actual, &mut found.given);
                 self.match_params(ty, &actual, &mut found.shown);
+                self.solve_bounds(&info.types, &mut found.given);
                 continue;
             }
             self.check_region_argument(task, arg, param, &mut found.regions)?;
@@ -12844,6 +12971,69 @@ impl Checker {
             let actual = in_callers_regions(&ty, &actual, &found.given);
             self.match_params(&ty, &actual, &mut found.given);
             self.match_params(&ty, &actual, &mut found.shown);
+        }
+        self.solve_bounds(&info.types, &mut found.given);
+        Ok(())
+    }
+
+    /// Checks that each type a bound gives a pattern allows what the pattern
+    /// asks of it: `<R: Ranked<T>, T>` for `pattern Ranked<T: ordered>` asks
+    /// `T: ordered` too. `types` are in scope.
+    fn check_bounds_allow(&self, types: &[TypeParam]) -> Result<()> {
+        for followed in types.iter().flat_map(|param| &param.patterns) {
+            let Some(pattern) = self.patterns.get(&followed.name) else { continue };
+            for (asked, given) in pattern.types.iter().zip(&followed.types) {
+                self.check_need("pattern", &followed.name, asked, &named_params(given, types), followed.span)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Works out the types a bound gives a pattern from the type given for
+    /// it: in `<I: Iterator<T>, T>`, `T` is `int` once `I` is a `Countdown`,
+    /// which follows `Iterator<int>`. Never from a value.
+    fn solve_bounds(&self, types: &[TypeParam], given: &mut HashMap<String, Type>) {
+        loop {
+            let before = given.len();
+            for param in types {
+                let Some(ty) = given.get(&param.name).cloned() else { continue };
+                for followed in param.patterns.iter().filter(|followed| !followed.types.is_empty()) {
+                    let Some(actual) = self.followed_by(&ty, &followed.name) else { continue };
+                    for (bound, actual) in followed.types.iter().zip(&actual) {
+                        self.match_params(&named_params(bound, types), actual, given);
+                    }
+                }
+            }
+            if given.len() == before {
+                return;
+            }
+        }
+    }
+
+    /// Checks that `ty`, given for `param` of `task`, gives each pattern its
+    /// bound asks for the types the bound names, with the call's `given`.
+    fn check_bound_types(&self, task: &str, types: &[TypeParam], param: &TypeParam, ty: &Type, given: &HashMap<String, Type>, at: Span) -> Result<()> {
+        for followed in param.patterns.iter().filter(|followed| !followed.types.is_empty()) {
+            let Some(actual) = self.followed_by(ty, &followed.name) else { continue };
+            let wanted: Vec<Type> = followed.types.iter().map(|bound| in_copy(&named_params(bound, types), given)).collect();
+            let fits = wanted.len() == actual.len() && wanted.iter().zip(&actual).all(|(wanted, actual)| wanted.unknown() || actual.unknown() || !wanted.params().is_empty() || wanted.without_regions() == actual.without_regions());
+            if !fits {
+                let list = |types: &[Type]| types.iter().map(Type::to_string).collect::<Vec<_>>().join(", ");
+                return err(
+                    at,
+                    format!(
+                        "{} '{}' takes a type that follows '{}<{}>' as '{}', and {} follows '{}<{}>'",
+                        if self.shapes.contains_key(task) { "shape" } else { "task" },
+                        unqualified(task),
+                        unqualified(&followed.name),
+                        list(&wanted),
+                        param.name,
+                        ty,
+                        unqualified(&followed.name),
+                        list(&actual)
+                    ),
+                );
+            }
         }
         Ok(())
     }
@@ -12909,6 +13099,7 @@ impl Checker {
                     );
                 }
                 self.check_need("task", task, param, ty, *at)?;
+                self.check_bound_types(task, &info.types, param, ty, &given, *at)?;
             }
         }
         // A type found in a region a task value takes is in the region the
@@ -13583,7 +13774,11 @@ impl Checker {
         if info.types.is_empty() {
             return err(span, format!("task '{}' takes no types, so '< … >' has nothing to name", task));
         }
-        if written.len() != info.types.len() {
+        // A call of a pattern's method the checker made gives the type following
+        // the pattern and those its bound gives it; the method's own types, after
+        // them, come from the values (see `pattern_call`).
+        let partly = pattern_call_parts(task).is_some() && written.len() < info.types.len();
+        if written.len() != info.types.len() && !partly {
             let names: Vec<&str> = info.types.iter().map(|param| param.name.as_str()).collect();
             return err(
                 span,
@@ -13602,7 +13797,7 @@ impl Checker {
     /// task's header asks of it.
     fn check_need(&self, what: &str, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
         // The patterns it asks every type given for it to follow.
-        if let Some((pattern, _)) = param.patterns.iter().find(|(pattern, _)| !self.follows(ty, pattern)) {
+        if let Some(Followed { name: pattern, .. }) = param.patterns.iter().find(|followed| !self.follows(ty, &followed.name)) {
             let pattern = unqualified(pattern);
             let how = match self.owner_of(ty) {
                 Some(owner) if self.shapes.contains_key(&owner) || self.kinds.contains_key(&owner) => {
@@ -13834,6 +14029,14 @@ impl Checker {
                 param,
                 unqualified(task),
                 unqualified(task)
+            );
+        }
+        // A method's own types aren't written at a call yet.
+        if self.tasks.get(task).is_some_and(|info| info.owner.is_some()) {
+            return format!(
+                "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; a method's types aren't written at a call yet, so give the value a place whose type names it, as in 'fixed x: maybe int = …'",
+                param,
+                self.written_names.get(task).cloned().unwrap_or_else(|| unqualified(task).to_string())
             );
         }
         let count = self.tasks.get(task).map_or(1, |info| info.types.len().max(1));
@@ -15017,9 +15220,13 @@ impl Checker {
                 // `x.area()` with `x: T`: the method of the type this copy gives
                 // `T`, which has the header the pattern asks for (see
                 // `check_follows`), made for its types where it takes them.
-                if let Some((_, method)) = pattern_call_parts(name)
+                if let Some((pattern, method)) = pattern_call_parts(name)
                     && let Some(receiver) = args.first().and_then(|arg| arg.ty.as_ref())
                 {
+                    // The method's own types, `A` of `fold<A>`, last in the call's,
+                    // stay the method's own after the follower's.
+                    let own = self.patterns.get(pattern).and_then(|def| def.method(method)).map_or(0, |def| def.types.len());
+                    let own_types: Vec<TypeArg> = types.iter().skip(types.len().saturating_sub(own)).cloned().collect();
                     let method = method.to_string();
                     let mut receiver = in_copy(receiver, given);
                     self.settle_applications(&mut receiver, at)?;
@@ -15034,11 +15241,11 @@ impl Checker {
                     match self.unmade(&receiver) {
                         Type::Applied(made) => {
                             *name = method_name(&made.name, &method);
-                            *types = made.types.iter().map(|ty| (ty.without_regions(), at)).collect();
+                            *types = made.types.iter().map(|ty| (ty.without_regions(), at)).chain(own_types).collect();
                         }
                         _ => {
                             *name = method_name(&owner, &method);
-                            types.clear();
+                            *types = own_types;
                         }
                     }
                 }
@@ -18356,4 +18563,30 @@ impl Taker<'_> {
             Taker::KeptBind(name) => format!("keeping '{}' as 'bind& {}'", place, name),
         }
     }
+}
+
+/// `ty`, written in a bound of a declaration taking `types`, with their names
+/// as those types: `Iterator<T>` read as `Iterator<Param(T)>`.
+fn named_params(ty: &Type, types: &[TypeParam]) -> Type {
+    ty.replace_names(&|name| types.iter().any(|param| param.name == name).then(|| Type::Param(name.to_string())))
+}
+
+/// Pattern `pattern` with the types it takes as `given` says, in its fields'
+/// types and its methods' headers: what a follower giving them is asked for.
+fn with_given(pattern: &PatternDef, given: &HashMap<String, Type>) -> PatternDef {
+    if given.is_empty() {
+        return pattern.clone();
+    }
+    let put = |ty: &Type| ty.map_params(&mut |name| given.get(name).cloned());
+    let mut pattern = pattern.clone();
+    for field in &mut pattern.fields {
+        field.ty = put(&field.ty);
+    }
+    for method in &mut pattern.methods {
+        for param in &mut method.params {
+            param.ty = put(&param.ty);
+        }
+        method.ret = put(&method.ret);
+    }
+    pattern
 }

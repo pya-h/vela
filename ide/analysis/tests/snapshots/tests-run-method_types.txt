@@ -1,0 +1,108 @@
+  1 | ; Methods taking types of their own: on a shape that takes types, on a kind,
+    | comment:; Methods taking types of their own: on a shape that takes types, on a kind,
+  2 | ; one a pattern asks for (named otherwise by the follower), and calls told
+    | comment:; one a pattern asks for (named otherwise by the follower), and calls told
+  3 | ; their types by their values or by the place the value goes.
+    | comment:; their types by their values or by the place the value goes.
+  5 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+  6 |     v: T
+    | field:v  punctuation::  type:T
+  8 |     apply<R>(f: (T) -> R) -> R
+    | method:apply  punctuation:<  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:R  punctuation:)  operator:->  type:R
+  9 |         <- f(.v)
+    | keyword:<-  parameter:f  punctuation:(  punctuation:.  field:v  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 12 |     map<R>(f: (T) -> R, r: region) -> Box<R>@r
+    | method:map  punctuation:<  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:R  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Box  punctuation:<  type:R  punctuation:>  operator:@  region:r
+ 13 |         <- Box<R> { v: f(.v) }
+    | keyword:<-  type:Box  punctuation:<  type:R  punctuation:>  punctuation:{  field:v  punctuation::  parameter:f  punctuation:(  punctuation:.  field:v  punctuation:)  punctuation:}
+ 14 |     fi
+    | keyword:fi
+ 16 |     with<A: shown>(other: A, r: region) -> text@r
+    | method:with  punctuation:<  type:A  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:other  punctuation::  type:A  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 17 |         <- "and {other}" at r
+    | keyword:<-  string:"and {  parameter:other  string:}"  keyword:at  region:r
+ 18 |     fi
+    | keyword:fi
+ 20 |     nothing_of<R>() -> maybe R
+    | method:nothing_of  punctuation:<  type:R  punctuation:>  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:R
+ 21 |         <- none
+    | keyword:<-  keyword:none
+ 22 |     fi
+    | keyword:fi
+ 23 | fi
+    | keyword:fi
+ 25 | kind Light
+    | keyword:kind  type:Light
+ 26 |     On
+    | variant:On
+ 27 |     Off
+    | variant:Off
+ 29 |     pick<V>(on: V, off: V) -> V
+    | method:pick  punctuation:<  type:V  punctuation:>  punctuation:(  parameter:on  punctuation::  type:V  punctuation:,  parameter:off  punctuation::  type:V  punctuation:)  operator:->  type:V
+ 30 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 31 |             case On
+    | keyword:case  variant:On
+ 32 |                 <- on
+    | keyword:<-  parameter:on
+ 33 |             case Off
+    | keyword:case  variant:Off
+ 34 |                 <- off
+    | keyword:<-  parameter:off
+ 35 |         fi
+    | keyword:fi
+ 36 |     fi
+    | keyword:fi
+ 37 | fi
+    | keyword:fi
+ 39 | pattern Holder<T>
+    | keyword:pattern  type:Holder  punctuation:<  type:T  punctuation:>
+ 40 |     give<R>(f: (T) -> R) -> R
+    | method:give  punctuation:<  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:R  punctuation:)  operator:->  type:R
+ 41 | fi
+    | keyword:fi
+ 43 | shape Cell::Holder<int>
+    | keyword:shape  type:Cell  punctuation::  punctuation::  type:Holder  punctuation:<  type-builtin:int  punctuation:>
+ 44 |     v: int
+    | field:v  punctuation::  type-builtin:int
+ 46 |     give<S>(f: (int) -> S) -> S
+    | method:give  punctuation:<  type:S  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type:S  punctuation:)  operator:->  type:S
+ 47 |         <- f(.v)
+    | keyword:<-  parameter:f  punctuation:(  punctuation:.  field:v  punctuation:)
+ 48 |     fi
+    | keyword:fi
+ 49 | fi
+    | keyword:fi
+ 51 | task through<H: Holder<T>, T>(h: H, f: (T) -> bool) -> bool
+    | keyword:task  task:through  punctuation:<  type:H  punctuation::  type:Holder  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation:>  punctuation:(  parameter:h  punctuation::  type:H  punctuation:,  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type-builtin:bool  punctuation:)  operator:->  type-builtin:bool
+ 52 |     <- h.give(f)
+    | keyword:<-  parameter:h  punctuation:.  method:give  punctuation:(  parameter:f  punctuation:)
+ 53 | fi
+    | keyword:fi
+ 55 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 56 |     region r
+    | keyword:region  region:r
+ 57 |     fixed b = Box<int> { v: 2 }
+    | keyword:fixed  variable:b  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:v  punctuation::  number:2  punctuation:}
+ 58 |     show(b.apply(n -> n * 3), " ", b.apply((n: int) -> text <- "two" fi))
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  method:apply  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  method:apply  punctuation:(  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  keyword:<-  string:"two"  keyword:fi  punctuation:)  punctuation:)
+ 59 |     show(b.map(n -> n > 1) at r)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:1  punctuation:)  keyword:at  region:r  punctuation:)
+ 60 |     show(Box { v: 1.5 }.with(true) at r)
+    | builtin-fn:show  punctuation:(  type:Box  punctuation:{  field:v  punctuation::  number:1.5  punctuation:}  punctuation:.  method:with  punctuation:(  keyword:true  punctuation:)  keyword:at  region:r  punctuation:)
+ 61 |     fixed none_yet: maybe text = b.nothing_of()
+    | keyword:fixed  variable:none_yet  punctuation::  keyword:maybe  type-builtin:text  operator:=  variable:b  punctuation:.  method:nothing_of  punctuation:(  punctuation:)
+ 62 |     show(none_yet { "none" })
+    | builtin-fn:show  punctuation:(  variable:none_yet  punctuation:{  string:"none"  punctuation:}  punctuation:)
+ 63 |     show(Light.On.pick("yes", "no"), " ", Light.Off.pick(1, 0))
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:On  punctuation:.  method:pick  punctuation:(  string:"yes"  punctuation:,  string:"no"  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Light  punctuation:.  variant:Off  punctuation:.  method:pick  punctuation:(  number:1  punctuation:,  number:0  punctuation:)  punctuation:)
+ 64 |     fixed c = Cell { v: 4 }
+    | keyword:fixed  variable:c  operator:=  type:Cell  punctuation:{  field:v  punctuation::  number:4  punctuation:}
+ 65 |     show(c.give(n -> n * 2), " ", through(c, n -> n > 3))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:give  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  task:through  punctuation:(  variable:c  punctuation:,  parameter:n  operator:->  parameter:n  operator:>  number:3  punctuation:)  punctuation:)
+ 66 | fi
+    | keyword:fi

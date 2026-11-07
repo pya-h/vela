@@ -2653,15 +2653,50 @@ pub struct TypeParam {
     /// its values can only be stored, passed, and sent.
     pub needs: Vec<(Need, Span)>,
     /// The patterns every type given for it follows, joined with the words by
-    /// `&` (`<T: Shaped & shown>`), each with where it is written: the body may
-    /// call their methods and read their fields on a value of it. The resolver
+    /// `&` (`<T: Shaped & shown>`, `<I: Iterator<T>, T>`): the body may call
+    /// their methods and read their fields on a value of it. The resolver
     /// writes each as the program names it.
-    pub patterns: Vec<(String, Span)>,
+    pub patterns: Vec<Followed>,
     /// `P...`: a group of types, any number and any mix, which a task takes
     /// as its last parameter (`args: P...`) and names in a task's type
     /// (`(P...) -> R`). Each use fills it in with the types of the values it
     /// gives, as a type is filled in (see `Type::Group`).
     pub group: bool,
+}
+
+/// A pattern a type a declaration takes must follow, with the types it gives
+/// the pattern (`Iterator<T>`; none for `Shaped`) and where it is written.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Followed {
+    pub name: String,
+    pub types: Vec<Type>,
+    pub span: Span,
+}
+
+/// The name of the pattern a shape or kind follows, as its `follows` holds it:
+/// `Shaped`, or `Iterator` given types.
+pub fn followed_name(ty: &Type) -> Option<&str> {
+    match ty {
+        Type::Named(name, _) => Some(name),
+        Type::Applied(applied) => Some(&applied.name),
+        _ => None,
+    }
+}
+
+/// The types a shape or kind gives the pattern it follows, as its `follows`
+/// holds it: none for `Shaped`, `[int]` for `Iterator<int>`.
+pub fn followed_types(ty: &Type) -> &[Type] {
+    match ty {
+        Type::Applied(applied) => &applied.types,
+        _ => &[],
+    }
+}
+
+impl Followed {
+    /// Pattern `name` given no types, at `span`.
+    pub fn plain(name: &str, span: Span) -> Followed {
+        Followed { name: name.to_string(), types: Vec::new(), span }
+    }
 }
 
 /// What a generic declaration requires of a type given to it, written after the
@@ -2866,6 +2901,10 @@ pub struct MacroDef {
 #[derive(Debug, Clone)]
 pub struct PatternDef {
     pub name: String,
+    /// `pattern Iterator<T>`: the types it takes, which a shape or kind
+    /// following it gives (`::Iterator<int>`), empty for a pattern that takes
+    /// none. Its fields and methods name them as types.
+    pub types: Vec<TypeParam>,
     pub fields: Vec<Field>,
     pub methods: Vec<TaskDef>,
     /// Position of the pattern's name.

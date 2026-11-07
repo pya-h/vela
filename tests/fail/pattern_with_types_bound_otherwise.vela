@@ -1,0 +1,18 @@
+; error: 17:10: task 'texts' takes a type that follows 'Iterator<text>' as 'I', and Countdown follows 'Iterator<int>'
+pattern Iterator<T>
+    alters next() -> maybe T
+fi
+
+shape Countdown::Iterator<int>
+    alters next() -> maybe int
+        <- none
+    fi
+fi
+
+task texts<I: Iterator<text>>(flex it: I) -> int
+    <- 0
+fi
+
+task main()
+    show(texts(Countdown {}))
+fi

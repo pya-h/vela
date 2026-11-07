@@ -1,0 +1,13 @@
+; error: 6:30: 'Iterator' is followed already, at 6:14; a shape or kind follows each pattern once
+pattern Iterator<T>
+    alters next() -> maybe T
+fi
+
+shape Words::Iterator<int> & Iterator<text>
+    alters next() -> maybe int
+        <- none
+    fi
+fi
+
+task main()
+fi

@@ -1,0 +1,80 @@
+; Feeds: a pattern that takes a type, Feed<T>, followed by a ticker of numbers
+; and a list of words, each giving it its own type; a default with a type of
+; its own; and tasks asking for any feed, told its item type by what the feed
+; follows.
+
+pattern Feed<T>
+    ; The next item, or none once the feed is done.
+    alters next() -> maybe T
+
+    ; Every item left, gathered with `step`: its type, A, is told by the call.
+    alters gather<A>(start: A, step: (A, T) -> A) -> A
+        flex done = start
+        endless
+            fixed item = .next() { break }
+            done = step(done, item)
+        fi
+        <- done
+    fi
+fi
+
+; 1, 2, … up to `last`.
+shape Ticker::Feed<int>
+    now: int
+    last: int
+
+    alters next() -> maybe int
+        when .now >= .last
+            <- none
+        fi
+        .now++
+        <- .now
+    fi
+fi
+
+; Three words, one at a time: they live where the value does, so the type it
+; gives the pattern says so, `text@this`.
+shape Words::Feed<text@this>
+    items: [text#3]
+    place: int
+
+    alters next() -> maybe text@this
+        when .place >= 3
+            <- none
+        fi
+        .place++
+        <- .items[.place - 1]
+    fi
+fi
+
+; How many items a feed of any type has left.
+task count_of<F: Feed<T>, T>(flex feed: F) -> int
+    flex n = 0
+    endless
+        fixed item: T = feed.next() { break }
+        n++
+    fi
+    <- n
+fi
+
+; The first item a feed of numbers gives above `limit`.
+task first_above<F: Feed<int>>(flex feed: F, limit: int) -> maybe int
+    endless
+        fixed n = feed.next() { break }
+        when n > limit
+            <- n
+        fi
+    fi
+    <- none
+fi
+
+task main()
+    flex ticks = Ticker { now: 0, last: 5 }
+    show("sum of 1 to 5: ", ticks.gather(0, (sum, n) -> sum + n))
+    show("count: ", count_of(Ticker { now: 0, last: 9 }))
+    show("first above 6: ", first_above(Ticker { now: 0, last: 9 }, 6) { 0 })
+
+    flex words = Words { items: ["tea", "cake", "bread"], place: 0 }
+    show("letters: ", words.gather(0, (sum, w) -> sum + w.len))
+    show("words: ", count_of(Words { items: ["a", "b", "c"], place: 1 }))
+fi

@@ -1,4 +1,4 @@
-; error: 9:28: a method takes no types of its own yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so 'Some' is given none; call it as 'Some(…)'
+; error: 9:28: a method's own types are told by the values a call gives, or by the place its value goes, and aren't written at the call yet, and a variant takes none of its own (a kind's types are written after its name, as in 'Option<int>.Some(…)'), so 'Some' is given none; call it as 'Some(…)'
 ; The types of a kind are written after the kind's name.
 kind Option<T>
     Some(value: T)

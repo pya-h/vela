@@ -1,7 +1,0 @@
-; error: 2:14: a pattern takes no types yet; the types a task takes follow it, as in 'task f<T: Shaped>(x: T)'
-pattern Holds<T>
-    get() -> T
-fi
-
-task main()
-fi

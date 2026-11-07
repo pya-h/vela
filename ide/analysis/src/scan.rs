@@ -805,10 +805,13 @@ impl<'a> Tokens<'a> {
         if self.token(p) != Some(&Token::Lt) {
             return false;
         }
-        let declares = p >= 2 && self.ident(p - 1).is_some() && matches!(self.token(p - 2), Some(Token::Task | Token::Shape | Token::Kind));
+        let declares = p >= 2 && self.ident(p - 1).is_some() && (matches!(self.token(p - 2), Some(Token::Task | Token::Shape | Token::Kind)) || self.ident(p - 2) == Some(vela::ast::PATTERN));
         if declares {
             return true;
         }
+        // `with<A: shown>(…)` starting a line, or after `alters`: a method's
+        // header, whose types may say what they allow.
+        let header = p >= 1 && self.ident(p - 1).is_some() && (self.starts_line(p - 1) || (p >= 2 && self.ident(p - 2) == Some(vela::ast::ALTERS)));
         let mut depth = 0usize;
         // Parentheses pair up inside the types, and no `>` inside them closes
         // anything, as the parser has it (`(i < n), m > (k)` compares).
@@ -829,6 +832,7 @@ impl<'a> Tokens<'a> {
                 }
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
+                Some(Token::Colon | Token::Amp) if header => {}
                 Some(token) if token.writes_type() => {}
                 _ => return false,
             }
@@ -1684,6 +1688,8 @@ impl<'a> Classifier<'a> {
                     } else {
                         let symbol = self.global(name, &[SymbolKind::Pattern]);
                         self.push(range, TokenClass::Type, symbol);
+                        // `<I: Iterator<T>>`: the types it gives the pattern.
+                        after_type = true;
                     }
                 }
                 // `shape Circle::Shaped & Named`: each name after a `&` in a shape's

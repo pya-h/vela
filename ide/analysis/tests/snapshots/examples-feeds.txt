@@ -1,0 +1,140 @@
+  1 | ; Feeds: a pattern that takes a type, Feed<T>, followed by a ticker of numbers
+    | comment:; Feeds: a pattern that takes a type, Feed<T>, followed by a ticker of numbers
+  2 | ; and a list of words, each giving it its own type; a default with a type of
+    | comment:; and a list of words, each giving it its own type; a default with a type of
+  3 | ; its own; and tasks asking for any feed, told its item type by what the feed
+    | comment:; its own; and tasks asking for any feed, told its item type by what the feed
+  4 | ; follows.
+    | comment:; follows.
+  6 | pattern Feed<T>
+    | keyword:pattern  type:Feed  punctuation:<  type:T  punctuation:>
+  7 |     ; The next item, or none once the feed is done.
+    | comment:; The next item, or none once the feed is done.
+  8 |     alters next() -> maybe T
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:T
+ 10 |     ; Every item left, gathered with `step`: its type, A, is told by the call.
+    | comment:; Every item left, gathered with `step`: its type, A, is told by the call.
+ 11 |     alters gather<A>(start: A, step: (A, T) -> A) -> A
+    | keyword:alters  method:gather  punctuation:<  type:A  punctuation:>  punctuation:(  parameter:start  punctuation::  type:A  punctuation:,  parameter:step  punctuation::  punctuation:(  type:A  punctuation:,  type:T  punctuation:)  operator:->  type:A  punctuation:)  operator:->  type:A
+ 12 |         flex done = start
+    | keyword:flex  variable:done  operator:=  parameter:start
+ 13 |         endless
+    | keyword:endless
+ 14 |             fixed item = .next() { break }
+    | keyword:fixed  variable:item  operator:=  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
+ 15 |             done = step(done, item)
+    | variable:done  operator:=  parameter:step  punctuation:(  variable:done  punctuation:,  variable:item  punctuation:)
+ 16 |         fi
+    | keyword:fi
+ 17 |         <- done
+    | keyword:<-  variable:done
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | ; 1, 2, … up to `last`.
+    | comment:; 1, 2, … up to `last`.
+ 22 | shape Ticker::Feed<int>
+    | keyword:shape  type:Ticker  punctuation::  punctuation::  type:Feed  punctuation:<  type-builtin:int  punctuation:>
+ 23 |     now: int
+    | field:now  punctuation::  type-builtin:int
+ 24 |     last: int
+    | field:last  punctuation::  type-builtin:int
+ 26 |     alters next() -> maybe int
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 27 |         when .now >= .last
+    | keyword:when  punctuation:.  field:now  operator:>=  punctuation:.  field:last
+ 28 |             <- none
+    | keyword:<-  keyword:none
+ 29 |         fi
+    | keyword:fi
+ 30 |         .now++
+    | punctuation:.  field:now  operator:++
+ 31 |         <- .now
+    | keyword:<-  punctuation:.  field:now
+ 32 |     fi
+    | keyword:fi
+ 33 | fi
+    | keyword:fi
+ 35 | ; Three words, one at a time: they live where the value does, so the type it
+    | comment:; Three words, one at a time: they live where the value does, so the type it
+ 36 | ; gives the pattern says so, `text@this`.
+    | comment:; gives the pattern says so, `text@this`.
+ 37 | shape Words::Feed<text@this>
+    | keyword:shape  type:Words  punctuation::  punctuation::  type:Feed  punctuation:<  type-builtin:text  operator:@  region:this  punctuation:>
+ 38 |     items: [text#3]
+    | field:items  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:3  punctuation:]
+ 39 |     place: int
+    | field:place  punctuation::  type-builtin:int
+ 41 |     alters next() -> maybe text@this
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:text  operator:@  region:this
+ 42 |         when .place >= 3
+    | keyword:when  punctuation:.  field:place  operator:>=  number:3
+ 43 |             <- none
+    | keyword:<-  keyword:none
+ 44 |         fi
+    | keyword:fi
+ 45 |         .place++
+    | punctuation:.  field:place  operator:++
+ 46 |         <- .items[.place - 1]
+    | keyword:<-  punctuation:.  field:items  punctuation:[  punctuation:.  field:place  operator:-  number:1  punctuation:]
+ 47 |     fi
+    | keyword:fi
+ 48 | fi
+    | keyword:fi
+ 50 | ; How many items a feed of any type has left.
+    | comment:; How many items a feed of any type has left.
+ 51 | task count_of<F: Feed<T>, T>(flex feed: F) -> int
+    | keyword:task  task:count_of  punctuation:<  type:F  punctuation::  type:Feed  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation:>  punctuation:(  keyword:flex  parameter:feed  punctuation::  type:F  punctuation:)  operator:->  type-builtin:int
+ 52 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
+ 53 |     endless
+    | keyword:endless
+ 54 |         fixed item: T = feed.next() { break }
+    | keyword:fixed  variable:item  punctuation::  type:T  operator:=  parameter:feed  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
+ 55 |         n++
+    | variable:n  operator:++
+ 56 |     fi
+    | keyword:fi
+ 57 |     <- n
+    | keyword:<-  variable:n
+ 58 | fi
+    | keyword:fi
+ 60 | ; The first item a feed of numbers gives above `limit`.
+    | comment:; The first item a feed of numbers gives above `limit`.
+ 61 | task first_above<F: Feed<int>>(flex feed: F, limit: int) -> maybe int
+    | keyword:task  task:first_above  punctuation:<  type:F  punctuation::  type:Feed  punctuation:<  type:int  punctuation:>  punctuation:>  punctuation:(  keyword:flex  parameter:feed  punctuation::  type:F  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 62 |     endless
+    | keyword:endless
+ 63 |         fixed n = feed.next() { break }
+    | keyword:fixed  variable:n  operator:=  parameter:feed  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
+ 64 |         when n > limit
+    | keyword:when  variable:n  operator:>  parameter:limit
+ 65 |             <- n
+    | keyword:<-  variable:n
+ 66 |         fi
+    | keyword:fi
+ 67 |     fi
+    | keyword:fi
+ 68 |     <- none
+    | keyword:<-  keyword:none
+ 69 | fi
+    | keyword:fi
+ 71 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 72 |     flex ticks = Ticker { now: 0, last: 5 }
+    | keyword:flex  variable:ticks  operator:=  type:Ticker  punctuation:{  field:now  punctuation::  number:0  punctuation:,  field:last  punctuation::  number:5  punctuation:}
+ 73 |     show("sum of 1 to 5: ", ticks.gather(0, (sum, n) -> sum + n))
+    | builtin-fn:show  punctuation:(  string:"sum of 1 to 5: "  punctuation:,  variable:ticks  punctuation:.  method:gather  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:sum  operator:+  parameter:n  punctuation:)  punctuation:)
+ 74 |     show("count: ", count_of(Ticker { now: 0, last: 9 }))
+    | builtin-fn:show  punctuation:(  string:"count: "  punctuation:,  task:count_of  punctuation:(  type:Ticker  punctuation:{  field:now  punctuation::  number:0  punctuation:,  field:last  punctuation::  number:9  punctuation:}  punctuation:)  punctuation:)
+ 75 |     show("first above 6: ", first_above(Ticker { now: 0, last: 9 }, 6) { 0 })
+    | builtin-fn:show  punctuation:(  string:"first above 6: "  punctuation:,  task:first_above  punctuation:(  type:Ticker  punctuation:{  field:now  punctuation::  number:0  punctuation:,  field:last  punctuation::  number:9  punctuation:}  punctuation:,  number:6  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 77 |     flex words = Words { items: ["tea", "cake", "bread"], place: 0 }
+    | keyword:flex  variable:words  operator:=  type:Words  punctuation:{  field:items  punctuation::  punctuation:[  string:"tea"  punctuation:,  string:"cake"  punctuation:,  string:"bread"  punctuation:]  punctuation:,  field:place  punctuation::  number:0  punctuation:}
+ 78 |     show("letters: ", words.gather(0, (sum, w) -> sum + w.len))
+    | builtin-fn:show  punctuation:(  string:"letters: "  punctuation:,  variable:words  punctuation:.  method:gather  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:w  punctuation:)  operator:->  parameter:sum  operator:+  parameter:w  punctuation:.  field:len  punctuation:)  punctuation:)
+ 79 |     show("words: ", count_of(Words { items: ["a", "b", "c"], place: 1 }))
+    | builtin-fn:show  punctuation:(  string:"words: "  punctuation:,  task:count_of  punctuation:(  type:Words  punctuation:{  field:items  punctuation::  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:]  punctuation:,  field:place  punctuation::  number:1  punctuation:}  punctuation:)  punctuation:)
+ 80 | fi
+    | keyword:fi

@@ -1,0 +1,66 @@
+; Methods taking types of their own: on a shape that takes types, on a kind,
+; one a pattern asks for (named otherwise by the follower), and calls told
+; their types by their values or by the place the value goes.
+
+shape Box<T>
+    v: T
+
+    apply<R>(f: (T) -> R) -> R
+        <- f(.v)
+    fi
+
+    map<R>(f: (T) -> R, r: region) -> Box<R>@r
+        <- Box<R> { v: f(.v) }
+    fi
+
+    with<A: shown>(other: A, r: region) -> text@r
+        <- "and {other}" at r
+    fi
+
+    nothing_of<R>() -> maybe R
+        <- none
+    fi
+fi
+
+kind Light
+    On
+    Off
+
+    pick<V>(on: V, off: V) -> V
+        match .this
+            case On
+                <- on
+            case Off
+                <- off
+        fi
+    fi
+fi
+
+pattern Holder<T>
+    give<R>(f: (T) -> R) -> R
+fi
+
+shape Cell::Holder<int>
+    v: int
+
+    give<S>(f: (int) -> S) -> S
+        <- f(.v)
+    fi
+fi
+
+task through<H: Holder<T>, T>(h: H, f: (T) -> bool) -> bool
+    <- h.give(f)
+fi
+
+task main()
+    region r
+    fixed b = Box<int> { v: 2 }
+    show(b.apply(n -> n * 3), " ", b.apply((n: int) -> text <- "two" fi))
+    show(b.map(n -> n > 1) at r)
+    show(Box { v: 1.5 }.with(true) at r)
+    fixed none_yet: maybe text = b.nothing_of()
+    show(none_yet { "none" })
+    show(Light.On.pick("yes", "no"), " ", Light.Off.pick(1, 0))
+    fixed c = Cell { v: 4 }
+    show(c.give(n -> n * 2), " ", through(c, n -> n > 3))
+fi

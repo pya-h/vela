@@ -1,0 +1,11 @@
+; error: 6:17: pattern 'Ranked' takes a type that is 'ordered' as 'T', and T is any type here; require it, as in '<T: ordered>'
+pattern Ranked<T: ordered>
+    best() -> T
+fi
+
+task best_of<R: Ranked<T>, T>(r: R) -> T
+    <- r.best()
+fi
+
+task main()
+fi

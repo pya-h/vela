@@ -1,0 +1,137 @@
+; Patterns taking types: a pattern with a type, shapes and a kind following it
+; with types given, a generic adapter following it with a type of its own,
+; defaults reading the pattern's type, bounds whose types come from what the
+; type given follows, and a pattern's own word checked.
+
+pattern Iterator<T>
+    alters next() -> maybe T
+
+    ; A default, its own type told by its values.
+    alters fold<A>(initial: A, step: (A, T) -> A) -> A
+        flex done = initial
+        endless
+            fixed v = .next() { break }
+            done = step(done, v)
+        fi
+        <- done
+    fi
+
+    alters count_left() -> int
+        flex n = 0
+        endless
+            fixed v: T = .next() { break }
+            n++
+        fi
+        <- n
+    fi
+fi
+
+shape Countdown::Iterator<int>
+    left: int
+
+    alters next() -> maybe int
+        when .left == 0
+            <- none
+        fi
+        .left = .left - 1
+        <- .left + 1
+    fi
+fi
+
+; An adapter: another iterator's items, each through `f`.
+shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
+    inner: I
+    f: (T) -> R
+
+    alters next() -> maybe R
+        fixed v = .inner.next() { <- none }
+        <- .f(v)
+    fi
+fi
+
+kind Once::Iterator<bool>
+    Full
+    Empty
+
+    alters next() -> maybe bool
+        match .this
+            case Full
+                .this = Once.Empty
+                <- true
+            case Empty
+                <- none
+        fi
+    fi
+fi
+
+pattern Ranked<T: ordered>
+    best() -> T
+fi
+
+shape Scores::Ranked<int>
+    a: int
+    b: int
+
+    best() -> int
+        when .a > .b
+            <- .a
+        fi
+        <- .b
+    fi
+fi
+
+task half(n: int) -> float
+    <- float(n) / 2.0
+fi
+
+task double(n: int) -> int
+    <- n * 2
+fi
+
+; `T` is told by what the type given for `I` follows.
+task first<I: Iterator<T>, T>(flex it: I) -> maybe T
+    <- it.next()
+fi
+
+task plus(a: float, b: float) -> float
+    <- a + b
+fi
+
+task sum_floats<I: Iterator<float>>(flex it: I) -> float
+    <- it.fold(0.0, plus)
+fi
+
+task total<I: Iterator<T>, T>(flex it: I, zero: T, add: (T, T) -> T) -> T
+    <- it.fold(zero, add)
+fi
+
+; An adapter made inside a generic task, its types told by the bound.
+task first_doubled<I: Iterator<int>>(it: I) -> int
+    flex m = MapIter { inner: it, f: double }
+    <- m.next() { 0 }
+fi
+
+task best_of<R: Ranked<T>, T: ordered>(r: R) -> T
+    <- r.best()
+fi
+
+task main()
+    flex c = Countdown { left: 3 }
+    show(c.next() { 0 }, " ", c.count_left())
+    show(first(Countdown { left: 7 }) { 0 })
+    show(total(Countdown { left: 4 }, 0, (a, b) -> a + b))
+    flex d = Countdown { left: 3 }
+    show(d.fold("", (t: text, n: int) -> text <- "x" fi))
+
+    ; Adapters, written with their types and told them.
+    flex halves = MapIter<Countdown, int, float> { inner: Countdown { left: 3 }, f: half }
+    show(halves.next() { 0.0 }, " ", halves.count_left())
+    show(sum_floats(MapIter<Countdown, int, float> { inner: Countdown { left: 4 }, f: half }))
+    flex tens = MapIter { inner: Countdown { left: 2 }, f: n -> n * 10 }
+    show(tens.next() { 0 }, " ", tens.next() { 0 }, " ", tens.next() { 0 })
+    show(first_doubled(Countdown { left: 5 }))
+
+    flex once = Once.Full
+    show(once.next() { false }, " ", once.next() { false })
+    show(best_of(Scores { a: 3, b: 9 }))
+fi

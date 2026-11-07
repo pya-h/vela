@@ -1,0 +1,228 @@
+  1 | ; Patterns taking types: a pattern with a type, shapes and a kind following it
+    | comment:; Patterns taking types: a pattern with a type, shapes and a kind following it
+  2 | ; with types given, a generic adapter following it with a type of its own,
+    | comment:; with types given, a generic adapter following it with a type of its own,
+  3 | ; defaults reading the pattern's type, bounds whose types come from what the
+    | comment:; defaults reading the pattern's type, bounds whose types come from what the
+  4 | ; type given follows, and a pattern's own word checked.
+    | comment:; type given follows, and a pattern's own word checked.
+  6 | pattern Iterator<T>
+    | keyword:pattern  type:Iterator  punctuation:<  type:T  punctuation:>
+  7 |     alters next() -> maybe T
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:T
+  9 |     ; A default, its own type told by its values.
+    | comment:; A default, its own type told by its values.
+ 10 |     alters fold<A>(initial: A, step: (A, T) -> A) -> A
+    | keyword:alters  method:fold  punctuation:<  type:A  punctuation:>  punctuation:(  parameter:initial  punctuation::  type:A  punctuation:,  parameter:step  punctuation::  punctuation:(  type:A  punctuation:,  type:T  punctuation:)  operator:->  type:A  punctuation:)  operator:->  type:A
+ 11 |         flex done = initial
+    | keyword:flex  variable:done  operator:=  parameter:initial
+ 12 |         endless
+    | keyword:endless
+ 13 |             fixed v = .next() { break }
+    | keyword:fixed  variable:v  operator:=  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
+ 14 |             done = step(done, v)
+    | variable:done  operator:=  parameter:step  punctuation:(  variable:done  punctuation:,  variable:v  punctuation:)
+ 15 |         fi
+    | keyword:fi
+ 16 |         <- done
+    | keyword:<-  variable:done
+ 17 |     fi
+    | keyword:fi
+ 19 |     alters count_left() -> int
+    | keyword:alters  method:count_left  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 20 |         flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
+ 21 |         endless
+    | keyword:endless
+ 22 |             fixed v: T = .next() { break }
+    | keyword:fixed  variable:v  punctuation::  type:T  operator:=  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
+ 23 |             n++
+    | variable:n  operator:++
+ 24 |         fi
+    | keyword:fi
+ 25 |         <- n
+    | keyword:<-  variable:n
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | shape Countdown::Iterator<int>
+    | keyword:shape  type:Countdown  punctuation::  punctuation::  type:Iterator  punctuation:<  type-builtin:int  punctuation:>
+ 30 |     left: int
+    | field:left  punctuation::  type-builtin:int
+ 32 |     alters next() -> maybe int
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 33 |         when .left == 0
+    | keyword:when  punctuation:.  field:left  operator:==  number:0
+ 34 |             <- none
+    | keyword:<-  keyword:none
+ 35 |         fi
+    | keyword:fi
+ 36 |         .left = .left - 1
+    | punctuation:.  field:left  operator:=  punctuation:.  field:left  operator:-  number:1
+ 37 |         <- .left + 1
+    | keyword:<-  punctuation:.  field:left  operator:+  number:1
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi
+ 41 | ; An adapter: another iterator's items, each through `f`.
+    | comment:; An adapter: another iterator's items, each through `f`.
+ 42 | shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
+    | keyword:shape  type:MapIter  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation:,  type:R  punctuation:>  punctuation::  punctuation::  type:Iterator  punctuation:<  type:R  punctuation:>
+ 43 |     inner: I
+    | field:inner  punctuation::  type:I
+ 44 |     f: (T) -> R
+    | field:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:R
+ 46 |     alters next() -> maybe R
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:R
+ 47 |         fixed v = .inner.next() { <- none }
+    | keyword:fixed  variable:v  operator:=  punctuation:.  field:inner  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:{  keyword:<-  keyword:none  punctuation:}
+ 48 |         <- .f(v)
+    | keyword:<-  punctuation:.  field:f  punctuation:(  variable:v  punctuation:)
+ 49 |     fi
+    | keyword:fi
+ 50 | fi
+    | keyword:fi
+ 52 | kind Once::Iterator<bool>
+    | keyword:kind  type:Once  punctuation::  punctuation::  type:Iterator  punctuation:<  type-builtin:bool  punctuation:>
+ 53 |     Full
+    | variant:Full
+ 54 |     Empty
+    | variant:Empty
+ 56 |     alters next() -> maybe bool
+    | keyword:alters  method:next  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:bool
+ 57 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 58 |             case Full
+    | keyword:case  variant:Full
+ 59 |                 .this = Once.Empty
+    | punctuation:.  keyword:this  operator:=  type:Once  punctuation:.  variant:Empty
+ 60 |                 <- true
+    | keyword:<-  keyword:true
+ 61 |             case Empty
+    | keyword:case  variant:Empty
+ 62 |                 <- none
+    | keyword:<-  keyword:none
+ 63 |         fi
+    | keyword:fi
+ 64 |     fi
+    | keyword:fi
+ 65 | fi
+    | keyword:fi
+ 67 | pattern Ranked<T: ordered>
+    | keyword:pattern  type:Ranked  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>
+ 68 |     best() -> T
+    | method:best  punctuation:(  punctuation:)  operator:->  type:T
+ 69 | fi
+    | keyword:fi
+ 71 | shape Scores::Ranked<int>
+    | keyword:shape  type:Scores  punctuation::  punctuation::  type:Ranked  punctuation:<  type-builtin:int  punctuation:>
+ 72 |     a: int
+    | field:a  punctuation::  type-builtin:int
+ 73 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 75 |     best() -> int
+    | method:best  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 76 |         when .a > .b
+    | keyword:when  punctuation:.  field:a  operator:>  punctuation:.  field:b
+ 77 |             <- .a
+    | keyword:<-  punctuation:.  field:a
+ 78 |         fi
+    | keyword:fi
+ 79 |         <- .b
+    | keyword:<-  punctuation:.  field:b
+ 80 |     fi
+    | keyword:fi
+ 81 | fi
+    | keyword:fi
+ 83 | task half(n: int) -> float
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:float
+ 84 |     <- float(n) / 2.0
+    | keyword:<-  type-builtin:float  punctuation:(  parameter:n  punctuation:)  operator:/  number:2.0
+ 85 | fi
+    | keyword:fi
+ 87 | task double(n: int) -> int
+    | keyword:task  task:double  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 88 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 89 | fi
+    | keyword:fi
+ 91 | ; `T` is told by what the type given for `I` follows.
+    | comment:; `T` is told by what the type given for `I` follows.
+ 92 | task first<I: Iterator<T>, T>(flex it: I) -> maybe T
+    | keyword:task  task:first  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation:>  punctuation:(  keyword:flex  parameter:it  punctuation::  type:I  punctuation:)  operator:->  keyword:maybe  type:T
+ 93 |     <- it.next()
+    | keyword:<-  parameter:it  punctuation:.  field:next  punctuation:(  punctuation:)
+ 94 | fi
+    | keyword:fi
+ 96 | task plus(a: float, b: float) -> float
+    | keyword:task  task:plus  punctuation:(  parameter:a  punctuation::  type-builtin:float  punctuation:,  parameter:b  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
+ 97 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 98 | fi
+    | keyword:fi
+100 | task sum_floats<I: Iterator<float>>(flex it: I) -> float
+    | keyword:task  task:sum_floats  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:float  punctuation:>  punctuation:>  punctuation:(  keyword:flex  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:float
+101 |     <- it.fold(0.0, plus)
+    | keyword:<-  parameter:it  punctuation:.  field:fold  punctuation:(  number:0.0  punctuation:,  task:plus  punctuation:)
+102 | fi
+    | keyword:fi
+104 | task total<I: Iterator<T>, T>(flex it: I, zero: T, add: (T, T) -> T) -> T
+    | keyword:task  task:total  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation:>  punctuation:(  keyword:flex  parameter:it  punctuation::  type:I  punctuation:,  parameter:zero  punctuation::  type:T  punctuation:,  parameter:add  punctuation::  punctuation:(  type:T  punctuation:,  type:T  punctuation:)  operator:->  type:T  punctuation:)  operator:->  type:T
+105 |     <- it.fold(zero, add)
+    | keyword:<-  parameter:it  punctuation:.  field:fold  punctuation:(  parameter:zero  punctuation:,  parameter:add  punctuation:)
+106 | fi
+    | keyword:fi
+108 | ; An adapter made inside a generic task, its types told by the bound.
+    | comment:; An adapter made inside a generic task, its types told by the bound.
+109 | task first_doubled<I: Iterator<int>>(it: I) -> int
+    | keyword:task  task:first_doubled  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:int  punctuation:>  punctuation:>  punctuation:(  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:int
+110 |     flex m = MapIter { inner: it, f: double }
+    | keyword:flex  variable:m  operator:=  type:MapIter  punctuation:{  field:inner  punctuation::  parameter:it  punctuation:,  field:f  punctuation::  task:double  punctuation:}
+111 |     <- m.next() { 0 }
+    | keyword:<-  variable:m  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}
+112 | fi
+    | keyword:fi
+114 | task best_of<R: Ranked<T>, T: ordered>(r: R) -> T
+    | keyword:task  task:best_of  punctuation:<  type:R  punctuation::  type:Ranked  punctuation:<  type:T  punctuation:>  punctuation:,  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:r  punctuation::  type:R  punctuation:)  operator:->  type:T
+115 |     <- r.best()
+    | keyword:<-  parameter:r  punctuation:.  method:best  punctuation:(  punctuation:)
+116 | fi
+    | keyword:fi
+118 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+119 |     flex c = Countdown { left: 3 }
+    | keyword:flex  variable:c  operator:=  type:Countdown  punctuation:{  field:left  punctuation::  number:3  punctuation:}
+120 |     show(c.next() { 0 }, " ", c.count_left())
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:count_left  punctuation:(  punctuation:)  punctuation:)
+121 |     show(first(Countdown { left: 7 }) { 0 })
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  type:Countdown  punctuation:{  field:left  punctuation::  number:7  punctuation:}  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+122 |     show(total(Countdown { left: 4 }, 0, (a, b) -> a + b))
+    | builtin-fn:show  punctuation:(  task:total  punctuation:(  type:Countdown  punctuation:{  field:left  punctuation::  number:4  punctuation:}  punctuation:,  number:0  punctuation:,  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)  operator:->  parameter:a  operator:+  parameter:b  punctuation:)  punctuation:)
+123 |     flex d = Countdown { left: 3 }
+    | keyword:flex  variable:d  operator:=  type:Countdown  punctuation:{  field:left  punctuation::  number:3  punctuation:}
+124 |     show(d.fold("", (t: text, n: int) -> text <- "x" fi))
+    | builtin-fn:show  punctuation:(  variable:d  punctuation:.  method:fold  punctuation:(  string:""  punctuation:,  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  keyword:<-  string:"x"  keyword:fi  punctuation:)  punctuation:)
+126 |     ; Adapters, written with their types and told them.
+    | comment:; Adapters, written with their types and told them.
+127 |     flex halves = MapIter<Countdown, int, float> { inner: Countdown { left: 3 }, f: half }
+    | keyword:flex  variable:halves  operator:=  type:MapIter  punctuation:<  type:Countdown  punctuation:,  type-builtin:int  punctuation:,  type-builtin:float  punctuation:>  punctuation:{  field:inner  punctuation::  type:Countdown  punctuation:{  field:left  punctuation::  number:3  punctuation:}  punctuation:,  field:f  punctuation::  task:half  punctuation:}
+128 |     show(halves.next() { 0.0 }, " ", halves.count_left())
+    | builtin-fn:show  punctuation:(  variable:halves  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:halves  punctuation:.  field:count_left  punctuation:(  punctuation:)  punctuation:)
+129 |     show(sum_floats(MapIter<Countdown, int, float> { inner: Countdown { left: 4 }, f: half }))
+    | builtin-fn:show  punctuation:(  task:sum_floats  punctuation:(  type:MapIter  punctuation:<  type:Countdown  punctuation:,  type-builtin:int  punctuation:,  type-builtin:float  punctuation:>  punctuation:{  field:inner  punctuation::  type:Countdown  punctuation:{  field:left  punctuation::  number:4  punctuation:}  punctuation:,  field:f  punctuation::  task:half  punctuation:}  punctuation:)  punctuation:)
+130 |     flex tens = MapIter { inner: Countdown { left: 2 }, f: n -> n * 10 }
+    | keyword:flex  variable:tens  operator:=  type:MapIter  punctuation:{  field:inner  punctuation::  type:Countdown  punctuation:{  field:left  punctuation::  number:2  punctuation:}  punctuation:,  field:f  punctuation::  parameter:n  operator:->  parameter:n  operator:*  number:10  punctuation:}
+131 |     show(tens.next() { 0 }, " ", tens.next() { 0 }, " ", tens.next() { 0 })
+    | builtin-fn:show  punctuation:(  variable:tens  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:tens  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:tens  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+132 |     show(first_doubled(Countdown { left: 5 }))
+    | builtin-fn:show  punctuation:(  task:first_doubled  punctuation:(  type:Countdown  punctuation:{  field:left  punctuation::  number:5  punctuation:}  punctuation:)  punctuation:)
+134 |     flex once = Once.Full
+    | keyword:flex  variable:once  operator:=  type:Once  punctuation:.  variant:Full
+135 |     show(once.next() { false }, " ", once.next() { false })
+    | builtin-fn:show  punctuation:(  variable:once  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  keyword:false  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:once  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  keyword:false  punctuation:}  punctuation:)
+136 |     show(best_of(Scores { a: 3, b: 9 }))
+    | builtin-fn:show  punctuation:(  task:best_of  punctuation:(  type:Scores  punctuation:{  field:a  punctuation::  number:3  punctuation:,  field:b  punctuation::  number:9  punctuation:}  punctuation:)  punctuation:)
+137 | fi
+    | keyword:fi

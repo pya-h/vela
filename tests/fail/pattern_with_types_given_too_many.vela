@@ -1,0 +1,13 @@
+; error: 6:14: pattern 'Iterator' takes 1 type, and is given 2
+pattern Iterator<T>
+    alters next() -> maybe T
+fi
+
+shape Words::Iterator<int, text>
+    alters next() -> maybe int
+        <- none
+    fi
+fi
+
+task main()
+fi

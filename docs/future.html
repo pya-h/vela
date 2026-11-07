@@ -1714,7 +1714,9 @@ show(c.total())</pre>
           <code>mapped&lt;U&gt;() -&gt; Box&lt;U&gt;</code>. The types a call gives would have to say which list they
           belong to, since the value already gives the shape's: either the method's own come second,
           <code>b.mapped&lt;text&gt;()</code> with the shape's worked out from <code>b</code>, or the two lists are
-          written apart. Worth doing once the first list is proven.</li>
+          written apart. Worth doing once the first list is proven.
+          <em>(done in part: <a href="vela.html#method-types">Types of its own</a>; a method's own types come after the
+          shape's and are told by the call's values or the place its value goes, not yet written at a call)</em></li>
       </ul>
     </section>
 

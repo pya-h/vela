@@ -1,0 +1,13 @@
+; error: 6:14: pattern 'Ranked' takes a type that is 'ordered' as 'T', and [int#2] has no order, so '<' can't compare it
+pattern Ranked<T: ordered>
+    best() -> T
+fi
+
+shape Pairs::Ranked<[int#2]>
+    best() -> [int#2]
+        <- [1, 2]
+    fi
+fi
+
+task main()
+fi

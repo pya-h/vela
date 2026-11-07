@@ -1,0 +1,13 @@
+; error: 12:17: can't tell which type 'R' is for this call of 'Box.nothing_of', since no argument and nothing this value goes into names one; a method's types aren't written at a call yet, so give the value a place whose type names it, as in 'fixed x: maybe int = …'
+shape Box
+    v: int
+
+    nothing_of<R>() -> maybe R
+        <- none
+    fi
+fi
+
+task main()
+    fixed b = Box { v: 1 }
+    fixed x = b.nothing_of()
+fi
