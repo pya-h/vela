@@ -245,24 +245,65 @@
     </section>
 
     <section>
-      <h2>4. API Specification & Module Surface</h2>
-      <p>The library is imported as <code>include std/web { ... }</code>:</p>
+      <h2>4. API Specification & Decorator-Driven Routing</h2>
+      <p>
+        Vela's two decorator modes work seamlessly with <code>std/web</code> to provide both declarative endpoint
+        registration and composable request middleware with zero wiring boilerplate in <code>main</code>:
+      </p>
 
-      <pre><span class="keyword">include</span> std/web { Server, Request, Response, WebError, Method, serve, route, text, json, html, files }
+      <div class="card">
+        <h3 style="margin-top:0;">Declarative Endpoint Registration & Middleware</h3>
+        <p>
+          Startup decorators (<code>$get(...)</code>, <code>$post(...)</code>, <code>$router.get(...)</code>) register routes
+          automatically at program startup before <code>main</code> begins. Wrapper decorators (<code>$(auth, logged)</code>)
+          intercept requests at call time as per-endpoint middleware.
+        </p>
 
-<span class="keyword">task</span> main() -&gt; int {
-  <span class="keyword">let</span> router = route()
-  router.get(<span class="string">"/api/greeting/{name}"</span>, handle_greeting)
-  router.get(<span class="string">"/static/*"</span>, files(<span class="string">"./public"</span>))
+        <pre><span class="keyword">include</span> std/web { serve, get, post, text, json, Request, Response, WebError }
+<span class="keyword">include</span> middleware { authenticated, logged }
 
-  <span class="keyword">let</span> server = serve(<span class="string">"127.0.0.1:8080"</span>, router)?
-  <span class="keyword">return</span> 0
-}
-
+<span class="comment">; Middleware runs on every request; $get registers route at startup</span>
+$(authenticated, logged)
+$get(<span class="string">"/api/greeting/{name}"</span>)
 <span class="keyword">task</span> handle_greeting(req: Request) -&gt; Response ~ WebError {
   <span class="keyword">let</span> name = req.param(<span class="string">"name"</span>) <span class="keyword">else</span> <span class="string">"world"</span>
   <span class="keyword">return</span> text(<span class="string">"Hello, {name}!"</span>)
+}
+
+$post(<span class="string">"/api/echo"</span>)
+<span class="keyword">task</span> handle_echo(req: Request) -&gt; Response ~ WebError {
+  <span class="keyword">return</span> text(req.body())
+}
+
+<span class="keyword">task</span> main() -&gt; int {
+  <span class="comment">; All decorated endpoints are automatically served:</span>
+  serve(<span class="string">"127.0.0.1:8080"</span>)?
+  <span class="keyword">return</span> 0
 }</pre>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Programmatic & Modular Routers</h3>
+        <p>
+          Applications can also instantiate explicit <code>Router</code> instances for modular sub-trees, mounted prefixes,
+          or static asset directories:
+        </p>
+
+        <pre><span class="keyword">include</span> std/web { route, files, serve, Request, Response, WebError, text }
+
+<span class="keyword">task</span> main() -&gt; int {
+  <span class="keyword">let</span> api = route()
+  api.get(<span class="string">"/health"</span>, health_check)
+  api.get(<span class="string">"/static/*"</span>, files(<span class="string">"./public"</span>))
+
+  serve(<span class="string">"127.0.0.1:8080"</span>, api)?
+  <span class="keyword">return</span> 0
+}
+
+<span class="keyword">task</span> health_check(req: Request) -&gt; Response ~ WebError {
+  <span class="keyword">return</span> text(<span class="string">"ok"</span>)
+}</pre>
+      </div>
     </section>
 
     <section>

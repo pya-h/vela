@@ -1,0 +1,55 @@
+; Tests raw non-blocking socket layer: bind_to, listen, connect, accept, write, read, close.
+include std/web { Socket }
+
+task main()
+    region r default
+        fixed server = Socket.open(r) { failure e
+            show("open server error")
+            <-
+        }
+        server.bind_to("127.0.0.1", 18091) { failure e
+            show("bind error")
+            <-
+        }
+        server.listen(16) { failure e
+            show("listen error")
+            <-
+        }
+
+        fixed client = Socket.open(r) { failure e
+            show("open client error")
+            <-
+        }
+        client.connect("127.0.0.1", 18091) { failure e
+            show("connect error")
+            <-
+        }
+
+        fixed accepted = server.accept(r) { failure e
+            show("accept error")
+            <-
+        }
+
+        client.write("ping from vela") { failure e
+            show("write error")
+            <-
+        }
+
+        fixed recvd = accepted.read(64, r) { failure e
+            show("read error")
+            <-
+        }
+        show("server received: ", recvd)
+
+        accepted.write("echo: {recvd}") { failure e
+            show("echo write error")
+            <-
+        }
+
+        fixed reply = client.read(64, r) { failure e
+            show("reply read error")
+            <-
+        }
+        show("client received: ", reply)
+fi
+

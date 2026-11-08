@@ -3,6 +3,13 @@
 
 /* Generated Vela names never contain __, preventing collisions with vela__rt__*. */
 
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -12,6 +19,14 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
 
 static inline void vela__rt__show_line(void) {
     putchar('\n');
@@ -553,6 +568,7 @@ typedef struct vela__rt__chunk {
 typedef struct vela__rt__closer {
     struct vela__rt__closer* next;
     int64_t handle;
+    void (*close_fn)(int64_t handle);
 } vela__rt__closer;
 
 typedef struct vela__rt__region {
@@ -1640,6 +1656,7 @@ static inline int64_t vela__rt__files_open(vela__rt__text path, int64_t mode, ve
     int64_t handle = (int64_t)(((uint64_t)slot->generation << 32) | (uint64_t)index);
     vela__rt__closer* closer = vela__rt__region_alloc(within, sizeof(vela__rt__closer), _Alignof(vela__rt__closer));
     closer->handle = handle;
+    closer->close_fn = NULL;
     closer->next = within->closers;
     within->closers = closer;
     vela__rt__files_done(VELA__RT__FILE_OK);
@@ -1847,10 +1864,14 @@ static inline int64_t vela__rt__files_remove(vela__rt__text path) {
 /* Invoke closers before freeing chunks because closer records live inside the arena. */
 static inline void vela__rt__region_free(vela__rt__region* r) {
     for (vela__rt__closer* closer = r->closers; closer != NULL; closer = closer->next) {
-        vela__rt__file_slot* slot = vela__rt__file_of(closer->handle);
-        if (slot != NULL) {
-            fclose(slot->file);
-            slot->file = NULL;
+        if (closer->close_fn != NULL) {
+            closer->close_fn(closer->handle);
+        } else {
+            vela__rt__file_slot* slot = vela__rt__file_of(closer->handle);
+            if (slot != NULL) {
+                fclose(slot->file);
+                slot->file = NULL;
+            }
         }
     }
     r->closers = NULL;
@@ -2459,6 +2480,333 @@ static inline vela__rt__text vela__rt__int512_to_text_impl(vela__rt__int512 a, v
 #define vela__rt__int512_parse_status(t) vela__rt__int512_parse_status_impl(t)
 #define vela__rt__int512_parse_value(t) vela__rt__int512_cast_out(vela__rt__int512_parse_value_impl(t))
 #define vela__rt__int512_to_text(a, into) vela__rt__int512_to_text_impl(vela__rt__int512_cast_in(a), (into))
+
+/* Socket runtime for std/web non-blocking networking. */
+
+enum {
+    VELA__RT__SOCK_OK = 0,
+    VELA__RT__SOCK_WOULD_BLOCK = 1,
+    VELA__RT__SOCK_CLOSED = 2,
+    VELA__RT__SOCK_FAILED = 3,
+    VELA__RT__SOCK_INVALID_HANDLE = 4,
+    VELA__RT__SOCK_ADDR_IN_USE = 5,
+    VELA__RT__SOCK_CONN_REFUSED = 6,
+    VELA__RT__SOCK_CONN_RESET = 7,
+    VELA__RT__SOCK_TIMEOUT = 8
+};
+
+typedef struct vela__rt__socket_slot {
+    int fd;
+    uint32_t generation;
+} vela__rt__socket_slot;
+
+typedef struct vela__rt__socket_table {
+    vela__rt__socket_slot* slots;
+    size_t count;
+    int64_t status;
+} vela__rt__socket_table;
+
+static inline vela__rt__socket_table* vela__rt__sockets(void) {
+    static vela__rt__socket_table table = { NULL, 0, VELA__RT__SOCK_OK };
+    return &table;
+}
+
+static inline int64_t vela__rt__web_socket_status(void) {
+    return vela__rt__sockets()->status;
+}
+
+static inline int64_t vela__rt__sockets_done(int64_t status) {
+    vela__rt__sockets()->status = status;
+    return status;
+}
+
+static inline vela__rt__socket_slot* vela__rt__socket_of(int64_t handle) {
+    if (handle < 0) {
+        return NULL;
+    }
+    vela__rt__socket_table* table = vela__rt__sockets();
+    size_t index = (size_t)(handle & 0xffffffff);
+    uint32_t generation = (uint32_t)(handle >> 32);
+    if (index >= table->count) {
+        return NULL;
+    }
+    vela__rt__socket_slot* slot = &table->slots[index];
+    return slot->fd >= 0 && slot->generation == generation ? slot : NULL;
+}
+
+static inline bool vela__rt__socket_set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        return false;
+    }
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) >= 0;
+}
+
+static inline int64_t vela__rt__web_socket_close(int64_t handle) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    int fd = slot->fd;
+    slot->fd = -1;
+    int res = close(fd);
+    return vela__rt__sockets_done(res == 0 ? VELA__RT__SOCK_OK : VELA__RT__SOCK_FAILED);
+}
+
+static inline void vela__rt__web_socket_closer_hook(int64_t handle) {
+    vela__rt__web_socket_close(handle);
+}
+
+static inline int64_t vela__rt__socket_alloc_slot(int fd, vela__rt__region* within) {
+    vela__rt__socket_table* table = vela__rt__sockets();
+    size_t index = 0;
+    while (index < table->count && table->slots[index].fd >= 0) {
+        index++;
+    }
+    if (index == table->count) {
+        size_t count = table->count == 0 ? 8 : table->count * 2;
+        if (count > 0xffffffffu || count > SIZE_MAX / sizeof(vela__rt__socket_slot)) {
+            vela__rt__out_of_memory();
+        }
+        vela__rt__socket_slot* slots = realloc(table->slots, count * sizeof(vela__rt__socket_slot));
+        if (slots == NULL) {
+            vela__rt__out_of_memory();
+        }
+        for (size_t i = table->count; i < count; i++) {
+            slots[i] = (vela__rt__socket_slot){ -1, 0 };
+        }
+        table->slots = slots;
+        table->count = count;
+    }
+    vela__rt__socket_slot* slot = &table->slots[index];
+    slot->fd = fd;
+    slot->generation++;
+    int64_t handle = (int64_t)(((uint64_t)slot->generation << 32) | (uint64_t)index);
+    if (within != NULL) {
+        vela__rt__closer* closer = vela__rt__region_alloc(within, sizeof(vela__rt__closer), _Alignof(vela__rt__closer));
+        closer->handle = handle;
+        closer->close_fn = vela__rt__web_socket_closer_hook;
+        closer->next = within->closers;
+        within->closers = closer;
+    }
+    vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    return handle;
+}
+
+static inline int64_t vela__rt__web_socket_open(vela__rt__region* within) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void*)&yes, sizeof(yes));
+#ifdef SO_NOSIGPIPE
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, (const void*)&yes, sizeof(yes));
+#endif
+    if (!vela__rt__socket_set_nonblocking(fd)) {
+        close(fd);
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    return vela__rt__socket_alloc_slot(fd, within);
+}
+
+static inline int64_t vela__rt__web_socket_bind(int64_t handle, vela__rt__text host, int64_t port) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+
+    char host_buf[64];
+    size_t host_len = (size_t)(host.len < 0 ? 0 : host.len);
+    if (host_len >= sizeof(host_buf)) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    if (host_len == 0 || (host_len == 7 && memcmp(host.bytes, "0.0.0.0", 7) == 0)) {
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    } else if (host_len == 9 && memcmp(host.bytes, "127.0.0.1", 9) == 0) {
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    } else {
+        memcpy(host_buf, host.bytes, host_len);
+        host_buf[host_len] = '\0';
+        if (inet_pton(AF_INET, host_buf, &addr.sin_addr) <= 0) {
+            return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+        }
+    }
+
+    if (bind(slot->fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+        if (errno == EADDRINUSE) {
+            return -vela__rt__sockets_done(VELA__RT__SOCK_ADDR_IN_USE);
+        }
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    return vela__rt__sockets_done(VELA__RT__SOCK_OK);
+}
+
+static inline int64_t vela__rt__web_socket_listen(int64_t handle, int64_t backlog) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    int res = listen(slot->fd, backlog > 0 ? (int)backlog : 128);
+    if (res != 0) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    return vela__rt__sockets_done(VELA__RT__SOCK_OK);
+}
+
+static inline int64_t vela__rt__web_socket_accept(int64_t handle, vela__rt__region* within) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    int client_fd = accept(slot->fd, (struct sockaddr*)&client_addr, &client_len);
+    if (client_fd < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return -vela__rt__sockets_done(VELA__RT__SOCK_WOULD_BLOCK);
+        }
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    vela__rt__socket_set_nonblocking(client_fd);
+    int yes = 1;
+    setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, (const void*)&yes, sizeof(yes));
+#ifdef SO_NOSIGPIPE
+    setsockopt(client_fd, SOL_SOCKET, SO_NOSIGPIPE, (const void*)&yes, sizeof(yes));
+#endif
+    return vela__rt__socket_alloc_slot(client_fd, within);
+}
+
+static inline int64_t vela__rt__web_socket_connect(int64_t handle, vela__rt__text host, int64_t port) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+
+    char host_buf[64];
+    size_t host_len = (size_t)(host.len < 0 ? 0 : host.len);
+    if (host_len >= sizeof(host_buf)) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    if (host_len == 0 || (host_len == 9 && memcmp(host.bytes, "127.0.0.1", 9) == 0)) {
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    } else {
+        memcpy(host_buf, host.bytes, host_len);
+        host_buf[host_len] = '\0';
+        if (inet_pton(AF_INET, host_buf, &addr.sin_addr) <= 0) {
+            return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+        }
+    }
+
+    int res = connect(slot->fd, (struct sockaddr*)&addr, sizeof(addr));
+    if (res == 0) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    }
+    if (errno == EINPROGRESS || errno == EWOULDBLOCK) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_WOULD_BLOCK);
+    }
+    if (errno == ECONNREFUSED) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_CONN_REFUSED);
+    }
+    return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+}
+
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
+static inline int64_t vela__rt__web_socket_write(int64_t handle, vela__rt__text data) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    if (data.len <= 0) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    }
+    ssize_t n = send(slot->fd, data.bytes, (size_t)data.len, MSG_NOSIGNAL);
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            vela__rt__sockets_done(VELA__RT__SOCK_WOULD_BLOCK);
+            return 0;
+        }
+        if (errno == EPIPE || errno == ECONNRESET) {
+            return -vela__rt__sockets_done(VELA__RT__SOCK_CONN_RESET);
+        }
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    return (int64_t)n;
+}
+
+static inline vela__rt__text vela__rt__web_socket_read(int64_t handle, int64_t max_bytes, vela__rt__region* into) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL || max_bytes <= 0) {
+        vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+        return (vela__rt__text){ "", 0 };
+    }
+    size_t cap = (size_t)max_bytes;
+    char* buf = vela__rt__region_alloc(into, cap, 1);
+    ssize_t n = recv(slot->fd, buf, cap, 0);
+    if (n == 0) {
+        vela__rt__sockets_done(VELA__RT__SOCK_CLOSED);
+        return (vela__rt__text){ "", 0 };
+    }
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            vela__rt__sockets_done(VELA__RT__SOCK_WOULD_BLOCK);
+            return (vela__rt__text){ "", 0 };
+        }
+        if (errno == ECONNRESET) {
+            vela__rt__sockets_done(VELA__RT__SOCK_CONN_RESET);
+            return (vela__rt__text){ "", 0 };
+        }
+        vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+        return (vela__rt__text){ "", 0 };
+    }
+    vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    return (vela__rt__text){ buf, (int64_t)n };
+}
+
+static inline int64_t vela__rt__web_socket_poll(int64_t handle, int64_t events, int64_t timeout_ms) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    struct pollfd pfd;
+    pfd.fd = slot->fd;
+    pfd.events = 0;
+    if (events & 1) pfd.events |= POLLIN;
+    if (events & 2) pfd.events |= POLLOUT;
+    pfd.revents = 0;
+
+    int res = poll(&pfd, 1, (int)timeout_ms);
+    if (res < 0) {
+        if (errno == EINTR) {
+            return vela__rt__sockets_done(VELA__RT__SOCK_WOULD_BLOCK);
+        }
+        return -vela__rt__sockets_done(VELA__RT__SOCK_FAILED);
+    }
+    if (res == 0) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_TIMEOUT);
+    }
+    int64_t ready = 0;
+    if (pfd.revents & (POLLIN | POLLHUP | POLLERR)) {
+        ready |= 1;
+    }
+    if (pfd.revents & POLLOUT) {
+        ready |= 2;
+    }
+    vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    return ready;
+}
 
 #endif
 

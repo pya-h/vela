@@ -1,0 +1,125 @@
+; std/web: networking, HTTP server, client, routing, and web primitives.
+
+kind SocketError
+    WouldBlock
+    Closed
+    Failed
+    NotFound
+    AddressInUse
+    ConnectionRefused
+    ConnectionReset
+    Timeout
+fi
+
+shape Socket
+    priv handle: int = -1
+
+    shared open(within: region) -> Socket ~ SocketError
+        fixed h = native_socket_open(within)
+        when h < 0
+            <- fail error_of(-h)
+        fi
+        <- Socket { handle: h }
+    fi
+
+    bind_to(host: text@p, port: int) -> nothing ~ SocketError
+        fixed res = native_socket_bind(.handle, host, port)
+        when res < 0
+            <- fail error_of(-res)
+        fi
+    fi
+
+    listen(backlog: int = 128) -> nothing ~ SocketError
+        fixed res = native_socket_listen(.handle, backlog)
+        when res < 0
+            <- fail error_of(-res)
+        fi
+    fi
+
+    accept(within: region) -> Socket ~ SocketError
+        fixed client = native_socket_accept(.handle, within)
+        when client < 0
+            <- fail error_of(-client)
+        fi
+        <- Socket { handle: client }
+    fi
+
+    connect(host: text@p, port: int) -> nothing ~ SocketError
+        fixed res = native_socket_connect(.handle, host, port)
+        when res < 0
+            <- fail error_of(-res)
+        fi
+    fi
+
+    read(max_bytes: int, into: region) -> text@into ~ SocketError
+        fixed t = native_socket_read(.handle, max_bytes, into)
+        fixed st = native_socket_status()
+        when st != 0
+            <- fail error_of(st)
+        fi
+        <- t
+    fi
+
+    write(data: text@p) -> int ~ SocketError
+        fixed n = native_socket_write(.handle, data)
+        when n < 0
+            <- fail error_of(-n)
+        fi
+        <- n
+    fi
+
+    poll(events: int, timeout_ms: int) -> int ~ SocketError
+        fixed r = native_socket_poll(.handle, events, timeout_ms)
+        when r < 0
+            <- fail error_of(-r)
+        fi
+        <- r
+    fi
+
+    alters close() -> nothing ~ SocketError
+        when .handle < 0
+            <- fail SocketError.Closed
+        fi
+        fixed res = native_socket_close(.handle)
+        .handle = -1
+        when res < 0
+            <- fail error_of(-res)
+        fi
+    fi
+fi
+
+task socket(within: region) -> Socket ~ SocketError
+    <- Socket.open(within)
+fi
+
+priv task error_of(code: int) -> SocketError
+    when code == 1
+        <- SocketError.WouldBlock
+    else when code == 2
+        <- SocketError.Closed
+    else when code == 3
+        <- SocketError.Failed
+    else when code == 4
+        <- SocketError.NotFound
+    else when code == 5
+        <- SocketError.AddressInUse
+    else when code == 6
+        <- SocketError.ConnectionRefused
+    else when code == 7
+        <- SocketError.ConnectionReset
+    else when code == 8
+        <- SocketError.Timeout
+    fi
+    <- SocketError.Failed
+fi
+
+priv native task native_socket_open(within: region) -> int
+priv native task native_socket_bind(handle: int, host: text@p, port: int) -> int
+priv native task native_socket_listen(handle: int, backlog: int) -> int
+priv native task native_socket_accept(handle: int, within: region) -> int
+priv native task native_socket_connect(handle: int, host: text@p, port: int) -> int
+priv native task native_socket_read(handle: int, max_bytes: int, into: region) -> text@into
+priv native task native_socket_write(handle: int, data: text@p) -> int
+priv native task native_socket_close(handle: int) -> int
+priv native task native_socket_poll(handle: int, events: int, timeout_ms: int) -> int
+priv native task native_socket_status() -> int

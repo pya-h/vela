@@ -1,0 +1,94 @@
+  1 | ; Tests raw non-blocking socket layer: bind_to, listen, connect, accept, write, read, close.
+    | comment:; Tests raw non-blocking socket layer: bind_to, listen, connect, accept, write, read, close.
+  2 | include std/web { Socket }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r default
+    | keyword:region  region:r  keyword:default
+  6 |         fixed server = Socket.open(r) { failure e
+    | keyword:fixed  variable:server  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+  7 |             show("open server error")
+    | builtin-fn:show  punctuation:(  string:"open server error"  punctuation:)
+  8 |             <-
+    | keyword:<-
+  9 |         }
+    | punctuation:}
+ 10 |         server.bind_to("127.0.0.1", 18091) { failure e
+    | variable:server  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18091  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 11 |             show("bind error")
+    | builtin-fn:show  punctuation:(  string:"bind error"  punctuation:)
+ 12 |             <-
+    | keyword:<-
+ 13 |         }
+    | punctuation:}
+ 14 |         server.listen(16) { failure e
+    | variable:server  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 15 |             show("listen error")
+    | builtin-fn:show  punctuation:(  string:"listen error"  punctuation:)
+ 16 |             <-
+    | keyword:<-
+ 17 |         }
+    | punctuation:}
+ 19 |         fixed client = Socket.open(r) { failure e
+    | keyword:fixed  variable:client  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 20 |             show("open client error")
+    | builtin-fn:show  punctuation:(  string:"open client error"  punctuation:)
+ 21 |             <-
+    | keyword:<-
+ 22 |         }
+    | punctuation:}
+ 23 |         client.connect("127.0.0.1", 18091) { failure e
+    | variable:client  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18091  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 24 |             show("connect error")
+    | builtin-fn:show  punctuation:(  string:"connect error"  punctuation:)
+ 25 |             <-
+    | keyword:<-
+ 26 |         }
+    | punctuation:}
+ 28 |         fixed accepted = server.accept(r) { failure e
+    | keyword:fixed  variable:accepted  operator:=  variable:server  punctuation:.  method:accept  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 29 |             show("accept error")
+    | builtin-fn:show  punctuation:(  string:"accept error"  punctuation:)
+ 30 |             <-
+    | keyword:<-
+ 31 |         }
+    | punctuation:}
+ 33 |         client.write("ping from vela") { failure e
+    | variable:client  punctuation:.  method:write  punctuation:(  string:"ping from vela"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 34 |             show("write error")
+    | builtin-fn:show  punctuation:(  string:"write error"  punctuation:)
+ 35 |             <-
+    | keyword:<-
+ 36 |         }
+    | punctuation:}
+ 38 |         fixed recvd = accepted.read(64, r) { failure e
+    | keyword:fixed  variable:recvd  operator:=  variable:accepted  punctuation:.  method:read  punctuation:(  number:64  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 39 |             show("read error")
+    | builtin-fn:show  punctuation:(  string:"read error"  punctuation:)
+ 40 |             <-
+    | keyword:<-
+ 41 |         }
+    | punctuation:}
+ 42 |         show("server received: ", recvd)
+    | builtin-fn:show  punctuation:(  string:"server received: "  punctuation:,  variable:recvd  punctuation:)
+ 44 |         accepted.write("echo: {recvd}") { failure e
+    | variable:accepted  punctuation:.  method:write  punctuation:(  string:"echo: {  variable:recvd  string:}"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 45 |             show("echo write error")
+    | builtin-fn:show  punctuation:(  string:"echo write error"  punctuation:)
+ 46 |             <-
+    | keyword:<-
+ 47 |         }
+    | punctuation:}
+ 49 |         fixed reply = client.read(64, r) { failure e
+    | keyword:fixed  variable:reply  operator:=  variable:client  punctuation:.  method:read  punctuation:(  number:64  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 50 |             show("reply read error")
+    | builtin-fn:show  punctuation:(  string:"reply read error"  punctuation:)
+ 51 |             <-
+    | keyword:<-
+ 52 |         }
+    | punctuation:}
+ 53 |         show("client received: ", reply)
+    | builtin-fn:show  punctuation:(  string:"client received: "  punctuation:,  variable:reply  punctuation:)
+ 54 | fi
+    | keyword:fi

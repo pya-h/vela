@@ -8,6 +8,7 @@ pub const MODULES: &[(&str, &str)] = &[
     ("int512", include_str!("../std/int512.vela")),
     ("loops", include_str!("../std/loops.vela")),
     ("math", include_str!("../std/math.vela")),
+    ("web", include_str!("../std/web.vela")),
 ];
 
 /// Implicitly loaded by value-producing loops.
@@ -57,6 +58,16 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/math.tanh", "tanh"),
     ("std/math.exp", "exp"),
     ("std/math.log", "vela__rt__math_log"),
+    ("std/web.native_socket_open", "vela__rt__web_socket_open"),
+    ("std/web.native_socket_bind", "vela__rt__web_socket_bind"),
+    ("std/web.native_socket_listen", "vela__rt__web_socket_listen"),
+    ("std/web.native_socket_accept", "vela__rt__web_socket_accept"),
+    ("std/web.native_socket_connect", "vela__rt__web_socket_connect"),
+    ("std/web.native_socket_read", "vela__rt__web_socket_read"),
+    ("std/web.native_socket_write", "vela__rt__web_socket_write"),
+    ("std/web.native_socket_close", "vela__rt__web_socket_close"),
+    ("std/web.native_socket_poll", "vela__rt__web_socket_poll"),
+    ("std/web.native_socket_status", "vela__rt__web_socket_status"),
 ];
 
 pub fn module(name: &str) -> Option<&'static str> {
