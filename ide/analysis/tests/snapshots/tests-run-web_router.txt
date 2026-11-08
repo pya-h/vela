@@ -1,0 +1,168 @@
+  1 | ; Tests routing, path parameters, wildcards, startup decorators, middleware wrappers, and errors.
+    | comment:; Tests routing, path parameters, wildcards, startup decorators, middleware wrappers, and errors.
+  2 | include std/web { Socket, Request, Response, Method, WebError, Router, get, post, router, serve_one, text_find, trim, default_route }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:Method  punctuation:,  type:WebError  punctuation:,  type:Router  punctuation:,  task:get  punctuation:,  task:post  punctuation:,  task:router  punctuation:,  task:serve_one  punctuation:,  task:text_find  punctuation:,  task:trim  punctuation:,  task:default_route  punctuation:}
+  4 | task auth(next: (Request@r, @r) -> Response@r ~ WebError@r, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:auth  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Request  operator:@  region:r  punctuation:,  operator:@  region:r  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r  punctuation:,  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+  5 |     when req.header("authorization") is {token}
+    | keyword:when  parameter:req  punctuation:.  method:header  punctuation:(  string:"authorization"  punctuation:)  keyword:is  punctuation:{  variable:token  punctuation:}
+  6 |         when token == "Bearer secret-token"
+    | keyword:when  variable:token  operator:==  string:"Bearer secret-token"
+  7 |             <- next(req, r)
+    | keyword:<-  parameter:next  punctuation:(  parameter:req  punctuation:,  region:r  punctuation:)
+  8 |         fi
+    | keyword:fi
+  9 |     fi
+    | keyword:fi
+ 10 |     <- fail WebError.Unauthorized("token missing or invalid")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:Unauthorized  punctuation:(  string:"token missing or invalid"  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | $get("/users/\{id\}")
+    | keyword:$  task:get  punctuation:(  string:"/users/  escape:\{  string:id  escape:\}  string:"  punctuation:)
+ 14 | task handle_user(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_user  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 15 |     fixed id = req.param("id") { "unknown" }
+    | keyword:fixed  variable:id  operator:=  parameter:req  punctuation:.  method:param  punctuation:(  string:"id"  punctuation:)  punctuation:{  string:"unknown"  punctuation:}
+ 16 |     <- Response.text("User: {id}\n" at r, r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"User: {  variable:id  string:}  escape:\n  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | $post("/echo")
+    | keyword:$  task:post  punctuation:(  string:"/echo"  punctuation:)
+ 20 | task handle_echo(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_echo  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 21 |     <- Response.text("Echo: {req.body()}\n" at r, r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Echo: {  parameter:req  punctuation:.  method:body  punctuation:(  punctuation:)  string:}  escape:\n  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | $get("/files/*")
+    | keyword:$  task:get  punctuation:(  string:"/files/*"  punctuation:)
+ 25 | task handle_files(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_files  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 26 |     fixed file = req.param("*") { "none" }
+    | keyword:fixed  variable:file  operator:=  parameter:req  punctuation:.  method:param  punctuation:(  string:"*"  punctuation:)  punctuation:{  string:"none"  punctuation:}
+ 27 |     <- Response.text("File: {file}\n" at r, r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"File: {  variable:file  string:}  escape:\n  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | $get("/secret")
+    | keyword:$  task:get  punctuation:(  string:"/secret"  punctuation:)
+ 31 | $(auth)
+    | keyword:$  punctuation:(  task:auth  punctuation:)
+ 32 | task handle_secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_secret  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 33 |     <- Response.text("Secret content\n", r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Secret content  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | task send_and_receive(server: Socket, raw_req: text@p, port: int, r: region default)
+    | keyword:task  task:send_and_receive  punctuation:(  parameter:server  punctuation::  type:Socket  punctuation:,  parameter:raw_req  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+ 37 |     flex client = Socket.open(r) { failure _
+    | keyword:flex  variable:client  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 38 |         <-
+    | keyword:<-
+ 39 |     }
+    | punctuation:}
+ 40 |     client.connect("127.0.0.1", port) { failure _
+    | variable:client  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  parameter:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 41 |         <-
+    | keyword:<-
+ 42 |     }
+    | punctuation:}
+ 43 |     client.write(raw_req) { failure _
+    | variable:client  punctuation:.  method:write  punctuation:(  parameter:raw_req  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 44 |         <-
+    | keyword:<-
+ 45 |     }
+    | punctuation:}
+ 46 |     serve_one(server, default_route, r) { failure _
+    | task:serve_one  punctuation:(  parameter:server  punctuation:,  task:default_route  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 47 |         <-
+    | keyword:<-
+ 48 |     }
+    | punctuation:}
+ 49 |     fixed resp = client.read(1024, r) { failure _
+    | keyword:fixed  variable:resp  operator:=  variable:client  punctuation:.  method:read  punctuation:(  number:1024  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 50 |         <-
+    | keyword:<-
+ 51 |     }
+    | punctuation:}
+ 52 |     client.close() { failure _ }
+    | variable:client  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+ 53 |     when resp.len >= 15
+    | keyword:when  variable:resp  punctuation:.  field:len  operator:>=  number:15
+ 54 |         fixed first_line_end = text_find(resp, "\r\n", 0)
+    | keyword:fixed  variable:first_line_end  operator:=  task:text_find  punctuation:(  variable:resp  punctuation:,  string:"  escape:\r  escape:\n  string:"  punctuation:,  number:0  punctuation:)
+ 55 |         fixed status_line = when first_line_end >= 0 resp[0..first_line_end] else resp[0..15] fi
+    | keyword:fixed  variable:status_line  operator:=  keyword:when  variable:first_line_end  operator:>=  number:0  variable:resp  punctuation:[  number:0  operator:..  variable:first_line_end  punctuation:]  keyword:else  variable:resp  punctuation:[  number:0  operator:..  number:15  punctuation:]  keyword:fi
+ 56 |         show("status: ", status_line)
+    | builtin-fn:show  punctuation:(  string:"status: "  punctuation:,  variable:status_line  punctuation:)
+ 57 |         fixed body_start = text_find(resp, "\r\n\r\n", 0)
+    | keyword:fixed  variable:body_start  operator:=  task:text_find  punctuation:(  variable:resp  punctuation:,  string:"  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  number:0  punctuation:)
+ 58 |         when body_start >= 0
+    | keyword:when  variable:body_start  operator:>=  number:0
+ 59 |             fixed body = resp[body_start + 4..resp.len]
+    | keyword:fixed  variable:body  operator:=  variable:resp  punctuation:[  variable:body_start  operator:+  number:4  operator:..  variable:resp  punctuation:.  field:len  punctuation:]
+ 60 |             show("body: ", trim(body))
+    | builtin-fn:show  punctuation:(  string:"body: "  punctuation:,  task:trim  punctuation:(  variable:body  punctuation:)  punctuation:)
+ 61 |         fi
+    | keyword:fi
+ 62 |     fi
+    | keyword:fi
+ 63 | fi
+    | keyword:fi
+ 65 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 66 |     region r default
+    | keyword:region  region:r  keyword:default
+ 67 |     fixed port = 18093
+    | keyword:fixed  variable:port  operator:=  number:18093
+ 68 |     fixed server = Socket.open(r) { failure _
+    | keyword:fixed  variable:server  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 69 |         <-
+    | keyword:<-
+ 70 |     }
+    | punctuation:}
+ 71 |     server.bind_to("127.0.0.1", port) { failure _
+    | variable:server  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 72 |         <-
+    | keyword:<-
+ 73 |     }
+    | punctuation:}
+ 74 |     server.listen(16) { failure _
+    | variable:server  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 75 |         <-
+    | keyword:<-
+ 76 |     }
+    | punctuation:}
+ 78 |     send_and_receive(server, "GET /users/42 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /users/42 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 79 |     send_and_receive(server, "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 11\r\nConnection: close\r\n\r\nping router", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"POST /echo HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Content-Length: 11  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:ping router"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 80 |     send_and_receive(server, "GET /files/docs/readme.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /files/docs/readme.txt HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 81 |     send_and_receive(server, "GET /secret HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /secret HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 82 |     send_and_receive(server, "GET /secret HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer secret-token\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /secret HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Authorization: Bearer secret-token  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 83 |     send_and_receive(server, "POST /users/42 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"POST /users/42 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Content-Length: 0  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 84 |     send_and_receive(server, "GET /unknown/path HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /unknown/path HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+ 86 |     flex custom_router = router()
+    | keyword:flex  variable:custom_router  operator:=  task:router  punctuation:(  punctuation:)
+ 87 |     custom_router.get("/custom/\{id\}", handle_user)
+    | variable:custom_router  punctuation:.  method:get  punctuation:(  string:"/custom/  escape:\{  string:id  escape:\}  string:"  punctuation:,  task:handle_user  punctuation:)
+ 88 |     fixed req_custom = Request { method: Method.Get, path: "/custom/tester", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_custom  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/custom/tester"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 89 |     fixed res_custom = custom_router.route(req_custom, r) { failure _
+    | keyword:fixed  variable:res_custom  operator:=  variable:custom_router  punctuation:.  method:route  punctuation:(  variable:req_custom  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 90 |         Response.text("err", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:"err"  punctuation:,  region:r  punctuation:)
+ 91 |     }
+    | punctuation:}
+ 92 |     show("programmatic router: ", trim(res_custom.body_data))
+    | builtin-fn:show  punctuation:(  string:"programmatic router: "  punctuation:,  task:trim  punctuation:(  variable:res_custom  punctuation:.  field:body_data  punctuation:)  punctuation:)
+ 93 | fi
+    | keyword:fi

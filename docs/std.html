@@ -503,6 +503,59 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     </section>
 
     <section>
+      <h2 id="web">std/web</h2>
+      <p>
+        Non-blocking networking, HTTP/1.1 request/response shapes, pattern-matching routers, decorator-based
+        route registration, and composable call-time middleware. Brought in with
+        <code>include std/web {Socket, Request, Response, Method, WebError, get, post, serve}</code> or
+        <code>include std/web =&gt; web</code>. See also the architectural guide in <a href="web.html">docs/web.html</a>.
+      </p>
+      <pre><span class="keyword">include</span> std/web {Socket, Request, Response, WebError, get, post, serve}
+
+<span class="keyword">task</span> auth(next: (Request@r, @r) -&gt; Response@r ~ WebError@r, req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">when</span> req.header(<span class="string">"authorization"</span>) <span class="keyword">is</span> {token}
+        <span class="keyword">when</span> token == <span class="string">"Bearer secret"</span>
+            &lt;- next(req, r)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    &lt;- <span class="keyword">fail</span> WebError.Unauthorized(<span class="string">"invalid token"</span>)
+<span class="keyword">fi</span>
+
+$get(<span class="string">"/greeting/\{name\}"</span>)
+<span class="keyword">task</span> greet(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">fixed</span> name = req.param(<span class="string">"name"</span>) { <span class="string">"friend"</span> }
+    &lt;- Response.text(<span class="string">"Hello, {name}!\n"</span> <span class="keyword">at</span> r, r)
+<span class="keyword">fi</span>
+
+$get(<span class="string">"/secret"</span>)
+$(auth)
+<span class="keyword">task</span> secret_panel(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    &lt;- Response.text(<span class="string">"Confidential data\n"</span>, r)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    serve(<span class="string">"127.0.0.1:8080"</span>) { <span class="keyword">failure</span> err
+        show(<span class="string">"server stopped: "</span>, err)
+    }
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>Socket</code></td><td>Non-blocking TCP socket handle (<code>open</code>, <code>bind_to</code>, <code>listen</code>, <code>accept</code>, <code>connect</code>, <code>read</code>, <code>write</code>, <code>close</code>, <code>poll</code>)</td></tr>
+        <tr><td><code>Request@r</code></td><td>HTTP request: <code>.method</code>, <code>.path</code>, <code>.raw_query</code>, <code>.headers</code>, <code>.body_data</code>, <code>.header(name)</code>, <code>.query(name)</code>, <code>.param(name)</code>, <code>.body()</code></td></tr>
+        <tr><td><code>Response@r</code></td><td>HTTP response: <code>Response.text(body, r)</code>, <code>Response.html(body, r)</code>, <code>Response.with_status(code, r)</code>, <code>Response.redirect(to, r)</code>, <code>.header(k, v)</code>, <code>.set_body(v)</code></td></tr>
+        <tr><td><code>WebError</code></td><td>Failure kind: <code>ListenFailed</code>, <code>BadRequest(why)</code>, <code>PayloadTooLarge</code>, <code>RouteNotFound(where)</code>, <code>MethodNotAllowed(method, path)</code>, <code>Unauthorized(why)</code>, <code>ServerFailed(why)</code></td></tr>
+        <tr><td><code>$get, $post, $put, $patch, $delete, $route</code></td><td>Startup decorators that register handlers to the default router before <code>main</code></td></tr>
+        <tr><td><code>Router</code></td><td>Programmatic router shape: <code>Router.new()</code>, <code>.get(pattern, h)</code>, <code>.post(pattern, h)</code>, <code>.enroll(method_code, pattern, h)</code>, <code>.route(req, r)</code></td></tr>
+        <tr><td><code>serve(addr, handler)</code></td><td>Listens on TCP address and handles incoming HTTP requests sequentially (or with event loop)</td></tr>
+      </table>
+      <ul>
+        <li><strong>Path parameters and wildcards.</strong> Patterns like <code>/users/\{id\}</code> capture dynamic path segments accessible via <code>req.param("id")</code>. Wildcards like <code>/assets/*</code> capture remaining path text via <code>req.param("*")</code>.</li>
+        <li><strong>Method-aware routing.</strong> If a route's path matches but the request method does not, the router automatically fails with <code>WebError.MethodNotAllowed</code>, yielding HTTP 405. If no route matches, it fails with <code>WebError.RouteNotFound</code>, yielding HTTP 404.</li>
+        <li><strong>Composable middleware.</strong> Decorators like <code>$(auth, logged)</code> wrap handlers at call time, intercepting requests and short-circuiting on failure with typed errors such as <code>WebError.Unauthorized</code>.</li>
+      </ul>
+    </section>
+
+    <section>
       <h2 id="native">How the library is made</h2>
       <p>
         The library is Vela source in the repository's <code>std/</code> folder, which the compiler holds as it is

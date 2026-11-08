@@ -1,0 +1,15 @@
+status: HTTP/1.1 200 OK
+body: User: 42
+status: HTTP/1.1 200 OK
+body: Echo: ping router
+status: HTTP/1.1 200 OK
+body: File: docs/readme.txt
+status: HTTP/1.1 401 Unauthorized
+body: 401 Unauthorized: token missing or invalid
+status: HTTP/1.1 200 OK
+body: Secret content
+status: HTTP/1.1 405 Method Not Allowed
+body: 405 Method Not Allowed: POST /users/42
+status: HTTP/1.1 404 Not Found
+body: 404 Not Found: /unknown/path
+programmatic router: User: tester

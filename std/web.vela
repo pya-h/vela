@@ -26,6 +26,8 @@ kind WebError
     BadRequest(why: text)
     PayloadTooLarge
     RouteNotFound(where: text)
+    MethodNotAllowed(method: text, path: text)
+    Unauthorized(why: text)
     ServerFailed(why: text)
 fi
 
@@ -116,6 +118,7 @@ shape Request
     raw_query: text
     headers: [text: text]
     body_data: text
+    params: [text: text]
 
     header(name: text@p) -> maybe text@this
         when .headers[#name] is {found}
@@ -134,6 +137,9 @@ shape Request
     fi
 
     param(name: text@p) -> maybe text@this
+        when .params[#name] is {found}
+            <- found
+        fi
         <- none
     fi
 
@@ -217,7 +223,212 @@ shape Server
     fi
 fi
 
-task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError) -> nothing ~ WebError
+shape RouteEntry
+    method_code: int = 0
+    pattern: text = ""
+    handler: maybe (Request@r, @r) -> Response@r ~ WebError@r = none
+fi
+
+shape Router
+    count: int = 0
+    routes: [RouteEntry#128] = [RouteEntry {}#128]
+
+    shared new() -> Router
+        <- Router {}
+    fi
+
+    alters enroll(m: int, pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        when .count < 128
+            .routes[.count] = RouteEntry { method_code: m, pattern: pattern, handler: handler }
+            .count++
+        fi
+        <- .this
+    fi
+
+    alters get(pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        <- .enroll(1, pattern, handler)
+    fi
+
+    alters post(pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        <- .enroll(2, pattern, handler)
+    fi
+
+    alters put(pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        <- .enroll(3, pattern, handler)
+    fi
+
+    alters patch(pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        <- .enroll(4, pattern, handler)
+    fi
+
+    alters delete(pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
+        <- .enroll(5, pattern, handler)
+    fi
+
+    route(req: Request@r, r: region default) -> Response@r ~ WebError@r
+        flex idx = 0
+        flex path_matched = false
+        loop idx < .count
+            fixed entry = .routes[idx]
+            flex params = new [text: text]() at r
+            when match_route(entry.pattern, req.path, params, r)
+                path_matched = true
+                when entry.method_code == 0 or entry.method_code == method_code(req.method)
+                    when entry.handler is {h}
+                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
+                        <- h(routed_req, r)
+                    fi
+                fi
+            fi
+            idx++
+        fi
+        when path_matched
+            <- fail WebError.MethodNotAllowed(method_name(req.method), req.path)
+        fi
+        <- fail WebError.RouteNotFound(req.path)
+    fi
+fi
+
+shape DefaultRouter
+    shared flex count: int = 0
+    shared flex routes: [RouteEntry#128] = [RouteEntry {}#128]
+
+    shared enroll(m: int, pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r)
+        when DefaultRouter.count < 128
+            DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: m, pattern: pattern, handler: handler }
+            DefaultRouter.count++
+        fi
+    fi
+
+    shared clear()
+        DefaultRouter.count = 0
+    fi
+
+    shared route(req: Request@r, r: region default) -> Response@r ~ WebError@r
+        flex idx = 0
+        flex path_matched = false
+        loop idx < DefaultRouter.count
+            fixed entry = DefaultRouter.routes[idx]
+            flex params = new [text: text]() at r
+            when match_route(entry.pattern, req.path, params, r)
+                path_matched = true
+                when entry.method_code == 0 or entry.method_code == method_code(req.method)
+                    when entry.handler is {h}
+                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
+                        <- h(routed_req, r)
+                    fi
+                fi
+            fi
+            idx++
+        fi
+        when path_matched
+            <- fail WebError.MethodNotAllowed(method_name(req.method), req.path)
+        fi
+        <- fail WebError.RouteNotFound(req.path)
+    fi
+
+    shared get(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+        DefaultRouter.enroll(1, pattern, handler)
+    fi
+
+    shared post(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+        DefaultRouter.enroll(2, pattern, handler)
+    fi
+
+    shared put(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+        DefaultRouter.enroll(3, pattern, handler)
+    fi
+
+    shared patch(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+        DefaultRouter.enroll(4, pattern, handler)
+    fi
+
+    shared delete(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+        DefaultRouter.enroll(5, pattern, handler)
+    fi
+fi
+
+task default_route(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- DefaultRouter.route(req, r)
+fi
+
+task get(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(1, pattern, handler)
+fi
+
+task post(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(2, pattern, handler)
+fi
+
+task put(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(3, pattern, handler)
+fi
+
+task patch(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(4, pattern, handler)
+fi
+
+task delete(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(5, pattern, handler)
+fi
+
+task route(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
+    DefaultRouter.enroll(0, pattern, handler)
+fi
+
+task router() -> Router
+    <- Router.new()
+fi
+
+task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: region default) -> bool
+    fixed norm_path: text@r = when path.len > 1 and path[path.len - 1..path.len] == "/" path[0..path.len - 1] else path fi
+    when pattern == norm_path
+        <- true
+    fi
+
+    when pattern.len >= 2 and pattern[pattern.len - 2..pattern.len] == "/*"
+        fixed prefix = pattern[0..pattern.len - 2]
+        when norm_path.len >= prefix.len and norm_path[0..prefix.len] == prefix
+            when norm_path.len == prefix.len
+                params["*"] = ""
+                <- true
+            fi
+            when norm_path[prefix.len..prefix.len + 1] == "/"
+                params["*"] = norm_path[prefix.len + 1..norm_path.len]
+                <- true
+            fi
+        fi
+        <- false
+    fi
+
+    flex pat_pos = 0
+    flex path_pos = 0
+    loop pat_pos < pattern.len and path_pos < norm_path.len
+        fixed next_pat_slash = text_find(pattern, "/", pat_pos)
+        fixed pat_end = when next_pat_slash >= 0 next_pat_slash else pattern.len fi
+        fixed pat_seg = pattern[pat_pos..pat_end]
+        pat_pos = when next_pat_slash >= 0 next_pat_slash + 1 else pattern.len fi
+
+        fixed next_path_slash = text_find(norm_path, "/", path_pos)
+        fixed path_end = when next_path_slash >= 0 next_path_slash else norm_path.len fi
+        fixed path_seg = norm_path[path_pos..path_end]
+        path_pos = when next_path_slash >= 0 next_path_slash + 1 else norm_path.len fi
+
+        when pat_seg.len >= 2 and pat_seg[0..1] == "\{" and pat_seg[pat_seg.len - 1..pat_seg.len] == "\}"
+            fixed param_name = pat_seg[1..pat_seg.len - 1]
+            params["{param_name}" at r] = path_seg
+        else when pat_seg == "*"
+            params["*"] = norm_path[path_pos..norm_path.len]
+            <- true
+        else when pat_seg != path_seg
+            <- false
+        fi
+    fi
+
+    <- pat_pos >= pattern.len and path_pos >= norm_path.len
+fi
+
+task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
     region srv_r default
     fixed (host, port) = parse_addr(addr)
     fixed server_sock = Socket.open(srv_r) { failure e
@@ -239,14 +450,14 @@ task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError) -> n
     fi
 fi
 
-task serve_one(server_sock: Socket, handler: (Request@r, @r) -> Response@r ~ WebError, r: region default) -> nothing ~ WebError
+task serve_one(server_sock: Socket, handler: (Request@r, @r) -> Response@r ~ WebError@r, r: region default) -> nothing ~ WebError
     fixed client_sock = server_sock.accept(r) { failure e
         <- fail WebError.BadRequest("failed accepting connection")
     }
     handle_connection(client_sock, handler, 1048576, r)
 fi
 
-task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response@r ~ WebError, max_body: int, r: region default) -> nothing
+task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, r: region default) -> nothing
     fixed raw = read_http_request(client, max_body, r) { failure e
         send_error_response(client, 400, "Bad Request", "Malformed HTTP request\n", r)
         client.close() { failure _ }
@@ -264,6 +475,8 @@ task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response
         case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
         case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
         case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
+        case WebError.MethodNotAllowed method path = status(405, r, "Method Not Allowed").header("content-type", "text/plain").set_body("405 Method Not Allowed: {method} {path}\n")
+        case WebError.Unauthorized why = status(401, r, "Unauthorized").header("content-type", "text/plain").set_body("401 Unauthorized: {why}\n")
         case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
         fi
         send_response(client, err_resp, r)
@@ -394,7 +607,7 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
     fi
 
     fixed body = raw[hdr_end + 4..raw.len]
-    <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body }
+    <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body, params: new [text: text]() at r }
 fi
 
 task parse_addr(addr: text@p) -> (text@p, int)
@@ -433,7 +646,7 @@ task reason_of(code: int) -> text
     else when code == 404
         <- "Not Found"
     else when code == 405
-        <- "Method Allowed"
+        <- "Method Not Allowed"
     else when code == 413
         <- "Payload Too Large"
     else when code == 500
@@ -472,6 +685,19 @@ task method_name(m: Method) -> text
     case Method.Options = "OPTIONS"
     fi
     <- name
+fi
+
+task method_code(m: Method) -> int
+    fixed c = match m
+    case Method.Get = 1
+    case Method.Post = 2
+    case Method.Put = 3
+    case Method.Patch = 4
+    case Method.Delete = 5
+    case Method.Head = 6
+    case Method.Options = 7
+    fi
+    <- c
 fi
 
 task to_lower(s: text@p, into: region default) -> text@into

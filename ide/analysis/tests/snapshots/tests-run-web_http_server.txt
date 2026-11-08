@@ -2,8 +2,8 @@
     | comment:; Tests HTTP server, Request/Response shapes, header parsing, query parsing, and response serialization.
   2 | include std/web { Socket, Request, Response, Method, WebError, serve_one, text_find }
     | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:Method  punctuation:,  type:WebError  punctuation:,  task:serve_one  punctuation:,  task:text_find  punctuation:}
-  4 | task handle_request(req: Request@r, r: region default) -> Response@r ~ WebError
-    | keyword:task  task:handle_request  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError
+  4 | task handle_request(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_request  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
   5 |     fixed name = req.query("name") { "friend" }
     | keyword:fixed  variable:name  operator:=  parameter:req  punctuation:.  method:query  punctuation:(  string:"name"  punctuation:)  punctuation:{  string:"friend"  punctuation:}
   6 |     fixed host = req.header("host") { "unknown" }

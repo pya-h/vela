@@ -1,0 +1,93 @@
+; Tests routing, path parameters, wildcards, startup decorators, middleware wrappers, and errors.
+include std/web { Socket, Request, Response, Method, WebError, Router, get, post, router, serve_one, text_find, trim, default_route }
+
+task auth(next: (Request@r, @r) -> Response@r ~ WebError@r, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.header("authorization") is {token}
+        when token == "Bearer secret-token"
+            <- next(req, r)
+        fi
+    fi
+    <- fail WebError.Unauthorized("token missing or invalid")
+fi
+
+$get("/users/\{id\}")
+task handle_user(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed id = req.param("id") { "unknown" }
+    <- Response.text("User: {id}\n" at r, r)
+fi
+
+$post("/echo")
+task handle_echo(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- Response.text("Echo: {req.body()}\n" at r, r)
+fi
+
+$get("/files/*")
+task handle_files(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed file = req.param("*") { "none" }
+    <- Response.text("File: {file}\n" at r, r)
+fi
+
+$get("/secret")
+$(auth)
+task handle_secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- Response.text("Secret content\n", r)
+fi
+
+task send_and_receive(server: Socket, raw_req: text@p, port: int, r: region default)
+    flex client = Socket.open(r) { failure _
+        <-
+    }
+    client.connect("127.0.0.1", port) { failure _
+        <-
+    }
+    client.write(raw_req) { failure _
+        <-
+    }
+    serve_one(server, default_route, r) { failure _
+        <-
+    }
+    fixed resp = client.read(1024, r) { failure _
+        <-
+    }
+    client.close() { failure _ }
+    when resp.len >= 15
+        fixed first_line_end = text_find(resp, "\r\n", 0)
+        fixed status_line = when first_line_end >= 0 resp[0..first_line_end] else resp[0..15] fi
+        show("status: ", status_line)
+        fixed body_start = text_find(resp, "\r\n\r\n", 0)
+        when body_start >= 0
+            fixed body = resp[body_start + 4..resp.len]
+            show("body: ", trim(body))
+        fi
+    fi
+fi
+
+task main()
+    region r default
+    fixed port = 18093
+    fixed server = Socket.open(r) { failure _
+        <-
+    }
+    server.bind_to("127.0.0.1", port) { failure _
+        <-
+    }
+    server.listen(16) { failure _
+        <-
+    }
+
+    send_and_receive(server, "GET /users/42 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "POST /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 11\r\nConnection: close\r\n\r\nping router", port, r)
+    send_and_receive(server, "GET /files/docs/readme.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /secret HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /secret HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer secret-token\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "POST /users/42 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /unknown/path HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+
+    flex custom_router = router()
+    custom_router.get("/custom/\{id\}", handle_user)
+    fixed req_custom = Request { method: Method.Get, path: "/custom/tester", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed res_custom = custom_router.route(req_custom, r) { failure _
+        Response.text("err", r)
+    }
+    show("programmatic router: ", trim(res_custom.body_data))
+fi
