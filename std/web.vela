@@ -11,6 +11,24 @@ kind SocketError
     Timeout
 fi
 
+kind Method
+    Get
+    Post
+    Put
+    Patch
+    Delete
+    Head
+    Options
+fi
+
+kind WebError
+    ListenFailed
+    BadRequest(why: text)
+    PayloadTooLarge
+    RouteNotFound(where: text)
+    ServerFailed(why: text)
+fi
+
 shape Socket
     priv handle: int = -1
 
@@ -92,6 +110,407 @@ task socket(within: region) -> Socket ~ SocketError
     <- Socket.open(within)
 fi
 
+shape Request
+    method: Method
+    path: text
+    raw_query: text
+    headers: [text: text]
+    body_data: text
+
+    header(name: text@p) -> maybe text@this
+        when .headers[#name] is {found}
+            <- found
+        fi
+        each k, v in .headers
+            when text_eq_ignore_case(k, name)
+                <- v
+            fi
+        fi
+        <- none
+    fi
+
+    body() -> text@this
+        <- .body_data
+    fi
+
+    param(name: text@p) -> maybe text@this
+        <- none
+    fi
+
+    query(key: text@p) -> maybe text@this
+        <- query_param(.raw_query, key)
+    fi
+fi
+
+shape Response
+    status: int = 200
+    reason: text = "OK"
+    headers: [text: text]
+    body_data: text = ""
+
+    shared text(body: text@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = "text/plain; charset=utf-8"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
+    fi
+
+    shared html(body: text@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = "text/html; charset=utf-8"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
+    fi
+
+    shared with_status(code: int, r: region default, custom_reason: text@r = "") -> Response@r
+        fixed r_name = when custom_reason != "" custom_reason else reason_of(code) fi
+        <- Response { status: code, reason: r_name, headers: new [text: text]() at r, body_data: "" }
+    fi
+
+    shared redirect(to: text@r, r: region default, code: int = 302) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["location"] = to
+        <- Response { status: code, reason: reason_of(code), headers: hdrs, body_data: "" }
+    fi
+
+    alters header(name: text@this, value: text@this) -> Response@this
+        .headers[name] = value
+        <- .this
+    fi
+
+    alters set_body(content: text@this) -> Response@this
+        .body_data = content
+        <- .this
+    fi
+fi
+
+task text_response(body: text@r, r: region default) -> Response@r
+    <- Response.text(body, r)
+fi
+
+task html_response(body: text@r, r: region default) -> Response@r
+    <- Response.html(body, r)
+fi
+
+task status_response(code: int, r: region default, custom_reason: text@r = "") -> Response@r
+    <- Response.with_status(code, r, custom_reason)
+fi
+
+task status(code: int, r: region default, custom_reason: text@r = "") -> Response@r
+    <- Response.with_status(code, r, custom_reason)
+fi
+
+task redirect(to: text@r, r: region default, code: int = 302) -> Response@r
+    <- Response.redirect(to, r, code)
+fi
+
+shape Server
+    addr: text
+    max_body_size: int = 1048576
+    keep_alive_enabled: bool = true
+    running: bool = true
+
+    body_limit(limit: int) -> Server@this
+        <- Server { addr: .addr, max_body_size: limit, keep_alive_enabled: .keep_alive_enabled, running: .running }
+    fi
+
+    keep_alive(enabled: bool) -> Server@this
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: enabled, running: .running }
+    fi
+fi
+
+task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError) -> nothing ~ WebError
+    region srv_r default
+    fixed (host, port) = parse_addr(addr)
+    fixed server_sock = Socket.open(srv_r) { failure e
+        <- fail WebError.ListenFailed
+    }
+    server_sock.bind_to(host, port) { failure e
+        <- fail WebError.ListenFailed
+    }
+    server_sock.listen(128) { failure e
+        <- fail WebError.ListenFailed
+    }
+
+    endless
+        region req_r default
+        fixed client_sock = server_sock.accept(req_r) { failure e
+            continue
+        }
+        handle_connection(client_sock, handler, 1048576, req_r)
+    fi
+fi
+
+task serve_one(server_sock: Socket, handler: (Request@r, @r) -> Response@r ~ WebError, r: region default) -> nothing ~ WebError
+    fixed client_sock = server_sock.accept(r) { failure e
+        <- fail WebError.BadRequest("failed accepting connection")
+    }
+    handle_connection(client_sock, handler, 1048576, r)
+fi
+
+task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response@r ~ WebError, max_body: int, r: region default) -> nothing
+    fixed raw = read_http_request(client, max_body, r) { failure e
+        send_error_response(client, 400, "Bad Request", "Malformed HTTP request\n", r)
+        client.close() { failure _ }
+        <-
+    }
+
+    fixed req = parse_request(raw, r) { failure e
+        send_error_response(client, 400, "Bad Request", "Malformed request headers\n", r)
+        client.close() { failure _ }
+        <-
+    }
+
+    fixed resp = handler(req, r) { failure err
+        fixed err_resp = match err
+        case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
+        case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
+        case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
+        case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
+        fi
+        send_response(client, err_resp, r)
+        client.close() { failure _ }
+        <-
+    }
+
+    send_response(client, resp, r)
+    when req.header("connection") is {conn}
+        when text_eq_ignore_case(conn, "close")
+            client.close() { failure _ }
+        fi
+    fi
+fi
+
+task send_error_response(client: Socket, code: int, reason: text@r, body: text@r, r: region default) -> nothing
+    fixed resp = status(code, r, reason).header("content-type", "text/plain").set_body(body)
+    send_response(client, resp, r)
+fi
+
+task send_response(client: Socket, resp: Response@r, r: region default) -> nothing
+    flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
+    when not resp.headers.has("content-length")
+        wire = "{wire}Content-Length: {resp.body_data.len}\r\n"
+    fi
+    when not resp.headers.has("connection")
+        wire = "{wire}Connection: close\r\n"
+    fi
+    each k, v in resp.headers
+        wire = "{wire}{k}: {v}\r\n"
+    fi
+    wire = "{wire}\r\n{resp.body_data}"
+    client.write(wire) { 0 }
+fi
+
+task read_http_request(client: Socket, max_body: int, r: region default) -> text@r ~ WebError
+    flex chunk = client.read(4096, r) { failure e
+        <- fail WebError.BadRequest("failed reading from client")
+    }
+    when chunk.len == 0
+        <- fail WebError.BadRequest("empty request")
+    fi
+    fixed hdr_end = text_find(chunk, "\r\n\r\n", 0)
+    when hdr_end < 0
+        endless
+            fixed more = client.read(4096, r) { "" }
+            when more.len == 0
+                break
+            fi
+            chunk = "{chunk}{more}"
+            when text_find(chunk, "\r\n\r\n", 0) >= 0
+                break
+            fi
+        fi
+    fi
+
+    fixed body_start = text_find(chunk, "\r\n\r\n", 0)
+    when body_start >= 0
+        fixed cl_idx = text_find(chunk, "Content-Length:", 0)
+        fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(chunk, "content-length:", 0) fi
+        when cl_idx_lower >= 0 and cl_idx_lower < body_start
+            fixed cl_end = text_find(chunk, "\r\n", cl_idx_lower)
+            fixed cl_val_str = trim(chunk[cl_idx_lower + 15..cl_end])
+            fixed content_len = int(cl_val_str) { 0 }
+            when content_len > max_body
+                <- fail WebError.PayloadTooLarge
+            fi
+            fixed expected_total = body_start + 4 + content_len
+            loop chunk.len < expected_total
+                fixed more = client.read(4096, r) { "" }
+                when more.len == 0
+                    break
+                fi
+                chunk = "{chunk}{more}"
+            fi
+        fi
+    fi
+    <- chunk
+fi
+
+task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
+    fixed line_end = text_find(raw, "\r\n", 0)
+    when line_end < 0
+        <- fail WebError.BadRequest("missing request line")
+    fi
+    fixed req_line = raw[0..line_end]
+
+    fixed sp1 = text_find(req_line, " ", 0)
+    when sp1 < 0
+        <- fail WebError.BadRequest("invalid request line")
+    fi
+    fixed sp2 = text_find(req_line, " ", sp1 + 1)
+    when sp2 < 0
+        <- fail WebError.BadRequest("invalid request line")
+    fi
+
+    fixed method_str = req_line[0..sp1]
+    fixed uri = req_line[sp1 + 1..sp2]
+    fixed method = method_of(method_str) { Method.Get }
+
+    fixed q_mark = text_find(uri, "?", 0)
+    fixed path: text@r = when q_mark >= 0 uri[0..q_mark] else uri fi
+    fixed query: text@r = when q_mark >= 0 uri[q_mark + 1..uri.len] else "" fi
+
+    flex headers = new [text: text]() at r
+    fixed hdr_end = text_find(raw, "\r\n\r\n", 0)
+    when hdr_end < 0
+        <- fail WebError.BadRequest("headers not terminated")
+    fi
+
+    flex cursor = line_end + 2
+    loop cursor < hdr_end
+        fixed next_crlf = text_find(raw, "\r\n", cursor)
+        when next_crlf < 0 or next_crlf > hdr_end
+            break
+        fi
+        fixed line = raw[cursor..next_crlf]
+        cursor = next_crlf + 2
+        when line.len == 0
+            continue
+        fi
+        fixed colon = text_find(line, ":", 0)
+        when colon > 0
+            fixed h_name = to_lower(trim(line[0..colon]), r)
+            fixed h_val = trim(line[colon + 1..line.len])
+            headers[h_name] = h_val
+        fi
+    fi
+
+    fixed body = raw[hdr_end + 4..raw.len]
+    <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body }
+fi
+
+task parse_addr(addr: text@p) -> (text@p, int)
+    fixed colon = text_find(addr, ":", 0)
+    when colon < 0
+        <- (addr, 80)
+    fi
+    when colon == 0
+        fixed port = int(addr[1..addr.len]) { 80 }
+        <- ("127.0.0.1", port)
+    fi
+    fixed host = addr[0..colon]
+    fixed port = int(addr[colon + 1..addr.len]) { 80 }
+    <- (host, port)
+fi
+
+task reason_of(code: int) -> text
+    when code == 200
+        <- "OK"
+    else when code == 201
+        <- "Created"
+    else when code == 204
+        <- "No Content"
+    else when code == 301
+        <- "Moved Permanently"
+    else when code == 302
+        <- "Found"
+    else when code == 304
+        <- "Not Modified"
+    else when code == 400
+        <- "Bad Request"
+    else when code == 401
+        <- "Unauthorized"
+    else when code == 403
+        <- "Forbidden"
+    else when code == 404
+        <- "Not Found"
+    else when code == 405
+        <- "Method Allowed"
+    else when code == 413
+        <- "Payload Too Large"
+    else when code == 500
+        <- "Internal Server Error"
+    fi
+    <- "OK"
+fi
+
+task method_of(name: text@p) -> maybe Method
+    when name == "GET"
+        <- Method.Get
+    else when name == "POST"
+        <- Method.Post
+    else when name == "PUT"
+        <- Method.Put
+    else when name == "PATCH"
+        <- Method.Patch
+    else when name == "DELETE"
+        <- Method.Delete
+    else when name == "HEAD"
+        <- Method.Head
+    else when name == "OPTIONS"
+        <- Method.Options
+    fi
+    <- none
+fi
+
+task method_name(m: Method) -> text
+    fixed name = match m
+    case Method.Get = "GET"
+    case Method.Post = "POST"
+    case Method.Put = "PUT"
+    case Method.Patch = "PATCH"
+    case Method.Delete = "DELETE"
+    case Method.Head = "HEAD"
+    case Method.Options = "OPTIONS"
+    fi
+    <- name
+fi
+
+task to_lower(s: text@p, into: region default) -> text@into
+    <- native_text_lower(s, into)
+fi
+
+task trim(s: text@p) -> text@p
+    <- native_text_trim(s)
+fi
+
+task text_find(haystack: text@p, needle: text@q, from: int = 0) -> int
+    <- native_text_find(haystack, needle, from)
+fi
+
+task text_eq_ignore_case(a: text@p, b: text@q) -> bool
+    <- native_text_eq_ignore_case(a, b)
+fi
+
+task query_param(raw_query: text@p, key: text@q) -> maybe text@p
+    when raw_query.len == 0 or key.len == 0
+        <- none
+    fi
+    flex cursor = 0
+    loop cursor < raw_query.len
+        fixed next_amp = text_find(raw_query, "&", cursor)
+        fixed part_end = when next_amp >= 0 next_amp else raw_query.len fi
+        fixed part = raw_query[cursor..part_end]
+        cursor = part_end + 1
+        fixed eq = text_find(part, "=", 0)
+        when eq > 0
+            fixed k = part[0..eq]
+            when k == key
+                <- part[eq + 1..part.len]
+            fi
+        fi
+    fi
+    <- none
+fi
+
 priv task error_of(code: int) -> SocketError
     when code == 1
         <- SocketError.WouldBlock
@@ -123,3 +542,7 @@ priv native task native_socket_write(handle: int, data: text@p) -> int
 priv native task native_socket_close(handle: int) -> int
 priv native task native_socket_poll(handle: int, events: int, timeout_ms: int) -> int
 priv native task native_socket_status() -> int
+priv native task native_text_find(haystack: text@p, needle: text@q, from: int) -> int
+priv native task native_text_lower(s: text@p, into: region) -> text@into
+priv native task native_text_trim(s: text@p) -> text@p
+priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool

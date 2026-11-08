@@ -1,0 +1,112 @@
+  1 | ; Tests HTTP server, Request/Response shapes, header parsing, query parsing, and response serialization.
+    | comment:; Tests HTTP server, Request/Response shapes, header parsing, query parsing, and response serialization.
+  2 | include std/web { Socket, Request, Response, Method, WebError, serve_one, text_find }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:Method  punctuation:,  type:WebError  punctuation:,  task:serve_one  punctuation:,  task:text_find  punctuation:}
+  4 | task handle_request(req: Request@r, r: region default) -> Response@r ~ WebError
+    | keyword:task  task:handle_request  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError
+  5 |     fixed name = req.query("name") { "friend" }
+    | keyword:fixed  variable:name  operator:=  parameter:req  punctuation:.  method:query  punctuation:(  string:"name"  punctuation:)  punctuation:{  string:"friend"  punctuation:}
+  6 |     fixed host = req.header("host") { "unknown" }
+    | keyword:fixed  variable:host  operator:=  parameter:req  punctuation:.  method:header  punctuation:(  string:"host"  punctuation:)  punctuation:{  string:"unknown"  punctuation:}
+  7 |     show("handler: ", method_name(req.method), " ", req.path, " for ", name, " on ", host)
+    | builtin-fn:show  punctuation:(  string:"handler: "  punctuation:,  task:method_name  punctuation:(  parameter:req  punctuation:.  field:method  punctuation:)  punctuation:,  string:" "  punctuation:,  parameter:req  punctuation:.  field:path  punctuation:,  string:" for "  punctuation:,  variable:name  punctuation:,  string:" on "  punctuation:,  variable:host  punctuation:)
+  8 |     <- Response.text("Hello, {name}!" at r, r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Hello, {  variable:name  string:}!"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+  9 | fi
+    | keyword:fi
+ 11 | task method_name(m: Method) -> text
+    | keyword:task  task:method_name  punctuation:(  parameter:m  punctuation::  type:Method  punctuation:)  operator:->  type-builtin:text
+ 12 |     fixed name = match m
+    | keyword:fixed  variable:name  operator:=  keyword:match  parameter:m
+ 13 |     case Method.Get = "GET"
+    | keyword:case  type:Method  punctuation:.  variant:Get  operator:=  string:"GET"
+ 14 |     case Method.Post = "POST"
+    | keyword:case  type:Method  punctuation:.  variant:Post  operator:=  string:"POST"
+ 15 |     case Method.Put = "PUT"
+    | keyword:case  type:Method  punctuation:.  variant:Put  operator:=  string:"PUT"
+ 16 |     case Method.Patch = "PATCH"
+    | keyword:case  type:Method  punctuation:.  variant:Patch  operator:=  string:"PATCH"
+ 17 |     case Method.Delete = "DELETE"
+    | keyword:case  type:Method  punctuation:.  variant:Delete  operator:=  string:"DELETE"
+ 18 |     case Method.Head = "HEAD"
+    | keyword:case  type:Method  punctuation:.  variant:Head  operator:=  string:"HEAD"
+ 19 |     case Method.Options = "OPTIONS"
+    | keyword:case  type:Method  punctuation:.  variant:Options  operator:=  string:"OPTIONS"
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- name
+    | keyword:<-  variable:name
+ 22 | fi
+    | keyword:fi
+ 24 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 25 |     region r default
+    | keyword:region  region:r  keyword:default
+ 26 |     fixed server = Socket.open(r) { failure _
+    | keyword:fixed  variable:server  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 27 |         <-
+    | keyword:<-
+ 28 |     }
+    | punctuation:}
+ 29 |     server.bind_to("127.0.0.1", 18092) { failure _
+    | variable:server  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18092  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 30 |         <-
+    | keyword:<-
+ 31 |     }
+    | punctuation:}
+ 32 |     server.listen(16) { failure _
+    | variable:server  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 33 |         <-
+    | keyword:<-
+ 34 |     }
+    | punctuation:}
+ 36 |     fixed client = Socket.open(r) { failure _
+    | keyword:fixed  variable:client  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 37 |         <-
+    | keyword:<-
+ 38 |     }
+    | punctuation:}
+ 39 |     client.connect("127.0.0.1", 18092) { failure _
+    | variable:client  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18092  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 40 |         <-
+    | keyword:<-
+ 41 |     }
+    | punctuation:}
+ 43 |     fixed req_text = "GET /greeting?name=Vela HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    | keyword:fixed  variable:req_text  operator:=  string:"GET /greeting?name=Vela HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"
+ 44 |     client.write(req_text) { failure _
+    | variable:client  punctuation:.  method:write  punctuation:(  variable:req_text  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 45 |         <-
+    | keyword:<-
+ 46 |     }
+    | punctuation:}
+ 48 |     serve_one(server, handle_request, r) { failure _
+    | task:serve_one  punctuation:(  variable:server  punctuation:,  task:handle_request  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 49 |         <-
+    | keyword:<-
+ 50 |     }
+    | punctuation:}
+ 52 |     fixed resp = client.read(512, r) { failure _
+    | keyword:fixed  variable:resp  operator:=  variable:client  punctuation:.  method:read  punctuation:(  number:512  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 53 |         <-
+    | keyword:<-
+ 54 |     }
+    | punctuation:}
+ 55 |     when resp.len >= 15
+    | keyword:when  variable:resp  punctuation:.  field:len  operator:>=  number:15
+ 56 |         show("client status: ", resp[0..15])
+    | builtin-fn:show  punctuation:(  string:"client status: "  punctuation:,  variable:resp  punctuation:[  number:0  operator:..  number:15  punctuation:]  punctuation:)
+ 57 |         fixed body_start = text_find(resp, "\r\n\r\n", 0)
+    | keyword:fixed  variable:body_start  operator:=  task:text_find  punctuation:(  variable:resp  punctuation:,  string:"  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  number:0  punctuation:)
+ 58 |         when body_start >= 0
+    | keyword:when  variable:body_start  operator:>=  number:0
+ 59 |             fixed body = resp[body_start + 4..resp.len]
+    | keyword:fixed  variable:body  operator:=  variable:resp  punctuation:[  variable:body_start  operator:+  number:4  operator:..  variable:resp  punctuation:.  field:len  punctuation:]
+ 60 |             show("client body: ", body)
+    | builtin-fn:show  punctuation:(  string:"client body: "  punctuation:,  variable:body  punctuation:)
+ 61 |         fi
+    | keyword:fi
+ 62 |     fi
+    | keyword:fi
+ 63 | fi
+    | keyword:fi

@@ -1,0 +1,63 @@
+; Tests HTTP server, Request/Response shapes, header parsing, query parsing, and response serialization.
+include std/web { Socket, Request, Response, Method, WebError, serve_one, text_find }
+
+task handle_request(req: Request@r, r: region default) -> Response@r ~ WebError
+    fixed name = req.query("name") { "friend" }
+    fixed host = req.header("host") { "unknown" }
+    show("handler: ", method_name(req.method), " ", req.path, " for ", name, " on ", host)
+    <- Response.text("Hello, {name}!" at r, r)
+fi
+
+task method_name(m: Method) -> text
+    fixed name = match m
+    case Method.Get = "GET"
+    case Method.Post = "POST"
+    case Method.Put = "PUT"
+    case Method.Patch = "PATCH"
+    case Method.Delete = "DELETE"
+    case Method.Head = "HEAD"
+    case Method.Options = "OPTIONS"
+    fi
+    <- name
+fi
+
+task main()
+    region r default
+    fixed server = Socket.open(r) { failure _
+        <-
+    }
+    server.bind_to("127.0.0.1", 18092) { failure _
+        <-
+    }
+    server.listen(16) { failure _
+        <-
+    }
+
+    fixed client = Socket.open(r) { failure _
+        <-
+    }
+    client.connect("127.0.0.1", 18092) { failure _
+        <-
+    }
+
+    fixed req_text = "GET /greeting?name=Vela HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    client.write(req_text) { failure _
+        <-
+    }
+
+    serve_one(server, handle_request, r) { failure _
+        <-
+    }
+
+    fixed resp = client.read(512, r) { failure _
+        <-
+    }
+    when resp.len >= 15
+        show("client status: ", resp[0..15])
+        fixed body_start = text_find(resp, "\r\n\r\n", 0)
+        when body_start >= 0
+            fixed body = resp[body_start + 4..resp.len]
+            show("client body: ", body)
+        fi
+    fi
+fi

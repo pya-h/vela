@@ -68,6 +68,10 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/web.native_socket_close", "vela__rt__web_socket_close"),
     ("std/web.native_socket_poll", "vela__rt__web_socket_poll"),
     ("std/web.native_socket_status", "vela__rt__web_socket_status"),
+    ("std/web.native_text_find", "vela__rt__web_text_find"),
+    ("std/web.native_text_lower", "vela__rt__web_text_lower"),
+    ("std/web.native_text_trim", "vela__rt__web_text_trim"),
+    ("std/web.native_text_eq_ignore_case", "vela__rt__web_text_eq_ignore_case"),
 ];
 
 pub fn module(name: &str) -> Option<&'static str> {

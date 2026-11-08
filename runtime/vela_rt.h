@@ -2808,5 +2808,63 @@ static inline int64_t vela__rt__web_socket_poll(int64_t handle, int64_t events, 
     return ready;
 }
 
+static inline int64_t vela__rt__web_text_find(vela__rt__text haystack, vela__rt__text needle, int64_t from) {
+    if (from < 0 || from > haystack.len || needle.len < 0) {
+        return -1;
+    }
+    if (needle.len == 0) {
+        return from;
+    }
+    if (haystack.len - from < needle.len) {
+        return -1;
+    }
+    int64_t max_pos = haystack.len - needle.len;
+    for (int64_t i = from; i <= max_pos; i++) {
+        if (haystack.bytes[i] == needle.bytes[0] &&
+            memcmp(haystack.bytes + i, needle.bytes, (size_t)needle.len) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static inline vela__rt__text vela__rt__web_text_lower(vela__rt__text s, vela__rt__region* into) {
+    if (s.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* buf = vela__rt__region_alloc(into, (size_t)s.len, 1);
+    for (int64_t i = 0; i < s.len; i++) {
+        char c = s.bytes[i];
+        buf[i] = (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
+    }
+    return (vela__rt__text){ buf, s.len };
+}
+
+static inline vela__rt__text vela__rt__web_text_trim(vela__rt__text s) {
+    int64_t start = 0;
+    while (start < s.len && ((unsigned char)s.bytes[start] <= ' ')) {
+        start++;
+    }
+    int64_t end = s.len;
+    while (end > start && ((unsigned char)s.bytes[end - 1] <= ' ')) {
+        end--;
+    }
+    return (vela__rt__text){ s.bytes + start, end - start };
+}
+
+static inline bool vela__rt__web_text_eq_ignore_case(vela__rt__text a, vela__rt__text b) {
+    if (a.len != b.len) {
+        return false;
+    }
+    for (int64_t i = 0; i < a.len; i++) {
+        char ca = (a.bytes[i] >= 'A' && a.bytes[i] <= 'Z') ? (char)(a.bytes[i] + 32) : a.bytes[i];
+        char cb = (b.bytes[i] >= 'A' && b.bytes[i] <= 'Z') ? (char)(b.bytes[i] + 32) : b.bytes[i];
+        if (ca != cb) {
+            return false;
+        }
+    }
+    return true;
+}
+
 #endif
 
