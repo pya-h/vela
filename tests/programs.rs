@@ -1,32 +1,9 @@
-//! End-to-end tests: every test is a `.vela` source file compiled with the
-//! real `vela` binary.
-//!
-//! - `tests/run/NAME.vela` must compile and run; its stdout must equal
-//!   `tests/run/NAME.out`. Its generated C must also compile as strict ISO C11
-//!   with no warnings (see `STRICT_C_FLAGS`). The warnings the Vela compiler
-//!   prints must be exactly those its `; warning: LINE:COL: MESSAGE` lines
-//!   write, in order, and none where it writes none; so too for a trap test
-//!   and an example.
-//! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
-//!   the C compiler). Its first line is `; error: LINE:COL: MESSAGE` (or
-//!   `; error: MESSAGE` for an error without a position, or
-//!   `; error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
-//!   program includes, with its path from the fixture's folder), and the
-//!   compiler's first line of output must be exactly that diagnostic. A fixture
-//!   whose program has several mistakes writes one `; error:` line for each, in
-//!   order, and then those must be exactly the mistakes reported: that is how a
-//!   fixture says a mistake causes no others. The modules fixtures use are in
-//!   `tests/fail/modules/`.
-//! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
-//!   runtime error: its first line is `; trap: MESSAGE`, the program's stderr
-//!   must be exactly `vela: MESSAGE`, and what it printed before stopping must
-//!   equal `tests/trap/NAME.out`.
-//! - `examples/NAME.vela` must compile and run, with strict C, and its stdout
-//!   must equal `tests/examples/NAME.out`.
-//! - A program reads `NAME.in` next to its `NAME.out`, if there is one, as its
-//!   standard input; otherwise its input is empty.
+//! End-to-end `.vela` suite compiled with the real `vela` binary:
+//! - `tests/run/` & `examples/`: strict ISO C11, exact stdout vs `.out` and `; warning:` order.
+//! - `tests/fail/`: rejected with `; error: ...` (exact ordered set when multiple are listed).
+//! - `tests/trap/`: strict C11, exits with `vela: <; trap: ...>` on stderr and matching `.out`.
+//! - `<NAME>.in` next to `.out` provides stdin when present.
 
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -35,11 +12,8 @@ use std::process::Command;
 
 const VELA: &str = env!("CARGO_BIN_EXE_vela");
 
-/// Flags for checking that generated C is portable, warning-free ISO C11.
 const STRICT_C_FLAGS: &[&str] = &["-std=c11", "-pedantic-errors", "-Wall", "-Wextra", "-Werror"];
 
-/// A command running the C compiler, chosen like the `vela` binary does: `$CC`,
-/// which may include arguments, or `cc`.
 fn c_compiler() -> Command {
     let cc = std::env::var("CC").unwrap_or_default();
     let mut words = cc.split_whitespace();
@@ -73,9 +47,6 @@ fn stem(path: &Path) -> String {
     path.file_stem().unwrap().to_string_lossy().into_owned()
 }
 
-/// Compiles and runs `source`, comparing stdout with `expected_path`. The
-/// program must succeed, or, when `trap` gives the message it stops with, fail
-/// with exactly that message. Returns a description of the failure, if any.
 fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let expected = match fs::read_to_string(expected_path) {
@@ -127,10 +98,6 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
     None
 }
 
-/// The folder a test program runs in, made fresh in `scratch` for the program
-/// called `name`: empty, or holding a copy of the files in the folder beside
-/// `source` that has its name (`tests/run/std_files/`), so a program that reads
-/// or writes files finds what it expects and changes nothing of the working tree.
 fn run_folder(source: &Path, name: &str, scratch: &Path) -> PathBuf {
     let folder = scratch.join(format!("{}.files", name));
     let _ = fs::remove_dir_all(&folder);
@@ -153,12 +120,8 @@ fn copy_folder(from: &Path, to: &Path) {
     }
 }
 
-/// How long a test program may run: a program that loops forever fails its
-/// test instead of hanging the suite.
 const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Runs `exe` with `input` as its standard input, capturing its output; `None`
-/// (after killing it) if it runs too long.
 fn run_with_timeout(exe: &Path, input: Vec<u8>, folder: &Path) -> Option<std::process::Output> {
     use std::process::Stdio;
     let mut child = Command::new(exe).current_dir(folder).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
@@ -195,7 +158,6 @@ fn run_with_timeout(exe: &Path, input: Vec<u8>, folder: &Path) -> Option<std::pr
     Some(std::process::Output { status, stdout: out.join().unwrap(), stderr: err.join().unwrap() })
 }
 
-/// Compiles the C generated for `source` with `STRICT_C_FLAGS`.
 fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let emit = Command::new(VELA).arg(source).arg("--emit-c").output().unwrap();
@@ -224,10 +186,6 @@ fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
     None
 }
 
-/// Compiles `source`, expecting the Vela diagnostics given on the file's first
-/// lines (`; error: TEXT`, one per mistake). One of them must be the first line
-/// the compiler prints; several must be exactly the mistakes it reports, in
-/// order, which is how a fixture says that nothing else follows from them.
 fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let text = fs::read_to_string(source).unwrap();
@@ -266,16 +224,10 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     None
 }
 
-/// The diagnostic line the compiler prints for a fixture's expected error:
-/// `LINE:COL: message` becomes `PATH:LINE:COL: error: message`, and a message
-/// without a location becomes `PATH: error: message`. An error in another
-/// file, `modules/x.vela:LINE:COL: message`, names that file from the
-/// fixture's folder.
 fn diagnostic_line(source: &Path, expected: &str) -> String {
     diagnostic_line_of(source, expected, "error")
 }
 
-/// `diagnostic_line` for a diagnostic of the kind `kind`: `error` or `warning`.
 fn diagnostic_line_of(source: &Path, expected: &str, kind: &str) -> String {
     if let Some((file, rest)) = expected.split_once(".vela:")
         && !file.contains(' ')
@@ -299,8 +251,6 @@ fn diagnostic_line_of(source: &Path, expected: &str, kind: &str) -> String {
     format!("{}: {}: {}", source.display(), kind, expected)
 }
 
-/// Checks that compiling `source` printed, in `stderr`, exactly the warnings
-/// its `; warning: LINE:COL: MESSAGE` lines write, in order.
 fn check_warnings(source: &Path, stderr: &str) -> Option<String> {
     let text = fs::read_to_string(source).unwrap();
     let wanted: Vec<String> = text.lines().filter_map(|line| line.strip_prefix("; warning: ")).map(|warning| diagnostic_line_of(source, warning.trim(), "warning")).collect();
@@ -329,7 +279,6 @@ fn run_programs() {
     report("tests/run", failures);
 }
 
-/// The message a `tests/trap` program's first line says it stops with.
 fn trap_message(source: &Path) -> Option<String> {
     let text = fs::read_to_string(source).unwrap();
     text.lines().next()?.strip_prefix("; trap: ").map(|message| message.trim().to_string())
@@ -362,7 +311,6 @@ fn failing_programs() {
     report("tests/fail", failures);
 }
 
-/// The text of an HTML element's contents: tags removed, entities decoded.
 fn html_text(html: &str) -> String {
     let mut text = String::new();
     let mut rest = html;
@@ -374,8 +322,6 @@ fn html_text(html: &str) -> String {
     text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#x27;", "'").replace("&amp;", "&")
 }
 
-/// The complete programs in a docs page, `<pre class="program" data-file="NAME">`,
-/// each with the output in the `<pre class="output">` right after it.
 fn doc_programs(page: &str) -> Vec<(String, String, String)> {
     const PROGRAM: &str = "<pre class=\"program\" data-file=\"";
     const OUTPUT: &str = "<pre class=\"output\" aria-label=\"Output\">";
@@ -392,8 +338,6 @@ fn doc_programs(page: &str) -> Vec<(String, String, String)> {
     programs
 }
 
-/// Every complete program in `docs/regions.html` compiles, with strict C, and
-/// prints the output the page shows for it.
 #[test]
 fn docs_programs() {
     let page = fs::read_to_string(project_root().join("docs/regions.html")).unwrap();
@@ -414,9 +358,6 @@ fn docs_programs() {
     report("docs/regions.html", failures);
 }
 
-/// Every `<pre>` in a docs page that holds a whole program, which a `task main()`
-/// on its own line marks, with the `; error: TEXT` comment that says the page
-/// means it to be refused, if it has one.
 fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
     let mut programs = Vec::new();
     let mut rest = page;
@@ -439,10 +380,6 @@ fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
     programs
 }
 
-/// Every whole program in `docs/vela.html` still says what the page says it
-/// does: one the page shows plainly compiles, with strict C, and one it marks
-/// with `; error:` is refused with that message. The page shows what each line
-/// gives in comments rather than as output, so these are not run.
 #[test]
 fn docs_guide_programs() {
     let page = fs::read_to_string(project_root().join("docs/vela.html")).unwrap();
@@ -479,8 +416,6 @@ fn docs_guide_programs() {
     report("docs/vela.html", failures);
 }
 
-/// The generated C that `docs/regions.html` shows for Lesson 1's `main` is what
-/// the compiler writes for it.
 #[test]
 fn docs_generated_c() {
     let page = fs::read_to_string(project_root().join("docs/regions.html")).unwrap();

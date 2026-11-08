@@ -1,8 +1,3 @@
-//! `break` and `continue`, and loops named for them, `outer => each …`: the
-//! names' classes and hovers, and what is offered after the words, whether or
-//! not the file checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -24,8 +19,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {
@@ -44,7 +37,6 @@ fn class(source: &str, needle: &str) -> TokenClass {
     Analysis::new(source).tokens().into_iter().find(|token| token.from == at).unwrap_or_else(|| panic!("no token at {:?}", needle)).class
 }
 
-/// The labels offered at `@@`.
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").expect("a @@ marker");
     let source = marked.replacen("@@", "", 1);
@@ -67,7 +59,6 @@ fn a_loop_s_name_hovers_as_one_where_it_is_given_and_where_it_is_used() {
         assert_eq!(class(&source, "outer =>"), TokenClass::Variable, "{}", when);
         assert_eq!(class(&source, "break"), TokenClass::Keyword, "{}", when);
         assert_eq!(class(&source, "continue"), TokenClass::Keyword, "{}", when);
-        // The loop's variable is still declared after its name.
         assert_eq!(hover(&source, "a in"), "each a: int", "{}", when);
     }
 }
@@ -77,7 +68,6 @@ fn break_and_continue_are_offered_inside_a_loop_and_take_the_names_of_the_loops_
     let inside = PROGRAM.replace("            continue inner\n", "            @@\n");
     let offered = labels(&inside);
     assert!(offered.iter().any(|label| label == "break") && offered.iter().any(|label| label == "continue"), "{:?}", offered);
-    // A loop's name is no value.
     assert!(!offered.iter().any(|label| label == "outer"), "{:?}", offered);
     let outside = PROGRAM.replace("    CHECK\n", "    @@\n");
     let offered = labels(&outside);
@@ -94,7 +84,6 @@ fn a_lambda_inside_a_loop_is_a_task_of_its_own() {
     assert!(offers_jumps(&program.replace("            INSIDE\n", "").replace("AFTER", "@@")));
     let one_line = "task main()\n    each a in 0..4\n        fixed f = (x: int) -> int <- x * 2 fi\n        @@\n    fi\nfi\n";
     assert!(offers_jumps(one_line));
-    // Only the lambda's own loops are named in it.
     let named = program.replace("INSIDE", "inner => each j in 0..2\n                break @@\n            fi").replace("AFTER", "show(1)");
     assert_eq!(labels(&named), ["inner"]);
 }

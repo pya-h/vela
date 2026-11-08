@@ -1,13 +1,4 @@
-/* The 512-bit division and text conversion in runtime/vela_rt.h, tested
- * directly without 128-bit integers: this file defines
- * VELA__RT__PORTABLE_ARITHMETIC, which leaves every 64-bit limb step to the
- * fallback paths, and compares them against per-limb reference calculations
- * that use unsigned __int128 where the C compiler has it. The fallback's
- * single-limb division used to lose the high bits of its running remainder
- * when the divisor was large, so the divisors here are all well past 2**32.
- * Compiled by tests/runtime.rs as strict C11 (and with sanitizers where
- * available, which would catch a shift past a limb); prints "ok" when every
- * check passes. */
+/* Tests VELA__RT__PORTABLE_ARITHMETIC 512-bit div/format paths with divisors > 2^32 against __int128. */
 
 #define VELA__RT__PORTABLE_ARITHMETIC
 #include "vela_rt.h"
@@ -48,7 +39,6 @@ int main(void) {
     for (size_t d = 0; d < sizeof divisors / sizeof divisors[0]; d++) {
         uint64_t div = divisors[d];
         vela__rt__int512 v = from_u64(div);
-        /* Dividends with bits set in every limb region, built limb by limb. */
         for (int round = 0; round < 64; round++) {
             vela__rt__int512 u = {{0}};
             uint64_t state = 0x9E3779B97F4A7C15ULL ^ (div + (uint64_t)round * 0x2545F4914F6CDD1DULL);
@@ -73,8 +63,6 @@ int main(void) {
             }
             check(r.limbs[0] == rem, "single-limb remainder");
             for (int i = 1; i < 8; i++) check(r.limbs[i] == 0, "single-limb remainder high limbs");
-            /* The full-radix check: quotient times divisor plus remainder is
-             * the dividend again. */
             vela__rt__int512 back;
             vela__rt__u512_mul(q, v, &back);
             uint64_t carry = 0;
@@ -93,8 +81,6 @@ int main(void) {
     n.limbs[7] = 0x0123456789ABCDEFULL;
     n.limbs[5] = 0xFEDCBA9876543210ULL;
     n.limbs[0] = 12345678901234567890ULL;
-    /* The digits, checked against the value worked out with a big-integer
-     * calculator: every chunk division goes through the fallback path. */
     const char* expected =
         "59590257466411541886248410857620380061859455589225173075914107969266735803958181"
         "858447905556853621782163274476906642637297499255148941413703997766699730";

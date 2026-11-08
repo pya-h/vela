@@ -1,7 +1,3 @@
-// The outline of the open file: tasks and the types they take, shapes and their
-// fields, kinds and their variants, and the methods of both. The declaration
-// around the cursor is highlighted.
-
 import type { OutlineItem, SymbolKind } from "../analysis/protocol";
 import { h } from "./dom";
 
@@ -19,11 +15,9 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   "type-param": { text: "T", className: "kind-type-param" },
   macro: { text: "#", className: "kind-macro" },
   pattern: { text: "P", className: "kind-kind" },
-  // The outline lists a file's own declarations, never a module it uses.
   module: { text: "M", className: "kind-module" },
 };
 
-/** Every item with its depth, parents before children. */
 export function flattenOutline(items: OutlineItem[], depth = 0): { item: OutlineItem; depth: number }[] {
   return items.flatMap((item) => [{ item, depth }, ...flattenOutline(item.children, depth + 1)]);
 }
@@ -45,7 +39,6 @@ export class Outline {
     );
   }
 
-  /** Shows `items` (null when no Vela file is open) with the cursor at `cursor`. */
   update(items: OutlineItem[] | null, cursor: number): void {
     this.items = items;
     this.cursor = cursor;
@@ -54,7 +47,6 @@ export class Outline {
 
   private render(): void {
     const rows = this.items ? flattenOutline(this.items) : [];
-    // The innermost declaration containing the cursor.
     let current: OutlineItem | null = null;
     for (const { item } of rows) {
       if (item.from <= this.cursor && this.cursor <= item.to) current = item;

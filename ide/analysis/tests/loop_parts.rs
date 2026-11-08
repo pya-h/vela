@@ -1,8 +1,3 @@
-//! Loops in three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and
-//! `endless`: the names a start declares, where they are seen, and what is
-//! offered around them, whether or not the file checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -21,8 +16,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {
@@ -41,7 +34,6 @@ fn class(source: &str, needle: &str) -> TokenClass {
     Analysis::new(source).tokens().into_iter().find(|token| token.from == at).unwrap_or_else(|| panic!("no token at {:?}", needle)).class
 }
 
-/// The labels offered at `@@`.
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").expect("a @@ marker");
     let source = marked.replacen("@@", "", 1);
@@ -61,7 +53,6 @@ fn the_names_a_start_declares_hover_with_the_word_that_covers_them() {
         assert_eq!(hover(&source, "i = 1").as_deref(), Some("flex i: int"), "{}", when);
         assert_eq!(hover(&source, "j = 10").as_deref(), Some("flex j: int"), "{}", when);
         assert_eq!(hover(&source, "limit = 7").as_deref(), Some("fixed limit: int"), "{}", when);
-        // Each is seen after its item, in the condition, the step and the body.
         assert_eq!(hover(&source, "limit ||").as_deref(), Some("fixed limit: int"), "{}", when);
         assert_eq!(hover(&source, "j--").as_deref(), Some("flex j: int"), "{}", when);
         assert_eq!(hover(&source, "j\n").as_deref(), Some("flex j: int"), "{}", when);

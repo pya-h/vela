@@ -1,9 +1,5 @@
-//! Code generation trusts the checker's annotations and guarantees. When they
-//! are missing or broken (a compiler bug), it must return an internal compiler
-//! error instead of panicking. These tests run code generation on programs that
-//! skipped the checker.
+//! Codegen must return internal errors instead of panicking if checked AST invariants are broken.
 
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela::ast::{ExprKind, Item, StmtKind};
@@ -17,8 +13,6 @@ fn parse(source: &str) -> Vec<Item> {
     Parser::new(tokens, spans, ends).parse_file().unwrap()
 }
 
-/// Generates C from `source` without checking it, expecting an internal error
-/// with exactly `message`.
 fn assert_internal_error(source: &str, message: &str) {
     let err = Generator::new().generate(&parse(source)).unwrap_err();
     assert_eq!(err.span, None, "internal errors have no diagnostic location");
@@ -53,8 +47,6 @@ fn untyped_binding() {
 
 #[test]
 fn show_with_a_type_it_cannot_write() {
-    // The checker refuses a value that can fail given to `show`; give a
-    // checked call one afterwards, as a checker bug would.
     let mut items = parse("task main()\n    region r\n    fixed xs = int(\"1\")\n    show(1, 2)\nfi\n");
     let mut checker = Checker::new();
     checker.check_file(&mut items);
@@ -96,8 +88,6 @@ fn the_region_of_a_show_read_outside_one() {
 
 #[test]
 fn variant_with_wrong_argument_count() {
-    // The checker resolves `Circle(1.0)` into a constructor; give that node an
-    // extra argument afterwards, as a checker bug would.
     let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    fixed c = Circle(1.0)\nfi\n");
     let mut checker = Checker::new();
     checker.check_file(&mut items);
@@ -126,8 +116,6 @@ fn match_on_unchecked_value() {
 
 #[test]
 fn value_list_that_does_not_fit_its_names() {
-    // The checker counts the values a list of names receives; only one call
-    // may give several of them.
     assert_internal_error("task main()\n    fixed a, b = 1, 2, 3\nfi\n", "3 values received by 2 names (at 2:11)");
 }
 

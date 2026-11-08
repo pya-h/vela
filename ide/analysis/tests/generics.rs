@@ -1,9 +1,3 @@
-//! Generic tasks and shapes in the editor: the types a declaration takes, the
-//! words that say what they must allow, the types a use gives, and what each of
-//! them hovers, colors, and completes as. In the sources below, `@@` marks the
-//! cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, SymbolKind, TokenClass};
@@ -78,7 +72,6 @@ fn a_type_a_task_takes_hovers_as_one_wherever_it_is_written() {
         let (code, doc) = hover(&source, "T]@r");
         assert_eq!(code, "T", "{}", when);
         assert!(doc.starts_with("A type task first takes"), "{}", doc);
-        // A word says what every type given for it must allow.
         let (_, doc) = hover(&source, "T: ordered");
         assert!(doc.contains("has an order"), "{}", doc);
         let (_, doc) = hover(&source, "T: shown");
@@ -112,7 +105,6 @@ fn the_types_a_task_takes_and_the_words_for_them_are_colored() {
     assert_eq!(class_at("ordered>"), Some(TokenClass::Keyword));
     assert_eq!(class_at("T: shown"), Some(TokenClass::Type));
     assert_eq!(class_at("shown>"), Some(TokenClass::Keyword));
-    // The types a call gives are types, and the call is still a call.
     assert_eq!(class_at("text@r>(names)"), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("first<text@r>"), Some(TokenClass::Task));
 }
@@ -124,7 +116,6 @@ fn a_type_a_task_takes_completes_as_a_type_in_its_own_body() {
         "float", "float64", "float32", "bool", "text", "char", "T", "maybe",
     ];
     assert_eq!(labels("task first<T>(x: T)\n    fixed y: @@ = x\nfi\n"), types);
-    // A task that takes no types has none to offer.
     assert_eq!(
         labels("task plain(x: int)\n    fixed y: @@ = x\nfi\n"),
         [
@@ -139,7 +130,6 @@ fn completion_offers_the_words_a_type_can_be_asked_to_allow() {
     let words = ["frozen", "same", "similar", "shown", "ordered"];
     assert_eq!(labels("task f<T: @@>(x: T)\nfi\n"), words);
     assert_eq!(labels("task f<T: same & @@>(x: T)\nfi\n"), words);
-    // The name of a type being declared is the writer's to choose.
     assert!(labels("task f<@@>(x: int)\nfi\n").is_empty());
 }
 
@@ -198,7 +188,6 @@ fi
     let diagnostics = Analysis::new(source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.contains("'ordered' already means 'same'"), "{}", diagnostic.message);
-    // Any other pair asks for two things, which says something new.
     assert_eq!(Analysis::new(&source.replace("ordered & same", "same & frozen")).diagnostics(), Vec::new());
 }
 
@@ -269,7 +258,6 @@ fn the_types_a_shape_is_given_are_colored_as_types() {
         let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
         analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
     };
-    // In a written type, in a literal, and in the header of the shape itself.
     assert_eq!(class_at("text>@r"), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("int> { value: 2 }"), Some(TokenClass::TypeBuiltin));
     assert_eq!(class_at("T: frozen"), Some(TokenClass::Type));
@@ -283,10 +271,8 @@ fn completion_offers_types_where_a_shape_is_given_them() {
         "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit",
         "float", "float64", "float32", "bool", "text", "char", "Box", "Pair", "maybe",
     ];
-    // In a written type, and in a literal.
     assert_eq!(labels(&shapes("fixed other: Box<@@> = count")), types);
     assert_eq!(labels(&shapes("fixed other = Box<@@> { value: 1 }")), types);
-    // A type the shape takes is a type inside its own fields.
     assert_eq!(
         labels("shape Box<T>\n    value: @@\nfi\n"),
         [
@@ -294,8 +280,6 @@ fn completion_offers_types_where_a_shape_is_given_them() {
             "float", "float64", "float32", "bool", "text", "char", "T", "Box", "maybe",
         ]
     );
-    // The words a type can be asked to allow, and nothing where a name is
-    // being declared.
     assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["frozen", "same", "similar", "shown", "ordered"]);
     assert!(labels("shape Box<@@>\n    value: int\nfi\n").is_empty());
 }
@@ -316,9 +300,6 @@ fn a_literal_whose_types_nothing_names_is_reported() {
 
 #[test]
 fn a_shape_made_for_its_types_is_named_as_written_from_a_plain_header() {
-    // A declaration that takes no types of its own may name a shape given a
-    // set of them, and one given types may be given to another. The editor
-    // names both as the program writes them, never as the shape made for them.
     let source = "\
 shape Box<T: frozen>
     value: T
@@ -362,7 +343,6 @@ fn similarity_is_an_operator_giving_a_bool_and_its_word_has_a_hover() {
     assert!(doc.contains("item by item with '~=' and '<>'") && doc.contains("can be shown"), "{}", doc);
     let (code, _) = hover(source, "same_items =");
     assert!(code.contains("bool"), "{}", code);
-    // Without the word, '~=' is refused and says which word to ask for.
     let diagnostics = Analysis::new(&source.replace("similar & shown", "shown")).diagnostics();
     assert!(diagnostics.iter().any(|d| d.message.contains("require it too, as in '<T: shown & similar>'")), "{:?}", diagnostics);
 }
@@ -374,8 +354,6 @@ fn types_are_offered_between_a_closed_pair_of_angle_brackets() {
     assert!(labels_at.contains(&"int".to_string()), "{:?}", labels_at);
 }
 
-/// The class of the token at the first occurrence of `needle` in `source`,
-/// which is ASCII, so bytes and UTF-16 offsets agree.
 fn class_at_in(source: &str, needle: &str) -> Option<TokenClass> {
     let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
     Analysis::new(source).tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)

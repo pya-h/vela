@@ -1,6 +1,3 @@
-// Remembered UI state (sidebar width, open tabs, theme) in localStorage.
-// Storage can be unavailable or full; the UI then just doesn't remember.
-
 const PREFIX = "vela-studio:";
 
 export function load<T>(key: string, fallback: T, valid: (value: unknown) => value is T): T {
@@ -18,7 +15,7 @@ export function save(key: string, value: unknown): void {
   try {
     globalThis.localStorage?.setItem(PREFIX + key, JSON.stringify(value));
   } catch {
-    // Not remembered.
+    // Ignore unavailable or full storage.
   }
 }
 

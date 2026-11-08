@@ -1,14 +1,3 @@
-//! Keeping the server to this user's IDE page (see `ide.md` §7):
-//!
-//! - the session token, generated per launch and required on every API
-//!   request (`Authorization: Bearer …`; WebSockets send it as their first
-//!   message, see `ws`), compared in constant time;
-//! - `Host` must be `127.0.0.1:PORT` or `localhost:PORT`, which defeats DNS
-//!   rebinding, and an `Origin`, when sent, must be the page's own, which
-//!   stops other websites; no CORS headers are ever sent;
-//! - response headers that forbid framing, sniffing, and, on the page, any
-//!   script or connection that isn't the server's own.
-
 use std::fmt;
 use std::io;
 use std::sync::Arc;
@@ -22,7 +11,6 @@ use axum::response::{IntoResponse, Response};
 use crate::Studio;
 use crate::api::ApiError;
 
-/// The per-launch secret: 32 random bytes as hex.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token(String);
 
@@ -35,22 +23,19 @@ impl Token {
         &self.0
     }
 
-    /// Whether `candidate` is this token, taking the same time for every
-    /// candidate of the right length.
+    /// Constant-time comparison.
     pub fn matches(&self, candidate: &str) -> bool {
         let (a, b) = (self.0.as_bytes(), candidate.as_bytes());
         a.len() == b.len() && a.iter().zip(b).fold(0u8, |diff, (x, y)| diff | (x ^ y)) == 0
     }
 }
 
-/// Keeps the token out of logs and panic messages.
 impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Token(…)")
     }
 }
 
-/// `bytes` is a byte count, not a bit count.
 pub fn random_hex(bytes: usize) -> io::Result<String> {
     let mut buffer = vec![0u8; bytes];
     getrandom::fill(&mut buffer)
@@ -70,11 +55,7 @@ pub fn origin_allowed(origin: &str, port: u16) -> bool {
         .any(|name| origin.eq_ignore_ascii_case(&format!("http://{}:{}", name, port)))
 }
 
-/// The `Content-Security-Policy` for the page: only the server's own
-/// scripts, styles, fonts, and connections, plus compiling WebAssembly.
-/// `nonce` allows the `<style>` elements the editor creates at run time
-/// (CodeMirror adds its styles that way); the page reads it from its
-/// `csp-nonce` meta tag.
+/// Nonce allows runtime `<style>` tags injected by CodeMirror (read from the `csp-nonce` meta tag).
 pub fn content_security_policy(port: u16, nonce: &str) -> String {
     format!(
         "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'nonce-{nonce}'; img-src 'self' data:; \
@@ -125,7 +106,6 @@ pub async fn guard(State(studio): State<Arc<Studio>>, request: Request, next: Ne
     response
 }
 
-/// API responses are never cached.
 pub async fn require_token(
     State(studio): State<Arc<Studio>>,
     request: Request,

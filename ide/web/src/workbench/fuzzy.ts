@@ -1,15 +1,11 @@
-// Fuzzy matching for the quick pickers: the query's characters must appear
-// in order. Matches at the start, after a separator, or in a run score higher.
-
 export interface Match {
   score: number;
-  /** Indices of the matched characters, for highlighting. */
   positions: number[];
 }
 
 const SEPARATORS = new Set(["/", "_", "-", ".", " "]);
 
-/** Lowercase, keeping every character's length, so indices still match `text`. */
+/** Keep each character's UTF-16 length unchanged so match indices still align with `text`. */
 function lower(text: string): string {
   return text.replace(/[\s\S]/gu, (char) => {
     const lowered = char.toLowerCase();
@@ -24,7 +20,7 @@ export function fuzzyMatch(query: string, text: string): Match | null {
   const positions: number[] = [];
   let score = 0;
   let from = 0;
-  // By code point, so a character outside the BMP (an emoji) is one match.
+  // Iterate by Unicode code point so surrogate pairs count as a single match.
   let queryIndex = 0;
   for (const char of q) {
     const at = t.indexOf(char, from);
@@ -38,13 +34,11 @@ export function fuzzyMatch(query: string, text: string): Match | null {
     from = at + char.length;
     queryIndex += char.length;
   }
-  // Prefer shorter texts, and matches in the last path segment (the name).
   score -= text.length * 0.05;
   if ((positions[0] ?? 0) > text.lastIndexOf("/")) score += 6;
   return { score, positions };
 }
 
-/** The items matching `query`, best first (ties keep their order). */
 export function fuzzyFilter<T>(items: readonly T[], query: string, text: (item: T) => string): { item: T; match: Match }[] {
   const results: { item: T; match: Match; index: number }[] = [];
   items.forEach((item, index) => {

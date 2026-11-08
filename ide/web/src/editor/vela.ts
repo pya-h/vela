@@ -1,9 +1,3 @@
-// Vela language support for CodeMirror, powered by the compiler running in
-// WebAssembly (see ../analysis): semantic highlighting, diagnostics,
-// completion with snippets, hover, go to definition, indentation, folding,
-// comments, and bracket closing. A file's modules come from `ModuleSources`,
-// and each document says its path with the `documentPath` facet.
-
 import { type Completion, type CompletionContext, type CompletionResult, insertCompletionText, snippet } from "@codemirror/autocomplete";
 import { foldService, getIndentation, indentService, indentString, indentUnit } from "@codemirror/language";
 import { type Diagnostic, forceLinting, linter } from "@codemirror/lint";
@@ -28,38 +22,27 @@ export interface FileAnalysis {
   tokens: Token[];
   diagnostics: VelaDiagnostic[];
   outline: OutlineItem[];
-  /** The modules the file's program includes that weren't known yet. */
   missing: string[];
 }
 
 const EMPTY: FileAnalysis = { tokens: [], diagnostics: [], outline: [], missing: [] };
 
-/** The workspace path of the file an editor state shows; empty for text without a file. */
 export const documentPath = Facet.define<string, string>({ combine: (paths) => paths[0] ?? "" });
 
-/** Redoes an editor's analysis, when the modules its file uses changed. */
 const reanalyze = StateEffect.define<null>();
 
-/** Whether `update` asks for the analysis to be redone. */
 function reanalyzes(update: ViewUpdate): boolean {
   return update.transactions.some((tr) => tr.effects.some((effect) => effect.is(reanalyze)));
 }
 
-/** Redoes the analysis shown in `view`: highlighting and diagnostics. */
 export function refreshAnalysis(view: EditorView): void {
   view.dispatch({ effects: reanalyze.of(null) });
   forceLinting(view);
 }
 
-/**
- * Analyzes documents, once per version and per version of the modules they
- * use: CodeMirror documents are immutable.
- */
 export class Analyzer {
   private readonly cache = new WeakMap<Text, { path: string; modules: number; result: FileAnalysis }>();
-  /** The text of the files Vela files include. */
   readonly modules = new ModuleSources();
-  /** Shows a definition in another file; the workbench sets it. */
   openDefinition: ((path: string, from: number, to: number) => void) | null = null;
 
   constructor(
@@ -67,7 +50,6 @@ export class Analyzer {
     readonly language: Language,
   ) {}
 
-  /** The analysis of `doc`, the text of the file at `path`. */
   file(doc: Text, path = ""): FileAnalysis {
     const cached = this.cache.get(doc);
     if (cached && cached.path === path && cached.modules === this.modules.version) return cached.result;
@@ -76,22 +58,20 @@ export class Analyzer {
     try {
       result = this.analysis.file(doc.toString(), this.context(path));
     } catch (error) {
-      // A crash restarts the module (see the bridge); show nothing for this version.
+      // A trap restarts the WASM instance (see bridge); degrade to empty for this version.
       console.error(error);
       result = EMPTY;
     }
     this.cache.set(doc, { path, modules, result });
-    // Fetched modules change the version, which redoes this analysis.
+    // Fetched modules bump modules.version and trigger re-analysis.
     if (result.missing.length > 0) this.modules.request(result.missing);
     return result;
   }
 
-  /** The program around the file at `path`, for a query. */
   context(path: string): ProgramContext {
     return { path, modules: this.modules.sources() };
   }
 
-  /** Runs a query that may crash the module, treating a crash as no answer. */
   safely<T>(query: () => T, fallback: T): T {
     try {
       return query();
@@ -101,8 +81,6 @@ export class Analyzer {
     }
   }
 }
-
-// Highlighting ------------------------------------------------------------------
 
 const marks = new Map<TokenClass, Decoration>();
 function mark(tokenClass: TokenClass): Decoration {
@@ -119,7 +97,7 @@ function highlighting(analyzer: Analyzer): Extension {
     const builder = new RangeSetBuilder<Decoration>();
     const tokens = analyzer.file(view.state.doc, view.state.facet(documentPath)).tokens;
     for (const { from, to } of view.visibleRanges) {
-      // Tokens are sorted and don't overlap: skip to the first visible one.
+      // Binary search to the first visible token.
       let low = 0;
       let high = tokens.length;
       while (low < high) {
@@ -151,7 +129,6 @@ function highlighting(analyzer: Analyzer): Extension {
   );
 }
 
-/** `code` as elements highlighted like the editor, for hovers and lists. */
 export function highlightedCode(analyzer: Analyzer, code: string): DocumentFragment {
   const fragment = document.createDocumentFragment();
   const tokens = analyzer.safely(() => analyzer.analysis.file(code).tokens, []);
@@ -168,8 +145,6 @@ export function highlightedCode(analyzer: Analyzer, code: string): DocumentFragm
   return fragment;
 }
 
-// Diagnostics -------------------------------------------------------------------
-
 function diagnostics(analyzer: Analyzer): Extension {
   return linter(
     (view): Diagnostic[] => {
@@ -182,16 +157,12 @@ function diagnostics(analyzer: Analyzer): Extension {
         message: d.message,
       }));
     },
-    // A lint that ran before the modules arrived is redone when they do.
     { delay: 150, needsRefresh: reanalyzes },
   );
 }
 
-// Completion --------------------------------------------------------------------
-
 const WORD_BEFORE = /[A-Za-z0-9_]*$/;
 
-/** Re-indents the line at `pos` as the indentation rules say. */
 function reindentLine(view: EditorView, pos: number): void {
   const line = view.state.doc.lineAt(pos);
   const wanted = getIndentation(view.state, line.from);
@@ -203,16 +174,9 @@ function reindentLine(view: EditorView, pos: number): void {
   }
 }
 
-/**
- * Converts the analysis's completions to CodeMirror's. `dedented` says the
- * line was re-indented for a `fi`, `else`, or `case` being typed; a completion
- * that turns it into another word re-indents it back.
- */
 export function completionResult(items: CompletionItem[], from: number, pos: number, doc: Text, dedented = false): CompletionResult | null {
   if (items.length === 0) return null;
-  // CodeMirror filters by the text from `from` to the cursor, which must be
-  // the word being typed. Some items replace more (a pointer field replaces
-  // the `.` too, to insert `^.x`), so their `apply` covers the analysis range.
+  // CodeMirror filters from `from` to the cursor, so anchor at the typed word while `apply` handles wider replacements (e.g. `.` -> `^.x`).
   const line = doc.lineAt(pos);
   const wordFrom = pos - (WORD_BEFORE.exec(line.text.slice(0, pos - line.from))?.[0].length ?? 0);
   const start = Math.min(from, wordFrom);
@@ -231,6 +195,7 @@ export function completionResult(items: CompletionItem[], from: number, pos: num
       const run = insert;
       option.apply = (view, completion, _from, to) => {
         run(view, completion, to);
+        // Accepting a longer identifier onto a dedented `fi`/`else`/`case` must restore its indent.
         if (dedented) reindentLine(view, view.state.selection.main.head);
       };
     }
@@ -244,7 +209,6 @@ function completion(analyzer: Analyzer) {
   const dedentWord = new RegExp(`^\\s*(?:${[blockCloser, ...branchKeywords].join("|")})$`);
   return (context: CompletionContext): CompletionResult | null => {
     const before = context.state.sliceDoc(Math.max(0, context.pos - 1), context.pos);
-    // While typing, open only on a word or right after `.`; Ctrl+Space opens anywhere.
     if (!context.explicit && !context.matchBefore(/[A-Za-z_][A-Za-z0-9_]*$/) && before !== ".") return null;
     const source = context.state.doc.toString();
     const program = analyzer.context(context.state.facet(documentPath));
@@ -254,8 +218,6 @@ function completion(analyzer: Analyzer) {
     return result && completionResult(result.items, result.from, context.pos, context.state.doc, dedented);
   };
 }
-
-// Hover and definitions -----------------------------------------------------------
 
 function hover(analyzer: Analyzer): Extension {
   return hoverTooltip(
@@ -288,10 +250,6 @@ function hover(analyzer: Analyzer): Extension {
   );
 }
 
-/**
- * Selects the declaration of the name at `pos` (or the cursor), opening its
- * file when it is in another one.
- */
 export function goToDefinition(analyzer: Analyzer, view: EditorView, pos = view.state.selection.main.head): boolean {
   const program = analyzer.context(view.state.facet(documentPath));
   const target = analyzer.safely(() => analyzer.analysis.definition(view.state.doc.toString(), pos, program), null);
@@ -324,18 +282,15 @@ function definitions(analyzer: Analyzer): Extension {
   ];
 }
 
-// Structure: indentation, folding, comments, brackets ---------------------------------
-
 function structure(language: Language): Extension {
   const unitText = "    ";
   const closeOrBranch = [language.blockCloser, ...language.branchKeywords].join("|");
-  // Created once: CodeMirror compares language data by identity.
+  // Created once: CodeMirror compares language data by reference identity.
   const data = [
     {
       commentTokens: { line: language.lineComment },
       closeBrackets: { brackets: language.brackets.map(([open]) => open) },
-      // Re-indent a line when it becomes just `fi`, `else`, `case`, or `}`, and
-      // again when a word continues past a keyword (`fib`), undoing the dedent.
+      // Trailing optional char re-indents back when typing continues past a keyword (e.g. `fib`).
       indentOnInput: new RegExp(`^\\s*(?:(?:${closeOrBranch})[A-Za-z0-9_]?|\\})$`),
     },
   ];
@@ -359,7 +314,7 @@ function structure(language: Language): Extension {
       const open = doc.lineAt(lineStart);
       const close = closingLine((i) => doc.line(i + 1).text, doc.lines, open.number - 1, language);
       if (close === null || close <= open.number) return null;
-      // Keep the header and the `fi` visible.
+      // Keep the `fi` / `}` closing line visible when folded.
       const lastInside = doc.line(close);
       return lastInside.number > open.number ? { from: open.to, to: lastInside.to } : null;
     }),
@@ -367,7 +322,6 @@ function structure(language: Language): Extension {
   ];
 }
 
-/** Everything the editor needs for a `.vela` file. */
 export function vela(analyzer: Analyzer): Extension {
   const autocompleteData = [{ autocomplete: completion(analyzer) }];
   return [
@@ -376,8 +330,7 @@ export function vela(analyzer: Analyzer): Extension {
     diagnostics(analyzer),
     hover(analyzer),
     definitions(analyzer),
-    // The same source each time: CodeMirror matches running queries to their
-    // source by identity, and would drop every result of a new one.
+    // Same source reference each time or CodeMirror drops in-flight completion results.
     EditorState.languageData.of(() => autocompleteData),
   ];
 }

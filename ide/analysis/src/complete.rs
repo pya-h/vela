@@ -1,10 +1,4 @@
-//! Completion: what may be typed at the cursor, decided from the tokens
-//! before it. Items are not filtered by the word being typed; the editor
-//! filters and ranks them, using `boost` to prefer the likelier kinds.
-//!
-//! Where types matter (fields after `.`, the cases of a `match`), the file is
-//! checked again with the half-typed text removed, so the compiler's types are
-//! used whenever the rest of the file allows it.
+//! Cursor completions derived from preceding tokens and a probe check with the half-typed word removed.
 
 use std::cell::RefCell;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -28,7 +22,6 @@ pub enum CompletionKind {
     Variable,
     Parameter,
     Field,
-    /// A method of a shape or kind, after a dot.
     Method,
     Variant,
     Type,
@@ -40,25 +33,15 @@ pub enum CompletionKind {
 pub struct CompletionItem {
     pub label: String,
     pub kind: CompletionKind,
-    /// A type, signature, or payload shown next to the label.
     pub detail: String,
-    /// Text to insert instead of the label.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apply: Option<String>,
-    /// A CodeMirror snippet template to insert instead of the label:
-    /// `${name}` marks a field to fill in (fields with the same name are
-    /// edited together), `${}` an unnamed field, and `\t` one level of
-    /// indentation. Tab visits the fields in order; reaching the last one ends
-    /// the snippet. (`${0}` isn't used: CodeMirror visits it first when unnumbered
-    /// fields come before it.)
+    /// CodeMirror snippet template; `${0}` is avoided because CodeMirror visits it before unnumbered fields.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
-    /// How much to prefer this item among equally good matches.
     pub boost: i32,
 }
 
-/// The completions at a position: the items replace the text from `from` to
-/// `to` (UTF-16 offsets).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Completions {
     pub from: usize,
@@ -66,13 +49,11 @@ pub struct Completions {
     pub items: Vec<CompletionItem>,
 }
 
-/// Boosts, from most to least likely.
 const LOCAL: i32 = 3;
 const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
-/// A loop in three parts, with a name of its own.
 const LOOP_PARTS_SNIPPET: &str = "loop flex ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
 
 const STATEMENT_KEYWORDS: &[&str] = &[
@@ -82,8 +63,6 @@ const VALUE_KEYWORDS: &[&str] = &[
     "true", "false", "none", "not", "new", "fail", "match", "when",
 ];
 
-/// Completions at byte `byte` of `source`. Returns the items and the byte
-/// range they replace.
 pub(crate) fn complete(
     source: &str,
     scan: &Scan,
@@ -116,8 +95,6 @@ pub(crate) fn complete(
     let prev_token = prev.and_then(|q| k.token(q));
     let blocks = open_blocks(&k, word_start);
 
-    // On an `include` line: nothing for the path or a name after `=>`; in its
-    // parentheses or braces, the names the module declares.
     if let Some(q) = prev
         && k.token(k.line_start(q)) == Some(&Token::Include)
     {
@@ -137,8 +114,6 @@ pub(crate) fn complete(
                         .map(|m| member_items(&k, m, Members::Listed))
                         .unwrap_or_default()
                 }
-                // The path's start, where Vela's library is one of the modules
-                // there are, and after `std/`, its modules.
                 _ if prev_token == Some(&Token::Include) => library_items(true),
                 _ if prev_token == Some(&Token::Slash)
                     && q >= 2
@@ -152,7 +127,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // `outer => `: only a loop is named so.
     if let (Some(arrow), Some(Token::FatArrow)) = (prev, prev_token)
         && arrow
             .checked_sub(1)
@@ -186,7 +160,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // After a module's name and `.`: what the module declares.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(module) = dot.checked_sub(1).and_then(|q| k.module_at(q))
     {
@@ -198,8 +171,6 @@ pub(crate) fn complete(
         return (member_items(&k, module, members), word_start, byte);
     }
 
-    // After the name of a kind no file declares and `.`: its variants, which no
-    // symbol holds (see `builtin_variants`).
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(name) = dot.checked_sub(1).and_then(|q| k.ident(q))
         && let Some(variants) = builtin_variants(name)
@@ -217,7 +188,7 @@ pub(crate) fn complete(
             .into_iter()
             .filter(|(label, _, _)| !covered.contains(label))
             .map(|(label, pattern, detail)| {
-                // A value is written `NoNumber(why)`, a pattern `NoNumber why`.
+                // Payloads use `NoNumber(why)` in expressions vs `NoNumber why` in patterns.
                 let holds = pattern != label;
                 let snippet = match (in_pattern, holds) {
                     (true, true) => Some(pattern),
@@ -241,8 +212,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // After a kind's name and `.`: its variants, as values or in a pattern.
-    // (`Option<int>.`: the kind is named before the types it is given.)
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(kind) = dot
             .checked_sub(1)
@@ -253,22 +222,18 @@ pub(crate) fn complete(
         let line = k.line_start(dot);
         let in_pattern = in_pattern(&k, line, dot);
         let mut items = kind_variant_items(&k, kind, in_pattern);
-        // A `case` offers the variants its match doesn't cover yet.
         if k.token(line) == Some(&Token::Case)
             && let Some(match_q) = k.enclosing_match(line)
         {
             let covered = covered_cases(&k, match_q, line);
             items.retain(|item| !covered.contains(&item.label));
         }
-        // Outside a pattern, the kind's shared methods are called on it too.
         if !in_pattern {
             items.extend(shared_methods(&k, kind));
         }
         return (items, word_start, byte);
     }
 
-    // After a shape's name and `.`: its shared fields and methods, which
-    // belong to the shape itself rather than to any value of it.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(shape) = dot
             .checked_sub(1)
@@ -291,8 +256,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // `.` starting a value inside a method: the value it is called on, `.this`,
-    // and its shape's or kind's fields and methods.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && !dot.checked_sub(1).is_some_and(|q| ends_value(&k, q))
     {
@@ -316,13 +279,10 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // After `.`: fields and methods.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token) {
         let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
         let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
-        // An array's member is its length; a slice's are its length and its
-        // changes, `add` and `del`.
         let members = |slice: bool, through_pointer: bool| {
             let prefix = if through_pointer { "^." } else { "" };
             let mut items = vec![CompletionItem {
@@ -370,7 +330,6 @@ pub(crate) fn complete(
             }
             items
         };
-        // A number, a bool, or text turned into text in a region.
         let to_text = || CompletionItem {
             label: vela::ast::STR.to_string(),
             kind: CompletionKind::BuiltinFn,
@@ -379,8 +338,6 @@ pub(crate) fn complete(
             snippet: Some(format!("{}() at ${{r}}", vela::ast::STR)),
             boost: LOCAL,
         };
-        // Every value holding text, a slice, or a pointer can be copied; a
-        // pointer's other members replace from the dot, and so does its copy.
         let can_copy = base.as_ref().is_some_and(|ty| exact.can_copy(ty));
         let copy = |from_dot: bool| {
             can_copy.then(|| CompletionItem {
@@ -392,7 +349,6 @@ pub(crate) fn complete(
                 boost: LOCAL,
             })
         };
-        // Every value's type, as code writes it.
         let is_value = base.is_some();
         let type_of = |from_dot: bool| {
             is_value.then(|| CompletionItem {
@@ -404,8 +360,6 @@ pub(crate) fn complete(
                 boost: LOCAL,
             })
         };
-        // An array, a slice, a tuple, a pointer, and a `maybe` are written as
-        // text too (see the checker's `writable`); a shape or kind by its own.
         let written = matches!(
             base,
             Some(
@@ -432,7 +386,6 @@ pub(crate) fn complete(
             items
         };
         match &base {
-            // A tuple's items, by position.
             Some(Type::Tuple(items)) => {
                 let items = items
                     .iter()
@@ -451,8 +404,6 @@ pub(crate) fn complete(
             Some(Type::Array(..)) => {
                 return (with_copy(members(false, false), false), word_start, byte);
             }
-            // A map's number of keys, what it answers, its sides as slices, and
-            // taking a key out; a key is added with `m[k] = v`.
             Some(Type::Map(..)) => {
                 let member = |label: &str,
                               kind: CompletionKind,
@@ -511,8 +462,6 @@ pub(crate) fn complete(
                 ];
                 return (with_copy(items, false), word_start, byte);
             }
-            // Text's members are its length in bytes, `at`, and `str`; a
-            // number's, a char's, and a bool's, `str`.
             Some(Type::Text(_)) => {
                 let len = CompletionItem {
                     label: vela::ast::LEN.to_string(),
@@ -547,8 +496,6 @@ pub(crate) fn complete(
             }
             _ => {}
         }
-        // A shape given types (`Box<int>`) has the fields and methods its
-        // declaration writes.
         let named = |ty: Type| match ty {
             Type::Named(name, _) => Some(name),
             Type::Applied(applied) => Some(applied.name),
@@ -571,7 +518,6 @@ pub(crate) fn complete(
         else {
             return (with_copy(Vec::new(), false), word_start, byte);
         };
-        // A pointer's members are reached through `^`: `p^.x`.
         let items = with_copy(
             owner_members(&k, owner_id, if through_pointer { "^." } else { "" }),
             through_pointer,
@@ -587,8 +533,6 @@ pub(crate) fn complete(
     let line_first = prev.map(|q| k.line_start(q + 1));
     let first_token = line_first.and_then(|q| k.token(q));
 
-    // After `priv` starting a line outside any item: what it can mark. (Before a
-    // shape's field, the field's name is being declared.)
     if let (Some(q), Some(Token::Priv)) = (prev, prev_token)
         && k.line_start(q) == q
     {
@@ -597,8 +541,6 @@ pub(crate) fn complete(
                 .into_iter()
                 .filter(|item| item.label != "priv" && item.label != "include")
                 .collect(),
-            // A private method may change its value, and a shape's shared
-            // field or method, or a kind's shared method, may be private.
             [Block::Shape] => vec![keyword(vela::ast::ALTERS), keyword("shared")],
             [Block::Kind] => vec![keyword(vela::ast::ALTERS), keyword("shared")],
             _ => Vec::new(),
@@ -606,8 +548,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // After `shared` in a shape: whether the field changes, and who changes it,
-    // or `new`, a shared method's name. (Otherwise its name is being declared.)
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Shape] {
         return (
             vec![
@@ -624,8 +564,6 @@ pub(crate) fn complete(
         return (vec![keyword(vela::ast::NEW_WORD)], word_start, byte);
     }
 
-    // `region r default` and `r: region default`: the word that makes a region
-    // the default of a block or of a task's body (see `ast::DEFAULT`).
     if let Some(q) = prev {
         let before = q.checked_sub(1).and_then(|before| k.token(before));
         let declared =
@@ -636,9 +574,6 @@ pub(crate) fn complete(
         }
     }
 
-    // Names being declared get no suggestions, including another name in a
-    // `fixed` or `flex` list (`fixed q, r = …`).
-    // After a reserved word, the error is the word itself.
     if matches!(
         prev_token,
         Some(
@@ -655,15 +590,12 @@ pub(crate) fn complete(
     ) {
         return (Vec::new(), word_start, byte);
     }
-    // `block` takes nothing on its line.
     if prev_token == Some(&Token::Block) {
         return (Vec::new(), word_start, byte);
     }
-    // `break outer` and `continue outer`: the names of the loops around it.
     if matches!(prev_token, Some(Token::Break | Token::Continue)) {
         return (loop_name_items(&k, byte), word_start, byte);
     }
-    // `flex& name`, `fixed& name` and `bind& name`: the `&` is part of the word.
     if prev_token == Some(&Token::Amp)
         && matches!(
             prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)),
@@ -677,18 +609,14 @@ pub(crate) fn complete(
     {
         return (Vec::new(), word_start, byte);
     }
-    // The next name of a named result list (`-> total: int, peak: int`).
     if let Some(q) = prev
         && names_a_result(&k, q)
     {
         return (Vec::new(), word_start, byte);
     }
-    // A region: after `@` in a type or `new@`, or after the `at` of `new T(v) at`.
-    // `new` allocates, so it takes only a region the task can allocate in.
     if let Some(q) = prev
         && (prev_token == Some(&Token::AtSign) || prev_token == Some(&Token::At))
     {
-        // `scan(…)@r` and `"n = {n}"@r` allocate too: both make new text.
         let allocating = prev_token == Some(&Token::At)
             || matches!(
                 k.token_before(q),
@@ -696,8 +624,6 @@ pub(crate) fn complete(
             );
         return (region_items(&k, word_start, allocating), word_start, byte);
     }
-    // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
-    // `is failure e`, `{ failure e`) get no suggestions.
     if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
         return (
             is_pattern_items(source, scan, context, &k, is),
@@ -705,8 +631,6 @@ pub(crate) fn complete(
             byte,
         );
     }
-    // The rest of the line after `is` is the pattern, whose names are
-    // declared, up to an `and` joining it to what reads them.
     if let Some(q) = prev
         && (k.line_start(q + 1)..=q)
             .rev()
@@ -729,24 +653,19 @@ pub(crate) fn complete(
     if declares_name {
         return (Vec::new(), word_start, byte);
     }
-    // Inside `< … >`: the types a declaration takes, or the ones a call gives.
     if let Some(open) = prev.and_then(|q| type_angle(&k, q)) {
         let declares = open
             .checked_sub(2)
             .is_some_and(|before| matches!(k.token(before), Some(Token::Task | Token::Shape)));
         if declares {
             return match prev_token {
-                // `<T: ` and `<T: frozen & `: what the type must allow.
                 Some(Token::Colon | Token::Amp) => (need_items(&k), word_start, byte),
-                // A name is being declared.
                 _ => (Vec::new(), word_start, byte),
             };
         }
     }
     let inside_parens =
         prev.is_some_and(|q| unclosed_on_line(&k, q, &Token::LParen, &Token::RParen));
-    // A parameter's or payload's name follows, unless the parentheses are a
-    // tuple type's, where an item's type follows.
     if matches!(prev_token, Some(Token::LParen | Token::Comma))
         && inside_parens
         && prev.and_then(|q| type_paren(&k, q)).is_none()
@@ -754,9 +673,6 @@ pub(crate) fn complete(
             || blocks.last() == Some(&Block::Kind)
             || prev.is_some_and(|q| method_header(&k, q)))
     {
-        // A task's or a method's parameter may be one it changes (`flex n: int`);
-        // a variant's value never is. In a kind, `V(` may be either until the
-        // line says `alters` or what the method sends.
         let in_kind = blocks.contains(&Block::Kind);
         let says_method = prev.is_some_and(|q| {
             (k.line_start(q)..)
@@ -783,9 +699,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // `case`: the variants the match doesn't cover yet; after the variant, its
-    // bindings. Past an `=`, the case gives a value, which is typed like any
-    // other, so the paths below have it.
     let gives_value =
         prev.is_some_and(|q| (k.line_start(q)..=q).any(|p| k.token(p) == Some(&Token::Assign)));
     if first_token == Some(&Token::Case) && !gives_value {
@@ -798,8 +711,6 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // A field name in a shape literal: the fields not given yet. (A `{` after
-    // anything but a shape's name opens a plan B, where values are typed.)
     if let Some(q) = prev
         && matches!(prev_token, Some(Token::LBrace | Token::Comma))
         && let Some(brace) = unclosed_brace(&k, q)
@@ -811,14 +722,12 @@ pub(crate) fn complete(
         return (literal_field_items(&k, brace, word_start), word_start, byte);
     }
 
-    // An array type's count, `[int#4]`, is a number.
     if let (Some(q), Some(Token::Hash)) = (prev, prev_token)
         && type_bracket(&k, q).is_some()
     {
         return (Vec::new(), word_start, byte);
     }
 
-    // `#NAME`: a macro's new name, at the start of a line.
     if let (Some(q), Some(Token::Hash)) = (prev, prev_token)
         && matches!(
             k.token(q.wrapping_sub(1)),
@@ -828,8 +737,6 @@ pub(crate) fn complete(
         return (Vec::new(), word_start, byte);
     }
 
-    // After a `scan`'s prompt: the type of a number to read, the only two types
-    // this form takes.
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
         && after_scan_prompt(&k, q)
     {
@@ -853,32 +760,21 @@ pub(crate) fn complete(
 
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
-        // A shortcut lambda's body is a value: `x -> x * 2`.
         (Some(q), Some(Token::Arrow)) => !shortcut_arrow(&k, q),
         (_, Some(Token::New)) => true,
-        // `-> int, int`: another result type follows the comma; so does the
-        // next item of a tuple type, `(int, text)`.
         (Some(q), Some(Token::Comma)) => {
             in_result_list(&k, q) || type_paren(&k, q).is_some() || type_angle(&k, q).is_some()
         }
-        // `(int, text)`: the first item's type follows the `(`.
         (Some(q), Some(Token::LParen)) => starts_type(&k, q),
-        // `first<int>(…)`: the types a call gives a generic task.
         (Some(q), Some(Token::Lt)) => opens_types(&k, q),
-        // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
-        // A type continues after `^`, `maybe`, and an array's or slice's `[`,
-        // and `~` starts the error type.
         (Some(q), Some(Token::Caret | Token::Maybe | Token::LBracket)) => starts_type(&k, q),
         (Some(q), Some(Token::Tilde)) => q.checked_sub(1).is_some_and(|end| ends_type(&k, end)),
         _ => false,
     };
     if type_context {
         let after_arrow = prev_token == Some(&Token::Arrow);
-        // A maybe can't hold a maybe, and an error type can't be one.
         let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Tilde));
-        // The kind reading a number sends is offered where an error type goes,
-        // which is where a program writes it.
         let mut items = type_items(
             &k,
             byte,
@@ -886,8 +782,6 @@ pub(crate) fn complete(
             offer_maybe,
             prev_token == Some(&Token::Tilde),
         );
-        // A parameter can be a region the task allocates in; a result can't,
-        // since a task never sends one.
         if prev_token == Some(&Token::Colon)
             && (first_token == Some(&Token::Task) || prev.is_some_and(|q| method_header(&k, q)))
             && inside_parens
@@ -904,23 +798,19 @@ pub(crate) fn complete(
         return (items, word_start, byte);
     }
 
-    // Nothing but a `when` follows an `else` on its line: `else when …`
-    // continues the chain, and one `fi` closes the whole of it.
     if prev_token == Some(&Token::Else) {
         return (vec![keyword("when")], word_start, byte);
     }
 
-    // (`prev_token` is also `None` after invalid text, which isn't a line start.)
+    // Check `prev.is_none()` rather than `prev_token` so invalid tokens do not count as line start.
     let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {
-        // A method's body holds statements, as a task's does.
         let item = if blocks.contains(&Block::Method) {
             Some(&Block::Method)
         } else {
             blocks.first()
         };
         let items = match item {
-            // `include` lines come before the file's items.
             None => {
                 let before_items = !(0..prev.map_or(0, |q| q + 1))
                     .any(|q| matches!(k.token(q), Some(Token::Task | Token::Shape | Token::Kind)));
@@ -929,8 +819,6 @@ pub(crate) fn complete(
                     .filter(|item| before_items || item.label != "include")
                     .collect()
             }
-            // A shape's field and a method can be private, a shape's field can
-            // be read-only or shared, and a method can change its value.
             Some(Block::Shape) => vec![
                 keyword("priv"),
                 keyword(vela::ast::READ),
@@ -945,7 +833,6 @@ pub(crate) fn complete(
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
-                // A plan B's first line may name its failure: `failure e`.
                 let names_error = prev.is_some_and(|q| {
                     blocks.last() == Some(&Block::PlanB)
                         && starts_plan_b_or_pattern(&k, q + 1)
@@ -962,15 +849,12 @@ pub(crate) fn complete(
     {
         return (Vec::new(), word_start, byte);
     }
-    // A region is a value only as the argument for a task's region parameter,
-    // which must be a region the caller can allocate in.
     let parameter = prev
         .filter(|_| inside_parens)
         .and_then(|q| argument_parameter(&k, q));
     if parameter == Some(Some(Type::Region)) {
         return (region_items(&k, word_start, true), word_start, byte);
     }
-    // After a finished value, only the words that can continue it.
     if let Some(q) = prev
         && k.range(q).end < word_start
         && (ends_value(&k, q) || bare_new(&k, q).is_some())
@@ -981,21 +865,16 @@ pub(crate) fn complete(
     if !inside_parens || parameter.is_some() {
         items.retain(|item| item.kind != CompletionKind::Region);
     }
-    // A `loop` takes its condition directly, so a `when` can't start it.
     if prev_token == Some(&Token::Loop) {
         items.retain(|item| item.label != "when" && item.label != "when … else");
     }
     (items, word_start, byte)
 }
 
-/// Whether the token at position `q` can end a value, a type, or a loop's name.
 fn ends_value(k: &Knowledge, q: usize) -> bool {
     k.token(q).is_some_and(crate::scan::ends_value)
 }
 
-/// Whether the `)` at position `q` ends a value that names its region after
-/// it, with `at`: a `new T(…)` (not `new@r T(…)`), a `scan(…)`, or a
-/// `x.copy()`.
 fn names_region_after(k: &Knowledge, q: usize) -> bool {
     if k.copied_value(q).is_some() {
         return true;
@@ -1007,14 +886,12 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
         return false;
     };
     if k.ident(before) == Some(vela::ast::SCAN) {
-        // The form that reads a number, `scan(prompt, int)`, names no region.
         let number = q
             .checked_sub(1)
             .and_then(|p| k.ident(p))
             .is_some_and(|name| vela::ast::number_cast(name).is_some());
         return !number && k.token_before(before) != Some(&Token::Dot);
     }
-    // The type between `new` and `(`.
     let mut p = before;
     loop {
         match k.token(p) {
@@ -1039,18 +916,11 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
     }
 }
 
-/// Whether the type ending at position `q` is a `new`'s, written without
-/// `( )` for the empty value, `new [int]` or `new Point`, which is a value
-/// already: `Some` with whether it names its region after it, as a `new@r`
-/// doesn't.
 fn bare_new(k: &Knowledge, q: usize) -> Option<bool> {
     k.bare_new(q)
         .map(|new| k.token(new + 1) != Some(&Token::AtSign))
 }
 
-/// The words that can follow the finished value, type, or name ending at
-/// position `q`: `in` after an `each`'s name or a `new`'s value, `~` after a
-/// written type, `is` in a condition, and `and`/`or` after a value.
 fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     let line = k.line_start(q);
     let on_line = |token: &Token| (line..=q).any(|p| k.token(p) == Some(token));
@@ -1069,8 +939,6 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     if bare == Some(true) || names_region_after(k, q) {
         items.push(keyword("at"));
     }
-    // After `and`, another part may be an `is`; an `is` is never joined with
-    // `or`, so a condition holding one goes on with `and` alone.
     let condition = matches!(k.token(line), Some(Token::When | Token::Loop));
     let last_join = (line..q)
         .rev()
@@ -1085,10 +953,6 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     items
 }
 
-/// The parameter whose argument is being typed after position `q`, inside a
-/// call's parentheses on the same line: `None` when the call isn't of a known
-/// task, and `Some(None)` when the task has no such parameter, it is `show`,
-/// or the parameter's type doesn't parse.
 fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
     let mut depth = 0usize;
     let mut index = 0;
@@ -1117,11 +981,6 @@ fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
     None
 }
 
-/// Whether the comma at position `q` separates a task's results, and whether
-/// the list names them: `Some(true)` for `-> total: int, …`, where a name
-/// follows the comma, and `Some(false)` for `-> int, …`, where a type does.
-/// Either every result has a name or none does, so the result before the comma
-/// says which list this is.
 fn result_list(k: &Knowledge, q: usize) -> Option<bool> {
     let line = k.line_start(q);
     if k.token(line) != Some(&Token::Task) {
@@ -1135,14 +994,10 @@ fn result_list(k: &Knowledge, q: usize) -> Option<bool> {
     Some(k.ident(start).is_some() && k.token(start + 1) == Some(&Token::Colon))
 }
 
-/// Whether the comma at position `q` separates a task's result types, so
-/// another type follows it.
 fn in_result_list(k: &Knowledge, q: usize) -> bool {
     result_list(k, q) == Some(false)
 }
 
-/// Whether position `q` is where a named result list declares its next name,
-/// after the comma and any `^` or `maybe` typed since.
 fn names_a_result(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
     while matches!(k.token(p), Some(Token::Caret | Token::Maybe)) {
@@ -1154,9 +1009,6 @@ fn names_a_result(k: &Knowledge, q: usize) -> bool {
     k.token(p) == Some(&Token::Comma) && result_list(k, p) == Some(true)
 }
 
-/// Whether the comma at position `q` separates the names of a `fixed`, `flex`
-/// or `bind`, so another name follows it. A comma inside a name's tuple type
-/// separates its items, not names.
 fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     let line = k.line_start(q);
     matches!(
@@ -1166,13 +1018,6 @@ fn in_binding_names(k: &Knowledge, q: usize) -> bool {
         && type_paren(k, q).is_none()
 }
 
-/// Whether the type-starting token at position `q` (a name, `^`, `maybe`, or
-/// `[`) is in a type: before it, after any `^`, `maybe`, and `[`, comes `:`
-/// (outside a shape literal), `->`, `new`, `~` after a type, or a module's
-/// name and `.` that are in a type themselves.
-/// Whether the `->` at `q` is a shortcut lambda's, its body a value: after a
-/// parameter's name, `x ->`, or names in parentheses where no type goes,
-/// `(a, b) ->`.
 fn shortcut_arrow(k: &Knowledge, q: usize) -> bool {
     match q.checked_sub(1).map(|b| (b, k.token(b))) {
         Some((_, Some(Token::Ident(_) | Token::Underscore))) => true,
@@ -1210,11 +1055,9 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
         Some((b, Some(Token::Arrow))) => !shortcut_arrow(k, b),
         Some((_, Some(Token::New))) => true,
         Some((b, Some(Token::Comma))) => in_result_list(k, b) || type_paren(k, b).is_some(),
-        // `(int, text)`: a tuple type's items are types themselves.
         Some((b, Some(Token::LParen))) => starts_type(k, b),
         Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
         Some((b, Some(Token::Tilde))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
-        // `geometry.Point`: the type goes on after the module's name.
         Some((b, Some(Token::Dot))) => b
             .checked_sub(1)
             .is_some_and(|module| k.module_at(module).is_some() && starts_type(k, module)),
@@ -1222,8 +1065,6 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     }
 }
 
-/// The `<` of the types a declaration takes, or a call gives, that position `q`
-/// is inside, on its line.
 fn type_angle(k: &Knowledge, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
@@ -1237,10 +1078,6 @@ fn type_angle(k: &Knowledge, q: usize) -> Option<usize> {
     None
 }
 
-/// Whether the `<` at `p` opens types: one right after the name of a `task` or
-/// `shape`, one after the name of a shape that takes types in a written type, or
-/// one whose matching `>` is followed by `(` (a call) or `{` (a shape literal),
-/// as the parser reads them.
 fn opens_types(k: &Knowledge, p: usize) -> bool {
     if p >= 2
         && k.ident(p - 1).is_some()
@@ -1251,8 +1088,6 @@ fn opens_types(k: &Knowledge, p: usize) -> bool {
     {
         return true;
     }
-    // `Box<` in a written type, where the name is a shape that takes types: the
-    // `>` may not be typed yet.
     if let Some(name) = p.checked_sub(1).and_then(|q| k.ident(q))
         && k.global(name, SymbolKind::Shape).is_some_and(|id| {
             k.symbols()
@@ -1262,7 +1097,6 @@ fn opens_types(k: &Knowledge, p: usize) -> bool {
     {
         return true;
     }
-    // `Option<`, where the name is a kind that takes types.
     if let Some(name) = p.checked_sub(1).and_then(|q| k.ident(q))
         && k.global(name, SymbolKind::Kind).is_some_and(|id| {
             k.children(id)
@@ -1274,7 +1108,6 @@ fn opens_types(k: &Knowledge, p: usize) -> bool {
     k.types_close(p).is_some()
 }
 
-/// The `(` of a tuple type that position `q` is inside, on its line.
 fn type_paren(k: &Knowledge, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
@@ -1288,23 +1121,18 @@ fn type_paren(k: &Knowledge, q: usize) -> Option<usize> {
     None
 }
 
-/// Whether position `q`, a `,` inside a call's parentheses, is the one after a
-/// `scan`'s prompt, where the type of a number to read goes:
-/// `scan("Age: ", int)`.
 fn after_scan_prompt(k: &Knowledge, q: usize) -> bool {
     let mut depth = 0usize;
     for p in (k.line_start(q)..q).rev() {
         match k.token(p) {
             Some(Token::RParen) => depth += 1,
             Some(Token::LParen) if depth == 0 => {
-                // The name before the `(`, which a dot would make a method.
                 return p.checked_sub(1).is_some_and(|name| {
                     k.ident(name) == Some(vela::ast::SCAN)
                         && k.token_before(name) != Some(&Token::Dot)
                 });
             }
             Some(Token::LParen) => depth -= 1,
-            // Only the first argument is the prompt.
             Some(Token::Comma) if depth == 0 => return false,
             _ => {}
         }
@@ -1312,7 +1140,6 @@ fn after_scan_prompt(k: &Knowledge, q: usize) -> bool {
     false
 }
 
-/// The `[` of an array or slice type that position `q` is inside, on its line.
 fn type_bracket(k: &Knowledge, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
@@ -1326,7 +1153,6 @@ fn type_bracket(k: &Knowledge, q: usize) -> Option<usize> {
     None
 }
 
-/// Whether position `q` is the region name of `new@r`, after which its type comes.
 fn after_new_region(k: &Knowledge, q: usize) -> bool {
     k.ident(q).is_some()
         && k.token_before(q) == Some(&Token::AtSign)
@@ -1334,10 +1160,7 @@ fn after_new_region(k: &Knowledge, q: usize) -> bool {
             .is_some_and(|new| k.token(new) == Some(&Token::New))
 }
 
-/// Whether the type-ending name at position `q` (a type's name, or the region
-/// after its `@`) ends a type, so that an `or` after it starts the error type.
 fn ends_type(k: &Knowledge, q: usize) -> bool {
-    // `[int#4]` or `[int]@r`.
     let closing = if k.token_before(q) == Some(&Token::AtSign) {
         q.checked_sub(2)
     } else {
@@ -1360,9 +1183,6 @@ fn ends_type(k: &Knowledge, q: usize) -> bool {
     name.is_some_and(|name| k.ident(name).is_some() && starts_type(k, name))
 }
 
-/// Whether the `fail` at position `q` names an error: it follows `is` or
-/// Whether position `q` is in a pattern: after a `case` or an `is` on the
-/// line starting at `line`, with no `and` since, which no pattern holds.
 fn in_pattern(k: &Knowledge, line: usize, q: usize) -> bool {
     (line..q)
         .rev()
@@ -1370,7 +1190,6 @@ fn in_pattern(k: &Knowledge, line: usize, q: usize) -> bool {
         .is_some_and(|p| k.token(p) != Some(&Token::And))
 }
 
-/// `case`, or it is the first word inside a plan B's `{`.
 fn starts_plan_b_or_pattern(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
     while p > 0 && k.token(p - 1) == Some(&Token::Newline) {
@@ -1382,9 +1201,7 @@ fn starts_plan_b_or_pattern(k: &Knowledge, q: usize) -> bool {
     )
 }
 
-/// Whether the plan B whose `{` is at or before position `q` (across line
-/// breaks) is on a value that can fail, so its first line may name the error.
-/// Unknown types are given the benefit of the doubt.
+/// Defaults to `true` for unknown types so valid `failure` completions stay available.
 fn plan_b_value_can_fail(k: &Knowledge, q: usize) -> bool {
     let mut brace = q;
     while k.token(brace) == Some(&Token::Newline) {
@@ -1403,14 +1220,10 @@ fn plan_b_value_can_fail(k: &Knowledge, q: usize) -> bool {
 }
 
 thread_local! {
-    /// The last texts `probe` checked, with the program they were checked in.
-    /// Completing a word removes the word typed so far, so each letter typed
-    /// probes the same text, which is checked once.
+    // Cache recent probes because typing successive letters strips back to the same source.
     static PROBES: RefCell<Vec<Probe>> = const { RefCell::new(Vec::new()) };
 }
 
-/// A text `probe` checked: the text, the file's path, a hash of the program's
-/// other files (see `program_print`), and what the check found.
 struct Probe {
     text: String,
     path: String,
@@ -1420,7 +1233,6 @@ struct Probe {
 
 const PROBES_KEPT: usize = 4;
 
-/// `source` with `from..to` removed, checked.
 fn probe(source: &str, context: Context, from: usize, to: usize) -> Rc<Checked> {
     let text = format!(
         "{}{}",
@@ -1454,8 +1266,6 @@ fn probe(source: &str, context: Context, from: usize, to: usize) -> Rc<Checked> 
     checked
 }
 
-/// A hash of the texts of the program's other files, which a probe's check
-/// reads too.
 fn program_print(context: Context) -> u64 {
     let mut paths: Vec<&String> = context.sources.keys().collect();
     paths.sort_unstable();
@@ -1467,8 +1277,6 @@ fn program_print(context: Context) -> u64 {
     hasher.finish()
 }
 
-/// Whether `byte` is inside a comment, a text literal, or a char, where
-/// nothing is completed.
 fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
     scan.lexed.iter().any(|t| {
         let text = source.get(t.range.clone()).unwrap_or_default();
@@ -1477,7 +1285,7 @@ fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
         match &t.kind {
             LexKind::Comment => inside || at_end,
             LexKind::Token(Token::Text(_) | Token::Char(_)) => inside,
-            // A rejected literal; an unterminated one runs to the cursor.
+            // Invalid closed literals end at `at_end`; unterminated ones still include the cursor.
             LexKind::Invalid(_) if text.starts_with('"') => {
                 inside || (at_end && !closes_text(text))
             }
@@ -1489,8 +1297,6 @@ fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
     })
 }
 
-/// Whether a text literal's last `"` closes it, rather than being its opening
-/// quote or an escaped `\"`.
 fn closes_text(text: &str) -> bool {
     let Some(body) = text
         .strip_prefix('"')
@@ -1506,32 +1312,22 @@ enum Block {
     Task,
     Shape,
     Kind,
-    /// A method, inside a shape or a kind: its header and its body.
     Method,
     When,
     Match,
-    /// A `loop` or an `each`, which `break` and `continue` stop or go on with.
     Loop,
-    /// What an `each` goes through, on its line, which is outside its loop.
     EachSource,
-    /// A lambda, `(x: int) -> int … fi`, a task of its own inside the code
-    /// around it, so the loops around it are none of its own.
     Lambda,
     Other,
-    /// A plan B's block, opened by a `{` ending its line.
     PlanB,
 }
 
-/// The fields and methods of the shape or kind `owner`, written after a dot:
-/// `prefix` goes before each (`^.` through a pointer). Another module's private
-/// members can't be used here.
 fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionItem> {
     let followed = k
         .members(owner, SymbolKind::Method)
         .filter(|(_, method)| method.parent != Some(owner));
     k.children(owner)
         .chain(followed)
-        // A shared field is the shape's own, read through its name.
         .filter(|(_, member)| {
             matches!(member.kind, SymbolKind::Field | SymbolKind::Method)
                 && !member.shared
@@ -1553,8 +1349,6 @@ fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionIte
         .collect()
 }
 
-/// The shared methods of the shape or kind `owner`, called on its name
-/// (`Point.new(…)`). Another module's private ones can't be used here.
 fn shared_methods(k: &Knowledge, owner: usize) -> Vec<CompletionItem> {
     k.members(owner, SymbolKind::Method)
         .filter(|(_, method)| method.shared && (method.module.is_none() || !method.private))
@@ -1562,8 +1356,6 @@ fn shared_methods(k: &Knowledge, owner: usize) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// A method as offered after a dot, with `prefix` before it: its name, and its
-/// parameters to fill in, headed by its word (`alters` or `shared`).
 fn method_item(member: &Symbol, prefix: &str) -> CompletionItem {
     let params = needed_parameter_names(&member.detail);
     let mut used = Vec::new();
@@ -1592,12 +1384,10 @@ fn method_item(member: &Symbol, prefix: &str) -> CompletionItem {
     }
 }
 
-/// Whether position `q` is on the header line of a method of this file.
 fn method_header(k: &Knowledge, q: usize) -> bool {
     (k.line_start(q)..=q).any(|p| k.declares_method(p))
 }
 
-/// The blocks open at `byte`, outermost first.
 fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
     open_blocks_at(k, byte)
         .into_iter()
@@ -1605,16 +1395,13 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
         .collect()
 }
 
-/// `open_blocks`, each with the position of the token that opens it.
 fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
     let mut blocks: Vec<(Block, usize)> = Vec::new();
-    // Braces opened and not yet closed on the current line.
     let mut inline_braces = 0usize;
     let end = k.last_before(byte).map_or(0, |q| q + 1);
     for q in 0..end {
         let last = blocks.last().map(|(block, _)| *block);
         match k.token(q) {
-            // An `each`'s line ends what it goes through, and its loop begins.
             Some(Token::Newline) if last == Some(Block::EachSource) => {
                 inline_braces = 0;
                 if let Some(open) = blocks.last_mut() {
@@ -1625,7 +1412,7 @@ fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
             Some(Token::LBrace) if opens_block_of_lines(k, q) => blocks.push((Block::PlanB, q)),
             Some(Token::LBrace) => inline_braces += 1,
             Some(Token::RBrace) if inline_braces > 0 => inline_braces -= 1,
-            // Closing a plan B also closes any block left open inside it.
+            // Closing a Plan B closes any unclosed blocks inside it.
             Some(Token::RBrace) => {
                 if let Some(at) = blocks.iter().rposition(|(b, _)| *b == Block::PlanB) {
                     blocks.truncate(at);
@@ -1641,8 +1428,7 @@ fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
                 };
                 blocks.push((block, q));
             }
-            // A method has no word of its own: it opens where the scan
-            // declares its name.
+            // Methods have no introducer keyword and open where `scan` declared their name.
             Some(Token::Ident(_)) if k.declares_method(q) => blocks.push((Block::Method, q)),
             Some(Token::When) => blocks.push((Block::When, q)),
             Some(Token::Match) => blocks.push((Block::Match, q)),
@@ -1659,8 +1445,6 @@ fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
     blocks
 }
 
-/// Whether the `{` at position `q` opens a plan B whose block continues on the
-/// next lines: it ends its line, or only `failure e` follows it there.
 pub(crate) fn opens_block_of_lines(k: &Knowledge, q: usize) -> bool {
     let names_error = k.token(q + 1) == Some(&Token::Failure)
         && matches!(k.token(q + 2), Some(Token::Ident(_) | Token::Underscore));
@@ -1668,8 +1452,6 @@ pub(crate) fn opens_block_of_lines(k: &Knowledge, q: usize) -> bool {
     matches!(k.token(end), Some(Token::Newline) | None)
 }
 
-/// Whether an `open` bracket before position `q` (inclusive) on its line is
-/// still unclosed.
 fn unclosed_on_line(k: &Knowledge, q: usize, open: &Token, close: &Token) -> bool {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
@@ -1687,8 +1469,6 @@ fn unclosed_on_line(k: &Knowledge, q: usize, open: &Token, close: &Token) -> boo
     false
 }
 
-/// The `{` of the shape literal directly around position `q`, if `q` is
-/// inside one and not inside parentheses or brackets within it.
 fn unclosed_brace(k: &Knowledge, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
@@ -1711,7 +1491,6 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
     else {
         return Vec::new();
     };
-    // Fields already given: `name:` directly inside these braces.
     let mut given = Vec::new();
     let mut depth = 0usize;
     for q in brace + 1..k.line_end(brace) {
@@ -1731,9 +1510,7 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
         }
     }
     k.members(shape, SymbolKind::Field)
-        // Another module's private fields can't be given here, and a `read`
-        // field that falls back on a value is given by no literal, and nor is
-        // a shared field, which is no part of a value.
+        // `read` fields with defaults and `shared` fields cannot be set in struct literals.
         .filter(|(_, field)| {
             !given.contains(&field.name)
                 && (field.module.is_none() || !field.private)
@@ -1762,7 +1539,6 @@ fn case_items(
         return Vec::new();
     };
 
-    // The subject's kind, checked without the half-typed `case` line.
     let case_start = k.range(case).start;
     let line_end = k.range(k.line_end(case)).start;
     let probe = probe(source, context, case_start, line_end.max(case_start));
@@ -1776,7 +1552,6 @@ fn case_items(
 
     let covered = covered_cases(k, match_q, case);
 
-    // A maybe or `T ~ E`: a value, and none or an error.
     if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
         let uncovered: Vec<&(String, String, String)> = outcomes
             .iter()
@@ -1817,7 +1592,6 @@ fn case_items(
         return items;
     }
 
-    // A kind no file declares has no symbol, so its cases come from the language.
     if kind.is_none()
         && let Some(Type::Named(name, _)) = &subject
         && let items @ [_, ..] = builtin_case_items(name, &covered, true).as_slice()
@@ -1838,7 +1612,6 @@ fn case_items(
             .map(|(id, _)| id)
             .collect(),
     };
-    // A case names a variant alone, even another module's.
     let uncovered: Vec<usize> = variants
         .into_iter()
         .filter(|&id| {
@@ -1895,9 +1668,6 @@ fn case_items(
     items
 }
 
-/// The cases already written in the `match` at position `match_q`, other than
-/// the one at position `case`: each variant by its name alone (also when written
-/// `Kind.Variant`), `{value}`, `none`, `fail e`, or `_`.
 fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
     let mut covered = Vec::new();
     let mut depth = 0usize;
@@ -1934,10 +1704,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
     covered
 }
 
-/// The patterns of a `maybe` or `T ~ E` as `(label, detail, snippet)`: its
-/// value, and `none` or its error.
 fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
-    // A tuple's items are named in parentheses, `{(a, b)}` and `failure (a, b)`.
     let items = |extracted: &Type| match extracted {
         Type::Tuple(items) => Some(format!(
             "({})",
@@ -1977,7 +1744,6 @@ fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
             ),
         ]),
         Type::Or(ok, error) => Some(vec![value(ok), failure(error)]),
-        // A tuple's items always match, so naming them is the only pattern.
         Type::Tuple(items) => Some(vec![(
             "(items)".to_string(),
             format!("the {} items", items.len()),
@@ -1993,7 +1759,6 @@ fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
     }
 }
 
-/// The patterns after `is`, for the value before it.
 fn is_pattern_items(
     source: &str,
     scan: &Scan,
@@ -2064,10 +1829,6 @@ fn is_pattern_items(
         .collect()
 }
 
-/// The variants of a kind no file declares, each as its name, the pattern that
-/// takes it apart, and what it holds: the file's symbols hold nothing about them,
-/// so they come from the language itself (see `ast::builtin_kinds`). None when
-/// `name` is no such kind.
 fn builtin_variants(name: &str) -> Option<Vec<(String, String, String)>> {
     let kind = vela::ast::builtin_kinds()
         .into_iter()
@@ -2097,7 +1858,6 @@ fn builtin_variants(name: &str) -> Option<Vec<(String, String, String)>> {
     )
 }
 
-/// Those of them a `match` or an `is` has not covered yet, as cases.
 fn builtin_case_items(name: &str, covered: &[String], every: bool) -> Vec<CompletionItem> {
     let Some(variants) = builtin_variants(name) else {
         return Vec::new();
@@ -2117,7 +1877,7 @@ fn builtin_case_items(name: &str, covered: &[String], every: bool) -> Vec<Comple
             boost: LOCAL,
         })
         .collect();
-    // An `is` runs on one case, so it offers no `_` and no set of the rest.
+    // `is` tests a single pattern, so omit `_` and catch-all snippets.
     if every && !uncovered.is_empty() {
         items.push(CompletionItem {
             label: "_".to_string(),
@@ -2149,10 +1909,6 @@ fn builtin_case_items(name: &str, covered: &[String], every: bool) -> Vec<Comple
     items
 }
 
-/// `Rectangle ${width} ${height}`: a variant with a field for each binding,
-/// named after its payload fields. `used` holds the field names already in
-/// the snippet, so that cases of variants sharing a payload field name get
-/// separate fields.
 fn case_template(k: &Knowledge, variant: usize, used: &mut Vec<String>) -> String {
     let mut text = k
         .symbol(variant)
@@ -2164,8 +1920,7 @@ fn case_template(k: &Knowledge, variant: usize, used: &mut Vec<String>) -> Strin
     text
 }
 
-/// `name`, or `name2`, `name3`, … if already used: snippet fields with the
-/// same name would be edited together.
+/// Disambiguates colliding payload names so CodeMirror does not link-edit unrelated fields.
 fn unique(used: &mut Vec<String>, name: &str) -> String {
     let mut candidate = name.to_string();
     let mut n = 2;
@@ -2220,8 +1975,6 @@ fn type_items(
             snippet: None,
             boost: SNIPPET,
         });
-    // The builtin kinds reading a number sends, which no file declares. Both are
-    // error types, so they are offered after `or`, where one goes.
     let builtin_kinds = [
         (
             vela::ast::PARSE_ERROR,
@@ -2257,7 +2010,6 @@ fn type_items(
             snippet: None,
             boost: GLOBAL,
         });
-    // A type of another module is written after its name: `geometry.Point`.
     let modules = module_items(k);
     let maybe = offer_maybe.then(|| CompletionItem {
         label: "maybe".to_string(),
@@ -2276,8 +2028,6 @@ fn type_items(
         .collect()
 }
 
-/// The types the declaration around the cursor takes (`<T: ordered>`), which
-/// are types inside it.
 fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
     let declares = |kind: SymbolKind| {
         matches!(
@@ -2311,8 +2061,6 @@ fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// The position of the name the types closed by the `>` at `q` are given to,
-/// as `Option` in `Option<int>`; `q` itself when it is no `>`.
 fn before_types(k: &Knowledge, q: usize) -> usize {
     if k.token(q) != Some(&Token::Gt) {
         return q;
@@ -2335,8 +2083,6 @@ fn before_types(k: &Knowledge, q: usize) -> usize {
     }
 }
 
-/// The words a type a declaration takes can be asked to allow, and the
-/// patterns it can be asked to follow.
 fn need_items(k: &Knowledge) -> Vec<CompletionItem> {
     let words = [
         (Need::Frozen, "never changes, so it can be a tuple's item"),
@@ -2370,9 +2116,6 @@ fn need_items(k: &Knowledge) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// The names of the tasks, shapes, kinds, or variants (as `kinds` says) usable
-/// without a module's name: the file's own, and those `include` brings in, with
-/// the name to write for each.
 fn visible_globals<'k>(
     k: &'k Knowledge,
     kinds: &[SymbolKind],
@@ -2396,8 +2139,6 @@ fn visible_globals<'k>(
     own.chain(imported).collect()
 }
 
-/// The variants of `kind`, after `Kind.`: with their values' fields as a
-/// value, or with names for them in a pattern.
 fn kind_variant_items(k: &Knowledge, kind: usize, in_pattern: bool) -> Vec<CompletionItem> {
     let kind_name = k.symbol(kind).map(|s| s.name.clone()).unwrap_or_default();
     k.members(kind, SymbolKind::Variant)
@@ -2434,7 +2175,6 @@ fn kind_variant_items(k: &Knowledge, kind: usize, in_pattern: bool) -> Vec<Compl
         .collect()
 }
 
-/// The modules the file names, as names to complete.
 fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
     k.scan
         .modules
@@ -2458,20 +2198,13 @@ fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// Which of a module's declarations `member_items` offers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Members {
-    /// What `m.` reaches: its tasks, shapes, kinds, and variants, except those
-    /// the file brings in under another name.
     All,
-    /// What `m.` reaches where a type is written: its shapes and kinds.
     Types,
-    /// What an `include` line can list: all of them, by their own names.
     Listed,
 }
 
-/// What module `module` (its `include` line's symbol) declares that another file
-/// can use, named without the module (see `Members`).
 fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<CompletionItem> {
     let Some(index) = k.scan.modules.iter().position(|m| m.symbol == module) else {
         return Vec::new();
@@ -2490,7 +2223,6 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
         ]
     };
     let module_name = k.symbol(module).map_or("", |s| s.name.as_str());
-    // A declaration's own name, which the file may write another way.
     let own_name = |s: &crate::scan::Symbol| {
         let source = k.scan.modules.get(index).and_then(|m| m.source.as_deref());
         source
@@ -2501,14 +2233,13 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
         .iter()
         .enumerate()
         .filter(|(_, s)| s.module == Some(index) && !s.private && kinds.contains(&s.kind))
-        // A variant is as private as its kind.
         .filter(|(_, s)| {
             s.kind != SymbolKind::Variant
                 || s.parent
                     .and_then(|p| k.symbol(p))
                     .is_none_or(|kind| !kind.private)
         })
-        // A name brought in under another name isn't reached through the module.
+        // Skip members already imported under an alias; they are not reachable via the module.
         .filter(|(_, s)| {
             members == Members::Listed
                 || s.name
@@ -2583,7 +2314,6 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
                 ),
                 _ => (CompletionKind::Type, "kind".to_string(), None, None),
             };
-            // An include line lists names alone: no call or literal.
             let (apply, snippet) = if members == Members::Listed {
                 (None, None)
             } else {
@@ -2601,11 +2331,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
         .collect()
 }
 
-/// A literal of the shape `shape`, written `label`, with every field a literal
-/// must give: `Point { x: ${x}, y: ${y} }`. A field the shape gives a value to
-/// fall back on is left out, since the literal needn't write it. None for
-/// another module's shape with a private field of that kind, which only its own
-/// module can build.
+/// Returns `None` for foreign shapes with required private fields; omits fields with defaults.
 fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
     let foreign = k.symbol(shape).is_some_and(|s| s.module.is_some());
     if foreign
@@ -2628,8 +2354,7 @@ fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
     Some(format!("{} {}", label, body))
 }
 
-/// `~`, offered after a finished type, which an error type follows:
-/// `int ~ ParseError`. A symbol rather than a word, so it says what it is for.
+/// Uses `~` as its label so error-type separator completions stay discoverable.
 fn error_separator() -> CompletionItem {
     CompletionItem {
         label: "~".to_string(),
@@ -2641,7 +2366,6 @@ fn error_separator() -> CompletionItem {
     }
 }
 
-/// `default`, which makes a region the one that allocations naming none use.
 fn default_region() -> CompletionItem {
     CompletionItem {
         label: vela::ast::DEFAULT.to_string(),
@@ -2653,8 +2377,6 @@ fn default_region() -> CompletionItem {
     }
 }
 
-/// The modules of Vela's library, each written whole (`std/files`) or, after
-/// `std/`, by its own name.
 fn library_items(whole: bool) -> Vec<CompletionItem> {
     vela::library::MODULES
         .iter()
@@ -2741,8 +2463,6 @@ fn item_level_items() -> Vec<CompletionItem> {
     ]
 }
 
-/// The word that last opened or divided the innermost block before `byte`:
-/// `when`, `else`, `loop`, `each`, `block`, `match`, `case`, or a declaration word.
 fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> {
     let mut depth = 0usize;
     let mut q = k.last_before(byte)?;
@@ -2779,7 +2499,6 @@ fn statement_items(
     names_error: bool,
 ) -> Vec<CompletionItem> {
     let innermost = innermost_block_word(k, byte);
-    // Right after `match`, only a `case` can come.
     if blocks.last() == Some(&Block::Match) && innermost == Some(&Token::Match) {
         return vec![keyword("case")];
     }
@@ -2787,7 +2506,6 @@ fn statement_items(
         .iter()
         .map(|word| keyword(word))
         .collect();
-    // A lambda is a task of its own, inside none of the loops around it.
     if blocks
         .iter()
         .rev()
@@ -2796,10 +2514,9 @@ fn statement_items(
     {
         items.extend([keyword("break"), keyword("continue")]);
     }
-    // Inside a plan B, `}` closes the block, not `fi`.
+    // Plan B blocks close with `}`, not `fi`.
     match blocks.last() {
         Some(Block::PlanB) => {}
-        // A `when` has one `else`.
         Some(Block::When) if innermost == Some(&Token::Else) => items.push(keyword("fi")),
         Some(Block::When) => items.extend([keyword("fi"), keyword("else")]),
         Some(Block::Match) => items.extend([keyword("fi"), keyword("case")]),
@@ -2862,8 +2579,6 @@ fn statement_items(
             "match ${value}\ncase ${Variant}\n\t${}\nfi",
         ),
     ]);
-    // A `match` with every case, for each visible value of a kind, a maybe, or
-    // a `T ~ E`.
     for (id, symbol) in visible_locals(k, byte) {
         let ty = k.type_of_symbol(id);
         if let Some(outcomes) = ty.as_ref().and_then(outcome_patterns) {
@@ -2890,8 +2605,6 @@ fn statement_items(
         let Some(Type::Named(kind_name, _)) = ty else {
             continue;
         };
-        // A kind no file declares has its variants from the language, not from a
-        // symbol (see `builtin_variants`).
         let cases: Vec<String> = match k.global(&kind_name, SymbolKind::Kind) {
             Some(kind) => {
                 let mut used = Vec::new();
@@ -2920,7 +2633,6 @@ fn statement_items(
         item.boost = GLOBAL;
         items.push(item);
     }
-    // Setting a named result is a statement of its own: `total <- value`.
     for (_, symbol) in visible_locals(k, byte).filter(|(_, s)| s.intro == Some("result")) {
         let mut item = snippet(
             &format!("{} <- ", symbol.name),
@@ -2930,7 +2642,6 @@ fn statement_items(
         item.boost = GLOBAL;
         items.push(item);
     }
-    // A region is only an argument, never a statement.
     items.extend(
         local_items(k, byte)
             .into_iter()
@@ -2978,7 +2689,6 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             boost: GLOBAL,
         });
     }
-    // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
     for (label, shape) in visible_globals(k, &[SymbolKind::Shape]) {
         let Some(id) = k.symbols().iter().position(|s| std::ptr::eq(s, shape)) else {
             continue;
@@ -2992,7 +2702,6 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             boost: GLOBAL,
         });
     }
-    // `new` needs a region to allocate in, and `fail` a `T ~ E` to hold its error.
     let can_allocate = !region_items(k, byte, true).is_empty();
     let has_errors = k
         .symbols()
@@ -3011,7 +2720,6 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             "new ${T}(${value}) at ${r}",
         ));
     }
-    // A `match` or a `when` used as a value: every branch gives it.
     items.push(snippet(
         "match … = value",
         "a value from each case",
@@ -3025,9 +2733,6 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     items
 }
 
-/// The regions that can be named at `byte`. `allocating` leaves out regions a
-/// task only names in its types, which `new` can't allocate in. In a task's
-/// header, the regions its parameters already name on that line.
 fn region_items(k: &Knowledge, byte: usize, allocating: bool) -> Vec<CompletionItem> {
     let same_line = |from: usize| {
         k.source
@@ -3068,7 +2773,6 @@ fn region_items(k: &Knowledge, byte: usize, allocating: bool) -> Vec<CompletionI
     items
 }
 
-/// The variables, parameters, and regions visible at `byte`, innermost last.
 fn visible_locals<'k>(
     k: &'k Knowledge,
     byte: usize,
@@ -3082,10 +2786,8 @@ fn visible_locals<'k>(
     })
 }
 
-/// The names of the loops around `byte`, which `break` and `continue` take
-/// (`outer => each …`), innermost first.
 fn loop_name_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
-    // A lambda's own loops only: the ones around it are none of its own.
+    // Restrict loop labels to the innermost enclosing lambda.
     let lambda = open_blocks_at(k, byte)
         .iter()
         .rev()
@@ -3111,8 +2813,6 @@ fn loop_name_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
 fn local_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     let mut seen: Vec<&str> = Vec::new();
     let mut items = Vec::new();
-    // Innermost first, so a name appears once even if the scan saw it twice.
-    // A loop's name is no value (see `loop_name_items`).
     let locals: Vec<_> = visible_locals(k, byte)
         .filter(|(_, s)| s.intro != Some(LOOP_NAME))
         .collect();
@@ -3166,8 +2866,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
         })
         .collect();
     items.extend(BUILTIN_TASKS.iter().map(|name| {
-        // `scan` names the region it reads a line into after its call; the form
-        // that reads a number names no region (see `hover`).
+        // `scan` appends `at r` when reading text, but takes no region when reading a number.
         let (detail, snippet) = if *name == vela::ast::SCAN {
             ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float) -> int | float ~ InputError", format!("{}(${{prompt}}) at ${{region}}", name))
         } else {

@@ -1,6 +1,3 @@
-// Vela Studio's page: finds the session token, loads the analysis module and
-// the workspace, and shows the workbench (or explains what went wrong).
-
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
@@ -23,10 +20,9 @@ import { Workbench } from "./workbench/workbench";
 
 const wasmUrl = new URL("../wasm/vela_analysis.wasm", import.meta.url);
 
-/** The nonce the server put in the page, allowing CodeMirror's styles. */
 function cspNonce(): string {
   const value = document.querySelector<HTMLMetaElement>('meta[name="csp-nonce"]')?.content ?? "";
-  // Unreplaced when served by the Vite dev server, which sends no policy.
+  // Unreplaced when served by Vite dev server without CSP headers.
   return value.startsWith("__") ? "" : value;
 }
 
@@ -51,7 +47,6 @@ function needsToken(refusal: string | null): void {
   );
 }
 
-/** This tab's session storage, or null where storage is blocked (reading it throws). */
 function sessionStore(): Storage | null {
   try {
     return window.sessionStorage;
@@ -61,10 +56,9 @@ function sessionStore(): Storage | null {
 }
 
 async function start(): Promise<void> {
-  // Before the first screen, so it doesn't flash in the other theme.
+  // Apply before first render to avoid a wrong-theme flash.
   applyInitialTheme();
   nonceStyleElements(cspNonce());
-  // Anything blocked by the page's security policy is a bug worth seeing.
   document.addEventListener("securitypolicyviolation", (event) => {
     console.error(`Content-Security-Policy blocked ${event.blockedURI || "inline code"} (${event.violatedDirective})`);
   });

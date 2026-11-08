@@ -1,6 +1,3 @@
-// The editor: CodeMirror's standard editing features, Vela Studio's theme,
-// and, for `.vela` files, Vela language support.
-
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching, foldGutter, foldKeymap, indentOnInput } from "@codemirror/language";
@@ -22,7 +19,6 @@ import {
 
 import { type Analyzer, vela } from "./vela";
 
-/** Colors come from CSS variables (see styles/editor.css), so one theme serves light and dark. */
 const theme = EditorView.theme({
   "&": { color: "var(--editor-fg)", backgroundColor: "var(--editor-bg)", height: "100%" },
   ".cm-scroller": { fontFamily: "var(--font-code)", lineHeight: "1.6" },
@@ -60,13 +56,9 @@ const theme = EditorView.theme({
 });
 
 export interface EditorOptions {
-  /** The nonce allowing CodeMirror's style elements under the page's policy. */
   nonce: string;
-  /** Vela language support, for `.vela` files. */
   analyzer: Analyzer | null;
-  /** Called after every change to the editor. */
   onUpdate: Extension;
-  /** Extra key bindings, which take precedence. */
   keys: Extension;
 }
 
@@ -101,8 +93,7 @@ export function editorExtensions(options: EditorOptions): Extension {
       ...completionKeymap,
       ...lintKeymap,
       indentWithTab,
-      // Find and replace share one panel (Mod-f opens it too). ⌘H hides the
-      // app on a Mac, so replace is ⌘⌥F there.
+      // ⌘H hides the app on macOS, so Replace uses ⌘⌥F there.
       { key: "Mod-h", mac: "Mod-Alt-f", run: openReplace, preventDefault: true },
     ]),
     theme,
@@ -111,7 +102,6 @@ export function editorExtensions(options: EditorOptions): Extension {
   ];
 }
 
-/** Opens the find and replace panel with the cursor in its replace field. */
 function openReplace(view: EditorView): boolean {
   openSearchPanel(view);
   const field = view.dom.querySelector<HTMLInputElement>(".cm-search input[name=replace]");

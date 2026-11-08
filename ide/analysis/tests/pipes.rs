@@ -1,9 +1,3 @@
-//! Call pipes in the editor: `a |> f(b)` and `a |>> f(b)`, chains going on
-//! from a line that starts with `|>`, and steps that can fail: colored,
-//! hovered, completed after the pipe, and their mistakes shown. In the sources
-//! below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -81,7 +75,6 @@ fn pipes_and_their_steps_are_colored() {
     assert_eq!(class_at(&source, "|>> scale"), Some(TokenClass::Operator));
     assert_eq!(class_at(&source, "double() |>>"), Some(TokenClass::Task));
     assert_eq!(class_at(&source, "scale(10)"), Some(TokenClass::Task));
-    // A line that starts with `|>` goes on with the chain above it.
     assert_eq!(class_at(&source, "|> double()\n"), Some(TokenClass::Operator));
     assert_eq!(class_at(&source, "checked() { 0 }"), Some(TokenClass::Task));
     assert_eq!(class_at(&source, "plus())"), Some(TokenClass::Method));

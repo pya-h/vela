@@ -1,17 +1,7 @@
-//! Vela's own library, `std`: modules written in Vela that come with the
-//! compiler, brought in as any module is, with `include std/files`. Their source
-//! is part of the compiler, so the command, Vela Studio, and the web editor
-//! all have them without reading a file, and a folder of a program's own can't
-//! stand in for them (see `modules::load`).
-//!
-//! A task of the library may be `native`: its header is Vela, and its body is
-//! a function of the runtime (`runtime/vela_rt.h`), for what Vela itself can't
-//! do, such as asking the system about a file. Only the library has them.
+//! Embedded standard library modules and their `runtime/vela_rt.h` native mappings.
 
-/// The first part of every include path that names a module of the library.
 pub const ROOT: &str = "std";
 
-/// Each module of the library: its name after `std/`, and its source.
 pub const MODULES: &[(&str, &str)] = &[
     ("collections", include_str!("../std/collections.vela")),
     ("files", include_str!("../std/files.vela")),
@@ -20,19 +10,12 @@ pub const MODULES: &[(&str, &str)] = &[
     ("math", include_str!("../std/math.vela")),
 ];
 
-/// The module that has `LOOP_RESULT`, which a program with a loop that gives
-/// a value loads whether a file includes it or not (see `modules::load`).
+/// Implicitly loaded by value-producing loops.
 pub const LOOPS: &str = "loops";
-
-/// What a loop that gives a value fails with (see `ast::ValueLoop`), by its
-/// name in the program.
 pub const LOOP_RESULT: &str = "std/loops.LoopResult";
-
-/// Euler's number in `std/math`, whose powers are computed by `exp`.
+/// Replaced with `exp(x)` when raised to a power.
 pub const MATH_E: &str = "std/math.e";
 
-/// Each native task of the library, by its name in the program, with the
-/// runtime function that is its body, which takes the same parameters.
 pub const NATIVES: &[(&str, &str)] = &[
     ("std/files.path_exists", "vela__rt__files_path_exists"),
     ("std/files.open_handle", "vela__rt__files_open"),
@@ -46,7 +29,6 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/files.rename_path", "vela__rt__files_rename"),
     ("std/files.remove_path", "vela__rt__files_remove"),
     ("std/files.status", "vela__rt__files_status"),
-    // `std/int512`'s tasks are 512-bit two's complement arithmetic in `runtime/vela_rt.h`.
     ("std/int512.native_add", "vela__rt__int512_add"),
     ("std/int512.native_sub", "vela__rt__int512_sub"),
     ("std/int512.native_mul", "vela__rt__int512_mul"),
@@ -62,8 +44,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/int512.native_parse_status", "vela__rt__int512_parse_status"),
     ("std/int512.native_parse_value", "vela__rt__int512_parse_value"),
     ("std/int512.native_to_text", "vela__rt__int512_to_text"),
-    // `std/math`'s tasks are C's own functions of `math.h`, but for `log`,
-    // which takes its base.
+    // Directly mapped to `<math.h>`, except `log` which takes a base.
     ("std/math.pow", "pow"),
     ("std/math.sin", "sin"),
     ("std/math.cos", "cos"),
@@ -78,24 +59,18 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/math.log", "vela__rt__math_log"),
 ];
 
-/// The source of the library's module `name` (`files` for `std/files`).
 pub fn module(name: &str) -> Option<&'static str> {
     MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
-/// The runtime function that is the body of the native task named `full` in
-/// the program (`std/files.path_exists`).
 pub fn native(full: &str) -> Option<&'static str> {
     NATIVES.iter().find(|(task, _)| *task == full).map(|(_, function)| *function)
 }
 
-/// Whether the module with identity `id` (see `modules::ModuleScope::name`)
-/// is one of the library's, or would read as one.
 pub fn is_library(id: &str) -> bool {
     id == ROOT || id.strip_prefix(ROOT).is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// The library's modules as an include names them, for a message.
 pub fn listed() -> String {
     MODULES.iter().map(|(name, _)| format!("'{}/{}'", ROOT, name)).collect::<Vec<_>>().join(", ")
 }

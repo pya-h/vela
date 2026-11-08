@@ -1,15 +1,4 @@
-//! The workspace folder, and the only way the server touches files.
-//!
-//! Paths in requests are relative, `/`-separated, and made of plain names:
-//! no empty, `.`, or `..` segments, no absolute paths, and no `\` or `:`
-//! (which Windows would read as separators or drives). A resolved path must
-//! still be inside the workspace after following symlinks, so a link can't
-//! lead out of it. Renames and deletes act on the entry itself, never on
-//! what a symlink points to.
-//!
-//! Checks and file operations can race with other programs changing the
-//! folder at the same moment; that is accepted for a local, single-user tool.
-//! The server's own writes are serialized.
+//! Confines all file access to the canonical workspace root; local external races are accepted.
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
@@ -20,36 +9,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::security::random_hex;
 
-/// The largest file the IDE opens or saves.
 pub const MAX_FILE_BYTES: usize = 1024 * 1024;
 
-/// Folders the file tree leaves out: build output and dependencies. Hidden
-/// entries (names starting with `.`) are left out too.
 const SKIPPED_FOLDERS: &[&str] = &["target", "node_modules"];
-/// Bounds on the file tree, so a huge folder can't stall the server.
 const MAX_DEPTH: usize = 16;
 const MAX_ENTRIES: usize = 10_000;
 
 #[derive(Debug)]
 pub enum FsError {
-    /// The path isn't a valid relative path.
     InvalidPath(String),
-    /// The path leads outside the workspace.
     Outside,
     NotFound,
     AlreadyExists,
-    /// A file was expected.
     NotAFile,
     TooLarge,
-    /// The file isn't UTF-8 text.
     NotText,
-    /// The file changed since the editor read it; `hash` is its current hash.
     Changed {
         hash: String,
     },
-    /// The file is read-only.
     ReadOnly,
-    /// The operating system refused access.
     Denied,
     Io(io::Error),
 }
@@ -77,10 +55,8 @@ pub enum EntryKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Entry {
     pub name: String,
-    /// The path relative to the workspace, `/`-separated.
     pub path: String,
     pub kind: EntryKind,
-    /// A folder's entries: folders first, then files, each by name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub children: Option<Vec<Entry>>,
 }
@@ -88,11 +64,9 @@ pub struct Entry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Tree {
     pub entries: Vec<Entry>,
-    /// Whether entries were left out because the folder is too large or deep.
     pub truncated: bool,
 }
 
-/// A text file's contents and hash (see `content_hash`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TextFile {
     pub content: String,
@@ -100,10 +74,8 @@ pub struct TextFile {
 }
 
 pub struct Workspace {
-    /// The canonical workspace folder.
     root: PathBuf,
-    /// Serializes the server's own changes, so that check-then-write steps
-    /// (such as "unchanged since read") hold.
+    /// Serializes read-check-write steps inside the server.
     writes: Mutex<()>,
 }
 
@@ -126,7 +98,6 @@ impl Workspace {
         &self.root
     }
 
-    /// The workspace folder's name.
     pub fn name(&self) -> String {
         self.root.file_name().map_or_else(
             || self.root.display().to_string(),
@@ -134,7 +105,6 @@ impl Workspace {
         )
     }
 
-    /// An existing entry, following symlinks, which must stay inside.
     pub fn resolve(&self, path: &str) -> Result<PathBuf> {
         let joined = self
             .root
@@ -146,8 +116,7 @@ impl Workspace {
         Ok(resolved)
     }
 
-    /// An entry itself (not what it links to): its parent folder must
-    /// resolve inside the workspace. Returns the path and whether it exists.
+    /// Checks parent containment without resolving the target symlink itself (for rename/delete).
     fn locate(&self, path: &str) -> Result<(PathBuf, bool)> {
         let segments = segments(path)?;
         let Some((name, parents)) = segments.split_last() else {
@@ -165,7 +134,6 @@ impl Workspace {
         Ok((entry, exists))
     }
 
-    /// The workspace's files and folders.
     pub fn tree(&self) -> Tree {
         let mut budget = MAX_ENTRIES;
         let mut truncated = false;
@@ -197,8 +165,7 @@ impl Workspace {
                 continue;
             };
             let kind = if metadata.file_type().is_symlink() {
-                // Links are shown only if they are files inside the workspace;
-                // linked folders are skipped, which also avoids cycles.
+                // Only symlinked files inside root; skip symlinked folders to avoid cycles.
                 match fs::canonicalize(&path) {
                     Ok(target) if target.starts_with(&self.root) && target.is_file() => {
                         EntryKind::File
@@ -213,7 +180,7 @@ impl Workspace {
             } else if metadata.is_file() {
                 EntryKind::File
             } else {
-                // Pipes, sockets, and devices: reading one could block forever.
+                // Skip FIFOs, sockets, and devices that could block on open.
                 continue;
             };
             found.push((name, path, kind));
@@ -264,10 +231,7 @@ impl Workspace {
         Ok(TextFile { content, hash })
     }
 
-    /// Replaces an existing file's contents, returning the new hash. With
-    /// `base_hash`, the write happens only if the file still has that hash.
-    /// The new contents are written to a temporary file and renamed into
-    /// place, so the file is never left half written.
+    /// Atomically replaces an existing file via temp + rename, failing with `Changed` if `base_hash` no longer matches.
     pub fn write(&self, path: &str, content: &str, base_hash: Option<&str>) -> Result<String> {
         if content.len() > MAX_FILE_BYTES {
             return Err(FsError::TooLarge);
@@ -281,9 +245,7 @@ impl Workspace {
         if !metadata.is_file() {
             return Err(FsError::NotAFile);
         }
-        // No write bit at all, or none that lets this user write: saving
-        // renames a new file over it, which only needs the folder to be
-        // writable, so the file's own permission is checked here.
+        // Check file write permissions upfront because atomic rename only needs directory write permission.
         let writable = OpenOptions::new().write(true).open(&resolved);
         if metadata.permissions().readonly()
             || writable
@@ -294,8 +256,7 @@ impl Workspace {
         }
         drop(writable);
         if let Some(base) = base_hash {
-            // The editor only ever held a file up to the size limit, so a
-            // larger file has changed, and isn't read to find out.
+            // Anything larger than MAX_FILE_BYTES cannot match what the editor loaded.
             if metadata.len() > MAX_FILE_BYTES as u64 {
                 return Err(FsError::Changed {
                     hash: String::new(),
@@ -307,7 +268,7 @@ impl Workspace {
             }
         }
         let folder = resolved.parent().ok_or(FsError::NotAFile)?;
-        // A short name, so a file whose name is near the length limit still saves.
+        // Short temp name so files near NAME_MAX still save.
         let temporary = folder.join(format!(".vela-studio-{}.tmp", random_hex(6)?));
         let created = OpenOptions::new()
             .write(true)
@@ -315,8 +276,7 @@ impl Workspace {
             .open(&temporary);
         let mut file = match created {
             Ok(file) => file,
-            // The folder can't take a new file, but the file itself may be
-            // writable: write it in place instead.
+            // Read-only directory: overwrite in place when the file itself is writable.
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
                 let mut file = OpenOptions::new()
                     .write(true)
@@ -341,7 +301,6 @@ impl Workspace {
         Ok(content_hash(content.as_bytes()))
     }
 
-    /// Creates an empty file or a folder, which must not exist yet.
     pub fn create(&self, path: &str, kind: EntryKind) -> Result<String> {
         let _guard = self
             .writes
@@ -363,7 +322,6 @@ impl Workspace {
         Ok(path.to_string())
     }
 
-    /// Moves a file or folder to a path that doesn't exist yet.
     pub fn rename(&self, from: &str, to: &str) -> Result<String> {
         let _guard = self
             .writes
@@ -386,7 +344,6 @@ impl Workspace {
         Ok(to.to_string())
     }
 
-    /// Deletes a file, a symlink, or a folder with everything in it.
     pub fn delete(&self, path: &str) -> Result<()> {
         let _guard = self
             .writes
@@ -396,7 +353,7 @@ impl Workspace {
         if !exists {
             return Err(FsError::NotFound);
         }
-        // `remove_dir_all` never follows symlinks inside the folder.
+        // `remove_dir_all` does not follow symlinks inside the folder.
         if entry.symlink_metadata()?.is_dir() {
             fs::remove_dir_all(&entry)?
         } else {
@@ -406,7 +363,6 @@ impl Workspace {
     }
 }
 
-/// The segments of a request path.
 fn segments(path: &str) -> Result<Vec<&str>> {
     if path.is_empty() {
         return Err(FsError::InvalidPath("the path is empty".to_string()));
@@ -430,9 +386,8 @@ fn valid_segment(segment: &str) -> bool {
             .any(|c| c == '\\' || c == ':' || c.is_control())
 }
 
-/// A file's bytes, refusing folders and files over the size limit.
 fn read_limited(path: &Path) -> Result<Vec<u8>> {
-    // Checked before opening: opening a pipe blocks until something writes to it.
+    // Check before opening because opening a FIFO blocks until written to.
     if !fs::metadata(path)?.is_file() {
         return Err(FsError::NotAFile);
     }
@@ -441,8 +396,7 @@ fn read_limited(path: &Path) -> Result<Vec<u8>> {
         return Err(FsError::NotAFile);
     }
     let mut bytes = Vec::new();
-    // One byte past the limit tells a too-large file apart, even if it grew
-    // after its size was read.
+    // Read one extra byte so concurrent growth past the limit is still caught.
     file.take(MAX_FILE_BYTES as u64 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > MAX_FILE_BYTES {
@@ -451,8 +405,7 @@ fn read_limited(path: &Path) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A hash of file contents for noticing changes (64-bit FNV-1a, as hex). It
-/// is not for security: only the IDE's own edits are compared with it.
+/// 64-bit FNV-1a for optimistic concurrency (not cryptographic).
 pub fn content_hash(bytes: &[u8]) -> String {
     let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |hash, &b| {
         (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)

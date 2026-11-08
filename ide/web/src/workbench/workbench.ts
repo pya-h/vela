@@ -1,7 +1,3 @@
-// The IDE window: title bar, sidebar (explorer and outline), tabs, the editor,
-// the panel (problems, output, terminal), and the status bar, and the file and
-// run operations that connect them to the server.
-
 import { isolateHistory } from "@codemirror/commands";
 import { Compartment, EditorState, StateEffect, type Text } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
@@ -50,9 +46,8 @@ export class Workbench {
   private sidebarVisible = load("sidebar-visible", true, isBoolean);
   private outlineTimer: ReturnType<typeof setTimeout> | undefined;
   private lastDiskCheck = 0;
-  /** Guards against opening the same file twice while it loads. */
   private readonly opening = new Map<string, Promise<void>>();
-  /** Saves in progress: a document's next save waits for the one before. */
+  /** Serializes saves per document so each uses the hash returned by the previous one. */
   private readonly saving = new Map<OpenDocument, Promise<boolean>>();
   private readonly panel: Panel;
   private readonly runner: Runner;
@@ -62,7 +57,6 @@ export class Workbench {
   private readonly runButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private problemsTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Each editor state's file path, which a rename changes. */
   private readonly pathCompartment = new Compartment();
   private modulesTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -198,22 +192,7 @@ export class Workbench {
       this.showEditorOrWelcome();
       this.scheduleProblems();
     });
-    // The files a Vela file uses: open ones as edited, others from the workspace.
-    this.analyzer.modules.connect({
-      read: async (path) => {
-        try {
-          return (await this.api.readFile(path)).content;
-        } catch {
-          return null;
-        }
-      },
-      openText: (path) => {
-        const doc = this.documents.get(path);
-        return doc ? this.latest(doc).doc.toString() : undefined;
-      },
-    });
-    // Changes can come from inside an editor update (typing in a module), where
-    // the editor can't be updated again, and several at once: once, just after.
+    // Defer analysis refresh so edits triggered inside an editor update don't re-enter dispatch.
     this.analyzer.modules.onChange(() => {
       clearTimeout(this.modulesTimer);
       this.modulesTimer = setTimeout(() => {
@@ -227,8 +206,7 @@ export class Workbench {
     this.outline.update(null, 0);
     this.updateProblems();
 
-    // Run keys are handled before the editor and terminals see them (the
-    // editor binds Ctrl+Enter, and F5 would reload the page).
+    // Capture phase intercepts run keys before CodeMirror (Ctrl+Enter) or the browser (F5).
     window.addEventListener("keydown", (event) => this.onRunKey(event), true);
     window.addEventListener("keydown", (event) => this.onGlobalKey(event));
     window.addEventListener("focus", () => void this.checkDisk());
@@ -240,8 +218,6 @@ export class Workbench {
     });
     void this.restoreTabs();
   }
-
-  // Documents and the editor ------------------------------------------------------
 
   private createState(path: string, content: string): EditorState {
     return EditorState.create({
@@ -261,7 +237,6 @@ export class Workbench {
     doc.state = update.state;
     if (update.docChanged) {
       this.documents.changed();
-      // Files that include this one are analyzed again.
       this.analyzer.modules.changed(doc.path);
     }
     if (update.docChanged || update.selectionSet) {
@@ -295,7 +270,6 @@ export class Workbench {
     if (this.documents.get(path)) this.activate(path);
   }
 
-  /** Opens the file at `path` with `from`..`to` selected, as a definition there. */
   private async openLocation(path: string, from: number, to: number): Promise<void> {
     await this.openFile(path);
     if (this.documents.current?.path !== path) return;
@@ -354,7 +328,6 @@ export class Workbench {
     return true;
   }
 
-  /** Closes a tab without asking. */
   private discard(path: string): void {
     const wasActive = this.documents.active === path;
     if (wasActive) this.documents.current!.state = this.view.state;
@@ -374,12 +347,9 @@ export class Workbench {
     this.welcome.hidden = !empty;
   }
 
-  /** The latest state of a document (the editor's, if it is the open one). */
   private latest(doc: OpenDocument): EditorState {
     return doc === this.documents.current ? this.view.state : doc.state;
   }
-
-  // Saving and changes on disk ------------------------------------------------------
 
   async saveActive(): Promise<void> {
     const doc = this.documents.current;
@@ -390,7 +360,6 @@ export class Workbench {
     await this.saveChanged();
   }
 
-  /** Saves every open file with changes; resolves to whether all were saved. */
   private async saveChanged(): Promise<boolean> {
     for (const doc of this.documents.all.filter(isDirty)) {
       if (!(await this.save(doc))) return false;
@@ -398,14 +367,10 @@ export class Workbench {
     return true;
   }
 
-  /**
-   * Saves a document; resolves to whether it was saved. Saves of one document
-   * run one after another: each sends the hash the one before received.
-   */
   save(doc: OpenDocument): Promise<boolean> {
     const previous = this.saving.get(doc);
     const next = previous
-      ? // Saved already by the save before, unless edited since.
+      ? // Skip redundant write if the queued save left it clean.
         previous.then(() => (doc.disk === "in-sync" && !isDirty(doc) ? true : this.write(doc)))
       : this.write(doc);
     this.saving.set(doc, next);
@@ -430,8 +395,7 @@ export class Workbench {
           },
         );
         await this.refreshTree();
-        // Another program made the file again meanwhile: it is a changed file
-        // now, which isn't overwritten without asking.
+        // Another tool recreated the deleted file meanwhile; confirm before overwriting.
         if (recreated && !overwrite) {
           doc.disk = "changed";
           this.documents.changed();
@@ -474,7 +438,6 @@ export class Workbench {
     return false;
   }
 
-  /** Replaces a document's text with the file on disk (undoable). */
   private async reload(doc: OpenDocument): Promise<void> {
     try {
       const file = await this.api.readFile(doc.path);
@@ -484,7 +447,7 @@ export class Workbench {
     }
   }
 
-  /** Keeps edits after a save out of the undo step of the edits before it. */
+  /** Split undo history at save boundaries. */
   private startUndoStep(doc: OpenDocument): void {
     const spec = { annotations: isolateHistory.of("after") };
     if (doc === this.documents.current) {
@@ -496,8 +459,7 @@ export class Workbench {
 
   private replaceText(doc: OpenDocument, content: string, hash: string): void {
     const current = this.latest(doc);
-    // Only the part that differs, so the cursor, scroll position, and folds
-    // elsewhere stay put.
+    // Diff only the changed span to preserve cursor, scroll, and folds outside it.
     const spec = { changes: textChange(current.doc.toString(), content) ?? [] };
     let text: Text;
     if (doc === this.documents.current) {
@@ -511,18 +473,15 @@ export class Workbench {
     this.documents.markSaved(doc.path, text, hash);
   }
 
-  /** Notices files changed or deleted by other programs (on returning to the page). */
   private async checkDisk(): Promise<void> {
     const now = Date.now();
     if (now - this.lastDiskCheck < 1000) return;
     this.lastDiskCheck = now;
     void this.refreshTree();
-    // Modules may have changed on disk too; they are read again when used.
     this.analyzer.modules.forget();
     for (const doc of this.documents.all) {
       try {
-        // A save in progress changes the file and then the hash; comparing
-        // in between would look like a change by another program.
+        // Skip docs mid-save so we don't mistake our own write for an external edit.
         if (this.saving.has(doc)) continue;
         const file = await this.api.readFile(doc.path);
         if (this.saving.has(doc) || this.documents.get(doc.path) !== doc) continue;
@@ -548,13 +507,11 @@ export class Workbench {
     }
   }
 
-  // Files and folders ---------------------------------------------------------------
-
   async refreshTree(): Promise<void> {
     try {
       this.tree = await this.api.files();
       this.explorer.setTree(this.tree);
-      // The welcome screen lists the workspace's programs.
+      // Rebuild welcome screen so its file links reflect the updated tree.
       const welcome = this.buildWelcome();
       welcome.hidden = this.welcome.hidden;
       this.welcome.replaceWith(welcome);
@@ -576,10 +533,8 @@ export class Workbench {
     if (name === null) return;
     const path = folder ? `${folder}/${name}` : name;
     try {
-      // Create any folders in the name first.
       await this.createFolders(parentFolder(path));
       await this.api.create(path, kind);
-      // A file that an include named before it existed is read now.
       if (kind === "file") this.analyzer.modules.changed(path);
       this.explorer.expand(kind === "folder" ? path : parentFolder(path));
       await this.refreshTree();
@@ -589,14 +544,13 @@ export class Workbench {
     }
   }
 
-  /** Creates `folder` and the folders around it that the tree doesn't have. */
   private async createFolders(folder: string): Promise<void> {
     const parts = folder === "" ? [] : folder.split("/");
     for (let i = 1; i <= parts.length; i++) {
       const path = parts.slice(0, i).join("/");
       if (hasEntry(this.tree.entries, path)) continue;
       await this.api.create(path, "folder").catch((error: unknown) => {
-        // Created by another program since the tree was read.
+        // Ignore conflict if another process created the folder meanwhile.
         if (!(error instanceof ApiError && error.conflict)) throw error;
       });
     }
@@ -620,14 +574,12 @@ export class Workbench {
     if (name === null || name === entry.name) return;
     const to = folder ? `${folder}/${name}` : name;
     try {
-      // A name with folders moves the entry there, creating them as needed.
       await this.createFolders(parentFolder(to));
       await this.api.rename(entry.path, to);
       const active = this.documents.current;
       if (active) active.state = this.view.state;
       this.documents.renamed(entry.path, to);
-      // A file that became (or stopped being) Vela gets the right editor features,
-      // and every moved file its new path.
+      // Rebuild editor extensions when `.vela` suffix toggles; otherwise just update `documentPath`.
       for (const doc of this.documents.within(to)) {
         const wasVela = (entry.path + doc.path.slice(to.length)).endsWith(".vela");
         if (wasVela !== doc.path.endsWith(".vela")) {
@@ -641,7 +593,6 @@ export class Workbench {
           else doc.state = doc.state.update({ effects }).state;
         }
       }
-      // Paths changed, so the modules files use are found again.
       this.analyzer.modules.forget();
       this.explorer.renamed(entry.path, to);
       this.runner.renamed(entry.path, to);
@@ -666,36 +617,30 @@ export class Workbench {
       this.analyzer.modules.forget();
       this.runner.deleted(entry.path);
       await this.refreshTree();
-      // The deleted row had focus; keep it in the explorer.
+      // Restore focus to explorer when deleting the focused row leaves focus on body.
       if (document.activeElement === document.body) this.explorer.focus();
     } catch (error) {
       toast(`Couldn't delete ${entry.path}: ${message(error)}`, "error");
     }
   }
 
-  // Running, problems, and the status bar -------------------------------------------------
-
-  /**
-   * Saves every open file with changes, since the program may use any of them
-   * as a module, and runs the active Vela file, showing Output.
-   */
   async runActive(): Promise<void> {
     const doc = this.runnableDocument("run");
     if (!doc || this.runner.busy) return;
+    // Save all open files because the program may import other open modules.
     if (!(await this.saveChanged())) return;
     this.panel.show("output", false);
     await nextFrame();
     await this.runner.run(doc.path);
   }
 
-  /** Saves every open file with changes and builds the active Vela file without running it. */
   async buildActive(): Promise<void> {
     const doc = this.runnableDocument("build");
     if (!doc || this.runner.busy) return;
     if (!(await this.saveChanged())) return;
     const built = await this.runner.build(doc.path);
     if (built) toast(`${fileName(doc.path)} built without errors.`, "success");
-    // While a program runs, a failed build doesn't take over Output.
+    // Don't leave Output blank if build failed beside an already-running program.
     else if (built === false && this.runner.status.kind !== "failed") this.panel.show("problems", false);
   }
 
@@ -723,8 +668,7 @@ export class Workbench {
     this.runButton.setAttribute("aria-busy", String(state === "building"));
     this.buildButton.disabled = state === "building";
     if (status.kind === "failed") {
-      // Vela errors and a missing main point into the file; a C compiler's
-      // failure is best read in Output.
+      // C compiler failures have no source location and are read in Output.
       const inFile = status.failure.kind === "vela" || status.failure.kind === "no-main";
       this.panel.show(inFile ? "problems" : "output", false);
     }
@@ -738,7 +682,7 @@ export class Workbench {
     if (event.key === "F5" && !mod) {
       action = event.shiftKey ? () => this.runner.stop() : () => void this.runActive();
     } else if (mod && !event.shiftKey && event.key === "Enter" && !(event.target instanceof HTMLInputElement)) {
-      // Text fields keep theirs (such as replace all in the search panel).
+      // Let text inputs keep Mod+Enter (e.g. replace-all in search).
       action = () => void this.runActive();
     } else if (mod && event.shiftKey && key === "b") {
       action = () => void this.buildActive();
@@ -751,8 +695,7 @@ export class Workbench {
     }
     if (!action) return;
     event.preventDefault();
-    // Not while a dialog asks something, but the browser's own action (F5
-    // reloads, Ctrl+J opens downloads) mustn't happen either.
+    // Always suppress browser defaults (F5 reload, Ctrl+J downloads), even behind modal dialogs.
     if (document.querySelector("dialog[open]")) return;
     event.stopPropagation();
     action();
@@ -779,7 +722,6 @@ export class Workbench {
 
   private scheduleProblems(): void {
     clearTimeout(this.problemsTimer);
-    // A little after typing pauses, so errors that come and go mid-word don't flicker.
     this.problemsTimer = setTimeout(() => this.updateProblems(), 300);
   }
 
@@ -794,7 +736,6 @@ export class Workbench {
     this.statusBar.setProblems(errors, warnings);
   }
 
-  /** Opens a problem's file with the problem selected. */
   private async openProblem(problem: Problem): Promise<void> {
     await this.openFile(problem.path);
     if (this.documents.current?.path !== problem.path) return;
@@ -806,7 +747,7 @@ export class Workbench {
       to = Math.min(Math.max(problem.to, from), text.length);
     } else if (problem.line !== null) {
       const line = text.line(Math.max(1, Math.min(problem.line, text.lines)));
-      // The compiler counts columns in characters; the editor in UTF-16 units.
+      // Compiler columns count Unicode scalar characters; editor offsets count UTF-16 code units.
       const before = [...line.text].slice(0, Math.max(0, (problem.col ?? 1) - 1)).join("");
       from = to = line.from + before.length;
     }
@@ -828,12 +769,9 @@ export class Workbench {
     const head = state.selection.main.head;
     const line = state.doc.lineAt(head);
     const selected = state.selection.ranges.reduce((total, range) => total + [...state.sliceDoc(range.from, range.to)].length, 0);
-    // Columns count characters, as the compiler's do.
     const col = [...line.text.slice(0, head - line.from)].length + 1;
     this.statusBar.setCursor({ line: line.number, col, selected }, doc.path.endsWith(".vela") ? "Vela" : "Plain Text");
   }
-
-  // Pickers, outline, and navigation ----------------------------------------------------
 
   async quickOpen(): Promise<void> {
     const files = allFiles(this.tree.entries).map((entry) => ({ label: entry.name, detail: parentFolder(entry.path), path: entry.path }));
@@ -860,7 +798,7 @@ export class Workbench {
   }
 
   private jumpTo(item: OutlineItem): void {
-    // The outline updates a moment after typing, so it may be behind the text.
+    // Outline updates on a debounce timer, so offsets may lag behind edits.
     const length = this.view.state.doc.length;
     const from = Math.min(item.nameFrom, length);
     const to = Math.min(Math.max(item.nameTo, from), length);
@@ -891,7 +829,7 @@ export class Workbench {
     const key = event.key.toLowerCase();
     const dialogOpen = document.querySelector("dialog[open]") !== null;
     const run = (action: () => void) => {
-      // Inside a dialog the shortcut does nothing, rather than print or save the page.
+      // Prevent browser Print/Save shortcuts even while a dialog is open.
       event.preventDefault();
       if (!dialogOpen) action();
     };
@@ -901,8 +839,6 @@ export class Workbench {
     else if (key === "o" && event.shiftKey) run(() => void this.goToSymbol());
     else if (key === "b" && !event.shiftKey) run(() => this.toggleSidebar());
   }
-
-  // Layout ------------------------------------------------------------------------
 
   private toggleSidebar(): void {
     this.sidebarVisible = !this.sidebarVisible;
@@ -1001,8 +937,6 @@ export class Workbench {
     );
   }
 
-  // Remembered tabs -------------------------------------------------------------------
-
   private persistTabs(): void {
     save(`tabs:${this.info.workspace.root}`, { open: this.documents.all.map((d) => d.path), active: this.documents.active });
   }
@@ -1022,7 +956,7 @@ export class Workbench {
         const state = this.createState(path, file.content);
         this.documents.add({ path, state, saved: state.doc, hash: file.hash, disk: "in-sync", scrollTop: 0 });
       } catch {
-        // Skip files that can't be opened any more.
+        // Ignore files that can no longer be read.
       }
     }
     const active = remembered.active !== null && this.documents.get(remembered.active) ? remembered.active : (this.documents.all[0]?.path ?? null);

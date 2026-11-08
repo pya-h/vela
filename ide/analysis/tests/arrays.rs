@@ -1,8 +1,3 @@
-//! Arrays and slices in the editor: hover and completion with the compiler's
-//! types, and the same types read from the declarations while the file doesn't
-//! check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -38,8 +33,6 @@ task main()
 fi
 ";
 
-/// `PROGRAM` with `code` at the cursor, and a first line in `main` that
-/// either checks or stops the checker before anything else in `main`.
 fn program(checks: bool, code: &str) -> String {
     let first = if checks { "show(0)" } else { "show(unknown)" };
     PROGRAM.replace("CHECK", first).replace("    @@\n", &format!("    {}\n", code))
@@ -55,7 +48,6 @@ fn labels(marked: &str) -> Vec<String> {
     completions(marked).into_iter().map(|item| item.label).collect()
 }
 
-/// The code and doc of the hover at the first occurrence of `needle`.
 fn hover(source: &str, needle: &str) -> (String, String) {
     let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
     let hover = Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle));
@@ -99,14 +91,11 @@ fn a_counter_and_an_item_are_described_apart() {
 fn completion_offers_len_on_arrays_and_len_add_del_and_copy_on_slices() {
     for checks in [true, false] {
         assert_eq!(labels(&program(checks, "show(scores.@@)")), ["len", "str", "type"], "checks: {}", checks);
-        // A slice of values in a region can be copied too.
         assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del", "added", "without", "str", "copy", "type"], "checks: {}", checks);
         let fields = labels(&program(checks, "show(points[0].@@)"));
         assert!(fields.contains(&"x".to_string()) && fields.contains(&"y".to_string()), "{:?}", fields);
     }
-    // An array behind a pointer is reached through `^`.
     let through = completions(&program(true, "show(boxed.@@)"));
-    // An array behind a pointer is reached through `^`, and the pointer is copied as it is.
     let pairs: Vec<(&str, Option<&str>, Option<&str>)> = through.iter().map(|item| (item.label.as_str(), item.apply.as_deref(), item.snippet.as_deref())).collect();
     assert_eq!(pairs, [("len", Some("^.len"), None), ("str", None, Some(".str() at ${r}")), ("copy", None, Some(".copy()")), ("type", None, Some(".type"))]);
 }
@@ -117,13 +106,10 @@ fn completion_offers_types_in_brackets_and_nothing_for_a_count() {
     for expected in ["int", "Point", "maybe"] {
         assert!(types.contains(&expected.to_string()), "{:?} in {:?}", expected, types);
     }
-    // An array can't hold nothing.
     assert!(!types.contains(&"nothing".to_string()), "{:?}", types);
     assert!(labels(&program(true, "fixed grid: [[@@")).contains(&"float".to_string()));
     assert_eq!(labels(&program(true, "fixed grid: [int#@@")), Vec::<String>::new());
-    // The count of a repeated value is a value.
     assert!(labels(&program(true, "fixed zeros = [0#@@")).contains(&"count".to_string()));
-    // An error type goes on after an array type, with `~`.
     assert!(labels(&program(true, "flex pair: [int#2] @@")).contains(&"~".to_string()));
 }
 
@@ -138,21 +124,16 @@ fn values_in_an_array_inside_a_shape_literal_are_not_its_fields() {
 fn completion_continues_array_and_slice_expressions() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
-        // After a slice made with `new`, the region it goes in.
         assert!(labels(&program(checks, "fixed copy = new [int](scores) @@")).contains(&"at".to_string()), "{}", when);
         assert!(labels(&program(checks, "fixed copy = new [int#3](scores) @@")).contains(&"at".to_string()), "{}", when);
         assert_eq!(labels(&program(checks, "fixed copy = new [int](scores) at @@")), ["r"], "{}", when);
-        // Once it has one, no second `at`.
         assert!(!labels(&program(checks, "fixed copy = new [int](scores) at r @@")).contains(&"at".to_string()), "{}", when);
-        // Nor after an array literal, which `new` doesn't make.
         assert!(!labels(&program(checks, "fixed copy = [1, 2] @@")).contains(&"at".to_string()), "{}", when);
-        // What `each` goes through is a value: arrays, slices, and counts.
         let values = labels(&program(checks, "each v in @@"));
         for name in ["scores", "points", "part", "count", "sum"] {
             assert!(values.contains(&name.to_string()), "{} in {:?} ({})", name, values, when);
         }
         assert!(!values.iter().any(|name| name == "fixed" || name == "each" || name == "fi"), "{:?} ({})", values, when);
-        // After its name, only `in`.
         assert_eq!(labels(&program(checks, "each v @@")), ["in"], "{}", when);
     }
 }
@@ -177,7 +158,6 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
     let (code, doc) = hover(&source, "del(");
     assert_eq!(code, "del(index) or del()");
     assert!(doc.starts_with("Takes the item at the index out"), "{}", doc);
-    // A new slice with one change, which leaves the original as it was.
     let source = program(true, "fixed more = points.added(Point { x: 1, y: 2 }) at r\n    fixed fewer = more.without(0) at r\n    show(fewer.len)");
     assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
     let (code, doc) = hover(&source, "added(");
@@ -201,7 +181,6 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
             ("type", None)
         ]
     );
-    // An array can't change its length.
     assert_eq!(labels(&program(true, "scores.@@")), ["len", "str", "type"]);
 }
 
@@ -214,8 +193,6 @@ fn a_variant_named_like_a_change_is_still_a_variant() {
 
 #[test]
 fn an_array_type_written_in_a_header_is_read_while_the_file_does_not_check() {
-    // The count after `#` makes it an array, read from the parameter's type
-    // as written, since the checker stops at the first line.
     let source = "task top(xs: [int#3], grid: [[float#2]#2]) -> int\n    show(unknown)\n    show(xs.@@, grid[0].@@)\n    <- 0\nfi\n";
     let first = source.replacen("@@", "", 1);
     assert_eq!(labels(&first), ["len", "str", "type"]);
@@ -228,8 +205,6 @@ fn an_array_type_written_in_a_header_is_read_while_the_file_does_not_check() {
 #[test]
 fn an_each_through_a_place_has_the_items_type_whether_or_not_the_file_checks() {
     let code = "each live in &points\n        show(live.x)\n    fi";
-    // As it checks, with a mistake the checker reads past, and with one the
-    // parser stops at, so that nothing the checker found is there.
     let parse_stops = PROGRAM.replace("CHECK", "show(").replace("    @@\n", &format!("    {}\n", code)) + "task (";
     for source in [program(true, code), program(false, code), parse_stops] {
         assert_eq!(hover(&source, "live in").0, "each live: Point", "{}", source);

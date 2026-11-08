@@ -1,8 +1,3 @@
-//! Loops that give a value, `fixed r = each x in xs … fi`: the type they give,
-//! `break r` offered by the variable's name, and `LoopResult` from
-//! `std/loops`.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex};
@@ -34,7 +29,6 @@ fn hover(source: &str, needle: &str) -> Option<String> {
     Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).map(|hover| hover.code)
 }
 
-/// The labels offered at `@@`.
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").expect("a @@ marker");
     let source = marked.replacen("@@", "", 1);

@@ -1,6 +1,3 @@
-//! Command-line interface behavior of the `vela` binary.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::process::{Command, Output};
@@ -108,7 +105,6 @@ fn diagnostics_show_the_source_line_and_caret() {
     assert_eq!(stderr(&out), expected);
 }
 
-/// A fresh directory for one test, removed by the caller.
 fn temp_dir(test: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("vela-cli-{}-{}", std::process::id(), test));
     std::fs::create_dir_all(&dir).unwrap();
@@ -168,7 +164,6 @@ fn an_output_that_cannot_be_written_is_reported_before_compiling() {
 
 #[test]
 fn a_module_reached_through_a_folder_above_is_read_once() {
-    // From `app`, `../app/shapes` is `shapes`: one module, not two of one name.
     let dir = temp_dir("climb-back");
     let app = dir.join("app");
     std::fs::create_dir_all(&app).unwrap();
@@ -179,7 +174,6 @@ fn a_module_reached_through_a_folder_above_is_read_once() {
     assert!(out.status.success(), "{}", stderr(&out));
     let run = Command::new(app.join("main")).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n");
-    // Included twice by one file, under two spellings, is the error for including a module twice.
     std::fs::write(app.join("twice.vela"), "include ../app/shapes\ninclude shapes => other\n\ntask main()\nfi\n").unwrap();
     let out = Command::new(VELA).args(["twice.vela", "--check"]).current_dir(&app).output().unwrap();
     assert!(stderr(&out).starts_with("twice.vela:2:9: error: this module is already included at 1:16"), "{}", stderr(&out));
@@ -203,8 +197,6 @@ fn cc_may_include_arguments() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The arguments `vela` gives the C compiler, recorded by a `CC` that writes
-/// them down and then compiles, with `extra` after `vela`'s own arguments.
 #[cfg(unix)]
 fn c_compiler_arguments(test: &str, extra: &[&str], cc_args: &str) -> String {
     use std::os::unix::fs::PermissionsExt;
@@ -229,8 +221,6 @@ fn c_compiler_arguments(test: &str, extra: &[&str], cc_args: &str) -> String {
 #[test]
 #[cfg(unix)]
 fn quick_builds_without_optimizing_the_c() {
-    // An optimized build by default, and `-O0` last with `--quick`, even when
-    // `CC` names another level.
     let optimized = c_compiler_arguments("quick-default", &[], "");
     assert!(optimized.contains("-O2") && !optimized.contains("-O0"), "{}", optimized);
     let quick = c_compiler_arguments("quick", &["--quick"], "-O3");
@@ -240,8 +230,6 @@ fn quick_builds_without_optimizing_the_c() {
 
 #[test]
 fn a_passed_decorator_failure_is_a_notice_unless_built_without_them() {
-    // A startup decorator written `$d?` that fails: the program goes on, and
-    // says so on standard error unless it is built with `--no-notices`.
     let dir = temp_dir("notices");
     let source = dir.join("notices.vela");
     std::fs::write(
@@ -265,9 +253,6 @@ fn a_passed_decorator_failure_is_a_notice_unless_built_without_them() {
 
 #[test]
 fn a_notice_names_tasks_by_their_modules_and_writes_all_of_the_error() {
-    // A task the program's own file has is named alone, and one of a module
-    // after the module's name, however the file includes it; the error is
-    // written whole, a `\0` in it too.
     let dir = temp_dir("notice-names");
     std::fs::create_dir_all(dir.join("lib")).unwrap();
     std::fs::write(
@@ -321,7 +306,6 @@ fn emit_c_writes_to_the_output_file() {
     assert!(out.stdout.is_empty());
     assert!(std::fs::read_to_string(&c_file).unwrap().contains("int main(void)"));
 
-    // It never overwrites the input.
     let input = dir.join("hello.vela");
     std::fs::copy(example("hello"), &input).unwrap();
     let out = vela(&[input.to_str().unwrap(), "--emit-c", "-o", input.to_str().unwrap()]);
@@ -368,7 +352,6 @@ fn a_failed_write_to_standard_output_is_an_error_not_a_crash() {
 
 #[test]
 fn version_is_an_option_like_the_others() {
-    // A wrong argument is still an error, even beside --version.
     let out = vela(&[&example("hello"), "--bogus", "--version"]);
     assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
     assert!(out.stdout.is_empty());
@@ -450,7 +433,6 @@ fn the_default_output_is_a_out() {
 fn every_mistake_is_reported_and_too_many_are_counted() {
     let dir = temp_dir("many-errors");
     let file = dir.join("many.vela");
-    // Three mistakes: each is shown with its line and a caret under it.
     std::fs::write(&file, "task main()\n    show(a)\n    show(b)\n    show(c)\nfi\n").unwrap();
     let out = vela(&[file.to_str().unwrap(), "--check"]);
     assert_eq!(out.status.code(), Some(1));
@@ -460,7 +442,6 @@ fn every_mistake_is_reported_and_too_many_are_counted() {
     }
     assert_eq!(shown.matches("error:").count(), 3, "{}", shown);
 
-    // More than the command shows at once: the first `MAX_SHOWN`, then a count.
     let many: String = (0..vela::driver::MAX_SHOWN + 2).map(|i| format!("    show(v{})\n", i)).collect();
     std::fs::write(&file, format!("task main()\n{}fi\n", many)).unwrap();
     let out = vela(&[file.to_str().unwrap(), "--check"]);
@@ -534,7 +515,6 @@ fn modules_are_read_next_to_the_program() {
     assert!(out.status.success(), "{}", stderr(&out));
     assert!(String::from_utf8_lossy(&out.stdout).contains("vela_shop__1__cart__0__add("));
 
-    // An error in a module is shown in that module's file.
     let dir = temp_dir("modules");
     std::fs::create_dir_all(dir.join("parts")).unwrap();
     std::fs::write(dir.join("main.vela"), "include parts/lib\n\ntask main()\n    show(lib.twice(2))\nfi\n").unwrap();
@@ -550,8 +530,6 @@ fn modules_are_read_next_to_the_program() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// A program that builds, with one warning: `==` on a plain parameter's
-/// shape, which the compiler gives as a copy.
 const WARNED: &str = "shape Point\n    x: int\nfi\n\ntask same(a: Point, fixed& b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    fixed p = Point { x: 1 }\n    show(same(p, &p))\nfi\n";
 
 #[test]
@@ -580,8 +558,6 @@ fn warnings_go_to_stderr_and_the_program_still_builds() {
     let run = Command::new(&exe).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&run.stdout), "false\n");
 
-    // Saying how the parameter is given silences it; a mistake is reported
-    // alone, its warnings left until it is fixed.
     std::fs::write(dir.join("said.vela"), WARNED.replace("same(a: Point", "same(fixed a: Point")).unwrap();
     let out = vela(&[dir.join("said.vela").to_str().unwrap(), "--check"]);
     assert!(out.status.success() && out.stderr.is_empty(), "{}", stderr(&out));
@@ -600,32 +576,27 @@ fn a_rule_that_warns_once_holds_back_its_repeats_until_asked() {
     std::fs::write(&input, REPEATED).unwrap();
     let input = input.to_str().unwrap();
 
-    // The first add and the first del in the task, and no more.
     let out = vela(&[input, "--check"]);
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stderr(&out).matches(": warning: ").count(), 2, "{}", stderr(&out));
     assert!(stderr(&out).contains(&format!("{}:2:8: warning: 'xs' is the task's own copy of the caller's slice, and an 'add'", input)), "{}", stderr(&out));
     assert!(stderr(&out).contains(&format!("{}:4:8: warning: 'xs' is the task's own copy of the caller's slice, and a 'del'", input)), "{}", stderr(&out));
 
-    // With the option, the repeats too, in the order they are written.
     let out = vela(&[input, "--check", "--repeat-warnings"]);
     assert!(out.status.success(), "{}", stderr(&out));
     let lines: Vec<String> = stderr(&out).lines().filter(|line| line.contains(": warning: ")).map(|line| line.split(": warning: ").next().unwrap().to_string()).collect();
     let wanted: Vec<String> = [2, 3, 4, 5].iter().map(|line| format!("{}:{}:8", input, line)).collect();
     assert_eq!(lines, wanted, "{}", stderr(&out));
 
-    // It changes only what is shown: the program builds and runs the same.
     let exe = dir.join("repeated");
     let out = vela(&[input, "-o", exe.to_str().unwrap(), "--repeat-warnings"]);
     assert!(out.status.success(), "{}", stderr(&out));
     assert_eq!(stderr(&out).matches(": warning: ").count(), 4, "{}", stderr(&out));
     let run = Command::new(&exe).output().unwrap();
-    // A flex parameter never changes the caller's length, whatever the room.
     assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n");
     let out = vela(&[input, "--emit-c", "--repeat-warnings"]);
     assert!(out.status.success() && stderr(&out).matches(": warning: ").count() == 4, "{}", stderr(&out));
 
-    // Every rule of the kind: the chars warning, said once in each file.
     let chars = dir.join("chars.vela");
     std::fs::write(&chars, "task main()\n    flex a = ['a', 'b']\n    flex b = ['c', 'd']\n    a[0] = b[0]\nfi\n").unwrap();
     let chars = chars.to_str().unwrap();
@@ -634,7 +605,6 @@ fn a_rule_that_warns_once_holds_back_its_repeats_until_asked() {
     let out = vela(&[chars, "--check", "--repeat-warnings"]);
     assert_eq!(stderr(&out).matches(": warning: ").count(), 2, "{}", stderr(&out));
 
-    // The option takes no value, and the usage names it.
     let out = vela(&["--help"]);
     assert!(String::from_utf8_lossy(&out.stdout).contains("[--repeat-warnings]"));
 }

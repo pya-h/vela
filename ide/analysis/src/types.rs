@@ -1,8 +1,3 @@
-//! What the compiler's checker knows about a program, collected into lookup
-//! tables keyed by source position. The checker annotates the program in
-//! place; when it stops at an error, the tables still hold everything it
-//! checked before that error.
-
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
@@ -16,17 +11,13 @@ use vela::driver;
 use vela::error::Error;
 use vela::modules::{self, SourceFile};
 
-/// Where the analyzed file is, and the text of the other files of its program
-/// that the editor has, by path (`/`-separated, as `include` paths resolve).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Context<'a> {
     pub path: &'a str,
     pub sources: &'a HashMap<String, String>,
 }
 
-/// A type as the program writes it: a shape or kind the compiler made for the
-/// types it was given (`Box__of__int`) reads as those types (`Box<int>`), and
-/// so do the types inside it. `made` holds the types each was made for.
+/// Restores compiler-specialized names (`Box__of__int` -> `Box<int>`); Vela identifiers cannot hold `__`.
 fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
     match ty {
         Type::Named(name, region) => match made.get(name.as_str()) {
@@ -66,8 +57,6 @@ fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
     }
 }
 
-/// The name of the shape a made one was made from: everything before the
-/// `__of__` the compiler joins its types with (no Vela name holds `__`).
 fn as_written_name(name: &str, made: &HashMap<&str, &[Type]>) -> String {
     match made.contains_key(name) {
         true => name.split("__of__").next().unwrap_or(name).to_string(),
@@ -75,19 +64,15 @@ fn as_written_name(name: &str, made: &HashMap<&str, &[Type]>) -> String {
     }
 }
 
-/// A path as the editor names files: `/`-separated.
 pub(crate) fn slashed(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
 struct Declarations<'a> {
     kinds: HashMap<&'a str, &'a KindDef>,
-    /// The shapes and kinds that can be given a region: those holding
-    /// pointers or text.
     takes_region: HashSet<String>,
 }
 
-/// A (line, column) position, as the compiler reports it.
 pub(crate) type Pos = (usize, usize);
 
 fn pos(span: Span) -> Pos {
@@ -96,26 +81,14 @@ fn pos(span: Span) -> Pos {
 
 #[derive(Default)]
 pub(crate) struct Checked {
-    /// Every mistake the compiler found, in source order. A position may be in
-    /// another file of the program (see `files`).
     pub errors: Vec<Error>,
-    /// Every warning, in source order (see `driver::Partial::warnings`).
     pub warnings: Vec<Error>,
-    /// The program's files, the analyzed file first, as far as they loaded.
     pub files: Vec<SourceFile>,
-    /// The files the program includes, directly or through others, that the
-    /// editor didn't give.
     pub missing: Vec<String>,
-    /// The type of each checked expression, by the position of the token that
-    /// identifies it: the name of a variable, call, or field access; the
-    /// operator of a unary or binary operation or of `^`; `new`; or a shape
-    /// literal's shape name.
+    /// Keyed by identifying token (line, col): identifier, operator, `^`, `new`, or shape literal name.
     pub exprs: HashMap<Pos, Type>,
-    /// The type of each parameter, variable, and region (`Type::Region`), by
-    /// the position of its name.
     pub decls: HashMap<Pos, Type>,
-    /// For each field access `a.b`, the shape of `a`, by the position of `b`;
-    /// an empty name for `xs.len` on an array or slice.
+    /// Keyed by member token (line, col); `""` denotes built-in members such as `len`.
     pub field_accesses: HashMap<Pos, String>,
 }
 
@@ -129,9 +102,7 @@ impl Checked {
             found.ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
         };
         let partial = driver::front_end_program(path, source, &mut loader);
-        // Every file reachable through the files the editor has, reading the
-        // ones it doesn't as empty, so it can fetch them all at once. Only
-        // needed when one was missing.
+        // Re-run discovery with empty stubs when anything is missing so the editor can fetch all paths at once.
         let mut missing = Vec::new();
         if absent {
             let mut discover = |file: &Path| -> io::Result<String> {
@@ -171,12 +142,8 @@ impl Checked {
                 .cloned()
                 .collect(),
         };
-        // Positions are recorded for the analyzed file only. A task made from a
-        // generic one holds the positions of the generic task's body with the
-        // types of one use in place of its own, so the editor reads the generic
-        // task itself, where `T` is a type it takes.
+        // Record main-file positions only; skip monomorphized tasks whose spans echo the generic body.
         for item in &items {
-            // A macro, with the type of the value the checker computed.
             if let Item::Macro(m) = item
                 && m.span.file == 0
                 && let Some(ty) = &m.value.ty
@@ -187,13 +154,10 @@ impl Checked {
                 && task.span.file == 0
                 && task.given.is_empty()
             {
-                // A method's value is no parameter the file writes: it sits at
-                // the method's name.
+                // Receiver `this` sits on the method itself rather than a written parameter.
                 for param in task.params.iter().filter(|param| param.name != THIS) {
                     checked.declare(param.span, param.ty.clone());
                 }
-                // A named result is a variable of the task, with the type the
-                // header gives it.
                 for (result, ty) in task.results.iter().zip(task.ret.results()) {
                     if let Some((_, at)) = &result.name {
                         checked.declare(*at, ty.clone());
@@ -201,8 +165,7 @@ impl Checked {
                 }
                 checked.block(&task.body, &declarations);
             }
-            // A wrapper's own values worked out where the program starts, which
-            // the checker moved into a hidden shape that the calls read.
+            // Wrapper defaults were hoisted into `START_VALUES`.
             if let Item::Shape(values) = item
                 && values.name == START_VALUES
             {
@@ -217,8 +180,6 @@ impl Checked {
                 }
             }
         }
-        // A shape or kind the compiler made for the types it was given is
-        // written as those types (`Box<int>`), the way the program writes it.
         let made: HashMap<&str, &[Type]> = items
             .iter()
             .filter_map(|item| match item {
@@ -229,8 +190,7 @@ impl Checked {
                 _ => None,
             })
             .collect();
-        // The program names another module's shapes and kinds by the module's
-        // path (`shapes/geometry.Point`); this file names them as it writes them.
+        // Unmangle compiler-specialized types and foreign module prefixes back to source spelling.
         for ty in checked.exprs.values_mut().chain(checked.decls.values_mut()) {
             *ty = spelling.ty(&as_written(ty, &made));
         }
@@ -240,9 +200,7 @@ impl Checked {
         checked
     }
 
-    /// Records the type of a name written at `at`. A type the checker couldn't
-    /// work out is no type to show, so it is left out and the editor falls back
-    /// to what the source itself says (see `ast::Type::Unknown`).
+    /// Omit `Unknown` so the editor falls back to source declarations.
     fn declare(&mut self, at: Span, ty: Type) {
         if !ty.unknown() {
             self.decls.insert(pos(at), ty);
@@ -328,8 +286,6 @@ impl Checked {
                 }
             }
             StmtKind::Each(_, second, range, body, finally) => {
-                // A counter, an item of an array or slice, or a map's key and
-                // value, once the checker knows which.
                 let (item, value) = match (&range.kind, &range.ty) {
                     (ExprKind::Range(..), _) => (Some(Type::Int), None),
                     (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => {
@@ -362,8 +318,6 @@ impl Checked {
         }
     }
 
-    /// Records the types of the names `pattern` binds from a value of type
-    /// `subject`.
     fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &Declarations) {
         let Some(subject) = subject else { return };
         match (&pattern.kind, subject) {
@@ -385,9 +339,7 @@ impl Checked {
                 self.pattern_names(names, inner)
             }
             (PatternKind::Fail(names), Type::Or(_, error)) => self.pattern_names(names, error),
-            // `(x, y)`: the items of the tuple itself.
             (PatternKind::Tuple(names), _) => self.pattern_names(names, subject),
-            // `t.#2 is maybe int x` names the read, and `{x}` the item.
             (
                 PatternKind::Typed {
                     ty,
@@ -408,7 +360,6 @@ impl Checked {
         }
     }
 
-    /// Records the type of each name `names` binds from a value of type `ty`.
     fn pattern_names(&mut self, names: &vela::ast::Names, ty: &Type) {
         if names.parts.is_empty() {
             self.declare(names.span, ty.clone());
@@ -429,21 +380,11 @@ impl Checked {
     }
 
     fn expr(&mut self, e: &Expr, kinds: &Declarations) {
-        // A wrapped value keeps its own type at its position, as a value of
-        // a kind made one of a kind imitating it does.
-        if let ExprKind::Wrap(inner) | ExprKind::Widen(inner) = &e.kind {
+        // Wrapper/widening/pipe nodes keep the inner expression's type at its position.
+        if let ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Piped(inner) = &e.kind {
             return self.expr(inner, kinds);
         }
-        // The value before a pipe stands among its call's arguments, at the
-        // pipe, which has the pipe's own type.
-        if let ExprKind::Piped(inner) = &e.kind {
-            return self.expr(inner, kinds);
-        }
-        // So does a value given to `show` that the checker turned into the call
-        // of its own `str` (see `check::show_with_str`): the call stands where
-        // the value is written, and the editor asks about the value there, not
-        // about the text it becomes. No program can name that region, so no
-        // call a program writes looks like this one.
+        // `show(x)` lowers to `str(x, SHOWN)`; unwrap so hover inspects `x` rather than text.
         if let ExprKind::Call { args, .. } = &e.kind
             && let [value, region] = args.as_slice()
             && matches!(&region.kind, ExprKind::Var(name) if name == SHOWN)
@@ -461,7 +402,6 @@ impl Checked {
                     Some(Type::Named(shape, _)) => {
                         self.field_accesses.insert(pos(e.span), shape.clone());
                     }
-                    // `len`, and a tuple's items: members no declaration names.
                     Some(Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_)) => {
                         self.field_accesses.insert(pos(e.span), String::new());
                     }
@@ -470,14 +410,10 @@ impl Checked {
                 self.expr(base, kinds);
             }
             ExprKind::Spread(inner) => self.expr(inner, kinds),
-            // `Point.made`: a member of the shape itself, at the member's name.
             ExprKind::Shared { shape, .. } if shape != START_VALUES => {
                 self.field_accesses.insert(pos(e.span), shape.clone());
             }
-            // A wrapper's value read where its value is written, which is
-            // walked where it was moved to.
             ExprKind::Shared { .. } => {}
-            // `Point.new`, a shared method named as a value, at the method's name.
             ExprKind::TaskValue(name) if let Some((owner, _)) = method_parts(name) => {
                 self.field_accesses.insert(pos(e.span), owner.to_string());
             }
@@ -513,10 +449,7 @@ impl Checked {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }
-            // `c.step()`, which the checker made a call of the task the method
-            // is, at the method's name: the name after the dot is a member of
-            // the shape or kind before `__on__` (no Vela name holds `__`), as
-            // written without the types a made one was given.
+            // Lowered method calls use `Owner__on__method`; strip `__of__` args from specialized types.
             ExprKind::Call { name, args, .. } if let Some((owner, _)) = method_parts(name) => {
                 let owner = owner.split("__of__").next().unwrap_or(owner);
                 self.field_accesses.insert(pos(e.span), owner.to_string());
@@ -561,7 +494,6 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
-            // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.statement(stmt, kinds),
             ExprKind::LoopValue(value) => self.statement(&value.stmt, kinds),
             ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => {
@@ -569,22 +501,18 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
-            // `x.copy()`: the word is a member of every value, as `len` is of a slice.
             ExprKind::Copy { value, .. } => {
                 self.field_accesses.insert(pos(e.span), String::new());
                 self.expr(value, kinds);
             }
-            // `n.str() at r` is a member too, written after its value; `text(n)
-            // at r` is written before it, and its word is the type.
+            // Only method-form `n.str()` precedes its receiver in column order; `text(n)` does not.
             ExprKind::ToText { value, .. } => {
                 if (value.span.line, value.span.col) < (e.span.line, e.span.col) {
                     self.field_accesses.insert(pos(e.span), String::new());
                 }
                 self.expr(value, kinds);
             }
-            // `p.area()`: the checker turns a method call into the call of the
-            // task the method is, so one is left only where a file doesn't
-            // check. The name after the dot is a member of the value's type.
+            // Only un-checked files still contain `MethodCall`.
             ExprKind::MethodCall { value, args, .. } => {
                 if let Some(Type::Named(owner, _)) = &value.ty {
                     self.field_accesses.insert(pos(e.span), owner.clone());
@@ -594,7 +522,6 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
-            // `xs.add(…)` and `xs.del(…)`: the word is a slice's member, as `len` is.
             ExprKind::Edit { items, args, .. } => {
                 if matches!(items.ty, Some(Type::Slice(..))) {
                     self.field_accesses.insert(pos(e.span), String::new());

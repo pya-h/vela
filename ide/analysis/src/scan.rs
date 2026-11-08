@@ -1,16 +1,4 @@
-//! The declaration scan: classifies every token for highlighting and resolves
-//! names to their declarations, working from the compiler's error-tolerant
-//! token stream rather than its parser, so it keeps working while code is half
-//! typed.
-//!
-//! It runs in two passes. The first finds the top-level declarations (tasks,
-//! shapes and their fields, kinds and their variants, and the modules `include`
-//! lines name), which may be used before they are declared. The declarations
-//! of each module the file includes are added then too, named as the file names
-//! them (`geometry.area`). The second walks the tokens in order, tracking
-//! blocks and the variables declared in them (parameters, `fixed`/`flex`,
-//! `each`, the names `case` and `is` patterns bind, the error a plan B names,
-//! and regions), which are only visible after their declaration.
+//! Token classification and scope resolution from the lexer stream, resilient to incomplete syntax.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -27,40 +15,30 @@ use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
 
-/// The `intro` of a loop's name, `outer => each …`, which `break` and
-/// `continue` take, and which is no value.
+/// Synthetic `intro` marker for loop labels (`outer => ...`), which are not value bindings.
 pub(crate) const LOOP_NAME: &str = "=>";
 
-/// What a highlighted piece of source is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TokenClass {
     Keyword,
-    /// `int`, `float`, `bool`, `text`, `nothing` where a type is written.
     TypeBuiltin,
-    /// A shape or kind name.
     Type,
     Variant,
     Task,
-    /// A method of a shape or kind, where it is declared and where it is called.
     Method,
-    /// A builtin task such as `show`.
     BuiltinFn,
     Parameter,
     Variable,
-    /// A region's name: `region r`, `r: region`, or `@r` in a type.
     Region,
     Field,
     Number,
     String,
-    /// An escape such as `\n` inside a text literal.
     Escape,
     Comment,
     Operator,
     Punctuation,
-    /// Text the compiler rejects.
     Invalid,
-    /// A module's name, and the folders of an `include` path.
     Module,
 }
 
@@ -70,29 +48,16 @@ pub enum SymbolKind {
     Task,
     Shape,
     Kind,
-    /// A type alias, `alias Name => type`; its detail is the type.
     Alias,
     Variant,
-    /// A method of a shape or kind, declared inside it; `intro` is `alters` for
-    /// one that changes the value it is called on.
     Method,
-    /// A shape field or a variant's payload field.
     Field,
     Parameter,
-    /// A `fixed`, `flex`, `each`, `case`, `is`, or plan B (`fail e`) binding.
     Variable,
-    /// A region: declared by `region r`, taken as a parameter `r: region`, or
-    /// only named in a task header's types (`@r`).
     Region,
-    /// A module the file includes, declared by its `include` line.
     Module,
-    /// A type a generic declaration takes, `T` in `task first<T>(…)`.
     TypeParam,
-    /// `#P = 3.14159`: a name for a value the compiler computes.
     Macro,
-    /// `pattern Shaped … fi`: what a shape or kind following it has; its
-    /// fields and methods are its children, a method with a default body
-    /// marked `default`.
     Pattern,
 }
 
@@ -111,7 +76,7 @@ impl SymbolKind {
             SymbolKind::Region => TokenClass::Region,
             SymbolKind::Module => TokenClass::Module,
             SymbolKind::TypeParam => TokenClass::Type,
-            // A value that never changes, as a variant is.
+            // Constants highlight like enum variants.
             SymbolKind::Macro => TokenClass::Variant,
         }
     }
@@ -121,66 +86,30 @@ impl SymbolKind {
 pub(crate) struct Symbol {
     pub name: String,
     pub kind: SymbolKind,
-    /// Bytes of the name where it is declared.
     pub name_range: Range<usize>,
-    /// The compiler's position of the name.
     pub start: Span,
-    /// For a variable or parameter, the bytes where it can be used: from the
-    /// end of its declaring line to the end of its block. Everything else is
-    /// visible everywhere.
     pub visible: Range<usize>,
-    /// The keyword that declared a variable: `fixed`, `flex`, `each`, `case`,
-    /// `is`, or `fail` (the error a plan B names), or `=>` for a loop's name
-    /// (`LOOP_NAME`); for a region, `region` (a
-    /// region statement) or `@` (a region a task header only names); for a
-    /// method, `alters` when it changes the value it is called on.
+    /// Declaring keyword (`fixed`, `flex`, `case`, `is`, `failure`), `alters`, `@`, or `LOOP_NAME`.
     pub intro: Option<&'static str>,
-    /// Bytes of the whole declaration: from `task`/`shape`/`kind` (or a
-    /// method's first word) to its `fi` for those, and just the name for
-    /// everything else.
     pub range: Range<usize>,
-    /// Source text describing it: a task's parameters and return type, a
-    /// field's or parameter's type, a variant's payload.
     pub detail: String,
-    /// The shape of a field, the kind of a variant, the shape or kind of a
-    /// method, or the variant of a payload field.
     pub parent: Option<usize>,
-    /// The module it is declared in (an index into `Scan::modules`), for a
-    /// declaration of another file; its ranges are in that file.
+    /// Ranges belong to the referenced module in `Scan::modules`.
     pub module: Option<usize>,
-    /// Marked `priv`: a task, shape, kind, or field of its own file only.
     pub private: bool,
-    /// A field with a value a literal that leaves it out gives it
-    /// (`size: int = 0`), or a pattern's method with a default body.
     pub default: bool,
-    /// A field marked `read` (`read path: text`): any file reads it, and only
-    /// the alters methods of its shape change it. A literal gives it exactly
-    /// when it has no `default`.
     pub read: bool,
-    /// A shape's `shared` field (`shared made: int = 0`): one value for the
-    /// whole program, read through the shape's name, never a value's. `intro`
-    /// is `flex` for one any code may change. A shared method (`shared
-    /// new(…)`), called on the shape's or kind's name, has `intro` `shared`.
     pub shared: bool,
-    /// For a kind, the kinds it imitates and the patterns it follows, and for
-    /// a shape the patterns, as written after its `::` (`kind
-    /// AppError::ParseErr & files.FileError`), without the types given them:
-    /// an imitated kind's variants are its variants too (see `kind_variants`),
-    /// and a pattern's methods its methods (see `followed_methods`).
+    /// Imitated kinds and followed patterns listed after `::`, unqualified as written in their module.
     pub bases: Vec<String>,
 }
 
-/// What ends one of a pattern's headers on a line holding several.
 fn ends_header(token: &Token) -> bool {
     matches!(token, Token::Comma)
 }
 
-/// The names of the kinds a kind imitates, from position `p`, just after its
-/// name: what follows its `::` (past the types it takes, if any), each name
-/// with its module's name in front when it has one, without the types given.
 fn imitated_names(tokens: &Tokens, p: usize) -> Vec<String> {
     let mut q = p;
-    // `kind Choice<T>::…`: the types the kind takes come first.
     if tokens.token(q) == Some(&Token::Lt) {
         while !matches!(
             tokens.token(q),
@@ -214,11 +143,6 @@ fn imitated_names(tokens: &Tokens, p: usize) -> Vec<String> {
     names
 }
 
-/// The variants of kind `kind` (an index into `symbols`): those it has from the
-/// kinds it imitates first, in order, then its own. `global` finds a kind by
-/// its name in this file (see `Symbol::bases`); a kind of another module names
-/// the kinds it imitates as its own module does, which this file writes with
-/// that module's name in front.
 pub(crate) fn kind_variants(
     symbols: &[Symbol],
     kind: usize,
@@ -237,7 +161,7 @@ fn collect_variants(
     variants: &mut Vec<usize>,
     through: &mut Vec<usize>,
 ) {
-    // A kind imitating itself is the compiler's to report; here it ends.
+    // Stop cycles in self-imitating kinds for the compiler to diagnose.
     if through.contains(&kind) {
         return;
     }
@@ -254,10 +178,6 @@ fn collect_variants(
     );
 }
 
-/// The declarations of kind `kind` named after the `::` of the shape or kind
-/// `owner` (see `Symbol::bases`). `global` finds one by its name in this file;
-/// one of another module names them as its own module does, which this file
-/// writes with that module's name in front.
 fn bases_of(
     symbols: &[Symbol],
     owner: usize,
@@ -287,8 +207,6 @@ fn bases_of(
         .collect()
 }
 
-/// The methods of the patterns the shape or kind `owner` follows that it
-/// doesn't write itself, which it has from them (see `Symbol::bases`).
 pub(crate) fn followed_methods(
     symbols: &[Symbol],
     owner: usize,
@@ -318,21 +236,13 @@ pub(crate) fn followed_methods(
     methods
 }
 
-/// A module the file includes.
 #[derive(Debug, Clone)]
 pub(crate) struct Module {
-    /// Its path, as the editor names files; empty when the file has no path.
     pub path: String,
-    /// Its text, when the editor gave it.
     pub source: Option<String>,
-    /// Its `include` line's symbol, named by the name this file names the
-    /// module by (or, when only its parts are included, by its path from this
-    /// file's folder, which no code can write).
+    /// Resolves to the local alias symbol, or path-qualified for brace-only imports not addressable in code.
     pub symbol: usize,
-    /// Whether this file names the module: not when only its parts are included.
     pub named: bool,
-    /// Whether it is a module of Vela's library, whose text is the compiler's
-    /// and no file the editor has (see `vela::library`).
     pub library: bool,
 }
 
@@ -340,28 +250,18 @@ pub(crate) struct Module {
 pub(crate) struct Classified {
     pub range: Range<usize>,
     pub class: TokenClass,
-    /// The declaration this token declares or refers to, if known.
     pub symbol: Option<usize>,
 }
 
 pub(crate) struct Scan {
-    /// The compiler's tokens, including comments and invalid text.
     pub lexed: Vec<LexToken>,
     pub symbols: Vec<Symbol>,
-    /// In source order, without overlaps.
     pub tokens: Vec<Classified>,
-    /// The modules the file includes, in the order of its `include` lines.
     pub modules: Vec<Module>,
-    /// The names `include m (a, b)` brings in, each by the name this file
-    /// writes (its alias, if it has one), with the declaration it names.
     pub imports: HashMap<String, usize>,
-    /// Where each lambda's `(` starts, `(x: int) -> int … fi`, by byte.
     pub lambdas: HashSet<usize>,
 }
 
-/// `field_accesses` maps the (line, column) of a field name in `a.b` to the
-/// shape of `a`, when the checker knows it. `context` gives the file's path
-/// and the other files it may include.
 pub(crate) fn scan(
     source: &str,
     field_accesses: &HashMap<(usize, usize), String>,
@@ -394,9 +294,6 @@ pub(crate) fn scan(
     }
 }
 
-/// `lexed` with each text holding values spread into its pieces: its text as
-/// text tokens, each taking the braces next to it, and each value's own tokens
-/// between them, so the analysis sees the names in a value as it sees any.
 pub(crate) fn spread(lexed: Vec<LexToken>) -> Vec<LexToken> {
     let mut out = Vec::with_capacity(lexed.len());
     for token in lexed {
@@ -416,7 +313,6 @@ fn spread_into(token: LexToken, out: &mut Vec<LexToken>) {
         end,
         range,
     };
-    // Where the text before the next value starts.
     let (mut start, mut from) = (token.start, token.range.start);
     for piece in pieces {
         let Piece::Value {
@@ -437,20 +333,15 @@ fn spread_into(token: LexToken, out: &mut Vec<LexToken>) {
 }
 
 thread_local! {
-    /// The declarations of each module scanned, by path, with the text they
-    /// were scanned from: an editor analyzes the file again on every
-    /// keystroke, and the modules it includes rarely change in between.
+    /// Caches scanned module declarations across keystrokes.
     static DECLARED: RefCell<HashMap<String, Declared>> = RefCell::new(HashMap::new());
 }
 
-/// A module's declarations, and the text they were scanned from.
 struct Declared {
     text: String,
     symbols: Rc<Vec<Symbol>>,
 }
 
-/// The declarations of the module at `path`, whose text is `source`: scanned
-/// once for each text it has.
 fn module_declarations(path: &str, source: &str) -> Rc<Vec<Symbol>> {
     let kept = DECLARED.with_borrow(|declared| {
         declared
@@ -476,34 +367,20 @@ fn module_declarations(path: &str, source: &str) -> Rc<Vec<Symbol>> {
     symbols
 }
 
-/// An `include` line found by the first pass.
 struct IncludeLine {
-    /// The path as written: names and `..`.
     parts: Vec<String>,
-    /// The position of the path's last part.
     last: usize,
-    /// The module's symbol, declared at its alias if it has one.
     symbol: usize,
-    /// The names in parentheses or braces.
     names: Vec<IncludedName>,
-    /// Written with braces: only the names are included.
     only_parts: bool,
 }
 
-/// A name on an `include` line: `Point`, or `Point => Spot`.
 struct IncludedName {
     name: String,
-    /// The position of the name.
     at: usize,
-    /// The name after `=>` and its position.
     alias: Option<(String, usize)>,
 }
 
-/// Adds the declarations of each module in `includes` to `symbols`, named as
-/// this file names them (`geometry.area`, whose signature says
-/// `geometry.Point`), and returns the modules and the names brought in by name.
-/// Each name on an `include` line is recorded in `declared_at` with the
-/// declaration it names.
 fn included_modules(
     symbols: &mut Vec<Symbol>,
     declared_at: &mut HashMap<usize, usize>,
@@ -517,8 +394,6 @@ fn included_modules(
         let index = modules.len();
         declared_at.insert(line.last, line.symbol);
         let file = vela::modules::module_file(folder, &line.parts);
-        // A module of Vela's library is the compiler's own, whatever the
-        // editor has (see `vela::library`).
         let library = line
             .parts
             .split_first()
@@ -532,8 +407,7 @@ fn included_modules(
             Some(name) => vela::library::module(name).map(str::to_string),
             None => context.sources.get(&path).cloned(),
         };
-        // The name this file names the module by, or its path, which the
-        // compiler names a declaration this file can't write by.
+        // Brace-only imports have no module identifier in scope, so key them by path.
         let name = if line.only_parts {
             let id = match &library {
                 Some(name) => format!("{}/{}", vela::library::ROOT, name),
@@ -549,13 +423,10 @@ fn included_modules(
                 .map(|s| s.name.clone())
                 .unwrap_or_default()
         };
-        // Each declaration of the module by its own name.
         let mut declared: HashMap<String, usize> = HashMap::new();
         if let Some(source) = &source {
             let theirs = module_declarations(&path, source);
             let listed = |written: &str| line.names.iter().find(|n| n.name == written);
-            // How this file writes a name of the module: its alias, the name
-            // alone when it is brought in, or through the module.
             let written_as = |written: &str| match listed(written) {
                 Some(IncludedName {
                     alias: Some((alias, _)),
@@ -574,7 +445,7 @@ fn included_modules(
                 })
                 .map(|s| (s.name.clone(), written_as(&s.name)))
                 .collect();
-            // Their own `include` lines aren't this file's modules; indices move past them.
+            // Skip the module's own `include` items when reindexing imported symbols.
             let kept: Vec<usize> = (0..theirs.len())
                 .filter(|&i| theirs.get(i).is_some_and(|s| s.kind != SymbolKind::Module))
                 .collect();
@@ -595,14 +466,12 @@ fn included_modules(
                         | SymbolKind::Macro
                 ) {
                     declared.entry(symbol.name.clone()).or_insert(symbols.len());
-                    // A variant keeps its name: only a whole declaration takes an alias.
+                    // Only whole declarations take an `=>` alias; variants keep their own name.
                     let kind = symbol
                         .parent
                         .and_then(|parent| theirs.get(parent))
                         .map(|kind| kind.name.as_str());
                     symbol.name = match symbol.kind {
-                        // Without the module's name, a variant is written alone
-                        // when it is brought in, or else through its kind.
                         SymbolKind::Variant
                             if line.only_parts && listed(&symbol.name).is_some() =>
                         {
@@ -622,7 +491,6 @@ fn included_modules(
                         SymbolKind::Variant => {
                             format!("{}{}{}", name, MODULE_SEPARATOR, symbol.name)
                         }
-                        // Named as written: under its alias, or alone when the module has no name here.
                         _ if listed(&symbol.name)
                             .is_some_and(|n| n.alias.is_some() || line.only_parts) =>
                         {
@@ -679,9 +547,6 @@ fn included_modules(
     (modules, imports)
 }
 
-/// `text`, a declaration's detail written in another module, with the names of
-/// that module's shapes and kinds as this file writes them (`types`): `(p: Point)`
-/// becomes `(p: geometry.Point)`.
 fn qualify_types(text: &str, types: &HashMap<String, String>) -> String {
     let lexed = highlight(text);
     let mut out = String::new();
@@ -713,26 +578,18 @@ fn qualify_types(text: &str, types: &HashMap<String, String>) -> String {
     out
 }
 
-/// The token stream with comments set aside, so that patterns such as
-/// `task NAME` can look at neighboring tokens.
 struct Tokens<'a> {
     source: &'a str,
     all: &'a [LexToken],
-    /// Indices into `all` of every token except comments.
     significant: Vec<usize>,
 }
 
-/// Whether the name at `p` is a key of a `[:V]` map's pairs given to `new`,
-/// `new [:V]([name: v, …])`, which is text rather than a name: it is followed by
-/// `:`, and the `[` its pairs open follows `(` after the type's `]`, whose `[`
-/// is followed by `:`.
 fn named_key(tokens: &Tokens, p: usize) -> bool {
     if tokens.token(p + 1) != Some(&Token::Colon)
         || !matches!(tokens.before(p), Some(Token::LBracket | Token::Comma))
     {
         return false;
     }
-    // The `[` that opens the pairs: back past the pairs before this one.
     let mut depth = 0usize;
     let mut at = p;
     let open = loop {
@@ -749,7 +606,6 @@ fn named_key(tokens: &Tokens, p: usize) -> bool {
             _ => {}
         }
     };
-    // `(` after the type's `]`, and the type's `[` followed by `:`.
     let (Some(paren), Some(close)) = (open.checked_sub(1), open.checked_sub(2)) else {
         return false;
     };
@@ -787,9 +643,6 @@ impl vela::parser::LineTokens for Tokens<'_> {
 }
 
 impl<'a> Tokens<'a> {
-    /// Whether an item of the start of the loop whose line starts after
-    /// `first` begins at `p`, as the parser parts them (see `vela::parser`'s
-    /// `loop_items`): the start ends at its first `||`, or with the line.
     fn starts_loop_item(&self, first: usize, p: usize) -> bool {
         let last = (p..)
             .find(|&q| matches!(self.token(q), Some(Token::Parts | Token::Newline) | None))
@@ -817,7 +670,6 @@ impl<'a> Tokens<'a> {
         self.significant.len()
     }
 
-    /// The significant token at position `p`.
     fn get(&self, p: usize) -> Option<&'a LexToken> {
         self.significant.get(p).and_then(|&i| self.all.get(i))
     }
@@ -839,8 +691,6 @@ impl<'a> Tokens<'a> {
             .unwrap_or(self.source.len()..self.source.len())
     }
 
-    /// Whether the `{` at position `p` opens a block that continues on the next
-    /// lines: it ends its line, or only `failure e` follows it there.
     fn opens_lines(&self, p: usize) -> bool {
         let names_error = self.token(p + 1) == Some(&Token::Failure)
             && matches!(self.token(p + 2), Some(Token::Ident(_) | Token::Underscore));
@@ -848,15 +698,11 @@ impl<'a> Tokens<'a> {
         matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
     }
 
-    /// Whether the type starting at position `p` ends where a list of types
-    /// goes on or closes, as `() -> int` does in `(() -> int, int)`: a
-    /// lambda's result type is followed by its body, on its line or the next.
     fn ends_in_a_list(&self, p: usize) -> bool {
         let mut depth = 0usize;
         let mut q = p;
         loop {
             match self.token(q) {
-                // The file ends before the list does, as a half-typed one may.
                 Some(Token::Eof) | None => return false,
                 Some(Token::LParen | Token::LBracket | Token::Lt) => depth += 1,
                 Some(Token::RParen | Token::RBracket | Token::Gt) if depth > 0 => depth -= 1,
@@ -884,14 +730,10 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// Whether what is before position `p` is what a lambda keeps, `[@r]`,
-    /// `[flex @r]`, or `[flex& count, @r]`.
     fn after_kept(&self, p: usize) -> bool {
         self.kept_open(p).is_some()
     }
 
-    /// The `[` opening what a lambda keeps, when it closes right before
-    /// position `p`.
     fn kept_open(&self, p: usize) -> Option<usize> {
         let close = p
             .checked_sub(1)
@@ -904,8 +746,6 @@ impl<'a> Tokens<'a> {
             })
     }
 
-    /// Whether the token at `q` may be part of what a lambda keeps: a name,
-    /// `@`, `flex`, `fixed`, `bind`, `&`, or a comma.
     fn kept_part(&self, q: usize) -> bool {
         matches!(
             self.token(q),
@@ -921,15 +761,12 @@ impl<'a> Tokens<'a> {
         )
     }
 
-    /// The `]` closing what a lambda keeps, when the `[` at `open` starts
-    /// one: its region, `@r` or `flex @r`, and the places it keeps.
     fn kept_list(&self, open: usize) -> Option<usize> {
         let close = (open + 1..).find(|&q| !self.kept_part(q))?;
         let region = (open + 1..close).any(|q| self.token(q) == Some(&Token::AtSign));
         (self.token(close) == Some(&Token::RBracket) && region && close > open + 1).then_some(close)
     }
 
-    /// Whether position `p` is inside what a lambda keeps, `[flex& count, @r]`.
     pub(crate) fn in_kept_list(&self, p: usize) -> bool {
         (0..p)
             .rev()
@@ -940,16 +777,11 @@ impl<'a> Tokens<'a> {
             })
     }
 
-    /// The `->` of a shortcut lambda whose parameters start at position `p`,
-    /// as the parser reads one: `x -> x * 2`, `_ -> 0`, `(a, b) -> a + b`, or
-    /// `() -> 42` where no result type follows the arrow (see
-    /// `vela::parser::empty_lambda_has_results`). Only where a value goes.
     pub(crate) fn shortcut_lambda(&self, p: usize) -> Option<usize> {
         match self.token(p)? {
             Token::Ident(_) | Token::Underscore => {
                 (self.token(p + 1) == Some(&Token::Arrow)).then_some(p + 1)
             }
-            // A call's or a header's parentheses follow a name.
             Token::LParen
                 if self.kept_open(p).is_none()
                     && self.before(p).is_some_and(|before| {
@@ -985,9 +817,6 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// The end of the body of the shortcut lambda whose `->` is at position
-    /// `arrow`: the byte where a `,`, a closing bracket, or its line ends it, as
-    /// the parser reads its expression, pipes and all.
     pub(crate) fn shortcut_body_end(&self, arrow: usize) -> usize {
         let mut depth = 0usize;
         let mut q = arrow + 1;
@@ -1008,14 +837,7 @@ impl<'a> Tokens<'a> {
         self.get(q).map_or(self.source.len(), |t| t.range.start)
     }
 
-    /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
-    /// its parentheses close on their line and `->` follows them, as the
-    /// parser reads it; and they name a parameter, or take none where no type
-    /// is written, since `() -> int` is also the type of a task that takes none.
     fn starts_lambda(&self, p: usize) -> bool {
-        // A header's parameters, and a call's values, follow a name; a
-        // lambda's follow what it keeps, `[@r]` or `[flex @r]`, which is a
-        // lambda's type where a type is written.
         let kept = self.kept_open(p);
         if kept
             .and_then(|open| self.before(open))
@@ -1042,8 +864,7 @@ impl<'a> Tokens<'a> {
         {
             return false;
         }
-        // What follows the `(` tells first, so that nested parentheses aren't
-        // each read to their end.
+        // Check empty parens first to avoid scanning nested calls to EOF.
         if self.token(p + 1) == Some(&Token::RParen) {
             return self.token(p + 2) == Some(&Token::Arrow)
                 && !matches!(
@@ -1060,7 +881,6 @@ impl<'a> Tokens<'a> {
                 )
                 && !self.ends_in_a_list(p + 3);
         }
-        // `(flex& n: int` names a parameter; a type's `(flex& int)` names none.
         let named = |q: usize| self.ident(q).is_some() && self.token(q + 1) == Some(&Token::Colon);
         let after_word = if self.token(p + 2) == Some(&Token::Amp) {
             p + 3
@@ -1094,11 +914,6 @@ impl<'a> Tokens<'a> {
         self.token(close) == Some(&Token::RParen) && self.token(close + 1) == Some(&Token::Arrow)
     }
 
-    /// Whether the `<` at position `p` opens the types a declaration takes or a
-    /// use gives: one right after the name of a `task`, `shape`, or `kind`, or
-    /// one whose matching `>` is followed by `(` (a call), `{` (a shape
-    /// literal), or `.` and a variant (`Option<int>.None`), as the parser reads
-    /// them.
     fn opens_types(&self, p: usize) -> bool {
         if self.token(p) != Some(&Token::Lt) {
             return false;
@@ -1112,15 +927,12 @@ impl<'a> Tokens<'a> {
         if declares {
             return true;
         }
-        // `with<A: shown>(…)` starting a line, or after `alters`: a method's
-        // header, whose types may say what they allow.
         let header = p >= 1
             && self.ident(p - 1).is_some()
             && (self.starts_line(p - 1)
                 || (p >= 2 && self.ident(p - 2) == Some(vela::ast::ALTERS)));
         let mut depth = 0usize;
-        // Parentheses pair up inside the types, and no `>` inside them closes
-        // anything, as the parser has it (`(i < n), m > (k)` compares).
+        // Paren-grouped comparisons like `(i < n), m > (k)` do not close outer `<...>`.
         let mut grouped = 0usize;
         for q in p + 1.. {
             match self.token(q) {
@@ -1128,9 +940,7 @@ impl<'a> Tokens<'a> {
                 Some(Token::LParen) => grouped += 1,
                 Some(Token::RParen) if grouped == 0 => return false,
                 Some(Token::RParen) => grouped -= 1,
-                // A call follows the types a task is given, a literal the types
-                // a shape is given, and a variant the types a kind is given.
-                // A variant's `.` touches the `>`, as the parser has it.
+                // Generic variant uses require `.` directly after `>` per parser rules.
                 Some(Token::Gt) if depth == 0 => {
                     let touching = matches!((self.get(q), self.get(q + 1)), (Some(gt), Some(dot)) if gt.range.end == dot.range.start);
                     return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace))
@@ -1148,8 +958,6 @@ impl<'a> Tokens<'a> {
         false
     }
 
-    /// The shape whose literal opens with the `{` at `p`: the name before it, or,
-    /// for a shape given types (`Box<int> { … }`), the name before those.
     fn literal_shape(&self, p: usize) -> Option<&'a str> {
         let mut before = p.checked_sub(1)?;
         if self.token(before) == Some(&Token::Gt) {
@@ -1169,14 +977,10 @@ impl<'a> Tokens<'a> {
         self.ident(before)
     }
 
-    /// Whether position `p` starts a line.
     fn starts_line(&self, p: usize) -> bool {
         p == 0 || self.before(p) == Some(&Token::Newline)
     }
 
-    /// The trimmed source text after token `p`, up to a comment, the end of the
-    /// line, or the first token `stop` names outside brackets: a tuple type's
-    /// commas and its `)` are part of it, as in `(int, text)`.
     fn text_after(&self, p: usize, stop: fn(&Token) -> bool) -> String {
         let Some(&first) = self.significant.get(p) else {
             return String::new();
@@ -1188,8 +992,6 @@ impl<'a> Tokens<'a> {
             .iter()
             .skip(first + 1)
             .find(|t| match &t.kind {
-                // `< … >` holds the types a shape or kind is given, whose
-                // commas don't end the text: `Pair<int, text>`.
                 LexKind::Token(Token::LParen | Token::LBracket | Token::LBrace | Token::Lt) => {
                     depth += 1;
                     false
@@ -1214,14 +1016,10 @@ impl<'a> Tokens<'a> {
             .to_string()
     }
 
-    /// The variable a loop starting at `p` gives its value, which names the
-    /// loop: `r` of `fixed r = loop …`, of `fixed r: int ~ LoopResult = loop …`
-    /// and of `r = each …`, the loop's word the first after the line's `=`.
     fn loop_variable(&self, p: usize) -> Option<usize> {
         if self.before(p) != Some(&Token::Assign) {
             return None;
         }
-        // The start of the line.
         let mut start = p - 1;
         while start > 0 && !matches!(self.token(start - 1), Some(Token::Newline) | None) {
             start -= 1;
@@ -1231,7 +1029,6 @@ impl<'a> Tokens<'a> {
             _ => start,
         };
         self.ident(name)?;
-        // The name, then its type or the `=`, and no other `=` before the loop's.
         let typed = self.token(name + 1) == Some(&Token::Colon);
         let assigns = (name + 1..p - 1).any(|q| self.token(q) == Some(&Token::Assign));
         (typed || name + 1 == p - 1)
@@ -1246,23 +1043,10 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// Whether position `p` starts a member of a shape or a kind: the first
-    /// word of its line, or the first after `priv`.
     fn starts_member(&self, p: usize) -> bool {
         self.starts_line(p) || (self.before(p) == Some(&Token::Priv) && self.starts_line(p - 1))
     }
 
-    /// Where the name of the method whose line starts at position `p` (after
-    /// any `priv`) is, as the parser reads a shape's or a kind's members: a
-    /// name followed by `(`, or by `<` for one that names types, with `alters`
-    /// allowed before it. Inside a kind, `in_kind`, a variant's values are
-    /// written as a method's parameters are, so the parser's rule tells them
-    /// apart (see `vela::parser`'s `at_variant_payload`): with no method above
-    /// it, `methods_above`, and without `alters`, a member whose line ends after
-    /// parentheses holding named values is a variant.
-    /// Whether the header of the pattern's method named at `name` is followed
-    /// by its default body, as the parser reads it: it is alone on its line,
-    /// and the next line starts no other member and doesn't close the pattern.
     fn pattern_body_follows(&self, name: usize) -> bool {
         let mut q = name;
         let mut depth = 0usize;
@@ -1307,8 +1091,6 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// Whether the name at `q`, followed by `(`, starts what only a header
-    /// can be: a parameter, or results or another header after the `)`.
     fn header_shaped(&self, q: usize) -> bool {
         if matches!(
             self.token(q + 2),
@@ -1369,9 +1151,6 @@ impl<'a> Tokens<'a> {
     }
 }
 
-/// Whether a value can end with `token`, so that a `.` after it reads a member
-/// of that value (`p.x`, `f().m()`, `xs[0].x`, `p^.x`, `t.0.x`); a `.` after
-/// anything else starts a member of the value a method is called on, `.x`.
 pub(crate) fn ends_value(token: &Token) -> bool {
     matches!(
         token,
@@ -1390,8 +1169,6 @@ pub(crate) fn ends_value(token: &Token) -> bool {
     )
 }
 
-/// Whether the argument at position `p` belongs to a `scan` call, so that the
-/// type it names is the number that call reads: `scan("Age: ", int)`.
 fn reads_a_number(tokens: &Tokens, p: usize) -> bool {
     let mut depth = 0usize;
     for q in (0..p).rev() {
@@ -1419,18 +1196,11 @@ fn ends_field(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::RParen | Token::Assign)
 }
 
-/// Whether the name at `p` is a shape's field marked `read`, the word starting
-/// its line (`read path: text`). A field named `read` is followed by `:`, so it
-/// is never taken for the word.
 fn read_marker(tokens: &Tokens, p: usize) -> bool {
     p.checked_sub(1)
         .is_some_and(|q| tokens.ident(q) == Some(READ) && tokens.starts_line(q))
 }
 
-/// Whether the name at `p` is a shape's `shared` field, as in `shared f`,
-/// `shared flex f`, `shared bind f` or `shared read f`, with `shared` starting
-/// its line (after `priv`, if it is written); and if so, the word that says how
-/// it changes: "flex", "bind", or none for a plain or read field.
 fn shared_marker(tokens: &Tokens, p: usize) -> Option<Option<&'static str>> {
     let (at, word) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
         Some(Token::Shared) => (p - 1, None),
@@ -1444,13 +1214,10 @@ fn shared_marker(tokens: &Tokens, p: usize) -> Option<Option<&'static str>> {
     (tokens.token(at) == Some(&Token::Shared) && starts).then_some(word)
 }
 
-/// What ends a shape's field, whose type may be followed by the value a literal
-/// that leaves the field out gives it (`size: int = 0`).
 fn ends_shape_field(token: &Token) -> bool {
     matches!(token, Token::Assign)
 }
 
-/// What ends the words a type a declaration takes must allow.
 fn ends_type_param(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::Gt)
 }
@@ -1460,31 +1227,22 @@ enum Block {
     Task,
     Shape,
     Kind,
-    /// `pattern Name … fi`, holding fields and method headers.
     Pattern,
-    /// A method, inside a shape or a kind, or a pattern's default.
     Method,
-    /// `when`, `loop`, `each`, or `match`: any block inside a task.
     Inner,
 }
 
-/// First pass: top-level declarations. Returns the symbols, for each
-/// declaring token its symbol, and the `include` lines.
 fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<IncludeLine>) {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut declared_at = HashMap::new();
     let mut includes = Vec::new();
     let mut blocks: Vec<Block> = Vec::new();
-    // The open task, shape, or kind, and the variant whose payload is open.
     let mut item: Option<usize> = None;
     let mut variant: Option<usize> = None;
-    // The open method, and whether the open shape or kind has one above.
     let mut method: Option<usize> = None;
     let mut methods_above = false;
     let mut parens = 0usize;
-    // Whether the line is a task's or a method's header, where no lambda is.
     let mut header = false;
-    // End of the last token that isn't a newline, where an unclosed item ends.
     let mut last_end = 0;
 
     let mut declare = |symbols: &mut Vec<Symbol>,
@@ -1496,7 +1254,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         let visible = 0..tokens.source.len();
-        // `priv name`, `priv task name`, or `priv native task name`.
         let native = p >= 2 && tokens.ident(p - 2) == Some(NATIVE);
         let private = tokens.before(p) == Some(&Token::Priv)
             || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv)
@@ -1528,8 +1285,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             continue;
         };
         match token {
-            // `include path/name => alias (a, b => c)` or `include path/name {a}`:
-            // declares the module `name`, or `alias`.
             Token::Include => {
                 let mut parts = Vec::new();
                 let mut names: Vec<IncludedName> = Vec::new();
@@ -1596,8 +1351,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     });
                 }
             }
-            // Items only appear at the top level, so a new one also closes
-            // any item left open by half-typed code.
             Token::Task | Token::Shape | Token::Kind => {
                 for open in [method.take(), item.take()].into_iter().flatten() {
                     close(&mut symbols, open, last_end);
@@ -1612,9 +1365,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 header = block == Block::Task;
                 blocks.push(block);
                 if tokens.ident(p + 1).is_some() {
-                    // A shape's line holds the types it takes, if any; a
-                    // task's holds its parameters and results too, and a
-                    // kind's the kinds it imitates.
                     let bases = if block == Block::Task {
                         Vec::new()
                     } else {
@@ -1631,8 +1381,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         symbol.bases = bases;
                     }
                     item = Some(id);
-                    // `task first<T: ordered>(…)`: the types the task takes,
-                    // each with the words it must allow.
                     let mut q = p + 2;
                     if tokens.token(q) == Some(&Token::Lt) {
                         let mut names = true;
@@ -1657,9 +1405,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     }
                 }
             }
-            // `#P = 3.14159`, or `priv #P = …`, at the start of a line
-            // outside every item: a declaration of its own line. One in the
-            // first column also closes a task still missing its `fi`.
             Token::Hash
                 if tokens.ident(p + 1).is_some()
                     && matches!(
@@ -1699,8 +1444,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     symbol.range = tokens.range(first).start..tokens.range(last).end;
                 }
             }
-            // `pattern Name`, or `priv pattern Name`, at the start of a line
-            // outside every item: a block of fields and method headers.
             Token::Ident(word)
                 if word == PATTERN
                     && tokens.ident(p + 1).is_some()
@@ -1738,7 +1481,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 }
                 item = Some(id);
             }
-            // A pattern's field, `name: type`, on a line of its own.
             Token::Ident(_)
                 if let (Some(pattern), [Block::Pattern]) = (item, blocks.as_slice())
                     && tokens.starts_line(p)
@@ -1747,8 +1489,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 let detail = tokens.text_after(p + 1, never);
                 declare(&mut symbols, p, SymbolKind::Field, detail, Some(pattern));
             }
-            // A pattern's method header, one or several on a line; one alone
-            // with a body below it is a default, a block of its own.
             Token::Ident(_)
                 if let (Some(pattern), [Block::Pattern]) = (item, blocks.as_slice())
                     && parens == 0
@@ -1774,7 +1514,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     method = Some(id);
                 }
             }
-            // `alias Name => type`, or `priv alias …`, as a macro is read.
             Token::Ident(word)
                 if word == "alias"
                     && tokens.ident(p + 1).is_some()
@@ -1818,7 +1557,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             | Token::Each
             | Token::Block
             | Token::Match => blocks.push(Block::Inner),
-            // A lambda is a block of its own, closed by its `fi`.
             Token::LParen if !header && tokens.starts_lambda(p) => {
                 blocks.push(Block::Inner);
                 parens += 1;
@@ -1841,8 +1579,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 parens = 0;
                 header = false;
             }
-            // `shared new(…)`: a method of the shape or kind itself, named by a
-            // name or by `new`, a block of its own as any method is.
             Token::Shared
                 if let (Some(owner), [Block::Shape | Block::Kind]) = (item, blocks.as_slice())
                     && tokens.starts_member(p)
@@ -1872,8 +1608,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 methods_above = true;
                 header = true;
             }
-            // A method, which a shape or a kind declares below its fields or
-            // variants: a block of its own, closed by its `fi`.
             Token::Ident(_)
                 if let (Some(owner), [only @ (Block::Shape | Block::Kind)]) =
                     (item, blocks.as_slice())
@@ -1907,7 +1641,6 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         || shared_marker(tokens, p).is_some())
                         && tokens.token(p + 1) == Some(&Token::Colon) =>
                 {
-                    // The type, and whether a value it falls back on follows it.
                     let whole = tokens.text_after(p + 1, never);
                     let detail = tokens.text_after(p + 1, ends_shape_field);
                     let falls_back = whole != detail;
@@ -1919,7 +1652,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                             || (shared.is_some() && tokens.ident(p - 1) == Some(READ));
                         field.shared = shared.is_some();
                         field.intro = shared.flatten();
-                        // `priv shared f`: `declare` looks only just before the name.
+                        // Look past `priv` to detect `shared` before the field name.
                         if shared.is_some() {
                             let start = (p.saturating_sub(3)..p)
                                 .find(|q| tokens.token(*q) == Some(&Token::Shared));
@@ -1966,7 +1699,6 @@ fn close(symbols: &mut [Symbol], id: usize, end: usize) {
     }
 }
 
-/// A block open during the second pass, with the variables declared in it.
 struct Scope {
     kind: ScopeKind,
     variables: Vec<usize>,
@@ -1979,16 +1711,12 @@ enum ScopeKind {
     Other,
     Match,
     Case,
-    /// A plan B's block, `{ … }`.
     PlanB,
 }
 
-/// An open `{`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Brace {
-    /// A shape literal, with its shape's name if known.
     Literal(Option<String>),
-    /// A plan B's block, which may span lines.
     PlanB,
 }
 
@@ -1997,10 +1725,7 @@ struct Classifier<'a> {
     symbols: Vec<Symbol>,
     declared_at: HashMap<usize, usize>,
     field_accesses: &'a HashMap<(usize, usize), String>,
-    /// Tasks, shapes, kinds, variants, and modules by name (the first, if
-    /// repeated); another module's by their qualified names (`geometry.area`).
     globals: HashMap<String, usize>,
-    /// The names `include m (a, b)` brings in, with their declarations.
     imports: HashMap<String, usize>,
     scopes: Vec<Scope>,
     out: Vec<Classified>,
@@ -2015,7 +1740,6 @@ impl<'a> Classifier<'a> {
         imports: HashMap<String, usize>,
     ) -> Self {
         let mut globals = HashMap::new();
-        // A field or a method is only ever written after a dot.
         for (id, symbol) in symbols.iter().enumerate() {
             if !matches!(symbol.kind, SymbolKind::Field | SymbolKind::Method) {
                 globals.entry(symbol.name.clone()).or_insert(id);
@@ -2035,55 +1759,28 @@ impl<'a> Classifier<'a> {
 
     fn run(mut self) -> (Vec<Symbol>, Vec<Classified>) {
         let tokens = self.tokens;
-        // Context carried from one token to the next.
         let mut in_type = false;
-        // The keyword declaring the next name as a variable.
         let mut declaring: Option<&'static str> = None;
-        // `outer => loop …`: the name's position, and where its token went in
-        // `out`, until the loop it names opens the scope it is seen in.
         let mut loop_name: Option<(usize, usize)> = None;
         let mut in_task_header = false;
-        // In a `case` or `is` pattern, whose names are declared.
         let mut in_pattern = false;
-        // The scopes opened on this line by headers of a pattern's methods
-        // without bodies, which close with it.
         let mut headers_open = 0usize;
-        // Just after a plan B's `{`, where `fail e` names the error.
         let mut plan_b_head = false;
-        // Just after a type's name, where `or` starts the error type.
         let mut after_type = false;
-        // After `@` or a `new …(…)`'s `at`, where a region is named; whether a
-        // type follows it (as after `new@r`).
         let mut region_next: Option<bool> = None;
-        // In a task header after `->`, where each comma starts another result
-        // type.
         let mut in_results = false;
-        // In a lambda's parameters, and in its results, which end where its
-        // body starts on their line.
         let mut lambda_params = false;
         let mut lambda_results = false;
-        // The `->` of a shortcut lambda whose parameters are being read, and
-        // the byte its body ends at (see `Tokens::shortcut_lambda`).
         let mut shortcut: Option<(usize, usize)> = None;
-        // In the names of a `fixed` or `flex`, where each comma declares
-        // another one.
         let mut declaring_list: Option<&'static str> = None;
-        // In a loop's start, before its first `||`, and the word, `flex` or
-        // `fixed`, that covers the names after it there.
         let mut loop_start = false;
         let mut loop_words: Option<&'static str> = None;
-        // The position after that loop's `loop`.
         let mut loop_first = 0usize;
-        // On an `include` line, and inside its parentheses of names.
         let mut in_include = false;
         let mut in_include_names = false;
         let mut braces: Vec<Brace> = Vec::new();
-        // How many `[`s are open in a type, as in `[int#4]`.
         let mut type_brackets = 0usize;
-        // How many `(`s of tuple types are open, as in `(int, text)`.
         let mut type_parens = 0usize;
-        // How many `<`s of the types a declaration takes, or a call gives, are
-        // open; and whether the next name is a word a type must allow.
         let mut type_angles = 0usize;
         let mut needs_word = false;
 
@@ -2116,13 +1813,10 @@ impl<'a> Classifier<'a> {
             let was_type = std::mem::take(&mut in_type);
             let was_after_type = std::mem::take(&mut after_type);
             let declaring_now = declaring.take();
-            // `each k, v in m`: the name after the comma is the loop's too.
             if *token == Token::Comma && p >= 2 && tokens.token(p - 2) == Some(&Token::Each) {
                 declaring = Some("each");
             }
             let region_now = region_next.take();
-            // A lambda's body on the line of its header: what follows its
-            // results is no type, and declares no parameter.
             if lambda_results
                 && (*token == Token::Send
                     || (matches!(token, Token::Ident(_)) && !was_type && region_now.is_none()))
@@ -2155,12 +1849,10 @@ impl<'a> Classifier<'a> {
                     type_parens = 0;
                     type_angles = 0;
                     needs_word = false;
-                    // Shape literals are on one line, so an unclosed literal `{` ends
-                    // with it; a plan B's block continues.
+                    // Shape literals are single-line, whereas Plan B blocks span lines.
                     braces.retain(|brace| *brace == Brace::PlanB);
                 }
                 Token::Eof => {}
-                // `t.0`: a tuple's item.
                 Token::Int(_) if p > 0 && tokens.token(p - 1) == Some(&Token::Dot) => {
                     self.push(range, TokenClass::Field, None)
                 }
@@ -2168,23 +1860,19 @@ impl<'a> Classifier<'a> {
                 Token::Text(_) | Token::Char(_) => self.string(range),
                 Token::Ident(_) if in_include => {
                     let (class, symbol) = match self.declared_at.get(&p) {
-                        // The module's name or alias, or a name brought in and its alias.
                         Some(&id) => (
                             self.symbols
                                 .get(id)
                                 .map_or(TokenClass::Variable, |s| s.kind.class()),
                             Some(id),
                         ),
-                        // A name the module doesn't declare (or whose file isn't known).
                         None if in_include_names => (TokenClass::Variable, None),
-                        // A folder of the path.
                         None => (TokenClass::Module, None),
                     };
                     self.push(range, class, symbol);
                 }
                 Token::FatArrow => {
                     self.push(range, TokenClass::Operator, None);
-                    // `alias Name => type`: a type follows.
                     in_type |= p >= 2
                         && tokens.ident(p - 2) == Some("alias")
                         && matches!(
@@ -2196,8 +1884,6 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     in_include_names = true;
                 }
-                // `<T: ordered>`: what the type must allow, or `<T: Shaped>`, a
-                // pattern it must follow, which may be another module's.
                 Token::Ident(name) if needs_word => {
                     needs_word = false;
                     if vela::ast::Need::from_word(name).is_some() {
@@ -2205,12 +1891,9 @@ impl<'a> Classifier<'a> {
                     } else {
                         let symbol = self.global(name, &[SymbolKind::Pattern]);
                         self.push(range, TokenClass::Type, symbol);
-                        // `<I: Iterator<T>>`: the types it gives the pattern.
                         after_type = true;
                     }
                 }
-                // `shape Circle::Shaped & Named`: each name after a `&` in a shape's
-                // or kind's header is a pattern or a kind too.
                 Token::Ident(name)
                     if tokens.before(p) == Some(&Token::Amp)
                         && tokens.token(p + 1) != Some(&Token::Dot)
@@ -2223,8 +1906,7 @@ impl<'a> Classifier<'a> {
                     );
                     self.push(range, TokenClass::Type, symbol);
                 }
-                // `shared new(…)`, `X.new(…)`, and `X.new` as a value: the
-                // keyword naming a shared method, read as the name it is there.
+                // `new` acts as a method/value identifier in `shared new` and `X.new`.
                 Token::New
                     if self.declared_at.contains_key(&p)
                         || tokens.before(p) == Some(&Token::Dot) =>
@@ -2244,19 +1926,16 @@ impl<'a> Classifier<'a> {
                     );
                     self.push(range, class, symbol);
                 }
-                // `new [:float]([width: 1.5])`: a bare name that is its own text.
                 Token::Ident(_) if named_key(tokens, p) => {
                     self.push(range, TokenClass::String, None)
                 }
-                // `t.at(i)`: the keyword naming the method text has.
+                // `at` names text's `.at(i)` method after `.`.
                 Token::At
                     if tokens.before(p) == Some(&Token::Dot)
                         && tokens.token(p + 1) == Some(&Token::LParen) =>
                 {
                     self.push(range, TokenClass::Method, None);
                 }
-                // `alias Name => type`, where `alias` is a word of the line only.
-                // `pattern Name`: a block of its own, as a shape's is.
                 Token::Ident(word)
                     if word == PATTERN
                         && self
@@ -2283,7 +1962,6 @@ impl<'a> Classifier<'a> {
                 {
                     self.push(range, TokenClass::Keyword, None);
                 }
-                // `outer => loop …`: a loop's name, declared in the loop's scope.
                 Token::Ident(_)
                     if !in_include
                         && tokens.token(p + 1) == Some(&Token::FatArrow)
@@ -2295,8 +1973,6 @@ impl<'a> Classifier<'a> {
                     loop_name = Some((p, self.out.len()));
                     self.push(range, TokenClass::Variable, None);
                 }
-                // `x -> x * 2`, `(a, b) -> a + b`: a shortcut lambda's
-                // parameters, seen in its body only.
                 Token::Ident(_)
                     if !was_type
                         && region_now.is_none()
@@ -2324,16 +2000,12 @@ impl<'a> Classifier<'a> {
                         in_type = type_follows;
                         after_type = !type_follows;
                     } else {
-                        // A method's header declares its parameters, which its
-                        // body sees, as a task's does.
                         if let Some(method) = self
                             .declared_at
                             .get(&p)
                             .and_then(|&id| self.symbols.get(id))
                             .filter(|s| s.kind == SymbolKind::Method)
                         {
-                            // A pattern's header with no body has no `fi`: its
-                            // parameters are seen to the end of its line.
                             if !method.default
                                 && method
                                     .parent
@@ -2345,7 +2017,6 @@ impl<'a> Classifier<'a> {
                             self.open(ScopeKind::Item);
                             in_task_header = true;
                         }
-                        // `-> total: int`: the result's name, not its type.
                         let declaring_now = match tokens.token(p + 1) {
                             Some(Token::Colon) if in_results && was_type => Some("result"),
                             _ => declaring_now,
@@ -2359,8 +2030,6 @@ impl<'a> Classifier<'a> {
                             in_pattern,
                             &braces,
                         );
-                        // A lambda's body may start on its header's line, where
-                        // its parameters are already seen.
                         if lambda_params
                             && class == TokenClass::Parameter
                             && let Some(param) = symbol.and_then(|id| self.symbols.get_mut(id))
@@ -2382,13 +2051,8 @@ impl<'a> Classifier<'a> {
                 }
                 Token::Colon => {
                     self.push(range, TokenClass::Punctuation, None);
-                    // A field's value in a shape literal is not a type, though a
-                    // lambda's parameter there has one.
                     in_type = in_task_header || !matches!(braces.last(), Some(Brace::Literal(_)));
                 }
-                // `(int) -> int`: a task's type, whose arrow follows the `)` of
-                // the types it takes; any other arrow starts a header's results.
-                // A shortcut lambda's arrow: its body, a value, follows.
                 Token::Arrow if shortcut.is_some_and(|(arrow, _)| arrow == p) => {
                     self.push(range, TokenClass::Operator, None);
                     shortcut = None;
@@ -2413,7 +2077,6 @@ impl<'a> Classifier<'a> {
                         || (tokens.ident(p + 1).is_some()
                             && tokens.token(p + 2) == Some(&Token::Colon));
                     if in_pattern {
-                        // `case {value}`: the name inside is declared by the pattern.
                         braces.push(Brace::Literal(None));
                     } else if literal {
                         braces.push(Brace::Literal(tokens.literal_shape(p).map(str::to_string)));
@@ -2434,13 +2097,11 @@ impl<'a> Classifier<'a> {
                         self.close_scope(at);
                     }
                 }
-                // `[int#4]` and `[int]@r` in a type: the item's type, then its count.
                 Token::LBracket if was_type => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_brackets += 1;
                     in_type = true;
                 }
-                // `#P = …`: the mark before a macro's name, which declares it.
                 Token::Hash
                     if self
                         .declared_at
@@ -2454,16 +2115,12 @@ impl<'a> Classifier<'a> {
                 Token::RBracket if type_brackets > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_brackets -= 1;
-                    // `[@r](int) -> int`: a lambda's type goes on with its task's.
                     if tokens.after_kept(p + 1) {
                         in_type = true;
                     } else {
-                        // `@r` or `or E` may follow the type.
                         after_type = true;
                     }
                 }
-                // `(x: int) -> int … fi`: a lambda, whose header declares its
-                // parameters, which its body sees, as a task's does.
                 Token::LParen if !was_type && tokens.shortcut_lambda(p).is_some() => {
                     self.push(range, TokenClass::Punctuation, None);
                     if let Some(arrow) = tokens.shortcut_lambda(p) {
@@ -2476,7 +2133,6 @@ impl<'a> Classifier<'a> {
                     in_task_header = true;
                     lambda_params = true;
                 }
-                // `(int, text)` in a type: each item's type.
                 Token::LParen if was_type => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_parens += 1;
@@ -2485,10 +2141,8 @@ impl<'a> Classifier<'a> {
                 Token::RParen if type_parens > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_parens -= 1;
-                    // `@r` or `or E` may follow the type.
                     after_type = true;
                 }
-                // `fixed a, (b, c) = t`: the names of a tuple's items.
                 Token::LParen if declaring_now.is_some() => {
                     self.push(range, TokenClass::Punctuation, None);
                     declaring = declaring_now;
@@ -2497,8 +2151,6 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     match token {
                         Token::LParen if in_include => in_include_names = true,
-                        // `geometry.Point`: a type goes on after the module's name,
-                        // which ended a type as far as it went.
                         Token::Dot => in_type = was_after_type,
                         _ => {}
                     }
@@ -2507,8 +2159,6 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     in_type = true;
                 }
-                // `<T: ordered>`, `first<int>(…)`, and `Box<int>` in a type:
-                // the types a declaration takes, or the ones a use gives it.
                 Token::Lt if was_after_type || tokens.opens_types(p) => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_angles += 1;
@@ -2523,8 +2173,6 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     needs_word = true;
                 }
-                // `flex&` is one word, and `&a` gives a place at a call.
-                // The name after `flex&` or `fixed&` is still being declared.
                 Token::Amp
                     if matches!(
                         tokens.before(p),
@@ -2532,7 +2180,6 @@ impl<'a> Classifier<'a> {
                     ) =>
                 {
                     self.push(range, TokenClass::Keyword, None);
-                    // `(flex& int) -> nothing`: in a task's type, a type follows.
                     if was_type {
                         in_type = true;
                     } else {
@@ -2543,11 +2190,8 @@ impl<'a> Classifier<'a> {
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
                     match (declaring_list, loop_words) {
-                        // `-> int, int`: another result type.
                         _ if in_results => in_type = true,
-                        // `fixed q, r = …`: another name.
                         (Some(intro), _) => declaring = Some(intro),
-                        // `loop flex i = 0, j = 9`: another name the word covers.
                         (None, Some(intro))
                             if loop_start
                                 && tokens.ident(p + 1).is_some()
@@ -2563,7 +2207,6 @@ impl<'a> Classifier<'a> {
                         _ => {}
                     }
                 }
-                // `loop start || condition || step`: what parts them.
                 Token::Parts => {
                     self.push(range, TokenClass::Operator, None);
                     loop_start = false;
@@ -2597,12 +2240,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Operator, None);
                     if *token == Token::Assign {
                         declaring_list = None;
-                        // `case p = value`: the pattern ends at the `=`, and what
-                        // follows is the value that case gives.
                         in_pattern = false;
                     }
                 }
-                // A type after `maybe`, and the error type after `~` in a type.
                 Token::Maybe => {
                     self.push(range, TokenClass::Keyword, None);
                     in_type = was_type;
@@ -2611,7 +2251,6 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Operator, None);
                     in_type = was_after_type;
                 }
-                // Everything else is a keyword.
                 keyword => {
                     self.push(range, TokenClass::Keyword, None);
                     match keyword {
@@ -2624,21 +2263,15 @@ impl<'a> Classifier<'a> {
                             braces.clear();
                         }
                         Token::Is => in_pattern = true,
-                        // `m is {x} and x > 0`: no pattern holds an `and`, so
-                        // what follows it is a value that reads the names.
+                        // Patterns cannot contain `and`, so `and` after `is` returns to expression mode.
                         Token::And => in_pattern = false,
                         Token::Failure if plan_b_head => declaring = Some("failure"),
-                        // `else when …` continues the block the `else` reopened,
-                        // and one `fi` closes the whole chain, so this `when`
-                        // opens no scope of its own. A `when` on the line after
-                        // an `else` is a statement inside it, which does.
+                        // `else when` reuses the open `when` block so one `fi` closes the whole chain.
                         Token::When if tokens.before(p) == Some(&Token::Else) => {}
                         Token::When => self.open(ScopeKind::When),
                         Token::Block => self.open(ScopeKind::Other),
                         Token::Loop | Token::Endless | Token::Each => {
                             self.open(ScopeKind::Other);
-                            // `loop flex i = 0, j = 9 || …`: the start, up to its
-                            // first `||`, declares the names after `flex` or `fixed`.
                             loop_start = *token == Token::Loop;
                             loop_words = None;
                             loop_first = p + 1;
@@ -2653,8 +2286,6 @@ impl<'a> Classifier<'a> {
                                     named.symbol = Some(id);
                                 }
                             } else if let Some(q) = tokens.loop_variable(p) {
-                                // `fixed r = loop …`, `total = each …`: the variable
-                                // the loop gives names it, for `break r`.
                                 self.declare_local(
                                     q,
                                     SymbolKind::Variable,
@@ -2667,12 +2298,6 @@ impl<'a> Classifier<'a> {
                             }
                         }
                         Token::Match => self.open(ScopeKind::Match),
-                        // `(flex n: int`: a parameter the task changes, which
-                        // the header declares below, not a variable.
-                        // (and `fixed`, `flex&`, `fixed&`).
-                        // `(flex& int) -> nothing`: how a task's type takes a place.
-                        // `[flex& count, @r]`: what a lambda keeps names
-                        // variables of the code around it, and declares none.
                         Token::Flex | Token::Fixed | Token::Bind if tokens.in_kept_list(p) => {}
                         Token::Flex | Token::Fixed | Token::Bind if was_type => in_type = true,
                         Token::Flex | Token::Fixed | Token::Bind
@@ -2682,7 +2307,6 @@ impl<'a> Classifier<'a> {
                                     Some(Token::LParen | Token::Comma)
                                 ) => {}
                         Token::Fixed | Token::Flex | Token::Bind => {
-                            // `flex& y = &x` and `fixed& y = &x`: references.
                             let reference = tokens.token(p + 1) == Some(&Token::Amp);
                             let intro = match (keyword.clone(), reference) {
                                 (Token::Fixed, false) => "fixed",
@@ -2712,7 +2336,6 @@ impl<'a> Classifier<'a> {
                             in_pattern = true;
                         }
                         Token::Fi => {
-                            // A plan B still open here is missing its `}`.
                             self.close_plan_b(at, &mut braces);
                             if self
                                 .scopes
@@ -2725,7 +2348,7 @@ impl<'a> Classifier<'a> {
                         }
                         Token::Else => {
                             self.close_plan_b(at, &mut braces);
-                            // The `else` branch can't see the `when` branch's variables.
+                            // Reset local scope at `else` so `when`-branch locals stay isolated.
                             if self
                                 .scopes
                                 .last()
@@ -2736,9 +2359,7 @@ impl<'a> Classifier<'a> {
                             }
                         }
                         Token::New => in_type = true,
-                        // `new T(v) at r` names a region; `in` belongs to `each`.
                         Token::At => region_next = Some(false),
-                        // `region r` declares a region; `r: region` is a parameter's type.
                         Token::Region if !was_type => declaring = Some("region"),
                         Token::Include => in_include = true,
                         _ => {}
@@ -2772,7 +2393,6 @@ impl<'a> Classifier<'a> {
                 .map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
-        // `alters step()`: the word before a method that changes its value.
         if name == ALTERS
             && self
                 .declared_at
@@ -2782,8 +2402,7 @@ impl<'a> Classifier<'a> {
         {
             return (TokenClass::Keyword, None);
         }
-        // Inside a pattern, `this` written as a type is the type following it,
-        // as the pattern's own name is.
+        // Inside a `pattern`, standalone `this` denotes the conforming type.
         if name == THIS_WORD && before != Some(&Token::Dot) && before != Some(&Token::AtSign) {
             let at = tokens.range(p).start;
             if self.symbols.iter().any(|s| {
@@ -2795,8 +2414,6 @@ impl<'a> Classifier<'a> {
                 return (TokenClass::Type, None);
             }
         }
-        // `read path: text`: the word before a field only its shape's methods
-        // assign.
         if name == READ
             && self
                 .declared_at
@@ -2806,12 +2423,9 @@ impl<'a> Classifier<'a> {
         {
             return (TokenClass::Keyword, None);
         }
-        // `native task …`: a task of Vela's library whose body is C.
         if name == NATIVE && after == Some(&Token::Task) {
             return (TokenClass::Keyword, None);
         }
-        // `region r default` and `r: region default`: the word that makes a
-        // region the default of a block or of a task's body.
         if name == DEFAULT {
             let two_back = p.checked_sub(2).and_then(|q| tokens.token(q));
             let after_declaration =
@@ -2820,9 +2434,7 @@ impl<'a> Classifier<'a> {
                 return (TokenClass::Keyword, None);
             }
         }
-        // `.this`, `.x`, and `.m()`: the value a method is called on, and a
-        // member of it, which its shape or kind declares.
-        // (`Option<int>.None` is a variant, after the types its kind is given.)
+        // `Option<int>.None` has `.` after `>`, so it is a qualified variant rather than `.member`.
         let after_types = p.checked_sub(2).and_then(|q| tokens.token(q)) == Some(&Token::Gt)
             && self.kind_before().is_some();
         if before == Some(&Token::Dot)
@@ -2867,7 +2479,6 @@ impl<'a> Classifier<'a> {
                 None => (TokenClass::Field, None),
             };
         }
-        // `geometry.area`: a module's name, then a name in it.
         let at = tokens.range(p).start;
         if after == Some(&Token::Dot)
             && let Some(module) = self.module_named(name, at)
@@ -2887,13 +2498,10 @@ impl<'a> Classifier<'a> {
                 .and_then(|&id| self.symbols.get(id).map(|s| (id, s.kind)))
             {
                 Some((id, kind)) => (kind.class(), Some(id)),
-                // A pattern names a kind after the module's name.
                 None if in_type || in_pattern => (TokenClass::Type, None),
                 None => (TokenClass::Variable, None),
             };
         }
-        // `Point.new(…)` and `Light.start()`: a shared method, called on the
-        // name of its shape or kind (a kind's variant is made the same way).
         if before == Some(&Token::Dot)
             && after == Some(&Token::LParen)
             && let Some(owner) = self.type_before()
@@ -2912,7 +2520,6 @@ impl<'a> Classifier<'a> {
                 return (TokenClass::Method, method);
             }
         }
-        // `Shape.Circle`: a kind's variant, after the kind's name.
         if before == Some(&Token::Dot)
             && let Some(kind) = self.kind_before()
         {
@@ -2925,7 +2532,6 @@ impl<'a> Classifier<'a> {
                     .get(id)
                     .is_some_and(|s| unqualified(&s.name) == name)
             });
-            // `Mode.pick` with no `(`: a shared method as a value, a decorator or a wrapper.
             if variant.is_none()
                 && let Some(method) = self.symbols.iter().position(|s| {
                     s.kind == SymbolKind::Method
@@ -2938,22 +2544,17 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Variant, variant);
         }
-        // In a pattern, a name after `.` is a variant even when its kind isn't
-        // known (a module not read yet, or a misspelled kind): not a new variable.
+        // Do not highlight unresolved `Kind.Variant` inside patterns as a fresh variable.
         if in_pattern && before == Some(&Token::Dot) {
             return (TokenClass::Variant, None);
         }
-        // `case Shape.Circle`: the kind's name, before its variant.
         if in_pattern
             && after == Some(&Token::Dot)
             && matches!(before, Some(Token::Case | Token::Is))
         {
             return (TokenClass::Type, self.global(name, &[SymbolKind::Kind]));
         }
-        // A name being declared is one even where a type would be written,
-        // as a result's name is (`-> total: int`).
-        // `is flex (x, y)`: the pattern declares the names, `flex` only says they
-        // can be assigned, so they take their types from the value matched.
+        // In patterns like `is flex (x, y)`, types still come from the matched subject.
         if let Some(intro) = declaring.filter(|intro| !(in_pattern && *intro == "flex")) {
             if intro == "region" {
                 return (
@@ -2961,8 +2562,6 @@ impl<'a> Classifier<'a> {
                     Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())),
                 );
             }
-            // `fixed q: int, r = …` and `-> steps: int, peak: int`: the type
-            // ends at the next name.
             let detail = if after == Some(&Token::Colon) {
                 tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::Comma))
             } else {
@@ -2990,9 +2589,6 @@ impl<'a> Classifier<'a> {
                 ),
             );
         }
-        // `flex n: int`, `flex& n: int`, `fixed n: int`, `fixed& n: int`,
-        // `bind n: int` and `bind& n: int`: the word, and its `&`, before a
-        // parameter's name.
         let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
         let word_at = |q: usize| match tokens.token(q) {
             Some(Token::Flex) if opens_param(q) => Some("flex"),
@@ -3012,8 +2608,6 @@ impl<'a> Classifier<'a> {
             && (marked.is_some() || matches!(before, Some(Token::LParen | Token::Comma)))
         {
             let detail = tokens.text_after(p + 1, ends_field);
-            // `r: region`, and `r: region default`, which also makes it the
-            // default region of the task's body (see `ast::DEFAULT`).
             let takes_region = crate::infer::without_default(&detail) == "region";
             let kind = if takes_region {
                 SymbolKind::Region
@@ -3055,21 +2649,15 @@ impl<'a> Classifier<'a> {
                 Some(self.declare_local(p, SymbolKind::Variable, Some(intro), String::new())),
             );
         }
-        // `ParseError.TooLarge`: a variant of a kind no file declares, written
-        // through its kind. A field of that name belongs to a shape, so only the
-        // kind's own name before the dot makes this one.
+        // Require `Kind.` prefix so same-named shape fields are not shadowed.
         if before == Some(&Token::Dot)
             && let Some(kind) = vela::ast::builtin_kind_of(name)
             && p.checked_sub(2).and_then(|owner| tokens.ident(owner)) == Some(kind)
         {
             return (TokenClass::Variant, None);
         }
-        // `p.x` and `p.m()`: a field or a method of the value's shape or kind.
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
-            // Named on a shape or a kind itself, as in `Point.new` or a
-            // decorator's `$Registry.enroll`: a shared member of it, a method
-            // named as a value too.
             let typed = self
                 .type_before()
                 .and_then(|id| self.symbols.get(id))
@@ -3115,22 +2703,14 @@ impl<'a> Classifier<'a> {
                 ),
             );
         }
-        // A call always names a task or a variant, even when a variable has the
-        // same name, and `show(` and `scan(` always the builtin tasks.
         if after == Some(&Token::LParen) && BUILTIN_TASKS.contains(&name) {
             return (TokenClass::BuiltinFn, None);
         }
-        // `text(n) at r`, `int(2.9)`, and `float(n)`: the type, turning a value
-        // into it.
         if after == Some(&Token::LParen)
             && (name == vela::ast::TEXT_CAST || vela::ast::number_cast(name).is_some())
         {
             return (TokenClass::TypeBuiltin, None);
         }
-        // `scan("Age: ", int)`: the type of the number it reads, which is a type
-        // and not a value, as the one a cast names is. Another builtin type there
-        // is one this form cannot read, which the checker reports; it is still
-        // written as a type.
         if after == Some(&Token::RParen)
             && before == Some(&Token::Comma)
             && Type::builtin(name).is_some()
@@ -3144,7 +2724,6 @@ impl<'a> Classifier<'a> {
             let kind = self.symbols.get(id).map_or(SymbolKind::Task, |s| s.kind);
             return (kind.class(), Some(id));
         }
-        // After `break` or `continue`, the name of a loop, which is no value.
         let local = match tokens.before(p) {
             Some(Token::Break | Token::Continue) => self.loop_named(name, tokens.range(p).start),
             _ => self.local(name, tokens.range(p).start),
@@ -3175,10 +2754,7 @@ impl<'a> Classifier<'a> {
         if BUILTIN_TASKS.contains(&name) {
             return (TokenClass::BuiltinFn, None);
         }
-        // The kinds no file declares, where a value of one is written rather than
-        // its type: `fail ParseError.TooLarge`, or the bare `fail Ended`. No
-        // declaration takes these names, and a variable or field that does was
-        // found above, so what is left is the kind itself (see `hover`).
+        // Fallback for built-in error kinds (`ParseError`, `InputError`) absent from `symbols`.
         if vela::ast::BUILTIN_KIND_NAMES.contains(&name) {
             let class = if vela::ast::builtin_kind_of(name).is_some() {
                 TokenClass::Variant
@@ -3193,12 +2769,7 @@ impl<'a> Classifier<'a> {
         (TokenClass::Variable, None)
     }
 
-    /// The region named at `p` (after `@`, or `in` after `new`). In a task's
-    /// header, a name no parameter declares is a region the task only names in
-    /// its types, declared where it first appears.
     fn region(&mut self, p: usize, name: &str, in_task_header: bool) -> Option<usize> {
-        // A task type's regions are its own, `(@a, int) -> [int]@a`, and name
-        // nothing around it.
         if self.in_task_type(p) {
             return None;
         }
@@ -3218,7 +2789,6 @@ impl<'a> Classifier<'a> {
         if known.is_some() {
             return known;
         }
-        // A `region` parameter later in the header: `task f(a: ^int@r, r: region)`.
         let tokens = self.tokens;
         let later = (p + 1..tokens.len())
             .take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None))
@@ -3236,24 +2806,16 @@ impl<'a> Classifier<'a> {
         Some(self.declare_local(p, SymbolKind::Region, Some("@"), String::new()))
     }
 
-    /// Whether the region named at `p` is one a task type takes or sends in:
-    /// inside its parentheses, or after its `->`, in a written type.
     fn in_task_type(&self, p: usize) -> bool {
         let tokens = self.tokens;
-        // The arrows between the region and the start of its item, where a
-        // comma cuts the list it is in.
         let (mut depth, mut arrows, mut cut) = (0usize, 0usize, None);
         for q in (0..p).rev() {
             match tokens.token(q) {
                 Some(Token::RParen | Token::RBracket) => depth += 1,
-                // A header's parentheses before it, or a lambda's: it is in
-                // what the task sends, after the task's own arrow.
                 Some(Token::LParen) if depth == 1 && cut.is_none() && names_paren(tokens, q) => {
                     return arrows > 1;
                 }
                 Some(Token::LParen | Token::LBracket) if depth > 0 => depth -= 1,
-                // The parentheses around it: a header's, a lambda's, or a task
-                // type's, which a `->` follows.
                 Some(Token::LParen) if names_paren(tokens, q) => return cut.unwrap_or(arrows) > 0,
                 Some(Token::LParen)
                     if closing(tokens, q)
@@ -3261,8 +2823,6 @@ impl<'a> Classifier<'a> {
                 {
                     return true;
                 }
-                // A tuple's or a slice's around it, `(text@q, int)`: what is
-                // around them says.
                 Some(Token::LParen | Token::LBracket) => {
                     if cut.unwrap_or(arrows) > 0 {
                         return true;
@@ -3271,7 +2831,6 @@ impl<'a> Classifier<'a> {
                 }
                 Some(Token::Comma) if depth == 0 && cut.is_none() => cut = Some(arrows),
                 Some(Token::Arrow) if depth == 0 && cut.is_none() => arrows += 1,
-                // A variable's type, or what a task sends, after its own arrow.
                 Some(Token::Newline | Token::Colon | Token::Assign) | None if depth == 0 => {
                     let own = usize::from(!matches!(
                         tokens.token(q),
@@ -3292,8 +2851,6 @@ impl<'a> Classifier<'a> {
         });
     }
 
-    /// Closes the plan B scopes open at the top, at byte `at`, and forgets
-    /// their braces: a block keyword there means they are missing their `}`.
     fn close_plan_b(&mut self, at: usize, braces: &mut Vec<Brace>) {
         while self
             .scopes
@@ -3307,8 +2864,6 @@ impl<'a> Classifier<'a> {
         }
     }
 
-    /// Closes the innermost scope at byte `at`, where its variables stop being
-    /// visible.
     fn close_scope(&mut self, at: usize) {
         let Some(scope) = self.scopes.pop() else {
             return;
@@ -3331,8 +2886,7 @@ impl<'a> Classifier<'a> {
         let name = tokens.ident(p).unwrap_or_default().to_string();
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
-        // A name a `case` pattern binds is usable as soon as it is written, since
-        // the case may give its value on the same line: `case Ok v = v * 2`.
+        // `case` bindings enter scope immediately for same-line arms like `case Ok v = v * 2`.
         if intro == Some("case") {
             let visible = range.end..tokens.source.len();
             self.symbols.push(Symbol {
@@ -3358,9 +2912,7 @@ impl<'a> Classifier<'a> {
             }
             return id;
         }
-        // Usable from the next line: not in its own initializer, range, or
-        // header, including a plan B there that spans lines. Other braces
-        // (shape literals, plan Bs written on one line) end with their line.
+        // Other locals enter scope on the next line, past initializers and multi-line header Plan Bs.
         let mut open_plan_bs = 0usize;
         let mut line_braces = 0usize;
         let line_end = (p..tokens.len())
@@ -3389,8 +2941,6 @@ impl<'a> Classifier<'a> {
                 _ => false,
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
-        // `m is {x} and x > 0`: a name an `is` binds is seen from the `and`
-        // after its pattern, which no pattern holds.
         let joined = match intro {
             Some("is") => (p..tokens.len())
                 .take_while(|&q| {
@@ -3399,8 +2949,6 @@ impl<'a> Classifier<'a> {
                 .find(|&q| tokens.token(q) == Some(&Token::And)),
             _ => None,
         };
-        // `loop flex i = 0, j = i || i < j || …`: a name a loop's start declares
-        // is seen from the end of its item, its `,` or the `||` after it.
         let item_end = match intro {
             Some("flex" | "fixed") => {
                 let line: Vec<usize> = (p..tokens.len())
@@ -3455,19 +3003,15 @@ impl<'a> Classifier<'a> {
         id
     }
 
-    /// The variable or parameter called `name` visible at byte `at`, innermost
-    /// first. (A variable isn't visible in its own initializer: `fixed y = y + 1`.)
+    /// Locals are invisible inside their own initializers (`fixed y = y + 1`).
     fn local(&self, name: &str, at: usize) -> Option<usize> {
         self.scoped(name, at, false)
     }
 
-    /// The loop named `name` around byte `at`, which `break` and `continue`
-    /// name (see `LOOP_NAME`).
     fn loop_named(&self, name: &str, at: usize) -> Option<usize> {
         self.scoped(name, at, true)
     }
 
-    /// The local `name` at byte `at`, a loop's name or any other.
     fn scoped(&self, name: &str, at: usize, loop_name: bool) -> Option<usize> {
         self.scopes
             .iter()
@@ -3484,8 +3028,6 @@ impl<'a> Classifier<'a> {
             })
     }
 
-    /// The top-level declaration called `name`, if it is one of `kinds`: one of
-    /// this file's, or one `include` brings in by name.
     fn global(&self, name: &str, kinds: &[SymbolKind]) -> Option<usize> {
         let own = self
             .globals
@@ -3500,8 +3042,6 @@ impl<'a> Classifier<'a> {
             })
     }
 
-    /// The shape or kind named just before the `.` last classified, as in
-    /// `Point.` or `Light.`.
     fn type_before(&self) -> Option<usize> {
         let mut classified = self
             .out
@@ -3518,7 +3058,6 @@ impl<'a> Classifier<'a> {
             .then_some(id)
     }
 
-    /// The kind named just before the `.` last classified, as in `Shape.`.
     fn kind_before(&self) -> Option<usize> {
         let mut classified = self
             .out
@@ -3533,7 +3072,6 @@ impl<'a> Classifier<'a> {
                 .get(token.range.clone())
                 .unwrap_or_default()
         };
-        // `Option<int>.None`: the kind is named before the types it is given.
         if text(named) == ">" {
             let mut depth = 0usize;
             loop {
@@ -3554,18 +3092,11 @@ impl<'a> Classifier<'a> {
             .then_some(id)
     }
 
-    /// The module the file includes under `name`, unless a variable at byte `at`
-    /// has that name.
     fn module_named(&self, name: &str, at: usize) -> Option<usize> {
         self.global(name, &[SymbolKind::Module])
             .filter(|_| self.local(name, at).is_none())
     }
 
-    /// A shape's field, or a shape's or a kind's method, called `name`, as
-    /// `kinds` allows. Without a known owner, a name that only one shape or
-    /// kind declares still resolves.
-    /// Whether position `p` is on the line of a shape's or kind's name, past a
-    /// `::`.
     fn in_item_header(&self, p: usize) -> bool {
         let tokens = self.tokens;
         let mut q = p;
@@ -3597,7 +3128,7 @@ impl<'a> Classifier<'a> {
                         })
             });
             let first = candidates.next().map(|(id, _)| id);
-            // With no owner known, a name two shapes have is neither's.
+            // Ambiguous unowned member names resolve to neither candidate.
             if owner.is_none() && candidates.next().is_some() {
                 return None;
             }
@@ -3607,7 +3138,6 @@ impl<'a> Classifier<'a> {
         if exact.is_some() || owner.is_none() {
             return exact;
         }
-        // A method the owner has from a pattern it follows.
         if kinds.contains(&SymbolKind::Method)
             && let Some(owner) = owner.and_then(|owner| {
                 self.symbols.iter().position(|s| {
@@ -3622,9 +3152,7 @@ impl<'a> Classifier<'a> {
         {
             return Some(method);
         }
-        // A shape of a module this file names and also brings in by name
-        // (`include m => d (File)`) is `d.File` among the symbols, and `File`
-        // as the compiler spells it: the one such shape, if only one is.
+        // Match both qualified (`d.File`) and imported (`File`) owner spellings.
         let suffix = format!("{}{}", MODULE_SEPARATOR, owner.unwrap_or_default());
         let mut loose = self.symbols.iter().enumerate().filter(|(_, s)| {
             kinds.contains(&s.kind)
@@ -3651,13 +3179,11 @@ impl<'a> Classifier<'a> {
         }
     }
 
-    /// A text literal, valid or not, split into plain text and escapes. An
-    /// escape the compiler rejects is `Invalid`.
     fn string(&mut self, range: Range<usize>) {
         let text = self.tokens.source.get(range.clone()).unwrap_or_default();
         let mut piece = range.start;
         let mut chars = text.char_indices();
-        // A char literal has one escape text doesn't: `'\''`.
+        // Char literals allow `\'`, which string literals reject.
         let quoted = text.starts_with('\'');
         while let Some((i, c)) = chars.next() {
             if c != '\\' {
@@ -3686,15 +3212,10 @@ impl<'a> Classifier<'a> {
     }
 }
 
-/// Whether the `(` at `q` opens a header's parameters: a name comes before
-/// it, or the `>` closing the types a task takes.
 fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
     tokens.ident(q.wrapping_sub(1)).is_some() || tokens.before(q) == Some(&Token::Gt)
 }
 
-/// Whether the `(` at `q` opens parameters that name what they take: a
-/// header's, or a lambda's, `(s: region, n: int) -> [int]@s`, which a task
-/// type's never do.
 fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {
     header_paren(tokens, q)
         || matches!(
@@ -3704,7 +3225,6 @@ fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {
         || (tokens.ident(q + 1).is_some() && tokens.token(q + 2) == Some(&Token::Colon))
 }
 
-/// The `)` closing the `(` at `q`, on the same line.
 fn closing(tokens: &Tokens<'_>, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for at in q + 1.. {

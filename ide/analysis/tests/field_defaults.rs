@@ -1,9 +1,3 @@
-//! A field that names the value a literal leaving it out gives it
-//! (`size: int = 0`) in the editor: the field's type is the type alone, a
-//! literal completes only what it must give, and both hold while the file
-//! doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -57,11 +51,9 @@ fn a_field_that_falls_back_on_a_value_has_its_type_alone() {
     for checks in [true, false] {
         let source = program(checks, "show(tries)");
         let when = if checks { "checked" } else { "declared" };
-        // The value the field falls back on is no part of its type.
         assert_eq!(hover(&source, "tries: int =").0, "tries: int", "{}", when);
         assert_eq!(hover(&source, "note: maybe").0, "note: maybe text", "{}", when);
         assert_eq!(hover(&source, "state: State =").0, "state: State", "{}", when);
-        // And a name bound to one reads the same type, left out or not.
         assert_eq!(hover(&source, "tries = job").0, "fixed tries: int", "{}", when);
         assert_eq!(hover(&source, "note = job").0, "fixed note: maybe text", "{}", when);
     }
@@ -70,12 +62,9 @@ fn a_field_that_falls_back_on_a_value_has_its_type_alone() {
 #[test]
 fn a_literal_completes_the_fields_it_must_give() {
     for checks in [true, false] {
-        // The whole literal offers only the field with no value to fall back on.
         let items = completions(&program(checks, "flex other = Jo@@"));
         let job = items.iter().find(|item| item.label == "Job").unwrap_or_else(|| panic!("no Job: {:?}", items));
         assert_eq!(job.snippet.as_deref(), Some("Job { name: ${name} }"), "checks: {}", checks);
-        // Inside one, every field not given yet is still offered, since a
-        // literal may write what it would otherwise fall back on.
         let inside = completions(&program(checks, "flex other = Job { @@ }"));
         let offered: Vec<(&str, &str)> = inside.iter().map(|item| (item.label.as_str(), item.detail.as_str())).collect();
         assert_eq!(offered, [("name", "text"), ("tries", "int"), ("note", "maybe text"), ("state", "State")], "checks: {}", checks);

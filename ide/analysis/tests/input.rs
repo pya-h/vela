@@ -1,8 +1,3 @@
-//! Reading input in the editor: `scan(prompt) at r`, with the compiler's types
-//! and with the types read from the source while the file doesn't check. In the
-//! sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -60,8 +55,6 @@ fn a_line_read_is_a_maybe_text_in_its_region_whether_or_not_the_file_checks() {
 fn scan_has_a_hover_and_a_snippet_that_names_the_region() {
     let source = program(true, "show(1)");
     let (code, doc) = hover(&source, "scan(");
-    // Both forms: the line it reads into a region, and the number it reads from
-    // that line, which needs none.
     assert_eq!(code, "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float ~ InputError");
     assert!(doc.starts_with("Shows the prompt, then reads one line"), "{}", doc);
     assert!(doc.contains("names no region"), "{}", doc);

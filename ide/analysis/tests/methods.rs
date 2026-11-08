@@ -1,9 +1,3 @@
-//! Methods of shapes and kinds: they are outlined under their shape or kind,
-//! colored, followed to their declarations, described on hover, and completed
-//! after a dot, whether or not the file checks. In the sources below, `@@`
-//! marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -69,19 +63,15 @@ task main()
 fi
 ";
 
-/// `PROGRAM`, which checks or (with an unknown name above everything else in
-/// `main`) doesn't, with `code` in place of its `@@` line.
 fn program(checks: bool, code: &str) -> String {
     let first = if checks { "show(0)" } else { "show(unknown)" };
     PROGRAM.replace("CHECK", first).replace("    @@\n", &format!("    {}\n", code))
 }
 
-/// `PROGRAM` with `code` on a line of its own in the body of `step`.
 fn in_step(checks: bool, code: &str) -> String {
     program(checks, "show(1)").replace("        .cap()\n", &format!("        .cap()\n        {}\n", code))
 }
 
-/// The UTF-16 offset of the `nth` (0-based) occurrence of `needle`.
 fn at(source: &str, needle: &str, nth: usize) -> usize {
     let byte = source.match_indices(needle).nth(nth).unwrap_or_else(|| panic!("no {:?} #{}", needle, nth)).0;
     LineIndex::new(source).utf16_of(byte)
@@ -92,8 +82,6 @@ fn class_at(source: &str, needle: &str, nth: usize) -> TokenClass {
     Analysis::new(source).tokens().into_iter().find(|t| t.from == offset).unwrap_or_else(|| panic!("no token at {:?}", needle)).class
 }
 
-/// Asserts that the name at the `nth` occurrence of `name_use` is declared at
-/// the `nth` occurrence of `declaration`.
 #[track_caller]
 fn assert_definition(source: &str, name_use: (&str, usize), declaration: (&str, usize)) {
     let name: String = declaration.0.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
@@ -165,8 +153,6 @@ fn methods_are_outlined_under_their_shape_or_kind_below_what_it_holds() {
             ("shown", SymbolKind::Method, "() -> text"),
         ])
     );
-    // A method's `fi` closes the method, not its shape: `main` is outlined too,
-    // and a method covers its lines from its first word.
     assert!(outline.iter().any(|item| item.name == "main"));
     let counter = outline.iter().find(|item| item.name == "Counter").unwrap();
     let cap = counter.children.iter().find(|child| child.name == "cap").unwrap();
@@ -192,7 +178,6 @@ fn methods_their_words_and_their_parameters_are_colored() {
             ("step(2)", 0, TokenClass::Method),
             ("flip()\n", 1, TokenClass::Method),
             ("shown())", 0, TokenClass::Method),
-            // A kind's method is not read as a variant.
             ("shown() -> text", 0, TokenClass::Method),
         ];
         for &(needle, nth, class) in cases {
@@ -241,7 +226,6 @@ fn methods_and_what_they_are_called_on_are_described_on_hover() {
         let (code, doc) = hover(&source, "this\n", 0);
         assert_eq!(code, "region this");
         assert!(doc.starts_with("The region the value this method is called on lives in."), "{}", doc);
-        // A shape lists its methods below its fields, as written.
         let (code, _) = hover(&source, "Counter\n", 0);
         assert!(code.contains("    count: int\n    total() -> int\n"), "{}", code);
         assert!(code.contains("    alters step(by: int)\n    priv alters cap()\nfi"), "{}", code);
@@ -253,7 +237,6 @@ fn a_member_of_the_value_has_its_type_inside_a_method() {
     for checks in [true, false] {
         let source = program(checks, "show(1)");
         assert_eq!(hover(&source, "count = .count", 0).0, "count: int");
-        // `.label` is a member of the value, which lives in `@this`.
         let marked = in_step(checks, "fixed name = .label\n        show(name.@@)");
         assert_offers(&marked, &["copy"], &["count"]);
     }
@@ -269,11 +252,8 @@ fn completion_after_a_values_dot_offers_its_fields_and_methods() {
         assert_eq!((step.kind, step.detail.as_str(), step.snippet.as_deref()), (CompletionKind::Method, "alters (by: int)", Some("step(${by})")));
         let total = item("total");
         assert_eq!((total.kind, total.apply.as_deref()), (CompletionKind::Method, Some("total()")));
-        // A method of this file's own shape is offered even when private.
         item("cap");
-        // A kind's value has its methods, not its variants.
         assert_offers(&program(checks, "light.@@"), &["flip", "shown"], &["Red", "Green"]);
-        // A pointer's members are reached through `^`.
         let items = completions(&program(checks, "region r\n    fixed p = new Counter(c) at r\n    p.@@"));
         let step = items.iter().find(|item| item.label == "step").unwrap();
         assert_eq!(step.snippet.as_deref(), Some("^.step(${by})"));
@@ -284,10 +264,8 @@ fn completion_after_a_values_dot_offers_its_fields_and_methods() {
 fn completion_after_a_dot_starting_a_value_inside_a_method_offers_the_value_and_its_members() {
     for checks in [true, false] {
         assert_offers(&in_step(checks, "show(.@@)"), &["this", "label", "count", "total", "step", "cap"], &["Red", "main"]);
-        // In a kind's method: its methods, and no variants.
         let marked = program(checks, "show(1)").replace("                .this = Green\n", "                .this = Green\n                show(.@@)\n");
         assert_offers(&marked, &["this", "flip", "shown"], &["Red", "count"]);
-        // Outside a method, nothing is called on a value.
         assert_offers(&program(checks, "show(.@@)"), &[], &["this", "count"]);
     }
 }
@@ -298,7 +276,6 @@ fn a_methods_body_completes_as_a_tasks_does() {
         assert_offers(&in_step(checks, "@@"), &["fixed", "flex", "when", "fi", "by", "show"], &["priv", "alters"]);
         assert_offers(&in_step(checks, "show(b@@)"), &["by"], &["fixed"]);
     }
-    // A method's parameter is being named after `(`, and a type follows `:`.
     let source = program(true, "show(1)");
     assert_offers(&source.replace("alters step(by: int)", "alters step(@@"), &[], &["int", "by"]);
     assert_offers(&source.replace("alters step(by: int)", "alters step(by: @@"), &["int", "Counter", "region"], &[]);
@@ -310,7 +287,6 @@ fn a_member_line_of_a_shape_or_a_kind_offers_priv_and_alters() {
     assert_offers(&source.replace("    count: int\n", "    count: int\n    @@\n"), &["priv", "alters"], &["fixed"]);
     assert_offers(&source.replace("    Green\n", "    Green\n    @@\n"), &["priv", "alters"], &["fixed"]);
     assert_offers(&source.replace("    count: int\n", "    count: int\n    priv @@\n"), &["alters"], &["priv"]);
-    // A method's name is being declared after `alters`.
     assert_offers(&source.replace("    count: int\n", "    count: int\n    alters @@\n"), &[], &["alters", "count"]);
 }
 

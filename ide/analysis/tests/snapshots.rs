@@ -1,10 +1,5 @@
-//! Highlighting snapshots: the token classes of every example and run test,
-//! and of the modules they include, one annotated line per source line, in `tests/snapshots/`. A change in
-//! classification shows up as a readable diff. Regenerate after an intended
-//! change with `UPDATE_SNAPSHOTS=1 cargo test -p vela-analysis`, and review
-//! the diff.
+//! Highlighting snapshots in `tests/snapshots/`. Regenerate with `UPDATE_SNAPSHOTS=1 cargo test -p vela-analysis`.
 
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -18,8 +13,6 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The `.vela` files in `dir`, from the repository's root, and in its folders
-/// (the modules the programs include), each by its path from the root.
 fn vela_files(dir: &str) -> Vec<String> {
     let mut files = Vec::new();
     for entry in fs::read_dir(root().join(dir)).unwrap() {
@@ -35,9 +28,6 @@ fn vela_files(dir: &str) -> Vec<String> {
     files
 }
 
-/// Each source line, followed by its tokens as `class:text`. `path` is the
-/// file's path from the repository's root; the modules it uses are read from
-/// there, as the editor fetches them.
 fn render(path: &str, source: &str) -> String {
     let mut sources = HashMap::new();
     loop {

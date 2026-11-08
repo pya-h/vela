@@ -1,6 +1,3 @@
-//! The JSON protocol and the raw memory functions, tested natively.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use serde_json::{Value, json};
@@ -53,11 +50,9 @@ fn modules_given_once_are_kept_for_the_requests_after() {
     assert!(response["error"].as_str().unwrap().contains("send them"));
     let modules = json!({ "lib/a.vela": "task hello()\n    show(1)\nfi\n" });
     assert_eq!(asked(json!({ "modules": modules })), json!({ "results": [[], []] }));
-    // The same modules, not sent again, and the same answers.
     assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
     let hover = request(json!({ "source": main, "path": "main.vela", "same-modules": true, "queries": [{ "kind": "hover", "offset": 34 }] }));
     assert_eq!(hover["results"][0]["code"], "task a.hello()", "{}", hover);
-    // A request without them has none; the kept ones stay for the next.
     assert_eq!(asked(json!({}))["results"][1], json!(["lib/a.vela"]));
     assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
     // Text given alone, as a tooltip's code is, doesn't replace the file's
@@ -67,10 +62,8 @@ fn modules_given_once_are_kept_for_the_requests_after() {
     request(tip.clone());
     assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
     assert_eq!(analyses_made(), made + 1);
-    // The same text alone again is answered from the one kept for it.
     request(tip);
     assert_eq!(analyses_made(), made + 1);
-    // New modules replace them.
     let changed = json!({ "lib/a.vela": "task other()\nfi\n" });
     assert_ne!(asked(json!({ "modules": changed }))["results"][0], json!([]));
 }
@@ -99,7 +92,6 @@ fn malformed_requests_are_errors() {
     }
 }
 
-/// Sends `bytes` through the exported functions, as JavaScript does.
 fn call_raw(bytes: &[u8]) -> Value {
     let ptr = vela_alloc(bytes.len());
     // SAFETY: `ptr` has room for `bytes.len()` bytes, and each pointer is used
@@ -119,7 +111,6 @@ fn raw_functions_round_trip() {
     let body = json!({ "source": "task main()\n    show(\"é𝄞\")\nfi\n", "queries": [{ "kind": "tokens" }] }).to_string();
     let response = call_raw(body.as_bytes());
     assert!(response["results"][0].as_array().unwrap().len() > 5);
-    // Empty and invalid requests.
     assert!(call_raw(b"")["error"].is_string());
     assert_eq!(call_raw(&[0xff, 0xfe])["error"], "invalid request: not UTF-8");
 }

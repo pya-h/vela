@@ -1,9 +1,3 @@
-//! Fields marked `read` in the editor (`read path: text`): the field is still a
-//! field, with the word before it colored as one, hover says who assigns it, a
-//! literal completes only what it may give, and all of it holds while the file
-//! doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -59,10 +53,8 @@ fn a_read_field_is_a_field_whose_hover_says_who_assigns_it() {
         assert_eq!(code, "read label: text", "{}", when);
         assert!(doc.contains("only the alters methods of its shape change it"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "count: int =").0, "read count: int", "{}", when);
-        // An ordinary field beside them says nothing of the kind.
         assert_eq!(hover(&source, "note: text").0, "note: text", "{}", when);
         assert_eq!(hover(&source, "counted =").0, "fixed counted: int", "{}", when);
-        // The shape lists its members with their markers.
         let shape = hover(&source, "Meter\n").0;
         assert!(shape.contains("    read label: text\n") && shape.contains("    read count: int\n"), "{}: {}", when, shape);
     }
@@ -97,7 +89,6 @@ fi
     };
     assert_eq!(class_at("read title"), Some(TokenClass::Keyword));
     assert_eq!(class_at("title: text"), Some(TokenClass::Field));
-    // A field, and a task, that are called `read`.
     assert_eq!(class_at("read: int"), Some(TokenClass::Field));
     assert_eq!(class_at("read(n"), Some(TokenClass::Task));
 }
@@ -108,8 +99,6 @@ fn a_literal_completes_what_it_may_give() {
         let items = completions(&program(checks, "flex other = Me@@"));
         let meter = items.iter().find(|item| item.label == "Meter").unwrap_or_else(|| panic!("no Meter: {:?}", items));
         assert_eq!(meter.snippet.as_deref(), Some("Meter { label: ${label} }"), "checks: {}", checks);
-        // Inside one, a read field with no value to fall back on is offered, and
-        // one that falls back on a value is given by no literal.
         let inside = completions(&program(checks, "flex other = Meter { @@ }"));
         let offered: Vec<&str> = inside.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(offered, ["label", "note"], "checks: {}", checks);

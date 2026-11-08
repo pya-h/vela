@@ -1,7 +1,3 @@
-//! Steps in the editor: `x++`, `x--`, and `x += v` with the other compound
-//! operators, each one operator, checked as the compiler checks them.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, TokenClass};

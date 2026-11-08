@@ -1,16 +1,5 @@
-//! The C runtime, `runtime/vela_rt.h`:
-//!
-//! - `tests/runtime/NAME.c` tests it directly: each must compile as strict ISO
-//!   C11 and print `ok`.
-//! - Programs must be free of undefined behavior, and free all their memory:
-//!   where the C compiler supports AddressSanitizer and UndefinedBehaviorSanitizer,
-//!   the runtime tests and every `tests/run` and `examples` program run under
-//!   them (with leak checks on Linux), and must print their expected output
-//!   (reading `NAME.in`, if there is one, as their input).
-//!   Each `tests/trap` program must stop with its message and no sanitizer
-//!   report, so nothing undefined happens before an integer check stops it.
+//! Strict ISO C11 + ASan/UBSan runtime suite for `runtime/vela_rt.h` and `.vela` programs.
 
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -23,7 +12,6 @@ const STRICT_C_FLAGS: &[&str] = &["-std=c11", "-pedantic-errors", "-Wall", "-Wex
 
 const SANITIZER_FLAGS: &[&str] = &["-std=c11", "-g", "-fsanitize=address,undefined", "-fno-sanitize-recover=all"];
 
-/// A command running the C compiler: `$CC`, which may include arguments, or `cc`.
 fn c_compiler() -> Command {
     let cc = std::env::var("CC").unwrap_or_default();
     let mut words = cc.split_whitespace();
@@ -56,8 +44,6 @@ fn stem(path: &Path) -> String {
     path.file_stem().unwrap().to_string_lossy().into_owned()
 }
 
-/// Compiles the C file `source` with `flags` into `exe`; the compiler's
-/// errors on failure.
 fn compile_c(source: &Path, exe: &Path, flags: &[&str]) -> Result<(), String> {
     let output = c_compiler()
         .args(flags)
@@ -72,22 +58,15 @@ fn compile_c(source: &Path, exe: &Path, flags: &[&str]) -> Result<(), String> {
     if output.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&output.stderr).into_owned()) }
 }
 
-/// Runs `exe` with the sanitizers' options, returning its output. Its input is
-/// empty.
 fn run(exe: &Path) -> std::process::Output {
     run_with_input(exe, Vec::new())
 }
 
-/// `run`, with `input` as the program's standard input.
 fn run_with_input(exe: &Path, input: Vec<u8>) -> std::process::Output {
-    // In the folder the program was built in, which is this suite's own: a test
-    // that writes a file (`tests/runtime/input.c`) then writes it there rather
-    // than into the working tree, where the suites, which run at the same time,
-    // would write the same name.
+    // Run in the executable's scratch dir so concurrent tests writing files do not collide.
     run_in(exe, input, exe.parent().unwrap_or(Path::new(".")))
 }
 
-/// `run_with_input`, in `folder`.
 fn run_in(exe: &Path, input: Vec<u8>, folder: &Path) -> std::process::Output {
     use std::process::Stdio;
     let mut command = Command::new(exe);
@@ -105,7 +84,6 @@ fn run_in(exe: &Path, input: Vec<u8>, folder: &Path) -> std::process::Output {
     output
 }
 
-/// Whether the C compiler can build and run a sanitized program here.
 fn sanitizers_work(scratch: &Path) -> bool {
     let source = scratch.join("probe.c");
     fs::write(&source, "int main(void) { return 0; }\n").unwrap();
@@ -152,9 +130,6 @@ fn programs_run_clean_under_the_sanitizers() {
             Err(errors) => failures.push(format!("{}: {}", stem(&source), errors)),
         }
     }
-    // Each program with its expected output (`tests/run/NAME.out`,
-    // `tests/examples/NAME.out`, or `tests/trap/NAME.out`), and for a trap, the
-    // message it stops with.
     let programs: Vec<(PathBuf, PathBuf, String, Option<String>)> = files("tests/run", "vela")
         .into_iter()
         .map(|p| (p.with_extension("out"), format!("run-{}", stem(&p)), p, None))
@@ -181,13 +156,6 @@ fn programs_run_clean_under_the_sanitizers() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Builds `source` with the sanitizers and runs it, expecting the output in
-/// `expected` and success, or, when `trap` gives a message, to stop with exactly
-/// that message; a description of the failure, if any.
-/// The folder a test program runs in, made fresh in `scratch` for the program
-/// called `name`: empty, or holding a copy of the files in the folder beside
-/// `source` that has its name (`tests/run/std_files/`), so a program that reads
-/// or writes files finds what it expects and changes nothing of the working tree.
 fn run_folder(source: &Path, name: &str, scratch: &Path) -> PathBuf {
     let folder = scratch.join(format!("{}.files", name));
     let _ = fs::remove_dir_all(&folder);
@@ -261,9 +229,6 @@ fn addresses_mean_the_same_under_an_optimizing_clang() {
     let _ = fs::remove_dir_all(&scratch);
 }
 
-/// An allocation that can't be satisfied (one whose size overflows, one the
-/// system refuses, and a slice's items whose size in bytes overflows) stops the
-/// program with a message instead of returning memory that isn't there.
 #[test]
 fn an_impossible_allocation_stops_the_program() {
     let scratch = scratch_dir("runtime-out-of-memory");

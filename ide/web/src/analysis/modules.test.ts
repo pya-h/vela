@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { ModuleSources } from "./modules";
 
-/** A reader over `files`, which counts reads and resolves them when told. */
 function reader(files: Record<string, string>, open: Record<string, string> = {}) {
   const reads: string[] = [];
   const waiting: (() => void)[] = [];
@@ -38,7 +37,6 @@ describe("ModuleSources", () => {
     await files.settle();
     expect(changes).toBe(2);
     expect(modules.version).toBeGreaterThan(before);
-    // A file that can't be read isn't given, and isn't asked for again.
     expect(modules.sources()).toEqual({ "lib/a.vela": "task a()\nfi\n" });
     modules.request(["lib/missing.vela"]);
     expect(files.reads).toHaveLength(2);
@@ -56,7 +54,6 @@ describe("ModuleSources", () => {
     modules.changed("lib/a.vela");
     expect(modules.version).toBe(version + 1);
     expect(modules.sources()).toEqual({ "lib/a.vela": "edited again" });
-    // Edits to a file no analysis uses change nothing.
     modules.changed("main.vela");
     expect(modules.version).toBe(version + 1);
   });
@@ -69,12 +66,10 @@ describe("ModuleSources", () => {
     modules.request(["lib/new.vela"]);
     await files.settle();
     expect(modules.sources()).toEqual({});
-    // Created: the analyses that asked for it run again...
     disk["lib/new.vela"] = "task n()\nfi\n";
     const version = modules.version;
     modules.changed("lib/new.vela");
     expect(modules.version).toBe(version + 1);
-    // ...and it is read when they ask for it again.
     modules.request(["lib/new.vela"]);
     await files.settle();
     expect(files.reads).toEqual(["lib/new.vela", "lib/new.vela"]);
@@ -97,7 +92,6 @@ describe("ModuleSources", () => {
     expect(changes).toBe(1);
     await files.settle();
     expect(modules.sources()).toEqual({});
-    // Asked again after forgetting, it is read again.
     modules.request(["lib/a.vela"]);
     await files.settle();
     expect(files.reads).toEqual(["lib/a.vela", "lib/a.vela"]);

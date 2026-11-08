@@ -1,10 +1,3 @@
-//! How parameters take their values, in the editor: `flex n: int`, a parameter
-//! the task changes, and `flex& n: int`, the caller's place, which a call gives
-//! as `&a`, are parameters whose hover says so, the words before them are
-//! keywords, a parameter list offers them, and all of it holds while the file
-//! doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -62,7 +55,6 @@ fn a_flex_parameter_is_a_parameter_whose_hover_says_it_changes() {
         assert_eq!(code, "flex n: int", "{}", when);
         assert!(doc.starts_with("A parameter of task countdown."), "{}: {}", when, doc);
         assert!(doc.contains("the caller's variable never does"), "{}: {}", when, doc);
-        // Where it is used, too, and a plain one beside it says nothing of the kind.
         assert_eq!(hover(&source, "n > 0").0, "flex n: int", "{}", when);
         assert_eq!(hover(&source, "step: int").0, "step: int", "{}", when);
         let analysis = Analysis::new(&source);
@@ -83,17 +75,14 @@ fn a_parameter_list_offers_flex() {
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(labels, ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"], "{:?}", marked);
     }
-    // A method's too, in a shape, and in a kind once the line says it is one.
     for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
         let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
         assert_eq!(labels, ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"], "{:?}", marked);
     }
-    // Not after the word, where the parameter's name goes.
     assert!(completions("task f(flex @@)\nfi\n").is_empty());
     assert!(completions("task f(flex& @@)\nfi\n").is_empty());
     assert!(completions("task f(bind @@)\nfi\n").is_empty());
     assert!(completions("task f(bind& @@)\nfi\n").is_empty());
-    // At a call, what follows '&' is a place: the variables.
     let at_call: Vec<String> = completions(&program(true).replace("swap(&x, &y)", "swap(&x, &@@)")).into_iter().map(|item| item.label).collect();
     assert!(at_call.contains(&"y".to_string()), "{:?}", at_call);
 }
@@ -127,7 +116,6 @@ fn a_flex_ref_parameter_is_the_callers_place() {
         assert!(doc.starts_with("A parameter of task swap."), "{}: {}", when, doc);
         assert!(doc.contains("The caller's place"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "a, b = b").0, "flex& a: int", "{}", when);
-        // The place given at the call is the variable itself.
         assert_eq!(hover(&source, "x, &y").0, "flex x: int", "{}", when);
         let analysis = Analysis::new(&source);
         let class_at = |needle: &str| {
@@ -188,7 +176,6 @@ fn a_local_reference_hovers_with_its_word_and_type() {
         assert_eq!(class_at("&x\n    y"), Some(TokenClass::Operator), "{}", when);
         assert_eq!(class_at("y = 5"), Some(TokenClass::Variable), "{}", when);
     }
-    // Nothing is offered for the name being declared.
     assert!(completions("task main()\n    flex x = 1\n    flex& @@\nfi\n").is_empty());
     assert!(completions("task main()\n    flex x = 1\n    fixed& @@\nfi\n").is_empty());
 }
@@ -215,7 +202,6 @@ fn fixed_and_fixed_ref_parameters_are_parameters_whose_hover_says_how_they_are_g
         let (code, doc) = hover(&source, "q: Point");
         assert_eq!(code, "fixed q: Point", "checks: {}", checks);
         assert!(doc.contains("Always a copy"), "{}", doc);
-        // The words are keywords, and a use of the name is the parameter.
         let analysis = Analysis::new(&source);
         let class_at = |needle: &str| {
             let byte = source.find(needle).unwrap();
@@ -226,7 +212,6 @@ fn fixed_and_fixed_ref_parameters_are_parameters_whose_hover_says_how_they_are_g
         assert_eq!(class_at("fixed q"), Some(TokenClass::Keyword));
         assert_eq!(class_at("p == q"), Some(TokenClass::Parameter));
     }
-    // A value given without '&' is reported.
     let diagnostics = Analysis::new(&base.replace("CHECK", "show(0)").replace("look(&a, a)", "look(a, a)")).diagnostics();
     assert!(diagnostics.iter().any(|d| d.message.contains("reads 'p' where the caller keeps it, so the call marks that place with '&'")), "{:?}", diagnostics);
 }

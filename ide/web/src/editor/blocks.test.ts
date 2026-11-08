@@ -10,7 +10,6 @@ const WORDS: BlockWords = {
   methodMarker: "alters",
 };
 
-/** The indentation for the last line of `source`, as columns. */
 function indentOfLast(source: string): number {
   const lines = source.split("\n");
   const current = lines.pop() ?? "";
@@ -20,7 +19,6 @@ function indentOfLast(source: string): number {
 describe("reading lines", () => {
   it("finds the first word and the indentation", () => {
     expect([firstWord("    when x"), firstWord("; when"), firstWord("  "), firstWord("fi")]).toEqual(["when", null, null, "fi"]);
-    // A modifier before an opener is skipped; alone, or before anything else, it is the word.
     expect([firstWord("priv task f()", ["priv"]), firstWord("    priv balance: int", ["priv"]), firstWord("priv", ["priv"])]).toEqual(["task", "balance", "priv"]);
     expect([indentWidth("    x", 4), indentWidth("\tx", 4), indentWidth("  \tx", 4), indentWidth("", 4)]).toEqual([4, 4, 4, 0]);
   });
@@ -57,15 +55,12 @@ describe("indentation", () => {
     expect(opener("    show(when ok", WORDS)).toBe("when");
     expect(opener("    fixed label = when n > 0", WORDS)).toBe("when");
     expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  ; match", WORDS)]).toEqual([null, null, null]);
-    // A match's cases line up with the line the `match` is on, wherever in it.
     expect(indentOfLast("task main()\n    fixed area = match s\n")).toBe(4);
     expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r\n")).toBe(8);
     expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r\n        1.0\n    case")).toBe(4);
     expect(indentOfLast("task main()\n    fixed area = match s\n    case Circle r = 1.0\n    fi")).toBe(4);
-    // A when used as a value indents its branch, and its else lines up with it.
     expect(indentOfLast("task main()\n    fixed label = when n > 0\n")).toBe(8);
     expect(indentOfLast('task main()\n    fixed label = when n > 0\n        "yes"\n        else')).toBe(4);
-    // Folding covers the whole value, up to the fi that closes it.
     const lines = ["task main()", "    fixed area = match s", "    case Circle r = 1.0", "    case Rect w h = 2.0", "    fi", "    show(area)", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(6);
@@ -91,7 +86,6 @@ describe("indentation", () => {
     expect(opener('    when 1 > 0 show("a") fi', WORDS)).toBeNull();
     expect(opener("    fixed x = when c 1 else 2 fi", WORDS)).toBeNull();
     expect(opener("    fixed x = match s case A = 1 case B = 2 fi", WORDS)).toBeNull();
-    // A line whose inner block closes still opens its own.
     expect(opener("    each i in 0..3 when x fi", WORDS)).toBe("each");
     expect(indentOfLast('task main()\n    when 1 > 0 show("a") fi\n')).toBe(4);
     expect(indentOfLast("task main()\n    fixed x = when c 1 else 2 fi\n")).toBe(4);
@@ -101,9 +95,6 @@ describe("indentation", () => {
   });
 
   it("reads an else when as one chain, sharing the when's fi", () => {
-    // The line starts with `else`, so it lines up with the `when` it continues,
-    // its block is one level deeper, and the `fi` closing the chain is the
-    // `when`'s: the `when` after the `else` opens nothing of its own.
     expect(indentOfLast("task main()\n    when x\n        show(1)\n        else when y")).toBe(4);
     expect(indentOfLast("task main()\n    when x\n        show(1)\n    else when y\n")).toBe(8);
     expect(indentOfLast("task main()\n    when x\n        show(1)\n    else when y\n        show(2)\n        fi")).toBe(4);
@@ -117,7 +108,6 @@ describe("indentation", () => {
     expect(indentOfLast("task main()\n    when x\n        show(1)\n        else")).toBe(4);
     expect(indentOfLast("task main()\n    when x\n        show(1)\n    fi\n    fi")).toBe(0);
     expect(indentOfLast("task t(k: K)\n    match k\n    case A\n        show(1)\n        fi")).toBe(4);
-    // Nested blocks are skipped over.
     expect(indentOfLast("task main()\n    loop x\n        when y\n            show(1)\n        fi\n        fi")).toBe(4);
     expect(indentOfLast("fi")).toBe(0);
   });
@@ -129,33 +119,26 @@ describe("plan B braces", () => {
     expect(indentOfLast("task main()\n    fixed n = m {  ; no value\n")).toBe(8);
     expect(indentOfLast("task main()\n    fixed n = m {\n        show(1)\n        }")).toBe(4);
     expect(indentOfLast("task main()\n    fixed n = m {\n        fixed k = j {\n            0\n        }\n        k\n        }")).toBe(4);
-    // After the closing line, the block's level again.
     expect(indentOfLast("task main()\n    fixed n = m {\n        0\n    }\n")).toBe(4);
-    // A brace in a comment or a one-line plan B opens nothing.
     expect(indentOfLast("task main()\n    ; a {\n")).toBe(4);
     expect(indentOfLast("task main()\n    fixed n = m { 0 }\n")).toBe(4);
-    // Nor does one in a trailing comment or a string.
     expect(indentOfLast("task main()\n    show(1)  ; see {\n")).toBe(4);
     expect(indentOfLast('task main()\n    show("use { ; like this")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\" {")\n')).toBe(4);
     expect(indentOfLast('task main()\n    fixed n = m {  ; "quoted" {\n')).toBe(8);
-    // Values in a string may hold strings, and braces, of their own.
     expect(indentOfLast('task main()\n    fixed n = m("{";"}") {\n')).toBe(8);
     expect(indentOfLast('task main()\n    fixed n = m("{k { 0 }} {f("}")}") {\n')).toBe(8);
     expect(indentOfLast('task main()\n    show("{n} {")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\{ {n}")\n')).toBe(4);
     expect(indentOfLast("task main()\n    fixed n = m {\n        show(1)  ; uses {\n        0\n        }")).toBe(4);
-    // A line closing one plan B and opening another.
     expect(indentOfLast("task main()\n    fixed x = a {\n        0\n    } + b {\n")).toBe(8);
     expect(indentOfLast("task main()\n    fixed x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
   });
 
   it("reads a char as a value, never a comment, a brace, or a string", () => {
-    // A `;`, a `{`, or a `"` between single quotes is a char.
     expect(indentOfLast("task main()\n    fixed n = m(';') {\n")).toBe(8);
     expect(indentOfLast("task main()\n    show('{')\n")).toBe(4);
     expect(indentOfLast("task main()\n    fixed n = m('\"') {\n")).toBe(8);
-    // Its escaped quote doesn't end it, and a char inside a string's value is read too.
     expect(indentOfLast("task main()\n    show('\\'', '{')\n")).toBe(4);
     expect(indentOfLast('task main()\n    fixed n = m("{f(\'}\')}") {\n')).toBe(8);
   });
@@ -246,7 +229,6 @@ describe("methods", () => {
       "    fi",
       "fi",
     ];
-    // A variant carries named values; a method after another is one whatever it takes.
     expect([...methodLines(light, WORDS)]).toEqual([3, 6]);
     const first = ["kind K", "    A", "    tell(prefix: text) -> nothing", "    fi", "    alters set(to: int)", "    fi", "fi"];
     expect([...methodLines(first, WORDS)]).toEqual([2, 4]);
@@ -260,9 +242,7 @@ describe("methods", () => {
     expect(indentOfLast(counter.slice(0, 8).join("\n") + "\n")).toBe(8);
     expect(indentOfLast(counter.slice(0, 5).join("\n") + "\n        fi")).toBe(4);
     expect(indentOfLast(counter.slice(0, 11).join("\n") + "\n            fi")).toBe(4);
-    // The shape's own fi, below its methods, lines up with the shape.
     expect(indentOfLast(counter.slice(0, 12).join("\n") + "\n    fi")).toBe(0);
-    // After a method, the next member is at the shape's level.
     expect(indentOfLast(counter.slice(0, 6).join("\n") + "\n")).toBe(4);
   });
 

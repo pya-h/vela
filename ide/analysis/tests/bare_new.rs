@@ -1,9 +1,3 @@
-//! `new` written without `( )` for the empty value, `new [text]` or
-//! `new Point`: the types hover shows and what completion offers after it,
-//! whether the file checks, stops the checker, or doesn't parse. In the
-//! sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex};
@@ -32,8 +26,6 @@ task main()
 fi
 ";
 
-/// The first lines `main` may start with: one that checks, one that stops
-/// the checker, and one that stops the parser.
 const FIRSTS: [&str; 3] = ["show(0)", "show(unknown)", "fixed = ="];
 
 fn program(first: &str, code: &str) -> String {
@@ -69,7 +61,6 @@ fn hover_shows_what_a_new_without_parentheses_makes() {
         assert_eq!(hover(&source, "b ="), "fixed b: [text: int]@r", "{}", first);
         assert_eq!(hover(&source, "c ="), "fixed c: [int]@r", "{}", first);
         assert_eq!(hover(&source, "q ="), "fixed q: ^Point@r", "{}", first);
-        // A map made with `( )` too, its keys written or text.
         assert_eq!(hover(&source, "made ="), "fixed made: [text: int]@r", "{}", first);
         assert_eq!(hover(&source, "names ="), "fixed names: [text: int]@r", "{}", first);
     }
@@ -85,11 +76,9 @@ fn completion_offers_the_region_after_a_new_without_parentheses() {
             assert!(!items.contains(&"~".to_string()), "{} in {:?} ({})", code, items, first);
         }
         assert_eq!(labels(&program(first, "fixed z = new [int] at @@")), ["r"], "{}", first);
-        // A region named already, after the type or after `new@`.
         for code in ["fixed z = new Point at r @@", "fixed z = new@r [int] @@"] {
             assert!(!labels(&program(first, code)).contains(&"at".to_string()), "{} ({})", code, first);
         }
-        // A value after a `new` in a list is a value of its own.
         assert!(!labels(&program(first, "show(new [int], p @@")).contains(&"at".to_string()), "{}", first);
     }
 }

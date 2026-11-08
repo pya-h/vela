@@ -1,9 +1,3 @@
-//! Macros in the editor: `#P = 3.14159` outside every task, colored,
-//! hovered with the type of its value, listed in the outline, and completed by
-//! name, through its module, and as a word at the top level. In the sources
-//! below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -78,7 +72,6 @@ fn a_macro_hovers_with_its_value_and_type_whether_or_not_the_file_checks() {
         assert_eq!(code, "#TAU = P * 2.0", "{}", when);
         assert!(doc.contains("of type float"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "NAME =").0, "priv #NAME = \"vela\"", "{}", when);
-        // A use hovers as the macro it names, here and in another module.
         assert_eq!(hover(&source, "SIZE * 2").0, "#SIZE = 4", "{}", when);
         let (code, doc) = hover(&source, "LIMIT\n");
         assert_eq!(code, "#LIMIT = 10", "{}", when);
@@ -98,7 +91,6 @@ fn a_macro_is_colored_as_a_value_that_never_changes() {
         analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
     };
     assert_eq!(class_at("#P"), Some(TokenClass::Keyword));
-    // `#` in an array's count is punctuation.
     let counted = "task main()\n    fixed xs = [0#3]\n    show(xs[#1])\nfi\n";
     let hashes: Vec<TokenClass> = Analysis::new(counted).tokens().into_iter().filter(|t| &counted[t.from..t.to] == "#").map(|t| t.class).collect();
     assert_eq!(hashes, [TokenClass::Punctuation, TokenClass::Punctuation]);
@@ -108,7 +100,6 @@ fn a_macro_is_colored_as_a_value_that_never_changes() {
     assert_eq!(class_at("P = 3"), Some(TokenClass::Variant));
     assert_eq!(class_at("P * 2.0\n    fixed"), Some(TokenClass::Variant));
     assert_eq!(class_at("LIMIT\n"), Some(TokenClass::Variant));
-    // A variable named `macro` is only a variable.
     let plain = "task main()\n    fixed macro = 1\n    show(macro)\nfi\n";
     let classes: Vec<TokenClass> = Analysis::new(plain).tokens().into_iter().filter(|t| &plain[t.from..t.to] == "macro").map(|t| t.class).collect();
     assert_eq!(classes, [TokenClass::Variable, TokenClass::Variable]);
@@ -137,7 +128,6 @@ fn macros_are_offered_by_name_through_their_module_and_as_a_word() {
     let found = completions("task main()\nfi\n\n@@");
     let snippet = found.iter().find(|item| item.label == "macro").expect("a macro snippet");
     assert_eq!(snippet.snippet.as_deref(), Some("#${NAME} = ${value}"));
-    // A new macro's name is its own.
     assert_eq!(labels("task main()\nfi\n\n#@@"), Vec::<String>::new());
 }
 

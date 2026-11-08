@@ -1,9 +1,3 @@
-//! The error-tolerant lexer (`lexer::highlight`) used by editors, and the
-//! keyword and builtin tables. The tolerant lexer must agree exactly with the
-//! compiler's lexer on everything the compiler accepts, and report the
-//! compiler's own error first on everything it rejects.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -24,9 +18,6 @@ fn vela_files(dir: &str) -> Vec<PathBuf> {
     files
 }
 
-/// Checks `highlight` against `Lexer::tokenize` on `source`, and the shape of
-/// its output: tokens in order, without overlaps, each range matching its
-/// line/column positions, ending with a single `Eof`.
 fn check_agreement(source: &str, what: &str) {
     let tokens = highlight(source);
     let Some(last) = tokens.last() else { panic!("{}: no tokens", what) };
@@ -63,7 +54,6 @@ fn check_agreement(source: &str, what: &str) {
     }
 }
 
-/// The line and column of byte offset `offset`, counted like the lexer does.
 fn position(source: &str, offset: usize) -> Span {
     let before = &source[..offset];
     let line = before.matches('\n').count() + 1;
@@ -101,8 +91,6 @@ fn agrees_with_the_compiler_on_every_test_program() {
 
 #[test]
 fn agrees_with_the_compiler_on_every_prefix_of_the_examples() {
-    // Every half-typed state of a real program: highlighting must never fail,
-    // and must still agree with the compiler.
     for file in vela_files("examples") {
         let source = fs::read_to_string(&file).unwrap();
         for (offset, _) in source.char_indices() {
@@ -150,7 +138,6 @@ fn invalid_text_becomes_a_token_and_lexing_continues() {
             token(Token::Eof),
         ]
     );
-    // A bad escape is reported where it is, and the literal still ends at its quote.
     assert_eq!(kinds("\"a\\qb\" fi"), [invalid(1, 3, "invalid escape '\\q'"), token(Token::Fi), token(Token::Eof)]);
 }
 
@@ -167,16 +154,13 @@ fn messages_quote_numbers_as_written_and_name_unprintable_escapes() {
     assert_eq!(kinds("0x8000_0000_0000_0000")[0], invalid(1, 1, "integer literal '0x8000_0000_0000_0000' is too large"));
     assert_eq!(kinds("0B1")[0], invalid(1, 1, "invalid number '0B1': its base is written in lowercase, as in '0b1'"));
     assert_eq!(kinds("0o19")[0], invalid(1, 1, "invalid number '0o19': '9' is not an octal digit (0-7)"));
-    // `#` separates a count, and `;` starts a comment: `#` in text is text.
     assert_eq!(kinds("[int#4]")[2], token(Token::Hash));
     assert_eq!(kinds("x ; # y")[1], LexKind::Comment);
     assert_eq!(kinds("\"#\"")[0], token(Token::Text("#".into())));
-    // A leading zero alone is a decimal digit.
     assert_eq!(kinds("010")[0], token(Token::Int(10)));
     assert_eq!(kinds("\"a\\\tb\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a tab"));
     assert_eq!(kinds("\"a\\\u{1}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a control character"));
     assert_eq!(kinds("\"a\\\u{0}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a NUL character"));
-    // A missing closing quote is reported at its own literal, not at a later one.
     let tokens = kinds("show(\"abc)\nshow(\"def\")\n");
     assert_eq!(tokens[2], invalid(1, 6, UNCLOSED_TEXT));
     assert_eq!(tokens[6], token(Token::Text("def".into())));
@@ -211,16 +195,13 @@ fn ranges_are_bytes_and_positions_are_characters() {
 fn every_keyword_lexes_to_its_token() {
     for (word, keyword) in KEYWORDS {
         assert_eq!(kinds(word), [token(keyword.clone()), token(Token::Eof)], "{}", word);
-        // Each token is spelled one way, which names it.
         assert_eq!(KEYWORDS.iter().filter(|(_, token)| token == keyword).count(), 1, "{}", word);
         assert_eq!(keyword.describe(), format!("'{}'", word));
     }
     assert_eq!(Token::Fixed.describe(), "'fixed'");
     assert_eq!(Token::Flex.describe(), "'flex'");
-    // The old words are reserved, each a token of its own.
     assert_eq!(Token::Bind.describe(), "'bind'");
     assert_eq!(Token::Hold.describe(), "'hold'");
-    // Longer words that start with a keyword are names.
     assert_eq!(kinds("fine"), [token(Token::Ident("fine".into())), token(Token::Eof)]);
 }
 
@@ -230,11 +211,9 @@ fn the_send_arrow_is_one_token() {
     let minus = || token(Token::Minus);
     assert_eq!(kinds("<-"), [token(Token::Send), token(Token::Eof)]);
     assert_eq!(Token::Send.describe(), "'<-'");
-    // Written without a space, `<-` is always the arrow, never `<` then `-`.
     assert_eq!(kinds("a<-1")[1], token(Token::Send));
     assert_eq!(kinds("a < -1")[1..3], [lt(), minus()]);
     assert_eq!(kinds("<=")[0], token(Token::Le));
-    // `send` is an ordinary name.
     assert_eq!(kinds("send"), [token(Token::Ident("send".into())), token(Token::Eof)]);
 }
 
@@ -244,10 +223,8 @@ fn the_underscore_alone_is_a_symbol() {
     assert_eq!(Token::Underscore.describe(), "'_'");
     assert_eq!(kinds("{_}"), [token(Token::LBrace), token(Token::Underscore), token(Token::RBrace), token(Token::Eof)]);
     assert_eq!(kinds("fail _")[1], token(Token::Underscore));
-    // A name still can't start with `_`.
     assert_eq!(kinds("_x")[0], invalid(1, 1, "'_x': names must start with a letter"));
     assert_eq!(kinds("__")[0], invalid(1, 1, "'__': names must start with a letter"));
-    // `maybe`, `is`, and `fail` are keywords; longer words are names.
     assert_eq!(kinds("maybe int")[0], token(Token::Maybe));
     assert_eq!(kinds("issue")[0], token(Token::Ident("issue".into())));
 }
@@ -259,12 +236,10 @@ fn regions_are_named_with_a_keyword_and_an_at_sign() {
     assert_eq!(kinds("^Node@r")[1..4], [ident("Node"), token(Token::AtSign), ident("r")]);
     assert_eq!(kinds("new@r")[..3], [token(Token::New), token(Token::AtSign), ident("r")]);
     assert_eq!(Token::AtSign.describe(), "'@'");
-    // `at` names the region a `new` allocates in; `in` counts through a range.
     assert_eq!(kinds("new int(1) at r")[5..], [token(Token::At), ident("r"), token(Token::Eof)]);
     assert_eq!(Token::At.describe(), "'at'");
     assert_eq!(kinds("each i in 0..3")[2], token(Token::In));
     assert_eq!(kinds("attic")[0], ident("attic"));
-    // `free` is an ordinary name now that regions free memory.
     assert_eq!(kinds("free"), [ident("free"), token(Token::Eof)]);
     assert_eq!(kinds("regions")[0], ident("regions"));
 }
@@ -343,13 +318,10 @@ fn common_mistakes_get_hints() {
     assert_eq!(Token::Parts.describe(), "'||'");
     assert_eq!(kinds("a | b")[1], invalid(1, 3, "unexpected character '|'; Vela writes 'or'"));
     assert_eq!(kinds("!x")[0], invalid(1, 1, "unexpected '!'; Vela negates with 'not'"));
-    // Floats are described as Vela writes them.
     assert_eq!(Token::Float(1e20).describe(), "float 100000000000000000000.0");
     assert_eq!(Token::Float(2.5).describe(), "float 2.5");
 }
 
-/// The pieces of text holding values: its text, and for each value the
-/// tokens between its braces.
 fn pieces(source: &str) -> Vec<(bool, String)> {
     let first = highlight(source).into_iter().next().unwrap();
     let LexKind::Token(Token::Interpolated(pieces)) = first.kind else { panic!("{:?}: {:?}", source, first.kind) };
@@ -368,12 +340,9 @@ fn text_holding_values_is_split_into_its_pieces() {
     let value = |s: &str| (true, s.to_string());
     assert_eq!(pieces("\"n = {n}!\""), [text("n = "), value("n"), text("!")]);
     assert_eq!(pieces("\"{a}{b}\""), [value("a"), value("b")]);
-    // Escapes are read in the text; `\{` and `\}` are braces.
     assert_eq!(pieces("\"\\{{n}\\}\\n\""), [text("{"), value("n"), text("}\n")]);
-    // A value may hold text, even text holding values, and a plan B's braces.
     assert_eq!(pieces("\"{f(\"x\")} {\"{n}\"}\""), [value("f ( \"x\" )"), text(" "), value("\"{n}\"")]);
     assert_eq!(pieces("\"{m { 0 }}\""), [value("m { 0 }")]);
-    // Text without values stays a plain literal.
     assert_eq!(kinds("\"\\{ \\}\""), [token(Token::Text("{ }".into())), token(Token::Eof)]);
 }
 
@@ -399,9 +368,7 @@ fn braces_in_text_that_hold_no_value_are_errors() {
     assert_eq!(kinds("\"a {} b\"")[0], invalid(1, 4, "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'"));
     assert_eq!(kinds("\"a } b\"")[0], invalid(1, 4, "a '}' in text closes a value opened with '{'; to write a brace, write '\\}'"));
     assert_eq!(kinds("\"{n ; note}\"")[0], invalid(1, 5, "a value in text can't hold a comment"));
-    // An error inside a value is the literal's error.
     assert_eq!(kinds("\"{n!}\"")[0], invalid(1, 4, "unexpected '!'; Vela negates with 'not'"));
-    // The literal ends with its line, and the next line lexes as usual.
     let tokens = kinds("show(\"{n)\nfi\n");
     assert_eq!(tokens[2], invalid(1, 7, UNCLOSED_VALUE));
     assert_eq!(tokens[3..], [token(Token::Newline), token(Token::Fi), token(Token::Newline), token(Token::Eof)]);

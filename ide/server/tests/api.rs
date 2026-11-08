@@ -1,6 +1,3 @@
-//! The HTTP API and page, through the router without a network: the security
-//! checks, workspace confinement, files, and builds.
-
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 mod common;
@@ -36,7 +33,6 @@ async fn the_api_requires_the_token() {
     assert_eq!(info["workspace"]["name"], "ws");
     assert!(info["cc"]["available"].is_boolean());
 
-    // Endpoints that change things are protected the same way.
     let write = send(
         &app,
         Request::post("/api/file/new")
@@ -88,7 +84,6 @@ async fn other_origins_are_rejected_and_cors_is_never_allowed() {
     assert!(!dir.exists("evil.vela"));
     assert_eq!(send(&app, create("http://127.0.0.1:4000", "ok.vela")).await.status, StatusCode::CREATED);
 
-    // A CORS preflight gets no permission, from any origin.
     for origin in ["http://evil.example", "http://127.0.0.1:4000"] {
         let preflight = Request::builder()
             .method(Method::OPTIONS)
@@ -192,7 +187,6 @@ async fn files_round_trip_and_changes_on_disk_are_detected() {
     let reread = call(&app, &studio, Method::GET, "/api/file?path=dir/main.vela", None).await.json();
     assert_eq!((reread["content"].as_str(), reread["hash"].as_str()), (Some(edited), Some(new_hash.as_str())));
 
-    // Another program changes the file: a save based on the old hash is refused.
     dir.write("dir/main.vela", HELLO);
     let stale = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": "dir/main.vela", "content": "lost", "baseHash": new_hash }))).await;
     assert_eq!(stale.status, StatusCode::CONFLICT);
@@ -200,14 +194,12 @@ async fn files_round_trip_and_changes_on_disk_are_detected() {
     assert_eq!(stale.json()["hash"], hash);
     assert_eq!(dir.read("dir/main.vela"), HELLO);
 
-    // Without a base hash, the save overwrites; no temporary files are left.
     let forced = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": "dir/main.vela", "content": "kept" }))).await;
     assert_eq!(forced.status, StatusCode::OK);
     assert_eq!(dir.read("dir/main.vela"), "kept");
     let names: Vec<_> = std::fs::read_dir(dir.workspace().join("dir")).unwrap().map(|e| e.unwrap().file_name()).collect();
     assert_eq!(names, ["main.vela"]);
 
-    // Saving only replaces existing files.
     let absent = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": "new.vela", "content": "" }))).await;
     assert_eq!(absent.status, StatusCode::NOT_FOUND);
 }
@@ -246,7 +238,6 @@ async fn files_and_folders_are_created_renamed_and_deleted() {
     assert!(!dir.exists("lib"));
     assert_eq!(post("/api/file/delete", json!({ "path": "lib" })).await.status, StatusCode::NOT_FOUND);
 
-    // A folder isn't a file.
     let folder = call(&app, &studio, Method::GET, "/api/file?path=src", None).await;
     assert_eq!(folder.status, StatusCode::BAD_REQUEST);
 }
@@ -282,7 +273,6 @@ async fn paths_stay_inside_the_workspace() {
         let create = call(&app, &studio, Method::POST, "/api/file/new", Some(json!({ "path": bad, "kind": "file" }))).await;
         assert_eq!(create.status, StatusCode::BAD_REQUEST, "create {:?}", bad);
     }
-    // A missing path parameter is refused too.
     assert_eq!(call(&app, &studio, Method::GET, "/api/file", None).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(std::fs::read_to_string(dir.outside().join("secret.txt")).unwrap(), "secret");
 }
@@ -311,14 +301,12 @@ async fn symlinks_cannot_lead_out_of_the_workspace() {
     assert!(!dir.outside().join("new.txt").exists() && !dir.outside().join("moved.vela").exists());
     assert!(dir.exists("inside.vela"));
 
-    // A link inside the workspace works, and appears in the tree; links out don't.
     let inner = call(&app, &studio, Method::GET, "/api/file?path=inner-link.vela", None).await;
     assert_eq!(inner.json()["content"], HELLO);
     let tree = call(&app, &studio, Method::GET, "/api/files", None).await.json();
     let names: Vec<&str> = tree["entries"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["inner-link.vela", "inside.vela"]);
 
-    // Deleting a link deletes the link, not its target.
     assert_eq!(call(&app, &studio, Method::POST, "/api/file/delete", Some(json!({ "path": "folder-link" }))).await.status, StatusCode::NO_CONTENT);
     assert_eq!(call(&app, &studio, Method::POST, "/api/file/delete", Some(json!({ "path": "file-link" }))).await.status, StatusCode::NO_CONTENT);
     assert_eq!(std::fs::read_to_string(dir.outside().join("secret.txt")).unwrap(), "secret");
@@ -341,7 +329,6 @@ async fn builds_read_modules_from_the_workspace_only() {
 
     assert_eq!(build("app/main.vela").await, json!({ "ok": true }));
 
-    // An error in a module names that module's file, as the workspace knows it.
     let broken = build("app/broken.vela").await;
     assert_eq!(broken["error"]["file"], "app/shapes/bad.vela");
     assert_eq!((broken["error"]["line"].clone(), broken["error"]["col"].clone()), (json!(2), json!(8)));
@@ -350,7 +337,6 @@ async fn builds_read_modules_from_the_workspace_only() {
         "app/shapes/bad.vela:2:8: error: unknown variable 'missing'\n 2 |     <- missing\n   |        ^"
     );
 
-    // A module outside the workspace isn't read.
     let escape = build("app/escape.vela").await;
     assert_eq!(escape["error"]["file"], "app/escape.vela");
     assert_eq!(escape["error"]["message"], "can't read module '../../outside' (../outside.vela): it isn't in the workspace");
@@ -389,7 +375,6 @@ async fn builds_report_errors_with_positions_and_leave_the_workspace_alone() {
     assert_eq!(no_main["error"]["rendered"], "lib.vela: error: program has no 'main' task");
     assert_eq!(build("missing.vela").await.status, StatusCode::NOT_FOUND);
 
-    // Nothing was written into the workspace.
     let mut names: Vec<_> = std::fs::read_dir(dir.workspace()).unwrap().map(|e| e.unwrap().file_name().into_string().unwrap()).collect();
     names.sort();
     assert_eq!(names, ["bad.vela", "hello.vela", "lib.vela"]);
@@ -419,7 +404,6 @@ async fn a_launch_code_gives_the_token_once() {
             .body(Body::from(json!({ "code": code }).to_string()))
             .unwrap()
     };
-    // No code has been made yet, and a guess is refused.
     assert_eq!(send(&app, redeem("0".repeat(64))).await.status, StatusCode::FORBIDDEN);
     let code = studio.launch_code().unwrap();
     let first = send(&app, redeem(code.clone())).await;
@@ -501,7 +485,6 @@ async fn saving_respects_read_only_files_and_long_names() {
     assert_eq!(refused.status, StatusCode::FORBIDDEN);
     assert_eq!(refused.json()["error"], "the file is read-only");
     assert_eq!(dir.read("locked.vela"), HELLO);
-    // Writable by the group and others, but not by its owner, this user.
     let others = dir.write("others.vela", HELLO);
     std::fs::set_permissions(&others, std::fs::Permissions::from_mode(0o464)).unwrap();
     // Root can write any file, so there is nothing to refuse.

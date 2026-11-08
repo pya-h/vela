@@ -1,6 +1,3 @@
-/* Semantic highlighting (classes from the analysis's token classes), hover
-   cards, and completion icons. */
-
 .tok-keyword {
   color: var(--syn-keyword);
 }
@@ -63,8 +60,6 @@
   text-underline-offset: 3px;
 }
 
-/* Hover cards ----------------------------------------------------------------- */
-
 .cm-tooltip-hover {
   animation: fade-in var(--fast) var(--ease);
 }
@@ -96,8 +91,6 @@
 .cm-lintRange-error {
   animation: fade-in var(--normal) var(--ease);
 }
-
-/* Completion ----------------------------------------------------------------------- */
 
 .cm-tooltip-autocomplete {
   animation: pop-in var(--fast) var(--ease);

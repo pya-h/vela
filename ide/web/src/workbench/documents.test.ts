@@ -16,7 +16,6 @@ describe("reloading", () => {
     expect(textChange("abc", "abcabc")).toEqual({ from: 3, to: 3, insert: "abc" });
     expect(textChange("abcabc", "abc")).toEqual({ from: 3, to: 6, insert: "" });
     expect(textChange("", "x")).toEqual({ from: 0, to: 0, insert: "x" });
-    // Repeated text around the change doesn't overlap the start and the end.
     expect(textChange("aaa", "aa")).toEqual({ from: 2, to: 3, insert: "" });
     for (const [before, after] of [["hello world", "hello there world"], ["x😀y", "x😁y"], ["abba", "aba"]] as const) {
       const change = textChange(before, after)!;
@@ -49,7 +48,6 @@ describe("Documents", () => {
     expect(isDirty(a)).toBe(false);
     a.state = a.state.update({ changes: { from: 3, insert: " two" } }).state;
     expect(isDirty(a)).toBe(true);
-    // Typing the change back counts as clean again.
     a.state = a.state.update({ changes: { from: 3, to: 7 } }).state;
     expect(isDirty(a)).toBe(false);
     a.state = a.state.update({ changes: { from: 0, insert: "x" } }).state;

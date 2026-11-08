@@ -7,19 +7,15 @@ use crate::library;
 use crate::modules::{IncludeScope, ModuleScope, Program};
 use crate::parser::MAX_NESTING;
 
-/// A macro: its value as written, and the literal it is once computed (see
-/// `Checker::macro_value`).
 #[derive(Debug, Clone)]
 struct MacroInfo {
     written: Expr,
     value: Option<Expr>,
-    /// Why its value couldn't be computed, once tried: each macro computed
-    /// from it, and each use, gets that again without computing it again.
+    /// Cached error so repeated uses avoid recomputation.
     failed: Option<Error>,
     span: Span,
 }
 
-/// A value the compiler computes, as a macro's is.
 #[derive(Debug, Clone, PartialEq)]
 enum Constant {
     Int(i64),
@@ -79,41 +75,24 @@ struct VariantInfo {
     variant: Variant,
 }
 
-/// One block's names, and the region its allocations use when they name none:
-/// what `region r default` or a `r: region default` parameter set (see
-/// `ast::DEFAULT` and `Checker::default_region`), with where it was written.
 #[derive(Default)]
 struct Scope {
     names: HashMap<String, VarInfo>,
     default: Option<(String, Span)>,
 }
 
-/// Where a value that holds a slice, a map or a pointer may come from, for the
-/// rule that what a fixed name owns is never given to what may change it (see
-/// `Checker::owners`). A call gives back what the task's body may send, which
-/// is known once every task is checked, so the rule is settled then (see
-/// `Checker::settle_owners`).
+/// Provenance for enforcing that `fixed`-owned slices, maps, and pointers are never passed to mutable sinks.
 #[derive(Clone, Debug, PartialEq)]
 enum Own {
-    /// A name of this task that never changes: a `fixed` variable, a
-    /// `fixed&`, a pattern's or loop's name without `flex`, a lambda's copy.
     Root(String),
-    /// A parameter of this task that never changes (`x: T`, `fixed x`,
-    /// `fixed& x`, `.this` outside `alters`), by its place in the header.
     Param(usize, String),
-    /// What `task` may send back of what its parameter `param` is given,
-    /// which is given `from`.
     Sent {
         task: String,
         param: usize,
         from: Vec<Own>,
     },
-    /// What a lambda that keeps what it uses keeps of the code around it,
-    /// which a call of it may send back.
     Kept(String),
-    /// What `from` owns, copied in the generic `task` as a value of type `ty`:
-    /// a copy shares nothing, but a lambda in it still sends back what it
-    /// keeps, so it counts only where a copy of the task gives `ty` a lambda.
+    /// Copies clear ownership except when generic instantiation substitutes a closure (which still captures).
     Copied {
         task: String,
         ty: Type,
@@ -121,409 +100,200 @@ enum Own {
     },
 }
 
-/// The types one copy of a generic task was given: as the program writes them,
-/// and by the name each fills in.
 type GivenTypes = (Vec<Type>, HashMap<String, Type>);
 
-/// Where a value is given to what may change it (see `Checker::hand`).
 #[derive(Clone, Debug)]
 enum HandedTo {
-    /// A `flex` variable or name, or one assigned.
     Variable(String),
-    /// A `flex` parameter of a task.
     Param { task: String, param: String },
-    /// A place that changes: a field, an item, a map's value, a slice added to.
     Place(String),
-    /// A task's named result.
     Result(String),
-    /// A place written, or changed by an `alters` method, that is reached from
-    /// a value made where it is written: the words before the owner.
     Written(String),
 }
 
-/// A value given to what may change it, with what owns it, settled once every
-/// task is checked (see `Checker::settle_owners`).
 #[derive(Clone, Debug)]
 struct Handed {
     span: Span,
     owners: Vec<Own>,
     to: HandedTo,
-    /// The copy the message suggests instead, as in `xs.copy() at r`.
     copy: String,
-    /// Whether the value is a lambda, which holds no slice, map or pointer of
-    /// its own but may send back what it keeps when called.
     lambda: bool,
-    /// Where no region is here to copy into: the one the copy names, which
-    /// the task would take.
     no_region: Option<String>,
-    /// In a generic task, where the value holds a slice, a map or a pointer
-    /// only for some types it may be given: the task and the value's type,
-    /// which each copy of the task fills in (see `Checker::copies`).
     generic: Option<(String, Type)>,
 }
 
 #[derive(Clone)]
 struct VarInfo {
-    /// `Type::Region` for a region.
     ty: Type,
     mode: Mode,
     span: Span,
-    /// For a region: whether `new` can allocate in it. A region a task only
-    /// names in its header's types (`p: ^int@r`) can't be.
+    /// False for region-only header parameters (`p: ^int@r`) where `new` cannot allocate.
     allocates: bool,
-    /// Whether this is a named result, which only `<-` sets.
     result: bool,
     param: bool,
-    /// How a parameter is given (see `Passing`); `Copy` for anything else.
     passing: Passing,
-    /// For a reference, `flex& y = &x` or `fixed& y = &x`: the place it names,
-    /// from a variable that isn't a reference itself (see `resolved_path`).
+    /// Resolved root path for `fixed&`/`flex&` bindings, chasing through aliases.
     refers: Option<Vec<Step>>,
-    /// Whether this is a variable of the code around a lambda that keeps what
-    /// it uses, `[@r](…)`, which the lambda keeps a copy of if it uses it.
     kept: bool,
     owners: Vec<Own>,
-    /// For a slice made of another, `flex ys = xs` or a part `xs[1..3]`, or
-    /// one that one was made of: which slices share items with it, by their
-    /// place in `Checker::slice_families` (see `link_slices`).
     family: Option<usize>,
 }
 
-/// The slices of one task that were made of one another, so they share items
-/// until an `add` moves one of them, and what was last done to them (see
-/// `Checker::link_slices`).
 #[derive(Default)]
 struct SliceFamily {
     added: Option<(String, Span)>,
     deleted: Option<(String, Span)>,
 }
 
-/// A lambda that keeps what it uses, `[@r](…)` (see `Checker::kept_lambdas`).
 struct KeptLambda {
     region: String,
     mode: KeptMode,
     span: Span,
-    /// The variables and region of the code around it where it is written,
-    /// which it may keep: the region it keeps them in, and no other.
     outer: Vec<(String, VarInfo)>,
-    /// The lambda that keeps what it uses it is written in, if any, which
-    /// keeps what this one keeps of the code around both.
     within: Option<String>,
-    /// The variables it uses, which it keeps, in the order first used.
     uses: Vec<String>,
-    /// The variables it keeps as places, `[flex& count, @r]`.
     places: Vec<KeptPlace>,
     owned: HashMap<String, Vec<Own>>,
 }
 
-/// What a place an assignment writes to takes: nothing (`_`), a value of a
-/// type, or the items of a tuple, `( … )` at a position.
 enum TargetType {
     Discard,
     Place(Type),
     Tuple(Vec<TargetType>, Span),
 }
 
-/// A name a pattern or a plan B declares: its name, where it is written, its
-/// type, and its mode (`flex` or `bind` in a pattern, else `fixed`).
 type Declared = (String, Span, Type, Mode);
 
-/// Where a type is written, which decides the regions it may name.
 #[derive(Clone, Copy, PartialEq)]
 enum TypePlace {
-    /// A shape's field or a variant's payload: no regions, since fields live in
-    /// the region of the value holding them.
     Field,
-    /// The type after `new`, which lives in the region `new` allocates in.
     New,
-    /// A shape's shared field, which lives as long as the program, and so in no
-    /// region (see `check_shared_type`).
     Shared,
-    /// A task's header: any region names, which the task is given.
     Header,
-    /// Inside a task: only regions visible there.
     Body,
 }
 
-/// Type-checks a program and annotates it for code generation: every
-/// expression gets its `ty`, and every binding without an annotation gets its
-/// inferred type. Code generation relies on these annotations.
 #[derive(Default)]
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
-    /// The program's patterns, by name, their fields' and methods' types read
-    /// once the declarations are known (see `declare_patterns`).
     patterns: HashMap<String, PatternDef>,
     task_spans: HashMap<String, Span>,
-    /// The shapes and kinds that lack what a pattern they follow asks for,
-    /// whose copies of its default methods are left unchecked, since they would
-    /// only say the same again (see `check_follows`).
+    /// Shapes/kinds that failed a pattern conformance check; skip verifying copied defaults to avoid duplicate errors.
     unfollowed: HashSet<String>,
-    /// The type a pattern's default method, copied into a shape or kind
-    /// following the pattern, writes `this` for in its body: that follower's
-    /// (see `ast::THIS_TYPE`).
+    /// Concrete `this` type substituted while checking copied pattern default methods.
     this_type: Option<Type>,
-    /// Whether the task being read is a pattern's default method, or a copy a
-    /// follower has of one, which may name `@this` on a type holding nothing
-    /// in a region (see `resolve_regions`).
+    /// Pattern defaults may write `@this` on value-less generics before concrete followers are known.
     in_pattern_default: bool,
-    /// The default methods followers have from patterns, by name, whose
-    /// headers may name `@this` inside a value of another region, which each
-    /// call checks (see `check_kept_regions`).
+    /// Copied pattern default methods; headers may name `@this` inside another region, checked per call.
     default_copies: HashSet<String>,
-    /// For each default method a follower has from a pattern that takes types,
-    /// those types with what the follower gives each (see `Program::stand_ins`).
     stand_ins_of: HashMap<String, Vec<(String, Type)>>,
-    /// Those of the task being read, whose written types read each in place
-    /// of the pattern's name for it (see `resolve_type`).
     stand_ins: Vec<(String, Type)>,
     tasks: HashMap<String, TaskInfo>,
     type_params: Vec<TypeParam>,
-    /// What the task being checked is a method of, when it is one: its own name
-    /// and whether it may change the value it is called on.
     current_method: Option<Owner>,
-    /// The shape or kind whose `alters` method is being checked, as `owner_of`
-    /// names it: the only code that may change its `read` fields.
     current_owner: Option<String>,
-    /// The shapes and kinds that hold pointers, directly or in other shapes and
-    /// kinds, so their values live in a region.
     regional: HashSet<String>,
-    /// The shapes and kinds that can be given a region: those in `regional`, and
-    /// those holding text (see `textual_types`), whose text is in the region
-    /// when they name one (`Person@r`) and lasts as long as the program when
-    /// they don't (`Person`).
+    /// Shapes/kinds holding pointers (`regional`) or text (`Property@r` allocates in `r`, unanchored lasts for program).
     takes_region: HashSet<String>,
-    /// The shapes and kinds holding something whose value can change: a
-    /// pointer, a slice, or an array, directly or in other shapes and kinds by
-    /// value. A tuple can't hold them.
+    /// Types with mutable contents (pointers, slices, arrays), which tuples reject.
     changeable: HashSet<String>,
-    /// Every variant, by its name in the program: its tag, qualified with its
-    /// kind's module outside the main file (`geometry.Circle`). Tags are unique
-    /// across the kinds of a module.
     variants: HashMap<String, VariantInfo>,
     macros: HashMap<String, MacroInfo>,
-    /// Each module of the program, by name; the main file's is empty.
     modules: HashMap<String, ModuleScope>,
-    /// The tasks, shapes, kinds, and variants marked `priv` (a variant through
-    /// its kind), by their names in the program.
     private: HashSet<String>,
     current_module: String,
     scopes: Vec<Scope>,
     current_ret: Option<Type>,
     result_names: Vec<String>,
-    /// Those of them not set on the path being checked. Vela has no zero
-    /// values, so a result must be set before it is read, before a bare `<-`,
-    /// and before the end of the task, on every path.
+    /// Unset named results on the current path; Vela has no zero values so all must be assigned.
     unset: HashSet<String>,
     type_places: TypePlaces,
-    /// At most how many bytes a value of each shape and kind takes, once the
-    /// declarations are checked (see `check_sizes`).
     sizes: HashMap<String, u128>,
-    /// The item type an `each x in it` goes through, when `it` follows
-    /// `std/collections.Iterator`: the statement is read as the `next` calls
-    /// it stands for (see `check_stmt_kind`'s `Each`).
     each_iterator: Option<Type>,
-    /// How many `each x in <a value made here>` loops were read, for the name
-    /// their iterator is bound to so it is made once, before the loop.
     each_count: usize,
-    /// Where each `copy()` without a written region is, until the place it goes
-    /// gives it one (see `settle_copies`). A statement must settle the ones it has.
+    /// `copy()` calls in the current statement awaiting region inference from destination.
     unsettled_copies: Vec<Span>,
-    /// The word of each copy that isn't written `copy()`, `added` or `without`,
-    /// by where it is, for the message that its region isn't settled.
     copy_words: HashMap<(usize, usize, usize), &'static str>,
-    /// Where each call of a generic task whose types aren't all worked out yet
-    /// is, with the task's name and the first type still unknown, until the
-    /// place its value goes names it (see `settle_types`).
     unsettled_types: Vec<(Span, String, String)>,
-    /// The error the place a chain of pipes goes names, `AppError` in `fixed n:
-    /// int ~ AppError = line |> parse() |> check()`, for the chain's pipes to
-    /// fail with (see `check_pipe`).
     pipe_target: Option<Type>,
-    /// The type written where a loop in map form goes, `[int]@r` in `fixed xs:
-    /// [int]@r = each …`, or what a task sends with its `<-`, which says which
-    /// collection it makes (see `map_collection`).
     loop_place: Option<Type>,
-    /// One task to make for each set of types a call gives a generic task: the
-    /// name of the task made for them, the generic task's name, the types, and
-    /// where the call that needs it is.
     instances: Vec<(String, String, Vec<Type>, Span)>,
     noted_instances: HashSet<String>,
-    /// The variants of kinds that take types made in the statement being
-    /// checked whose types neither their values nor anything else has told
-    /// yet: where each is, its kind, its variant, the first type untold, and
-    /// its types as a message writes them, `int` for each untold. The place
-    /// the value goes tells them (see `settle_variant`); one still untold at
-    /// the statement's end is a mistake.
+    /// Generic variant constructors whose type args are still inferred from destination.
     untold_kinds: Vec<(Span, String, String, String, String)>,
-    /// The shapes being made for their types, innermost last: a field of one may
-    /// name a shape given types of its own, which needs that shape made first
-    /// (see `shape_instance`).
     making_shapes: Vec<String>,
-    /// For each shape made for a set of types, the shape and the types it was
-    /// made for (`Box__of__int` is `Box` given `int`), so a use of a declaration
-    /// that takes types can tell what a value's type gives it (see
-    /// `unify_params`).
     made_of: HashMap<String, Applied>,
     made_shapes: Vec<Item>,
-    /// How each shape made for a set of types is written in a program
-    /// (`lib/util.Box<int>` for `lib/util.Box__of__int`), so an error names it as
-    /// the program writes it. Applied to every message (see `check_program`).
     written_names: HashMap<String, String>,
-    /// For each generic task, the copies its body makes of values of the types
-    /// it takes into a region its header doesn't keep them in: the type's name,
-    /// the region the copy goes into, whether the header names that region at
-    /// all, and where the copy is written. Such a copy is only the value itself,
-    /// so every use must give a type that holds nothing in a region (see
-    /// `check_copies_of`).
+    /// Generic-task copies into non-preserved regions; instantiated types there cannot hold regional data.
     loose_copies: HashMap<String, Vec<(String, String, bool, Span)>>,
-    /// Every mistake found so far, in the order the checks found them. The
-    /// checker goes on after one, so a file's mistakes are all reported
-    /// together (see `record` and `Type::Unknown`).
+    /// Accumulated errors; checking continues with `Type::Unknown` to avoid cascading diagnostics.
     errors: Vec<Error>,
-    /// What the program does that it may not mean, found so far: code that
-    /// builds, but whose meaning rests on a choice the compiler made (see
-    /// `warn_chosen`).
     warnings: Vec<Error>,
-    /// What the program does that it may not mean, but which a rule says only
-    /// once for each task or file: the repeats it held back, which
-    /// `--repeat-warnings` shows (see `warn_once`).
+    /// Deduplicated per-scope warnings suppressed unless `--repeat-warnings` is active.
     held_back: Vec<Error>,
     told_once: HashSet<(String, &'static str)>,
     slice_families: Vec<SliceFamily>,
-    /// The tasks, shapes, and kinds whose own declaration has a mistake. What
-    /// they promise isn't known, so a use of one is checked as far as it can be
-    /// and then left alone: reporting the declaration's mistake again at every
-    /// use would bury the file's other mistakes (see `Type::Unknown`).
+    /// Declarations with broken headers/fields; uses fall back to `Type::Unknown` to prevent cascading errors.
     broken: HashSet<String>,
     defaults_checked: HashSet<String>,
-    /// For each task with parameters that fall back on values, the value of
-    /// each, checked as its own module reads it (`None` for one without), in
-    /// the order of its parameters, a method's value first. A call that leaves
-    /// out the last ones is given these (see `fill_defaults`).
     param_defaults: HashMap<String, Vec<Option<Expr>>>,
-    /// The field or parameter whose default is being checked, written as a
-    /// message names it, `field 'x'` or `parameter 'n'`: its value is written
-    /// with no task or method around it (see `check_field_default`).
     in_default: Option<String>,
-    /// The shared field whose first value is being checked, as its shape and
-    /// its index there, which may name a shared field above it (see
-    /// `check_shared_value`).
     in_shared: Option<(String, usize)>,
-    /// The first values of shared fields, checked, by `shared_key`: `None` for
-    /// one with a mistake, which is reported once. Each is checked when it is
-    /// first needed, by its own shape or by a shared field that names it.
+    /// Cached checked shared field initializers (`None` = failed and already reported).
     shared_values: HashMap<String, Option<Expr>>,
-    /// The shared fields whose first value is being checked, innermost last,
-    /// so a cycle of them is found (see `check_shared_value`).
     shared_checking: Vec<String>,
-    /// The shape whose method is being checked, shared or not: the only code
-    /// that may change its `shared read` fields.
     current_shape: Option<String>,
-    /// The shape or kind whose method is being checked, shared or not, for
-    /// the hint when one of its methods is called by name alone.
     current_type: Option<String>,
-    /// Where each call written on a value (`x.m(…)`) is, once it is the call
-    /// of its method's task, which may be checked again as a value of another
-    /// call: any other call of a method is written on its shape, `X.m(…)`.
+    /// Value-method call spans rewritten to plain calls, tracked across re-checks (other calls use `X.m`).
     on_values: HashSet<(usize, usize, usize)>,
-    /// Whether a call was refused for leaving out the region it takes last,
-    /// which a chain joined `at r` reads (see `check_join`).
     region_wanted: bool,
-    /// The task a lambda became, while its body is checked (see
-    /// `ast::lambda_name`).
     current_lambda: Option<String>,
     current_task: String,
     param_index: HashMap<String, usize>,
     handed: Vec<Handed>,
-    /// For each task, where what its `<-` sends may come from.
     sends: HashMap<String, Vec<Own>>,
-    /// The tasks whose body is the runtime's, which may send back anything.
     natives: HashSet<String>,
-    /// What the names about to be declared own, by where each is written,
-    /// which `define` gives them (see `bind_from`).
     bound_owners: Vec<(Span, Vec<Own>)>,
-    /// What owns each variable read, by where it is read (its file, line and
-    /// column), noted while its name is known: a value block's last line may
-    /// read a name of its own, which is gone when the block's value is used.
+    /// Saved at variable read span before value-block scope exits and local bindings disappear.
     read_owners: HashMap<(usize, usize, usize), Vec<Own>>,
     copies: HashMap<String, Vec<GivenTypes>>,
-    /// The tuple items a type test has narrowed, `t.#5? is maybe int`, for the
-    /// rest of its condition and its block: the tuple's name, the item's place,
-    /// and the type its reads give in a `maybe` there.
+    /// Active tuple-item narrowings from `t.#k? is maybe T {x}` for subsequent conditions and block.
     narrowed: Vec<(String, usize, Type)>,
-    /// The groups whose `each v in args` the statements checked are inside,
-    /// where a group's name alone, `P`, is the type of the turn's value (see
-    /// `check_type`), each with how many loops are around it.
     group_turns: Vec<(String, usize)>,
-    /// The loops around the statements checked, innermost last: the name each
-    /// is given, `outer => loop …`, with where it is written, if any.
     loops: Vec<Option<(String, Span)>>,
-    /// The name given to the loop about to be checked, `outer =>`.
     loop_name: Option<(String, Span)>,
-    /// The loops that give a value around the code being checked (see
-    /// `ValueLoop`): each one's place in `loops`, counting from one, and the
-    /// values its `break`s give, with where.
+    /// Enclosing value-giving loops (`1`-based stack index, break types + spans).
     value_loops: Vec<(usize, Vec<(Type, Span)>)>,
-    /// Whether the loop about to be checked gives a value on the last lines of
-    /// its passes, and, once checked, what they give.
     loop_gives: bool,
     loop_given: Option<(Type, Span)>,
-    /// While a loop's step is checked, how many loops are around it, that
-    /// loop the innermost (see `PartedLoop`).
     stepping: Option<usize>,
-    /// For each lambda, the names its value's place sees: the variables and
-    /// regions of the code around it, which it takes nothing from, for the
-    /// message when its body names one.
     lambda_outer: HashMap<String, HashSet<String>>,
-    /// For each lambda, the named loops around its value's place, outside
-    /// lambdas around it too: no name inside the lambda takes theirs, and no
-    /// jump in it reaches them.
     lambda_loops: HashMap<String, Vec<(String, Span)>>,
     kept_lambdas: HashMap<String, KeptLambda>,
-    /// The order the lambdas that keep what they use were written in, inner
-    /// ones after the ones around them.
     kept_order: Vec<String>,
     pub shortcut_lambdas: HashMap<String, TaskDef>,
     inferred_shortcut_lambdas: HashSet<String>,
-    /// The one-line lambdas the checker came to where they are written; one it
-    /// never came to is in a statement that failed before it.
+    /// Shortcut lambdas already reached during checking (unreached ones sit behind failed statements).
     reached_shortcut_lambdas: HashSet<String>,
     kept_used: std::cell::RefCell<Vec<String>>,
-    /// Whether the variable being checked is read to be called or given as a
-    /// place, the only ways a `[flex @r]` lambda's value is read.
+    /// True while checking a variable read solely as a call target or `&` place (allows `[flex @r]` lambdas).
     calling: bool,
-    /// Whether the variable being checked is read only for its length, `xs.len`,
-    /// which what is done to another slice's items doesn't change.
+    /// True while checking `xs.len`, which does not observe item reallocation from sibling slice aliases.
     reading_length: bool,
-    /// The region the lambda called through a value keeps what it uses in,
-    /// which the call's types name as it is (see `check_invoke`).
     kept_call: Option<String>,
-    /// Whether the value being checked is given on whole as a group's values,
-    /// `args...`, the only way a group's values are read.
+    /// True while checking `args...`, the only valid read of a type-group parameter.
     spreading: bool,
-    /// Each task with wrappers, and its wrappers' calls as written, until
-    /// `settle_wrappers` makes its layers' bodies (see `add_wrappers`).
     wrapped: Vec<(String, Vec<Expr>)>,
     wrapper_layers: HashMap<String, usize>,
-    /// Each task with wrappers whose layers are settled, and the tasks that
-    /// call its wrappers, in order: the task itself, then `task__layer__1`, …
-    /// (see `settle_wrapped`).
+    /// Wrapped tasks and their ordered chain of generated layer wrappers `[task, layer1, ...]`.
     wrapped_chains: Vec<(String, Vec<String>)>,
-    /// The values of wrappers worked out where the program starts, each a
-    /// shared field of `START_VALUES`, in the order they are written (see
-    /// `check_start_values`, and `order_start_values` for the order they are
-    /// worked out in).
     start_values: Vec<StartValue>,
-    /// What the value being checked is, when it is worked out where the program
-    /// starts, outside any task: a decorator's or a wrapper's (see `AT_START`).
-    /// A `<-` there would leave the task it is worked out in.
+    /// Non-empty when checking startup-evaluated values outside any task (`<-` is disallowed).
     at_start: Option<&'static str>,
 }
 
-/// A value of a wrapper worked out where the program starts (see
-/// `Checker::start_values`).
 struct StartValue {
     task: String,
     wrapper: String,
@@ -531,47 +301,32 @@ struct StartValue {
     span: Span,
 }
 
-/// What the values worked out where the program starts are, in messages (see
-/// `Checker::at_start`).
 const DECORATOR_VALUES: &str = "a decorator's values";
 const WRAPPER_VALUES: &str = "a wrapper's own values";
 
-/// What a call needs to know about a task: the types it takes, its parameters,
-/// what it sends, and what it is a method of, when it is one.
 #[derive(Clone)]
 struct TaskInfo {
     types: Vec<TypeParam>,
     params: Vec<(String, Type)>,
-    /// How each parameter takes its value, in the order of `params`.
     passing: Vec<Passing>,
     ret: Type,
     owner: Option<Owner>,
 }
 
-/// The error for `x.str()` or `text(x)` where neither the call nor the block
-/// names a region for the new text to go in.
 const STR_NEEDS_REGION: &str = "'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', 'x.str(r)', or 'text(x) at r'";
 
-/// The error for joining text where neither the join nor the block names a
-/// region for the new text to go in.
 const JOIN_NEEDS_REGION: &str = "joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'";
 
-/// The error for a `copy()` whose region nothing names.
 const UNSETTLED_COPY: &str = "can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'";
 
-/// The end of that error where the block has a default region: a copy goes where
-/// the value it becomes goes, so a default is no answer for one.
+/// Copies ignore block default regions because their destination determines their lifetime.
 const COPY_IGNORES_DEFAULT: &str =
     "; a copy goes where the value it becomes goes, so a block's default region doesn't settle one";
 
-/// What a `match` or a `when` used as a value calls itself and its parts, so
-/// that one set of checks words its messages for either (see
-/// `Checker::check_branching_value`).
 #[derive(Clone, Copy)]
 struct Branches {
     of: &'static str,
     each: &'static str,
-    /// Whether giving a value is optional (for loops with finally).
     optional: bool,
 }
 
@@ -611,30 +366,20 @@ impl Branches {
     }
 }
 
-/// The name a shared field is known by in the checker's tables, and as a place:
-/// its shape's name in the program, a dot, and its own (`Point.made`). No
-/// variable is named with a dot.
 fn shared_key(shape: &str, field: &str) -> String {
     format!("{}{}{}", shape, MODULE_SEPARATOR, field)
 }
 
-/// The `File` shape of `std/files`, which a shared field can't hold (see
-/// `Checker::check_shared_type`).
 const FILE_SHAPE: &str = "std/files.File";
 
-/// At most how many tasks one generic task may be made into, and how deeply a
-/// type given to one may be built up. A generic task whose call gives a type
-/// built from its own (`f<(T, int)>` inside `f<T>`) would need an endless
-/// number of them, so it stops at these.
+/// Bound generic monomorphization and recursive type-size growth (e.g. `f<(T, int)>` inside `f<T>`).
 const MAX_INSTANCES: usize = 500;
 const MAX_TYPE_DEPTH: usize = 24;
 
-/// The most types one type given to a generic may be built of (see
-/// `type_size`): far more than a program writes, and small enough to handle.
+/// Cap on constructed type node count to bound type-checker complexity.
 const MAX_TYPE_SIZE: usize = 1000;
 
-/// The most memory a value may take, in bytes: 1 TiB. A larger type is an
-/// error, so that no C compiler rejects the program for it.
+/// Cap at 1 TiB so the C backend does not reject oversized value types.
 const MAX_VALUE_BYTES: u128 = 1 << 40;
 
 impl Checker {
@@ -653,36 +398,22 @@ impl Checker {
         &self.errors
     }
 
-    /// Records a mistake and goes on checking. The check that found it stops,
-    /// and the next declaration or statement is checked as if it had passed, so
-    /// one mistake never hides the rest of the file. What the failed check was
-    /// working out is left as `Type::Unknown`, which no later check complains
-    /// about.
     fn record(&mut self, error: Error) {
         self.errors.push(error);
     }
 
-    /// Checks each of `values` on its own, recording the mistakes they have.
-    /// Used where nothing is known about the place they go — a call of a task
-    /// whose header has a mistake, say — so that the values are still read for
-    /// mistakes of their own (see `broken`).
     fn check_each(&mut self, values: &mut [Expr]) {
         for value in values {
-            // A region argument is a region's name, not a value. Without the
-            // task's parameters there is no telling which arguments are regions,
-            // so a name that is one here is left alone.
+            // Region args look like bare names; without task params, skip names already bound as regions.
             if matches!(&value.kind, ExprKind::Var(name) if self.lookup(name).is_some_and(|info| info.ty == Type::Region))
             {
                 continue;
             }
-            // A region written after the call only needs to be one.
             if let ExprKind::RegionAfter(region) = &value.kind {
                 let known = self.visible_region(region, value.span, false);
                 self.keep_going(known);
                 continue;
             }
-            // `&a`, a place given to a parameter that may take one: the place
-            // only needs to be one this code sees.
             let checked = match &mut value.kind {
                 ExprKind::Ref(place) => self.check_expr(place),
                 _ => self.check_expr(value),
@@ -691,10 +422,6 @@ impl Checker {
         }
     }
 
-    /// Records the mistake a check that works out a type found, and stands
-    /// `Type::Unknown` in for the type it couldn't work out. Used where what
-    /// follows can be checked without that type: the block a condition guards,
-    /// the cases of a match, the fallback of a plan B.
     fn or_unknown(&mut self, found: Result<Type>) -> Type {
         match found {
             Ok(ty) => ty,
@@ -715,24 +442,15 @@ impl Checker {
         }
     }
 
-    /// Checks a program loaded with `modules::load`, and annotates its items.
-    /// Returns every mistake the program has, in source order, and nothing when
-    /// it checks. The items are annotated as far as they checked, so a tool can
-    /// read the types around a mistake (see `driver::Partial`).
     pub fn check_program(program: &mut Program) -> Vec<Error> {
         Checker::check_program_warned(program).0
     }
 
-    /// `check_program`, with the warnings too. A program with warnings still
-    /// builds.
     pub fn check_program_warned(program: &mut Program) -> (Vec<Error>, Vec<Error>) {
         let (errors, warnings, _) = Checker::check_program_held(program);
         (errors, warnings)
     }
 
-    /// `check_program_warned`, with a third list: the warnings a rule that
-    /// says something once for each task or file held back (see `warn_once`),
-    /// in source order, which `--repeat-warnings` adds to the others.
     pub fn check_program_held(program: &mut Program) -> (Vec<Error>, Vec<Error>, Vec<Error>) {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program
@@ -750,42 +468,31 @@ impl Checker {
         add_startups(&mut program.items);
         checker.add_wrappers(&mut program.items);
         checker.check_file(&mut program.items);
-        // What a program with a mistake would be made into is never generated,
-        // and the parts of it a mistake left unchecked would only cause more, so
-        // the program is completed only once it checks.
+        // Skip post-check expansion and aliasing/ownership passes on broken programs to prevent spurious errors.
         if checker.errors.is_empty() {
             let made = checker.expand_instances(&mut program.items);
             checker.keep_going(made);
         }
-        // What a fixed name owns is given to what may change it only where
-        // every task's sends are known.
         if checker.errors.is_empty() {
             checker.settle_owners();
         }
-        // The shapes and kinds made for their types join the program, so a
-        // tool reading a program with a mistake names them as written too.
+        // Always register monomorphized shapes/kinds so IDE analysis renders written generic names.
         program
             .items
             .extend(std::mem::take(&mut checker.made_shapes));
         if checker.errors.is_empty() {
-            // The values of wrappers worked out where the program starts, after
-            // every shared field of the program, which they may read.
+            // Remove synthetic `START_VALUES` shape only after shared fields it may reference have been checked.
             if let Some(values) = checker.shapes.remove(START_VALUES) {
                 program.items.push(Item::Shape(values));
             }
-            // No file declares the kinds that reading a number sends, so
-            // they join the program's own declarations here, after every
-            // check that reads them, for the code generator to write their C.
+            // Inject built-in `ParseError`/`InputError` after checking so codegen emits them.
             program
                 .items
                 .extend(builtin_kinds().into_iter().map(Item::Kind));
         }
         program.type_places = checker.type_places;
-        // Names in a message are written as the file with the error writes them.
         let written = std::mem::take(&mut checker.written_names);
-        // A shape made for one set of types is named as the program gives
-        // them: `Box<int>`, not the name the compiler made for it. The
-        // longest name first, so one whose name starts another is not cut.
+        // Sort longest first so prefix names do not partially rewrite nested generic names.
         let mut made: Vec<(&String, &String)> = written.iter().collect();
         made.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
         let mut errors = std::mem::take(&mut checker.errors);
@@ -815,12 +522,6 @@ impl Checker {
         )
     }
 
-    /// Whether a task, shape, kind, or variant name written in the current
-    /// module can name the declaration called `name` in the program. The
-    /// resolver has given every name a module's code can use its full name, so a
-    /// name without a module is one of the main file's only in the main file —
-    /// except for the builtin kinds, which belong to no file and so are written
-    /// bare in every one (see `ast::builtin_kinds`).
     fn sees(&self, name: &str) -> bool {
         self.current_module.is_empty()
             || name.contains(MODULE_SEPARATOR)
@@ -846,8 +547,6 @@ impl Checker {
         }
     }
 
-    /// A variant of a builtin kind belongs to no module, so it is the same one
-    /// in every file (see `ast::builtin_kinds`).
     fn variant_in_scope(&self, name: &str) -> Option<&VariantInfo> {
         if builtin_kind_of(name).is_some() {
             return self.variants.get(name);
@@ -855,8 +554,6 @@ impl Checker {
         self.variants.get(&self.in_module(name))
     }
 
-    /// Names of the program in the message are written as the program names
-    /// them; it is spelled for the file later (see `check_program`).
     fn elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else {
             return String::new();
@@ -885,7 +582,6 @@ impl Checker {
             .iter()
             .find(|(_, imported, _)| *imported == full)
         {
-            // Brought in under its own name: the name is known, but not as what was written.
             Some((written, _, _)) if written == name => return String::new(),
             Some((alias, _, at)) => {
                 return format!(
@@ -907,7 +603,6 @@ impl Checker {
         }
     }
 
-    /// The error for a shape literal of `name`, which names no shape.
     fn unknown_shape(&self, span: Span, name: &str) -> Error {
         match self.variants.get(name).filter(|_| self.sees(name)) {
             Some(info) => Error::at(
@@ -953,8 +648,6 @@ impl Checker {
 
     fn place(&self, span: Span, part: &str) -> Span {
         let parts = self.type_places.get(&span.place_key());
-        // A shape or kind of another module may be written without its module,
-        // as in its own file or after `include m (Name)`.
         let found = |part: &str| {
             parts
                 .and_then(|parts| parts.iter().find(|(name, _)| name == part))
@@ -970,8 +663,6 @@ impl Checker {
             .unwrap_or(span)
     }
 
-    /// Each declaration and each task body is checked whatever the ones before
-    /// it found (see `errors` and `check_program`).
     pub fn check_file(&mut self, items: &mut [Item]) {
         self.collect_declarations(items);
         self.regional = regional_types(items);
@@ -988,23 +679,16 @@ impl Checker {
         }
         self.check_declarations(items);
         self.settle_wrappers(items);
-        // A field's value may name a wrapped task, whose type its wrappers
-        // settle (see `settle_wrapped`).
+        // Field defaults run after decorators/wrappers settle because they may reference wrapped tasks.
         self.check_field_defaults(items);
         self.check_param_defaults(items);
         self.check_shared_fields(items);
         self.check_start_values(items);
-        // A lambda is checked after the code it is written in, which notes
-        // the names around it (see `lambda_outer`): the parser adds lambdas
-        // last, each after the ones inside it, so they are checked from the
-        // last back.
+        // Parser emits lambdas after enclosing code and outer-after-inner; check in reverse so `lambda_outer` is ready.
         let (lambdas, others): (Vec<&mut Item>, Vec<&mut Item>) = items
             .iter_mut()
             .partition(|item| matches!(item, Item::Task(t) if is_lambda(&t.name)));
-        // A pattern's default methods are checked once each, as tasks taking
-        // the type following the pattern, before the copies of them shapes and
-        // kinds have (see `modules::follow_patterns`): a mistake one has is told
-        // there, once, and not again for each copy.
+        // Check pattern defaults once as generic-`this` tasks before follower copies so errors are not repeated.
         let (defaults, others): (Vec<&mut Item>, Vec<&mut Item>) = others
             .into_iter()
             .partition(|item| matches!(item, Item::Task(t) if t.name.contains(DEFAULT_MARK)));
@@ -1022,8 +706,6 @@ impl Checker {
                         t.ret = inferred.ret.clone();
                         t.body = inferred.body.clone();
                     }
-                    // Checked already, or in a statement whose mistake is told
-                    // already, which left its types unknown.
                     if self.inferred_shortcut_lambdas.contains(&t.name)
                         || !self.reached_shortcut_lambdas.contains(&t.name)
                     {
@@ -1042,9 +724,6 @@ impl Checker {
                 }
                 self.current_module = module_of(&t.name).to_string();
                 let before = self.errors.len();
-                // A mistake in a body is the body's own: the task's header was
-                // checked with the other declarations, so calls of it elsewhere
-                // are checked as usual.
                 let checked = self.check_task(t);
                 self.keep_going(checked);
                 if t.name.contains(DEFAULT_MARK) && self.errors.len() > before {
@@ -1057,13 +736,7 @@ impl Checker {
         self.order_start_values(items);
     }
 
-    /// Reads each pattern's fields' and methods' types, as a shape's and its
-    /// methods' are, with the type following it a type its methods take
-    /// (`THIS_TYPE`), and makes each method known as the generic task that a
-    /// call of it on a value of a type following the pattern is, until a copy
-    /// of the task making the call points it at that type's own method (see
-    /// `ast::pattern_call` and `substitute_expr`). A default method's header is
-    /// told about where it is checked as a task (see `ast::pattern_default`).
+    /// Registers pattern signatures and maps methods as generic tasks over `THIS_TYPE` until call substitution.
     fn declare_patterns(&mut self) {
         let mut patterns: Vec<PatternDef> = self.patterns.values().cloned().collect();
         patterns.sort_by_key(|pattern| (pattern.span.file, pattern.span.line, pattern.span.col));
@@ -1132,9 +805,6 @@ impl Checker {
         }
     }
 
-    /// The pattern that type parameter `param` follows whose method `method`
-    /// is, if one is; two that both have it are an error, since the call would
-    /// not say which it is.
     fn pattern_with_method(&self, param: &str, method: &str, span: Span) -> Result<Option<String>> {
         let Some(declared) = self.type_param(param) else {
             return Ok(None);
@@ -1165,12 +835,7 @@ impl Checker {
         }
     }
 
-    /// The type of field `field` of a value of type parameter `param`: one of
-    /// the patterns it follows asks for it. The value a pattern's default
-    /// method is called on lives in `@this`, as a method's does, so what the
-    /// field holds lives there too; a value of another type a task takes lives
-    /// where the task doesn't know, so only a field holding nothing in a region
-    /// is read there.
+    /// Value-less generic type params have unknown region, so field reads on them cannot yield regional values.
     fn pattern_field(&self, param: &str, field: &str, span: Span) -> Result<Type> {
         let base = Type::Param(param.to_string());
         let patterns = self
@@ -1223,8 +888,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Whether `t` is a pattern's default method, or a copy of one a follower
-    /// has, written where the pattern writes it.
     fn is_default(&self, t: &TaskDef) -> bool {
         t.owner.as_ref().is_some_and(|owner| !owner.shared)
             && self
@@ -1236,8 +899,6 @@ impl Checker {
                 })
     }
 
-    /// Where each default method of the program's patterns is written, which
-    /// is where every copy of it is too.
     fn default_spans(&self) -> HashSet<(usize, usize, usize)> {
         self.patterns
             .values()
@@ -1247,9 +908,6 @@ impl Checker {
             .collect()
     }
 
-    /// Whether values of type `ty` follow pattern `pattern`: a shape or kind
-    /// that says it does (the one a shape or kind given types was made from),
-    /// or a type a declaration takes that asks for it.
     fn follows(&self, ty: &Type, pattern: &str) -> bool {
         if ty.unknown() || is_untold(ty) {
             return true;
@@ -1278,12 +936,6 @@ impl Checker {
         })
     }
 
-    /// The types values of type `ty` give pattern `pattern`, which they follow:
-    /// `[int]` for a `Countdown` following `Iterator<int>`, the types its bound
-    /// gives it for a type a declaration takes, and those a shape given types
-    /// gives it with them in place (`[R]` of `MapIter<I, T, R>::Iterator<R>`, as
-    /// `[text]` for a `MapIter<Countdown, int, text>`). None when it doesn't
-    /// follow it, or nothing says.
     fn followed_by(&self, ty: &Type, pattern: &str) -> Option<Vec<Type>> {
         if let Type::Param(name) = ty {
             let declared = self.type_param(name)?;
@@ -1321,9 +973,6 @@ impl Checker {
         )
     }
 
-    /// `ty`, written in a header, with the names of the types the declaration
-    /// being read takes as those types (`Iterator<T>` in a bound, read before
-    /// the checker reads the header's types).
     fn as_params(&self, ty: &Type) -> Type {
         ty.replace_names(&|name| {
             self.type_param(name)
@@ -1331,11 +980,7 @@ impl Checker {
         })
     }
 
-    /// Checks that shape or kind `name`, which follows `follows`, has what each
-    /// asks for: each field, declared with the same type and not `priv`, and
-    /// each method, written with the same header (its parameters may be named
-    /// otherwise), not `priv` and not shared, unless it is a default, which the
-    /// resolver copied in (see `modules::follow_patterns`).
+    /// Verifies pattern conformance (skipping defaults already copied by `modules::follow_patterns`).
     fn check_follows(
         &mut self,
         name: &str,
@@ -1343,7 +988,6 @@ impl Checker {
         follows: &[(Type, Span)],
     ) -> Result<()> {
         let mut asked: HashMap<String, String> = HashMap::new();
-        // The types the shape or kind takes, which it may give a pattern.
         let own_types = self
             .shapes
             .get(name)
@@ -1358,8 +1002,6 @@ impl Checker {
                 continue;
             };
             let written = unqualified(pattern_name);
-            // `::Iterator<int>`: one type for each the pattern takes, read in
-            // their place in what it asks for.
             let given = followed_types(followed);
             if given.len() != pattern.types.len() {
                 let names: Vec<&str> = pattern
@@ -1399,8 +1041,6 @@ impl Checker {
                 .map(|param| param.name.clone())
                 .zip(given.iter().map(|ty| named_params(ty, &own_types)))
                 .collect();
-            // Each must allow what the pattern asks of it, `<T: ordered>`, as a
-            // type given a shape must; one the follower takes, by what it asks.
             let outer = std::mem::replace(&mut self.type_params, own_types.clone());
             let allowed = pattern
                 .types
@@ -1531,8 +1171,6 @@ impl Checker {
                         ),
                     );
                 }
-                // A default copied in is the pattern's own header, with the
-                // follower's types in place.
                 if self.broken.contains(&full)
                     || self.broken.contains(&pattern_call(pattern_name, &own))
                     || (!method.body.is_empty() && span.place_key() == method.span.place_key())
@@ -1557,7 +1195,6 @@ impl Checker {
     }
 
     fn pattern_header(&self, method: &TaskDef, owner: &str) -> String {
-        // In `@this`, as the value the method is called on, where it lives in a region.
         let this = Type::Named(
             unqualified(owner).to_string(),
             self.takes_region
@@ -1616,11 +1253,6 @@ impl Checker {
         format!("{}{}{}({}){}", alters, name, own, params.join(", "), ret)
     }
 
-    /// Whether the method `info`, written by the follower `owner`, has the
-    /// header pattern method `method` asks for: the same `alters`, the same
-    /// parameters, each taken the same way, and the same results, with the
-    /// follower in place of the type following the pattern. The names of the
-    /// parameters, and of the regions it takes, are its own.
     fn same_header(&self, method: &TaskDef, info: &TaskInfo, owner: &str) -> bool {
         let alters = |owner: Option<&Owner>| owner.is_some_and(|owner| owner.alters);
         if alters(method.owner.as_ref()) != alters(info.owner.as_ref())
@@ -1628,8 +1260,6 @@ impl Checker {
         {
             return false;
         }
-        // Its own types, `<R>`, by where they are taken: the follower may name
-        // them otherwise, as it may its parameters.
         let owner_types = self
             .shapes
             .get(owner)
@@ -1733,11 +1363,6 @@ impl Checker {
         params && named(&put(&method.ret), &asked) == named(&info.ret, &mine)
     }
 
-    /// Checks the types one use gives a generic task against the copies its body
-    /// makes of the values of those types (see `loose_copies`): a copy is a
-    /// value of the region it is made in, and nothing in the header keeps a
-    /// value of that type there, so the copy is only the value itself and the
-    /// type given must hold nothing in a region. `at` is the use.
     fn check_copies_of(&self, task: &str, types: &[Type], at: Span) -> Result<()> {
         let Some(copies) = self.loose_copies.get(task) else {
             return Ok(());
@@ -1808,15 +1433,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Makes one task for each set of types a call gives a generic task, with
-    /// the types in place of its type parameters, and points every such call at
-    /// the one made for it. A generic task itself generates nothing: its body is
-    /// checked once, with `T` standing for the type each use gives.
-    ///
-    /// Making one can need another (a generic task calling a generic task), so
-    /// they are made from a list until it is empty. A task whose call gives a
-    /// type built from its own (`f<(T, int)>` inside `f<T>`) would never stop,
-    /// so a type nested too deeply, or too many tasks, is an error.
     fn expand_instances(&mut self, items: &mut Vec<Item>) -> Result<()> {
         let generic: HashMap<String, TaskDef> = items
             .iter()
@@ -1880,8 +1496,6 @@ impl Checker {
                 }
                 given.insert(format!("{}{}", param.name, GROUP_MARK), Type::Tuple(types));
             }
-            // A kind or shape given types, `Option<int>`, is the one made for
-            // them, which a group's values and a turn over them take as given.
             for ty in given.values_mut() {
                 self.settle_applications(ty, at)?;
             }
@@ -1942,10 +1556,7 @@ impl Checker {
                 );
             }
             for (name, types, at) in made.needed {
-                // `f((v, v))` in `f`: each use doubles the type, which would
-                // grow too large to handle long before it grew too deep. A
-                // group's values given on, `f(args...)`, are a tuple of them,
-                // each a value of its own, as a call writing them gives them.
+                // Reject exponentially doubling tuple growth (`f((v, v))` inside `f`) before depth limit hits.
                 let parts = |ty: &Type| match ty {
                     Type::Tuple(items) => items.iter().map(type_size).max().unwrap_or(0),
                     other => type_size(other),
@@ -1968,11 +1579,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Makes `ParseError`, `InputError` and their variants known, as if a file
-    /// had declared them: reading a number from text sends the first (see
-    /// `check_number_cast`) and reading one from input the second (see
-    /// `check_scan`), and `match`, `is`, and a plan B read either as they read
-    /// any kind. No program may take these names (see `collect_declarations`).
     fn declare_builtin_kinds(&mut self) {
         for kind in builtin_kinds() {
             for variant in &kind.variants {
@@ -1986,13 +1592,9 @@ impl Checker {
         }
     }
 
-    /// Tasks, shapes, kinds, and variants share one namespace: no two may have
-    /// the same name, and none may use the name of a builtin type or task.
     fn collect_declarations(&mut self, items: &[Item]) {
         let mut names: HashMap<String, Span> = HashMap::new();
-        // The mistakes found here, kept aside while `names` is borrowed, and
-        // recorded once the items are all read. A name declared twice keeps the
-        // first declaration, so the checks that follow have one of each name.
+        // Collect duplicate-name errors into `found` before recording so `self.names` can stay borrowed; keep first decl.
         let mut found: Vec<Error> = Vec::new();
         let mut declare = |name: &str, span: Span| -> Result<()> {
             let written = unqualified(name);
@@ -2008,9 +1610,6 @@ impl Checker {
                     format!("'{}' is a builtin task and cannot be redefined", written),
                 );
             }
-            // The kinds reading a number sends, and their variants: a program
-            // gets them without declaring them, and writes them as it writes
-            // any kind's, so those names are their own.
             if BUILTIN_KIND_NAMES.contains(&written) {
                 let what = match builtin_kind_of(written) {
                     Some(kind) => format!("a variant of the builtin kind '{}'", kind),
@@ -2048,9 +1647,6 @@ impl Checker {
                     );
                 }
             }
-            // A name already taken is reported, and the declaration taking it
-            // is left out: every later check reads the first declaration of the
-            // name, as it would have before the second was written.
             let mut taken = |name: &str, span: Span| -> bool {
                 match declare(name, span) {
                     Ok(()) => false,
@@ -2073,8 +1669,6 @@ impl Checker {
                     }
                     for (i, v) in k.variants.iter().enumerate() {
                         let full = variant_name(k, i, v);
-                        // One it has from a kind it imitates is named through
-                        // it, by no name of the file (see `imitated_variant`).
                         if i >= k.imitated && taken(&full, v.span) {
                             continue;
                         }
@@ -2091,8 +1685,6 @@ impl Checker {
                         continue;
                     }
                     self.task_spans.insert(t.name.clone(), t.span);
-                    // A method is written as a member of its shape or kind, so
-                    // every message names it that way (see `written_names`).
                     if let Some(owner) = &t.owner
                         && let Some(ty) = t.owner_type()
                     {
@@ -2153,13 +1745,9 @@ impl Checker {
                 declared = self.check_declaration(item);
             }
             if !self.keep_going(declared) {
-                // What the declaration promises isn't settled, so every use of
-                // it is left alone (see `broken`).
                 self.broken.insert(name);
             }
         }
-        // What the patterns a shape or kind follows ask for, once every
-        // method's header is read.
         for item in items.iter() {
             let (name, fields, follows) = match item {
                 Item::Shape(s) if !s.follows.is_empty() => {
@@ -2199,11 +1787,7 @@ impl Checker {
         self.check_constructible(items);
     }
 
-    /// Checks the value each field falls back on, after every declaration is
-    /// settled. It comes last because such a value can be a literal of another
-    /// shape, whose own left-out fields are filled in to check it: a shape that
-    /// held itself would fill itself forever, and by now it is one whose fields
-    /// aren't settled, which no literal reads (see `broken`).
+    /// Run last so literal field-default expansion cannot infinite-loop on cyclic by-value shapes (already `broken`).
     fn check_field_defaults(&mut self, items: &[Item]) {
         for item in items {
             if let Item::Shape(shape) = item {
@@ -2212,10 +1796,6 @@ impl Checker {
         }
     }
 
-    /// Checks the values the tasks' parameters fall back on, each as its own
-    /// module reads it, and keeps them for the calls that leave them out (see
-    /// `param_defaults`). A task with a mistake in one is broken, so its calls
-    /// say nothing more (see `broken`).
     fn check_param_defaults(&mut self, items: &mut [Item]) {
         for item in items.iter_mut() {
             let Item::Task(t) = item else { continue };
@@ -2243,8 +1823,6 @@ impl Checker {
 
     #[inline(never)]
     fn check_defaults_of_task(&mut self, t: &mut TaskDef) -> Result<Vec<Option<Expr>>> {
-        // The value a method is called on is told by `not_a_method`, which
-        // names it as written.
         let names: Vec<String> = t
             .params
             .iter()
@@ -2257,7 +1835,6 @@ impl Checker {
                 values.push(None);
                 continue;
             };
-            // Another parameter has no value before the call gives it.
             let mut other = None;
             walk_expr(value, &mut |expr| {
                 if let ExprKind::Var(name) = &expr.kind
@@ -2291,8 +1868,7 @@ impl Checker {
                 &format!("parameter '{}'", param.name),
                 "the task takes, which is a different type in every use",
             )?;
-            // `none` for a `maybe T` is the `none` of each use's own type, so
-            // each call checks it as written.
+            // `none` defaults for `maybe T` depend on call-site `T`, so type-check per call instead of once.
             if !param.ty.params().is_empty() {
                 values.push(Some(Expr::new(ExprKind::NoneLit, value.span)));
                 continue;
@@ -2302,12 +1878,7 @@ impl Checker {
         Ok(values)
     }
 
-    /// Checks the defaults of the shape `name` once, as its own module reads
-    /// them, and marks it broken when one has a mistake. A default that is a
-    /// literal of a shape declared later checks that shape's first, so each
-    /// mistake is told once and as its own shape says it. Nothing loops: a
-    /// default holds no pointer, and a shape that holds itself by value is
-    /// already broken (see `check_field_defaults`).
+    /// Outlined (`#[inline(never)]`) to avoid bloating caller stacks; safe from cycles since `broken` excludes cyclic shapes.
     #[inline(never)]
     fn check_defaults_of(&mut self, name: &str) {
         if self.broken.contains(name) || !self.defaults_checked.insert(name.to_string()) {
@@ -2326,8 +1897,6 @@ impl Checker {
         for (i, field) in shape.fields.iter().enumerate() {
             if let Some(value) = &field.default {
                 let mut value = value.clone();
-                // Arithmetic worked out once is the number each literal is
-                // given (see `check_default_value`).
                 if is_arithmetic(Some(&value))
                     && let Ok(folded) = self.fold_constant(&value, &mut Vec::new())
                 {
@@ -2356,8 +1925,6 @@ impl Checker {
     fn check_declaration(&mut self, item: &mut Item) -> Result<()> {
         match item {
             Item::Shape(s) => {
-                // A shape's own types are in scope while its fields are
-                // read, as a task's are while its header and body are.
                 self.enter_type_params(&s.types);
                 let fields = self.check_fields(&mut s.fields);
                 self.type_params.clear();
@@ -2370,9 +1937,7 @@ impl Checker {
                 if let Some(shape) = self.shapes.get_mut(&s.name) {
                     shape.shared = s.shared.clone();
                 }
-                // The fields as they were read, with their regions settled,
-                // so the shape made for one set of types (see
-                // `shape_instance`) substitutes into them.
+                // Preserve pre-instantiation field types on `self.shapes` so `shape_instance` can substitute generic params later.
                 if let Some(shape) = self.shapes.get_mut(&s.name) {
                     shape.fields = s.fields.clone();
                 }
@@ -2381,9 +1946,6 @@ impl Checker {
                 if k.variants.is_empty() {
                     return err(k.span, format!("kind '{}' has no variants", k.name));
                 }
-                // A kind's own types are in scope while its variants are read,
-                // as a shape's are while its fields are, and the kinds it
-                // imitates, which they may be given.
                 self.enter_type_params(&k.types);
                 let payloads = k
                     .variants
@@ -2402,14 +1964,11 @@ impl Checker {
                     kind.imitates = k.imitates.clone();
                 }
             }
-            // A macro whose name was refused has no value to compute.
             Item::Macro(m) if self.macros.contains_key(&m.name) => {
                 m.value = self.macro_value(&m.name, &mut Vec::new())?
             }
             Item::Macro(_) => {}
             Item::Task(t) => {
-                // A default method a follower has from a pattern names the
-                // follower `this` in its header too (see `this_type`).
                 self.this_type = method_this(t);
                 self.in_pattern_default = self.is_default(t);
                 if self.in_pattern_default {
@@ -2427,9 +1986,7 @@ impl Checker {
     }
 
     fn check_task_declaration(&mut self, t: &mut TaskDef) -> Result<()> {
-        // `Kind.Tag(…)` makes a variant, so a shared method can't take the name
-        // of one its kind has from a kind it imitates, as it can't take one of
-        // its own (see `Parser::parse_kind`).
+        // Inherited/imitated variant names share the `Kind.Name` namespace with shared methods.
         if let (Some(owner), Some(kind)) = (
             t.owner.as_ref().filter(|owner| owner.shared),
             t.owner_type().and_then(|kind| self.kinds.get(kind)),
@@ -2468,8 +2025,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The literal macro `name` stands for, computed once. `through` holds the
-    /// macros whose values are being computed, which the value can't name.
     fn macro_value(&mut self, name: &str, through: &mut Vec<String>) -> Result<Expr> {
         let Some(info) = self.macros.get(name) else {
             return Err(Error::internal(format!("no macro '{}'", name)));
@@ -2493,8 +2048,6 @@ impl Checker {
                 ),
             );
         }
-        // Each macro computed from another waits for it, so a chain as deep
-        // as the parser's nesting is as far as they go.
         if through.len() >= MAX_NESTING {
             return err(
                 span,
@@ -2521,8 +2074,6 @@ impl Checker {
         value
     }
 
-    /// What `e`, a macro's value, is: literals, other macros, and the
-    /// operators and conversions of numbers, chars, bools and text on them.
     fn fold_constant(&mut self, e: &Expr, through: &mut Vec<String>) -> Result<Constant> {
         let span = e.span;
         let not_constant = |what: &str| -> Result<Constant> {
@@ -2598,9 +2149,6 @@ impl Checker {
         }
     }
 
-    /// Settles how large a value of each shape and kind can be, in `order`,
-    /// where each comes after the types it holds by value, and rejects one too
-    /// large for memory (see `MAX_VALUE_BYTES`).
     fn check_sizes(&mut self, order: &[String]) {
         for name in order {
             let (bytes, span) = match (self.shapes.get(name), self.kinds.get(name)) {
@@ -2644,13 +2192,9 @@ impl Checker {
         Ok(())
     }
 
-    /// A public item can't name a private type in what other files see of it:
-    /// code using the item couldn't name the type.
     fn check_private_types(&self, item: &Item) -> Result<()> {
         let (private, what, name, fields): (bool, &str, &str, Vec<&Field>) = match item {
-            // A method is reached only through a value of its shape or kind, so
-            // a private one keeps its methods private, and the type of the value
-            // they are called on gives nothing away.
+            // Private owners keep their methods inaccessible externally anyway, so private param/return types are allowed.
             Item::Task(t) if t.owner.is_some() => {
                 let hidden = t.owner_type().is_some_and(|ty| self.private.contains(ty));
                 let receiver = usize::from(t.owner.as_ref().is_some_and(|owner| !owner.shared));
@@ -2662,7 +2206,6 @@ impl Checker {
                 )
             }
             Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
-            // Its shared fields are named on it, `X.f`, so theirs count too.
             Item::Shape(s) => (
                 s.private,
                 "shape",
@@ -2679,7 +2222,6 @@ impl Checker {
                 &k.name,
                 k.variants.iter().flat_map(|v| &v.payload).collect(),
             ),
-            // A macro's type is a builtin one.
             Item::Macro(_) => return Ok(()),
         };
         if private {
@@ -2721,8 +2263,6 @@ impl Checker {
         Ok(())
     }
 
-    /// A shape literal, `Point { x: 1 }` or `Box<int> { value: none }`: every
-    /// field given exactly once, and the region of the value they make.
     fn check_struct_init(
         &mut self,
         span: Span,
@@ -2748,8 +2288,6 @@ impl Checker {
             .ok_or_else(|| self.unknown_shape(span, name))?
             .clone();
         self.check_defaults_of(name);
-        // A shape whose own fields have a mistake takes nothing known, so the
-        // values are read on their own (see `broken`).
         if self.broken.contains(name.as_str()) {
             let mut values: Vec<&mut Expr> =
                 fields.iter_mut().map(|field| &mut field.value).collect();
@@ -2759,10 +2297,6 @@ impl Checker {
             }
             return Ok(Type::Unknown);
         }
-        // A literal of a shape that takes types is a literal of the shape made
-        // for them, so the rest reads as any other literal. Inside a declaration
-        // that takes types, where a type given isn't known yet, it stays a
-        // literal of the shape with the types it is given (see `substitute_expr`).
         let mut given_types: Option<Vec<Type>> = None;
         if !shape.types.is_empty() {
             let types = self.literal_types(span, name, written, &shape, fields)?;
@@ -2787,10 +2321,7 @@ impl Checker {
                 )
             });
         }
-        // A private field another file can't give is one only its own module can
-        // build the shape at all — unless the shape gives it a value to fall back
-        // on, which is what lets a shape keep a field of its own and still be
-        // built anywhere.
+        // Private fields without defaults restrict construction to the declaring module.
         let outside = module_of(name) != self.current_module;
         if outside
             && let Some(hidden) = shape
@@ -2808,7 +2339,6 @@ impl Checker {
                 )
             });
         }
-        // Fields may be given in any order, each exactly once.
         let mut seen: HashMap<String, Span> = HashMap::new();
         let mut declared = Vec::new();
         for field in fields.iter() {
@@ -2857,9 +2387,7 @@ impl Checker {
                     )
                 });
             }
-            // A `read` field that falls back on a value is the shape's own
-            // business: no literal writes it, so nothing can make it say what
-            // isn't so.
+            // `read` fields with defaults cannot be overridden in struct literals so shape invariants stay private.
             if field_def.read && field_def.default.is_some() && !field.filled {
                 return refuse(|| {
                     Error::at(
@@ -2874,8 +2402,7 @@ impl Checker {
             seen.insert(field.name.clone(), field.span);
             declared.push(field_def.clone());
         }
-        // A field left out takes the value its shape falls back on, written into
-        // the literal here so that nothing after this sees a literal without it.
+        // Materialize omitted default fields here so codegen never inspects missing fields.
         for field_def in &shape.fields {
             if seen.contains_key(&field_def.name) {
                 continue;
@@ -2929,8 +2456,6 @@ impl Checker {
         }
     }
 
-    /// The region of a value of a shape given types not all known yet: the one
-    /// its values hold something in, when any type it may be given could.
     fn region_of_applied(&self, name: &str, shape: &ShapeDef, region: String) -> Option<String> {
         let may_hold = self.takes_region.contains(name)
             || shape
@@ -2940,10 +2465,6 @@ impl Checker {
         may_hold.then_some(region)
     }
 
-    /// A written `Box<int>`: the shape made for those types, in the region the
-    /// type names. Inside a declaration that takes types, where a type given
-    /// isn't known yet (`Box<T>`), the application is kept as it is until the
-    /// declaration is used.
     fn resolve_applied(
         &mut self,
         applied: &Applied,
@@ -2994,10 +2515,7 @@ impl Checker {
                 ),
             );
         }
-        // The types it is given are in the region of the value holding them, as
-        // a shape's fields are, so they take the region written on the whole
-        // type (or the one around it), and name none of their own (`Box<text>@r`
-        // fills in its `text@r` as it is read, which says the same).
+        // Generic args share the enclosing value's region (e.g. `Box<text>@r` puts `text` in `r`).
         if let Some(named) = applied
             .types
             .iter()
@@ -3028,9 +2546,6 @@ impl Checker {
             self.check_need(word, name, param, ty, at)?;
         }
         if types.iter().any(|ty| !ty.params().is_empty()) {
-            // A shape given a type this declaration takes: whether its values
-            // live in a region depends on the types given, so it names one
-            // wherever any of them could.
             let may_hold = self.takes_region.contains(name.as_str())
                 || parts.iter().any(|ty| !ty.params().is_empty());
             if may_hold && region.is_none() && matches!(place, TypePlace::Header | TypePlace::Body)
@@ -3059,9 +2574,6 @@ impl Checker {
         )
     }
 
-    /// For a shape or a kind called `name`: which it is, the types it takes,
-    /// and the types of what its values hold (a shape's fields, a kind's
-    /// payloads), which may name them.
     fn takes_types(&self, name: &str) -> Option<(&'static str, Vec<TypeParam>, Vec<Type>)> {
         if let Some(shape) = self.shapes.get(name) {
             return Some((
@@ -3088,10 +2600,6 @@ impl Checker {
         self.shape_instance(name, types, at)
     }
 
-    /// The kind made for the types `types` give the kind `name`, made on the
-    /// first use, as a shape is (see `shape_instance`): its variants carry
-    /// those types in place of the names it takes, in the region of the value
-    /// holding them, so one kind serves every region.
     fn kind_instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
         let types: Vec<Type> = types.iter().map(Type::without_regions).collect();
         let key = instance_name(name, &types);
@@ -3143,8 +2651,7 @@ impl Checker {
                 ),
             );
         }
-        // Registered before the variants are read, so one naming the same kind
-        // again (behind a pointer) is this kind.
+        // Register before resolving variants so pointer self-recursion resolves to this instance.
         let written = format!(
             "{}<{}>",
             name,
@@ -3187,10 +2694,6 @@ impl Checker {
         for variant in &source.variants {
             let mut payload = Vec::new();
             for field in &variant.payload {
-                // A kind used before its declaration is checked has its
-                // payloads as written, where `T` is still a name: read with
-                // its types in scope, `T` is the type it takes (as
-                // `instance_fields` has it).
                 let outer = std::mem::replace(&mut self.type_params, source.types.clone());
                 let read = self.resolve_type(&field.ty, field.ty_span, TypePlace::Field);
                 self.type_params = outer;
@@ -3267,11 +2770,7 @@ impl Checker {
         Ok(key)
     }
 
-    /// The shape made for the types `types` give the shape `name`, made on the
-    /// first use. The types name no region, as a shape's fields don't, so one
-    /// shape serves every region: the field of `Box<text>` is `text`, which is
-    /// in the region of the value holding it, so `Box<text>@r` and
-    /// `Box<text>@s` are that one shape in two regions.
+    /// Shared monomorphization across regions: field types drop regions and inherit the enclosing value's region.
     fn shape_instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
         let types: Vec<Type> = types.iter().map(Type::without_regions).collect();
         let key = instance_name(name, &types);
@@ -3306,9 +2805,7 @@ impl Checker {
                 ),
             );
         }
-        // A field naming the same shape with the same types is the shape itself,
-        // however deep the pointers go; one that gives it a type built from its
-        // own (`Grow<Grow<T>>` in `Grow<T>`) would need an endless line of them.
+        // Self-recursion with identical args reuses this instance; infinite structural growth hits `MAX_TYPE_DEPTH`.
         if self.making_shapes.len() >= MAX_TYPE_DEPTH {
             let names = source
                 .types
@@ -3326,9 +2823,6 @@ impl Checker {
                 ),
             );
         }
-        // The name is registered before the fields are read, so a field naming
-        // the same shape again (behind a pointer) is this shape rather than an
-        // endless line of them.
         let written = format!(
             "{}<{}>",
             name,
@@ -3363,8 +2857,7 @@ impl Checker {
         self.making_shapes.pop();
         let fields = match fields {
             Ok(fields) => fields,
-            // Not made after all: a later use gets the same error, not one
-            // about a shape with no fields.
+            // Roll back incomplete instance so later references see the same error rather than an empty shape.
             Err(error) => {
                 self.shapes.remove(&key);
                 self.written_names.remove(&key);
@@ -3375,8 +2868,6 @@ impl Checker {
         if let Some(shape) = self.shapes.get_mut(&key) {
             shape.fields = fields.clone();
         }
-        // What its values hold, and how large they are, as for a shape the
-        // program declares (see `check_file` and `check_sizes`).
         if fields
             .iter()
             .any(|field| holds_pointers(&field.ty, &self.regional))
@@ -3417,9 +2908,6 @@ impl Checker {
         Ok(key)
     }
 
-    /// The shape a literal of a shape that takes types is of: the types the
-    /// literal names (`Box<int> { … }`), or the ones the values it gives show
-    /// (`Box { value: 1 }`).
     fn literal_types(
         &mut self,
         span: Span,
@@ -3448,8 +2936,6 @@ impl Checker {
                 );
             }
             for ((ty, at), param) in written.iter_mut().zip(&shape.types) {
-                // The types a shape is given name no region, as its fields
-                // don't: the region comes from the values, as for any literal.
                 *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
                 self.check_need("shape", name, param, ty, *at)?;
                 given.insert(param.name.clone(), ty.clone());
@@ -3463,9 +2949,7 @@ impl Checker {
                 .filter_map(|param| given.get(&param.name).cloned())
                 .collect());
         }
-        // Nothing written: the values say which types they are. They are checked
-        // again with the shape made for them, so what this check left to settle
-        // is left to that one.
+        // Save copy/untold state and re-check against instantiated fields once inferred.
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
         let kinds = self.untold_kinds.len();
@@ -3474,8 +2958,6 @@ impl Checker {
             let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else {
                 continue;
             };
-            // `f: n -> n * 10`: the types the other fields told, and those their
-            // bounds tell from them, say what a one-line lambda takes.
             self.solve_bounds(&shape.types, &mut given);
             if let Err(error) =
                 self.prepare_shortcut_lambda(&mut field.value, &in_copy(&declared.ty, &given))
@@ -3532,9 +3014,6 @@ impl Checker {
             .collect();
         let mut fields = Vec::new();
         for field in &source.fields {
-            // A shape used before its declaration is checked has its fields
-            // as written, where `T` is still a name: read with its types in
-            // scope, `T` is the type it takes.
             let outer = std::mem::replace(&mut self.type_params, source.types.clone());
             let read = self.resolve_type(&field.ty, field.ty_span, TypePlace::Field);
             self.type_params = outer;
@@ -3548,22 +3027,13 @@ impl Checker {
         Ok(fields)
     }
 
-    /// The type with each shape made for a set of types written as that shape
-    /// given them (`Box__of__int` as `Box<int>`), so that a header naming
-    /// `Box<T>` and a value of `Box<int>` can be matched up (see `unify_params`
-    /// and `unify_regions`). It is the checker's own reading; the types in the
-    /// program stay as the shapes made for them.
+    /// Reconstructs user-written `Applied` types from internal monomorphized names for unification and diagnostics.
     fn unmade(&self, ty: &Type) -> Type {
         let boxed = |ty: &Type| Box::new(self.unmade(ty));
         match ty {
             Type::Named(name, region) => match self.made_of.get(name) {
                 Some(made) => Type::Applied(Box::new(Applied {
                     name: made.name.clone(),
-                    // One shape serves every region, so the types it was made
-                    // for hold none (see `shape_instance`). Everything a value
-                    // in a region holds is in that region, its types given
-                    // included, so reading the shape back gives them the region
-                    // of the value, as a field takes it (see `field_in`).
                     types: made
                         .types
                         .iter()
@@ -3572,13 +3042,7 @@ impl Checker {
                             match region {
                                 Some(region) => {
                                     let ty = self.in_region(&ty, region);
-                                    // The fill-in names the region inside the
-                                    // types given; an instance that holds
-                                    // regional data names it on the whole too,
-                                    // as its value is read (`FilterIter` made
-                                    // for a `SliceIter` is `…@r`, not a
-                                    // region-less whole holding a regional
-                                    // type, which no written type has).
+                                    // Preserve enclosing region on regional instances so `FilterIter` over `SliceIter` keeps `@r`.
                                     match &ty {
                                         Type::Applied(applied)
                                             if applied.region.is_none()
@@ -3642,11 +3106,6 @@ impl Checker {
         }
     }
 
-    /// Matches a type a declaration names against the type a value is, with
-    /// both read the same way (see `unmade`), and records which region of the
-    /// caller each region the declaration names stands for. A shape made for
-    /// its types is one type with the shape given them, so a header naming
-    /// `Box<text>@r` is matched by a value of the shape made for `Box<text>`.
     fn match_regions(&self, named: &Type, value: &Type, regions: &mut HashMap<String, String>) {
         unify_regions(&self.unmade(named), &self.unmade(value), regions);
     }
@@ -3655,9 +3114,6 @@ impl Checker {
         unify_params(&self.unmade(named), &self.unmade(value), given);
     }
 
-    /// Puts the shape made for its types in place of every application in `ty`
-    /// whose types are all known, which is what a use of a declaration that
-    /// takes types leaves behind (see `expand_instances`).
     fn settle_applications(&mut self, ty: &mut Type, at: Span) -> Result<()> {
         match ty {
             Type::Applied(applied) => {
@@ -3669,11 +3125,7 @@ impl Checker {
                 }
                 let applied = applied.clone();
                 let key = self.instance(&applied.name, &applied.types, at)?;
-                // A shape made for the types it is given holds what its fields
-                // hold with them, as the shape they were made from does: one
-                // whose fields hold a slice or text serves every region, so it
-                // keeps the region its value is in (`FilterIter` made for a
-                // `SliceIter` holds its slice's region).
+                // Concrete generic instances retain a region whenever their substituted fields hold regional values or text.
                 let holds = self.takes_region.contains(&key)
                     || self.shapes.get(&key).is_some_and(|shape| {
                         shape.fields.iter().any(|field| {
@@ -3681,10 +3133,7 @@ impl Checker {
                                 || holds_pointers(&field.ty, &self.regional)
                         })
                     });
-                // `this` is the region of the value a method is called on, which
-                // the call names: it is kept whatever the shape holds, so a type
-                // a parameter takes, as `(T) -> bool` for `T` given as
-                // `Indexed<T>@this`, is read with it.
+                // Preserve `@this` on method receivers so higher-order callbacks (e.g. `Indexed<T>@this`) keep their region.
                 let region = applied.region.filter(|region| holds || region == THIS_WORD);
                 *ty = Type::Named(key, region);
                 Ok(())
@@ -3695,8 +3144,6 @@ impl Checker {
             | Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Fail(inner) => self.settle_applications(inner, at),
-            // A map's key given by a use of a generic declaration: one that is
-            // compared and hashed, as a written key must be.
             Type::Map(key, value, _) => {
                 if let Some(why) = key_problem(key, &|_| false) {
                     return err(
@@ -3735,10 +3182,7 @@ impl Checker {
         }
     }
 
-    /// Refuses a shared field's type that holds what lives in a region, which
-    /// no region outlasts: a pointer, a slice, or a value of a shape or kind
-    /// that holds one; and a `File`, which a region closes (see
-    /// `docs/future.html#static-region` for a region that would last).
+    /// Shared fields outlive all regions and hold no handles, so they cannot contain regions or `File`.
     fn check_shared_type(&self, ty: &Type, span: Span, field: &str) -> Result<()> {
         if holds_pointers(ty, &self.regional) {
             return err(
@@ -3765,8 +3209,6 @@ impl Checker {
         self.holds_file_in(ty, &mut Vec::new())
     }
 
-    /// `holds_file`, having looked into the shapes and kinds in `seen` already,
-    /// so a type holding itself, which is refused later, is looked into once.
     fn holds_file_in<'t>(&'t self, ty: &'t Type, seen: &mut Vec<&'t str>) -> bool {
         match ty {
             Type::Named(name, _) if name == FILE_SHAPE => true,
@@ -3816,13 +3258,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks a field's default, `size: int = 0`: a value the compiler works out
-    /// without running the program, which fits the field's type. A copy is
-    /// checked, so the one the shape keeps is the value as it is written, and
-    /// every literal that leaves the field out gets a copy of that (see
-    /// `check_struct_init`). A mistake here makes the shape one whose fields
-    /// aren't settled, so no literal of it says the same thing again (see
-    /// `broken`).
     fn check_field_default(&mut self, value: &mut Expr, ty: &Type, field: &str) -> Result<()> {
         self.check_default_value(
             value,
@@ -3832,9 +3267,6 @@ impl Checker {
         )
     }
 
-    /// Checks `value`, which `what` (`field 'x'` or `parameter 'n'`) of type
-    /// `ty` falls back on: a value the compiler works out, of that type, which
-    /// a type the declaration takes (`which` says why) can't have.
     fn check_default_value(
         &mut self,
         value: &mut Expr,
@@ -3843,8 +3275,7 @@ impl Checker {
         which: &str,
     ) -> Result<()> {
         let at = value.span;
-        // `none` is the one value that fits a type the declaration takes, in a
-        // maybe, whatever type that is.
+        // `none` is the only valid default for generic `maybe T` parameters.
         let fits_any = matches!(ty, Type::Maybe(_)) && matches!(value.kind, ExprKind::NoneLit);
         if !ty.params().is_empty() && !fits_any {
             return err(
@@ -3855,8 +3286,6 @@ impl Checker {
                 ),
             );
         }
-        // Arithmetic on literals and macros is worked out here, once, so what
-        // each literal or call is given is the number it makes.
         if is_arithmetic(Some(value))
             && let Ok(folded) = self.fold_constant(value, &mut Vec::new())
         {
@@ -3884,11 +3313,7 @@ impl Checker {
         Ok(())
     }
 
-    /// Drops the region named on the value a method is called on where its shape
-    /// or kind lives in none: the parser writes `@this` on every receiver, since
-    /// only the whole file says which types hold something in a region. A shape
-    /// given types keeps it, and the shape made for each set of types settles it
-    /// (see `settle_applications`).
+    /// Parser attaches `@this` to every method receiver; strip it here for non-regional, non-generic types.
     fn settle_receiver(&self, task: &mut TaskDef) {
         if task.owner.as_ref().is_none_or(|owner| owner.shared) {
             return;
@@ -3902,13 +3327,8 @@ impl Checker {
         }
     }
 
-    /// A region the header names without a `region` parameter is one the task
-    /// only reads or links pointers in (it can't allocate there), and each
-    /// result's regions must be regions the task is given.
     fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
         self.enter_type_params(&t.types);
-        // The task's types are out of scope after its header, whether or not
-        // it checks, so a declaration after it can't name them.
         let checked = self
             .check_bounds_allow(&t.types)
             .and_then(|()| self.check_header_in_scope(t));
@@ -3917,9 +3337,6 @@ impl Checker {
     }
 
     fn check_header_in_scope(&mut self, t: &mut TaskDef) -> Result<()> {
-        // `r: region default` makes the region the task is given its body's
-        // default (see `ast::DEFAULT`): only a region can be one, and a task
-        // takes one at most, as a block declares one at most.
         let mut marked: Option<&Field> = None;
         for param in t.params.iter().filter(|param| param.default_region) {
             if param.ty != Type::Region {
@@ -3948,8 +3365,6 @@ impl Checker {
                 "'main' is where the program starts, so it takes no types",
             );
         }
-        // `args: P...`: the values a call gives between the ones named before
-        // it and after it.
         let mut grouped = false;
         for param in &t.params {
             let Type::Group(group) = &param.ty else {
@@ -3982,14 +3397,9 @@ impl Checker {
             .map(|p| p.name.as_str())
             .collect();
         let mut named: Vec<String> = region_params.iter().map(|name| name.to_string()).collect();
-        // A pattern's default method, read once for any follower, may name the
-        // region of the value it is called on, which a follower in no region
-        // reads as none.
         if t.types.first().is_some_and(|param| param.name == THIS_TYPE) || self.is_default(t) {
             named.push(THIS_WORD.to_string());
         }
-        // A lambda that keeps what it uses in `r` may name `r` in its types,
-        // where what it keeps lives.
         if let Some(kept) = &t.kept {
             if let Some(param) = t.params.iter().find(|param| param.name == kept.region) {
                 return err(
@@ -4009,8 +3419,7 @@ impl Checker {
                 continue;
             }
             let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
-            // A `[flex @r]` or `[bind @r]` lambda changes what it keeps, so it
-            // is never copied.
+            // Mutable-capture closures cannot be copied, so they require `flex&`.
             if held_lambda(&ty) && param.passing != Passing::FlexRef {
                 return err(
                     param.span,
@@ -4071,8 +3480,6 @@ impl Checker {
                 if t.params.iter().any(|p| p.name == region) {
                     return err(at, format!("'{}' is a parameter, not a region", region));
                 }
-                // A named result is easier to point at by its name than by its
-                // place in the list.
                 let which = match t.results.get(i).and_then(|r| r.name.as_ref()) {
                     Some((name, _)) => format!("result '{}'", name),
                     None if several => format!("result {}", i + 1),
@@ -4111,8 +3518,6 @@ impl Checker {
             1 => results.into_iter().next().unwrap_or(Type::Nothing),
             _ => Type::Results(results),
         };
-        // A `nothing ~ E` task succeeds by reaching its end or a bare `<-`, so a
-        // name for its result would have nothing to hold.
         if !sends_value(&t.ret)
             && let Some((name, at)) = t.result_names().next()
         {
@@ -4127,7 +3532,7 @@ impl Checker {
         for (param, ty) in t.params.iter_mut().zip(resolved) {
             param.ty = ty;
         }
-        // A wrapper's layers of `str` are its body, kept out of sight.
+        // Hide internal wrapper chains generated by `str` layers from public signatures.
         if t.owner.as_ref().is_some_and(|owner| owner.name == STR) && !t.name.contains(LAYER) {
             check_str_method(t)?;
         }
@@ -4149,32 +3554,18 @@ impl Checker {
         Ok(())
     }
 
-    /// Makes the types a declaration takes visible while its header and body are
-    /// checked: `T` in them means the type each use gives. A name that is
-    /// already a type is reported when the file's names are resolved (see
-    /// `Resolver::enter_type_params`).
     fn enter_type_params(&mut self, types: &[TypeParam]) {
         self.type_params = types.to_vec();
     }
 
     fn type_param(&self, name: &str) -> Option<&TypeParam> {
-        // The type of one item of a group's tuple, `P#0`, asks what its group does.
         let name = name.split(GROUP_ITEM).next().unwrap_or(name);
         self.type_params.iter().find(|param| param.name == name)
     }
 
-    /// Checks a written type and settles its regions for `place`:
-    /// - in a field or after `new`, no type names a region;
-    /// - elsewhere, every pointer and every regional shape or kind names one,
-    ///   which inside a task must be a region visible there;
-    /// - a shape or kind without pointers lives in no region, so `Point@r` is
-    ///   an error, while the `Point` in `^Point@r` just has its region dropped.
+    /// Validates written regions: `Field`/`New` forbid regions; `Body` requires visible regions; drops region on value types.
     fn resolve_type(&mut self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
-        // A type a pattern takes, in a default method a follower has from it,
-        // is the type the follower gives it: `T` of `Iterator<T>` is `int`.
-        // The follower's own type, the method's receiver, names its own types,
-        // which may have the same names, so it is read as written; so is
-        // `this`, put in after.
+        // Pattern type params resolve against follower substitutions, keeping receiver's own generic names intact.
         let given;
         let ty = match self.stand_ins.as_slice() {
             [] => ty,
@@ -4189,7 +3580,6 @@ impl Checker {
                 &given
             }
         };
-        // `this` in a default method a follower has from a pattern is the follower.
         let followed;
         let ty = match &self.this_type {
             Some(this) if mentions_name(ty, THIS_TYPE) => {
@@ -4199,16 +3589,12 @@ impl Checker {
             _ => ty,
         };
         self.check_type(ty, span)?;
-        // The sizes of shapes and kinds are known inside tasks; fields and
-        // headers are checked for size once they are (see `check_task`).
         if matches!(place, TypePlace::Body | TypePlace::New) {
             self.check_size(ty, span)?;
         }
         self.resolve_regions(ty, span, place, None)
     }
 
-    /// `kept` is a region the type may also name: the one a lambda keeps what
-    /// it uses in (see `ClosureType`).
     fn resolve_task_type(
         &mut self,
         task: &TaskType,
@@ -4256,8 +3642,6 @@ impl Checker {
                 ),
             );
         }
-        // `flex` or `bind` before a whole value says nothing its caller sees,
-        // so it reads as nothing: `(flex int) -> int` is `(int) -> int`.
         let taken = task
             .taken
             .iter()
@@ -4267,11 +3651,7 @@ impl Checker {
         Ok(TaskType { params, taken, ret })
     }
 
-    /// How a task's type takes a value of type `ty` it is said to take `how`:
-    /// `flex` or `bind` only before a twofold value, a slice, a map or a pointer
-    /// or what holds one, whose items the task may change; before a whole value
-    /// it changes nothing the caller sees, so it is a value. A `bind&` place of a
-    /// type with no contents is only read, so it is a `fixed&` one.
+    /// Collapses `flex`/`bind` on scalar/whole types to `Value`, and `bind&` on non-content types to `FixedRef`.
     fn taken_for(&self, how: &Taken, ty: &Type) -> Taken {
         match how {
             Taken::Flex | Taken::Bind if !self.twofold(ty) => Taken::Value,
@@ -4305,8 +3685,6 @@ impl Checker {
                         region
                     ),
                 ),
-                // `new [T] at r` in a pattern's default, where the follower
-                // gives `T` as `text@this` (see `check_kept_regions`).
                 (TypePlace::New, Some(region))
                     if region == THIS_WORD && self.in_pattern_default =>
                 {
@@ -4411,13 +3789,9 @@ impl Checker {
                 Box::new(self.resolve_regions(inner, span, place, inside)?),
                 *count,
             )),
-            // Text inside a value of a region is in that region.
             Type::Text(region) => {
                 given(region)?;
-                // In a pattern's default, text a follower gives as `T`,
-                // `text@this`, may be named inside a value of another region,
-                // `[T]@r`: each call says whether they are one (see
-                // `check_kept_regions`).
+                // Pattern defaults may accept follower `text@this` inside another `@r`, validated at call sites.
                 if let (Some(region), Some(inside)) = (region, inside)
                     && region != inside
                     && !(region == THIS_WORD && self.in_pattern_default)
@@ -4434,13 +3808,8 @@ impl Checker {
                     region.clone().or_else(|| inside.map(str::to_string)),
                 ))
             }
-            // A type parameter's regions are the given type's, so it names none
-            // of its own.
             Type::Named(name, region) if self.type_param(name).is_some() => {
-                // A slice or pointer around it gives it their region (`[T]@r`),
-                // which a parameter simply takes; a region written on the
-                // parameter itself says nothing, since what a `T` holds is in
-                // the region of the type given for it.
+                // Regions on bare `T` belong to whatever type fills `T`; enclosing containers (`[T]@r`) apply their own region.
                 if let Some(region) = region.as_deref().filter(|region| inside != Some(region)) {
                     return err(
                         self.place(span, &format!("@{}", region)),
@@ -4477,8 +3846,6 @@ impl Checker {
                 }
                 given(region)?;
                 if !self.regional.contains(name) {
-                    // A shape or kind holding text may name the region its text
-                    // is in, and is in the region of a value holding it.
                     if self.takes_region.contains(name) {
                         if let (Some(region), Some(inside)) = (region, inside)
                             && region != inside
@@ -4496,9 +3863,7 @@ impl Checker {
                             region.clone().or_else(|| inside.map(str::to_string)),
                         ));
                     }
-                    // A pattern's default method can't know whether its
-                    // follower lives in a region, so it may name `@this` on what
-                    // holds none, `MapIter<this, T, R>@this`.
+                    // Pattern defaults allow `@this` on value-less generics (`MapIter<this, T, R>@this`) before concrete followers.
                     if region.as_deref() == Some(THIS_WORD) && self.in_pattern_default {
                         return Ok(Type::named(name));
                     }
@@ -4526,13 +3891,7 @@ impl Checker {
                 }
                 Ok(ty.clone())
             }
-            // Its regions are its own, as a header's are, so it names them as a
-            // header does, and what it sends is in regions its parameters name.
-            // In a pattern's default method, `this` names the region of the
-            // value it is called on, which each call says: it is no region of
-            // the task's own, so it is not renamed with them (a parameter may
-            // name it inside a type it takes, as `find(test: (T) -> bool)` for
-            // `T` given as `Indexed<T>@this`).
+            // Do not rename `this` in pattern defaults: it binds to the caller's receiver region per call site.
             Type::Task(task) => {
                 let task = self.resolve_task_type(task, span, None)?;
                 let task = match self.in_pattern_default {
@@ -4541,13 +3900,8 @@ impl Checker {
                 };
                 Ok(Type::Task(Box::new(task)))
             }
-            // `[@r](int) -> int`: a lambda keeping what it uses in `r`, which
-            // its task's type may name too.
             Type::Closure(closure) => {
-                // `f: [@this](int) -> int`: a field holding a lambda that keeps
-                // what it uses in the region of the value holding it, as a
-                // `text` field holds text there. It reads its copies, since a
-                // value holding it is copied freely.
+                // `[@this]` field closures live in the owner's region; safe to copy because owner copies share region.
                 if place == TypePlace::Field && closure.region == THIS_WORD {
                     if closure.mode != KeptMode::Plain {
                         return err(
@@ -4589,8 +3943,6 @@ impl Checker {
                         ),
                     );
                 }
-                // After `new`, its region is the one `new` allocates in, which
-                // `check_new` sees.
                 if place != TypePlace::New {
                     given(&Some(closure.region.clone()))?;
                 }
@@ -4691,16 +4043,10 @@ impl Checker {
         }
     }
 
-    /// `ty`, whose regions are unsettled (a field's type, or the type after
-    /// `new`), as it is in a value of region `region`: its pointers and
-    /// regional shapes and kinds get `region`.
     fn in_region(&self, ty: &Type, region: &str) -> Type {
         in_region(ty, region, &self.takes_region)
     }
 
-    /// A type written in the source must be a builtin type, a shape, or a kind.
-    /// `nothing` is only valid as a return type, which is checked separately, and
-    /// as the value side of `nothing ~ E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         if holds_held_lambda(ty) {
             return err(
@@ -4723,8 +4069,6 @@ impl Checker {
                 self.place(span, "region"),
                 "'region' is only the type of a task's parameter, as in 'task build(r: region)'",
             ),
-            // Only a task's header lists several types, and `check_header`
-            // checks each of them on its own.
             Type::Results(_) => err(
                 span,
                 "several types, separated by commas, are only a task's results",
@@ -4772,9 +4116,7 @@ impl Checker {
                 _ => self.check_type(inner, span),
             },
             Type::Or(value, error) => {
-                // One error side, whichever side of the `~` the other is written
-                // on: `(int ~ text) ~ text` and `int ~ (text ~ int)` name two, as
-                // `maybe maybe int` names two emptinesses.
+                // Error operator `~` does not associate/nest; flat `T ~ E` only.
                 if matches!(value.as_ref(), Type::Or(..)) || matches!(error.as_ref(), Type::Or(..))
                 {
                     return err(
@@ -4794,8 +4136,7 @@ impl Checker {
                     }
                     _ => self.check_type(error, span)?,
                 }
-                // Text in two regions is still text on both sides, and a value
-                // of no region in particular (a literal) would fit both.
+                // Identical non-regional types on both sides would make literal values ambiguous, except regional `text`.
                 if value == error
                     || (value.without_regions() == error.without_regions()
                         && self.fits_any_region(value))
@@ -4822,8 +4163,6 @@ impl Checker {
                 }
                 Ok(())
             }
-            // `(int) -> int`: its parameters are values, places, and regions
-            // written `@r`, and it sends one value or nothing, as a header does.
             Type::Task(task) => {
                 for (i, param) in task.params.iter().enumerate() {
                     match param {
@@ -4855,8 +4194,6 @@ impl Checker {
                     ret => self.check_type(ret, span),
                 }
             }
-            // `P...`: a group of types the task takes, which the parser lets
-            // only a parameter's whole type, and all a task's type takes, be.
             Type::Group(name) => match self.type_param(name) {
                 Some(param) if param.group => Ok(()),
                 Some(_) => err(
@@ -4874,7 +4211,6 @@ impl Checker {
                     ),
                 ),
             },
-            // `P` alone, inside a task: one value's type, as `v` has in `each v in args`.
             Type::Named(name, _)
                 if self.group_turns.iter().any(|(group, _)| group == name)
                     && self.type_param(name).is_some_and(|param| param.group) =>
@@ -4888,10 +4224,7 @@ impl Checker {
                     name
                 ),
             ),
-            // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
-            // `Box<int>`: what it is given is checked with it (see
-            // `resolve_applied`), which also reports a name that is no shape.
             Type::Applied(applied) => applied
                 .types
                 .iter()
@@ -4918,9 +4251,6 @@ impl Checker {
         }
     }
 
-    /// What a tuple's item of type `ty` holds whose value can change, for a
-    /// message: a pointer, a slice, an array, or a shape or kind holding one.
-    /// `None` when nothing in it can change.
     fn changeable_item(&self, ty: &Type) -> Option<String> {
         match ty {
             Type::Applied(applied) => {
@@ -4928,7 +4258,7 @@ impl Checker {
                 let found = fields.iter().find_map(|ty| self.changeable_item(ty))?;
                 Some(format!("'{}', which holds {}", ty, found))
             }
-            // Only a type required to be `frozen` is known never to change.
+            // Generic params can hold mutable state unless constrained `frozen`.
             Type::Param(name) if !self.allows(Need::Frozen, ty) => Some(format!(
                 "'{}', which {}",
                 name,
@@ -4958,9 +4288,6 @@ impl Checker {
         }
     }
 
-    /// Whether a value of type `ty` can be of no region in particular, as a
-    /// literal is, and so fit the same type in any region: text, and a shape or
-    /// kind that can be given a region, held by value.
     fn fits_any_region(&self, ty: &Type) -> bool {
         match ty {
             Type::Text(_) => true,
@@ -4972,14 +4299,7 @@ impl Checker {
         }
     }
 
-    /// Rejects a shape or kind that contains itself by value, directly or
-    /// through other types: its values would have infinite size. Containing a
-    /// pointer to itself (`maybe ^T`) is fine. `acyclic` holds the types
-    /// already known to be free of cycles. The search keeps its own stack, so
-    /// a long chain of types can't overflow the compiler's.
-    ///
-    /// Each type found free of cycles is added to `order` after the types it
-    /// contains by value.
+    /// Iterative cycle check using an explicit stack to prevent compiler overflow on deep type chains.
     fn check_value_cycle(
         &self,
         root: &str,
@@ -4989,8 +4309,6 @@ impl Checker {
         if acyclic.contains(root) {
             return Ok(());
         }
-        // Each type being entered, with the types its fields contain by value
-        // and how many of those have been followed.
         type Entered<'a> = (&'a str, Vec<(&'a str, Span)>, usize);
         let mut path: Vec<Entered> = vec![(root, self.contained_types(root), 0)];
         let mut on_path: HashSet<&str> = HashSet::from([root]);
@@ -5015,8 +4333,6 @@ impl Checker {
                     .map(|(name, _, _)| *name)
                     .chain([target])
                     .collect();
-                // A shape that takes types keeps them in the pointer that
-                // breaks the cycle: `maybe ^Node<T>`.
                 let takes = self.shapes.get(target).map_or(String::new(), |shape| {
                     match shape.types.is_empty() {
                         true => String::new(),
@@ -5041,9 +4357,7 @@ impl Checker {
                         takes
                     ),
                 );
-                // Every type in the cycle contains itself through the others, so
-                // the cycle is one mistake: it is reported at the field that
-                // closes it, and the types in it are not walked again.
+                // Report cycle once at closing edge and skip re-walking cycle members.
                 return Err((error, chain.into_iter().map(str::to_string).collect()));
             }
             if !acyclic.contains(target) {
@@ -5070,16 +4384,8 @@ impl Checker {
             .collect()
     }
 
-    /// Rejects a shape or kind that could never be created. A pointer can't be
-    /// `none`, so a shape whose field points to its own type (directly or
-    /// through other types) would need one to exist before the first is made.
-    /// A kind can be created if any of its variants can.
+    /// Worklist reachability from base/pointer-free variants to reject uninhabitable self-referential shapes/kinds.
     fn check_constructible(&mut self, items: &[Item]) {
-        // Each type that could be created, with the types each way of making it
-        // holds: a shape's fields, or each variant's values. A shape or kind
-        // made for a set of types (`Out<int>`, `Option<int>`) is one of them,
-        // with what it was made with, since what it holds says whether it can
-        // be (see `shape_instance` and `kind_instance`).
         let mut types: Vec<(&str, Vec<Vec<Type>>)> = Vec::new();
         for item in items {
             match item {
@@ -5113,8 +4419,6 @@ impl Checker {
                 ));
             }
         }
-        // The types whose fields name each type: when a type turns out to be
-        // creatable, only those need another look.
         let mut users: HashMap<&str, Vec<usize>> = HashMap::new();
         for (i, (_, ways)) in types.iter().enumerate() {
             for ty in ways.iter().flatten() {
@@ -5123,9 +4427,6 @@ impl Checker {
                 }
             }
         }
-        // The kinds no file declares hold a variant that holds nothing, so they
-        // can always be created; no item declares them, so they are known before
-        // the first look rather than found by it (see `ast::builtin_kinds`).
         let mut can: HashSet<&str> = BUILTIN_KIND_NAMES
             .iter()
             .copied()
@@ -5144,13 +4445,8 @@ impl Checker {
                 pending.extend(users.get(name).into_iter().flatten().copied());
             }
         }
-        // Each type that can never be created is reported, since one that holds
-        // another says nothing about the one it holds.
         let mut found = Vec::new();
         for item in items {
-            // A type that already has a mistake of its own says nothing more:
-            // one that contains itself by value, say, can never be created
-            // either, which is the same mistake told twice (see `broken`).
             if self.broken.contains(item.name()) {
                 continue;
             }
@@ -5189,10 +4485,6 @@ impl Checker {
 
     fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
         self.enter_type_params(&task.types);
-        // A header with a mistake never settled its types, so the body is
-        // checked with nothing known about what the task takes or sends: its own
-        // mistakes are still reported, and the header's isn't reported again at
-        // every line that uses a parameter (see `broken`).
         let unsettled = self.broken.contains(&task.name);
         let known = |ty: &Type| if unsettled { Type::Unknown } else { ty.clone() };
         if task.shortcut {
@@ -5224,8 +4516,6 @@ impl Checker {
             .map(|(i, param)| (param.name.clone(), i))
             .collect();
         self.current_method = task.owner.clone();
-        // A method's body may write `this` only where it is a pattern's
-        // default, copied in, as the type of the value it is called on.
         self.this_type = method_this(task);
         self.in_pattern_default = self.is_default(task);
         self.stand_ins = self
@@ -5241,7 +4531,6 @@ impl Checker {
             .and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
         self.current_shape = match &task.owner {
-            // A shared method is its shape's own, with no value it is called on.
             Some(owner) if owner.shared => task
                 .owner_type()
                 .filter(|ty| self.shapes.contains_key(*ty))
@@ -5249,17 +4538,12 @@ impl Checker {
             Some(_) => task.params.first().and_then(|this| self.owner_of(&this.ty)),
             None => None,
         };
-        // Parameters and the task body share one scope, as in C.
+        // Parameters share function-body scope to match C local scoping.
         self.scopes = vec![Scope::default()];
-        // A lambda's body is a task of its own, inside no loop of the code around it.
         self.loops.clear();
         self.loop_name = None;
         self.stepping = None;
-        // A lambda that keeps what it uses sees the variables of the code
-        // around it, and the region it keeps them in, under its own (see
-        // `kept_scope`); one whose value was never checked has none to see.
         if task.kept.is_some() {
-            // A header with a mistake, told already, leaves nothing to keep.
             match self.kept_scope(&task.name).filter(|_| !unsettled) {
                 Some(around) => self.scopes.insert(0, around),
                 None => {
@@ -5288,7 +4572,6 @@ impl Checker {
             }
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
-                // Given to the task, so it outlives the task's variables.
                 if let Some(info) = self
                     .scopes
                     .last_mut()
@@ -5297,9 +4580,6 @@ impl Checker {
                     info.param = true;
                 }
             } else {
-                // Only the value a method marked `alters` is called on changes,
-                // and a parameter the task holds a copy of (`flex x: T`) or the
-                // caller's place (`flex& x: T`).
                 let alters =
                     param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
                 let mode = if alters || matches!(param.passing, Passing::Flex | Passing::FlexRef) {
@@ -5320,7 +4600,6 @@ impl Checker {
                 }
             }
         }
-        // The regions the header only names in its types.
         for param in &task.params {
             for region in param.ty.regions() {
                 if self.lookup(region).is_none() {
@@ -5328,9 +4607,7 @@ impl Checker {
                 }
             }
         }
-        // A region the header marks is the default of the body, which shares the
-        // parameters' scope, so a second default in the body is refused as a
-        // second in any block is (see `set_default_region`).
+        // Header `r: region default` occupies the body's default-region slot; body cannot declare another.
         if let Some((name, at)) = task
             .params
             .iter()
@@ -5339,7 +4616,6 @@ impl Checker {
         {
             self.set_default_region(&name, at)?;
         }
-        // Named results are variables of the task, declared by its header.
         self.result_names = task.result_names().map(|(name, _)| name.clone()).collect();
         self.unset = self.result_names.iter().cloned().collect();
         for (result, ty) in task.results.iter().zip(task.ret.results()) {
@@ -5347,8 +4623,6 @@ impl Checker {
                 self.define_result(name, known(ty), *at)?;
             }
         }
-        // A native task's body is the runtime's (see `ast::NATIVE`), so its
-        // header is all there is to check.
         if task.native {
             self.natives.insert(task.name.clone());
             self.scopes.clear();
@@ -5386,22 +4660,10 @@ impl Checker {
             }
             checked?;
         }
-        // Whether every path sends a value can only be told of a body that
-        // checked: a line with a mistake may well be the one that sends, so a
-        // task with a mistake anywhere is not told this as well (see `record`).
-        // A method of a shape with a mistake reads its fields as unknown, so its
-        // body settles nothing that reads them (see `broken`).
         let owner_broken = task.owner.is_some()
             && method_parts(&task.name).is_some_and(|(of, _)| self.broken.contains(of));
         let whole = self.errors.len() == before && !unsettled && !owner_broken;
-        // The copies the body makes of the values of the types the task takes
-        // (substituting no types changes nothing and only reads the body). A
-        // copy into a region the header keeps that type in is the value's own
-        // region, since a use must give a type of that region (see
-        // `region_conflict` at a call); any other is only the value itself, and
-        // every use must fit that (see `check_copies_of`).
-        // Only a body that checked, since reading it again relies on every call
-        // and method call having been settled (see `substitute_expr`).
+        // Verify generic body copies into non-header regions only if body checked without errors.
         if !task.types.is_empty() && whole {
             let mut made = Made::default();
             self.substitute_task(task, &HashMap::new(), &mut made)?;
@@ -5448,7 +4710,6 @@ impl Checker {
             && !always_sends(&task.body)
             && let Some(name) = self.first_unset()
         {
-            // Reaching the end sends the results, so they must all be set.
             err(
                 task.span,
                 format!(
@@ -5465,17 +4726,11 @@ impl Checker {
         ends_well
     }
 
-    /// Checks `block` as a path of its own, and returns the results it leaves
-    /// unset, or `None` when every path through it leaves it (sending, or with
-    /// `break` or `continue`), so nothing after it runs on this path. `entry` is the state the block starts from.
     fn branch_state(&mut self, block: &Block, entry: &HashSet<String>) -> Option<HashSet<String>> {
         let after = std::mem::replace(&mut self.unset, entry.clone());
         (!always_leaves(block)).then_some(after)
     }
 
-    /// The state after branches that each start from `entry`: a result is set
-    /// only where every branch that runs on sets it. Where no branch runs on,
-    /// what follows is unreachable, and `entry` is kept for checking it.
     fn join_branches(&mut self, entry: HashSet<String>, branches: Vec<Option<HashSet<String>>>) {
         let mut after: Option<HashSet<String>> = None;
         for branch in branches.into_iter().flatten() {
@@ -5492,11 +4747,7 @@ impl Checker {
         self.scopes.pop();
     }
 
-    /// Starts a loop, with the name `outer =>` gave it, if any.
-    /// Hides the loop giving a value about to be entered, where it `gives`,
-    /// from what runs before its passes, an `each`'s source and a three-part
-    /// loop's start: a loop there, one deep as it will be, gives it nothing
-    /// with its `break`. Gives where it was, for `show_value_loop`.
+    /// Hide outer value-loop around loop headers (`each` source / `start`) so headers cannot `break` into it.
     fn hide_value_loop(&mut self, gives: bool) -> Option<usize> {
         let depth = self.loops.len() + 1;
         match self.value_loops.last_mut() {
@@ -5516,9 +4767,6 @@ impl Checker {
         self.loops.push(name);
     }
 
-    /// `loop start || condition || step` (see `PartedLoop`), named `named`, in
-    /// the scope its start's names live in.
-    /// Its passes give a value where it `gives` (see `ValueLoop`).
     fn check_parted(
         &mut self,
         parted: &mut PartedLoop,
@@ -5535,8 +4783,7 @@ impl Checker {
                 ),
             );
         }
-        // A region lives until its block closes, and the start and the step
-        // are no blocks.
+        // `parted` `start` and `step` are not blocks, so disallow region declarations in them.
         if let Some(region) = parted
             .start
             .iter()
@@ -5548,9 +4795,6 @@ impl Checker {
                 "a loop's start and step declare no region, as they are no block of their own; declare it before the loop, or in its body for each pass",
             );
         }
-        // The start runs once, before the loop: what it sets is set after it,
-        // and a jump there leaves a loop around this one. A name without
-        // `flex` or `fixed` is one already declared, which it changes.
         for item in parted.start.iter_mut() {
             let mut places = Vec::new();
             match &item.kind {
@@ -5574,8 +4818,6 @@ impl Checker {
                     ),
                 );
             }
-            // The loop's name is no name of its start, whose names live in the
-            // loop, though a jump there leaves the loop around it.
             if let (StmtKind::Binding { names, .. }, Some((loop_name, at))) = (&item.kind, &named) {
                 let mut declared = Vec::new();
                 names
@@ -5597,8 +4839,6 @@ impl Checker {
             self.show_value_loop(hidden);
             checked?;
         }
-        // Its body might not run, so it sets nothing for certain; its condition
-        // is tested inside it, so a plan B there may stop it.
         let unchanging = parted.cond.as_ref().and_then(|cond| {
             unchanging_reads(
                 cond,
@@ -5665,8 +4905,7 @@ impl Checker {
                 }
             }
         };
-        // The step runs after each pass, where a `continue` of this loop leads,
-        // so it can't have one; what it declares ends with it.
+        // `continue` targets `step`, so forbid `continue` and scope `step` vars to a single iteration.
         self.stepping = Some(self.loops.len());
         for item in parted.step.iter_mut() {
             if let StmtKind::Binding { names, .. } = &item.kind {
@@ -5682,12 +4921,7 @@ impl Checker {
         Ok(())
     }
 
-    /// A loop's `finally` block, checked after its passes and outside it, so a
-    /// `break` or a `continue` there is the loop around it's, in a scope of its
-    /// own. A `break` or no pass at all skips it, so what it sets is not set
-    /// after it. Where the loop `gives` a value, the block's last line gives it,
-    /// and `body_given` is what its passes gave, which the block overrides with
-    /// a warning; the loop then gives what the block does.
+    /// Checked outside the loop so `break`/`continue` hit enclosing loops; overriding loop value warns.
     fn check_finally(
         &mut self,
         finally: &mut Block,
@@ -5714,11 +4948,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Warns, at `at`, about a loop whose condition reads only the variables
-    /// `names`, which nothing in it changes and nothing in it leaves (see
-    /// `unchanging_reads`), so it never ends once it starts: where each is a
-    /// plain value of this task, which no reference or lambda may change
-    /// elsewhere.
     fn warn_unchanging(&mut self, names: &[String], at: Span) {
         let plain = |info: &VarInfo| {
             info.refers.is_none()
@@ -5740,7 +4969,6 @@ impl Checker {
         {
             return;
         }
-        // A reference or a lambda that keeps a place may change it anywhere.
         if self
             .scopes
             .iter()
@@ -5760,12 +4988,7 @@ impl Checker {
         ));
     }
 
-    /// A loop that gives a value (see `ValueLoop`), and its type: `V ~
-    /// LoopResult<B, M>`, `V` what the last lines of its passes give, `B` what
-    /// its `break`s give and `M` what its last lines fail with, each `bool`
-    /// where none is given. As a statement with a plan B, it gives nothing.
     fn check_loop_value(&mut self, value: &mut ValueLoop, span: Span) -> Result<Type> {
-        // Taken before the passes are checked, so no loop inside takes it.
         let place = self.loop_place.take();
         let never_ends = match &value.stmt.kind {
             StmtKind::Parted(parted) => parted.cond.as_ref().is_none_or(says_true),
@@ -5784,7 +5007,6 @@ impl Checker {
                 "a loop that never ends by itself gives no value, since no pass of it is the final one; give it a condition, as in 'loop i < n', and stop it early with 'break = v'",
             );
         }
-        // A name written with `=>` follows the rule of names, as a statement's does.
         if let Some((name, at)) = value.name.as_ref().filter(|_| value.arrow) {
             self.push_scope();
             let free = self.define(name, Type::Unknown, Mode::Fixed, *at);
@@ -5795,8 +5017,6 @@ impl Checker {
         self.value_loops.push((self.loops.len() + 1, Vec::new()));
         self.loop_gives = value.gives;
         self.loop_given = None;
-        // The statement is the loop the value is, whose last lines the place
-        // the value goes may tell more of (see `settle_variant`).
         let result = self.check_stmt_kind(&mut value.stmt);
         self.loop_gives = false;
         self.loop_name = None;
@@ -5806,8 +5026,6 @@ impl Checker {
             .map(|(_, breaks)| breaks)
             .unwrap_or_default();
         let given = self.loop_given.take();
-        // `each v in args` is written out once per value, each pass its own:
-        // said first, as what its passes give is no matter then.
         if let StmtKind::Each(_, _, range, _, _) = &value.stmt.kind
             && matches!(range.ty, Some(Type::Group(_)))
         {
@@ -5868,7 +5086,6 @@ impl Checker {
             None => Type::Bool,
             Some(error) => self.manual_type(error, value, at)?,
         };
-        // What the `break`s give, or `bool` where none does.
         let mut broke: Option<Type> = None;
         for (ty, at) in &breaks {
             let ty = match ty {
@@ -5887,7 +5104,6 @@ impl Checker {
         if holds_untold(&broke)
             && let Some((ty, at)) = breaks.iter().find(|(ty, _)| holds_untold(ty))
         {
-            // Its statement has said so already, as of a variant nothing told.
             if self.errors.iter().any(|error| error.span == Some(*at)) {
                 return Ok(Type::Unknown);
             }
@@ -5899,8 +5115,6 @@ impl Checker {
                 ),
             );
         }
-        // `LoopResult<B, M>`, in the region of what it holds, which is one, and
-        // which outlives every pass, so no pass declares it.
         let mut failures = Vec::new();
         if let Some(finally) = value.finally() {
             last_values(finally, &mut failures);
@@ -5954,11 +5168,10 @@ impl Checker {
             if let Some(finally) = value.finally_mut() {
                 self.settle_value(finally, &ty)?;
             } else if let Some(body) = value.body_mut() {
-                // Each pass gives an item, or fails with the loop's failure.
                 self.settle_value(body, &map_pass(&ty, manual_error.is_some()))?;
             }
         }
-        // Its value outlives every pass, so it is in no region one declares.
+        // Value-loop outputs outlive every iteration, so they cannot reference loop-local regions.
         if let Some(region) = ty.regions().into_iter().find(|region| {
             !unnamed_region(region) && *region != ANY_REGION && self.lookup(region).is_none()
         }) {
@@ -5977,14 +5190,7 @@ impl Checker {
         Ok(ty)
     }
 
-    /// The collection a loop in map form gives (see `ValueLoop`), whose passes
-    /// give `item`, from `place`, the type written where its value goes, if
-    /// any. A slice where the place is one, in its region; an array as long as
-    /// the count where the loop goes through an array or a range of constant
-    /// ends; and a slice in the block's default region where the count is known
-    /// only as it runs. A `continue` of the loop, even one that never runs,
-    /// leaves its pass out of a slice, and its item `none` in an array, whose
-    /// items are then maybes (the user's rule, 2026-10-17).
+    /// Infers slice vs constant array for map-form loops; `continue` skips slice items or produces `none` in array items.
     fn map_collection(
         &mut self,
         value: &ValueLoop,
@@ -6060,9 +5266,6 @@ impl Checker {
         })
     }
 
-    /// `M`, what the last lines of the loop `value` fail with, from `error`,
-    /// the error they give: only `LoopResult.Manual(m)`, since the other
-    /// variants say what the loop did.
     fn manual_type(&self, error: &Type, value: &ValueLoop, at: Span) -> Result<Type> {
         let wrong = || {
             err(
@@ -6107,8 +5310,6 @@ impl Checker {
                         );
                     }
                 },
-                // A value that may fail, as another loop's: what it fails with
-                // says what that did, not this loop.
                 _ if fails => {
                     return err(
                         failure.span,
@@ -6160,8 +5361,6 @@ impl Checker {
                 ),
             );
         }
-        // A turn of `each v in args` is written out for each value, so a value
-        // of the turn's type would be of another type in each.
         let params = ty.params();
         if let Some((group, _)) = self.group_turns.iter().find(|(group, around)| {
             target.is_some_and(|target| target <= *around) && params.contains(&group.as_str())
@@ -6201,7 +5400,6 @@ impl Checker {
                 format!("'{}' {}, and there is none around it here", word, what),
             );
         }
-        // `continue` in a step of the loop it goes on with would run the step again.
         let target = match name {
             None => Some(self.loops.len()),
             Some((name, _)) => self
@@ -6301,11 +5499,8 @@ impl Checker {
         result
     }
 
-    /// Declares a variable in the innermost scope. Vela has no shadowing: a
-    /// name cannot be declared while another variable of that name is visible.
-    /// (Sibling blocks may reuse names, since neither is visible to the other.)
+    /// Declares a local with no shadowing against visible locals, variants, macros, kinds, shapes, tasks, modules, or loops.
     fn define(&mut self, name: &str, ty: Type, mode: Mode, span: Span) -> Result<()> {
-        // A variable named like a variant would make a bare `Empty` ambiguous.
         if let Some(info) = self.variant_in_scope(name) {
             let at = info.variant.span;
             if at.file != span.file {
@@ -6323,7 +5518,6 @@ impl Checker {
             );
         }
         let full = self.in_module(name);
-        // Nor like a macro, which a bare name would read as.
         if let Some(info) = self.macros.get(&full) {
             let at = info.span;
             if at.file != span.file {
@@ -6343,7 +5537,6 @@ impl Checker {
                 ),
             );
         }
-        // Nor like a kind, which `Kind.Variant` would read as.
         if self.kinds.contains_key(&full) {
             return err(
                 span,
@@ -6353,7 +5546,6 @@ impl Checker {
                 ),
             );
         }
-        // Nor like a shape, which `Shape.f` would read as, for its shared field.
         if self.shapes.contains_key(&full) {
             return err(
                 span,
@@ -6363,7 +5555,6 @@ impl Checker {
                 ),
             );
         }
-        // Nor may a task value take a task's name, which `name(…)` would call.
         if (is_task(&ty)
             || matches!(ty, Type::Closure(_))
             || matches!(&ty, Type::Maybe(inner) if is_task(inner)))
@@ -6377,7 +5568,6 @@ impl Checker {
                 ),
             );
         }
-        // Nor may it take a module's name, which `name.x` would read as.
         if let Some(at) = self.module_used(name) {
             return err(
                 span,
@@ -6387,8 +5577,6 @@ impl Checker {
                 ),
             );
         }
-        // A lambda that keeps what it uses names nothing as the code around it
-        // does, so a region of it, which it doesn't see, is no name of its own.
         if self.lookup(name).is_none()
             && let Some(lambda) = self
                 .current_lambda
@@ -6407,8 +5595,6 @@ impl Checker {
                 ),
             );
         }
-        // Nor like a loop around it, which `break` and `continue` name. The
-        // name is still declared, so its uses say nothing more.
         let clash = match (
             self.loops.iter().flatten().find(|(given, _)| given == name),
             self.loop_around_lambda(name),
@@ -6445,7 +5631,6 @@ impl Checker {
             )));
         };
         let allocates = ty == Type::Region;
-        // What it owns, where `bind_from` or a binding said so.
         let owners = match self.bound_owners.iter().position(|(at, _)| *at == span) {
             Some(i) => self.bound_owners.swap_remove(i).1,
             None => Vec::new(),
@@ -6492,8 +5677,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Declares a named result, which reads like a variable and is set only by
-    /// `total <- value`.
     fn define_result(&mut self, name: &str, ty: Type, span: Span) -> Result<()> {
         self.define(name, ty, Mode::Fixed, span)?;
         if let Some(info) = self
@@ -6528,7 +5711,6 @@ impl Checker {
     fn lookup(&self, name: &str) -> Option<&VarInfo> {
         for scope in self.scopes.iter().rev() {
             if let Some(info) = scope.names.get(name) {
-                // A variable of the code around a lambda, which it keeps.
                 if info.kept && !self.kept_used.borrow().iter().any(|used| used == name) {
                     self.kept_used.borrow_mut().push(name.to_string());
                 }
@@ -6538,11 +5720,6 @@ impl Checker {
         None
     }
 
-    /// The region an allocation that names none goes in: the default region of
-    /// the innermost block that has one, which a block sets with
-    /// `region r default` or a task with an `r: region default` parameter.
-    /// `None` where no block in scope has named one, which is the error each
-    /// allocating form reports in its own words.
     fn default_region(&self) -> Option<String> {
         self.scopes
             .iter()
@@ -6551,9 +5728,7 @@ impl Checker {
             .map(|(name, _)| name.clone())
     }
 
-    /// Makes `name` the default region of the innermost block. A block names one
-    /// default at most: a second is a mistake, since two lines that look alike
-    /// would allocate in regions of different lifetimes.
+    /// Sets block default region; at most one per block so identical syntax does not span lifetimes.
     fn set_default_region(&mut self, name: &str, span: Span) -> Result<()> {
         if let Some((already, at)) = self.scopes.last().and_then(|scope| scope.default.clone()) {
             return err(
@@ -6570,14 +5745,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Settles the region of a call to `what` (`task 'f'`, `method 'M.m'`), whose
-    /// written arguments are `args` and whose parameters, a method's without the
-    /// value it is called on, are `params`. A region written after the call
-    /// (`f(x) at r`, which the parser adds last; see `ExprKind::RegionAfter`)
-    /// becomes the region argument it stands for, where the task takes one last
-    /// that the parentheses leave out; and where the parentheses leave out only
-    /// that region, it is the block's default, as for any allocation that names
-    /// none. Anything else is left to the call's own checks.
     fn settle_call_region(
         &mut self,
         span: Span,
@@ -6612,10 +5779,7 @@ impl Checker {
             }
             return Ok(());
         }
-        // A call whose last argument is a region, where the task takes none,
-        // gave its region and left out something else, which the count of its
-        // arguments says. Where the task takes a region there too, as in
-        // `join(t, a: region, into: region)`, that region is its own.
+        // Keep arity diagnostic accurate if final arg is a region where task expects none or expects a trailing region.
         let takes_one_there = args
             .len()
             .checked_sub(1)
@@ -6637,10 +5801,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The region an allocation uses, given the one it writes: that region, or
-    /// the block's default. `needed` is what to say when there is no default,
-    /// which each form words for itself, and a region visible here is named as
-    /// the one to mark.
     fn region_or_default(
         &mut self,
         written: Option<&String>,
@@ -6656,9 +5816,6 @@ impl Checker {
         }
     }
 
-    /// The error for a `copy()` that nothing gives a region: a copy is the one
-    /// thing that allocates without taking a block's default, since the place it
-    /// goes says where it belongs, so the message says that where a block has one.
     fn unsettled_copy(&self, at: Span) -> String {
         let first = match self.copy_words.get(&(at.file, at.line, at.col)) {
             Some(word) => format!(
@@ -6673,8 +5830,6 @@ impl Checker {
         }
     }
 
-    /// The end of the message for an allocation that names no region: when a
-    /// region is visible here, the shortest fix is to make it the default.
     fn or_make_it_default(&self) -> String {
         match self.innermost_region() {
             Some(name) => format!(
@@ -6686,8 +5841,7 @@ impl Checker {
     }
 
     fn innermost_region(&self) -> Option<&str> {
-        // A scope's names are in no order, so of its regions the one
-        // declared last is taken.
+        // Map iteration order is unspecified, so pick last declared region.
         self.scopes
             .iter()
             .rev()
@@ -6725,7 +5879,6 @@ impl Checker {
             } else if self.kinds.contains_key(&self.full_name(name)) {
                 Error::at(span, format!("'{0}' is a kind, not a variable; name one of its variants, as in '{0}.Variant'", name))
             } else if let Some(shape) = self.shapes.get(&self.full_name(name)) {
-                // Most likely a shape literal the parser read as a plan B.
                 let example = match shape.fields.first() {
                     Some(field) => format!("{} {{ {}: … }}", name, field.name),
                     None => format!("{} {{}}", name),
@@ -6739,8 +5892,6 @@ impl Checker {
                 if let Some(outer) = self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda))
                     && outer.contains(name)
                 {
-                    // A lambda that keeps what it uses keeps variables, not the
-                    // results of the task around it, which only `<-` sets.
                     if self.current_lambda.as_ref().is_some_and(|lambda| self.kept_lambdas.contains_key(lambda)) {
                         return Error::at(span, format!("'{0}' is a result of the task around this lambda, which a lambda doesn't keep; keep a variable of it first, as in 'fixed kept = {0}', and use that", name));
                     }
@@ -6751,11 +5902,7 @@ impl Checker {
         })
     }
 
-    /// Checks the statements of a block, each whatever the ones before it
-    /// found: a statement with a mistake is reported and the next one is
-    /// checked, so a block's mistakes are all reported together. The names a
-    /// statement that didn't check meant to declare are declared without a type,
-    /// so that using them is no second mistake (see `Type::Unknown`).
+    // Record errors and declare failed-binding names as `Type::Unknown` so later statements keep checking.
     fn check_block(&mut self, block: &mut [Stmt]) -> Result<()> {
         for stmt in block {
             let checked = self.check_stmt(stmt);
@@ -6766,24 +5913,17 @@ impl Checker {
         Ok(())
     }
 
-    /// Declares, without a type, the names a statement that didn't check would
-    /// have declared. Only `fixed` declares a name the rest of the block sees;
-    /// what a pattern or a loop declares is visible in its own block only, which
-    /// the statement checks itself.
     fn declare_unchecked(&mut self, stmt: &Stmt) {
         let StmtKind::Binding { names, mode, .. } = &stmt.kind else {
             return;
         };
         for bound in names.iter().flat_map(Bound::leaves) {
             if bound.name != DISCARD && self.lookup(&bound.name).is_none() {
-                // A name that can't be declared at all (one already taken by a
-                // variant, say) is the statement's own mistake, already reported.
                 let _ = self.define(&bound.name, Type::Unknown, *mode, bound.span);
             }
         }
     }
 
-    /// The copies a statement has must all know their regions when it ends.
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let before = self.unsettled_copies.len();
         let types_before = self.unsettled_types.len();
@@ -6795,16 +5935,14 @@ impl Checker {
         self.unsettled_copies.truncate(before);
         self.unsettled_types.truncate(types_before);
         self.untold_kinds.truncate(kinds_before);
-        // A mistake about a value of a type nothing told, `Option<…>`, is
-        // that nothing told it: `Option.None == Option.None`. A place that
-        // tells other types is a mistake of its own (`Either<int, text>`
-        // given `Either.Right(5)`).
+        // Prioritize untold generic-variant inference error unless the statement already hit a clearer type-unknown error.
         if let (Err(error), Some((at, kind, tag, param, example))) = (&result, &untold_kind)
             && ((!error.message.starts_with("expected type")
                 && !error.message.starts_with("cannot infer")
                 && error.message.contains(&format!("{}<", unqualified(kind)))
-                && ["<…", "…>", ", …"].iter().any(|untold| error.message.contains(untold)))
-                // `each x in [Option.None]`: no item tells its types.
+                && ["<…", "…>", ", …"]
+                    .iter()
+                    .any(|untold| error.message.contains(untold)))
                 || error.message.starts_with("cannot tell the type of"))
         {
             return err(*at, untold_kind_message(kind, tag, param, example));
@@ -6822,11 +5960,7 @@ impl Checker {
         }
     }
 
-    /// Makes `x++`, `x--`, or `x op= v` the assignment it is, `x = x op v`,
-    /// which the rest checks as it checks any. The place is written twice, so
-    /// nothing in it may call a task or change anything. `++` and `--` count
-    /// whole numbers and chars; `t += u` on text joins into the region `t` is
-    /// in.
+    /// Desugars `x++`/`x--`/`x op= v`; rejects side effects in LHS since desugaring duplicates the place.
     fn step_to_assignment(&mut self, stmt: &mut Stmt) -> Result<()> {
         let StmtKind::Step {
             target,
@@ -6873,8 +6007,6 @@ impl Checker {
                 ),
             );
         }
-        // `f += 1`: a whole number written out doesn't become a float (a
-        // power's may be an int, `f **= 2`).
         if ty.is_float()
             && op != BinaryOp::Pow
             && let ExprKind::IntLit(n) = value.kind
@@ -6897,8 +6029,6 @@ impl Checker {
                         "'+=' joins text into the region the text is in, and this text lasts as long as the program, in no region; keep it in a region, as in 'flex t: text@r = …', or write 't = t + u at r'",
                     );
                 };
-                // `t += "{n}!"` and `t += a + b`: text holding values, and
-                // text joined, go into the same region, part by part.
                 let mut parts = vec![place];
                 step_parts(value, &region, at, &mut parts);
                 Expr::new(
@@ -6934,7 +6064,6 @@ impl Checker {
         match &mut stmt.kind {
             StmtKind::Step { .. } => Err(Error::internal_at(span, "a step left as it was")),
             StmtKind::Expr(e) => {
-                // `fail e` names a plan B's error only on its first line.
                 if let ExprKind::Fail(inner) = &e.kind
                     && let ExprKind::Var(name) = &inner.kind
                     && self.lookup(name).is_none()
@@ -6959,16 +6088,12 @@ impl Checker {
             StmtKind::Binding {
                 names, mode, init, ..
             } => {
-                // `fixed r = loop …`: the variable names the loop it gives, and a
-                // `LoopResult` written with no types there takes the loop's,
-                // `fixed r: int ~ LoopResult = loop …`.
                 let mut from_loop = HashSet::new();
                 let each_given = init.len() == names.len();
                 for (i, bound) in names.iter_mut().enumerate() {
                     let Some(value) = init.get_mut(i).filter(|_| each_given) else {
                         continue;
                     };
-                    // `fixed r = loop … fi { 0 }` names it too.
                     if let ExprKind::PlanB { value, .. } = &mut value.kind
                         && let ExprKind::LoopValue(value) = &mut value.kind
                     {
@@ -6993,7 +6118,6 @@ impl Checker {
                 for bound in names.iter_mut() {
                     self.resolve_bound_types(bound)?;
                 }
-                // `flex y = &x`: a copy, where a reference was maybe meant.
                 if let Some(marked) = init
                     .iter()
                     .find(|value| matches!(value.kind, ExprKind::Ref(_)))
@@ -7013,15 +6137,11 @@ impl Checker {
                         self.prepare_shortcut_lambda(value, ty)?;
                     }
                 }
-                // `fixed xs: [int]@r = each …`: the type says which collection
-                // the loop makes.
                 if let ([bound], [value]) = (names.as_slice(), init.as_slice())
                     && let Some(ty) = &bound.ty
                 {
                     self.loop_place = loop_value(value).map(|_| success_of(ty));
                 }
-                // `fixed n: int ~ AppError = line |> parse()`: the chain fails
-                // with the error named.
                 if let ([bound], [value]) = (names.as_slice(), init.as_slice())
                     && matches!(value.kind, ExprKind::Pipe(_))
                     && let Some(Type::Or(_, error)) = &bound.ty
@@ -7032,8 +6152,6 @@ impl Checker {
                 self.pipe_target = None;
                 self.loop_place = None;
                 let given = given?;
-                // A single call sending several values gives them all, and
-                // those values are taken as they are.
                 let forwarded = init.len() < names.len();
                 let list_span = init.first().map_or(span, |value| value.span);
                 let mut declared = Vec::new();
@@ -7046,7 +6164,6 @@ impl Checker {
                     } else {
                         init.get(i).map_or(span, |value| value.span)
                     };
-                    // `(a, b)`: the names of a tuple's items.
                     if let Some(group) = names.get_mut(i).filter(|bound| !bound.parts.is_empty()) {
                         self.unpack_bound(group, &actual, value_span, &mut declared)?;
                         continue;
@@ -7073,7 +6190,6 @@ impl Checker {
                             annotated
                         }
                         None if name == DISCARD => actual,
-                        // A variable without a type names no region for a copy.
                         None if matches!(
                             init.get(i).filter(|_| !forwarded).map(|value| &value.kind),
                             Some(ExprKind::Copy { region: None, .. })
@@ -7106,8 +6222,6 @@ impl Checker {
                     }
                     declared.push((name, at, ty));
                 }
-                // What the names are given: a `flex` or `bind` one may not take
-                // what a fixed name owns, and one that never changes owns it too.
                 for (i, bound) in names.iter().enumerate() {
                     let Some(value) = (if forwarded { init.first() } else { init.get(i) }) else {
                         continue;
@@ -7134,7 +6248,6 @@ impl Checker {
                     }
                 }
                 for (name, at, ty) in declared {
-                    // A `[flex @r]` or `[bind @r]` lambda changes what it keeps.
                     if held_lambda(&ty) && *mode != Mode::Flex {
                         return err(
                             at,
@@ -7158,7 +6271,6 @@ impl Checker {
                         self.define(&name, ty, *mode, at)?;
                     }
                 }
-                // A slice made of another shares its items.
                 if !forwarded {
                     for (bound, value) in names.iter().zip(init.iter()) {
                         if let Some(from) = Checker::shared_slice_of(value) {
@@ -7169,7 +6281,6 @@ impl Checker {
                 Ok(())
             }
             StmtKind::Assign(targets, values) => {
-                // `total = loop …`: the variable names the loop it gives.
                 for (target, value) in targets.iter().zip(values.iter_mut()) {
                     let value = match &mut value.kind {
                         ExprKind::PlanB { value, .. } => value,
@@ -7192,8 +6303,7 @@ impl Checker {
                 for target in targets.iter_mut() {
                     places.push(self.check_target(target, &mut assigned)?);
                 }
-                // `m[a], m[b] = 1, 2`: a key's value may be added, which only
-                // the line setting it alone does.
+                // Map multi-target assignments cannot auto-insert new keys.
                 if targets.len() > 1
                     && let Some(at) = targets.iter().find_map(|target| match target {
                         Target::Place(Expr {
@@ -7209,7 +6319,6 @@ impl Checker {
                         "a map's value is set on a line of its own, as in 'm[k] = v', since it may add the key",
                     );
                 }
-                // `y = &x`: '=' writes a value; nothing points a name elsewhere.
                 if let Some(marked) = values
                     .iter()
                     .find(|value| matches!(value.kind, ExprKind::Ref(_)))
@@ -7261,7 +6370,6 @@ impl Checker {
                         Some(value) => self.coerce(value, &expected)?,
                         None => fits_or_err(&actual, &expected, value_span, given_by(values))?,
                     }
-                    // A place that changes may not take what a fixed name owns.
                     let to = match targets.get(i) {
                         Some(Target::Place(Expr {
                             kind: ExprKind::Var(name),
@@ -7278,8 +6386,7 @@ impl Checker {
                         self.hand_as(value, &expected, to);
                     }
                 }
-                // `ys = xs` makes `ys` another slice of those items; any other
-                // value makes it one of its own.
+                // Direct `ys = xs` aliases slice storage; other RHS expressions detach into independent buffers.
                 if let (
                     [
                         Target::Place(Expr {
@@ -7304,8 +6411,6 @@ impl Checker {
             StmtKind::When(arms, else_block) => {
                 self.check_when(span, arms, else_block, None).map(|_| ())
             }
-            // Its statements run once, as the block around it does, so what they
-            // set is set after it; what they declare ends at its `fi`.
             StmtKind::Block(body) => self.check_scoped_block(body),
             StmtKind::Loop(cond, body, finally) => {
                 let gives = std::mem::take(&mut self.loop_gives);
@@ -7317,10 +6422,6 @@ impl Checker {
                         "a tuple's items always match, so this loop would never end; take the tuple apart with 'fixed' instead",
                     );
                 }
-                // A loop's body might not run, so it sets nothing for certain.
-                // Its condition is tested inside it, so a plan B there may stop it.
-                // What the loop may do is read as written, before checking
-                // makes its calls what they are.
                 let unchanging = unchanging_reads(
                     cond,
                     body,
@@ -7345,7 +6446,6 @@ impl Checker {
                     Some(finally) => self.check_finally(finally, gives, body, body_given, span)?,
                     None => self.loop_given = body_given,
                 }
-                // `loop true`: one that never ends by itself says so in a word.
                 if says_true(cond) {
                     self.warnings.push(Error::at(span, ENDLESS_UNSAID));
                 } else if let Some(names) = unchanging {
@@ -7354,7 +6454,6 @@ impl Checker {
                 Ok(())
             }
             StmtKind::Parted(parted) => {
-                // Its start's names live in it, which a scope of its own ends.
                 let named = self.loop_name.take();
                 let gives = std::mem::take(&mut self.loop_gives);
                 self.push_scope();
@@ -7363,12 +6462,9 @@ impl Checker {
                 result
             }
             StmtKind::Named(name, inner) => {
-                // The name is one in scope as any other: it may match no name
-                // declared where it is seen, and nothing inside it may take it.
                 self.push_scope();
                 let free = self.define(name, Type::Unknown, Mode::Fixed, span);
                 self.pop_scope();
-                // The loop is still checked, as named, for mistakes of its own.
                 if let Err(error) = free {
                     self.record(error);
                 }
@@ -7391,8 +6487,6 @@ impl Checker {
                 "a loop written out for a group's values, checked",
             )),
             StmtKind::Each(name, second, range, body, finally) => {
-                // What it goes through is found before it starts, outside it,
-                // so a loop in a plan B there takes neither its name nor a `break`.
                 let named = self.loop_name.take();
                 let gives = std::mem::take(&mut self.loop_gives);
                 let hidden = self.hide_value_loop(gives);
@@ -7400,17 +6494,8 @@ impl Checker {
                 let source = self.check_each_source(name, second.as_ref(), range);
                 self.show_value_loop(hidden);
                 let (item, value) = source?;
-                // `each x in it`, where `it` follows std/collections' Iterator:
-                // the loop is `endless; fixed x = it.next() { break }; … fi`, so
-                // a `break` ends it and `continue` takes the next item. What it
-                // goes through advances, which the call of `next` says, as any
-                // call of a method that changes the value it is called on.
+                // Iterator loops desugar into `endless` + `.next() { break }`, advance via `alters next`, and forbid value/finally forms.
                 if self.each_iterator.take().is_some() {
-                    // An each over an iterator advances it, so it gives no
-                    // loop value; gathering what it gives says 'collect'. Its
-                    // end is a break out (no item left), and a finally runs
-                    // only when a loop ends by itself, so a finally here would
-                    // never run.
                     if gives || finally.is_some() {
                         return err(
                             span,
@@ -7424,10 +6509,7 @@ impl Checker {
                     else {
                         return Err(Error::internal_at(span, "an each that is no longer one"));
                     };
-                    // A value made where it is written, as `xs.map(…)`, is one
-                    // value: it is bound before the loop, so each pass takes the
-                    // next item of the same iterator. A place, as `it` or
-                    // `box.it`, is read each pass, and advances where it is.
+                    // Bind rvalue iterators once before looping (`xs.map(...)`); re-read lvalue places (`it`, `box.it`) each pass.
                     let (head, source) = match range.kind {
                         ExprKind::Var(_)
                         | ExprKind::Field(..)
@@ -7504,7 +6586,6 @@ impl Checker {
                         "'_' drops a map's key or value, as in 'each _, v in m'; a loop over this gives one item each pass, so name it",
                     );
                 }
-                // `each v in args`: `P` alone is the type of `v` inside it.
                 let turn = match &range.ty {
                     Some(Type::Group(group)) => Some(group.clone()),
                     _ => None,
@@ -7521,11 +6602,9 @@ impl Checker {
                     }
                     self.group_turns.push((group.clone(), self.loops.len()));
                 }
-                // The loop variables and the body share one scope; `_` names none.
                 let entry = self.unset.clone();
                 self.loops.push(named);
                 self.push_scope();
-                // Its names own what the items are owned by.
                 let mut each_names: Vec<Declared> =
                     vec![(name.clone(), span, item.clone(), Mode::Fixed)];
                 if let (Some((second, at)), Some(value)) = (second.as_ref(), value.as_ref()) {
@@ -7586,7 +6665,6 @@ impl Checker {
                 let expected = ret.results();
                 if values.is_empty() {
                     if !self.result_names.is_empty() {
-                        // A bare `<-` sends the results as they are.
                         return match self.first_unset() {
                             Some(name) => err(span, format!("'{}' might not be set here", name)),
                             None => Ok(()),
@@ -7611,17 +6689,12 @@ impl Checker {
                         "this task has no return type, so '<-' cannot take a value",
                     );
                 }
-                // One value for one result, which may become a `maybe`, a
-                // `T ~ E`, or the error of one.
                 if let ([e], [ret]) = (values.as_mut_slice(), expected) {
                     let mut ret = ret.clone();
-                    // `<- line |> parse()`: the chain fails with the task's error.
                     if let (ExprKind::Pipe(_), Type::Or(_, error)) = (&e.kind, &ret) {
                         self.pipe_target = Some((**error).clone());
                     }
-                    // `<- each …`: the task's result says which collection the loop makes.
                     self.loop_place = loop_value(e).map(|_| success_of(&ret));
-                    // `<- x -> x * 2`: the task's result says what the lambda takes and sends.
                     self.prepare_shortcut_lambda(e, &ret)?;
                     let ety = self.check_expr(e);
                     self.pipe_target = None;
@@ -7648,7 +6721,6 @@ impl Checker {
                 }
                 let expected = expected.to_vec();
                 let given = self.value_types(values, expected.len(), span, false).map_err(|mut error| {
-                    // `-> (int, int)` sends one tuple, and `-> int, int` two values.
                     if let [Type::Tuple(_)] = expected.as_slice() {
                         error.message.push_str("; this task sends one tuple, so write its values in parentheses, as in '<- (a, b)'");
                     }
@@ -7677,10 +6749,6 @@ impl Checker {
         }
     }
 
-    /// Checks a `when`: its arms, the `else when`s of a chain, one after
-    /// another, and its `else`. In `gives`, every branch gives the whole a
-    /// value, which the branches settle between them. A `when` that gives a
-    /// value needs an `else`, since there is no value without one.
     fn check_when(
         &mut self,
         span: Span,
@@ -7688,7 +6756,6 @@ impl Checker {
         else_block: &mut Option<Block>,
         gives: Option<Branches>,
     ) -> Result<Option<Type>> {
-        // A tuple's items always match, so nothing after such an arm could run.
         let last = arms.len().saturating_sub(1);
         for (i, arm) in arms.iter().enumerate() {
             if let Some(pattern) = &arm.cond.pattern
@@ -7729,7 +6796,6 @@ impl Checker {
                 }
             };
             given.extend(value.map(|(ty, at)| (i, ty, at)));
-            // An arm known never to hold is no path.
             let state = self.branch_state(&arm.body, &entry);
             states.push(state.filter(|_| known_condition(&arm.cond) != Some(false)));
         }
@@ -7745,11 +6811,9 @@ impl Checker {
                 given.extend(value.map(|(ty, at)| (arms.len(), ty, at)));
                 states.push(self.branch_state(else_b, &entry));
             }
-            // A condition that always holds leaves no other path.
             None if arms
                 .iter()
                 .any(|arm| known_condition(&arm.cond) == Some(true)) => {}
-            // Without an `else`, running no block is a path too.
             None => states.push(Some(entry.clone())),
         }
         self.join_branches(entry, states);
@@ -7775,10 +6839,6 @@ impl Checker {
         Ok(Some(settled))
     }
 
-    /// Records the mistake a branch's value had, if any, and says what it gives:
-    /// nothing where every path through it sends, and an unknown type where it
-    /// didn't check, so that the other branches still settle theirs and nothing
-    /// complains about it twice (see `Type::Unknown`).
     fn note_branch(
         &mut self,
         found: Result<Option<(Type, Span)>>,
@@ -7793,32 +6853,19 @@ impl Checker {
         }
     }
 
-    /// Coerces the value a block gives to `settled`, the type the branches
-    /// settled on. It runs once the block's own scope has closed, so a value in a
-    /// region the block declared can't become the whole's. A `when` or a `match`
-    /// on the last line is coerced through its own branches, since it settled a
-    /// type among them that may be narrower than the whole: an `int` where a case
-    /// beside it gives `none`, and so the whole is a `maybe int`.
+    /// Run after block scope closes so locals in block-local regions cannot escape as the branch result.
     fn settle_value(&mut self, block: &mut Block, settled: &Type) -> Result<()> {
         let Some(last) = block.last_mut() else {
             return Ok(());
         };
         match &mut last.kind {
-            // A value with no type never checked, which is already reported: there
-            // is nothing to coerce (see `Type::Unknown`).
             StmtKind::Expr(e) if e.ty.is_none() => Ok(()),
             StmtKind::Expr(e) => self.coerce(e, settled),
-            // A `when` with no `else`, or a block every path sends from, gives no
-            // value of its own to coerce (see `gives_value`).
             _ => self.settle_branch_values(last, settled),
         }
     }
 
-    /// Coerces the value each branch of a `when` or a `match` gives to `settled`,
-    /// the type the place it goes, or the branches around it, settled on. A
-    /// branching value becomes what is expected branch by branch, rather than as a
-    /// whole: each branch's own `none` or `fail e` then becomes part of the
-    /// `maybe` or the `T ~ E`, which is what the branch gives back.
+    /// Push coercion into `Choice` arms so `none` or `fail e` arms coerce independently.
     fn settle_branch_values(&mut self, stmt: &mut Stmt, settled: &Type) -> Result<()> {
         match &mut stmt.kind {
             StmtKind::When(arms, Some(else_block)) => {
@@ -7834,10 +6881,6 @@ impl Checker {
         }
     }
 
-    /// Refuses a value in a region that is freed before the `match` or `when`
-    /// giving it ends: the region was declared inside a branch, so nothing
-    /// outside can name it. The error is at the value of the first branch
-    /// in it, of those `given`, or else at `at`.
     fn escaping_region(
         &mut self,
         at: Span,
@@ -7864,11 +6907,6 @@ impl Checker {
         }
     }
 
-    /// Checks a `when` or `loop` condition and the block it guards, where the
-    /// names an `is` pattern binds are visible. In `gives`, the block gives a
-    /// value on its last line, which comes back with its position (see
-    /// `check_value_block`); otherwise the block holds statements and nothing
-    /// comes back.
     fn check_condition(
         &mut self,
         cond: &mut Condition,
@@ -7883,7 +6921,6 @@ impl Checker {
         Ok(result)
     }
 
-    /// `check_condition`, before the type tests in it are settled.
     fn check_condition_parts(
         &mut self,
         cond: &mut Condition,
@@ -7891,8 +6928,6 @@ impl Checker {
         gives: Option<Branches>,
     ) -> Result<Option<(Type, Span)>> {
         if !cond.single() {
-            // `m is {x} and x > 0`: the names each part binds are seen by the
-            // parts after it and by the block, all in one scope around them.
             let at = cond.value.span;
             self.push_scope();
             let result = self.check_parts(cond).and_then(|()| match gives {
@@ -7927,9 +6962,6 @@ impl Checker {
         }
     }
 
-    /// Checks the parts of a condition joined with `and`, in the scope
-    /// `check_condition` opened: each a `bool`, or an `is` whose names are
-    /// declared there for the parts after it.
     fn check_parts(&mut self, cond: &mut Condition) -> Result<()> {
         let mut part = Some(cond);
         while let Some(current) = part {
@@ -7958,11 +6990,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks a block that gives a value, in a new scope that first declares
-    /// `bindings` (from a pattern). Its statements are checked as usual, and its
-    /// last line gives the value: an expression, a `when` or a `match` whose own
-    /// branches give it, or nothing at all when every path through the block
-    /// sends with `<-`. `at` is where to blame a block that gives no value.
     fn check_value_block(
         &mut self,
         bindings: Vec<Declared>,
@@ -7980,7 +7007,6 @@ impl Checker {
         result
     }
 
-    /// Checks that an expression used as a statement is allowed (task call, edit, etc.)
     fn check_expr_stmt(&self, e: &Expr) -> Result<()> {
         match &e.kind {
             ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => {
@@ -8064,9 +7090,6 @@ impl Checker {
         }
     }
 
-    /// The statements of a block that gives a value, checked in the scope
-    /// `check_value_block` opened: everything but the last line as usual, and the
-    /// last line as the value.
     fn value_block_tail(
         &mut self,
         body: &mut Block,
@@ -8081,10 +7104,7 @@ impl Checker {
         };
         last_loop_gives(last);
         self.check_block(rest)?;
-        // A `when` or a `match` on the last line gives the value through its own
-        // branches, which is what makes a chain of conditions give one.
-        // One whose every branch leaves (`<-`, `break`, `continue`) leaves the
-        // block too, which then gives nothing, as a last `<-` does.
+        // Value-block tail `when`/`match` transfers values through arms unless all arms diverge via `<-`/`break`/`continue`.
         if gives_value(last) && always_leaves(std::slice::from_ref(last)) {
             self.check_stmt(last)?;
             return Ok(None);
@@ -8120,10 +7140,6 @@ impl Checker {
         Ok(None)
     }
 
-    /// A `when` or a `match` used as a value: the type its branches settle on,
-    /// and nothing where every branch sends. The statement is the same one it is
-    /// on its own, so its patterns, its cases and its bookkeeping are checked as
-    /// they always are.
     fn check_branching_value(&mut self, stmt: &mut Stmt) -> Result<Option<Type>> {
         let span = stmt.span;
         match &mut stmt.kind {
@@ -8140,12 +7156,6 @@ impl Checker {
         }
     }
 
-    /// The type the branches of a `match` or a `when` used as a value settle on:
-    /// the types they give, joined one after another by the rule the items of an
-    /// array follow (`join_types`), so that a branch giving `none` or a failure
-    /// makes the whole a `maybe` or a `T ~ E`, as a value becomes one anywhere
-    /// else. A branch whose value had a mistake of its own settles nothing, and
-    /// `None` comes back where nothing settles it.
     fn settle_branches(
         &self,
         at: Span,
@@ -8160,13 +7170,9 @@ impl Checker {
             };
             match self.join(sofar, ty) {
                 Some(joined) => settled = Some(joined),
-                // The branches disagree, which the loop below reports against
-                // what they had settled on until here.
                 None => break,
             }
         }
-        // A branch that didn't check may have been the one that told `none` or a
-        // failure what it is part of, so nothing more is said about it here.
         if let Some(ty) = &settled
             && unsettled(ty)
             && given.iter().any(|(_, ty, _)| ty.unknown())
@@ -8183,14 +7189,9 @@ impl Checker {
                     ),
                 );
             }
-            // Every branch that gives a value had a mistake of its own, which is
-            // already reported (see `Type::Unknown`).
             return Ok(None);
         };
-        // Every branch must fit what they settled on, which the fold above only
-        // promises for the ones it read before a widening or a disagreement.
         for (_, ty, span) in given.iter().filter(|(_, ty, _)| !ty.unknown()) {
-            // A variant whose types it didn't tell is told them by the others.
             if !fits(ty, &settled) && self.join(ty, &settled).as_ref() != Some(&settled) {
                 return err(
                     *span,
@@ -8204,12 +7205,7 @@ impl Checker {
         Ok(Some(settled))
     }
 
-    /// Checks that `pattern` can match a value of type `subject`, and returns
-    /// the names it binds with their types. `in_case` words messages for a
-    /// `case` rather than an `is`.
-    /// The names a part of a condition, `value is pattern`, binds: as any
-    /// pattern does, except for a test of a tuple item's type, and `none`
-    /// matched on a read past the tuple's end, which is always none.
+    /// Pattern bindings for `value is pattern`, handling tuple-item type tests and past-end `none`.
     fn part_bindings(
         &mut self,
         ty: &Type,
@@ -8221,7 +7217,6 @@ impl Checker {
             ty: written, form, ..
         } = &mut pattern.kind
         {
-            // The type as resolved, which `settle_type_tests` compares.
             let (resolved, bindings) = self.type_test_bindings(value, written, form, at)?;
             *written = resolved;
             return Ok(bindings);
@@ -8234,10 +7229,6 @@ impl Checker {
         self.pattern_bindings(ty, pattern, false)
     }
 
-    /// Checks a test of the type of a tuple's item, `t.#5 is maybe int {x}`,
-    /// and returns the names it binds: the item for `{x}`, the read itself, a
-    /// `maybe`, for `x`. The reads of the item after it, in its condition and
-    /// its block, give the type it names (see `check_safe_item`).
     fn type_test_bindings(
         &mut self,
         value: &Expr,
@@ -8249,7 +7240,6 @@ impl Checker {
             return err(value.span, TYPE_TEST_ON_A_READ);
         };
         let Type::Maybe(wanted) = self.resolve_type(written, at, TypePlace::Body)? else {
-            // `maybe int ~ text` is an `int ~ text` whose value is a maybe.
             let held = match written {
                 Type::Or(value, error) => match &**value {
                     Type::Maybe(inner) => format!("({} ~ {})", inner, error),
@@ -8274,10 +7264,7 @@ impl Checker {
                 ),
             );
         }
-        // The item's own type where it has the type tested, so a value of a
-        // region keeps it. Where the item's type is not known yet (a group's,
-        // or one holding a `T`), its regions are one the task can't name, so
-        // nothing taken from it outlives the call (see `UNNAMED_REGION`).
+        // Concrete tuple items retain their region; unknown (`group`/generic) items get `UNNAMED_REGION` so borrows cannot escape.
         let held = match item_state(value) {
             Some(Some(found)) if same_ignoring_regions(&found, &wanted) => found,
             Some(_) => (*wanted).clone(),
@@ -8303,12 +7290,7 @@ impl Checker {
         Ok(((Type::Maybe(wanted)), bindings))
     }
 
-    /// Settles the tests of the types of tuple items in `cond`, guarding
-    /// `body`, where each item's type is known: always, but in a task taking a
-    /// group, where each copy knows it. A test that fails empties the block and
-    /// makes the condition false there; one that holds becomes what it then is:
-    /// `true`, a name for the read, or the item in a `maybe`. Nothing is left to
-    /// test when the program runs.
+    /// Constant-folds tuple-item type tests when concrete item types are known; falsified branches drop their body.
     fn settle_type_tests(&mut self, cond: &mut Condition, body: &mut Block) {
         let mut part = Some(cond);
         while let Some(current) = part {
@@ -8383,9 +7365,6 @@ impl Checker {
         in_case: bool,
     ) -> Result<Vec<Declared>> {
         let span = pattern.span;
-        // Nothing is known about the value, so nothing about what matches it
-        // either; the names the pattern writes are declared without a type, so
-        // the block it guards still reads (see `Type::Unknown`).
         if subject.unknown() {
             return Ok(pattern
                 .bindings()
@@ -8393,7 +7372,6 @@ impl Checker {
                 .map(|names| (names.name.clone(), names.span, Type::Unknown, names.mode))
                 .collect());
         }
-        // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
         if let PatternKind::Value(names) | PatternKind::Fail(names) = &pattern.kind
             && names.parts.is_empty()
             && self.variant_in_scope(&names.name).is_some()
@@ -8417,7 +7395,6 @@ impl Checker {
             (PatternKind::Variant { kind, tag, binds }, Type::Named(kind_name, region))
                 if self.kinds.contains_key(kind_name) =>
             {
-                // A kind made for its types is written as the kind it was made from.
                 let from = self
                     .made_of
                     .get(kind_name)
@@ -8468,8 +7445,6 @@ impl Checker {
                     .collect::<Result<Vec<_>>>()
                     .map(|bound| bound.concat())
             }
-            // A kind given a type this declaration takes: what its variant
-            // carries, with the types given in place of the names it takes.
             (PatternKind::Variant { kind, tag, binds }, Type::Applied(applied))
                 if self.kinds.contains_key(&applied.name) =>
             {
@@ -8593,7 +7568,6 @@ impl Checker {
             (PatternKind::Fail(names), Type::Or(_, error)) => {
                 self.bound_names(names, error, Mode::Fixed)
             }
-            // `(x, y)`: the items of a tuple, which always match.
             (PatternKind::Tuple(names), _) => self.bound_names(names, subject, Mode::Fixed),
             (PatternKind::Value(_), other) => err(
                 span,
@@ -8621,9 +7595,6 @@ impl Checker {
         }
     }
 
-    /// The names `names` binds from a value of type `ty`, with their types:
-    /// one name takes the value, and `(a, b)` the items of a tuple. `mode`
-    /// is `flex` or `bind` written around them.
     fn bound_names(&self, names: &Names, ty: &Type, mode: Mode) -> Result<Vec<Declared>> {
         let mode = if names.mode.can_change_contents(true) {
             names.mode
@@ -8643,27 +7614,17 @@ impl Checker {
             .map(|bound| bound.concat())
     }
 
-    /// Checks the left side of an assignment and returns its type.
-    ///
-    /// Assignable places are: a `flex` variable, a field or item of an
-    /// assignable place, and what a pointer points to or a slice's or map's
-    /// item, reached from a name that changes (see `written_through`).
     fn check_assign_target(&mut self, expr: &mut Expr) -> Result<Type> {
         self.check_place_target(expr, true)
     }
 
-    /// `check_assign_target`, where `sets_key` says a map's item written is
-    /// set as `m[k] = v` sets it, which may add the key; `add` and `del` on a
-    /// slice kept in a map change the value already there.
     fn check_place_target(&mut self, expr: &mut Expr, sets_key: bool) -> Result<Type> {
-        // The place as written, for the error about a name it is reached from.
         let written = self.written_text(expr);
         let ty = self.check_written(expr, &written, sets_key)?;
         self.hand_written(expr, None);
         Ok(ty)
     }
 
-    /// `check_assign_target` of `expr`, part of the place `written`, as written.
     fn check_written(&mut self, expr: &mut Expr, written: &str, sets_key: bool) -> Result<Type> {
         let span = expr.span;
         match &mut expr.kind {
@@ -8699,8 +7660,6 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Field(base, field) => {
-                // A member of the value a method is called on, which only a
-                // method marked `alters` may change.
                 if matches!(&base.kind, ExprKind::Var(name) if name == THIS)
                     && !self
                         .lookup(THIS)
@@ -8790,7 +7749,6 @@ impl Checker {
                     );
                 }
                 let ty = self.check_index(base, &base_ty, index, span)?;
-                // A key added is kept in the map, so it lives where the map does.
                 if let Type::Map(key, _, _) = &base_ty {
                     self.coerce(index, key)?;
                 }
@@ -8808,11 +7766,7 @@ impl Checker {
         }
     }
 
-    /// Refuses to change `field` of a value of type `base` where it is a `read`
-    /// field, outside the alters methods of its own shape: it is read anywhere, so what
-    /// a shape keeps true of itself stays its own, in the file that declares it
-    /// as much as in another. Assigning it, an item of it, or a part of it, or
-    /// calling a method that alters it, all change it.
+    /// Forbids mutating `read` fields or their contents outside the owning shape's `alters` methods.
     fn read_only_field(&self, base: &Type, field: &str, span: Span) -> Result<()> {
         if let Some(owner) = self
             .owner_of(base)
@@ -8821,7 +7775,6 @@ impl Checker {
                 .declared_field(&owner, field)
                 .is_some_and(|declared| declared.read)
         {
-            // The full name, which each file's message spells as it writes it.
             return err(
                 span,
                 format!(
@@ -8833,14 +7786,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks the array, slice or map whose item is assigned, and returns its
-    /// type. An array holds its items, so it must be an assignable place
-    /// itself; a slice's items are in a region, behind a pointer, and are
-    /// written where the slice is reached from a name that changes, as what a
-    /// pointer points to is. `written` is the place assigned, as written, and
-    /// `sets_key` says the item is set as `m[k] = v` sets it, which may add the
-    /// key; a write into a value already in a map changes what the map holds,
-    /// as a write into a slice's item does.
     fn check_item_base(&mut self, base: &mut Expr, written: &str, sets_key: bool) -> Result<Type> {
         if let ExprKind::Var(name) = &base.kind {
             let info = self.lookup_or_err(name, base.span)?;
@@ -8855,7 +7800,6 @@ impl Checker {
                 let has_contents = self.bind_has_contents(&info.ty);
                 if !info.mode.can_change_contents(has_contents) && matches!(info.ty, Type::Map(..))
                 {
-                    // A parameter's hint says how to write one that changes.
                     let hint = match self.param_hint(name, info) {
                         hint if hint.is_empty() => {
                             "; keep the map in a 'flex' variable to change it".to_string()
@@ -8885,8 +7829,6 @@ impl Checker {
             return Ok(ty);
         }
         let ty = self.check_expr(base)?;
-        // `m[k] = v` may add the key, which changes the map as `add` changes a
-        // slice, so the map is in a place that can change.
         if matches!(ty, Type::Array(..) | Type::Map(..)) {
             self.assignable_array(base, written)?;
         }
@@ -8896,10 +7838,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Rejects an array, already checked, whose item can't be assigned: one in a
-    /// `fixed` variable, a result, or a temporary value, or one reached from a
-    /// name that never changes (see `written_through`). `written` is the place
-    /// assigned, as written.
     fn assignable_array(&self, place: &Expr, written: &str) -> Result<()> {
         match &place.kind {
             ExprKind::Var(name) => {
@@ -8935,7 +7873,6 @@ impl Checker {
                 }
                 self.assignable_array(base, written)
             }
-            // A value in a map is in its table in a region, as a slice's item is.
             ExprKind::Index(base, _)
                 if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) =>
             {
@@ -8946,14 +7883,7 @@ impl Checker {
         }
     }
 
-    /// Refuses a write into `written` (the place as written) through `place`,
-    /// what a pointer points to or a slice's or map's items are reached from,
-    /// where its root is a name that never changes: nothing changes through a
-    /// `fixed` variable, a parameter that isn't `flex`, a `fixed&`, a lambda's
-    /// copy, or `.this` outside an `alters` method, at any depth. A result is
-    /// the task's own value, being built, so what it holds may be written. A
-    /// value made where it is written (a call's, `new`'s) is no name's. With
-    /// `method`, the write is that `alters` method's, called on `written`.
+    /// Rejects mutating pointers/slices/maps rooted at `fixed` bindings, `fixed&`, non-`flex` params, or non-`alters` `this`.
     fn written_through(&self, place: &Expr, written: &str, method: Option<&str>) -> Result<()> {
         match &place.kind {
             ExprKind::Var(name) => {
@@ -8999,15 +7929,9 @@ impl Checker {
         }
     }
 
-    /// Where the value `e`, already checked, may come from, where it holds a
-    /// slice, a map or a pointer: the names that never change it is reached
-    /// from, and the calls that may give back what such a name holds (see
-    /// `Own`). Empty for a value that holds none, which is copied whole, and
-    /// for one made here or reached from a name that changes. What a fixed
-    /// name owns is never given to what may change it (see `hand`).
+    /// Provenance analysis over `fixed`-owned slices, maps, and pointers (`empty` for freshly created or mutable roots).
     fn owners(&self, e: &Expr) -> Vec<Own> {
         let holds = e.ty.as_ref().is_some_and(|ty| self.twofold(ty));
-        // A lambda's value keeps what it uses, which a call of it may give back.
         let lambda = matches!(e.ty, Some(Type::Closure(_)));
         if !holds && !lambda {
             return Vec::new();
@@ -9029,14 +7953,12 @@ impl Checker {
                         .map_or_else(Vec::new, |info| self.name_owners(name, info)),
                 }
             }
-            // A `fixed&` argument is the place it names.
             ExprKind::Ref(place) => self.owners(place),
             ExprKind::Field(base, _)
             | ExprKind::Index(base, _)
             | ExprKind::Lookup(base, _)
             | ExprKind::Deref(base) => self.owners(base),
             ExprKind::Call { name, args, .. } => self.call_owners(name, args),
-            // A task value or a lambda's: what it was given, and what it keeps.
             ExprKind::Invoke { callee, args } => {
                 all(&mut std::iter::once(callee.as_ref()).chain(args.iter()))
             }
@@ -9056,8 +7978,6 @@ impl Checker {
             | ExprKind::Shortcut { value, .. }
             | ExprKind::Spread(value)
             | ExprKind::Fail(value) => self.owners(value),
-            // Keys and values are copied into a slice of their own, which
-            // shares only what each of them holds.
             ExprKind::MapOp { map, op, .. } => match (op, &map.ty) {
                 (MapOp::Keys, Some(Type::Map(key, _, _))) if self.twofold(key) => self.owners(map),
                 (MapOp::Values, Some(Type::Map(_, value, _))) if self.twofold(value) => {
@@ -9065,9 +7985,6 @@ impl Checker {
                 }
                 _ => Vec::new(),
             },
-            // A copy of a map or of a slice is its own, at every depth, but what
-            // a lambda keeps stays shared; a slice of the values written, or of
-            // one value repeated, holds them as they are.
             ExprKind::New { ty, value, .. } => match ty.as_ref() {
                 map @ Type::Map(..) if !matches!(value.kind, ExprKind::Pairs(_)) => {
                     self.copied_owners(map, value)
@@ -9105,11 +8022,6 @@ impl Checker {
         }
     }
 
-    /// What owns the value of the variable `name`, with `info`, where it never
-    /// changes: what it was given, and the name itself where its value holds a
-    /// slice, a map or a pointer. A lambda kept in a variable is followed to
-    /// what it keeps, from what it was given; one that is a parameter may
-    /// send back anything the caller's lambda keeps.
     fn name_owners(&self, name: &str, info: &VarInfo) -> Vec<Own> {
         if info
             .mode
@@ -9130,9 +8042,7 @@ impl Checker {
         owners
     }
 
-    /// What owns a complete copy of `value`, whose items or whole are of type
-    /// `ty`: nothing, unless a lambda is in it, which the copy shares, or may
-    /// be, in a generic task given a lambda for one of its types.
+    /// Ownership for full copies: empty unless `ty` contains or instantiates a closure.
     fn copied_owners(&self, ty: &Type, value: &Expr) -> Vec<Own> {
         if has_closure(ty) {
             return self.owners(value);
@@ -9151,8 +8061,6 @@ impl Checker {
         }]
     }
 
-    /// Whether a copy of the generic `task` gives a type parameter in `ty` a
-    /// lambda, which a complete copy shares (see `Own::Copied`).
     fn copies_a_lambda(&self, task: &str, ty: &Type) -> bool {
         self.copies.get(task).is_some_and(|copies| {
             copies
@@ -9161,10 +8069,6 @@ impl Checker {
         })
     }
 
-    /// Where the value a call of `task` given `args` gives back may come
-    /// from: what the task may send back of each argument (see `Own::Sent`).
-    /// A call whose arguments aren't one for each parameter, as one giving a
-    /// group's values is, may give back any of them.
     fn call_owners(&self, task: &str, args: &[Expr]) -> Vec<Own> {
         let one_each = self
             .tasks
@@ -9190,27 +8094,18 @@ impl Checker {
             .collect()
     }
 
-    /// The hint for a variable that never changes, `name` with `info`, where a
-    /// change is refused (see `param_hint_for`).
     fn param_hint(&self, name: &str, info: &VarInfo) -> String {
         param_hint_for(name, info, holds_pointers(&info.ty, &self.regional))
     }
 
-    /// The value a message suggests copying: `value` as written, or its owner
-    /// (`OWNER_MARK`) where it has no short text, as `[a, b]` hasn't, or is a
-    /// plan B, which may give another value.
     fn copied_text(&self, value: &Expr) -> String {
         match self.value_text(value) {
-            // A plan B's own value may be what its block gives.
             _ if matches!(value.kind, ExprKind::PlanB { .. }) => OWNER_MARK.to_string(),
             text if text == "…" => OWNER_MARK.to_string(),
             text => text,
         }
     }
 
-    /// A value as a message names it: a place as written, a call by its task's
-    /// name (a method by what it is called on, or its shape's name if shared),
-    /// or a plan B by its value.
     fn value_text(&self, e: &Expr) -> String {
         if let Some(path) = place_path(e) {
             return path_text(&path);
@@ -9246,8 +8141,6 @@ impl Checker {
         }
     }
 
-    /// A place as a message quotes it, as `path_text` writes it, where a part
-    /// taken of a value on the way (`xs[0..2][0]`) is an item too.
     fn written_text(&self, e: &Expr) -> String {
         if let Some(path) = place_path(e) {
             return path_text(&path);
@@ -9263,24 +8156,17 @@ impl Checker {
         }
     }
 
-    /// Notes that `value`, already checked, is given to `to`, which may change
-    /// what it holds: an error, once every task is checked, if a fixed name
-    /// owns it (see `settle_owners`).
     fn hand(&mut self, value: &Expr, to: HandedTo) {
         let ty = value.ty.clone().unwrap_or(Type::Unknown);
         self.hand_as(value, &ty, to);
     }
 
-    /// `hand`, where what is given is of type `ty`: one of the several values
-    /// `value` sends, or the whole of it.
     fn hand_as(&mut self, value: &Expr, ty: &Type, to: HandedTo) {
-        // A lambda's value holds none: what it keeps counts where it is called.
         if !self.twofold(ty) {
             return;
         }
         let owners = self.owners(value);
         if !owners.is_empty() {
-            // Several values sent by one call are no one value to copy.
             let copied = if matches!(value.ty, Some(Type::Results(_))) {
                 OWNER_MARK.to_string()
             } else {
@@ -9291,9 +8177,6 @@ impl Checker {
         }
     }
 
-    /// A value of type `ty` given at `span` to `to`, with what owns it; the
-    /// message suggests a copy of `copied`, or of the owner (`OWNER_MARK`)
-    /// for a lambda, whose value can't be copied.
     fn handed(
         &self,
         span: Span,
@@ -9302,7 +8185,6 @@ impl Checker {
         copied: &str,
         ty: &Type,
     ) -> Handed {
-        // A lambda can't be copied, so neither can a value holding one.
         let lambda = self.only_lambdas(ty) || has_closure(ty);
         let copied = if lambda { OWNER_MARK } else { copied };
         let (region, none_here) = match ty {
@@ -9322,10 +8204,6 @@ impl Checker {
         }
     }
 
-    /// The region a suggested copy of a value of type `ty` goes in: the one
-    /// its type names, where the code here may allocate in it, or else the
-    /// innermost region here; and whether there is none here, so the region
-    /// the copy names is one the task would take.
     fn copy_region_here(&self, ty: &Type) -> (String, bool) {
         let usable = |name: &str| {
             self.lookup(name)
@@ -9355,30 +8233,18 @@ impl Checker {
         )
     }
 
-    /// Whether a value of type `ty` is twofold: it holds a slice, a map or a
-    /// pointer, which another name may share, or is a lambda that may send one
-    /// back, or is of a type the generic task being checked takes that may be
-    /// one; for several values, whether any of them is. Any other value is
-    /// whole, copied whole.
     fn twofold(&self, ty: &Type) -> bool {
         holds_twofold(ty, &self.regional, true) || self.may_hold(ty, true)
     }
 
-    /// Whether a value of type `ty` holds a slice, a map or a pointer only
-    /// through lambdas that may send one back.
     fn only_lambdas(&self, ty: &Type) -> bool {
         self.twofold(ty) && !holds_twofold(ty, &self.regional, false) && !self.may_hold(ty, false)
     }
 
-    /// Whether a `bind` variable of type `ty` may change its contents (see
-    /// `ast::has_contents`).
     fn bind_has_contents(&self, ty: &Type) -> bool {
         has_contents(ty, &|name| self.shapes.contains_key(name))
     }
 
-    /// Whether `ty` holds a type the generic task being checked takes, which
-    /// may be given one that holds a slice, a map or a pointer: any but one
-    /// that must be `frozen`. With `lambdas`, also one a lambda sends back.
     fn may_hold(&self, ty: &Type, lambdas: bool) -> bool {
         match ty {
             Type::Param(name) | Type::Named(name, _) => self.type_params.iter().any(|param| {
@@ -9399,17 +8265,11 @@ impl Checker {
         }
     }
 
-    /// Where a value of type `ty` holds a slice, a map or a pointer only for
-    /// some types the generic task being checked may be given: the task, and
-    /// the type its copies fill in.
     fn generic_part(&self, ty: &Type) -> Option<(String, Type)> {
         (!holds_twofold(ty, &self.regional, true) && self.may_hold(ty, true))
             .then(|| (self.current_task.clone(), ty.clone()))
     }
 
-    /// The names a pattern binds, `bindings`, from `source`, already checked:
-    /// a `flex` one may not be given what a fixed name owns (see `hand`), and
-    /// one that never changes owns what the value is owned by.
     fn bind_from(&mut self, bindings: &[Declared], source: &Expr) {
         let owners = self.owners(source);
         if owners.is_empty() {
@@ -9434,9 +8294,6 @@ impl Checker {
         }
     }
 
-    /// Notes what this task's `<-` sends may come from, which a call of it
-    /// gives back (see `Own::Sent`); for a lambda, what a call of its value
-    /// gives back (see `Own::Kept`).
     fn note_sent(&mut self, values: &[Expr]) {
         let sent: Vec<Own> = values.iter().flat_map(|value| self.owners(value)).collect();
         if !sent.is_empty() {
@@ -9447,10 +8304,6 @@ impl Checker {
         }
     }
 
-    /// Notes a write, or a change by an `alters` method (`method`), of
-    /// `place`, already checked, where it is reached from a value made where
-    /// it is written rather than from a name, as in `first(xs)^.x = 1`: an
-    /// error if a fixed name owns that value (see `settle_owners`).
     fn hand_written(&mut self, place: &Expr, method: Option<&str>) {
         let mut root = place;
         while let ExprKind::Field(base, _)
@@ -9485,14 +8338,8 @@ impl Checker {
         }
     }
 
-    /// Settles every value given to what may change it (see `hand`), once
-    /// every task is checked: which parameters each task may send back is
-    /// worked out from its sends, through the calls in them, until nothing
-    /// more is found, and a value a fixed name owns, directly or through what
-    /// a call gives back, is an error where it is given. A `[flex @r]` lambda
-    /// may not keep a copy of what a fixed name owns either.
+    /// Fixed-point dataflow over task returns (`<-`) to forbid passing `fixed`-owned handles to mutable sinks.
     fn settle_owners(&mut self) {
-        // Which parameters each task may send back, by their place.
         let mut sends_back: HashMap<String, HashSet<usize>> = HashMap::new();
         loop {
             let mut grown = false;
@@ -9520,7 +8367,6 @@ impl Checker {
             let Some((owner, of_param)) = self.owner_of_handed(&handed.owners, &sends_back) else {
                 continue;
             };
-            // In a generic task, only a copy given a type that holds one.
             let given = match &handed.generic {
                 None => String::new(),
                 Some((task, ty)) => {
@@ -9543,7 +8389,6 @@ impl Checker {
             };
             let owner_text = owner.clone();
             let copy = handed.copy.replace(OWNER_MARK, &owner_text);
-            // Where no region is here, the copy goes in one the task would take.
             let region = handed
                 .no_region
                 .as_ref()
@@ -9551,7 +8396,6 @@ impl Checker {
                     format!(", in a region the task takes, as in '{}: region'", region)
                 });
             let rule = "nothing changes through what a fixed name owns";
-            // A lambda's value can't be copied, but what it sends back can.
             let lambda = format!(
                 "a lambda that may send back what fixed '{}' owns",
                 owner_text
@@ -9585,12 +8429,10 @@ impl Checker {
                 ),
                 HandedTo::Param { task, param } => {
                     let keep = match of_param {
-                        // `.this` changes in an `alters` method.
                         true if owner == THIS => "make the method 'alters'".to_string(),
                         true => format!("take '{0}' as 'flex {0}'", owner_text),
                         false => format!("keep '{}' in a flex variable", owner_text),
                     };
-                    // A task value's parameters have no names: 'value 1'.
                     let what = match param
                         .strip_prefix("value ")
                         .and_then(|k| k.parse::<usize>().ok())
@@ -9616,12 +8458,9 @@ impl Checker {
                     lead, owner_text, rule
                 ),
             };
-            // The types a generic task is given that make it so, after its owner.
             let message = message.replacen(" owns", &format!(" owns{}", given), 1);
             errors.push(Error::at(handed.span, message));
         }
-        // A `[flex @r]` lambda's copies are its own to change, and so are the
-        // contents of a `[bind @r]` one's.
         for kept in self
             .kept_lambdas
             .values()
@@ -9645,7 +8484,6 @@ impl Checker {
                     continue;
                 }
                 let rule = "nothing changes through what a fixed name owns";
-                // A lambda kept may send back what it keeps, and can't be copied.
                 let message = if self.only_lambdas(&info.ty) {
                     format!(
                         "a '[{3} @{1}]' lambda may change what its copies hold, so it can't keep a copy of fixed '{0}', a lambda that may send back what a fixed name owns, and {2}; make it a '[@{1}]' lambda",
@@ -9661,7 +8499,6 @@ impl Checker {
                 errors.push(Error::at(kept.span, message));
             }
         }
-        // One place may be checked more than once, in a generic task's copies.
         let mut seen = HashSet::new();
         errors.retain(|error| {
             seen.insert((
@@ -9672,8 +8509,6 @@ impl Checker {
         self.errors.extend(errors);
     }
 
-    /// Whether `owners` reach parameter `param` of the task they are in,
-    /// through what the calls in them send back.
     fn reaches_param(
         &self,
         owners: &[Own],
@@ -9698,7 +8533,6 @@ impl Checker {
         })
     }
 
-    /// Whether `task` may send back what its parameter `param` is given.
     fn may_send_back(
         &self,
         task: &str,
@@ -9711,8 +8545,6 @@ impl Checker {
                 .is_some_and(|back| back.contains(&param))
     }
 
-    /// The fixed name that owns a value with `owners`, if one does, and
-    /// whether it is a parameter.
     fn owner_of_handed(
         &self,
         owners: &[Own],
@@ -9733,10 +8565,7 @@ impl Checker {
         })
     }
 
-    /// What a call of `lambda`'s value may give back, as the code where it is
-    /// written owns it: its sends, where each copy it keeps is what owns that
-    /// variable there. What the lambda makes, and its parameters, which its
-    /// caller gives, are no one's there.
+    /// Computes return ownership for `lambda` in outer scope, resolving captured outer variables to outer owners.
     fn lambda_sends(&self, lambda: &str) -> Vec<Own> {
         let Some(kept) = self.kept_lambdas.get(lambda) else {
             return Vec::new();
@@ -9745,10 +8574,6 @@ impl Checker {
         self.around_lambda(kept, lambda, sent)
     }
 
-    /// `owners`, noted in `lambda` (kept as `kept`), as the code where it is
-    /// written owns them: a copy by what owns its variable there, a lambda
-    /// written inside this one by what it sends, and what the copies were
-    /// given there as it is.
     fn around_lambda(&self, kept: &KeptLambda, lambda: &str, owners: &[Own]) -> Vec<Own> {
         owners
             .iter()
@@ -9792,17 +8617,12 @@ impl Checker {
             .collect()
     }
 
-    /// Checks the base of an assigned field, which must itself be an
-    /// assignable place. `written` is the place assigned, as written.
     fn check_field_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
         let span = base.span;
         match &base.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, span)?;
-                // Only a shape has fields to assign; for anything else (a pointer,
-                // a kind) the field error from `field_type` is the useful one. A
-                // shape given types counts, whether it has been made for them
-                // yet or not.
+                // Defer non-shape bases (pointers/kinds) so `field_type` produces the better diagnostic.
                 let is_shape = match &info.ty {
                     Type::Named(ty, _) => self.shapes.contains_key(ty),
                     Type::Applied(applied) => self.shapes.contains_key(&applied.name),
@@ -9843,9 +8663,6 @@ impl Checker {
         }
     }
 
-    /// Checks a `match` and its cases. In `gives`, every case gives the match a
-    /// value, which the cases settle between them (see `settle_branches`);
-    /// otherwise the cases hold statements and nothing comes back.
     fn check_match(
         &mut self,
         span: Span,
@@ -9855,11 +8672,7 @@ impl Checker {
     ) -> Result<Option<Type>> {
         let found = self.check_expr(expr);
         let ety = self.or_unknown(found);
-        // The value's type couldn't be worked out, so which cases cover it
-        // isn't known; each case is still checked, and none is missing or
-        // covered twice as far as this match can tell (see `Type::Unknown`).
         let unknown = ety.unknown();
-        // The cases that together cover every value.
         let needed: Vec<String> = match &ety {
             _ if unknown => Vec::new(),
             Type::Named(name, _) => match self.kinds.get(name) {
@@ -9874,7 +8687,6 @@ impl Checker {
                     );
                 }
             },
-            // A kind given a type this declaration takes.
             Type::Applied(applied) if self.kinds.contains_key(&applied.name) => self
                 .kinds
                 .get(&applied.name)
@@ -9882,7 +8694,6 @@ impl Checker {
                 .unwrap_or_default(),
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
             Type::Or(..) => vec!["{…}".to_string(), "failure …".to_string()],
-            // A tuple has one case, so it is taken apart rather than matched.
             Type::Tuple(_) => {
                 return err(
                     expr.span,
@@ -9904,12 +8715,8 @@ impl Checker {
         };
         let mut seen: HashSet<String> = HashSet::new();
         let mut matched_all = false;
-        // Every case is a path of its own, and a result is set after the match
-        // only where every case that runs on sets it.
         let entry = self.unset.clone();
         let mut branches = Vec::new();
-        // The type each case gives, where the match is a value and the case
-        // gives one: a case that sends gives none.
         let mut given = Vec::new();
         for (i, case) in cases.iter_mut().enumerate() {
             if matched_all {
@@ -9941,9 +8748,6 @@ impl Checker {
                     given.extend(value.map(|(ty, at)| (i, ty, at)));
                 }
                 None => {
-                    // `case p = value` where the match gives none: its body is
-                    // that one value, written on the pattern's own line, which
-                    // nothing would read.
                     if let [
                         Stmt {
                             kind: StmtKind::Expr(value),
@@ -9962,8 +8766,6 @@ impl Checker {
             }
             branches.push(self.branch_state(&case.body, &entry));
         }
-        // A value the cases don't cover would leave the match without setting
-        // anything, but then a case is missing, which is the error below.
         self.join_branches(entry, branches);
         if !matched_all && let Some(missing) = needed.iter().find(|n| !seen.contains(*n)) {
             return err(span, format!("missing case '{}' in match", missing));
@@ -9985,9 +8787,6 @@ impl Checker {
         Ok(Some(settled))
     }
 
-    /// Checks an expression, records its type on the node, and returns it. A
-    /// call that sends several values is rejected here: its values are
-    /// separate, so only a list can receive them (see `value_types`).
     fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let ty = self.check_expr_multi(expr)?;
         let Type::Results(types) = &ty else {
@@ -10008,10 +8807,7 @@ impl Checker {
         )
     }
 
-    /// `check_expr`, which also allows a call that sends several values.
     fn check_expr_multi(&mut self, expr: &mut Expr) -> Result<Type> {
-        // A shortcut lambda no type told about (`fixed f = () -> 42`) is
-        // checked here, its result read from its body.
         self.prepare_shortcut_lambda(expr, &Type::Unknown)?;
         self.resolve_constructor(expr);
         self.resolve_empty_plan_b(expr);
@@ -10039,8 +8835,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Warns, once per file, about an array or slice of chars made at `span`:
-    /// text built by hand, which `text` does already.
     fn warn_char_array(&mut self, ty: &Type, span: Span) {
         let chars = match ty {
             Type::Array(items, _) | Type::Slice(items, _) | Type::Ptr(items, _) => {
@@ -10062,8 +8856,6 @@ impl Checker {
         }
     }
 
-    /// The variable `name` as the innermost scope that has it declares it,
-    /// without `lookup`'s note that a lambda keeps it.
     fn var_info(&self, name: &str) -> Option<&VarInfo> {
         self.scopes
             .iter()
@@ -10071,8 +8863,6 @@ impl Checker {
             .find_map(|scope| scope.names.get(name))
     }
 
-    /// Puts the variable `name` in the family `family` of slices that share
-    /// items, or, with `None`, in none.
     fn set_family(&mut self, name: &str, family: Option<usize>) {
         if let Some(info) = self
             .scopes
@@ -10084,20 +8874,12 @@ impl Checker {
         }
     }
 
-    /// Whether the variable `name` is a slice.
     fn is_slice_var(&self, name: &str) -> bool {
         self.var_info(name)
             .is_some_and(|info| matches!(info.ty, Type::Slice(..)))
     }
 
-    /// Notes that the slice `to` was made of the slice `from`, a copy of it
-    /// (`flex to = from`) or a part (`from[1..3]`), so they share items: an
-    /// `add` on one that finds room in place keeps them on the same items, and
-    /// one that doesn't moves it to a block of its own. Which of the two
-    /// happens is known only when the program runs, so what is done to one is
-    /// said where the other is then used (see `note_slice_write` and
-    /// `note_slice_use`). Only a copy made by a binding or an assignment of
-    /// the slice's own name or a part of it is followed, within the task.
+    /// Tracks slices sharing backing buffers via direct copy or slicing to warn on post-`add`/`del` aliasing hazards.
     fn link_slices(&mut self, from: &str, to: &str) {
         if !self.is_slice_var(from) || !self.is_slice_var(to) {
             return;
@@ -10113,8 +8895,6 @@ impl Checker {
         self.set_family(to, Some(family));
     }
 
-    /// The slice a value is a copy or a part of, if it is one `link_slices`
-    /// follows: `xs`, or `xs[a..b]`.
     fn shared_slice_of(value: &Expr) -> Option<&str> {
         match &value.kind {
             ExprKind::Var(name) => Some(name),
@@ -10128,10 +8908,6 @@ impl Checker {
         }
     }
 
-    /// The slice whose own items an assignment to `place` writes: `xs[i]`, or
-    /// a field of such an item or an item of an array in it, but not an item
-    /// of a slice inside it, which is other memory. With where the slice is
-    /// named.
     fn written_slice(place: &Expr) -> Option<(&str, Span)> {
         let mut at = place;
         loop {
@@ -10147,16 +8923,8 @@ impl Checker {
         }
     }
 
-    /// Notes an `add` or a `del` on the slice `name`, at `span`, once it is
-    /// checked. A `flex` parameter is the task's own copy of the caller's
-    /// slice, which the caller's items move under (a `del`) or may stop being
-    /// shared with (an `add`), so the first of each in the task is warned
-    /// of; and a slice made of another, or one made of it, is told of where
-    /// it is next written or used. A `del` with no index takes the last item
-    /// and moves none, so only the parameter's rule follows it (`indexed`
-    /// tells which it is).
+    /// Records `add`/`del` edits; `del()` pops the tail without shifting, while `added`/`without` leave originals unchanged.
     fn note_slice_edit(&mut self, name: &str, op: EditOp, indexed: bool, span: Span) {
-        // `added` and `without` leave the slice as it was.
         if op.makes_copy() {
             return;
         }
@@ -10197,15 +8965,12 @@ impl Checker {
         {
             match op {
                 EditOp::Add => shared.added = Some((name.to_string(), span)),
-                // Taking the last item out moves none.
                 EditOp::Del if indexed => shared.deleted = Some((name.to_string(), span)),
                 EditOp::Del | EditOp::Added | EditOp::Without => {}
             }
         }
     }
 
-    /// Warns that the slice `name`, at `at`, is used after a `del` on another
-    /// that shares its items, which moved them, once for each task.
     fn warn_deleted_use(&mut self, name: &str, at: Span, family: usize) {
         let Some((deleter, deleted_at)) = self
             .slice_families
@@ -10224,8 +8989,6 @@ impl Checker {
         self.warn_once(self.current_task.clone(), "use after del", at, message);
     }
 
-    /// Notes a read of the slice `name` at `span`, for what a `del` on a slice
-    /// that shares its items did to it.
     fn note_slice_use(&mut self, name: &str, span: Span) {
         if let Some(info) = self.var_info(name)
             && matches!(info.ty, Type::Slice(..))
@@ -10235,9 +8998,6 @@ impl Checker {
         }
     }
 
-    /// Notes an assignment to `place`: an item written through a slice that
-    /// shares items with another is told of what an `add` or a `del` on either
-    /// may have done to the sharing.
     fn note_slice_write(&mut self, place: &Expr) {
         let Some((name, at)) = Checker::written_slice(place) else {
             return;
@@ -10273,11 +9033,7 @@ impl Checker {
         self.warn_deleted_use(name, at, family);
     }
 
-    /// Warns of `rule` at `span`, but only once for each `scope` (a task, or a
-    /// file) the rule is told apart by: the first goes with the warnings, and
-    /// the repeats are held back, for `--repeat-warnings` to show. A repeat
-    /// of a warning already given, as the copies a task that takes types is
-    /// checked as make of one body, is not a new one.
+    /// Emits warning once per `rule`+`scope`, archiving repeats into `held_back` for `--repeat-warnings`.
     fn warn_once(&mut self, scope: String, rule: &'static str, span: Span, message: String) {
         let first = self.told_once.insert((scope, rule));
         if self
@@ -10296,16 +9052,11 @@ impl Checker {
         }
     }
 
-    /// Checks `value.type`, the type of the value as code writes it, and makes
-    /// it the text it is: the compiler knows it, so the value is never worked
-    /// out, as C's `sizeof` doesn't. Regions are left out (`[float]`, `^Point`),
-    /// a shape or kind is its own name wherever it is read, and a shape made for
-    /// types is written as given them (`Box<int>`).
+    /// Evaluates `value.type` at compile time without regions; rejects `&x` places.
     fn check_type_of(&mut self, expr: &mut Expr) -> Result<Type> {
         let ExprKind::Field(base, _) = &mut expr.kind else {
             return Err(Error::internal_at(expr.span, "a '.type' that isn't one"));
         };
-        // An address is no value of its own, so it has no type to read.
         if let ExprKind::Ref(place) = &base.kind {
             let example =
                 place_path(place).map_or_else(|| "x".to_string(), |path| path_text(&path));
@@ -10332,18 +9083,12 @@ impl Checker {
         Ok(Type::Text(None))
     }
 
-    /// A type as code writes it, for `x.type`: no regions, each shape or kind by
-    /// its own name, and a shape made for types as given them.
     fn written_type(&self, ty: &Type) -> String {
         self.unmade(&ty.without_regions())
             .map_names(&|name| unqualified(name).to_string())
             .to_string()
     }
 
-    /// Checks the values of a list — a send, or the right side of a binding or
-    /// an assignment — and returns the type of each. A single call that sends
-    /// `wanted` values gives them all; otherwise every value gives its own, and
-    /// there must be one per name.
     fn value_types(
         &mut self,
         values: &mut [Expr],
@@ -10356,10 +9101,7 @@ impl Checker {
             let ty = self.check_expr_multi(only)?;
             match ty {
                 Type::Results(types) => given = types,
-                // A call of a task whose mistake is told already says nothing
-                // of how many values it sends (see `Type::Unknown`).
                 Type::Unknown => given = vec![Type::Unknown; wanted],
-                // `fixed a, b = pair`: the items of one tuple.
                 Type::Tuple(items) if unpacks && group_in_tuple(&items).is_some() => {
                     return err(only.span, GROUP_TUPLE_UNPACKED);
                 }
@@ -10402,8 +9144,6 @@ impl Checker {
         Ok(given)
     }
 
-    /// Resolves the types written for the names a binding declares, through the
-    /// parts of the tuples it unpacks.
     fn resolve_bound_types(&mut self, bound: &mut Bound) -> Result<()> {
         if let Some(annotated) = &mut bound.ty {
             *annotated = self.resolve_type(
@@ -10418,9 +9158,6 @@ impl Checker {
             .try_for_each(|part| self.resolve_bound_types(part))
     }
 
-    /// Checks `(a, b)` in a binding, which takes the items of `actual`, the
-    /// value at `at`, and adds the names it declares, with their types, to
-    /// `declared`.
     fn unpack_bound(
         &mut self,
         bound: &mut Bound,
@@ -10463,8 +9200,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The items of a value of type `actual` that `( … )` at `at`, with `names`
-    /// parts, unpacks.
     fn tuple_items(&self, actual: &Type, names: usize, at: Span) -> Result<Vec<Type>> {
         match actual {
             _ if actual.unknown() => Ok(vec![Type::Unknown; names]),
@@ -10489,8 +9224,6 @@ impl Checker {
         }
     }
 
-    /// Checks one place an assignment writes to, recording the variables it
-    /// assigns in `assigned`, and returns what it takes.
     fn check_target(
         &mut self,
         target: &mut Target,
@@ -10499,8 +9232,6 @@ impl Checker {
         match target {
             Target::Discard(_) => Ok(TargetType::Discard),
             Target::Place(place) => {
-                // Each place takes one value, so a variable assigned twice
-                // would quietly keep the last.
                 if let ExprKind::Var(name) = &place.kind
                     && let Some(at) = assigned.insert(name.clone(), place.span)
                 {
@@ -10524,8 +9255,6 @@ impl Checker {
         }
     }
 
-    /// Checks that the items of `actual`, the value at `value_span`, fit the
-    /// places `( … )` at `at` writes them to.
     fn unpack_target(
         &self,
         parts: &[TargetType],
@@ -10561,8 +9290,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `total <- value`, which sets named results and keeps going. The
-    /// names may be any of the task's results, in any order, each once.
     fn check_set_results(
         &mut self,
         span: Span,
@@ -10597,8 +9324,6 @@ impl Checker {
                 Some(value) => self.coerce(value, want)?,
                 None => fits_or_err(&actual, want, list_span, Given::Sent)?,
             }
-            // What a result holds may be written, so it may not take what a
-            // fixed name owns.
             if let (Some((name, _)), Some(value)) = (
                 names.get(i),
                 if forwarded {
@@ -10610,14 +9335,12 @@ impl Checker {
                 self.hand_as(value, want, HandedTo::Result(name.clone()));
             }
         }
-        // Set, so the results can be read from here on.
         for (name, _) in names {
             self.unset.remove(name);
         }
         Ok(())
     }
 
-    /// Why `name <- value` doesn't name a result of this task.
     fn not_a_result(&self, name: &str) -> String {
         if self.lookup(name).is_some() {
             return format!(
@@ -10638,9 +9361,6 @@ impl Checker {
         }
     }
 
-    /// How `ty`, a kind whose variant didn't tell all of its types, is written
-    /// with them, as the variant's message suggests (see `untold_kinds`):
-    /// `Option<Option<int>>` for `Option.Some(Option.None)`.
     fn untold_example(&self, ty: &Type) -> Option<String> {
         let Type::Applied(applied) = ty else {
             return None;
@@ -10653,11 +9373,8 @@ impl Checker {
         Some(format!("{}<{}>", unqualified(kind), example))
     }
 
-    /// The type a `fixed` or `flex` without an annotation gives `name`, from the
-    /// type of its value.
     fn inferred_type(&self, name: &str, actual: &Type, at: Span) -> Result<Type> {
-        // Text of no region in particular, and a shape or kind holding only such
-        // text, lasts as long as the program: a value made of literals.
+        // Literal text without a region promotes to program-lifetime `text`.
         let actual = &self.lasting(actual);
         match actual {
             Type::None => err(at, format!("cannot infer the type of '{}' from none; give it a type, such as '{}: maybe int'", name, name)),
@@ -10699,20 +9416,12 @@ impl Checker {
         }
     }
 
-    /// `ty` with `ANY_REGION` removed from its text and from the shapes and
-    /// kinds that hold text but no pointers: a value in no region holds only
-    /// text that lasts as long as the program. (One holding pointers keeps it,
-    /// since a variable of it must name a region.)
     fn lasting(&self, ty: &Type) -> Type {
         lasting(ty, &self.regional)
     }
 
-    /// Rewrites a variant used as a value, `Empty`, or called, `Circle(1.0)`,
-    /// into a `Construct` node. Variables can't share a variant's name, so a
-    /// bare name is never ambiguous.
     fn resolve_constructor(&self, expr: &mut Expr) {
-        // A macro named as a value is the literal it stands for, which the C
-        // names by the macro (see `ExprKind::Macro`). A broken one stays a name.
+        // Replace macro refs with folded constants while preserving `ExprKind::Macro` for C codegen.
         if let ExprKind::Var(name) = &expr.kind
             && self.lookup(name).is_none()
             && self.sees(name)
@@ -10752,25 +9461,15 @@ impl Checker {
         }
     }
 
-    /// Rewrites a name that names a task and no variable into the task's value,
-    /// and `f(x)`, where `f` is a variable of a task's type, into the call of
-    /// the task it holds. A variable named like a task that holds no task leaves
-    /// `f(x)` the task's call, as it always was; one named like no task makes it
-    /// a call of the variable, which says what the variable holds.
     fn resolve_task_use(&self, expr: &mut Expr) {
         match &mut expr.kind {
             ExprKind::Var(name) if self.lookup(name).is_none() => {
                 let full = self.full_name(name);
-                // A shared method is named so only by its decorators (see
-                // `Parser::decorate`); a program names it `X.m`.
-                // The layers of a wrapped method of every value are named so too,
-                // by the layer before each (see `add_wrappers`).
+                // Bare shared method names appear only inside decorators (`X.m` elsewhere); layer wrappers also match.
                 if self.tasks.get(&full).is_some_and(|info| info.owner.as_ref().is_none_or(|owner| owner.shared) || full.contains(LAYER)) {
                     expr.kind = ExprKind::TaskValue(full);
                 }
             }
-            // `X.f(…)`: a shared field that holds a task, called, where the
-            // shape has no method of that name.
             ExprKind::Call { name, types, args }
                 if types.is_empty()
                     && !self.tasks.contains_key(name.as_str())
@@ -10798,20 +9497,13 @@ impl Checker {
         }
     }
 
-    /// Checks the startup decorators in `body` (see `add_startups`), each a
-    /// call `d(task, args)`: that `d` takes a task of the task's type first,
-    /// and that it sends nothing, since what it sent would go nowhere.
     fn check_startup(&mut self, body: &mut Block, passes: &[bool]) {
         for stmt in body.iter_mut() {
             let fits = self.decorator_fits(stmt);
             if self.keep_going(fits) {
-                // The call is checked as a value, since a failure it sends is
-                // handled where the program starts (see `startup_failure`).
                 let StmtKind::Expr(call) = &mut stmt.kind else {
                     continue;
                 };
-                // No region exists where the program starts. One sending several
-                // values is told what a decorator sends, below.
                 let recorded = self.errors.len();
                 self.at_start = Some(DECORATOR_VALUES);
                 let checked = self
@@ -10834,8 +9526,6 @@ impl Checker {
                 continue;
             };
             match call.ty.as_ref() {
-                // A decorator that can fail: its error is written out where the
-                // program starts, so its type must have a text form.
                 Some(Type::Or(value, error)) if **value == Type::Nothing => self.note_written_strs(&error.clone(), call.span),
                 Some(Type::Nothing) if *passes => self.warnings.push(Error::at(
                     call.span,
@@ -10854,11 +9544,6 @@ impl Checker {
         }
     }
 
-    /// For a call of a task whose last parameter takes a group of types,
-    /// `args: P...`, the task as this call sees it: the group made into one type
-    /// for each value given after the others (`P#0`, `P#1`, …), worked out from
-    /// them as any type is, then kept together again (see `packed_groups`).
-    /// `None` for any other task.
     fn group_call_info(
         &self,
         info: &TaskInfo,
@@ -10907,7 +9592,6 @@ impl Checker {
                     count(after, "argument")
                 ),
             };
-            // `f(args...)`, the values of the group of the task it is in.
             let got = match args
                 .iter()
                 .filter(|arg| !matches!(arg.kind, ExprKind::Spread(_)))
@@ -10929,7 +9613,6 @@ impl Checker {
         };
         let mut types = Vec::new();
         for param in &info.types {
-            // A group given no values stays, given no types (see `check_call_args`).
             if param.name == *group && names.is_empty() {
                 types.push(param.clone());
             } else if param.name == *group {
@@ -10974,11 +9657,7 @@ impl Checker {
         }))
     }
 
-    /// Checks that a call of the task `name`, as `info` is for the call, can be
-    /// given the group's values `args[spread]`, `args...`: only as values for the
-    /// group the task takes. Values written beside them join that group,
-    /// but not in a call of the task by itself, whose group would be one value
-    /// longer at each call, and so would never be filled in.
+    /// Spreading `args...` matches a callee's group parameter; self-recursive extra args are rejected as infinite growth.
     fn check_spread_given(
         &self,
         name: &str,
@@ -11025,7 +9704,6 @@ impl Checker {
                 ),
             );
         }
-        // The values written beside them in the group, before and after.
         let grown = (spread - fixed) + (info.params.len() - after - spread - 1);
         if grown > 0 && self.full_name(name) == self.current_task {
             return err(
@@ -11040,10 +9718,7 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `t.#k`, the tuple `t`'s item `k` in a maybe, which is `none` past
-    /// the tuple's end: an item there becomes the item read as `t.k` and made
-    /// a maybe (see `ExprKind::Wrap`), and one past it stays, read as `none`,
-    /// which takes its maybe type from where it goes.
+    /// Tuple safe-index `t.#k`: wraps in-bounds reads in `maybe` (`Wrap`), leaves out-of-bounds as `none`, defers groups.
     fn check_safe_item(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
         let ExprKind::Field(base, item) = &mut expr.kind else {
@@ -11056,8 +9731,6 @@ impl Checker {
                 "a tuple's item read in a maybe without its place",
             ));
         };
-        // After a test of its type, `t.#5? is maybe int`, the item read is of
-        // the type tested, or none (see `type_test_bindings`).
         let narrowed = match &base.kind {
             ExprKind::Var(tuple) => self
                 .narrowed
@@ -11069,8 +9742,6 @@ impl Checker {
         };
         let items = match &base_ty {
             Type::Unknown => return Ok(Type::Unknown),
-            // A group's tuple: each copy of the task knows its length, so the
-            // read stays until then (see `substitute_expr`).
             Type::Tuple(items) if group_in_tuple(items).is_some() => {
                 let group = group_in_tuple(items).unwrap_or_default();
                 let item = narrowed.unwrap_or_else(|| Type::Param(group_item(&group, place)));
@@ -11098,9 +9769,6 @@ impl Checker {
             self.coerce(expr, &told)?;
             return Ok(told);
         };
-        // An item of another type than the one tested is read where the test
-        // failed, in a block that is dropped, or one holding a `T`, which each
-        // copy settles: either way it reads as the type tested.
         let read_as = match narrowed {
             Some(narrowed) if !same_ignoring_regions(&found, &narrowed) => {
                 Type::Maybe(Box::new(narrowed))
@@ -11116,7 +9784,6 @@ impl Checker {
         Ok(read_as)
     }
 
-    /// The group whose values `e` names, when it is a name of them, `args`.
     fn group_of(&self, e: &Expr) -> Option<String> {
         let ExprKind::Var(name) = &e.kind else {
             return None;
@@ -11127,8 +9794,6 @@ impl Checker {
         }
     }
 
-    /// Checks `args.len`, read from `base`, the values of a group: how many
-    /// there are, a number each copy of the task knows (see `substitute_expr`).
     fn check_group_member(&mut self, base: &mut Expr, member: &str, span: Span) -> Result<Type> {
         let Some(group) = self.group_of(base) else {
             return Err(Error::internal_at(
@@ -11139,8 +9804,6 @@ impl Checker {
         base.ty = Some(Type::Group(group.clone()));
         match member {
             LEN => Ok(Type::Int),
-            // The tuple for two or more values; for one or none, a failure
-            // holding the one value, or none (see `group_tuple_type`).
             GROUP_TUPLE if !self.allows(Need::Frozen, &Type::Group(group.clone())) => err(
                 span,
                 format!(
@@ -11159,8 +9822,6 @@ impl Checker {
         }
     }
 
-    /// Checks `args...`, the values of a group parameter given on whole as the
-    /// last values of a call, and returns the group's type.
     fn check_spread(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
         let outer = std::mem::replace(&mut self.spreading, true);
         let ty = self.check_expr(inner);
@@ -11177,14 +9838,7 @@ impl Checker {
         }
     }
 
-    /// Moves the body of each task with wrappers, `$(w1, w2(a))`, into a task of
-    /// its own, the innermost layer, and makes a task for each other layer: the
-    /// task itself calls `w1`, giving it the next layer, its own values, and the
-    /// task's values, and so on inward (see `ast::layer_name`). Every call of the
-    /// task, and every value of it, goes through the whole chain, the task
-    /// calling itself too. What each layer sends is worked out once the headers
-    /// are checked (see `settle_wrappers`), so each layer's header sends what the
-    /// task does until then.
+    /// Outlines wrapped task bodies into nested `__layer__k` tasks so all calls/values traverse the wrapper chain.
     fn add_wrappers(&mut self, items: &mut Vec<Item>) {
         let mut layers = Vec::new();
         for item in items.iter_mut() {
@@ -11246,7 +9900,6 @@ impl Checker {
                 layer.results = unnamed(task);
                 layers.push(layer);
             }
-            // Each layer is the task in a message.
             for k in 1..=count {
                 let layer = layer_name(&task.name, k);
                 self.written_names.insert(
@@ -11262,8 +9915,6 @@ impl Checker {
         items.extend(layers.into_iter().map(Item::Task));
     }
 
-    /// Works out what each layer of each task with wrappers sends, from the
-    /// innermost out, and writes its body: the call of its wrapper.
     fn settle_wrappers(&mut self, items: &mut [Item]) {
         let places: HashMap<String, usize> = items
             .iter()
@@ -11277,7 +9928,6 @@ impl Checker {
                 .settle_wrapped(items, &places, &task, &calls)
                 .and_then(|()| self.wrapped_privately(items, &places, &task, &calls));
             if !self.keep_going(settled) {
-                // What the layers send isn't known, so neither is what the task does.
                 self.broken.insert(task.clone());
                 for k in 1..calls.len() {
                     self.broken.insert(layer_name(&task, k));
@@ -11287,8 +9937,6 @@ impl Checker {
         self.current_module.clear();
     }
 
-    /// Refuses a public task that its wrappers make send a type private to
-    /// its file, which other files couldn't name, as its header couldn't.
     fn wrapped_privately(
         &self,
         items: &[Item],
@@ -11322,9 +9970,7 @@ impl Checker {
         }
     }
 
-    /// The tasks with wrappers (see `wrapped`), each after its wrappers that
-    /// have wrappers of their own: what a wrapper sends is settled before a
-    /// task it wraps reads it, wherever the two are written.
+    /// Topologically orders wrapped tasks after any wrappers they invoke so layer return types settle bottom-up.
     fn wrappers_first(&mut self) -> Vec<(String, Vec<Expr>)> {
         let wrapped = std::mem::take(&mut self.wrapped);
         let order: Vec<String> = wrapped.iter().map(|(task, _)| task.clone()).collect();
@@ -11336,27 +9982,23 @@ impl Checker {
         settled
     }
 
-    /// Adds `task`, if it is still `pending`, to `settled` after its wrappers.
     fn wrapper_first(
         &self,
         task: &str,
         pending: &mut HashMap<String, Vec<Expr>>,
         settled: &mut Vec<(String, Vec<Expr>)>,
     ) {
-        // Taken out first, so a wrapper is never waited on twice.
         let Some(calls) = pending.remove(task) else {
             return;
         };
         let module = module_of(task);
         for call in &calls {
             if let ExprKind::Call { name, .. } = &call.kind {
-                // `full_name`, for the module `task` is in.
                 let full = match self
                     .modules
                     .get(module)
                     .and_then(|scope| scope.imported(name))
                 {
-                    // `$(.checked)`: a method of the wrapped method's type.
                     _ if name.starts_with(MEMBER_WRAPPER) => match method_parts(task) {
                         Some((owner, _)) => {
                             method_name(owner, name.trim_start_matches(MEMBER_WRAPPER))
@@ -11399,8 +10041,6 @@ impl Checker {
                 ),
             );
         }
-        // How the task takes each value, which the rest of the chain takes too:
-        // a method of every value its value first (see `task_params_taken`).
         let (types, taken) = self.task_params_taken(info);
         let params: Vec<(String, Type)> = info
             .params
@@ -11419,15 +10059,11 @@ impl Checker {
                 return Err(Error::internal_at(call.span, "a wrapper that is no call"));
             };
             let written = unqualified(name);
-            // `$(.checked)`: a method of the value the wrapped method is called
-            // on, which it is called on too (see `member_wrapper`).
             let member = name.strip_prefix(MEMBER_WRAPPER);
             let full = match member {
                 Some(method) => self.member_wrapper(task, method, call.span)?,
                 None => self.full_name(name),
             };
-            // A wrapper whose header has a mistake, told already, promises
-            // nothing to check the chain against.
             if self.broken.contains(&full) {
                 self.broken.insert(task.to_string());
                 for k in 1..layers {
@@ -11445,7 +10081,6 @@ impl Checker {
                         ),
                     );
                 }
-                // `X.m`, naming no method of `X`.
                 if let Some((owner, field)) = self.shared_field(&full) {
                     return err(
                         call.span,
@@ -11475,8 +10110,6 @@ impl Checker {
                     ),
                 );
             };
-            // A shared method is a task of its type's; one of every value has
-            // a value to be called on, which no layer gives it.
             if member.is_none() && wrapper.owner.as_ref().is_some_and(|owner| !owner.shared) {
                 return err(
                     call.span,
@@ -11490,11 +10123,8 @@ impl Checker {
                     ),
                 );
             }
-            // A member wrapper is called on the value, which it takes as its
-            // method does; the rest of its parameters are a wrapper's.
+            // Member wrappers receive the wrapped value as receiver instead of first forwarded parameter.
             let skip = usize::from(member.is_some());
-            // The values the wrapper takes of the task's: a member wrapper is
-            // called on the value instead.
             let values = types.len() - skip;
             let (whose, besides) = match (member, method_parts(task)) {
                 (Some(_), Some((_, method))) => (
@@ -11503,8 +10133,6 @@ impl Checker {
                 ),
                 _ => (format!("task '{}'", written_task), ""),
             };
-            // The value a member wrapper is called on, whose region is the one
-            // the wrapped method's value is in.
             let this = wrapper
                 .params
                 .first()
@@ -11547,10 +10175,6 @@ impl Checker {
                     return err(call.span, message);
                 }
             }
-            // Which of the wrapper's parameters take the task's values, and which
-            // of the task's each takes: all of them, after its own values, or
-            // for a wrapper taking a group, the ones the next task's type names
-            // around its group, and the rest in the group (see `wrapper_tail`).
             let tail = match self.wrapper_tail(
                 &wrapper,
                 params.get(skip..).unwrap_or_default(),
@@ -11614,19 +10238,13 @@ impl Checker {
                     ),
                 );
             }
-            // The wrapper's types and regions, from the next task and the task's
-            // values, which are known here; its own values are the call's to say.
-            // Its types and regions are found in the task's own names, which
-            // its values and what it sends are in; the type is compared as every
-            // task type is, with its regions named in order.
+            // Resolve wrapper type/region params against next-layer signature in caller naming order.
             let named_next = Type::Task(Box::new(TaskType {
                 params: types.clone(),
                 taken: taken.clone(),
                 ret: sends.clone(),
             }));
             let next = named_next.normalized_tasks();
-            // A wrapper that takes no types takes these as they are, which is
-            // said as the wrapper's mistake rather than its call's.
             if wrapper.types.is_empty()
                 && !sends.unknown()
                 && let Some((_, first)) = wrapper.params.first()
@@ -11637,8 +10255,6 @@ impl Checker {
                 } else {
                     format!("what comes after wrapper '{}'", written)
                 };
-                // A value the wrapper names in no region, where the task's is in
-                // one, as a method's value may be.
                 let unnamed = match (first, &next) {
                     (Type::Task(mine), Type::Task(theirs)) => mine
                         .params
@@ -11662,7 +10278,6 @@ impl Checker {
                             example.unwrap_or_else(|| "text@a".to_string())
                         )
                     }
-                    // A task changing what a value reaches, or taking a place.
                     _ => task_way_hint(&next, first),
                 };
                 return err(
@@ -11673,8 +10288,6 @@ impl Checker {
                     ),
                 );
             }
-            // How it takes the task's values is its own to say, types or none;
-            // what they are, where its own type for one names no type it takes.
             if !sends.unknown() {
                 for &(mine, theirs) in &tail.pairs {
                     let theirs = theirs + skip;
@@ -11723,8 +10336,6 @@ impl Checker {
                 unify_params(pattern, actual, &mut given);
                 unify_regions(pattern, actual, &mut regions);
             }
-            // A region the task takes is the one the wrapper takes in its place,
-            // which only their names tell.
             for &(mine, theirs) in &tail.pairs {
                 if let (Some((param, Type::Region)), Some((given_name, Type::Region))) =
                     (wrapper.params.get(mine), params.get(theirs + skip))
@@ -11773,12 +10384,8 @@ impl Checker {
                     ),
                 );
             }
-            // The call of the wrapper, given the next layer, its own values, and
-            // the task's.
             let mut given_args = vec![Expr::new(ExprKind::Var(layer_name(task, k + 1)), call.span)];
             given_args.extend(args.iter().cloned());
-            // A place the task is given, it gives on as one; a member wrapper is
-            // called on the value instead.
             given_args.extend(
                 params
                     .iter()
@@ -11849,11 +10456,7 @@ impl Checker {
         Ok(())
     }
 
-    /// The task a member wrapper, `$(.method)`, names above `task`: the method
-    /// of every value of `task`'s own type, which `task` must be a method of
-    /// every value of; one wrapping a method that alters the value alters it
-    /// too, and only such a one does, so neither sees the value change under
-    /// it as a value that never changes.
+    /// Resolves `$(.method)` on the wrapped method's own type; `alters` must match between wrapper and target.
     fn member_wrapper(&self, task: &str, method: &str, at: Span) -> Result<String> {
         let wrapped = self.tasks.get(task).and_then(|info| info.owner.clone());
         let (Some(wrapped), Some((owner, _))) =
@@ -11925,12 +10528,6 @@ impl Checker {
         }
     }
 
-    /// Which of `wrapper`'s parameters take the values of the task it wraps,
-    /// which takes `params` as `taken` says: all of them, after the wrapper's
-    /// own values (`None` where there are too few), or for a wrapper taking a
-    /// group, `args: P...`, the values the next task's type names one by one
-    /// around its group, `next: (@a, P...) -> R`, which the wrapper names so
-    /// too, and the rest in the group, which holds no region.
     fn wrapper_tail(
         &self,
         wrapper: &TaskInfo,
@@ -12006,9 +10603,6 @@ impl Checker {
         if let Some(k) = (before..end).find(|&k| matches!(taken.get(k), Some(Taken::Region(_))))
             && let (Some(ahead), Some((region, _))) = (params.get(..k), params.get(k))
         {
-            // The values the task takes before the region are named before it
-            // too, a method's value first.
-            // A place is named so in both.
             let how = |i: usize| match taken.get(i) {
                 Some(Taken::Place(passing)) => format!("{} ", passing.word()),
                 _ => String::new(),
@@ -12047,14 +10641,7 @@ impl Checker {
         }))
     }
 
-    /// Checks the values of its own each wrapper is given in `$( … )`. Each is
-    /// worked out where the program starts, where no variable and no region
-    /// exist yet. One the compiler works out (a literal, a macro, a task's name)
-    /// stays written into every call, which costs nothing; any other (a call, a
-    /// shared field) becomes a shared field of `START_VALUES`, given its value
-    /// once where the program starts, which every call of the task reads. The
-    /// order they are worked out in is settled once every body is checked (see
-    /// `order_start_values`).
+    /// Evaluates wrapper custom args at startup: constants inline at call sites; dynamic values cache in `START_VALUES`.
     fn check_start_values(&mut self, items: &mut [Item]) {
         let places: HashMap<String, usize> = items
             .iter()
@@ -12062,8 +10649,6 @@ impl Checker {
             .filter(|(_, item)| matches!(item, Item::Task(_)))
             .map(|(i, item)| (item.name().to_string(), i))
             .collect();
-        // In the order the program is written, its modules first, as its
-        // startup decorators run.
         let mut chains = std::mem::take(&mut self.wrapped_chains);
         chains.sort_by_key(|(task, _)| places.get(task).copied().unwrap_or(usize::MAX));
         let mut members = Vec::new();
@@ -12080,8 +10665,6 @@ impl Checker {
                 let Some(call) = wrapper_call(&mut def.body) else {
                     continue;
                 };
-                // `$(.checked)`: a method of the value, called on it, which the
-                // call's values leave out, as they do the value it takes first.
                 let (wrapper, name, args, skip) = match &mut call.kind {
                     ExprKind::Call { name, args, .. } => {
                         (self.full_name(name), name.clone(), args, 0)
@@ -12113,8 +10696,6 @@ impl Checker {
                     .map(|info| info.passing.iter().skip(skip).copied().collect())
                     .unwrap_or_default();
                 let own = args.len().saturating_sub(1 + takes - skip);
-                // The types the wrapper takes, as the next task it is given tells
-                // them, `T` of `next: (T) -> T` (see `settle_wrapped`).
                 let mut known = HashMap::new();
                 if let (
                     Some(first),
@@ -12129,8 +10710,6 @@ impl Checker {
                     self.match_params(first, &next, &mut known);
                 }
                 for (i, arg) in args.iter_mut().enumerate().skip(1).take(own) {
-                    // A place the wrapper changes or reads where it is kept: no
-                    // value worked out once is one.
                     if let Some(mark) = passing
                         .get(i)
                         .filter(|passing| passing.is_ref())
@@ -12141,15 +10720,11 @@ impl Checker {
                             format!("wrapper '{}' takes this as a place, with '{}', but {} are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper", codegen::notice_name(&wrapper), mark, WRAPPER_VALUES),
                         ));
                         if !matches!(arg.kind, ExprKind::Ref(_)) {
-                            // Marked, so the wrapper's call says nothing more about it.
                             let span = arg.span;
                             *arg = Expr::new(ExprKind::Ref(Box::new(arg.clone())), span);
                         }
                         continue;
                     }
-                    // The type the wrapper takes it as, where that doesn't depend on
-                    // the value itself; its regions are no region's, since none
-                    // exists where the program starts.
                     let expected = params
                         .get(i)
                         .map(|ty| ty.map_params(&mut |name| known.get(name).cloned()))
@@ -12158,17 +10733,12 @@ impl Checker {
                     let mut value = arg.clone();
                     let checked = self.check_start_value(&mut value, expected.as_ref());
                     if checked.is_ok() && constant_value(&value) {
-                        // Written into every call as it was checked here, where no
-                        // variable is seen: a task's name stays the task's, even
-                        // where the task takes a parameter of that name.
                         *arg = value;
                         continue;
                     }
                     let span = arg.span;
                     let ty = match checked {
                         Ok(()) => value.ty.clone().unwrap_or(Type::Unknown),
-                        // The call reads a value of no type, so nothing complains
-                        // about it again (see `Type::unknown`).
                         Err(error) => {
                             self.record(error);
                             Type::Unknown
@@ -12229,20 +10799,12 @@ impl Checker {
         }
     }
 
-    /// Words the mistakes recorded since there were `recorded` of them, found in
-    /// a value worked out where the program starts, as such (see
-    /// `at_start_error`): a check that goes on after a mistake records it
-    /// rather than sending it back.
     fn said_at_start(&mut self, recorded: usize, what: &str) {
         for error in self.errors.iter_mut().skip(recorded) {
             *error = at_start_error(error.clone(), what);
         }
     }
 
-    /// Checks `value`, a wrapper's own value, where the program starts: with no
-    /// variable and no region, as a startup decorator's values are checked, and
-    /// as the type `expected` the wrapper takes it as, where that is known. It
-    /// is kept for as long as the program runs, so it holds nothing in a region.
     fn check_start_value(&mut self, value: &mut Expr, expected: Option<&Type>) -> Result<()> {
         let copies = self.unsettled_copies.len();
         let types = self.unsettled_types.len();
@@ -12299,13 +10861,7 @@ impl Checker {
         Ok(())
     }
 
-    /// Works out the order the values of wrappers are given where the program
-    /// starts (see `check_start_values`): a task's after those of every task
-    /// they may call, so that none reads a value not worked out yet, and in the
-    /// order the program is written otherwise. A value that may call its own
-    /// task, or values that may call each other's, have no such order and are
-    /// refused. It reads the calls every body makes, so it runs once they are
-    /// all checked, and only on a program without other mistakes.
+    /// Topologically orders dynamic `START_VALUES` initializers by call-graph dependencies (rejects cycles).
     fn order_start_values(&mut self, items: &[Item]) {
         if self.start_values.is_empty() || !self.errors.is_empty() {
             return;
@@ -12325,8 +10881,6 @@ impl Checker {
                     .map(|value| (member.field.name.as_str(), value))
             })
             .collect();
-        // What a call of a task held as a value may reach where the program
-        // starts, from what every value worked out there may run.
         let mut all = Calls::default();
         let mut named = Vec::new();
         for value in values.values() {
@@ -12342,8 +10896,6 @@ impl Checker {
                 units.push(&start.task);
             }
         }
-        // For each task, the tasks whose values its values need first, each with
-        // the value that needs it.
         let mut needs: HashMap<&str, Vec<(&str, &StartValue)>> = HashMap::new();
         let mut mistakes = Vec::new();
         for start in &self.start_values {
@@ -12441,10 +10993,6 @@ impl Checker {
         }
     }
 
-    /// Notes what `e` calls, without what is inside it (see `walk_expr`): a
-    /// task called or named as a value, a call of a task held as a value, and
-    /// the `str` of each value written as text. A generic task's body writes
-    /// values of the types it is given, so a call of one writes them too.
     fn note_calls(&self, e: &Expr, calls: &mut Calls) {
         let wrote = |ty: &Type, calls: &mut Calls| {
             let mut found = Vec::new();
@@ -12480,8 +11028,6 @@ impl Checker {
         }
     }
 
-    /// The `str` methods writing a value of type `ty` as text may call: those of
-    /// the shapes and kinds with one of their own, wherever they are in it.
     fn str_methods(&self, ty: &Type, seen: &mut Vec<String>, found: &mut Vec<String>) {
         match ty {
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
@@ -12513,9 +11059,6 @@ impl Checker {
         }
     }
 
-    /// Whether the startup decorator `stmt`, the call `d(task, args)`, takes
-    /// the task first and as many values as it is given, said as a decorator's
-    /// mistake rather than a call's. A generic decorator is left to the call.
     fn decorator_fits(&self, stmt: &Stmt) -> Result<()> {
         let StmtKind::Expr(call) = &stmt.kind else {
             return Ok(());
@@ -12523,8 +11066,7 @@ impl Checker {
         let ExprKind::Call { name, args, .. } = &call.kind else {
             return Ok(());
         };
-        // `main` is where the program starts, after its startup decorators
-        // have run, so none of them can take it.
+        // `main` runs after startup decorators, so decorators cannot target `main`.
         if let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind)
             && self.full_name(decorated) == "main"
         {
@@ -12604,7 +11146,6 @@ impl Checker {
         let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind) else {
             return Ok(());
         };
-        // As it is written: a decorator of another module keeps its module's name.
         let own = format!("{}{}", self.current_module, MODULE_SEPARATOR);
         let written = name.strip_prefix(own.as_str()).unwrap_or(name);
         let first = match info.params.first() {
@@ -12631,8 +11172,6 @@ impl Checker {
                 );
             }
         };
-        // The last of its values may fall back on values of their own (see
-        // `fill_defaults`), as `$d` leaves them out.
         let needed = self
             .param_defaults
             .get(&self.full_name(name))
@@ -12689,10 +11228,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The type of `square`, task `name` named as a value (see
-    /// `ExprKind::TaskValue`): its header, without names, but a region's, and
-    /// with how each parameter is given (see `Taken`). A task that takes types
-    /// or sends several values is none.
     fn task_value_type(&self, name: &str, span: Span) -> Result<Type> {
         if self.broken.contains(name) {
             return Ok(Type::Unknown);
@@ -12714,7 +11249,6 @@ impl Checker {
             );
         }
         if matches!(info.ret, Type::Results(_)) {
-            // A wrapper's next task, a layer, is named as the task it wraps.
             let base = name.split(LAYER).next().unwrap_or(name);
             let what = match (method_parts(base), &info.owner) {
                 (Some((_, method)), Some(owner)) if !owner.shared => format!("method '{}'", method),
@@ -12739,10 +11273,6 @@ impl Checker {
         )))
     }
 
-    /// The types of the values a task takes and how it takes each, as its type
-    /// says: a method of every value takes the value it is called on first, as
-    /// a place where it alters it, and of the type of its shape or kind, with
-    /// the region the value lives in only where the type holds one.
     fn task_params_taken(&self, info: &TaskInfo) -> (Vec<Type>, Vec<Taken>) {
         let alters = info
             .owner
@@ -12775,13 +11305,7 @@ impl Checker {
             .unzip()
     }
 
-    /// Checks `f(x)`, the call of the task value `callee` holds, and returns
-    /// what it sends: its arguments are checked as a named task's are, against
-    /// the task's type, whose regions stand for the caller's regions its values
-    /// show.
-    /// `[@r](x: int) -> int … fi` at `span`: the value of a lambda that keeps
-    /// what it uses of the code around it in region `region`, a copy of each
-    /// variable it uses, made here (see `kept_scope`).
+    /// Resolves `[@r](...)` closure captures and verifies outer visibility.
     fn check_closure(
         &mut self,
         lambda: &str,
@@ -12796,7 +11320,6 @@ impl Checker {
             KeptMode::Bind => "bind ",
         };
         let written = format!("[{}@{}]", mode_word, region);
-        // Where the program starts no region exists yet.
         if self.at_start.is_some() {
             return err(
                 span,
@@ -12831,8 +11354,6 @@ impl Checker {
         for place in places {
             self.check_kept_place(place, region)?;
         }
-        // What the lambda may keep: every variable here, and the one region,
-        // with those its places are in, which outlive them.
         let mut seen_regions: Vec<String> = vec![region.to_string()];
         for place in places {
             if let Some(info) = self
@@ -12852,13 +11373,11 @@ impl Checker {
         }
         let mut outer: Vec<(String, VarInfo)> = Vec::new();
         let mut seen: HashSet<&str> = HashSet::new();
-        // Innermost first, so a name is the one the lambda sees.
         for scope in self.scopes.iter().rev() {
             for (name, info) in &scope.names {
                 if !seen.insert(name.as_str()) {
                     continue;
                 }
-                // `.this` stays the method's: a lambda in one takes it as a parameter.
                 if info.result
                     || (info.ty == Type::Region && !seen_regions.contains(name))
                     || name == SHOWN
@@ -12885,8 +11404,6 @@ impl Checker {
             .iter()
             .map(|(name, info)| (name.clone(), self.name_owners(name, info)))
             .collect();
-        // A shortcut lambda's body may be checked already (see
-        // `prepare_shortcut_lambda`): what it uses stays noted.
         let uses = self
             .kept_lambdas
             .get(lambda)
@@ -12929,14 +11446,10 @@ impl Checker {
         )))
     }
 
-    /// Checks `place`, a variable a lambda kept in `region` keeps as a place:
-    /// one that changes where it changes it, and that outlives the lambda,
-    /// which ends with `region`, so `region` is declared after it, in its
-    /// block or a block inside it.
+    /// Captured `places` must originate outside the closure's capture `region` so references never dangle.
     fn check_kept_place(&self, place: &KeptPlace, region: &str) -> Result<()> {
         let name = &place.name;
         let word = place.passing.word();
-        // A use, which a lambda around this one keeps (see `lookup`).
         let _ = self.lookup(name);
         let at = |name: &str| {
             self.scopes
@@ -12981,7 +11494,6 @@ impl Checker {
                     ..error
                 })?;
         } else if place.passing == Passing::BindRef && self.bind_has_contents(&info.ty) {
-            // A `bind&` of a type with no contents only reads, as `fixed&` does.
             let mut var = Expr::new(ExprKind::Var(name.clone()), place.span);
             var.ty = Some(info.ty.clone());
             self.given_place(&var, &Taker::KeptBind(name))
@@ -13020,10 +11532,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The scope a lambda that keeps what it uses sees under its own: a copy of
-    /// each variable of the code around it, which changes only in a
-    /// `[flex @r]` lambda, and the region it keeps them in. `None` for one whose
-    /// value was never checked.
     fn kept_scope(&self, lambda: &str) -> Option<Scope> {
         let kept = self.kept_lambdas.get(lambda)?;
         let mut around = Scope::default();
@@ -13034,11 +11542,8 @@ impl Checker {
             info.passing = Passing::Copy;
             info.refers = None;
             if info.ty == Type::Region {
-                // The region it keeps them in, which it checked allocates; a
-                // region of a place may be one the task only names.
                 info.allocates = info.allocates || *name == kept.region;
             } else if let Some(place) = kept.places.iter().find(|place| place.name == *name) {
-                // A place: the variable itself, changed only through `flex&`.
                 info.passing = place.passing;
                 info.mode = match place.passing {
                     Passing::FlexRef => Mode::Flex,
@@ -13057,9 +11562,6 @@ impl Checker {
         Some(around)
     }
 
-    /// Checks a read of `name`, a variable of the code around the lambda being
-    /// checked, which keeps a copy of it, at `span`: a copy of a value of the
-    /// region it keeps them in, or of none.
     fn check_kept_use(&self, name: &str, ty: &Type, span: Span) -> Result<()> {
         let Some(kept) = self
             .current_lambda
@@ -13068,7 +11570,6 @@ impl Checker {
         else {
             return Ok(());
         };
-        // A place is the variable itself, which outlives the lambda.
         if *ty == Type::Region || kept.places.iter().any(|place| place.name == name) {
             return Ok(());
         }
@@ -13098,11 +11599,8 @@ impl Checker {
         Ok(())
     }
 
-    /// Once every body is checked: what each lambda that keeps what it uses
-    /// keeps, with what the lambdas written in it keep of the code around
-    /// both, as the shape of a block of its region (see `kept_name`).
     fn finish_kept(&mut self) {
-        // The inner ones first, so the ones around them keep what they keep.
+        // Walk inner-to-outer so enclosing closures inherit everything captured by nested closures.
         for lambda in self.kept_order.clone().iter().rev() {
             let Some(kept) = self.kept_lambdas.get(lambda) else {
                 continue;
@@ -13125,10 +11623,8 @@ impl Checker {
             let mut mistakes = Vec::new();
             if let Some(around) = self.kept_lambdas.get_mut(&within) {
                 for (name, ty) in passed {
-                    // What the lambda around keeps follows its own rules.
                     let place = around.places.iter().any(|place| place.name == name);
                     if !place && ty != Type::Region {
-                        // One the lambda itself refused is told already.
                         let refused = ty
                             .regions()
                             .into_iter()
@@ -13160,7 +11656,6 @@ impl Checker {
             let Some(kept) = self.kept_lambdas.get(lambda) else {
                 continue;
             };
-            // The region first, which the lambda allocates in where it says so.
             let region_field = |name: &str| Field {
                 name: name.to_string(),
                 ty: Type::Region,
@@ -13173,7 +11668,6 @@ impl Checker {
                 default: None,
             };
             let mut fields = vec![region_field(&kept.region)];
-            // The regions its places are in, which it may allocate in through them.
             for (name, info) in &kept.outer {
                 if info.ty == Type::Region && *name != kept.region && info.allocates {
                     fields.push(region_field(name));
@@ -13183,7 +11677,6 @@ impl Checker {
                 if !kept.uses.contains(name) || info.ty == Type::Region {
                     continue;
                 }
-                // A place is kept as a pointer to the variable (see `Generator::gen_closure`).
                 let place = kept
                     .places
                     .iter()
@@ -13240,7 +11733,6 @@ impl Checker {
             return Ok(());
         };
         self.reached_shortcut_lambdas.insert(name.clone());
-        // Checked once, by the first place that says what it takes.
         if self.inferred_shortcut_lambdas.contains(&name) {
             return Ok(());
         }
@@ -13265,8 +11757,7 @@ impl Checker {
         while let Type::Maybe(inner) | Type::Or(inner, _) = cur_expected {
             cur_expected = inner;
         }
-        // The regions the expected type takes as its own are named apart from
-        // the one this lambda keeps what it uses in, `s` in `[@r](text@s)`.
+        // Expected closure param/return regions are distinct from the closure's own capture region.
         let renamed;
         if let Some(kept) = task.kept.as_ref().map(|kept| kept.region.clone()) {
             renamed = match cur_expected {
@@ -13352,8 +11843,6 @@ impl Checker {
             info.ret = task.ret.clone();
         }
 
-        // The names around a plain one, so that using one says why it can't
-        // (see `lambda_outer`).
         if task.kept.is_none() {
             let seen = self
                 .scopes
@@ -13379,9 +11868,7 @@ impl Checker {
         let saved_loop_name = self.loop_name.take();
         let saved_stepping = self.stepping.take();
 
-        // A type filled from the place the lambda goes names a shape with the
-        // types it is given, which becomes the one made for them; its regions
-        // are read as the call says, not re-read as the lambda's own.
+        // Expected param/return types come from call context, keeping resolved shapes without re-checking as header types.
         for p in task.params.iter_mut() {
             if !p.ty.unknown() {
                 let mut ty = p.ty.clone();
@@ -13429,7 +11916,6 @@ impl Checker {
         self.loop_name = saved_loop_name;
         self.stepping = saved_stepping;
 
-        // Told about once, even when its body is wrong.
         self.inferred_shortcut_lambdas.insert(name.to_string());
         res?;
 
@@ -13472,8 +11958,6 @@ impl Checker {
             ExprKind::Var(name) => format!("'{}'", name),
             _ => "this value".to_string(),
         };
-        // A lambda that keeps what it uses names the region it keeps them in,
-        // which its task's type may name too: the call gives it as it is.
         let kept = match &ty {
             Type::Closure(closure) => Some(closure.region.clone()),
             _ => None,
@@ -13500,7 +11984,6 @@ impl Checker {
                 );
             }
         };
-        // `at r` after a call is the region of what a named task sends.
         if let Some(at) = region_after(args) {
             return err(
                 at,
@@ -13542,8 +12025,6 @@ impl Checker {
                 ),
             );
         }
-        // A region it takes is named as its type names it, which what it sends
-        // names too; a place is given as a named task's is.
         let info = TaskInfo {
             types: Vec::new(),
             params: task
@@ -13568,8 +12049,7 @@ impl Checker {
         sent
     }
 
-    /// Rewrites `name {}` into an empty plan B when `name` is a variable rather
-    /// than a shape: the parser reads both as a shape literal.
+    /// Disambiguates `name {}` between empty struct literal and variable Plan B (parser parses both as `StructInit`).
     fn resolve_empty_plan_b(&self, expr: &mut Expr) {
         let ExprKind::StructInit { name, fields, .. } = &mut expr.kind else {
             return;
@@ -13590,9 +12070,6 @@ impl Checker {
 
     fn infer_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
-        // A method call becomes the call of the task the method is, which the
-        // rest of this checks as it checks any call; any other call of a
-        // method is written on its shape or kind, `X.m(…)`.
         if matches!(expr.kind, ExprKind::MethodCall { .. }) {
             self.check_method_call(expr)?;
             self.on_values.insert(span.place_key());
@@ -13601,7 +12078,6 @@ impl Checker {
         if matches!(expr.kind, ExprKind::Shared { .. }) {
             return self.check_shared_use(expr);
         }
-        // `["a": 1]` alone: a map of its own, in the block's default region.
         if matches!(expr.kind, ExprKind::Pairs(_)) {
             let value = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             expr.kind = ExprKind::Shortcut {
@@ -13627,14 +12103,10 @@ impl Checker {
             ExprKind::BoolLit(_) => Ok(Type::Bool),
             ExprKind::TextLit(_) => Ok(Type::Text(None)),
             ExprKind::NoneLit => Ok(Type::None),
-            // One the call it is written after doesn't take (a variant's, which
-            // `settle_call_region` never sees).
             ExprKind::RegionAfter(_) => err(
                 span,
                 "a region is named after a call only when the call takes one last",
             ),
-            // One a call gives a `flex&` or `fixed&` parameter is checked with the call's
-            // arguments (see `check_argument`).
             ExprKind::Ref(_) => err(
                 span,
                 "'&' marks a place given to a 'flex&' or 'fixed&' parameter, as in 'f(&a)', named by a reference, as in 'flex& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself",
@@ -13643,7 +12115,6 @@ impl Checker {
                 span,
                 "a shared field read as another value",
             )),
-            // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
             ExprKind::Closure {
@@ -13656,7 +12127,6 @@ impl Checker {
                     (lambda.clone(), region.clone(), *mode, places.clone());
                 self.check_closure(&lambda, &region, mode, &places, span)
             }
-            // Only `coerce` makes one, of a value it checked.
             ExprKind::Kept { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
             ExprKind::TaskValue(name) => {
                 if is_lambda(name) {
@@ -13671,7 +12141,6 @@ impl Checker {
                 self.task_value_type(name, span)
             }
             ExprKind::Invoke { callee, args } => self.check_invoke(callee, args, span),
-            // A macro whose value has a mistake, which is told once, where it is written.
             ExprKind::Var(name)
                 if self.lookup(name).is_none()
                     && self.sees(name)
@@ -13694,7 +12163,6 @@ impl Checker {
                 err(base.span, message)
             }
             ExprKind::Field(base, field) => {
-                // `.x` outside a method, named as it is written.
                 if !self.called_on_a_value()
                     && matches!(&base.kind, ExprKind::Var(name) if name == THIS)
                 {
@@ -13724,8 +12192,6 @@ impl Checker {
             }
             ExprKind::Unary(..) => self.check_unary(expr),
             ExprKind::Construct { kind, args, .. } if self.broken.contains(kind.as_str()) => {
-                // A kind whose own variants have a mistake holds nothing known
-                // (see `broken`).
                 self.check_each(args);
                 Ok(Type::Unknown)
             }
@@ -13742,7 +12208,6 @@ impl Checker {
                 region,
                 region_span,
             } => self.check_new(ty, *ty_span, value, region, *region_span),
-            // `expand_shortcut` above made it the `New` it stands for.
             ExprKind::Shortcut { .. } | ExprKind::Pairs(_) => {
                 Err(Error::internal_at(span, "a shortcut that was not expanded"))
             }
@@ -13770,9 +12235,6 @@ impl Checker {
             ExprKind::PlanB { value, error, body } => {
                 self.check_plan_b(span, value, error.as_ref(), body)
             }
-            // A `match` or a `when` used as a value: its branches give it, and
-            // one whose branches had a mistake of their own gives an unknown
-            // type, so nothing after it complains twice (see `Type::Unknown`).
             ExprKind::Choice(stmt) => {
                 Ok(self.check_branching_value(stmt)?.unwrap_or(Type::Unknown))
             }
@@ -13799,25 +12261,19 @@ impl Checker {
                 region,
                 region_span,
             } => self.check_copy(span, value, region.as_deref(), *region_span),
-            // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr
                 .ty
                 .clone()
                 .ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
-            // Nor `Widen` (see `Checker::widen`).
             ExprKind::Widen(_) => expr
                 .ty
                 .clone()
                 .ok_or_else(|| Error::internal_at(span, "a widened value has no type")),
             ExprKind::Pipe(_) => self.check_pipe(expr),
-            // `check_pipe` checked the value, and gave it what it gives the call.
             ExprKind::Piped(_) => expr
                 .ty
                 .clone()
                 .ok_or_else(|| Error::internal_at(span, "a piped value outside its pipe")),
-            // `check_method_call` above has made this the call it is, unless the
-            // value it is called on has no type it could work out, which is
-            // what says which method this is (see `Type::Unknown`).
             ExprKind::MethodCall { value, args, .. }
                 if value.ty.as_ref().is_some_and(Type::unknown) =>
             {
@@ -13831,11 +12287,7 @@ impl Checker {
         }
     }
 
-    /// Checks `name(args)`, a call of a task or of a shared method;
-    /// `on_a_value` when it was written as a method call on a value. Kept
-    /// apart from `task_call_setup`, as `check_call_args` is from what it
-    /// calls: the checker recurses through calls, so the functions it goes
-    /// through keep little on the stack.
+    /// Split from `task_call_setup` because `check_call_args` recurses through nested calls and must keep small stack frames.
     fn check_task_call(
         &mut self,
         span: Span,
@@ -13849,13 +12301,10 @@ impl Checker {
 
             CallSetup::Call(info, group) => (info, group),
         };
-        // The values a call gives a group decide how many types it holds.
         self.check_call_args(span, name, types, args, &info)
             .map_err(|error| group_hint(error, group.as_ref()))
     }
 
-    /// What a call of `name` needs before its arguments are checked against
-    /// the task's header (see `check_task_call`).
     fn task_call_setup(
         &mut self,
         span: Span,
@@ -13864,8 +12313,6 @@ impl Checker {
         types: &mut [TypeArg],
         args: &mut Vec<Expr>,
     ) -> Result<CallSetup> {
-        // `show`, `int(…)` and `float(…)` make no memory a program sees,
-        // so nothing names a region after them.
         if let Some(at) = region_after(args)
             && (name == "show" || number_cast(name).is_some())
         {
@@ -13877,16 +12324,11 @@ impl Checker {
             return err(at, format!("{}, so no region is named after it", what));
         }
         if name == "show" {
-            // `show` takes any number of values, written one after
-            // another with nothing between them; `show()` is a line of
-            // its own.
             for arg in args.iter_mut() {
                 self.check_shown(arg)?;
             }
             return Ok(CallSetup::Checked(Type::Nothing));
         }
-        // `int(x)` and `float(x)`: a value turned into a number, as
-        // `text(x) at r` turns one into text.
         if let Some(into) = number_cast(name) {
             return self
                 .check_number_cast(&into, types, args, span)
@@ -13898,8 +12340,6 @@ impl Checker {
             .filter(|_| self.sees(name))
             .ok_or_else(|| self.unknown_task(name, types, span))?
             .clone();
-        // `X.m(…)`, a method named on its shape or kind: only a shared
-        // one is called that way, and a private one only in its file.
         if let Some(owner) = info.owner.as_ref().filter(|_| !on_a_value)
             && let Some((of, _)) = method_parts(name)
         {
@@ -13926,23 +12366,16 @@ impl Checker {
                 );
             }
         }
-        // A task whose header has a mistake takes and sends nothing
-        // known, so the call is only checked as far as its arguments
-        // are values of their own (see `broken`).
         if self.broken.contains(name) {
             self.check_each(args);
             return Ok(CallSetup::Checked(Type::Unknown));
         }
-        // A shared method is named as it is written, `X.new`.
         let callee = match method_parts(name).filter(|_| !on_a_value) {
             Some((of, method)) => {
                 format!("method '{}{}{}'", unqualified(of), MODULE_SEPARATOR, method)
             }
             None => format!("task '{}'", name),
         };
-        // A task taking a group takes, for this call, one type for each
-        // value the call gives it after the others; how many a spread,
-        // `args...`, gives, only each copy of the caller knows.
         let spreads = args
             .iter()
             .any(|arg| matches!(arg.kind, ExprKind::Spread(_)));
@@ -13966,7 +12399,7 @@ impl Checker {
         self.settle_call_region(span, &callee, args, &info.params)?;
         self.fill_defaults(name, args);
         if args.len() != info.params.len() {
-            // `f(a < b, c > (d))` reads as one argument, a call of `a`.
+            // Catch `f(a < b, c > (d))` misparsed as generic type args.
             if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
                 ExprKind::Call { name, types, .. }
                     if !types.is_empty()
@@ -13992,11 +12425,6 @@ impl Checker {
         Ok(CallSetup::Call(info, group))
     }
 
-    /// Gives a call of `task` that leaves out the last of its parameters the
-    /// values they fall back on, written in the task's module, which
-    /// `check_args_of` reads them as (see `param_defaults`). A call with a
-    /// spread gives as many values as only its copies know, and is filled in
-    /// there.
     fn fill_defaults(&self, task: &str, args: &mut Vec<Expr>) {
         let Some(defaults) = self.param_defaults.get(task) else {
             return;
@@ -14012,9 +12440,6 @@ impl Checker {
         }
     }
 
-    /// The parameters of `task` a call gives, of `all`, without the `skip`
-    /// first (a method's value), as an error message counts them: `2
-    /// arguments`, or `2 to 4 arguments` where the last fall back on values.
     fn expected_args(&self, task: &str, all: usize, skip: usize) -> String {
         let all = all.saturating_sub(skip);
         let needed = self
@@ -14029,9 +12454,6 @@ impl Checker {
         }
     }
 
-    /// Whether `arg`, given for parameter `i` of `task`, is the value that
-    /// parameter falls back on, filled in by `fill_defaults`, which only that
-    /// value's own position names.
     fn filled_default(&self, task: &str, i: usize, arg: &Expr) -> bool {
         self.param_defaults
             .get(task)
@@ -14040,16 +12462,12 @@ impl Checker {
             .is_some_and(|value| value.span == arg.span)
     }
 
-    /// Where `name`, a decorator naming no task, is a shared method of the
-    /// shape or kind whose method `decorated` is: what to say of it, and how it
-    /// is written.
     fn own_shared_method(&self, name: &str, decorated: &str) -> Option<(String, String)> {
         if name.contains(MODULE_SEPARATOR) || self.tasks.contains_key(&self.full_name(name)) {
             return None;
         }
         let (owner, _) = method_parts(decorated)?;
         let info = self.tasks.get(&method_name(owner, name))?;
-        // A method of every value wraps another of its type, called on the value.
         if info.owner.as_ref().is_some_and(|owner| !owner.shared) {
             return Some((
                 format!(
@@ -14071,8 +12489,6 @@ impl Checker {
         ))
     }
 
-    /// The shape and the field `name` (as `X__on__f`) names, when it is a
-    /// shared field of a shape and no method of it.
     fn shared_field<'n>(&self, name: &'n str) -> Option<(&'n str, &'n str)> {
         if self.tasks.contains_key(name) {
             return None;
@@ -14087,10 +12503,8 @@ impl Checker {
         })
     }
 
-    /// The mistake in a call of `name`, which names no task this file sees.
     fn unknown_task(&self, name: &str, types: &[TypeArg], span: Span) -> Error {
-        // `send (x)` written the old way reads as a call.
-        // `X.make(…)` naming no method of X (see `Resolver::shared_method`).
+        // Catch old `send (x)` syntax misparsed as a call.
         if let Some((owner, method)) = method_parts(name) {
             if self.shared_field(name).is_some() {
                 return Error::at(
@@ -14115,7 +12529,6 @@ impl Checker {
                 ),
             );
         }
-        // `area()` inside a method of the shape that has it.
         if let Some(of) = &self.current_type
             && let Some(method) = self
                 .tasks
@@ -14145,14 +12558,11 @@ impl Checker {
             "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
             _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
             _ if self.macros.contains_key(name) => "; it is a macro, a value that never changes, so it is used without '()'".to_string(),
-            // `(i < n, n > (m))`: a `<` after a name whose `>`
-            // is followed by `(` gives types to a call.
             _ => self.elsewhere(name),
         };
         Error::at(span, format!("unknown task '{}'{}", name, hint))
     }
 
-    /// Checks a read of the variable `name`.
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
         let calling = std::mem::take(&mut self.calling);
         let length_only = std::mem::take(&mut self.reading_length);
@@ -14161,8 +12571,7 @@ impl Checker {
         if kept {
             self.check_kept_use(name, &ty, span)?;
         }
-        // A `[flex @r]` or `[bind @r]` lambda changes what it keeps, so its
-        // value is never copied: it is called, or given as a place.
+        // `[flex @r]`/`[bind @r]` closures cannot be copied and must be used via calls or `&` places.
         if held_lambda(&ty) && !calling {
             return err(
                 span,
@@ -14174,8 +12583,7 @@ impl Checker {
                 ),
             );
         }
-        // Calling it changes what it keeps, so it is called through a place
-        // that changes.
+        // Calling mutating closures requires a mutable place.
         if held_lambda(&ty) && !mode.can_change_contents(true) {
             return err(
                 span,
@@ -14189,7 +12597,6 @@ impl Checker {
         if self.unset.contains(name) {
             return err(span, format!("'{}' might not be set here", name));
         }
-        // A group's values go on whole, and only to a task's call.
         if let Type::Group(group) = &ty
             && !self.spreading
         {
@@ -14207,7 +12614,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Checks `Kind.Tag(args)`, a variant made with its values.
     fn check_construct(
         &mut self,
         kind: &str,
@@ -14266,8 +12672,6 @@ impl Checker {
                 self.region_of_value(kind, region),
             ));
         }
-        // A kind that takes types: the ones written, or the ones the values
-        // show, and the rest from the place the value goes (see `settle_variant`).
         let (given, hints) = self.variant_types(kind, &def, &variant, written, args)?;
         if def
             .types
@@ -14287,7 +12691,6 @@ impl Checker {
             .find(|param| !given.contains_key(&param.name))
             .map(|param| param.name.clone())
             .unwrap_or_default();
-        // The types to suggest: the ones told, and `int` in place of each untold.
         let example: Vec<String> = def
             .types
             .iter()
@@ -14323,11 +12726,6 @@ impl Checker {
         })))
     }
 
-    /// The types the variant `variant` of `kind` (`def`, which takes types) is
-    /// given: all the ones `written` names, which are all of them or none, or
-    /// the ones its values `args` show, which may be fewer.
-    /// Also the types its values show that hold one untold, which tell
-    /// nothing, for a message to suggest.
     fn variant_types(
         &mut self,
         kind: &str,
@@ -14358,21 +12756,16 @@ impl Checker {
                 );
             }
             for ((ty, at), param) in written.iter_mut().zip(&def.types) {
-                // The types a kind is given name no region, as its payloads
-                // don't: the region comes from the values.
                 *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
                 self.check_need("kind", kind, param, ty, *at)?;
                 given.insert(param.name.clone(), ty.clone());
             }
             return Ok((given, HashMap::new()));
         }
-        // The values say which types they are. They are checked again with the
-        // kind made for them, so what this check left to settle is left to that one.
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
         let kinds = self.untold_kinds.len();
         let mut found = Ok(());
-        // `none` tells no type either, but a message can suggest a maybe.
         let mut unsettled_values = Vec::new();
         for (arg, field) in args.iter_mut().zip(&variant.payload) {
             match self.check_expr(arg) {
@@ -14390,8 +12783,6 @@ impl Checker {
         self.unsettled_types.truncate(untold);
         self.untold_kinds.truncate(kinds);
         found?;
-        // A value that is itself a variant with types untold, as in
-        // `Option.Some(Option.None)`, tells nothing either.
         let mut hints: HashMap<String, Type> = unsettled_values.into_iter().collect();
         given.retain(|param, ty| {
             let told = !ty.params().iter().any(|name| name.starts_with(UNTOLD));
@@ -14414,11 +12805,6 @@ impl Checker {
         Ok((given, hints))
     }
 
-    /// The value of the variant `tag` of `kind` given `types`, all known, with
-    /// its values `args`: of the kind made for them, or, where a type this
-    /// declaration takes is among them, of the kind given them, which each use
-    /// makes (see `settle_applications`). Values already `checked` are not
-    /// checked again.
     fn made_variant(
         &mut self,
         kind: &str,
@@ -14474,8 +12860,6 @@ impl Checker {
                 region: may_hold.then_some(region),
             })));
         }
-        // The kind made for the types, whose payloads name the kinds and shapes
-        // made for theirs.
         let key = self.kind_instance(kind, types, span)?;
         let made = self
             .kinds
@@ -14491,13 +12875,8 @@ impl Checker {
         Ok(Type::Named(key.clone(), self.region_of_value(&key, region)))
     }
 
-    /// A variant whose types its values didn't tell, `Option.None`, going where
-    /// a value of `expected` is: the types the place names, and the value of
-    /// the kind made for them. One whose place names none of its kind is left
-    /// as it is, which the statement reports (see `untold_kinds`).
+    /// Propagates expected types down into untold generic variants (`Option.None`, `Either.Left`) before statement end.
     fn settle_variant(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
-        // `fail Option.None` where a `T ~ Option<int>` goes: the failure's
-        // value goes where the error does.
         if let (ExprKind::Fail(inner), Type::Or(_, error) | Type::Fail(error)) =
             (&mut expr.kind, expected)
             && inner.ty.as_ref().is_some_and(untold_kind)
@@ -14506,7 +12885,6 @@ impl Checker {
             expr.ty = inner.ty.clone().map(|ty| Type::Fail(Box::new(ty)));
             return Ok(());
         }
-        // A branch's `none` beside a branch's `Option.None`.
         let none = match &expr.kind {
             ExprKind::Wrap(inner) => matches!(inner.kind, ExprKind::NoneLit),
             kind => matches!(kind, ExprKind::NoneLit),
@@ -14519,8 +12897,6 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return Ok(());
         }
-        // A branch's value made part of the `T ~ E` the branches give, whose
-        // error a branch's `fail Option.None` gave untold.
         if let ExprKind::Wrap(inner) = &mut expr.kind
             && let Some(Type::Or(value, error)) = &expr.ty
             && untold_kind(error)
@@ -14532,7 +12908,6 @@ impl Checker {
             expr.ty = Some(own);
             return Ok(());
         }
-        // A branch's `Option.None` made part of the maybe the branches give.
         if let ExprKind::Wrap(inner) = &mut expr.kind
             && inner.ty.as_ref().is_some_and(untold_kind)
         {
@@ -14546,9 +12921,6 @@ impl Checker {
             }
             return Ok(());
         }
-        // A loop going where an `int ~ LoopResult<int, text>` goes: the place
-        // tells the `B` and `M` nothing in it told, and the variant its last
-        // lines give whose types they didn't, `Option.None`.
         if let ExprKind::LoopValue(value) = &mut expr.kind
             && value.gives
             && let Some(Type::Or(given, result)) = expr.ty.clone()
@@ -14616,8 +12988,6 @@ impl Checker {
             }
             return Ok(());
         }
-        // `(Option.None, 1)` where a `(Option<int>, int)` goes: each item is
-        // told by its own place.
         if let (ExprKind::Tuple(items), Type::Tuple(places)) = (&mut expr.kind, expected)
             && expr.ty.as_ref().is_some_and(holds_untold)
             && items.len() == places.len()
@@ -14634,10 +13004,6 @@ impl Checker {
             }
             return Ok(());
         }
-        // The variant whose types are untold, or the one a maybe of it holds,
-        // as a `when` giving `none` or `Option.None` is, and the failure of one
-        // giving `fail Option.None`, which the error of the place tells.
-        // The whole then becomes `own`, its value's type kept.
         let choice = matches!(&expr.kind, ExprKind::Choice(_));
         let (sent, place, own) = match expr.ty.clone() {
             Some(Type::Applied(sent))
@@ -14660,8 +13026,6 @@ impl Checker {
                     _ => return Ok(()),
                 }
             }
-            // `when … none else when … fail Option.None else n fi`, a maybe of a
-            // `T ~ E` going where a `maybe T ~ E` goes, branch by branch.
             Some(Type::Maybe(inner))
                 if choice && matches!(&*inner, Type::Or(_, error) if untold_kind(error)) =>
             {
@@ -14679,8 +13043,6 @@ impl Checker {
         let Some(types) = self.told_types(&sent, &place) else {
             return Ok(());
         };
-        // `when c Option.None else Option.None fi`: each branch's value is
-        // told by the place the whole goes.
         if let ExprKind::Choice(stmt) = &mut expr.kind {
             self.settle_branch_values(stmt, &own)?;
             expr.ty = Some(own);
@@ -14702,8 +13064,6 @@ impl Checker {
                 return Ok(());
             };
             let tag = tag.clone();
-            // A value of it that is a variant nothing told, `Option.Some(Either.Left(1))`,
-            // is told by the type of its field.
             if let Some(variant) = def.variants.iter().find(|variant| variant.tag == tag) {
                 let names: HashMap<&str, &Type> = def
                     .types
@@ -14720,7 +13080,6 @@ impl Checker {
                     }
                 }
             }
-            // Its values were checked where they are, whose names may be gone.
             let ty = self.made_variant(&sent.name, &tag, &types, args, true, span)?;
             expr.ty = Some(ty);
             if let Some(at) = self.untold_kinds.iter().rposition(|(at, ..)| *at == span) {
@@ -14730,9 +13089,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The types `sent`, a variant whose types its values didn't all tell,
-    /// takes from `expected`, the place it goes: the value itself, or what a
-    /// maybe or a `T ~ E` holds, where that is its kind with types that fit.
     fn told_types(&self, sent: &Applied, expected: &Type) -> Option<Vec<Type>> {
         let mut places = vec![expected.clone()];
         match expected {
@@ -14771,18 +13127,13 @@ impl Checker {
                     }
                 })
                 .collect();
-            // A place no better told, as a branch of the same `when` is.
             (told && !types.iter().any(|ty| is_untold(ty) || holds_untold(ty))).then_some(types)
         })
     }
 
-    /// The type values of types `a` and `b` can both become (see `join_types`),
-    /// where a variant whose types its values didn't tell, `Option.None`, is
-    /// told them by a value of the same kind beside it, as `none` is.
     fn join(&self, a: &Type, b: &Type) -> Option<Type> {
         if untold_inside(a) || untold_inside(b) {
             match (a, b) {
-                // `none` beside `Option.None`, or a maybe of one beside a value.
                 (Type::Maybe(x), Type::Maybe(y)) => {
                     return self.join(x, y).map(|joined| Type::Maybe(Box::new(joined)));
                 }
@@ -14798,8 +13149,6 @@ impl Checker {
                 }
                 _ => {}
             }
-            // `Either.Left(1)` beside `Either.Right("x")`, or kinds of them:
-            // each tells what it can, and what neither tells stays untold.
             if let (Type::Applied(left), Type::Applied(right)) = (self.unmade(a), self.unmade(b))
                 && left.name == right.name
                 && left.types.len() == right.types.len()
@@ -14810,7 +13159,6 @@ impl Checker {
                     .zip(&right.types)
                     .map(|(x, y)| self.join_told(x, y))
                     .collect::<Option<Vec<Type>>>()?;
-                // One that tells all of them is the type both are, as it is.
                 for (side, applied) in [(b, &right), (a, &left)] {
                     if !untold_inside(side)
                         && types
@@ -14821,8 +13169,6 @@ impl Checker {
                         return Some(side.clone());
                     }
                 }
-                // Everything a value in a region holds is in that region, so a
-                // value holding one is in it.
                 let region = left
                     .region
                     .clone()
@@ -14841,8 +13187,6 @@ impl Checker {
                 })));
             }
         }
-        // A branch's `fail Option.None` beside a failure or a value of the
-        // kind: the errors join as values do.
         let failing_untold =
             |ty: &Type| matches!(ty, Type::Fail(error) | Type::Or(_, error) if untold_kind(error));
         if failing_untold(a) || failing_untold(b) {
@@ -14864,8 +13208,6 @@ impl Checker {
                 _ => {}
             }
         }
-        // A value of a kind beside one of a kind imitating it: both are values
-        // of the second (see `widen`), alone, in a `maybe`, or as a success.
         if let Some(joined) = join_types(a, b) {
             return Some(joined);
         }
@@ -14873,7 +13215,6 @@ impl Checker {
             Type::Maybe(inner) | Type::Or(inner, _) => inner.as_ref().clone(),
             other => other.clone(),
         };
-        // `ty` with its value of type `value(ty)` a value of `into` instead.
         let into = |ty: &Type, into: &Type| match ty {
             Type::Maybe(_) => Type::Maybe(Box::new(into.clone())),
             Type::Or(_, error) => Type::Or(Box::new(into.clone()), error.clone()),
@@ -14889,8 +13230,6 @@ impl Checker {
         None
     }
 
-    /// The type a kind given types takes for one of them, `x` beside `y`
-    /// (see `join`): the one that is told, or the one the other fits.
     fn join_told(&self, x: &Type, y: &Type) -> Option<Type> {
         match (is_untold(x), is_untold(y)) {
             (true, _) => Some(y.clone()),
@@ -14902,8 +13241,6 @@ impl Checker {
         }
     }
 
-    /// The error of the variant at `at` whose types nothing told, if it is
-    /// one (see `untold_kinds`).
     fn untold_kind_error(&self, at: Span) -> Option<Error> {
         let (at, kind, tag, param, example) = self
             .untold_kinds
@@ -14916,9 +13253,6 @@ impl Checker {
         ))
     }
 
-    /// `ty`, a type values beside each other settled on (see `join`), with the
-    /// kind made for each kind given types its variants told between them,
-    /// `Either<int, text>` for `Either.Left(1)` beside `Either.Right("x")`.
     fn made_kinds(&mut self, ty: Type, at: Span) -> Result<Type> {
         Ok(match ty {
             Type::Applied(applied)
@@ -14950,7 +13284,6 @@ impl Checker {
         })
     }
 
-    /// Checks `new T(value) at r` (see `ExprKind::New`).
     fn check_new(
         &mut self,
         ty: &mut Box<Type>,
@@ -14960,7 +13293,6 @@ impl Checker {
         region_span: Span,
     ) -> Result<Type> {
         **ty = self.resolve_type(ty, ty_span, TypePlace::New)?;
-        // `^int ~ E` means `(^int) ~ E`, so no written type could hold the pointer.
         if matches!(**ty, Type::Or(..)) {
             return err(
                 ty_span,
@@ -14970,16 +13302,11 @@ impl Checker {
                 ),
             );
         }
-        // `new Point` or `new Point()`: the parser wrote the literal of no
-        // fields at the type, which only a shape whose fields all fall back on
-        // values takes.
         if value.span == ty_span
             && matches!(&value.kind, ExprKind::StructInit { fields, .. } if fields.is_empty())
         {
             self.check_empty_shape(ty, ty_span)?;
         }
-        // The region written, or the block's default, which is kept on
-        // the node so the code generator sees the region either way.
         let written = ty.to_string();
         let allocates = self.region_or_default(region.as_ref(), region_span, || {
             format!(
@@ -14989,10 +13316,7 @@ impl Checker {
         })?;
         *region = Some(allocates.clone());
         self.visible_region(&allocates, region_span, true)?;
-        // What a lambda that keeps what it uses keeps is in its region, which
-        // everything a value in `allocates` holds is in.
-        // Text a follower gives a pattern as `text@this` is the one exception,
-        // in a default (see `check_kept_regions`).
+        // `new` values in `r` must not retain outer regions, except pattern-default `text@this` validated at calls.
         if let Some(other) = ty
             .regions()
             .into_iter()
@@ -15006,7 +13330,6 @@ impl Checker {
                 ),
             );
         }
-        // `new [K: V](…) at r` makes the map, its table in `r`.
         if let Type::Map(key, value_ty, _) = &**ty {
             let key = self.in_region(key, &allocates);
             let value_ty = self.in_region(value_ty, &allocates);
@@ -15018,7 +13341,6 @@ impl Checker {
             self.check_map_source(value, &key, &value_ty, &map)?;
             return Ok(map);
         }
-        // `new [T](…) at r` makes the slice itself, with its items in `r`.
         if let Type::Slice(items, _) = &**ty {
             let items = self.in_region(items, &allocates);
             let slice = Type::Slice(Box::new(items.clone()), Some(allocates));
@@ -15031,8 +13353,6 @@ impl Checker {
         Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
     }
 
-    /// Checks that `ty`, made by a `new` with no value at `span`, is a shape
-    /// whose fields all fall back on values, which is the value it makes.
     fn check_empty_shape(&mut self, ty: &Type, span: Span) -> Result<()> {
         let name = match ty {
             Type::Named(name, _) => name.as_str(),
@@ -15052,8 +13372,6 @@ impl Checker {
                 ),
             );
         };
-        // A private field from another file is the literal's to report: no
-        // value written here could give it.
         let outside = module_of(name) != self.current_module;
         if let Some(field) = shape
             .fields
@@ -15073,7 +13391,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `p^`, the value a pointer points to.
     fn check_deref(&mut self, e: &mut Expr, span: Span) -> Result<Type> {
         let ty = self.check_expr(e)?;
         if ty.unknown() {
@@ -15117,9 +13434,6 @@ impl Checker {
         })
     }
 
-    /// Checks `a |> f(b)` (see `ExprKind::Pipe`), and returns the type it
-    /// gives: the call's, or, where the value before it can fail, the call's
-    /// value `~` the error of either, joined (see `pipe_failure`).
     fn check_pipe(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
         let target = self.pipe_target.take();
@@ -15140,7 +13454,6 @@ impl Checker {
                 "a pipe giving its value to no call",
             ));
         };
-        // The pipes before this one in the chain fail as it does.
         if matches!(value.kind, ExprKind::Pipe(_)) {
             self.pipe_target = target.clone();
         }
@@ -15182,7 +13495,6 @@ impl Checker {
         }
         piped.ty = Some(given.clone());
         let call_span = call.span;
-        // A mistake in what the call is given names the pipe, which gives it.
         let sent = self.check_expr(call).map_err(|error| {
             let typed = error.span == Some(span) && error.message.starts_with("expected type ");
             let counted = error.span == Some(call_span) && error.message.contains(" expects ") && error.message.contains(", got ");
@@ -15220,11 +13532,6 @@ impl Checker {
         })
     }
 
-    /// The error a pipe at `span` fails with, where the value before it fails
-    /// with `before` and its call with `after`: the same kind, the one of the
-    /// two that imitates the other, or the kind `target` the place the chain
-    /// goes names, where both are values of it (see `widens`). Each failure
-    /// becomes a value of it where it happens.
     fn pipe_failure(
         &self,
         span: Span,
@@ -15264,7 +13571,6 @@ impl Checker {
         )
     }
 
-    /// Checks `fail error`.
     fn check_fail(&mut self, error: &mut Expr) -> Result<Type> {
         let ty = self.check_expr(error)?;
         if matches!(
@@ -15279,15 +13585,9 @@ impl Checker {
         Ok(Type::Fail(Box::new(ty)))
     }
 
-    /// Makes `m.keys` or `m.values` the map operation it is (see `MapOp`).
-    /// Gives the field's type when `expr` is a field of another value, read
-    /// from its base, which is checked once here.
     fn resolve_map_field(&mut self, expr: &mut Expr) -> Result<Option<Type>> {
         let span = expr.span;
-        // `m.keys`: a map's keys made into a slice in the block's default region.
-        // The base is checked once: a field of that name on anything else is
-        // read from the type found (checking it again would double the work
-        // at each `.values` of a chain of them).
+        // Check map `.keys`/`.values` base once here to avoid quadratic re-checks on chained calls.
         if let ExprKind::Field(base, word) = &mut expr.kind
             && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
             && (self.called_on_a_value()
@@ -15311,13 +13611,10 @@ impl Checker {
         Ok(None)
     }
 
-    /// Checks a tuple literal, `(a, b)`, and returns its type: its items' types.
     fn check_tuple(&mut self, values: &mut [Expr]) -> Result<Type> {
         let mut items = Vec::new();
         for value in values.iter_mut() {
             let ty = self.check_expr(value)?;
-            // A variant whose types are untold, `(Option.None, 1)`, gets them
-            // from the place the tuple goes, whose type was checked so.
             if let Some(what) = self.changeable_item(&ty).filter(|_| !holds_untold(&ty)) {
                 return err(
                     value.span,
@@ -15329,8 +13626,7 @@ impl Checker {
         Ok(Type::Tuple(items))
     }
 
-    /// Checks an array literal, `[a, b, c]`, and returns its type. Kept out of
-    /// `infer_expr`, whose stack frame every level of nested code pays for.
+    /// Separated from `infer_expr` so deeply nested expressions do not multiply stack frames.
     fn check_array(&mut self, values: &mut [Expr], span: Span) -> Result<Type> {
         let mut joined: Option<Type> = None;
         for value in values.iter_mut() {
@@ -15346,7 +13642,6 @@ impl Checker {
         if items == Type::Nothing {
             return err(span, "an array can't hold 'nothing', which has no value");
         }
-        // `none` alone, or `fail e`, becomes part of a type an annotation gives.
         if !unsettled(&items) {
             for value in values.iter_mut() {
                 self.coerce(value, &items)?;
@@ -15360,7 +13655,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Checks `[value#count]` outside `new`, an array, and returns its type.
     fn check_repeat(&mut self, value: &mut Expr, count: &mut Expr, span: Span) -> Result<Type> {
         let items = self.check_expr(value)?;
         if items == Type::Nothing {
@@ -15372,7 +13666,6 @@ impl Checker {
         let count_ty = self.check_expr(count)?;
         self.expect_type(&count_ty, &Type::Int, count.span)?;
         let Some(n) = constant_int(count) else {
-            // The region of a slice's items is the one it is made in.
             let written = if unsettled(&items) {
                 "T".to_string()
             } else {
@@ -15397,8 +13690,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Checks `t[a..b]`, a part of text of `region`: the same bytes, so it is
-    /// text of that region too. Text has no items to read one at a time.
     fn check_text_part(
         &mut self,
         region: &Option<String>,
@@ -15406,7 +13697,6 @@ impl Checker {
         span: Span,
     ) -> Result<Type> {
         let ExprKind::Range(from, to) = &mut index.kind else {
-            // `t[i]`: the byte at `i`, as a char.
             let ty = self.check_expr(index)?;
             self.expect_type(&ty, &Type::Int, index.span)?;
             if let Some(value) = constant_int(index).filter(|value| *value < 0) {
@@ -15443,9 +13733,6 @@ impl Checker {
         Ok(Type::Text(region.clone()))
     }
 
-    /// Makes `[1, 2, ...] at r` the `new [int]([1, 2]) at r` it stands for,
-    /// with the items' type worked out from the values, which are checked here
-    /// for it and again by the `New`.
     fn expand_shortcut(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
         if matches!(&expr.kind, ExprKind::Shortcut { value, .. } if matches!(value.kind, ExprKind::Pairs(_)))
@@ -15460,7 +13747,6 @@ impl Checker {
         self.unsettled_copies.truncate(copies);
         let items = match found? {
             Type::Array(items, _) => *items,
-            // What went wrong is reported already (see `Type::Unknown`).
             _ => Type::Unknown,
         };
         if matches!(items, Type::None | Type::Fail(_)) {
@@ -15493,19 +13779,12 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks what `each` goes through, and returns the type of the name it
-    /// gives each pass, and of the second name's value for a map: a range's
-    /// numbers, an array's or a slice's items (`&xs` for the place as it is at
-    /// each pass), a map's keys and values (`each k, v in m`), or one side of a
-    /// map, `m.keys` or `m.values`, gone through without making a slice.
     fn check_each_source(
         &mut self,
         name: &str,
         second: Option<&(String, Span)>,
         range: &mut Expr,
     ) -> Result<(Type, Option<Type>)> {
-        // `each v in args`: each value of a group, of its own type, `P` (see
-        // `each_of_group`).
         if let Some(group) = self.group_of(range) {
             range.ty = Some(Type::Group(group.clone()));
             if let Some((second, at)) = second {
@@ -15543,8 +13822,7 @@ impl Checker {
                 ),
             }
         };
-        // A range is only valid here, so it is checked here rather than as an
-        // ordinary expression.
+        // `Range` is only valid as an `each` source, so check it here rather than in `infer_expr`.
         if let ExprKind::Range(start, end) = &mut range.kind {
             for bound in [start, end] {
                 let bty = self.check_expr(bound)?;
@@ -15553,7 +13831,6 @@ impl Checker {
             range.ty = Some(Type::Range(Box::new(Type::Int)));
             return one(Type::Int);
         }
-        // `each k in m.keys`: one side of a map, gone through where it is.
         if let ExprKind::Field(base, word) = &mut range.kind
             && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
             && let Type::Map(key, value, region) = self.check_expr(base)?
@@ -15573,8 +13850,6 @@ impl Checker {
             return one(item);
         }
         if let ExprKind::Ref(place) = &mut range.kind {
-            // `each v in &xs`: the items of the place as they are at each pass,
-            // read through it, so the loop sees every change to it.
             let ty = self.check_expr(place)?;
             if !ty.unknown() && !self.is_place(place) {
                 let what = no_place(place);
@@ -15610,13 +13885,8 @@ impl Checker {
             ),
             Type::Array(items, _) | Type::Slice(items, _) => one(*items),
             Type::Map(key, value, _) => map_pair(*key, *value, range.span),
-            // What it goes through couldn't be worked out, so what each item is
-            // can't be either; the body is still checked with the names declared
-            // (see `Type::Unknown`).
             other if other.unknown() => Ok((Type::Unknown, second.map(|_| Type::Unknown))),
-            // `each x in it`, where `it` follows `std/collections.Iterator`:
-            // the statement is read as `endless; fixed x = it.next() { break };
-            // … fi`, which the statement's check makes from this signal.
+            // Signal `check_stmt_kind` to desugar `each x in it` using `Iterator.next()`.
             other => {
                 if let Some(types) = self.followed_by(&other, "std/collections.Iterator") {
                     if let Some((second, at)) = second {
@@ -15644,9 +13914,6 @@ impl Checker {
         }
     }
 
-    /// Makes `["a": 1] at r` the `new [text: int](["a": 1]) at r` it stands for,
-    /// with the keys' and the values' types worked out from the pairs, as the
-    /// items of two arrays would be.
     fn expand_map_shortcut(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
         let ExprKind::Shortcut { value, .. } = &mut expr.kind else {
@@ -15709,8 +13976,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks what a new map is made from: its pairs, each key and value going
-    /// into the map as a value goes into its place, or another map, copied.
     fn check_map_source(
         &mut self,
         value: &mut Expr,
@@ -15720,8 +13985,6 @@ impl Checker {
     ) -> Result<()> {
         let ExprKind::Pairs(pairs) = &mut value.kind else {
             let ty = self.check_expr(value)?;
-            // Another map's keys and values are copied into the new one's
-            // region, as `a.copy() at r` copies them, so theirs may be any.
             return match &ty {
                 Type::Map(k, v, _)
                     if k.without_regions() == key.without_regions()
@@ -15754,7 +14017,7 @@ impl Checker {
             self.coerce(k, key)?;
             self.check_expr(v)?;
             self.coerce(v, value_ty)?;
-            // The same key written out twice: the second would replace the first.
+            // Reject duplicate literal map keys since later entries silently overwrite earlier ones.
             if let Some(text) = constant_key(k) {
                 if let Some(at) = written.get(&text) {
                     return err(
@@ -15772,9 +14035,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `m.has(k)`, and `m.keys` and `m.values` made into a slice in
-    /// `region` (the block's default when none is written), and returns the
-    /// type: a bool, or the slice.
     fn check_map_op(
         &mut self,
         map: &mut Expr,
@@ -15816,9 +14076,7 @@ impl Checker {
         })?;
         self.visible_region(&made, region_span, true)?;
         *region = Some(made.clone());
-        // The slice holds the map's keys or values themselves, not copies:
-        // text in them is where the map's is, so the slice goes there too, as
-        // a slice's items are in its region.
+        // Slices from `m.keys`/`m.values` share element/text lifetimes with the map's own region.
         if let Some(held) = item
             .regions()
             .into_iter()
@@ -15836,10 +14094,7 @@ impl Checker {
         Ok(Type::Slice(Box::new(item), Some(made)))
     }
 
-    /// Checks `key`, a key looked for in a map whose keys are of type `wanted`:
-    /// any key of that type, in any region, since looking only compares (a
-    /// number written out becomes a unit or the like, as elsewhere). A range
-    /// takes a part, which a map has none of.
+    /// Lookup compares keys without storing them, so any region fits.
     fn check_key(&mut self, wanted: &Type, key: &mut Expr) -> Result<()> {
         if matches!(key.kind, ExprKind::Range(..)) {
             return err(
@@ -15859,8 +14114,6 @@ impl Checker {
         })
     }
 
-    /// Checks `xs[#i]` or `t.at(i)` on a value of type `base_ty`, already
-    /// checked, and returns its type: a maybe of the item, none out of range.
     fn check_lookup(&mut self, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
         if let Type::Map(key, value, _) = base_ty {
             self.check_key(key, index)?;
@@ -15906,10 +14159,6 @@ impl Checker {
         Ok(Type::Maybe(Box::new(item)))
     }
 
-    /// Checks `xs[i]`, an item, or `xs[a..b]`, a slice, on `base` of type
-    /// `base_ty`, already checked, and returns its type. A constant index or
-    /// bound that is out of range for an array is an error here; the program
-    /// checks the rest as it runs.
     fn check_index(
         &mut self,
         base: &Expr,
@@ -15918,8 +14167,6 @@ impl Checker {
         span: Span,
     ) -> Result<Type> {
         if base_ty.unknown() {
-            // Whether this reads an item or takes a slice depends on the type
-            // the checker couldn't work out (see `Type::Unknown`).
             let checked = self.check_expr(index);
             self.keep_going(checked.map(|_| ()));
             return Ok(Type::Unknown);
@@ -15932,8 +14179,6 @@ impl Checker {
             return Ok((**value).clone());
         }
         let items = match base_ty {
-            // `[none, none][i]`: an item that is only a literal can be wrapped
-            // where a `maybe` or `T ~ E` is expected, but not one read out.
             Type::Array(items, _) if matches!(**items, Type::None | Type::Fail(_)) => {
                 return err(
                     span,
@@ -16013,8 +14258,7 @@ impl Checker {
             );
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
-        // A map's table is packed again in place as keys are taken out, so a
-        // part of an array in it would come to point at another key's value.
+        // Map rehashing packs buckets, so slicing arrays stored inside map values would dangle.
         if !matches!(base_ty, Type::Slice(..)) && in_map_value(base) {
             return err(
                 span,
@@ -16043,11 +14287,6 @@ impl Checker {
         Ok(Type::Slice(Box::new(items), region))
     }
 
-    /// Checks `items.add(…)` or `items.del(…)`, a change to a slice at `span`,
-    /// and returns its type: `nothing` for `add`, the item taken out for `del`.
-    /// The slice must be in a place that can be assigned, since its length
-    /// changes, and `add` needs to allocate in the slice's region, which may
-    /// need more room.
     fn check_edit(
         &mut self,
         span: Span,
@@ -16072,8 +14311,7 @@ impl Checker {
                         format!("'{0}' is a result; set it with '{0} <- …'", name),
                     );
                 }
-                // The lambda's copy of a slice of the code around it shares its
-                // items, not its length.
+                // Closure-captured slices share elements with outer scope but not length.
                 if info.kept
                     && info.passing == Passing::Copy
                     && info.mode == Mode::Flex
@@ -16103,7 +14341,6 @@ impl Checker {
                             ),
                         );
                     }
-                    // A `bind` map has contents, so only a `bind` slice is here.
                     if info.mode == Mode::Bind {
                         return err(
                             items.span,
@@ -16163,10 +14400,8 @@ impl Checker {
                     ),
                 );
             }
-            // The place is checked as an assignment's is: the slice is written.
             ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => {
                 self.check_place_target(items, false).map_err(|mut error| {
-                    // Said of this change rather than of an assignment.
                     if let Some(rest) = error.message.strip_prefix("cannot assign to ") {
                         error.message = format!("'{}' can't change {}", word, rest);
                     } else if error.message.starts_with("'len' can't be assigned") {
@@ -16215,8 +14450,6 @@ impl Checker {
         }
         let (item, region) = match &ty {
             Type::Slice(item, region) => ((**item).clone(), region.clone()),
-            // Whether this is a slice at all depends on a type the checker
-            // couldn't work out; the arguments are still read (`Type::Unknown`).
             _ if ty.unknown() => {
                 self.check_each(args);
                 return Ok(Type::Nothing);
@@ -16288,9 +14521,7 @@ impl Checker {
         let Some(value) = value else { return Ok(item) };
         self.check_expr(value)?;
         self.coerce(value, &item)?;
-        // The slice changes, so it may not take what a fixed name owns.
         self.hand(value, HandedTo::Place(self.value_text(items)));
-        // Adding may need more room, which comes from the slice's region.
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
                 Some(info)
@@ -16330,10 +14561,6 @@ impl Checker {
         }
     }
 
-    /// Checks a read of input, at `span`, and returns its type:
-    /// `scan(prompt) at r`, the line as `maybe text@r`, or `scan(prompt, int)`,
-    /// a number read from that line as `int ~ InputError`. The type a typed
-    /// read names is a type, not a value, so it is never checked as one.
     fn check_scan(
         &mut self,
         span: Span,
@@ -16345,9 +14572,6 @@ impl Checker {
             [] => return err(span, SCAN_TAKES),
             [prompt, rest @ ..] => (prompt, rest),
         };
-        // A type where the prompt goes, as in `scan(int)`: the prompt comes
-        // first. A variable may be named after a builtin type, so one that is in
-        // scope is read as the value it is, as anywhere else.
         if let ExprKind::Var(name) = &prompt.kind
             && Type::builtin(name).is_some()
             && self.lookup(name).is_none()
@@ -16382,8 +14606,6 @@ impl Checker {
             }
         };
         match number {
-            // A line is text, which needs memory, so it goes in the region the
-            // call names, or else the block's default.
             None => {
                 let keeps = self.region_or_default(region.as_ref(), region_span, || {
                     "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'".to_string()
@@ -16392,8 +14614,6 @@ impl Checker {
                 self.visible_region(&keeps, region_span, true)?;
                 Ok(Type::Maybe(Box::new(Type::Text(Some(keeps)))))
             }
-            // A number needs no memory, so this form names no region and takes
-            // no default either.
             Some(number) if region.is_some() => err(
                 region_span,
                 format!(
@@ -16408,15 +14628,10 @@ impl Checker {
         }
     }
 
-    /// Checks one value given to `show`: a number, a bool, text, a `maybe` of
-    /// one, a shape or kind with its own `str`, or a type a declaration takes
-    /// that is `shown`.
     fn check_shown(&mut self, arg: &mut Expr) -> Result<()> {
-        // `show(&x)`: the address of the place.
         if matches!(arg.kind, ExprKind::Ref(_)) {
             return self.check_address(arg).map(|_| ());
         }
-        // `show(args...)`: each value of a group, which asks its types to be shown.
         if matches!(arg.kind, ExprKind::Spread(_)) {
             return match self.check_expr(arg)? {
                 Type::Group(group) if !self.allows(Need::Shown, &Type::Group(group.clone())) => {
@@ -16437,13 +14652,10 @@ impl Checker {
         if ty.unknown() {
             return Ok(());
         }
-        // `t.#5` past the tuple's end: none, written as any maybe's is.
         if past_end(arg) {
             return self.coerce(arg, &Type::Maybe(Box::new(Type::Bool)));
         }
-        // A shape or kind says how its values are written with its own `str`,
-        // which `show` calls in a region of its own. The value is checked again
-        // as part of that call, as a method call checks it twice.
+        // User-defined `str` runs inside a transient line region freed when `show` ends (see `codegen::gen_show`).
         if self.has_own_str(&ty) {
             self.unsettled_copies.truncate(copies);
             self.unsettled_types.truncate(types);
@@ -16456,7 +14668,6 @@ impl Checker {
         if let Some(untold) = self.untold_param(&ty) {
             return err(arg.span, untold);
         }
-        // A shape or kind can say how it is written itself.
         let own = match self
             .owner_of(&ty)
             .filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner))
@@ -16478,8 +14689,6 @@ impl Checker {
         )
     }
 
-    /// Why values of type `ty` can't be written as text, for the end of a
-    /// message: the type, the part of it that can't, and what to do instead.
     fn why_unwritable(&self, ty: &Type) -> String {
         let part = self.unwritable_part(ty).unwrap_or_else(|| ty.clone());
         let holds = if part == *ty {
@@ -16489,7 +14698,6 @@ impl Checker {
         };
         let hint = match &part {
             Type::Param(_) => format!("; {} {}", part, self.why_not(Need::Shown, &part)),
-            // A value that can fail is read first: a `maybe` of one has two to open.
             Type::Or(..) if part == *ty => extract_hint(&[ty]),
             Type::Or(..) => {
                 "; a value that can fail is read first, with a plan B, match, or is".to_string()
@@ -16501,24 +14709,15 @@ impl Checker {
         format!("{} as text{}{}", ty, holds, hint)
     }
 
-    /// Whether values of type `ty` can be written as text, by `show`, `str`, and
-    /// text holding values: numbers, bools, and text; a pointer, as its address;
-    /// an array, a slice, a tuple, or a `maybe` whose values can; and a shape or
-    /// kind with its own `str`. A value that can fail is read first, and a
-    /// type a declaration takes can when its word says it is `shown`.
     fn writable(&self, ty: &Type) -> bool {
         self.unwritable_part(ty).is_none()
     }
 
-    /// The first type in `ty`, itself included, whose values can't be written
-    /// as text (see `writable`).
     fn unwritable_part(&self, ty: &Type) -> Option<Type> {
         self.unwritable_in(ty, &mut Vec::new())
     }
 
-    /// `unwritable_part`, with the shapes and kinds already being looked
-    /// through in `seen`: one that holds itself (through a slice, say) is
-    /// written as far as its values go, so it is no reason to refuse.
+    // Track visited shapes/kinds in `seen` to allow recursive structures (e.g. via slices).
     fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
             _ if ty.is_numeric() => None,
@@ -16537,11 +14736,7 @@ impl Checker {
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
             Type::Param(_) | Type::Group(_) if self.allows(Need::Shown, ty) => None,
             Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
-            // A variant whose types nothing told is the statement's mistake
-            // (see `untold_kinds`), which says so.
             Type::Applied(_) if untold_kind(ty) => None,
-            // Without its own `str`, a shape is written as its fields that any
-            // file reads, and a kind as its variant with the values it carries.
             Type::Named(..) | Type::Applied(_) => {
                 let name = match ty {
                     Type::Applied(applied) => &applied.name,
@@ -16563,10 +14758,6 @@ impl Checker {
         }
     }
 
-    /// The types a shape's or kind's default text writes: a shape's fields
-    /// that aren't `priv` (shared ones are no part of a value), with the types
-    /// a shape that takes them is given, or every value a kind's variants
-    /// carry. `None` for no shape or kind.
     fn written_parts(&self, ty: &Type) -> Option<Vec<Type>> {
         let (name, given): (&str, &[Type]) = match ty {
             Type::Named(name, _) => (name, &[]),
@@ -16614,8 +14805,6 @@ impl Checker {
         )
     }
 
-    /// What a value of a shape or kind given types holds, a shape's fields or
-    /// a kind's payloads, with the types given in place of the names it takes.
     fn applied_parts(&self, applied: &Applied) -> Option<Vec<Type>> {
         let (_, params, parts) = self.takes_types(&applied.name)?;
         let names: HashMap<&str, &Type> = params
@@ -16631,17 +14820,12 @@ impl Checker {
         )
     }
 
-    /// Whether values of type `ty` are written by a method `str` of their own.
     fn has_own_str(&self, ty: &Type) -> bool {
         self.owner_of(ty)
             .is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)))
     }
 
-    /// The `str`s that writing a value of type `ty` as text calls, of the
-    /// shapes made for types it holds, itself included, that give their own:
-    /// each is the method of the shape it was made from, made for the same
-    /// types (`Box<int>` calls `Box`'s `str` made for `int`). One written only
-    /// inside another value has no call of its own that makes it.
+    /// Collects instantiated `str` methods needed when displaying compound types containing generic shapes.
     fn written_strs(
         &self,
         ty: &Type,
@@ -16675,8 +14859,6 @@ impl Checker {
         }
     }
 
-    /// Makes sure each `str` writing a value of type `ty` calls is made (see
-    /// `written_strs`), for a value written at `at`.
     fn note_written_strs(&mut self, ty: &Type, at: Span) {
         let mut found = Vec::new();
         self.written_strs(ty, &mut Vec::new(), &mut found);
@@ -16686,8 +14868,6 @@ impl Checker {
         }
     }
 
-    /// The end of a message about a shape or kind that has no `str` of its own,
-    /// and nothing for any other type.
     fn no_own_str(&self, ty: &Type) -> String {
         let Some(owner) = self
             .owner_of(ty)
@@ -16707,9 +14887,6 @@ impl Checker {
         )
     }
 
-    /// Rewrites a value given to `show` that has its own `str` into the call of
-    /// that method, which writes the value into the region `show` makes for the
-    /// line and frees when it ends (see `codegen::gen_show`).
     fn show_with_str(&mut self, arg: &mut Expr) -> Result<()> {
         let span = arg.span;
         if self.lookup(SHOWN).is_none() {
@@ -16726,9 +14903,7 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `a + b at region` or `"n = {n}" at region`, text joined into
-    /// `region`, and returns its type,
-    /// `text@region`. Every part is text, of any region or lasting.
+    /// Outlined (`#[inline(never)]`) to bound stack growth on deep concatenation/interpolation chains.
     #[inline(never)]
     fn check_join(
         &mut self,
@@ -16736,8 +14911,6 @@ impl Checker {
         region: &mut String,
         region_span: Span,
     ) -> Result<Type> {
-        // Text holding values that no `at r` followed (see
-        // `Parser::parse_interpolated`) goes in the block's default region.
         if let Some(field) = &self.in_default {
             return err(
                 parts.first().map_or(region_span, |part| part.span),
@@ -16751,15 +14924,12 @@ impl Checker {
             *region = self.region_or_default(None, region_span, || {
                 "text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'".to_string()
             })?;
-            // Each value turned into text in that region, as `at r` would.
             let pieces = std::mem::take(parts);
             crate::parser::interpolated_parts(pieces, region, region_span, parts);
         }
         let region = region.as_str();
         let mut numbers = true;
         let mut other = None;
-        // A part that is a call wanting a region fails, and when every other
-        // part is a number, the `at r` it was written for is a number chain's.
         let wanted = std::mem::take(&mut self.region_wanted);
         let mut failed = None;
         for part in parts.iter_mut() {
@@ -16812,9 +14982,7 @@ impl Checker {
             );
         }
         self.visible_region(region, region_span, true)?;
-        // A part that is text turned into text ('"{name}"', or 't.str() at r'
-        // written in a chain) is joined as it is: the join copies its bytes into
-        // the region, so copying them there first would be for nothing.
+        // `"{s}"` or `t.str() at r` directly splices bytes during join, skipping redundant temporary allocation.
         for part in parts.iter_mut() {
             let ExprKind::ToText { value, .. } = &part.kind else {
                 continue;
@@ -16831,11 +14999,7 @@ impl Checker {
         Ok(Type::Text(Some(region.to_string())))
     }
 
-    /// The end of a message about a value of type `ty` where text is wanted: how
-    /// to turn it into text, when it can be.
     fn to_text_hint(&self, ty: &Type) -> String {
-        // This hint is for text being joined, which goes in a region, so the
-        // parentheses `fail` needs are followed by one.
         if matches!(ty, Type::Fail(_)) {
             return "; 'fail' takes only the value right after it, so write 'fail (a + b)@r'"
                 .to_string();
@@ -16846,9 +15010,6 @@ impl Checker {
         extract_hint(&[ty])
     }
 
-    /// Checks `value.copy()`, at `span`, into `region` when one is written, and
-    /// returns its type: the value's, in that region. Without one, the copy is
-    /// of `ANY_REGION` and waits for the place it goes to settle its region.
     fn check_copy(
         &mut self,
         span: Span,
@@ -16856,7 +15017,6 @@ impl Checker {
         region: Option<&str>,
         region_span: Span,
     ) -> Result<Type> {
-        // `xs.added(v)` and `xs.without(i)`: a copy made with one change.
         let changed = match &mut value.kind {
             ExprKind::Edit { items, op, args } if op.makes_copy() => {
                 let op = *op;
@@ -16885,7 +15045,6 @@ impl Checker {
                 ),
             );
         }
-        // What a lambda keeps stays in its region, which its type names.
         if has_closure(&ty) {
             return err(
                 span,
@@ -16924,11 +15083,6 @@ impl Checker {
         }
     }
 
-    /// Checks `items.added(…)` or `items.without(…)` at `span`, the value a new
-    /// slice or map is made of and the change, and returns the type of `items`.
-    /// `items` is only read, so any value will do, a `fixed` one too, and so is
-    /// what a fixed name owns: the copy shares nothing with it. A value added is
-    /// copied into the copy's region with it, so it may be of any region.
     fn check_changed(
         &mut self,
         span: Span,
@@ -17034,9 +15188,6 @@ impl Checker {
         }
     }
 
-    /// Checks `value`, which goes into a new slice or map as an item, key's
-    /// value, of type `item`: it is copied into the new value's region with it,
-    /// so its own regions don't matter.
     fn check_copied_into(&mut self, value: &mut Expr, item: &Type) -> Result<()> {
         let ty = self.check_expr(value)?;
         if ty.unknown() || item.unknown() || same_ignoring_regions(&ty, item) {
@@ -17045,11 +15196,6 @@ impl Checker {
         self.coerce(value, item)
     }
 
-    /// Gives a `copy()` that `expr` is the region of `expected`, the type of the
-    /// place it goes, when that type names one region; otherwise the copy stays
-    /// unsettled, which its statement reports. Copies in an array, shape, or
-    /// variant literal, and in a value becoming a `maybe` or a `T ~ E`, go
-    /// where their part of `expected` does.
     fn settle_copies(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         match (&mut expr.kind, expected) {
             (
@@ -17101,15 +15247,12 @@ impl Checker {
             (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => {
                 self.settle_copies(inner, value)
             }
-            // A value of a kind another kind imitates goes where that one is.
             (ExprKind::Widen(inner), _) => {
                 match inner.ty.as_ref().map(|from| in_region_of(from, expected)) {
                     Some(into) => self.settle_copies(inner, &into),
                     None => Ok(()),
                 }
             }
-            // A `when` or `match` giving a value: each branch's value goes
-            // where the whole does.
             (ExprKind::Choice(stmt), _) => self.settle_branch_values(stmt, expected),
             (ExprKind::StructInit { name, fields, .. }, Type::Named(_, Some(region))) => {
                 let Some(shape) = self.shapes.get(name.as_str()).cloned() else {
@@ -17123,7 +15266,6 @@ impl Checker {
                     }
                 })
             }
-            // The kind the value is of, made for its types where it takes them.
             (ExprKind::Construct { tag, args, .. }, Type::Named(kind, Some(region))) => {
                 let Some(variant) = self
                     .kinds
@@ -17143,9 +15285,6 @@ impl Checker {
         }
     }
 
-    /// Checks the value of `new [T](value) at r`, which gives the slice its
-    /// items, of type `items` in `r`: `[v#n]`, whose count may be known only as
-    /// the program runs, or an array or slice whose items are copied.
     fn check_slice_source(&mut self, value: &mut Expr, items: &Type, slice: &Type) -> Result<()> {
         if let ExprKind::Repeat { value: item, count } = &mut value.kind {
             self.check_expr(item)?;
@@ -17160,16 +15299,12 @@ impl Checker {
             value.ty = Some(slice.clone());
             return Ok(());
         }
-        // `new [T]()`: no items yet.
         if matches!(&value.kind, ExprKind::Array(values) if values.is_empty()) {
             value.ty = Some(slice.clone());
             return Ok(());
         }
         let ty = self.check_expr(value)?;
-        // A slice made of another or of an array is a complete copy, which puts
-        // everything its items hold in the new slice's region, as `copy()` does,
-        // so the items may be in any region. A lambda isn't copied, and the
-        // values written are held as they are.
+        // Copying `new [T](slice)` isolates contents in the target region (except closures); array literals hold elements as-is.
         let copies = !matches!(value.kind, ExprKind::Array(_))
             && !has_closure(items)
             && (holds_pointers(items, &self.regional) || holds_text(items, &self.takes_region));
@@ -17203,8 +15338,6 @@ impl Checker {
         }
     }
 
-    /// Checks a plan B, `value { body }`, and returns the type it gives: the
-    /// type inside `value`.
     fn check_plan_b(
         &mut self,
         span: Span,
@@ -17217,9 +15350,6 @@ impl Checker {
         if past_end(value) {
             return self.past_end_plan_b(span, value, error, body);
         }
-        // Whether the value needs a plan B at all depends on the type the
-        // checker couldn't work out, so the fallback is read for mistakes of
-        // its own and nothing more (see `Type::Unknown`).
         let (extracted, error_ty) = match &value_ty {
             Type::Maybe(inner) => ((**inner).clone(), None),
             Type::Or(ok, fail) => ((**ok).clone(), Some((**fail).clone())),
@@ -17256,8 +15386,6 @@ impl Checker {
             }
             bindings.push((name.clone(), *at, error_ty, Mode::Fixed));
         }
-        // The block runs only when there is nothing to extract, so a result it
-        // sets isn't set for certain.
         let entry = self.unset.clone();
         self.push_scope();
         let result = bindings
@@ -17270,8 +15398,6 @@ impl Checker {
         let Some((settled, at)) = result? else {
             return Ok(extracted);
         };
-        // The fallback's regions must outlive the plan B: a region declared in
-        // its block is freed when it ends.
         if let Some(region) = settled
             .regions()
             .into_iter()
@@ -17285,10 +15411,7 @@ impl Checker {
                 ),
             );
         }
-        // A plan B is a place the value goes, so a call whose types it settled
-        // (see `check_plan_b_body`) learns them from it.
         if !value_ty.params().is_empty() {
-            // What the value holds, where the plan B made the whole a `maybe`.
             let held = match &settled {
                 Type::Maybe(inner) if !matches!(extracted, Type::Maybe(_)) => (**inner).clone(),
                 _ => settled.clone(),
@@ -17303,9 +15426,6 @@ impl Checker {
         Ok(settled)
     }
 
-    /// A plan B on `t.#5` past the tuple's end, which is always `none`, so the
-    /// block always runs: the item's type is the one the block gives, as in
-    /// `t.#5 { 0 }`, a `maybe int`.
     fn past_end_plan_b(
         &mut self,
         span: Span,
@@ -17332,7 +15452,6 @@ impl Checker {
                 "this tuple has no such item, so its plan B always runs, and gives the value: one of a type, not 'none'",
             );
         }
-        // A block that only sends gives no value; the item is then any maybe.
         let held = match &settled {
             Type::Nothing => Type::Bool,
             Type::Maybe(inner) => (**inner).clone(),
@@ -17342,13 +15461,6 @@ impl Checker {
         Ok(settled)
     }
 
-    /// Checks a plan B's statements: the last line gives the value, unless every
-    /// path through the block sends, or there is no value to give (`nothing ~ E`).
-    ///
-    /// Returns the plan B's type, and the last line's position, when the last line
-    /// settles it: a value holding no pointers (of `ANY_REGION`, such as
-    /// `first(none)`) has nothing to extract that lives anywhere, so the plan B
-    /// takes the fallback's regions.
     fn check_plan_b_body(
         &mut self,
         span: Span,
@@ -17361,9 +15473,6 @@ impl Checker {
         if let Some(last) = body.last_mut() {
             last_loop_gives(last);
         }
-        // Whether the plan B has to give a value depends on the type the checker
-        // couldn't work out, so its last line is read as a value and nothing is
-        // asked of it (see `Type::Unknown`).
         if extracted.unknown() {
             let Some((last, rest)) = body.split_last_mut() else {
                 return Ok(None);
@@ -17397,14 +15506,10 @@ impl Checker {
                     ),
                 );
             }
-            // `v { none }`: the whole is a `maybe`, the value when there is one
-            // and empty otherwise, never a plain value, which would have none.
+            // `v { none }` widens the whole expression to `maybe` if not already optional.
             if let Some(maybe) = gives_a_maybe(extracted, &ty) {
                 return self.coerce(e, &maybe).map(|()| Some((maybe, e.span)));
             }
-            // A plan B on a call that isn't told which type it is: the
-            // fallback's type is the one to use, since it is where the value
-            // goes (see `settle_types`).
             if extracted
                 .params()
                 .iter()
@@ -17434,10 +15539,6 @@ impl Checker {
             }
             return self.coerce(e, extracted).map(|()| None);
         }
-        // A `when` or a `match` on the last line gives the value through its own
-        // branches, as it does in the block of a case (see `value_block_tail`).
-        // One whose every branch leaves (`<-`, `break`, `continue`) leaves the
-        // block too, which then gives nothing, as a last `<-` does.
         if gives_value(last) && always_leaves(std::slice::from_ref(last)) {
             self.check_stmt(last)?;
             return Ok(None);
@@ -17497,8 +15598,6 @@ impl Checker {
         match op {
             UnaryOp::Neg => {
                 if !ty.is_numeric() {
-                    // A shape whose pattern answers `-` with a `neg` method
-                    // (see `operator_method`): the negation is that call.
                     if self.operator_neg(&ty) {
                         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
                         let ExprKind::Unary(_, operand) = taken else {
@@ -17547,12 +15646,7 @@ impl Checker {
         }
     }
 
-    /// The method a type's pattern answers an operator with, when it does: a
-    /// type following a pattern that asks for `plus` answers `+` with it, one
-    /// whose pattern asks for `cmp` answers `<`, `<=`, `>`, and `>=` with it
-    /// (see `std/int512`'s Numeric). The pattern's header says what the method
-    /// takes and gives, and following checks the type has it, so the call is
-    /// read as any method call.
+    /// Resolves operator-overloading trait methods (`plus`, `cmp`, `neg`) from followed patterns (e.g. `Numeric`).
     fn operator_method(&self, op: BinaryOp, ty: &Type) -> Option<&'static str> {
         let name = match op {
             BinaryOp::Add => "plus",
@@ -17574,8 +15668,6 @@ impl Checker {
         })
     }
 
-    /// Whether a type's pattern answers unary `-` with a `neg` method (see
-    /// `operator_method`).
     fn operator_neg(&self, ty: &Type) -> bool {
         !matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_))
             && self.patterns.values().any(|pattern| {
@@ -17586,10 +15678,6 @@ impl Checker {
             })
     }
 
-    /// Checks a binary operation, and returns its type. `a + b` on text is a
-    /// join, which makes new text and so needs a region: the block's default,
-    /// since a written one is a `Join` from the parser. That replaces the
-    /// expression, so this takes the whole node.
     fn check_binary_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
         let ExprKind::Binary(op, l, r) = &mut expr.kind else {
@@ -17599,8 +15687,6 @@ impl Checker {
             ));
         };
         let op = *op;
-        // `first<>(x)`: `<>` reads as 'not similar', so this is a use giving no
-        // types, written where a value would be compared.
         if op == BinaryOp::NotSimilar
             && let ExprKind::Var(name) = &l.kind
             && self.lookup(name).is_none()
@@ -17616,7 +15702,6 @@ impl Checker {
                 ),
             );
         }
-        // `&a == &b`: where two places are, not what they hold.
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
             && [&**l, &**r]
                 .into_iter()
@@ -17626,8 +15711,6 @@ impl Checker {
         }
         let mut lt = self.check_expr(l)?;
         let mut rt = self.check_expr(r)?;
-        // `Option.None == k`: a variant whose types it didn't tell is told
-        // them by the value beside it.
         if holds_untold(&lt) && !holds_untold(&rt) {
             self.settle_variant(l, &rt)?;
             lt = l.ty.clone().unwrap_or(lt);
@@ -17638,17 +15721,12 @@ impl Checker {
             && holds_untold(&rt)
             && let Some(joined) = self.join(&lt, &rt).filter(|joined| !holds_untold(joined))
         {
-            // `Either.Left(1) == Either.Right("x")`: each tells what the other
-            // doesn't, as values side by side do.
             let joined = self.made_kinds(joined, span)?;
             self.settle_variant(l, &joined)?;
             self.settle_variant(r, &joined)?;
             lt = l.ty.clone().unwrap_or(lt);
             rt = r.ty.clone().unwrap_or(rt);
         }
-        // With one operand's type unknown, the operation's own type is unknown
-        // too: a comparison is still a bool, but what it compares isn't checked
-        // (see `Type::Unknown`).
         if lt.unknown() || rt.unknown() {
             return Ok(match op {
                 BinaryOp::Eq
@@ -17664,8 +15742,6 @@ impl Checker {
                 _ => Type::Unknown,
             });
         }
-        // A value of a kind compared with one of a kind imitating it is made
-        // a value of the second first (see `widen`).
         if matches!(
             op,
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar
@@ -17695,10 +15771,6 @@ impl Checker {
             let region = self.region_or_default(None, span, || JOIN_NEEDS_REGION.to_string())?;
             return self.join_into(expr, region, span);
         }
-        // `a + b`, `a < b`: one shape following a pattern that answers the
-        // operator with a method of its own (see `operator_method`). The
-        // operation is the method call it names; a comparison reads the
-        // method's int as one beside 0. Both sides are the one type.
         if matches!(
             op,
             BinaryOp::Add
@@ -17744,10 +15816,6 @@ impl Checker {
         self.check_binary(op, l, r, span, &lt, &rt)
     }
 
-    /// Replaces `a + b` on text with the join it is, in `region`, and returns its
-    /// type. The parts are checked already, so this only settles the region and
-    /// splices the parts of a join of the same region, which a chain of `+` makes
-    /// one level at a time (see `check_join`).
     fn join_into(&mut self, expr: &mut Expr, region: String, span: Span) -> Result<Type> {
         self.visible_region(&region, span, true)?;
         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
@@ -17765,8 +15833,6 @@ impl Checker {
                     region: theirs,
                     ..
                 } if theirs == region => parts.extend(inner),
-                // Text turned into text is joined as it is, as `check_join` does
-                // with the parts of a written join.
                 ExprKind::ToText { value, .. } if matches!(value.ty, Some(Type::Text(_))) => {
                     parts.push(*value)
                 }
@@ -17792,8 +15858,7 @@ impl Checker {
     ) -> Result<Type> {
         let (mut lt, mut rt) = (lt.clone(), rt.clone());
         if op == BinaryOp::Pow {
-            // `b ** 2`: an exponent written out is a unit beside a unit base.
-            // A base written out stays an int, so `2 ** b` is an int.
+            // Only unannotated right-hand exponents inherit an unsigned/sized base type; bases stay `int`.
             if lt.is_integer() && lt != Type::Int && numeric_literal(r, &lt)? {
                 rt = lt.clone();
             } else if lt == Type::Float32 && float32_literal(r) {
@@ -17815,7 +15880,6 @@ impl Checker {
         {
             lt = target;
         } else if lt == Type::Float32 && float32_literal(r) {
-            // `f * 2.5` with `f: float32`: a float written out is one.
             rt = Type::Float32;
         } else if rt == Type::Float32 && float32_literal(l) {
             lt = Type::Float32;
@@ -17848,9 +15912,6 @@ impl Checker {
                             ),
                         );
                     }
-                    // A shape whose pattern answers operators, beside a value
-                    // of another type: the operator takes its own type on both
-                    // sides, so the mixed operation names the method.
                     if lt.without_regions() != rt.without_regions()
                         && let Some((at, of, other, method)) = [
                             (l.span, &lt, &rt, self.operator_method(op, &lt)),
@@ -17947,9 +16008,7 @@ impl Checker {
                         ),
                     );
                 }
-                // Comparing stores nothing, so values in different regions
-                // compare (pointers and places into different regions are never
-                // equal), and so do texts in any regions.
+                // Equality reads without storing, so pointers/slices/texts across differing regions still compare.
                 if lt.without_regions() != rt.without_regions() {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
@@ -17971,8 +16030,6 @@ impl Checker {
                         format!("'{}' can't compare values of type {}{}", symbol, lt, hint),
                     );
                 }
-                // An array, a shape, or a tuple is compared by where it is, so
-                // each side is a place; a value made on the spot is none.
                 if self.by_place(&lt) {
                     let what = self.compared_by_place(symbol, &lt);
                     if !same_root(l, r) {
@@ -17996,7 +16053,6 @@ impl Checker {
             }
             BinaryOp::Similar | BinaryOp::NotSimilar => {
                 let symbol = if op == BinaryOp::Similar { "~=" } else { "<>" };
-                // `none` is similar to an empty `maybe`, as `==` has it.
                 let none_and_maybe = matches!(
                     (&lt, &rt),
                     (Type::None, Type::Maybe(_)) | (Type::Maybe(_), Type::None)
@@ -18008,10 +16064,6 @@ impl Checker {
                     return err(span, "'none' can only be compared with a maybe value");
                 }
                 let (lt, rt) = self.widen_literal(l, r, lt, rt);
-                // `m ~= v`, either side first: a maybe is similar to a plain
-                // value when it holds one similar to it, so the plain side
-                // becomes a maybe and the two compare as maybes do (empty is
-                // similar to empty only).
                 let (lt, wrapped) = match (&lt, &rt) {
                     (Type::Maybe(inner), plain) | (plain, Type::Maybe(inner))
                         if !matches!(plain, Type::Maybe(_)) =>
@@ -18041,8 +16093,6 @@ impl Checker {
                         );
                         (maybe, true)
                     }
-                    // A maybe that a generic made of a maybe (`maybe maybe int`)
-                    // beside the maybe it holds: the one it holds is wrapped.
                     (Type::Maybe(inner), other @ Type::Maybe(_))
                     | (other @ Type::Maybe(_), Type::Maybe(inner))
                         if inner.without_regions() == other.without_regions() =>
@@ -18136,7 +16186,6 @@ impl Checker {
                         ),
                     );
                 }
-                // Comparing stores nothing, so texts in any regions compare.
                 if !matches!((&lt, &rt), (Type::Text(_), Type::Text(_))) {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
@@ -18151,9 +16200,6 @@ impl Checker {
     }
 
     fn field_type(&self, base: &Type, field: &str, span: Span) -> Result<Type> {
-        // Nothing is known about what the value holds: its type couldn't be
-        // worked out, or the shape it is of has a mistake in its own fields
-        // (see `Type::Unknown` and `broken`).
         if base.unknown()
             || self
                 .owner_of(base)
@@ -18161,7 +16207,6 @@ impl Checker {
         {
             return Ok(Type::Unknown);
         }
-        // Read, `.type` never reaches here (see `check_type_of`); changed, it does.
         if field == TYPE_WORD {
             return err(
                 span,
@@ -18172,10 +16217,7 @@ impl Checker {
             );
         }
         match base {
-            // A field a pattern the type follows asks for.
             Type::Param(param) => self.pattern_field(param, field, span),
-            // A shape given a type this declaration takes: its field's type is
-            // the shape's with the types given in place of the names it takes.
             Type::Applied(applied) => {
                 let Some(shape) = self.shapes.get(&applied.name) else {
                     return err(span, format!("type {} has no fields", base));
@@ -18246,8 +16288,6 @@ impl Checker {
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
-            // A group's tuple has two or more items, and each copy of the task
-            // checks a read past those its call gives (see `substitute_expr`).
             Type::Tuple(items) if group_in_tuple(items).is_some() => match field.parse::<usize>() {
                 Ok(n) => Ok(Type::Param(group_item(
                     &group_in_tuple(items).unwrap_or_default(),
@@ -18293,7 +16333,6 @@ impl Checker {
             Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Text(_) if field == LEN => {
                 Ok(Type::Int)
             }
-            // `m.keys` alone is read only by `each`, so it is no field either.
             Type::Map(..) if field == "keys" || field == "values" => {
                 let one = if field == "keys" { "k" } else { "v" };
                 err(
@@ -18343,8 +16382,6 @@ impl Checker {
         }
     }
 
-    /// A field's or payload's declared type `ty`, in a value of region `region`
-    /// (none for a value that holds no pointers).
     fn field_in(&self, ty: &Type, region: &Option<String>) -> Type {
         match region {
             Some(region) => self.in_region(ty, region),
@@ -18352,11 +16389,6 @@ impl Checker {
         }
     }
 
-    /// The region of a value of shape or kind `name` whose fields' values are
-    /// in `region` (see `check_fields_of_value`): none for a type that lives in
-    /// no region, and none for a value holding only text that lasts as long as
-    /// the program, which is how a type holding text is written without a
-    /// region.
     fn region_of_value(&self, name: &str, region: String) -> Option<String> {
         if self.regional.contains(name) {
             return Some(region);
@@ -18364,21 +16396,13 @@ impl Checker {
         (self.takes_region.contains(name) && region != ANY_REGION).then_some(region)
     }
 
-    /// Checks the values given for a shape's fields or a variant's payload,
-    /// `declared` in the same order, and returns the region of the value they
-    /// make: the region of the pointers among them, or `ANY_REGION` when they
-    /// hold none. Every value must then fit its field in that region. With
-    /// `filled`, the values from its index on are what a shape's fields fall
-    /// back on, written in its module, `filled`'s other half, and read there,
-    /// which may give what the literal's own can't, such as a private field.
     fn check_fields_of_value(
         &mut self,
         values: &mut [&mut Expr],
         declared: &[Field],
         filled: Option<(usize, &str)>,
     ) -> Result<String> {
-        // A literal nests in a literal, so this loop is kept small, as the
-        // stack each level takes (see `check_in_module`).
+        // Separated helper keeps stack frames small for deeply nested struct/variant literals.
         let from = filled.map_or(usize::MAX, |(from, _)| from);
         for (at, value) in values.iter_mut().enumerate().take(declared.len()) {
             if let Some(field) = declared.get(at) {
@@ -18393,9 +16417,6 @@ impl Checker {
         self.fields_region(values, declared)
     }
 
-    /// The region of the value `values`, already checked, make for the fields
-    /// or payload `declared` (see `check_fields_of_value`), each value made to
-    /// fit its field there.
     fn fields_region(&mut self, values: &mut [&mut Expr], declared: &[Field]) -> Result<String> {
         const OWN: &str = "";
         let mut regions = HashMap::new();
@@ -18412,8 +16433,7 @@ impl Checker {
         Ok(region)
     }
 
-    /// Checks a value filled into a literal, as the module `filled` names reads
-    /// it (see `check_fields_of_value`).
+    /// Outlined (`#[inline(never)]`) to avoid bloating literal-checking stack frames.
     #[inline(never)]
     fn check_in_module(&mut self, value: &mut Expr, filled: Option<(usize, &str)>) -> Result<Type> {
         let Some((_, module)) = filled else {
@@ -18425,9 +16445,6 @@ impl Checker {
         checked
     }
 
-    /// The shape or kind whose methods a value of type `ty` has: its name, with
-    /// a shape made for a set of types read as the shape itself (see `unmade`),
-    /// since a made shape has the methods the shape it was made from has.
     fn owner_of(&self, ty: &Type) -> Option<String> {
         match self.unmade(ty) {
             Type::Named(name, _) => Some(name),
@@ -18436,10 +16453,6 @@ impl Checker {
         }
     }
 
-    /// The field `field` as the shape `owner` declares it, for what its markers
-    /// say (`priv`, `read`, and the value it falls back on). A shape made for a
-    /// set of types is read as the shape it was made from, whose fields carry
-    /// them (see `owner_of`).
     fn declared_field(&self, owner: &str, field: &str) -> Option<&Field> {
         self.shapes
             .get(owner)?
@@ -18448,7 +16461,6 @@ impl Checker {
             .find(|declared| declared.name == field)
     }
 
-    /// The methods of the shape or kind `owner`, in no particular order.
     fn methods_of(&self, owner: &str) -> Vec<&str> {
         let prefix = method_name(owner, "");
         self.tasks
@@ -18457,8 +16469,6 @@ impl Checker {
             .collect()
     }
 
-    /// The error for `value.name(…)` where a value of type `base` has no method
-    /// `name`.
     fn no_method(&self, base: &Type, name: &str, span: Span) -> Error {
         if name == TYPE_WORD {
             return Error::at(
@@ -18466,7 +16476,6 @@ impl Checker {
                 "'type' is the type of a value, read without '(…)', as in 'x.type'",
             );
         }
-        // A slice's built-in changes are what these usually mean.
         let instead = match name {
             "push" | "append" | "insert" => {
                 "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'"
@@ -18490,8 +16499,6 @@ impl Checker {
                 "shape"
             };
             let written = unqualified(&owner);
-            // Without a `str` of its own, one is written by its parts, and one
-            // of them can't be.
             if name == STR {
                 return Error::at(
                     span,
@@ -18532,7 +16539,6 @@ impl Checker {
                 format!("{} '{}' has no method '{}'", what, written, name),
             );
         }
-        // A type a declaration takes has the methods of the patterns it follows.
         if let Type::Param(param) = base
             && name != STR
         {
@@ -18605,10 +16611,7 @@ impl Checker {
         }
     }
 
-    /// Checks `value.name(…)` and rewrites it into the call of the task the
-    /// method is (see `method_name`), with the value as its first argument. The
-    /// value says which method it is, so it is checked first; the call checks it
-    /// again, as a shape literal checks its values again (see `literal_types`).
+    /// Checks `value.name(...)` and rewrites it to a direct task call, re-checking the receiver as first argument.
     fn check_method_call(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
         let ExprKind::MethodCall { value, name, .. } = &mut expr.kind else {
@@ -18617,8 +16620,6 @@ impl Checker {
         let name = name.clone();
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
-        // `(&x).str()` and `"{&x}"`: the address of the place, as text. An
-        // address is no value of its own, so it has nothing else.
         let found = match value.kind {
             ExprKind::Ref(_) if name != STR => {
                 return err(
@@ -18635,22 +16636,14 @@ impl Checker {
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
         let ty = found?;
-        // `Option.None.isSome()`: a method's value tells it no types.
         if untold_kind(&ty)
             && let Some(error) = self.untold_kind_error(value.span)
         {
             return Err(error);
         }
-        // Which method this is comes from the value's type, so a value whose
-        // type the checker couldn't work out leaves the call unread; the
-        // expression it is part of is left as `Type::Unknown`.
         if ty.unknown() {
             return Ok(());
         }
-        // `x.str()` and `text(x)` make new text, so they name the region it goes
-        // in; with none written, that is the block's default (see `parse_str`).
-        // It reads as the region argument the written forms give, so a shape's
-        // own `str` takes it as its parameter, as it always did.
         if name == STR && matches!(&expr.kind, ExprKind::MethodCall { args, .. } if args.is_empty())
         {
             let region = self.region_or_default(None, span, || STR_NEEDS_REGION.to_string())?;
@@ -18659,7 +16652,6 @@ impl Checker {
             }
         }
         if name == STR && self.has_builtin_str(&ty) {
-            // The region written after it is the one `str` takes, and the only one.
             if let ExprKind::MethodCall { args, .. } = &mut expr.kind
                 && let Some(at) = region_after(args)
             {
@@ -18677,7 +16669,6 @@ impl Checker {
             }
             return self.builtin_str(expr);
         }
-        // `m.has(k)`: whether a map holds the key (see `ExprKind::MapOp`).
         if let Type::Map(..) = ty
             && let Some(op) = MapOp::from_word(&name)
         {
@@ -18719,7 +16710,6 @@ impl Checker {
             };
             return Ok(());
         }
-        // `t.at(i)`: a byte of text, or none (see `ExprKind::Lookup`).
         if name == AT && matches!(ty, Type::Text(_)) {
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             let ExprKind::MethodCall {
@@ -18743,9 +16733,6 @@ impl Checker {
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
             return Ok(());
         }
-        // `x.area()` with `x: T`, where `T` follows a pattern asking for `area`:
-        // the call of the method each type given for `T` has (see
-        // `ast::pattern_call`), checked against the pattern's header.
         if let Type::Param(param) = &ty
             && let Some(pattern) = self.pattern_with_method(param, &name, span)?
         {
@@ -18793,8 +16780,6 @@ impl Checker {
             let mut all = Vec::with_capacity(args.len() + 1);
             all.push(*value);
             all.extend(args);
-            // `I: Iterator<T>`: the call is given `I`, then the types the bound
-            // gives the pattern, which its header names (`maybe T`).
             let bound: Vec<Type> = self
                 .type_param(param)
                 .and_then(|declared| {
@@ -18819,8 +16804,6 @@ impl Checker {
             };
             return Ok(());
         }
-        // `op.run(4, 5)`: a field that holds a task, called, where the value
-        // has no method of that name.
         let method = self
             .owner_of(&ty)
             .is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, &name)));
@@ -18842,9 +16825,7 @@ impl Checker {
             };
             return Ok(());
         }
-        // `xs.map(…)`: a slice has the chain members of std/collections'
-        // `Iterator` in a file that includes it, read as its own iterator's
-        // (see `std/collections.SliceIter`).
+        // Slices gain `Iterator` chain methods via `SliceIter` when `std/collections` is included.
         if matches!(ty, Type::Slice(..)) {
             const CHAIN: &[&str] = &[
                 "map",
@@ -18978,8 +16959,6 @@ impl Checker {
             ExprKind::MethodCall { args, .. } => args.len(),
             _ => 0,
         };
-        // The value it is called on is the first parameter, not an argument;
-        // the last may fall back on values (see `fill_defaults`).
         let needed = self
             .param_defaults
             .get(&full)
@@ -19021,15 +17000,10 @@ impl Checker {
         Ok(())
     }
 
-    /// Whether values of type `ty` have `str` built in: every value that can
-    /// be written as text (see `writable`) but a shape's or kind's with a
-    /// method `str` of its own, which is called instead.
     fn has_builtin_str(&self, ty: &Type) -> bool {
         !self.has_own_str(ty) && self.writable(ty)
     }
 
-    /// Rewrites `value.str(r)`, a method call on a value with `str` built in,
-    /// into the `ToText` it is, which the rest of the checker checks.
     fn builtin_str(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
@@ -19073,8 +17047,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `value.str() at region` on a value with `str` built in, and
-    /// returns its type, `text@region`.
     fn check_to_text(&mut self, value: &mut Expr, region: &str, region_span: Span) -> Result<Type> {
         let ty = match value.kind {
             ExprKind::Ref(_) => self.check_address(value)?,
@@ -19085,11 +17057,6 @@ impl Checker {
         Ok(Type::Text(Some(region.to_string())))
     }
 
-    /// Checks `int(x)` or `float(x)`, a value turned into a number, and returns
-    /// that number's type. A `float` from an int always works; an `int` from a
-    /// float is its whole part, toward zero, which stops the program when there
-    /// is none to give, and an `int` from a bool is 1 or 0. A number turned into
-    /// its own type is the value itself.
     fn check_number_cast(
         &mut self,
         into: &Type,
@@ -19144,8 +17111,6 @@ impl Checker {
         if fits || ty.unknown() {
             return Ok(into.clone());
         }
-        // Text may hold no number at all, which is a mistake in the input rather
-        // than in the program, so reading it sends a value or a reason why not.
         if matches!(ty, Type::Text(_)) && *into != Type::Char {
             return Ok(Type::Or(
                 Box::new(into.clone()),
@@ -19179,12 +17144,8 @@ impl Checker {
         )
     }
 
-    /// Checks that the value a method marked `alters` is called on can change:
-    /// the same places an assignment writes to. Its type is already checked, so
-    /// this only says why a place can't.
     fn altered_place(&self, value: &Expr, method: &str) -> Result<()> {
-        // A value made here, which nothing else sees, is the method's to
-        // change: `xs.map(f).collect(r)` (see `codegen::made_here`).
+        // Temporaries produced on the spot (`xs.map(f).collect(r)`) can be mutated safely.
         if matches!(
             value.kind,
             ExprKind::Call { .. }
@@ -19197,7 +17158,6 @@ impl Checker {
         self.altered_part(value, method, &self.written_text(value))
     }
 
-    /// `altered_place` of `value`, part of the place `written`, as written.
     fn altered_part(&self, value: &Expr, method: &str, written: &str) -> Result<()> {
         let refuse = |what: String| {
             err(
@@ -19245,7 +17205,6 @@ impl Checker {
                         info.ty
                     ));
                 }
-                // A lambda's copy: the hint says which lambda changes it.
                 if info.kept {
                     return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
                 }
@@ -19269,9 +17228,6 @@ impl Checker {
                 }
                 self.altered_part(base, method, written)
             }
-            // A slice's items are in a region, behind a pointer, and change as
-            // what a pointer points to does: where it is reached from a name
-            // that changes (see `written_through`).
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => self.written_through(base, written, Some(method)),
             ExprKind::Index(base, _) => self.altered_part(base, method, written),
             ExprKind::Deref(pointer) => self.written_through(pointer, written, Some(method)),
@@ -19280,8 +17236,6 @@ impl Checker {
         }
     }
 
-    /// The error for changing the value a method is called on where the method
-    /// doesn't say it may: `what` is what changes it.
     fn needs_alters(&self, span: Span, what: &str, owner: &Owner) -> Error {
         Error::at(
             span,
@@ -19292,8 +17246,6 @@ impl Checker {
         )
     }
 
-    /// The error for assigning what a method is called on, or a member of it,
-    /// where the method doesn't say it may change it.
     fn this_cannot_change(&self, span: Span, what: &str) -> Error {
         match &self.current_method {
             Some(owner) if !owner.shared => self.needs_alters(span, what, owner),
@@ -19301,10 +17253,6 @@ impl Checker {
         }
     }
 
-    /// Why a method can't allocate in the region the value it is called on lives
-    /// in: nothing gives a method that region, only the type of the value. A
-    /// region it takes is another one, which the value can't point into, so the
-    /// fix, `what_to_do`, is always outside the method.
     fn cannot_allocate_in_this(&self, what_to_do: &str) -> String {
         format!(
             "'@{0}' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there, and a region it takes is another one, which the value can't point into; {1}",
@@ -19312,12 +17260,7 @@ impl Checker {
         )
     }
 
-    /// Checks `X.f`, a shared field of a shape, which `expr` is, and returns its
-    /// type. Where a value is worked out before the program runs (the value a
-    /// field falls back on, or a shared field's first value), `expr` becomes the
-    /// first value of the field it names, which is what it is there. (A
-    /// function of its own: `infer_expr`'s frame is on the stack once per
-    /// nesting level.)
+    /// Outlined (`#[inline(never)]`) because `infer_expr` recurses per nesting level.
     #[inline(never)]
     fn check_shared_use(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
@@ -19328,7 +17271,6 @@ impl Checker {
         if self.broken.contains(&shape) {
             return Ok(Type::Unknown);
         }
-        // `Point.new`, a shared method named without '(…)': its task, as a value.
         let task = method_name(&shape, &field);
         if let Some(owner) = self.tasks.get(&task).and_then(|info| info.owner.clone()) {
             let written = unqualified(&shape);
@@ -19406,7 +17348,6 @@ impl Checker {
                     ),
                 );
             }
-            // `Card.Hearts`, written as if the shape were a kind.
             if self.variants.values().any(|info| info.variant.tag == field) {
                 return err(
                     span,
@@ -19436,7 +17377,6 @@ impl Checker {
                 ),
             );
         }
-        // Worked out before the program runs: the field's first value.
         if let Some((within, above)) = self.in_shared.clone() {
             if within == shape && index >= above {
                 let what = if index == above {
@@ -19478,10 +17418,6 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Refuses to change the shared field `field` of `shape` at `span` where
-    /// it can't be: one that is neither `flex` nor `read`, and a `read` one
-    /// outside the methods of its shape. `lead` starts the message, for a
-    /// change that is a call's.
     fn changeable_shared(
         &self,
         shape: &str,
@@ -19495,7 +17431,6 @@ impl Checker {
             .get(shape)
             .and_then(|def| def.shared.iter().find(|member| member.field.name == field))
         else {
-            // `Point.new`, a shared method, named as a value: no place.
             if self
                 .tasks
                 .get(&method_name(shape, field))
@@ -19570,11 +17505,6 @@ impl Checker {
         )
     }
 
-    /// The first value of shared field `index` of `shape`, checked, which a use
-    /// at `span` names (or the field's own declaration). Each is checked once,
-    /// where its own module reads it: a mistake found in it is sent on, to be
-    /// reported once by whoever asked first, and a later use of it only says it
-    /// has one.
     fn shared_value(&mut self, shape: &str, index: usize, span: Span) -> Result<Expr> {
         let Some(member) = self
             .shapes
@@ -19635,9 +17565,6 @@ impl Checker {
         kept
     }
 
-    /// Checks a shared field's first value, written after its type: a value the
-    /// compiler works out without running the program, as a field falls back
-    /// on (see `check_field_default`), which may name a shared field above it.
     fn check_first_value(&mut self, value: &mut Expr, field: &Field) -> Result<()> {
         self.check_expr(value)?;
         if !constant_value(value) {
@@ -19652,9 +17579,6 @@ impl Checker {
         self.coerce(value, &field.ty)
     }
 
-    /// Checks the first value of every shared field, and writes it, checked,
-    /// into its shape's declaration for the code generator. A field named by
-    /// another's first value has been checked already, and is checked once.
     fn check_shared_fields(&mut self, items: &mut [Item]) {
         for item in items.iter_mut() {
             let Item::Shape(shape) = item else { continue };
@@ -19684,16 +17608,12 @@ impl Checker {
         }
     }
 
-    /// Whether the task being checked is a method called on a value, which it
-    /// reads as `.this`: not a task, and not a shared method.
     fn called_on_a_value(&self) -> bool {
         self.current_method
             .as_ref()
             .is_some_and(|owner| !owner.shared)
     }
 
-    /// The error for `.this` or `.x` in a task that is no method, or in a
-    /// shared method.
     fn not_a_method(&self, written: &str) -> String {
         if self.in_shared.is_some() {
             return format!(
@@ -19752,11 +17672,6 @@ impl Checker {
         )
     }
 
-    /// Checks a call's arguments against the task's `params`, and returns the
-    /// type the call gives. A region argument must be a region the caller can
-    /// allocate in. The task's other regions stand for the caller's regions
-    /// that the arguments' types show; one that no argument shows (as for
-    /// `none`) becomes `ANY_REGION`.
     fn check_call_args(
         &mut self,
         span: Span,
@@ -19765,11 +17680,7 @@ impl Checker {
         args: &mut [Expr],
         info: &TaskInfo,
     ) -> Result<Type> {
-        // The types the call gives: written after the name, or worked out from
-        // the arguments below (and from the place the value goes, later).
         let given = self.written_types(span, task, written, info)?;
-        // The region a lambda that keeps what it uses keeps it in, which its
-        // type names as the caller does (see `check_invoke`).
         let regions = self
             .kept_call
             .take()
@@ -19783,19 +17694,12 @@ impl Checker {
             taken: HashMap::new(),
             untold: false,
         };
-        // The arguments are checked in a function of their own, and what they
-        // show is settled in another: the checker recurses through calls'
-        // arguments, so this keeps little on the stack.
+        // Argument checking and settling live in separate helpers to keep recursive call stack frames small.
         let mut info = info.clone();
         self.check_args_of(task, args, &mut info, &mut found)?;
         self.settle_call_args(span, task, written, args, &info, found)
     }
 
-    /// Notes in `found` how `actual`, the task value given at `at` for a
-    /// parameter of type `ty`, takes each value of a group the call gives,
-    /// and makes `ty` take them so too: a task value taking a place there is
-    /// given the group's value as a place (see `group_place`). Two task values
-    /// taking one value in different ways can't both be given it.
     fn note_group_taken(
         ty: &mut Type,
         actual: &Type,
@@ -19851,9 +17755,6 @@ impl Checker {
         Ok(())
     }
 
-    /// How a call gives `arg`, the value `param` of a group it gives, which a
-    /// task value it gives takes as `found` notes: a place it takes there is
-    /// given as a place, marked, and a region a group never holds.
     fn group_place(
         &self,
         task: &str,
@@ -19872,8 +17773,6 @@ impl Checker {
                     region
                 ),
             ),
-            // A task value of a type not known, which a mistake in it left:
-            // the place may be what it takes.
             None if found.untold && matches!(arg.kind, ExprKind::Ref(_)) => {
                 Ok(Some(Passing::FixedRef))
             }
@@ -19888,8 +17787,6 @@ impl Checker {
         }
     }
 
-    /// Checks the arguments of a call of `task`, and notes in `found` what
-    /// each shows the task's types and regions to be.
     fn check_args_of(
         &mut self,
         task: &str,
@@ -19903,9 +17800,7 @@ impl Checker {
             "task"
         };
         let mut deferred = Vec::new();
-        // A group's values are checked after a task value given after them,
-        // `apply(&n, 5, bump)`, which says how it takes each (see
-        // `note_group_taken`).
+        // Check group arguments after trailing callback args so `note_group_taken` knows which args need `&`.
         let group_item = |ty: &Type| matches!(ty, Type::Param(name) if name.contains(GROUP_ITEM));
         let first_item = info.params.iter().position(|(_, ty)| group_item(ty));
         let last_task = info.params.iter().rposition(
@@ -19926,9 +17821,7 @@ impl Checker {
         });
         let shortcuts: Vec<bool> = (0..args.len()).map(is_shortcut).collect();
         for i in order {
-            // A one-line lambda takes its types from the values before it; an
-            // array given for a slice tells none, so it is told about first,
-            // rather than the lambda whose types it left unknown.
+            // Check array-vs-slice mismatches before trailing shortcut lambdas so error attribution points at the array.
             if shortcuts.get(i).copied().unwrap_or(false)
                 && let Some((at, got)) = (0..args.len())
                     .filter(|&j| !shortcuts.get(j).copied().unwrap_or(false))
@@ -19940,7 +17833,6 @@ impl Checker {
                             .then(|| (arg.span, got.clone()))
                     })
             {
-                // The lambda is left unchecked: what it lacks is this.
                 if let Some(lambda) = args
                     .get(i)
                     .and_then(|arg| self.shortcut_lambda_name(arg))
@@ -19964,18 +17856,12 @@ impl Checker {
                 continue;
             };
             if *ty != Type::Region {
-                // A value of a group, which a task value given with it may take
-                // as a place.
                 if let Type::Param(name) = &*ty
                     && name.contains(GROUP_ITEM)
                     && let Some(place) = self.group_place(task, arg, param, name, found)?
                 {
                     *passing = place;
                 }
-                // A value of a shape made for its types is read as that shape
-                // given them, so a header naming `Box<T>` matches it (see
-                // `match_regions`).
-                // A value filled in is read as the task's module wrote it.
                 let expected = in_copy(ty, &found.given);
                 self.prepare_shortcut_lambda(arg, &expected)?;
                 let actual = if self.filled_default(task, i, arg) {
@@ -19988,9 +17874,7 @@ impl Checker {
                 } else {
                     self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?
                 };
-                // A slice given where a type bounded by std/collections'
-                // Iterator is expected is read as its own iterator (see
-                // `std/collections.SliceIter`), which `zip` takes as `other`.
+                // Coerce slices into `SliceIter` where a bound expects `std/collections.Iterator`.
                 let actual = match (&*ty, &actual) {
                     (Type::Param(name), Type::Slice(..)) => {
                         let bounded = info.types.iter().any(|type_param| {
@@ -20038,9 +17922,6 @@ impl Checker {
                 self.match_regions(ty, &actual, &mut found.regions);
                 Self::note_group_taken(ty, &actual, arg.span, found)?;
                 found.untold |= matches!(ty, Type::Task(_)) && actual.unknown();
-                // A task value whose type names regions is matched after the
-                // other values, whose types name the caller's regions its own
-                // stand for.
                 if let (Type::Task(_), Type::Task(task)) = (&*ty, &actual)
                     && (task
                         .params
@@ -20068,9 +17949,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks that each type a bound gives a pattern allows what the pattern
-    /// asks of it: `<R: Ranked<T>, T>` for `pattern Ranked<T: ordered>` asks
-    /// `T: ordered` too. `types` are in scope.
     fn check_bounds_allow(&self, types: &[TypeParam]) -> Result<()> {
         for followed in types.iter().flat_map(|param| &param.patterns) {
             let Some(pattern) = self.patterns.get(&followed.name) else {
@@ -20089,9 +17967,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Works out the types a bound gives a pattern from the type given for
-    /// it: in `<I: Iterator<T>, T>`, `T` is `int` once `I` is a `Countdown`,
-    /// which follows `Iterator<int>`. Never from a value.
     fn solve_bounds(&self, types: &[TypeParam], given: &mut HashMap<String, Type>) {
         loop {
             let before = given.len();
@@ -20118,8 +17993,6 @@ impl Checker {
         }
     }
 
-    /// Checks that `ty`, given for `param` of `task`, gives each pattern its
-    /// bound asks for the types the bound names, with the call's `given`.
     fn check_bound_types(
         &self,
         task: &str,
@@ -20142,8 +18015,6 @@ impl Checker {
                 .iter()
                 .map(|bound| in_copy(&named_params(bound, types), given))
                 .collect();
-            // One side may name a shape made for its types (`Named`) and the
-            // other keep it written (`Applied`): read both the same way.
             let fits = wanted.len() == actual.len()
                 && wanted.iter().zip(&actual).all(|(wanted, actual)| {
                     wanted.unknown()
@@ -20183,7 +18054,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks `arg`, given to a call of `task` as its region parameter `param`.
     fn check_region_argument(
         &mut self,
         task: &str,
@@ -20214,8 +18084,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Settles a call of `task` whose arguments are checked: the types it
-    /// gives, what each argument becomes, and the type of what it sends.
     fn settle_call_args(
         &mut self,
         span: Span,
@@ -20234,8 +18102,6 @@ impl Checker {
         } = found;
         let params = &info.params;
         let ret = &info.ret;
-        // Where each type the call gives is written: the call itself, for one
-        // worked out rather than written.
         let places: Vec<Span> = info
             .types
             .iter()
@@ -20247,8 +18113,6 @@ impl Checker {
         } else {
             "task"
         };
-        // A written type names its regions, as a written type does everywhere
-        // else, so one that an argument shows to be of a region names it too.
         for ((param, at), (ty, _)) in info.types.iter().zip(&places).zip(written.iter()) {
             if let Some(held) = shown.get(&param.name)
                 && held.without_regions() == ty.without_regions()
@@ -20263,12 +18127,8 @@ impl Checker {
                 );
             }
         }
-        // Every type the call gives must allow what the task's header asks of
-        // it, and the types it names are put in place of the parameters.
         for (param, at) in info.types.iter().zip(&places) {
             if let Some(ty) = given.get(&param.name) {
-                // Its body may copy a value of the type, which a `[flex @r]` or
-                // `[bind @r]` lambda never is.
                 if held_lambda(ty)
                     || holds_held_lambda(ty)
                     || group_items(&given, &param.name).is_some_and(|(types, _)| {
@@ -20296,8 +18156,6 @@ impl Checker {
                 self.check_bound_types(task, &info.types, param, ty, &given, *at)?;
             }
         }
-        // A type found in a region a task value takes is in the region the
-        // task's body gives it there (see `regions_named_as`).
         for (param, at) in info.types.iter().zip(&places) {
             if let Some(ty) = given.get(&param.name)
                 && ty.regions().contains(&OWN_REGION)
@@ -20305,13 +18163,9 @@ impl Checker {
                 return err(*at, own_region_type(what, task, &param.name, ty));
             }
         }
-        // Everything a value in a region holds is in that region, so a type
-        // given for a `T` must be of the region the header keeps it in.
         if !info.types.is_empty() || self.default_copies.contains(task) {
             self.check_kept_regions(span, task, info, &regions, &given)?;
         }
-        // A pattern's default called on a value whose text lasts, as a literal
-        // does: the text its follower gives as `text@this` lasts too.
         let lasting_this = self.default_copies.contains(task)
             && !regions.contains_key(THIS_WORD)
             && args.first().and_then(|arg| arg.ty.as_ref()).is_some_and(
@@ -20327,13 +18181,9 @@ impl Checker {
             }
             let expected = self.settled_type(&lasting(ty), &regions, &given, span)?;
             let actual = arg.ty()?.clone();
-            // The place itself is given, so it holds exactly what the task
-            // may write there, or reads there: nothing becomes a wider type
-            // on the way.
+            // `flex&`/`fixed&` places require exact types without implicit wrapping or promotion.
             if passing.is_ref() {
-                // A region no argument names holds nothing the task could write
-                // there but values that last as long as the program, as the
-                // place's own do.
+                // Regionless slots accept only program-lifetime text unless a concrete region is bound.
                 let lasting = expected
                     .map_regions(&mut |region| (region != ANY_REGION).then(|| region.to_string()));
                 if actual != expected
@@ -20371,7 +18221,6 @@ impl Checker {
                 .flatten()
                 .any(|e| actual.without_regions() == e.without_regions());
             match self.coerce(arg, &expected) {
-                // A parameter that holds text of no region, given text of one.
                 Err(_) if same_but_region && expected.regions().is_empty() => {
                     let example = expected.map_regions_of_names(&mut |_| Some("r".to_string()));
                     return err(
@@ -20382,7 +18231,6 @@ impl Checker {
                         ),
                     );
                 }
-                // A method's parameter in `@this`, given a value of another region.
                 Err(_)
                     if same_but_region
                         && info.owner.is_some()
@@ -20411,7 +18259,6 @@ impl Checker {
         self.check_aliasing(args, info)?;
         for ((arg, passing), (param, _)) in args.iter().zip(&info.passing).zip(&info.params) {
             match (passing, &arg.kind) {
-                // A `flex` or `bind` parameter may change what it holds.
                 (Passing::Flex | Passing::Bind, _) => self.hand(
                     arg,
                     HandedTo::Param {
@@ -20426,10 +18273,6 @@ impl Checker {
             }
         }
         let sent = self.settled_type(&lasting(ret), &regions, &given, span)?;
-        // A type no argument names is worked out from the place the value goes
-        // (see `settle_types`), or written at the call.
-        // A group given no values, as a call of a task taking one sees it (see
-        // `group_call_info`), is given no types.
         for param in info.types.iter().filter(|param| param.group) {
             given
                 .entry(param.name.clone())
@@ -20440,7 +18283,6 @@ impl Checker {
             .iter()
             .filter(|param| !given.contains_key(&param.name))
             .collect();
-        // A task value whose mistake is told already may be what names them.
         if untold && !missing.is_empty() {
             return Ok(Type::Unknown);
         }
@@ -20478,10 +18320,6 @@ impl Checker {
         Ok(sent)
     }
 
-    /// Checks `flex& y = &x` or `fixed& y = &x`, which the parser made one name
-    /// and one value, and declares `y`, another name for the place `&x` marks:
-    /// one that changes it (`flex&`), or only reads it. `y` is of the place's
-    /// type exactly, since what either writes the other reads.
     fn check_reference(
         &mut self,
         names: &mut [Bound],
@@ -20519,7 +18357,6 @@ impl Checker {
                 ),
             );
         };
-        // A `[flex @r]` lambda may be named by a reference, never copied.
         self.calling = matches!(place.kind, ExprKind::Var(_));
         let ty = self.check_expr(place);
         self.calling = false;
@@ -20532,7 +18369,6 @@ impl Checker {
                 _ => Taker::Reference(&name),
             };
             if let Err(error) = self.given_place(place, &taker) {
-                // A place that only can't change may still be read through one.
                 return match (self.read_place(place), self.resolved_path(place)) {
                     (Ok(()), Some(path)) => Err(Error {
                         message: format!(
@@ -20573,8 +18409,6 @@ impl Checker {
         bound.ty = Some(ty.clone());
         value.ty = Some(ty.clone());
         let at = bound.span;
-        // A `fixed&` owns what its place is owned by; a `flex&` names a place
-        // that changes, unless reached from a value made here.
         if mode.can_change_contents(true) {
             self.hand_written(place, None);
         } else {
@@ -20594,10 +18428,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks that `place`, already checked, can be read through `fixed& y`: a
-    /// place, as `given_place` takes, of any variable, other than an item of a
-    /// slice, which moves when the slice grows, and a result, which only its
-    /// name reads.
     fn read_place(&self, place: &Expr) -> Result<()> {
         let refuse = |why: &str| {
             err(
@@ -20643,18 +18473,12 @@ impl Checker {
         }
     }
 
-    /// Checks `&x` where its address is read (`show(&x)`, `(&x).str()`,
-    /// `"{&x}"`, `&a == &b`), and returns its type: a pointer to the place's
-    /// type, which `show` and `str` write as an address. `x` is a place: a
-    /// variable, a field or an item of one, what a pointer points to, or a
-    /// shared field; a reference is the place it names.
     fn check_address(&mut self, e: &mut Expr) -> Result<Type> {
         let ExprKind::Ref(place) = &mut e.kind else {
             return Err(Error::internal_at(e.span, "an address of no place"));
         };
         let ty = self.check_expr(place)?;
         if ty.unknown() {
-            // Read as unknown where it is used, as a method call's value is.
             e.ty = Some(Type::Unknown);
             return Ok(Type::Unknown);
         }
@@ -20675,15 +18499,12 @@ impl Checker {
         Ok(address)
     }
 
-    /// Whether `e` names a place `&` can take the address of (see
-    /// `check_address`): a path from a variable or a shared field.
     fn is_place(&self, e: &Expr) -> bool {
         let mut at = e;
         loop {
             match &at.kind {
                 ExprKind::Var(name) => return self.lookup(name).is_some(),
                 ExprKind::Shared { .. } | ExprKind::Deref(_) => return true,
-                // `xs.len` is worked out from the value, not kept in it.
                 ExprKind::Field(base, _) if worked_out(base) => return false,
                 ExprKind::Field(base, _) => at = base,
                 ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Text(_))) => return false,
@@ -20695,10 +18516,7 @@ impl Checker {
         }
     }
 
-    /// Checks `&a == &b`, or `&a == p` with `p` a pointer, at `span`: where
-    /// two places are, or whether a pointer points at a place. Both are of one
-    /// type, as a shape and its first field start at the same address and
-    /// are still two places.
+    /// Compares addresses strictly by pointer identity; same-typed struct vs first field still share an address.
     fn check_address_compare(&mut self, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
         let warned = self.warnings.len();
         let mut side_type = |side: &mut Expr| match side.kind {
@@ -20706,8 +18524,6 @@ impl Checker {
             _ => self.check_expr(side),
         };
         let (lt, rt) = (side_type(l)?, side_type(r)?);
-        // Two parts of one parameter are where they are alike whichever way
-        // it was given, so the answer doesn't rest on the choice.
         if let (ExprKind::Ref(a), ExprKind::Ref(b)) = (&l.kind, &r.kind)
             && same_root(a, b)
         {
@@ -20717,7 +18533,6 @@ impl Checker {
         if lt.unknown() || rt.unknown() {
             return Ok(Type::Bool);
         }
-        // The side without '&', which is a pointer or a mistake.
         for (side, ty) in [(&*l, lt), (&*r, rt)] {
             if matches!(side.kind, ExprKind::Ref(_)) {
                 continue;
@@ -20774,10 +18589,7 @@ impl Checker {
         Ok(Type::Bool)
     }
 
-    /// The parameter `e` is, or is a field or an item of, when it is one the
-    /// compiler chooses how to give (`x: T`): a copy, or, for a large value,
-    /// where the caller keeps it (see `codegen::hidden_by_size`). Its name and
-    /// type. A place a pointer points to is its own, however it was given.
+    /// Identifies params whose C ABI passing (`copy` vs `hidden_by_size` by-ptr) affects address/place-identity warnings.
     fn chosen_param(&self, e: &Expr) -> Option<(String, Type, Span)> {
         let (name, at) = param_root(e)?;
         let info = self.lookup(name)?;
@@ -20788,9 +18600,6 @@ impl Checker {
         chosen.then(|| (name.to_string(), info.ty.clone(), at))
     }
 
-    /// What `==` (or `!=`, as `symbol`) does with values of `ty`, compared by
-    /// where they are, for a warning: a kind compares its variant by value and
-    /// only what that carries by where it is.
     fn compared_by_place(&self, symbol: &str, ty: &Type) -> String {
         match ty {
             Type::Named(name, _) if self.kinds.contains_key(name) => format!(
@@ -20806,8 +18615,6 @@ impl Checker {
         }
     }
 
-    /// `, in module 'm'` (or `, in the main file`) when `file`, where a use
-    /// is, isn't `here`, the file a message about it is shown in; else nothing.
     fn file_named(&self, file: usize, here: usize) -> String {
         if file == here {
             return String::new();
@@ -20818,16 +18625,10 @@ impl Checker {
         }
     }
 
-    /// Warns that `what`, at `at`, reads where a parameter the compiler chose
-    /// how to give is (`chosen_param`), which the choice decides: a copy is a
-    /// place of its own, and a large value is where the caller keeps it. The
-    /// warning says which it is, and how to say which is meant.
     fn warn_chosen(&mut self, e: &Expr, what: &str) {
         let Some((name, ty, at)) = self.chosen_param(e) else {
             return;
         };
-        // A type a declaration takes has no size until a use gives it one,
-        // where the task made for it warns (see `Made::reads_chosen`).
         if !ty.params().is_empty() {
             return;
         }
@@ -20835,7 +18636,6 @@ impl Checker {
         self.warnings.push(Error::at(at, message));
     }
 
-    /// How many bytes a value of `ty` takes in C (see `codegen::Layout`).
     fn size_of(&self, ty: &Type) -> usize {
         codegen::Layout {
             shapes: &self.shapes,
@@ -20845,8 +18645,6 @@ impl Checker {
         .0
     }
 
-    /// The place `e` names, as `place_path` gives it, with a reference it
-    /// starts at replaced by the place that reference names.
     fn resolved_path(&self, e: &Expr) -> Option<Vec<Step>> {
         let mut path = place_path(e)?;
         if let Some(Step::Field(root)) = path.first()
@@ -20857,9 +18655,6 @@ impl Checker {
         Some(path)
     }
 
-    /// Checks one argument of a call, given to `param` of `callee` (`task 'f'`),
-    /// and returns its type: a place marked `&` for a `flex&` parameter, and a
-    /// value otherwise.
     fn check_argument(
         &mut self,
         arg: &mut Expr,
@@ -20869,7 +18664,6 @@ impl Checker {
     ) -> Result<Type> {
         match (&mut arg.kind, passing) {
             (ExprKind::Ref(place), Passing::FlexRef | Passing::FixedRef | Passing::BindRef) => {
-                // A `[flex @r]` lambda is given as a place, never copied.
                 self.calling = matches!(place.kind, ExprKind::Var(_));
                 let ty = self.check_expr(place);
                 self.calling = false;
@@ -20893,8 +18687,6 @@ impl Checker {
         }
     }
 
-    /// Checks `place`, checked already, given with `&` to the `flex&`,
-    /// `fixed&` or `bind&` parameter `param` of `callee`.
     fn check_given_place(
         &mut self,
         place: &Expr,
@@ -20905,9 +18697,7 @@ impl Checker {
         match passing {
             Passing::FlexRef => self.given_place(place, &Taker::Param(param)),
             Passing::BindRef => {
-                // A `bind&` parameter changes the contents of the caller's
-                // place, but for simple types it has no contents, so it only
-                // reads them, like `fixed&`.
+                // Scalar/value types have no interior contents, so `bind&` checks like `fixed&` on them.
                 if self.bind_has_contents(place.ty.as_ref().unwrap_or(&Type::Unknown)) {
                     self.given_place(place, &Taker::BindParam(param))
                 } else {
@@ -20924,7 +18714,6 @@ impl Checker {
                     })
                 }
             }
-            // A place only read: any place a `fixed&` reference may name.
             _ => {
                 if !self.is_place(place) {
                     return err(
@@ -20952,18 +18741,10 @@ impl Checker {
         }
     }
 
-    /// Checks that `place`, already checked, can be given to a `flex&`
-    /// parameter or named by a `flex&` reference (see `Taker`):
-    /// a place that can change, as an assignment writes to, other than an item
-    /// of a slice, which may move when the slice grows.
     fn given_place(&self, place: &Expr, taker: &Taker) -> Result<()> {
         self.given_part(place, taker, &self.written_text(place), !taker.is_bind())
     }
 
-    /// `given_place` of `place`, part of the place `written`, as written.
-    /// `whole` is whether the taker may assign `place` as a whole: a `flex&`
-    /// one may assign the place it is given, but of the variable or shared
-    /// field that place is part of, it changes only the contents.
     fn given_part(&self, place: &Expr, taker: &Taker, written: &str, whole: bool) -> Result<()> {
         let refuse = |why: String| err(place.span, format!("{}, so {}", taker.lead(), why));
         match &place.kind {
@@ -21002,7 +18783,6 @@ impl Checker {
                         name, info.ty, want
                     ));
                 }
-                // A lambda's copy: the hint says which lambda changes it.
                 if info.kept {
                     return refuse(format!("it needs a place that can change, and '{}' never does{}", name, self.param_hint(name, info)));
                 }
@@ -21044,10 +18824,6 @@ impl Checker {
         }
     }
 
-    /// `t ~= (1, none)`: a tuple or array written on one side becomes the
-    /// other side's type where it can, as it becomes a written type in a
-    /// binding (`(int, none)` a `(int, maybe int)`). The types of the two
-    /// sides, after that.
     fn widen_literal(&mut self, l: &mut Expr, r: &mut Expr, lt: Type, rt: Type) -> (Type, Type) {
         let literal = |e: &Expr| {
             matches!(
@@ -21066,7 +18842,6 @@ impl Checker {
         let before = written.clone();
         match self.coerce(written, other) {
             Ok(()) => (other.clone(), other.clone()),
-            // Left as written, for the mismatch to be told as the two types.
             Err(_) => {
                 *written = before;
                 (lt, rt)
@@ -21074,18 +18849,9 @@ impl Checker {
         }
     }
 
-    /// Rejects a call that gives one place twice where the task changes it:
-    /// `swap(&a, &a)`, `f(a, &a)`, or `f(&a, &a.x)`, and a method that alters
-    /// the value it is called on given a part of it as a `flex&`,
-    /// `c.give(&c.n)`. A copy of a part of it, `c.grow(c.n)`, is read before
-    /// the method runs, as it always was. The task would see a value
-    /// change under it that it never wrote. Two places through pointers, `&p^`
-    /// and `&q^`, can't be told apart before the program runs, and are allowed,
-    /// as writing through two pointers is.
+    /// Forbids aliasing a mutable parameter with another arg or `alters` receiver; `&p^`/`&q^` pointers cannot be disambiguated.
     fn check_aliasing(&self, args: &[Expr], info: &TaskInfo) -> Result<()> {
         let alters = info.owner.as_ref().is_some_and(|owner| owner.alters);
-        // Each argument that names a place, whether the task changes it, and
-        // the parameter it is given to.
         let mut places: Vec<(Vec<Step>, bool, &str, Span)> = Vec::new();
         for (i, ((arg, (param, _)), passing)) in
             args.iter().zip(&info.params).zip(&info.passing).enumerate()
@@ -21094,8 +18860,6 @@ impl Checker {
                 (ExprKind::Ref(place), Passing::FlexRef | Passing::BindRef) => {
                     (place.as_ref(), true)
                 }
-                // Read where it is while the task runs, so no place given
-                // beside it may change.
                 (ExprKind::Ref(place), Passing::FixedRef) => (place.as_ref(), false),
                 (_, Passing::Flex | Passing::Fixed | Passing::Bind) => continue,
                 _ => (arg, i == 0 && alters),
@@ -21104,10 +18868,6 @@ impl Checker {
                 continue;
             };
             for (before, before_changed, before_param, _) in &places {
-                // A value given to a copy is read before the call starts, so a
-                // method may change the value it is called on and be given a
-                // part of it, `c.grow(c.n)`; only a `flex&` beside it names it.
-                // A `fixed&` is read while the method runs, so it is no copy.
                 let read_there = *passing == Passing::FixedRef;
                 let receiver_and_copy = alters
                     && !read_there
@@ -21141,11 +18901,9 @@ impl Checker {
                     } else {
                         format!("the call changes it through '{}'", changing)
                     };
-                    // The earlier one changes it: say where this one reads it.
                     if !changed {
                         how = format!("{} while it reads it through {}", how, name(param));
                     }
-                    // A reference is named as written, with the place it names.
                     let written = place_path(place)
                         .map(|written| path_text(&written))
                         .unwrap_or_default();
@@ -21171,10 +18929,6 @@ impl Checker {
         Ok(())
     }
 
-    /// One type of a task's header as the call sees it: the caller's regions in
-    /// place of the header's own names, the types the call gives in place of the
-    /// names it takes, and the shape made for those types in place of a shape
-    /// given them (see `settle_applications`).
     fn settled_type(
         &mut self,
         ty: &Type,
@@ -21193,15 +18947,12 @@ impl Checker {
         let ty = ty.map_group_items(&mut |name| group_items(given, name));
         let mut ty = ty.map_params(&mut |name| given.get(name).cloned());
         self.settle_applications(&mut ty, at)?;
-        // A task type given the caller's types names their regions its own way.
         if !given.is_empty() {
             ty = ty.normalized_tasks();
         }
         Ok(ty)
     }
 
-    /// Rejects a call whose types would make the task keep a value of one region
-    /// inside a value of another, which no value can do.
     fn check_kept_regions(
         &mut self,
         span: Span,
@@ -21216,8 +18967,7 @@ impl Checker {
             .map(|(_, ty)| ty.clone())
             .chain([info.ret.clone()])
         {
-            // Read before a kind or shape given types is made for them, which
-            // keeps only its own region: `Option<text@s>@r` is in two.
+            // Check before monomorphizing shapes/kinds, which collapses nested regions.
             let ty = ty.map_regions(&mut |region| {
                 Some(
                     regions
@@ -21229,7 +18979,6 @@ impl Checker {
             let ty = ty.map_group_items(&mut |name| group_items(given, name));
             let ty = ty.map_params(&mut |name| given.get(name).cloned());
             if let Some((outer, inner)) = region_conflict(&ty, None) {
-                // A lambda that keeps what it uses is never copied.
                 let fix = match has_closure(&ty) {
                     true => format!(
                         "make the lambda keep what it uses in '{0}', as in '[@{0}](…)'",
@@ -21255,8 +19004,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The types written after a call's name, by the name of the type each one
-    /// is given for. Writing them is all or nothing.
     fn written_types(
         &mut self,
         span: Span,
@@ -21276,9 +19023,6 @@ impl Checker {
                 ),
             );
         }
-        // A call of a pattern's method the checker made gives the type following
-        // the pattern and those its bound gives it; the method's own types, after
-        // them, come from the values (see `pattern_call`).
         let partly = pattern_call_parts(task).is_some() && written.len() < info.types.len();
         if written.len() != info.types.len() && !partly {
             let names: Vec<&str> = info.types.iter().map(|param| param.name.as_str()).collect();
@@ -21301,8 +19045,6 @@ impl Checker {
         Ok(given)
     }
 
-    /// Checks that `ty`, given for the type parameter `param`, allows what the
-    /// task's header asks of it.
     fn check_need(
         &self,
         what: &str,
@@ -21311,7 +19053,6 @@ impl Checker {
         ty: &Type,
         at: Span,
     ) -> Result<()> {
-        // The patterns it asks every type given for it to follow.
         if let Some(Followed { name: pattern, .. }) = param
             .patterns
             .iter()
@@ -21375,8 +19116,6 @@ impl Checker {
         let Some(&(need, _)) = param.needs.iter().find(|(need, _)| !self.allows(*need, ty)) else {
             return Ok(());
         };
-        // One of the types a call gives a group (see `group_call_info`), named
-        // as the group is written and by the value it is for.
         if let Some((group, place)) = param.name.split_once(GROUP_ITEM) {
             let given = match ty {
                 Type::Group(given) => format!(
@@ -21417,15 +19156,10 @@ impl Checker {
         )
     }
 
-    /// Whether values of type `ty` allow what `need` asks: a type parameter
-    /// allows it when its own word already does.
     fn allows(&self, need: Need, ty: &Type) -> bool {
-        // A value of no type had a mistake of its own, already reported, as a
-        // type nothing told is (see `untold_kinds`).
         if ty.unknown() || is_untold(ty) {
             return true;
         }
-        // A group allows what it asks of each of its types.
         if let Type::Param(name) | Type::Group(name) = ty {
             return self
                 .type_param(name)
@@ -21440,12 +19174,6 @@ impl Checker {
         }
     }
 
-    /// Whether `==` compares values of type `ty`, each by its own rule: a
-    /// number, a bool, and a kind by value, text by its bytes, a pointer by the
-    /// address it holds, a slice by its view (its first item and its length),
-    /// and an array, a shape, and a tuple by where the value is (see
-    /// `by_place`). A `maybe` is only compared with `none`, and a value that
-    /// can fail is read first.
     fn comparable(&self, ty: &Type) -> bool {
         match ty {
             _ if ty.is_numeric() => true,
@@ -21461,8 +19189,6 @@ impl Checker {
             Type::Named(name, _) if self.kinds.contains_key(name) => {
                 self.kind_comparable(name, &mut Vec::new())
             }
-            // `Option<T>` in a task that takes types: what its variants carry,
-            // given those types, compares as a made kind's does.
             Type::Applied(applied) if self.kinds.contains_key(&applied.name) => {
                 self.applied_parts(applied).is_some_and(|parts| {
                     parts.iter().all(|part| match part {
@@ -21479,9 +19205,6 @@ impl Checker {
         }
     }
 
-    /// Whether `==` compares values of the kind `name`: its variant, and each
-    /// value a variant carries by that value's own rule, a `maybe` being both
-    /// empty or both holding values that compare.
     fn kind_comparable(&self, name: &str, seen: &mut Vec<String>) -> bool {
         if seen.iter().any(|kind| kind == name) {
             return true;
@@ -21510,10 +19233,6 @@ impl Checker {
         found
     }
 
-    /// Whether `==` compares values of type `ty` by where they are, so both
-    /// sides are places: an array, a shape, a tuple, and a kind that can carry
-    /// one of those, whose variant is compared by value and what it carries by
-    /// that value's own rule.
     fn by_place(&self, ty: &Type) -> bool {
         self.by_place_in(ty, &mut Vec::new())
     }
@@ -21535,8 +19254,6 @@ impl Checker {
                     .iter()
                     .flat_map(|variant| &variant.payload)
                     .any(|field| {
-                        // A `maybe` a variant carries compares what it holds (see
-                        // `kind_comparable`), so by that value's own rule.
                         let carried = match &field.ty {
                             Type::Maybe(inner) => inner.as_ref(),
                             other => other,
@@ -21551,10 +19268,7 @@ impl Checker {
         }
     }
 
-    /// The first type in `ty`, itself included, whose values `~=` can't
-    /// compare item by item: numbers, bools, text, pointers (by the address
-    /// they hold, so nothing loops), and `maybe`s, arrays, slices, tuples,
-    /// shapes (every field but shared ones), and kinds of those can.
+    /// Structural `~=` compares pointers by address to avoid cyclic traversal.
     fn unsimilar_part(&self, ty: &Type) -> Option<Type> {
         self.unsimilar_in(ty, &mut Vec::new())
     }
@@ -21571,8 +19285,6 @@ impl Checker {
                 .or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
             Type::Param(_) | Type::Group(_) if self.allows(Need::Similar, ty) => None,
-            // A shape or kind given types this declaration takes: its fields or
-            // payloads with them.
             Type::Applied(applied) => self
                 .applied_parts(applied)?
                 .iter()
@@ -21598,11 +19310,8 @@ impl Checker {
         }
     }
 
-    /// Why a type doesn't allow what `need` asks, for the end of a message.
     fn why_not(&self, need: Need, ty: &Type) -> String {
         if let Type::Param(param) | Type::Group(param) = ty {
-            // A group's needs are written after its dots, for `P...` and for
-            // the type of one of its values, `P` alone or `P#0`.
             let declared = self.type_param(param);
             let group =
                 matches!(ty, Type::Group(_)) || declared.is_some_and(|declared| declared.group);
@@ -21614,8 +19323,6 @@ impl Checker {
                 .map(|param| param.needs.iter().map(|(own, _)| *own).collect())
                 .unwrap_or_default();
             let own: Vec<&str> = owned.iter().map(|own| own.word()).collect();
-            // The word asked for replaces any it already means, as `ordered`
-            // does `same`, since writing both is an error.
             let mut wanted: Vec<&str> = owned
                 .iter()
                 .filter(|own| !need.means(**own))
@@ -21664,10 +19371,7 @@ impl Checker {
         }
     }
 
-    /// The error for a type a call neither names nor shows in its arguments or
-    /// in the place its value goes.
     fn untold_type(&self, task: &str, param: &str) -> String {
-        // A call doesn't write the types of a task taking a group yet.
         if self
             .tasks
             .get(task)
@@ -21680,7 +19384,6 @@ impl Checker {
                 unqualified(task)
             );
         }
-        // A method's own types aren't written at a call yet.
         if self
             .tasks
             .get(task)
@@ -21708,9 +19411,6 @@ impl Checker {
         )
     }
 
-    /// The error for a value whose type names a type no task here takes: it is
-    /// a generic task's, and the call it came from was never told which type to
-    /// use, so that is what to say rather than anything about the type itself.
     fn untold_param(&self, ty: &Type) -> Option<String> {
         let name = ty
             .params()
@@ -21726,9 +19426,6 @@ impl Checker {
         Some(self.untold_type(task, name))
     }
 
-    /// Records that a use of the generic task `task` with the types `given` is
-    /// needed, so one made for them is generated (see `instances`). `at` is the
-    /// call, for the errors about a task used with too many types.
     fn note_instance(&mut self, at: Span, task: &str, given: &[TypeArg]) {
         if given.is_empty() || given.iter().any(|(ty, _)| !ty.params().is_empty()) {
             return;
@@ -21740,21 +19437,10 @@ impl Checker {
         }
     }
 
-    /// Checks that the value of `expr` fits where `expected` is required, and
-    /// marks where it becomes part of a `maybe` or `T ~ E` with a `Wrap` node:
-    /// a plain value or `none` in a `maybe`, a plain value or `fail e` in a
-    /// `T ~ E`.
-    ///
-    /// A value built without pointers (of `ANY_REGION`) fits the same type in
-    /// any region, and takes that region; any other value must be of exactly
-    /// the expected regions.
     fn coerce(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         if self.is_shortcut_lambda(expr) {
             self.prepare_shortcut_lambda(expr, expected)?;
         }
-        // A value the checker couldn't work out the type of goes anywhere, and
-        // anything goes into a place whose type it couldn't work out: what went
-        // wrong is already reported (see `Type::Unknown`).
         if expected.unknown() || expr.ty.as_ref().is_some_and(Type::unknown) {
             return Ok(());
         }
@@ -21771,29 +19457,18 @@ impl Checker {
             }
         }
         let actual = expr.ty()?.clone();
-        // One side may name a shape with the types it was made for (`Named`)
-        // while the other keeps them written (`Applied`), as a one-line
-        // lambda's type does beside a settled parameter's: read both the same
-        // way before saying they differ.
         let unmade_actual = self.unmade(&actual);
         let unmade_expected = self.unmade(expected);
         if fits_regions(&actual, expected) || fits_regions(&unmade_actual, &unmade_expected) {
             expr.ty = Some(expected.clone());
             return self.settle_copies(expr, expected);
         }
-        // A value of a kind where a kind imitating it is expected becomes a
-        // value of that kind, alone, in a maybe, as a success or as an error.
         if self.widen(expr, &actual, expected) {
             return self.coerce(expr, expected);
         }
-        // A plain task value where a lambda that keeps what it uses is
-        // expected: it keeps only the task, in the region the type names.
         if let (Type::Task(task), Type::Closure(closure)) = (&actual, expected)
             && task.normalized_avoiding(&closure.region) == closure.task
         {
-            // A task named here is kept where the program keeps it; a task
-            // value, in the region.
-            // Kept already, where a value it is part of is read again.
             if let ExprKind::Kept { .. } = &expr.kind {
                 expr.ty = Some(expected.clone());
                 return Ok(());
@@ -21827,15 +19502,7 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return Ok(());
         }
-        // A `match` or a `when` used as a value becomes what is expected in each
-        // of its branches, since that is where its values are made: a branch
-        // giving `none` beside one giving an `int` becomes part of the `maybe`
-        // itself, rather than the whole being wrapped once, which would leave the
-        // branches to run for nothing. Only what the branches can become is
-        // pushed into them: where the type they settled on doesn't go where this
-        // value does at all, the mistake is the whole one's, and a branch has
-        // already become that settled type, so blaming its value would name a
-        // type the branch doesn't say (`fixed n: int = when … 1 … none … fi`).
+        // Coerce `Choice` expressions arm-by-arm unless the branches already fail to fit `expected`.
         if let ExprKind::Choice(stmt) = &mut expr.kind
             && fits(&actual, expected)
         {
@@ -21846,8 +19513,6 @@ impl Checker {
         if self.coerce_items(expr, expected)? {
             return Ok(());
         }
-        // `n: int = v { none }`: the plan B made the whole a maybe, which has
-        // no value where the plan B runs.
         if let (ExprKind::PlanB { value, .. }, Type::Maybe(held)) = (&expr.kind, &actual)
             && fits_regions(held, expected)
             && value.ty.as_ref().is_some_and(|ty| !matches!(ty, Type::Maybe(inner) | Type::Or(inner, _) if matches!(**inner, Type::Maybe(_))))
@@ -21870,9 +19535,6 @@ impl Checker {
                 wrap(expr, expected);
                 return Ok(());
             }
-            // `maybe (T ~ E)`: a value or a `fail e` becomes the `T ~ E`, which
-            // the maybe then wraps, outside, as a join names it (see
-            // `join_types`).
             Type::Maybe(inner) if matches!(**inner, Type::Or(..)) && fits(&actual, inner) => {
                 self.coerce(expr, inner)?;
                 wrap(expr, expected);
@@ -21913,7 +19575,6 @@ impl Checker {
         if let Some(untold) = self.untold_param(expected) {
             return err(expr.span, untold);
         }
-        // `2 ** n`: an int raised to an int that may be negative is a float.
         if actual == Type::Float
             && *expected == Type::Int
             && let ExprKind::Binary(BinaryOp::Pow, l, r) = &expr.kind
@@ -21925,7 +19586,6 @@ impl Checker {
                 "expected type int, got float: an int raised to an int that may be negative is a float; raise it to a unit, as in 'n ** unit(k)', or to a constant 0 or more, as in 'n ** 2', for an int",
             );
         }
-        // A value of an imitated kind inside another value stays as it is.
         if let Some((from, to)) = self.widened_inside(&actual, expected) {
             return err(
                 expr.span,
@@ -21935,7 +19595,6 @@ impl Checker {
                 ),
             );
         }
-        // The other way round: a kind is no kind imitating it.
         if self.widens(expected, &actual) {
             return err(
                 expr.span,
@@ -21945,7 +19604,6 @@ impl Checker {
                 ),
             );
         }
-        // A shape holding a lambda kept in its region, `f: [@this](…)`.
         if let (Type::Named(name, Some(region)), Type::Named(expected_name, None)) =
             (&actual, expected)
             && name == expected_name
@@ -21974,10 +19632,6 @@ impl Checker {
         )
     }
 
-    /// Makes `expr`, of type `actual`, a value of the kind `expected` names,
-    /// alone, in a `maybe`, as the success of a `T ~ E` or, for a `fail e`, as
-    /// its error, where that kind imitates the value's kind (see
-    /// `ExprKind::Widen`). Whether it did.
     fn widen(&mut self, expr: &mut Expr, actual: &Type, expected: &Type) -> bool {
         let target = match expected {
             _ if self.widens(actual, expected) => expected,
@@ -22011,10 +19665,6 @@ impl Checker {
         true
     }
 
-    /// The kinds of the first value inside `from` that would have to become a
-    /// value of the kind beside it in `to`, which imitates it, for `from` to be
-    /// a `to`: a `maybe`'s, a slice's, an array's or a map's, a pointer's, or a
-    /// tuple's item. Nothing remakes a value inside another (see `widen`).
     fn widened_inside(&self, from: &Type, to: &Type) -> Option<(Type, Type)> {
         let found = |a: &Type, b: &Type| {
             if self.widens(a, b) {
@@ -22036,9 +19686,6 @@ impl Checker {
         }
     }
 
-    /// Whether a value of type `from` goes where `to` is expected by becoming
-    /// a value of it: both are kinds, `to` imitates `from`, directly or through
-    /// kinds it imitates, and `from` lives where `to` does.
     fn widens(&self, from: &Type, to: &Type) -> bool {
         let (Some(source), Some(target)) = (self.kind_made(from), self.kind_made(to)) else {
             return false;
@@ -22046,9 +19693,6 @@ impl Checker {
         fits_regions(&in_region_of(to, from), to) && self.imitates(&target, &source, 0)
     }
 
-    /// The kind a value of type `ty` is, as the kind it is made from and the
-    /// types it is given (none for a kind that takes none), with every kind
-    /// in those types written the same way. `None` when `ty` is no kind.
     fn kind_made(&self, ty: &Type) -> Option<(String, Vec<Type>)> {
         match self.unmade(ty) {
             Type::Named(name, _) if self.kinds.contains_key(&name) => Some((name, Vec::new())),
@@ -22060,9 +19704,6 @@ impl Checker {
         }
     }
 
-    /// Whether kind `to` (as `kind_made` gives it) imitates kind `from`, as
-    /// the kinds it imitates are written, with the types it is given in place
-    /// of the ones it takes, or through one of them.
     fn imitates(&self, to: &(String, Vec<Type>), from: &(String, Vec<Type>), depth: usize) -> bool {
         let Some(kind) = self.kinds.get(&to.0).filter(|_| depth <= MAX_TYPE_DEPTH) else {
             return false;
@@ -22080,10 +19721,6 @@ impl Checker {
         })
     }
 
-    /// Gives a call of a generic task the types no argument named, from the type
-    /// of the place its value goes: `fixed a: maybe int = empty()` says that
-    /// `nothing`'s `T` is `int`. A call whose types are all known already, and
-    /// any other expression, is left as it is.
     fn settle_types(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         let ExprKind::Call { name, types, .. } = &expr.kind else {
             return Ok(());
@@ -22106,8 +19743,6 @@ impl Checker {
         }
         let types = types.clone();
         expr.ty = Some(sent.map_params(&mut |param| given.get(param).cloned()));
-        // Some are still untold: the call waits for them, under the name of
-        // the first.
         if let Some(untold) = types
             .iter()
             .find_map(|(ty, _)| ty.params().first().map(|param| param.to_string()))
@@ -22129,8 +19764,6 @@ impl Checker {
         {
             self.unsettled_types.remove(at);
         }
-        // Every type known now: a shape or kind given them is the one made
-        // for them, as a call whose arguments told them gets (see `settled_type`).
         if let Some(ty) = &mut expr.ty {
             self.settle_applications(ty, expr.span)?;
         }
@@ -22143,11 +19776,7 @@ impl Checker {
         Ok(())
     }
 
-    /// Coerces an array written as a literal item by item, when its values can
-    /// become the items of `expected`, as `[1, none]` or `[none#4]` become
-    /// arrays of `maybe int`. Whether `expected` is such an array.
     fn coerce_items(&mut self, expr: &mut Expr, expected: &Type) -> Result<bool> {
-        // `(1, none)` as a `(int, maybe int)`: each value becomes its item.
         if let (Type::Tuple(items), ExprKind::Tuple(values)) = (expected, &mut expr.kind) {
             if items.len() != values.len() {
                 return Ok(false);
@@ -22179,12 +19808,8 @@ impl Checker {
         Ok(true)
     }
 
-    /// Checks that a value of type `actual` is exactly `expected`, where no
-    /// value changes type: conditions, operands, and ranges.
     fn expect_type(&self, actual: &Type, expected: &Type, span: Span) -> Result<()> {
         if actual.unknown() || expected.unknown() {
-            // One of them is a type the checker couldn't work out, and what
-            // went wrong is already reported (see `Type::Unknown`).
             return Ok(());
         }
         if actual != expected {
@@ -22203,8 +19828,6 @@ impl Checker {
     }
 }
 
-/// The type of the items of an array type, as a message writes it for a
-/// slice made from the array: without regions.
 fn item_type_example(array: &Type) -> Type {
     match array {
         Type::Array(items, _) => items.without_regions(),
@@ -22212,52 +19835,28 @@ fn item_type_example(array: &Type) -> Type {
     }
 }
 
-/// The type of a plan B whose block gives `given` where a value of type
-/// `extracted` was expected: a `maybe` of it when the block gives `none` or a
-/// `maybe`, since the whole then has no value when both are empty. A plan B on
-/// a value holding a `maybe` already gives one anyway, so nothing changes.
 fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
     let plain = !matches!(extracted, Type::Maybe(_) | Type::Nothing) && !extracted.unknown();
     (plain && matches!(given, Type::None | Type::Maybe(_)))
         .then(|| Type::Maybe(Box::new(extracted.clone())))
 }
 
-/// How a wrapper takes the values of a task it wraps (see
-/// `Checker::wrapper_tail`).
 struct WrapperTail {
-    /// How many values of its own it takes, after the next task.
     own: usize,
-    /// Each parameter of the wrapper that takes a value of the task alone,
-    /// with the place of that value among the task's.
     pairs: Vec<(usize, usize)>,
-    /// The place of its group among its parameters, for one taking a group.
     group: Option<usize>,
 }
 
-/// What the arguments of a call show its task's types and regions to be (see
-/// `Checker::check_call_args`).
 struct CallTypes {
-    /// Each type the call gives: written after the task's name, or worked out
-    /// from the arguments.
     given: HashMap<String, Type>,
-    /// What the arguments show each type to be, kept apart from the types
-    /// written at the call so one written without its region is reported as
-    /// that, rather than as an argument of the wrong type.
+    /// Tracks arg-inferred types apart from explicit type args for accurate region-omission diagnostics.
     shown: HashMap<String, Type>,
-    /// The region each region the header names is.
     regions: HashMap<String, String>,
-    /// How a task value the call gives takes each value of a group the call
-    /// gives (`P#0`, …): as a value, a place, or a region.
     taken: HashMap<String, Taken>,
-    /// Whether a task value the call gives has a type not known, which a
-    /// mistake in it left.
     untold: bool,
 }
 
-/// The mistake in `arg`, given without `&` to the `flex&` or `fixed&` parameter
-/// `param` of `callee`.
 fn unmarked_place(arg: &Expr, passing: Passing, callee: &str, param: &str) -> Error {
-    // `x |> f()` with `f(flex& n: int)`.
     if matches!(arg.kind, ExprKind::Piped(_)) {
         let does = if passing == Passing::FixedRef {
             "reads"
@@ -22299,18 +19898,11 @@ fn unmarked_place(arg: &Expr, passing: Passing, callee: &str, param: &str) -> Er
     Error::at(arg.span, message)
 }
 
-/// What `Checker::task_call_setup` found for a call.
 enum CallSetup {
-    /// A call checked already, of this type: one of `show` or a number cast,
-    /// or of a task whose header has a mistake.
     Checked(Type),
-    /// A call of a task, whose arguments are checked against its header, and
-    /// the group it takes, with how many values the call gives it.
     Call(TaskInfo, Option<(String, usize)>),
 }
 
-/// `error`, in a call giving `group` its values, told how many types the
-/// group is for that call when the error is of a value's type.
 fn group_hint(mut error: Error, group: Option<&(String, usize)>) -> Error {
     if let Some((group, given)) = group
         && error.message.starts_with("expected type")
@@ -22325,8 +19917,6 @@ fn group_hint(mut error: Error, group: Option<&(String, usize)>) -> Error {
     error
 }
 
-/// The error for `(i < n, n > (m))`, which reads as a call of `i` given the
-/// types `n, n`: a `<` after a name whose `>` is followed by `(` starts types.
 fn misread_comparison(name: &str) -> String {
     format!(
         "'{0}' is a value, but '{0} < …, … > (…)' reads as a call of '{0}' given the types between '<' and '>'; to compare, put the comparison before the ',' in parentheses, as in '({0} < …), … > (…)'",
@@ -22334,7 +19924,6 @@ fn misread_comparison(name: &str) -> String {
     )
 }
 
-/// Replaces `expr` with a `Wrap` of itself, of type `ty`.
 fn wrap(expr: &mut Expr, ty: &Type) {
     let span = expr.span;
     let inner = std::mem::replace(expr, Expr::new(ExprKind::NoneLit, span));
@@ -22345,8 +19934,6 @@ fn wrap(expr: &mut Expr, ty: &Type) {
     };
 }
 
-/// A hint for an operation on a `maybe` or `T ~ E`, whose value must be
-/// extracted first; empty if none of `types` is one.
 fn extract_hint(types: &[&Type]) -> String {
     match types
         .iter()
@@ -22369,9 +19956,6 @@ fn extract_hint(types: &[&Type]) -> String {
     }
 }
 
-/// `ty` with `ANY_REGION` removed from its text and from the shapes and kinds
-/// that hold text but no pointers (not in `regional`), as a variable without a
-/// written type takes it: see `Checker::lasting`.
 pub fn lasting(ty: &Type, regional: &HashSet<String>) -> Type {
     let any = Some(ANY_REGION.to_string());
     match ty {
@@ -22398,21 +19982,14 @@ pub fn lasting(ty: &Type, regional: &HashSet<String>) -> Type {
     }
 }
 
-/// The shapes and kinds that hold pointers, directly or in other shapes and
-/// kinds by value, so their values live in a region.
 pub fn regional_types(items: &[Item]) -> HashSet<String> {
     types_holding(items, holds_pointers)
 }
 
-/// The shapes and kinds that hold text, directly or in other shapes and kinds
-/// by value. One may name a region, in which its text is, or none, when its
-/// text lasts as long as the program.
 pub fn textual_types(items: &[Item]) -> HashSet<String> {
     types_holding(items, holds_text)
 }
 
-/// The shapes and kinds with a field or payload for which `holds` is true,
-/// given the types already found, directly or through other shapes and kinds.
 fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> HashSet<String> {
     let fields_of = |item: &Item| -> Vec<Type> {
         match item {
@@ -22426,8 +20003,6 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
             Item::Task(_) | Item::Macro(_) => Vec::new(),
         }
     };
-    // The items whose fields name each type, to look at again when it turns
-    // out to be regional.
     let mut users: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, item) in items.iter().enumerate() {
         for ty in fields_of(item) {
@@ -22459,24 +20034,13 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
     regional
 }
 
-/// A field's type, or the type after `new`, whose regions are unsettled, as it
-/// is in a value of region `region`: its pointers, slices, and text, and its
-/// shapes and kinds in `takes_region` (see `Checker::takes_region`) get
-/// `region`.
 pub fn in_region(ty: &Type, region: &str, takes_region: &HashSet<String>) -> Type {
     ty.map_regions_of_names(&mut |name| {
         (name.is_empty() || takes_region.contains(name)).then(|| region.to_string())
     })
 }
 
-/// Whether a value of type `actual` fits where `expected` is required without
-/// changing: the same type, where `actual` may be of `ANY_REGION` wherever
-/// `expected` names a region. Text, and a shape or kind holding text, that
-/// names no region lasts as long as the program, so it fits any region too. (A
-/// shape or kind holding pointers always has a region once checked.)
 fn fits_regions(actual: &Type, expected: &Type) -> bool {
-    // A type the checker couldn't work out fits anywhere, and anything fits it:
-    // what went wrong is reported where it was made (see `Type::Unknown`).
     if actual.unknown() || expected.unknown() {
         return true;
     }
@@ -22491,7 +20055,6 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
             region(ar, er) && fits_regions(ak, ek) && fits_regions(av, ev)
         }
         (Type::Array(a, an), Type::Array(e, en)) => an == en && fits_regions(a, e),
-        // A shape given types: the same shape and types, of a fitting region.
         (Type::Applied(a), Type::Applied(e))
             if a.name == e.name && a.types.len() == e.types.len() =>
         {
@@ -22510,8 +20073,6 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
         (Type::Tuple(a), Type::Tuple(e)) => {
             a.len() == e.len() && a.iter().zip(e).all(|(a, e)| fits_regions(a, e))
         }
-        // A lambda that only reads what it keeps goes where one that changes
-        // it is expected, never the other way; bind is between plain and flex.
         (Type::Closure(a), Type::Closure(e)) => {
             a.region == e.region && task_fits(&a.task, &e.task) && a.mode <= e.mode
         }
@@ -22520,7 +20081,6 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
     }
 }
 
-/// `k` as an ordinal for a message: `first` for 1, then `4th`, `21st` and on.
 fn ordinal(k: usize) -> String {
     match k {
         1 => "first".to_string(),
@@ -22535,22 +20095,11 @@ fn ordinal(k: usize) -> String {
     }
 }
 
-/// Whether a task of type `actual` goes where one of type `expected` is: the
-/// same types, each taken the same way, but that a task changing nothing
-/// through a value goes where one that may is expected, `(flex [int]@r)` or
-/// `(bind [int]@r)`, since its callers give it only what may change, and one
-/// taking it as `bind` goes where `flex` is expected, changing its items as a
-/// `flex` one may (the author, 2026-10-12); never the other way.
+/// Tasks mutating less (`fixed`) fit callbacks expecting more (`flex`/`bind`), never the reverse.
 fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
-    // Both sides read with their regions renamed alike, so the region of the
-    // value a method is called on, `this`, names the same one on each, however
-    // a side was read.
+    // Normalize region names so `this` aligns cleanly across both signatures.
     let (actual, expected) = (actual.normalized(), expected.normalized());
-    // Parameters fit as values do, with one exception: a parameter naming no
-    // region takes lasting values only, so a task value whose parameter names
-    // none, as `(text) -> text`, fits no `(text@r) -> text@r`. A parameter of
-    // any region (`@_`, as a plain lambda's) fits one named, as a lambda
-    // taking `Indexed<int>@_` fits `find`'s `(Indexed<int>@this) -> bool`.
+    // Regionless params reject regional `@r` signatures, while wildcard `@_` lambdas fit explicit `@this`.
     actual.params.len() == expected.params.len()
         && actual.params.iter().zip(&expected.params).all(|(a, e)| {
             fits_regions(a, e) && !(a.regions().is_empty() && !e.regions().is_empty())
@@ -22564,20 +20113,10 @@ fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
         })
 }
 
-/// Whether a statement on the last line of a block gives that block its value: a
-/// `match`, whose cases cover every value, or a `when` with an `else`, so that
-/// every way through it gives one. A `when` without an `else` can't, so such a
-/// block must send on every path, which is what its message says.
 pub fn gives_value(stmt: &Stmt) -> bool {
     matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, Some(_)))
 }
 
-/// Whether a value of type `from` goes where `to` is expected without being
-/// remade: unchanged, or wrapped as part of a `maybe` or a `T ~ E`, which is all
-/// `coerce` can do to a value whose parts it cannot see. Used where the branches
-/// of a value `match` or `when` are checked against what they settled on
-/// (`Checker::settle_branches`), and to tell a place that takes what they settled
-/// on from one that would need each branch remade (`Checker::coerce`).
 fn fits(from: &Type, to: &Type) -> bool {
     if fits_regions(from, to) {
         return true;
@@ -22592,12 +20131,7 @@ fn fits(from: &Type, to: &Type) -> bool {
     }
 }
 
-/// Whether a value of type `from` would have to be **remade inside** to be a
-/// `to`: it is not one already and doesn't become one by being wrapped (`fits`),
-/// but every part of it goes into the part beside it, wrapped or remade inside in
-/// this same way. Nothing remakes a value already made (see `join_types`), so a
-/// message says what to do instead. Two types that simply differ, like
-/// `(int, text)` and `(int, maybe int)`, are not this.
+/// True if converting `from` -> `to` would require rewriting existing container elements (disallowed).
 fn remade_inside(from: &Type, to: &Type) -> bool {
     if fits(from, to) {
         return false;
@@ -22620,15 +20154,7 @@ fn remade_inside(from: &Type, to: &Type) -> bool {
     }
 }
 
-/// Records in `regions` what each region of `pattern` stands for in `actual`,
-/// following `actual` into the places a value can become part of `pattern`
-/// (`maybe`, `T ~ E`, `fail`). A region already recorded, or one `actual`
-/// doesn't show, is left as it is; checking the value against the settled type
-/// then reports any mismatch.
-/// The two regions of a type that keeps a value of one region inside a value of
-/// another, which no value can do: the region around it and the one inside.
-/// `None` when every part of `ty` is in one region, or lasts as long as the
-/// program (a literal's text, which fits any region).
+/// Returns `(outer, inner)` if `ty` stores a value of one region inside another (ignoring literal text).
 fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> {
     let conflict = |region: &str| -> Option<(String, String)> {
         let inside = inside?;
@@ -22670,15 +20196,11 @@ fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> 
         Type::Tuple(types) | Type::Results(types) => {
             types.iter().find_map(|ty| region_conflict(ty, inside))
         }
-        // A lambda that keeps what it uses keeps it in its region.
         Type::Closure(closure) => conflict(&closure.region),
         _ => None,
     }
 }
 
-/// How deeply a type is built up: `int` is 1, `maybe int` 2, `(int, maybe int)` 3.
-/// How many types `ty` is built of, itself included, counting up to a little
-/// past `MAX_TYPE_SIZE` only.
 fn type_size(ty: &Type) -> usize {
     let mut count = 0;
     let mut pending = vec![ty];
@@ -22748,8 +20270,6 @@ fn type_depth(ty: &Type) -> usize {
     inner + 1
 }
 
-/// The regions a task's header names: a `r: region` parameter, and the regions
-/// written in its parameters' and results' types.
 fn header_regions(task: &TaskDef) -> HashSet<String> {
     let mut regions: HashSet<String> = task
         .params
@@ -22768,9 +20288,6 @@ fn header_regions(task: &TaskDef) -> HashSet<String> {
     regions
 }
 
-/// For each type a task takes, the regions its header keeps values of that type
-/// in: `xs: [T]@r` and `-> ^T@r` keep a `T` in `r`, and a use must give a type of
-/// that region, since everything a value in a region holds is in that region.
 fn keeps_params(task: &TaskDef) -> HashMap<String, HashSet<String>> {
     let mut kept: HashMap<String, HashSet<String>> = HashMap::new();
     for ty in task
@@ -22810,7 +20327,6 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
         Type::Tuple(types) | Type::Results(types) => types
             .iter()
             .for_each(|ty| keeps_params_of(ty, inside, kept)),
-        // `Box<T>@r`: the types a shape is given are in its region.
         Type::Applied(applied) => applied
             .types
             .iter()
@@ -22819,45 +20335,23 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
     }
 }
 
-/// What walking a generic task's body turns up: the uses of generic tasks in it
-/// that need tasks of their own, and the copies it makes of values whose types
-/// name the types it takes (see `Checker::loose_copies`).
 #[derive(Default)]
 struct Made {
     needed: Vec<(String, Vec<Type>, Span)>,
     copies: Vec<(String, String, Span)>,
-    /// Each `==` or `!=` that the types given make compare by where values are
-    /// (see `Checker::by_place`) with a side that is no place, and the type.
     placeless: Vec<(Span, Type)>,
-    /// The parameters the compiler chooses how to give (`x: T`), with their
-    /// types as the use gives them and as the task writes them (see
-    /// `Checker::chosen_param`).
     chosen: HashMap<String, (Type, Type)>,
-    /// Each side of an `==` by place, or an address, that reads where such a
-    /// parameter is: where the parameter is named, what reads it, and its
-    /// name.
     reads_chosen: Vec<(Span, String, String)>,
-    /// Each read of a group's tuple item past the values the use gives: where,
-    /// the item, and how many values there are (see `substitute_expr`).
     past_items: Vec<(Span, usize, usize)>,
 }
 
 impl Checker {
-    /// Puts the types `given` in place of the type parameters of `task`, a copy
-    /// of a generic task made for one use, points its calls of generic tasks at
-    /// the ones made for them, and puts the shape made for its types in place of
-    /// every shape given them (see `Made` and `settle_applications`). With no
-    /// types given it changes nothing, and only fills `made`, which is how the
-    /// checker reads a generic task's copies.
     fn substitute_task(
         &mut self,
         task: &mut TaskDef,
         given: &HashMap<String, Type>,
         made: &mut Made,
     ) -> Result<()> {
-        // `args: P...` becomes a parameter for each type given for the group,
-        // `args__1`, `args__2`, … (see `group_value`).
-        // A value the group holds as a place is a parameter taking the place.
         if let Some(at) = task
             .params
             .iter()
@@ -22883,8 +20377,6 @@ impl Checker {
         }
         let alters = task.owner.as_ref().is_some_and(|owner| owner.alters);
         for param in &mut task.params {
-            // A parameter of a type the task doesn't take has warned already,
-            // when the body was checked (see `warn_chosen`).
             let takes = !param.ty.params().is_empty();
             let declared = param.ty.clone();
             self.substitute_type(&mut param.ty, given, param.ty_span)?;
@@ -22902,10 +20394,6 @@ impl Checker {
         self.substitute_block(&mut task.body, given, made)
     }
 
-    /// One type of a task made for a set of types: the types given in place of
-    /// the names it takes, and the shape made for them in place of a shape given
-    /// them.
-    /// A written type in a copy, as `in_copy` makes it.
     fn substitute_type(
         &mut self,
         ty: &mut Type,
@@ -22965,12 +20453,7 @@ impl Checker {
                     .try_for_each(|value| self.substitute_expr(value, given, made))
             }
             StmtKind::When(arms, else_block) => {
-                // A condition this copy knows, as one on 'args.len' is: a branch
-                // it never takes is emptied, so a read it guards against is never
-                // checked or written. The `when` stays, so one used as a value
-                // still gives it, from the branch that runs. The arms after one
-                // it knows holds are dropped before anything is done to them, as
-                // their conditions may read what only that arm guards against.
+                // Dead `when` arms known false at instantiation are cleared without dropping the enclosing expression.
                 let (mut taken, mut cut) = (false, arms.len());
                 for (i, arm) in arms.iter_mut().enumerate() {
                     self.substitute_condition(&mut arm.cond, &mut arm.body, given, made)?;
@@ -23040,12 +20523,6 @@ impl Checker {
         }
     }
 
-    /// In a copy of a task, makes `e` what this copy's group gives, when `e`
-    /// is the group's tuple, `(args...)`, or an item of one, `t.k` or `t.#k`,
-    /// and says whether it did. The tuple is the values for two or more of
-    /// them, and for one or none a failure holding the one value or none; an
-    /// item is the value, and one past the values given is a mistake of the use
-    /// (see `Made::past_items`), or `none` when read as `t.#k`.
     fn substitute_group_tuple(
         &mut self,
         e: &mut Expr,
@@ -23119,8 +20596,7 @@ impl Checker {
         };
         let count = types.len();
         self.substitute_expr(inner, given, made)?;
-        // The tuple is made only for two or more values, so in a copy for fewer
-        // its items are never read, and stand in as they are.
+        // Group tuples with < 2 elements never construct at runtime; keep index placeholders unevaluated.
         let there = place < count && count >= 2;
         if !safe {
             if place >= count.max(2) {
@@ -23146,10 +20622,6 @@ impl Checker {
         Ok(true)
     }
 
-    /// `each v in args` in a copy of a task, for `range`, a group's values: the
-    /// body once for each value, in a block of its own giving `v` that value,
-    /// of its own type (`P` in the body). The blocks are still one loop, which
-    /// a `break` in them stops (see `StmtKind::Turns`).
     fn each_of_group(
         &mut self,
         name: &str,
@@ -23230,8 +20702,6 @@ impl Checker {
         }
     }
 
-    /// Records the `str`s writing `value` as text calls, once its type is the
-    /// one a use gives (see `written_strs`).
     fn need_written_strs(&self, value: &Expr, made: &mut Made) {
         let Some(ty) = &value.ty else { return };
         let mut found = Vec::new();
@@ -23243,11 +20713,7 @@ impl Checker {
         );
     }
 
-    /// Makes `cond`, guarding `body`, what this copy makes it, a part (joined
-    /// with `and`) at a time with its type tests settled: after a part the copy
-    /// knows doesn't hold, the parts after it, which may read what it guards
-    /// against, are never made and `body` is emptied. What the parts before it
-    /// do still runs, so the condition is `false` only where they do nothing.
+    /// Prunes falsified condition tails per instantiation so guarded past-end tuple reads are never lowered.
     fn substitute_condition(
         &mut self,
         cond: &mut Condition,
@@ -23268,8 +20734,6 @@ impl Checker {
             else {
                 continue;
             };
-            // The part known not to hold is made already, and works out to
-            // `false` where it runs.
             if cond
                 .parts()
                 .take(last + 1)
@@ -23294,10 +20758,6 @@ impl Checker {
         given: &HashMap<String, Type>,
         made: &mut Made,
     ) -> Result<()> {
-        // A copy of a value whose type names a type the task takes, read before
-        // the types are put in place of the names: the copy is a value of the
-        // region it goes into, so a use must give a type that lives there (see
-        // `Checker::loose_copies`).
         if let ExprKind::Copy {
             region: Some(region),
             ..
@@ -23310,7 +20770,6 @@ impl Checker {
             }
         }
         let at = e.span;
-        // A group's tuple, and its items, as this copy's values make them.
         if self.substitute_group_tuple(e, given, made)? {
             return Ok(());
         }
@@ -23318,14 +20777,11 @@ impl Checker {
             *ty = in_copy(ty, given);
             self.settle_applications(ty, at)?;
         }
-        // `a and b` where this copy knows `a` is false, or `a or b` where it
-        // knows it is true: `b` never runs, and may read what `a` guards
-        // against, so it isn't made.
+        // Short-circuit known `false and b` / `true or b` so dead RHS indexing/reads are pruned.
         if let ExprKind::Binary(op @ (BinaryOp::And | BinaryOp::Or), a, _) = &mut e.kind {
             let decides = *op == BinaryOp::Or;
             self.substitute_expr(a, given, made)?;
             if !given.is_empty() && known_bool(a) == Some(decides) {
-                // What `a` does still runs.
                 if without_effects(a) {
                     e.kind = ExprKind::BoolLit(decides);
                 } else if let ExprKind::Binary(_, _, b) = &mut e.kind {
@@ -23342,17 +20798,11 @@ impl Checker {
             ExprKind::Spread(inner) | ExprKind::Kept { value: inner, .. } => {
                 self.substitute_expr(inner, given, made)
             }
-            // No lambda is written in a task that takes types.
             ExprKind::Closure { .. } => Ok(()),
             ExprKind::Call { name, types, args } => {
-                // `x.area()` with `x: T`: the method of the type this copy gives
-                // `T`, which has the header the pattern asks for (see
-                // `check_follows`), made for its types where it takes them.
                 if let Some((pattern, method)) = pattern_call_parts(name)
                     && let Some(receiver) = args.first().and_then(|arg| arg.ty.as_ref())
                 {
-                    // The method's own types, `A` of `fold<A>`, last in the call's,
-                    // stay the method's own after the follower's.
                     let own = self
                         .patterns
                         .get(pattern)
@@ -23366,8 +20816,6 @@ impl Checker {
                     let method = method.to_string();
                     let mut receiver = in_copy(receiver, given);
                     self.settle_applications(&mut receiver, at)?;
-                    // A task taking types is read through this too, as itself,
-                    // where `T` stays as it is.
                     let owner = match self.owner_of(&receiver) {
                         Some(owner) => owner,
                         None if !receiver.params().is_empty() => {
@@ -23385,7 +20833,6 @@ impl Checker {
                             ));
                         }
                     };
-                    // The owner of a shape made for its types is the shape it was made from.
                     match self.unmade(&receiver) {
                         Type::Applied(made) => {
                             *name = method_name(&made.name, &method);
@@ -23402,9 +20849,7 @@ impl Checker {
                         }
                     }
                 }
-                // A group's types, kept as a tuple, are as many as the call gives
-                // it; any other tuple of a group's values is at least two items
-                // long, as this copy makes the values (see `in_copy`).
+                // Group tuples shorter than 2 elements stay unpadded in type args; runtime tuples pad to 2 (`padded_group_tuples`).
                 let groups: Vec<bool> = self
                     .tasks
                     .get(name.as_str())
@@ -23427,7 +20872,6 @@ impl Checker {
                 args.iter_mut()
                     .try_for_each(|arg| self.substitute_expr(arg, given, made))?;
                 spread_values(args, given, name != "show");
-                // `show(v)`, with `v` of a type given now: the `str`s it calls.
                 if name == "show" {
                     for arg in args.iter() {
                         self.need_written_strs(arg, made);
@@ -23442,8 +20886,6 @@ impl Checker {
                 note_chosen_address(value, made);
                 Ok(())
             }
-            // A literal of a shape given the types this task takes becomes a
-            // literal of the shape made for them (see `shape_instance`).
             ExprKind::StructInit {
                 name,
                 types,
@@ -23493,7 +20935,6 @@ impl Checker {
                 spread_values(args, given, true);
                 Ok(())
             }
-            // `args.len`: how many values this copy's group holds.
             ExprKind::Field(inner, member)
                 if member == "len"
                     && matches!(&inner.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) =>
@@ -23504,10 +20945,7 @@ impl Checker {
                     }
                     _ => 0,
                 };
-                // Written `count + 0`, which no copy checks again: the C then
-                // checks an index or a sum it takes part in as it runs, as for
-                // any value, rather than trusting the checker had (see
-                // `codegen::int_constant`). A condition still knows it.
+                // Emit `count + 0` so C runtime bounds/arithmetic checks run instead of trusting `codegen::int_constant`.
                 let int = |n: i64| {
                     let mut lit = Expr::new(ExprKind::IntLit(n), e.span);
                     lit.ty = Some(Type::Int);
@@ -23544,8 +20982,6 @@ impl Checker {
                 let symbol = if *op == BinaryOp::Ne { "!=" } else { "==" };
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)?;
-                // Where the body compares by place only for the types given:
-                // it was checked once, when any type could be given.
                 if let Some(ty) = a.ty.clone()
                     && !matches!(a.kind, ExprKind::Ref(_))
                     && !matches!(b.kind, ExprKind::Ref(_))
@@ -23554,14 +20990,11 @@ impl Checker {
                 {
                     made.placeless.push((at, ty.clone()));
                 }
-                // A side that reads where a parameter the compiler chose how
-                // to give is, now that its type is known.
                 let places = [&**a, &**b].map(|side| match &side.kind {
                     ExprKind::Ref(place) => place.as_ref(),
                     _ => side,
                 });
                 if same_root(places[0], places[1]) {
-                    // Two parts of one parameter: alike whichever way it was given.
                 } else if [&**a, &**b]
                     .iter()
                     .any(|side| matches!(side.kind, ExprKind::Ref(_)))
@@ -23601,7 +21034,6 @@ impl Checker {
                 self.substitute_expr(value, given, made)?;
                 self.substitute_block(body, given, made)
             }
-            // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.substitute_stmt(stmt, given, made),
             ExprKind::LoopValue(value) => self.substitute_stmt(&mut value.stmt, given, made),
             ExprKind::Edit { items, args, .. } => {
@@ -23609,8 +21041,6 @@ impl Checker {
                 args.iter_mut()
                     .try_for_each(|arg| self.substitute_expr(arg, given, made))
             }
-            // Every method call became the call of the task the method is while
-            // the body was checked (see `check_method_call`).
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
                 at,
                 format!("the method call '{}' was never rewritten", name),
@@ -23619,9 +21049,6 @@ impl Checker {
     }
 }
 
-/// Records what each type parameter of `pattern` stands for in `actual`, the
-/// type of a value given where `pattern` is expected. A parameter takes the
-/// first type found for it; `none`, which fits any `maybe`, names nothing.
 fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>) {
     if *actual == Type::None || matches!(actual, Type::Fail(_)) || is_untold(actual) {
         return;
@@ -23637,9 +21064,6 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
             unify_params(pk, ak, given);
             unify_params(pv, av, given)
         }
-        // A shape given types: the same shape, whose types stand for each other
-        // (a value of a shape made for its types is read as one, see
-        // `Checker::unmade`).
         (Type::Applied(p), Type::Applied(a))
             if p.name == a.name && p.types.len() == a.types.len() =>
         {
@@ -23660,15 +21084,11 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
             unify_params(pv, av, given);
             unify_params(pe, ae, given);
         }
-        // `(int, P...) -> R`: the group is what the task takes between the
-        // values named around it, with how it takes each.
         (Type::Closure(p), Type::Closure(a)) => unify_params(
             &Type::Task(Box::new(p.task.clone())),
             &Type::Task(Box::new(a.task.clone())),
             given,
         ),
-        // A plain task value goes where a lambda that keeps what it uses is
-        // expected (see `Checker::coerce`).
         (Type::Closure(p), Type::Task(_)) => {
             unify_params(&Type::Task(Box::new(p.task.clone())), actual, given)
         }
@@ -23691,20 +21111,12 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
             }
             unify_params(&p.ret, &a.ret, given);
         }
-        // A plain value given where a `maybe` or a `T ~ E` is expected becomes
-        // one, so it names the type inside.
         (Type::Maybe(p), a) | (Type::Or(p, _), a) => unify_params(p, a, given),
         _ => {}
     }
 }
 
-/// `actual`, a task type given where `pattern` is expected, with each region
-/// it takes in the place of a region `pattern` names made [`OWN_REGION`]. A
-/// task type's regions are its own (`(@r) -> [int]@r` is `(@s) -> [int]@s`),
-/// so the region a type found there is in is the one the generic task's body
-/// gives the task value there, which no name of the call says. A region in
-/// the place of a type the generic task takes keeps its name, which the
-/// values given for that type must be in too.
+/// Marks task-param regions owned by callback invocations as [`OWN_REGION`] so instantiations cannot unify them with caller regions.
 fn regions_named_as(pattern: &TaskType, actual: &TaskType) -> TaskType {
     let mut found = HashMap::new();
     let pairs = task_pairs(pattern, actual).map_or_else(Vec::new, |(pairs, _)| pairs);
@@ -23749,12 +21161,7 @@ fn regions_named_as(pattern: &TaskType, actual: &TaskType) -> TaskType {
     }
 }
 
-/// `actual`, a task type given where `pattern` is expected, with its regions
-/// named as the caller's where `given` says which: a parameter of type `T`
-/// in `pattern`, with `T` given `text@q` by another value, makes the region
-/// of `actual`'s parameter there `q`, and so what `actual` sends there. A
-/// task type's regions are its own, and the values given for `T` say which
-/// of the caller's each one is at this call.
+/// Maps generic-bound callback regions onto caller-resolved regions inferred from sibling arguments.
 fn in_callers_regions(pattern: &Type, actual: &Type, given: &HashMap<String, Type>) -> Type {
     let (Type::Task(p), Type::Task(a)) = (pattern, actual) else {
         return actual.clone();
@@ -23797,17 +21204,11 @@ fn in_callers_regions(pattern: &Type, actual: &Type, given: &HashMap<String, Typ
     }))
 }
 
-/// The places of a task type's parameters lined up with another's, and the
-/// group between them with the ones it stands for (see `task_pairs`).
 type TaskPairs = (
     Vec<(usize, usize)>,
     Option<(String, std::ops::Range<usize>)>,
 );
 
-/// Which parameter of `actual` stands in each place of `pattern`'s, a task
-/// type given where `pattern` is expected: the places of the ones `pattern`
-/// names one by one, and the group it takes between them, if any, with the
-/// parameters of `actual` it stands for. `None` where they can't line up.
 fn task_pairs(pattern: &TaskType, actual: &TaskType) -> Option<TaskPairs> {
     let Some(at) = pattern
         .params
@@ -23882,14 +21283,10 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
     }
 }
 
-/// Whether a value of type `ty` holds a pointer, given the shapes and kinds
-/// in `regional` that do.
 fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     match ty {
         Type::Ptr(..) | Type::Slice(..) | Type::Map(..) => true,
         Type::Named(name, _) => regional.contains(name),
-        // A shape given types holds what its own fields hold and what the types
-        // given hold, since a field may be one of them.
         Type::Applied(applied) => {
             regional.contains(&applied.name)
                 || applied.types.iter().any(|ty| holds_pointers(ty, regional))
@@ -23903,11 +21300,6 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     }
 }
 
-/// Whether a value of type `ty` is twofold, holding a slice, a map or a
-/// pointer another name may share, given the shapes and kinds in `regional`
-/// that do, or what `fail` sends holds one; with `lambdas`, also a lambda whose
-/// call may send one back. A field can't hold a lambda that keeps what it
-/// uses, so a shape or kind holds none.
 fn holds_twofold(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
     match ty {
         Type::Results(items) | Type::Tuple(items) => items
@@ -23924,8 +21316,6 @@ fn holds_twofold(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
     }
 }
 
-/// Whether a value of type `ty` holds a pointer, a slice, or an array, whose
-/// value can change, given the shapes and kinds in `changeable` that do.
 fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
     match ty {
         Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) => true,
@@ -23946,9 +21336,6 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
     }
 }
 
-/// Where the region written after a call is (`f(x) at r`), when the parser
-/// added one as the call's last argument (see `ExprKind::RegionAfter`).
-/// `ty` with no region anywhere in it, a task type's own regions too.
 fn strip_all_regions(ty: &Type) -> Type {
     match ty {
         Type::Task(task) => Type::Task(Box::new(TaskType {
@@ -23960,26 +21347,19 @@ fn strip_all_regions(ty: &Type) -> Type {
     }
 }
 
-/// Whether `ty` is a task's type, `(int) -> int`.
 fn is_task(ty: &Type) -> bool {
     matches!(ty, Type::Task(_))
 }
 
-/// Whether a value of type `ty` is called as a task: a task value, or a lambda
-/// that keeps what it uses.
 fn is_callable(ty: &Type) -> bool {
     matches!(ty, Type::Task(_) | Type::Closure(_))
 }
 
-/// Whether `ty` is the type of a `[flex @r]` or `[bind @r]` lambda, which
-/// changes what it keeps, so a value of it is never copied: a copy would share
-/// what the lambda changes. For `[bind @r]` the author decided so for now
-/// (2026-10-12), as a matter to look at again (see vela.html#lambda-bind).
+/// `[flex @r]`/`[bind @r]` closures mutate captured state and cannot be copied.
 fn held_lambda(ty: &Type) -> bool {
     matches!(ty, Type::Closure(closure) if closure.mode != KeptMode::Plain)
 }
 
-/// How a lambda `held_lambda` finds is written, for messages.
 fn held_word(ty: &Type) -> &'static str {
     match ty {
         Type::Closure(closure) if closure.mode == KeptMode::Bind => "[bind @r]",
@@ -23987,7 +21367,6 @@ fn held_word(ty: &Type) -> &'static str {
     }
 }
 
-/// Whether `ty` is or holds a lambda that keeps what it uses, `[@r](…)`.
 fn has_closure(ty: &Type) -> bool {
     match ty {
         Type::Closure(_) => true,
@@ -24004,8 +21383,6 @@ fn has_closure(ty: &Type) -> bool {
     }
 }
 
-/// Whether `ty` holds a `[flex @r]` or `[bind @r]` lambda inside it, which is
-/// held alone.
 fn holds_held_lambda(ty: &Type) -> bool {
     match ty {
         Type::Closure(_) => false,
@@ -24035,23 +21412,12 @@ fn region_after(args: &[Expr]) -> Option<Span> {
         .map(|arg| arg.span)
 }
 
-/// Whether `expr` is a value the compiler works out without running the program,
-/// which is what a field falls back on (see `check_field_default`): a literal,
-/// `none`, a number with a sign, a variant, or a tuple, an array, or a shape's
-/// literal whose parts are all of these. Checked after the expression is, so a
-/// variant is already a `Construct` rather than a name. Nothing here reads a
-/// variable, calls a task, or makes memory, so a literal that leaves a field out
-/// costs no more than one that writes the value.
-/// A refusal whose message `make` builds, apart from the function it is in:
-/// a message's pieces then take no room on the stack of a function that nests,
-/// as the checking of a literal in a literal does.
+/// Outlined (`#[inline(never)]`) so error formatting stays off recursive literal-checking stacks.
 #[inline(never)]
 fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
     Err(make())
 }
 
-/// Whether `value`, a value a field or a parameter falls back on, is
-/// arithmetic, which the checker works out before the program runs.
 fn is_arithmetic(value: Option<&Expr>) -> bool {
     match value.map(|value| &value.kind) {
         Some(ExprKind::Binary(..) | ExprKind::Unary(..)) => true,
@@ -24070,8 +21436,6 @@ fn constant_value(expr: &Expr) -> bool {
         | ExprKind::NoneLit
         | ExprKind::Macro { .. }
         | ExprKind::TaskValue(_) => true,
-        // A value the checker has already made part of a `maybe`, as an
-        // array's items and a shared field's value are.
         ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => constant_value(inner),
         ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().all(constant_value),
         ExprKind::Construct { args, .. } => args.iter().all(constant_value),
@@ -24083,13 +21447,9 @@ fn constant_value(expr: &Expr) -> bool {
     }
 }
 
-/// Whether a value of type `ty` holds text by value, given the shapes and kinds
-/// in `textual` that do.
 fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
     match ty {
         Type::Text(_) => true,
-        // A field's `[@this](…)`, which holds a lambda in the holder's region,
-        // as a `text` field holds text there.
         Type::Closure(closure) => closure.region == THIS_WORD,
         Type::Named(name, _) => textual.contains(name),
         Type::Applied(applied) => {
@@ -24103,8 +21463,6 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
     }
 }
 
-/// Whether `ty` still holds `none` or `fail …` where a type belongs, as the
-/// array `[none, none]` does until a type written for it settles what it holds.
 fn unsettled(ty: &Type) -> bool {
     match ty {
         Type::None | Type::Fail(_) => true,
@@ -24115,8 +21473,6 @@ fn unsettled(ty: &Type) -> bool {
     }
 }
 
-/// `ty` with a type in place of each `none` and `fail e`, for a message
-/// suggesting an annotation: `[maybe int#2]` for `[none#2]`.
 fn settled_example(ty: &Type) -> Type {
     match ty {
         Type::None => Type::Maybe(Box::new(Type::Int)),
@@ -24137,8 +21493,6 @@ fn settled_example(ty: &Type) -> Type {
     }
 }
 
-/// The message for a variant `tag` of `kind` whose type `param` nothing told,
-/// suggesting its types as `example` writes them.
 fn untold_kind_message(kind: &str, tag: &str, param: &str, example: &str) -> String {
     format!(
         "can't tell which type '{}' is for this '{}', since its values don't say and nothing this value goes into names one; write {}, as in '{}<{}>.{}'",
@@ -24151,17 +21505,13 @@ fn untold_kind_message(kind: &str, tag: &str, param: &str, example: &str) -> Str
     )
 }
 
-/// What marks a type of a kind's variant that nothing has told yet, before the
-/// name the kind gives it: `Option<?T>` for `Option.None` (see
-/// `Checker::settle_variant`). No type's name starts with it.
+/// Prefix marking uninferred generic variant params (`Option<?T>`).
 const UNTOLD: char = '?';
 
-/// Whether `ty` is a type of a variant nothing has told yet (see `UNTOLD`).
 fn is_untold(ty: &Type) -> bool {
     matches!(ty, Type::Param(name) if name.starts_with(UNTOLD))
 }
 
-/// How a variant of the kind `ty` untold is written with its types: `Option<int>.…`.
 fn untold_written(ty: &Type) -> String {
     match ty {
         Type::Maybe(inner) | Type::Array(inner, _) => untold_written(inner),
@@ -24187,7 +21537,6 @@ fn untold_written(ty: &Type) -> String {
     }
 }
 
-/// Whether `ty` is or holds a kind whose variant didn't tell all of its types.
 fn holds_untold(ty: &Type) -> bool {
     match ty {
         Type::Maybe(inner) | Type::Array(inner, _) => holds_untold(inner),
@@ -24196,8 +21545,6 @@ fn holds_untold(ty: &Type) -> bool {
     }
 }
 
-/// Whether `ty` holds a kind whose variant didn't tell all of its types,
-/// as a kind given one does: `Option<Either<int, ?B>>`.
 fn untold_inside(ty: &Type) -> bool {
     match ty {
         Type::Maybe(inner) | Type::Array(inner, _) => untold_inside(inner),
@@ -24210,28 +21557,11 @@ fn untold_inside(ty: &Type) -> bool {
     }
 }
 
-/// Whether `ty` is a kind whose variant didn't tell all of its types.
 fn untold_kind(ty: &Type) -> bool {
     matches!(ty, Type::Applied(applied) if applied.types.iter().any(is_untold))
 }
 
-/// The type the values of types `a` and `b` can both become, where several
-/// values must have one type: the items of an array, and the branches of a
-/// `match` or a `when` used as a value. Either type, when the other fits it; a
-/// `maybe` for `none` and a value; a `T ~ E` for `fail e` and a value. `None`
-/// when there is none, which is the mistake of two values that disagree.
-///
-/// A value already made is never changed inside: a `maybe` or a `T ~ E` is
-/// wrapped **around** it, which is all `coerce` can do to a value it cannot see
-/// the parts of. So `int ~ text` beside `none` is `maybe (int ~ text)`, the
-/// failure kept as it is inside a `maybe`, and not `(maybe int) ~ text`, which
-/// would mean reaching into the value to make its `int` a `maybe int`. A `maybe`
-/// or a `T ~ E` whose own inside would have to change joins with nothing, and the
-/// two values are reported as disagreeing. An array or a tuple is different: its
-/// items are values of their own, so joining them item by item asks nothing of a
-/// value that is already made — a written one is built item by item (see
-/// `Checker::coerce_items`), and one that is already made is refused by `coerce`,
-/// which says to build a new one.
+/// Joins two types (`none`/`fail` wrap *around* values; already-constructed containers are never rewritten inside).
 fn join_types(a: &Type, b: &Type) -> Option<Type> {
     if fits_regions(b, a) {
         return Some(a.clone());
@@ -24260,15 +21590,11 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
         (Type::None, other) | (other, Type::None) if plain(other) => {
             Some(Type::Maybe(Box::new(other.clone())))
         }
-        // `none` beside a value that can fail: the `T ~ E` goes inside the
-        // `maybe`, whole, since nothing can reach into it.
         (Type::None, Type::Or(..)) => Some(Type::Maybe(Box::new(b.clone()))),
         (Type::Or(..), Type::None) => Some(Type::Maybe(Box::new(a.clone()))),
         (Type::Maybe(inner), other) | (other, Type::Maybe(inner)) if plain(other) => {
             join_types(inner, other)
                 .filter(plain)
-                // The maybe's own value stays as it is: only the other side is made
-                // into it, or built as it.
                 .filter(|joined| fits_regions(inner, joined))
                 .map(|value| Type::Maybe(Box::new(value)))
         }
@@ -24292,7 +21618,6 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
         {
             join_types(value, other)
                 .filter(|joined| !matches!(joined, Type::Or(..)))
-                // As above: the success it already holds is not remade.
                 .filter(|joined| fits_regions(value, joined))
                 .map(|joined| Type::Or(Box::new(joined), error.clone()))
         }
@@ -24300,10 +21625,6 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
     }
 }
 
-/// The region of the array `place` names, when it is in one: behind a
-/// pointer, or an item of a slice. `None` for an array in a variable or a
-/// temporary value.
-/// Whether `place` is a value in a map, or part of one: `m[k]`, `m[k].xs`.
 fn in_map_value(place: &Expr) -> bool {
     match &place.kind {
         ExprKind::Field(base, _) => in_map_value(base),
@@ -24327,14 +21648,10 @@ fn place_region(place: &Expr) -> Option<String> {
     }
 }
 
-/// At most how many bytes a value of type `ty` takes in C, given `sizes` for
-/// shapes and kinds: each part counts at least 8 bytes, which covers padding.
 fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
     match ty {
         Type::Nothing => 0,
         Type::Named(name, _) => sizes.get(name).copied().unwrap_or(8),
-        // A shape given types is as large as the shape itself, whose fields of a
-        // type it takes are counted as a word each (see `check_sizes`).
         Type::Applied(applied) => sizes.get(&applied.name).copied().unwrap_or(8),
         Type::Array(items, count) => value_bytes(items, sizes).saturating_mul(u128::from(*count)),
         Type::Slice(..) => 24,
@@ -24352,7 +21669,6 @@ fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
     }
 }
 
-/// At most how many bytes a shape's fields or a variant's payload take.
 fn fields_bytes(fields: &[Field], sizes: &HashMap<String, u128>) -> u128 {
     fields
         .iter()
@@ -24360,19 +21676,13 @@ fn fields_bytes(fields: &[Field], sizes: &HashMap<String, u128>) -> u128 {
         .fold(8, u128::saturating_add)
 }
 
-/// Whether a task with return type `ret` must send a value: every return type
-/// except `nothing` and `nothing ~ E`, which succeed by reaching their end.
 fn sends_value(ret: &Type) -> bool {
     !matches!(ret, Type::Nothing) && !matches!(ret, Type::Or(value, _) if **value == Type::Nothing)
 }
 
-/// The shapes and kinds a value of type `ty` contains by value (not behind a
-/// pointer).
 fn contained_by_value(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
-        // A shape given types contains that shape by value: a field of it
-        // naming the same shape again is a cycle either way.
         Type::Applied(applied) => {
             let mut names = vec![applied.name.as_str()];
             names.extend(applied.types.iter().flat_map(contained_by_value));
@@ -24389,12 +21699,7 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
     }
 }
 
-/// Every shape or kind a type names, by value or through pointers.
-/// The type `this` stands for in method `t` where it is a pattern's default,
-/// copied in (see `ast::THIS_TYPE`): the type of the value it is called on,
-/// in `@this` where it lives in a region, as its first parameter has it once
-/// settled (see `Checker::settle_receiver`), or its shape or kind's for a
-/// shared method. `None` for a task.
+/// Receiver type substituted for `this` inside copied pattern default methods (`None` outside methods).
 fn method_this(t: &TaskDef) -> Option<Type> {
     match &t.owner {
         Some(owner) if owner.shared => t.owner_type().map(Type::named),
@@ -24403,10 +21708,7 @@ fn method_this(t: &TaskDef) -> Option<Type> {
     }
 }
 
-/// `ty`, written in a pattern's default method, with `this` read as `this`
-/// type, the follower's: a type given to a shape or kind is in the region of
-/// the value holding it, so there it names none, `MapIter<Words, text, int>@this`
-/// for `MapIter<this, T, R>@this`.
+/// Substitutes `this` inside pattern defaults, stripping regions on type args to match field-type rules.
 fn put_this(ty: &Type, this: &Type) -> Type {
     let whole = |ty: &Type| ty.replace_names(&|name| (name == THIS_TYPE).then(|| this.clone()));
     let given =
@@ -24425,7 +21727,6 @@ fn put_this(ty: &Type, this: &Type) -> Type {
     }
 }
 
-/// Whether `ty` names the shape or kind `name` anywhere in it.
 fn mentions_name(ty: &Type, name: &str) -> bool {
     named_types(ty).contains(&name)
 }
@@ -24471,14 +21772,11 @@ fn named_types(ty: &Type) -> Vec<&str> {
     }
 }
 
-/// Whether a value of type `ty` can be created, given the shapes and kinds in
-/// `can` that can be.
 fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     match ty {
         Type::Named(name, _) => can.contains(name.as_str()),
         Type::Applied(applied) => can.contains(applied.name.as_str()),
         Type::Ptr(inner, _) | Type::Array(inner, _) => constructible(inner, can),
-        // A slice or a map may be empty, as a new one is, which needs no item.
         Type::Slice(..) | Type::Map(..) => true,
         Type::Or(value, error) => {
             **value == Type::Nothing || constructible(value, can) || constructible(error, can)
@@ -24488,16 +21786,9 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     }
 }
 
-/// Whether running `block` always ends in `<-`: it contains a `<-`, a
-/// `when` whose two branches both always send, a `when` that always holds and
-/// whose block sends, a `match` whose cases all send, or a `block` that sends. Loops don't count,
-/// since their bodies might not run.
 fn always_sends(block: &Block) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) => true,
-        // The arms that may run, up to one that always holds, must send, and
-        // the `else` too where none always holds. One known never to hold, as a
-        // type test that fails is (see `settle_type_tests`), never runs.
         StmtKind::When(arms, else_block) => {
             for arm in arms {
                 let known = known_condition(&arm.cond);
@@ -24515,16 +21806,12 @@ fn always_sends(block: &Block) -> bool {
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         StmtKind::Block(body) => always_sends(body),
-        // A loop that never ends by itself, and that nothing in it stops, never
-        // finishes: `endless`, or a loop written so.
         StmtKind::Named(name, inner) => never_finishes(inner, Some(name)),
         StmtKind::Loop(..) | StmtKind::Parted(_) => never_finishes(stmt, None),
         _ => false,
     })
 }
 
-/// Whether the loop `stmt`, named `name`, never ends by itself, and nothing
-/// in it stops it.
 fn never_finishes(stmt: &Stmt, name: Option<&str>) -> bool {
     match &stmt.kind {
         StmtKind::Loop(cond, body, _) if says_true(cond) => !stops_loop(&[body], name),
@@ -24535,8 +21822,6 @@ fn never_finishes(stmt: &Stmt, name: Option<&str>) -> bool {
     }
 }
 
-/// Whether a `break` in `parts`, the statements of a loop named `name`, may
-/// stop it, or a `continue` go on with a loop around it (see `loop_effects`).
 fn stops_loop(parts: &[&Block], name: Option<&str>) -> bool {
     let mut effects = LoopEffects::default();
     parts
@@ -24545,12 +21830,8 @@ fn stops_loop(parts: &[&Block], name: Option<&str>) -> bool {
     effects.stops
 }
 
-/// The warning for a loop written to never end by itself, without the word.
 const ENDLESS_UNSAID: &str = "this loop never ends by its condition; write 'endless' to say so";
 
-/// The first name `parted`'s start declares that no part of the loop uses
-/// after it, with where it is declared. A lambda in the loop may use one
-/// where this can't see, so then none is told.
 fn unused_in_loop(parted: &PartedLoop) -> Option<(String, Span)> {
     let mut closures = false;
     let mut used = |stmts: &[Stmt], names: &mut Vec<(String, Span)>| {
@@ -24594,7 +21875,6 @@ fn unused_in_loop(parted: &PartedLoop) -> Option<(String, Span)> {
     declared.into_iter().next()
 }
 
-/// The names `bound` declares, `(a, b)` its items', with where each is.
 fn bound_names(bound: &Bound, names: &mut Vec<(String, Span)>) {
     if bound.parts.is_empty() {
         if bound.name != DISCARD {
@@ -24605,7 +21885,6 @@ fn bound_names(bound: &Bound, names: &mut Vec<(String, Span)>) {
     }
 }
 
-/// The places `target` sets, each item's of a tuple's.
 fn target_places<'a>(target: &'a Target, places: &mut Vec<&'a Expr>) {
     match target {
         Target::Place(place) => places.push(place),
@@ -24614,9 +21893,6 @@ fn target_places<'a>(target: &'a Target, places: &mut Vec<&'a Expr>) {
     }
 }
 
-/// The variables a loop's condition `cond` reads, where it is only those,
-/// values and operators, and nothing in its `body` and `step`, as written,
-/// leaves the loop or may change one of them (see `Checker::warn_unchanging`).
 fn unchanging_reads(
     cond: &Condition,
     body: &[Stmt],
@@ -24637,9 +21913,6 @@ fn unchanging_reads(
     (!effects.leaves && !effects.changes).then_some(names)
 }
 
-/// Whether `e` only reads variables and values with operators, as a
-/// condition `warn_unchanging` can tell about does, adding the variables
-/// to `names`.
 fn plain_reads(e: &Expr, names: &mut Vec<String>) -> bool {
     match &e.kind {
         ExprKind::Var(name) => {
@@ -24659,24 +21932,14 @@ fn plain_reads(e: &Expr, names: &mut Vec<String>) -> bool {
     }
 }
 
-/// What a loop's statements may do to it (see `loop_effects`).
 #[derive(Default)]
 struct LoopEffects {
-    /// Something may leave the loop: a `break` of it, a `continue` or a
-    /// `break` of a loop around it, or a `<-`.
     leaves: bool,
-    /// Something may change one of the variables looked at.
     changes: bool,
-    /// A `break` may stop the loop, or a `continue` go on with one around it.
     stops: bool,
-    /// Where a `continue` goes on with the loop itself, the first one.
     continued: Option<Span>,
 }
 
-/// What `stmts`, inside a loop, may do to it and to the variables `names`
-/// (see `warn_unchanging`). `inner` holds the loops around `stmts` inside it,
-/// innermost last, each by its name if it has one, and `own` is the name of
-/// the loop itself.
 fn loop_effects(
     stmts: &[Stmt],
     names: &[String],
@@ -24711,8 +21974,6 @@ fn stmt_effects(
             effects.leaves = true;
             exprs(values, inner, effects);
         }
-        // A `break` stops the loop or one around it, but one of a loop inside
-        // it, and a `continue` goes on with one around it.
         StmtKind::Break(name, value) => {
             let stops = match name {
                 None => inner.is_empty(),
@@ -24789,9 +22050,6 @@ fn stmt_effects(
     }
 }
 
-/// What the loop `stmt` inside the loop looked at, named `name`, may do (see
-/// `loop_effects`). What runs before its passes, an `each`'s source and a
-/// three-part loop's start, runs outside it.
 fn nested_loop_effects(
     stmt: &Stmt,
     name: Option<String>,
@@ -24828,16 +22086,11 @@ fn nested_loop_effects(
         _ => {}
     }
     inner.pop();
-    // Its `finally` block runs after its passes, outside it, so a `break` or
-    // a `continue` there is the loop around it's.
     if let Some(finally) = stmt.finally() {
         loop_effects(finally, names, inner, own, effects);
     }
 }
 
-/// What each pass of a loop in map form whose value is `ty`, a collection `~
-/// LoopResult<B, M>`, gives: an item, or, where a pass `fails`, an item `~ ` the
-/// loop's own failure, which then stops the loop.
 pub fn map_pass(ty: &Type, fails: bool) -> Type {
     let (collection, result) = match ty {
         Type::Or(collection, result) => (collection.as_ref(), Some(result)),
@@ -24853,7 +22106,6 @@ pub fn map_pass(ty: &Type, fails: bool) -> Type {
     }
 }
 
-/// The loop giving a value that `e` is, alone or with a plan B after it.
 fn loop_value(e: &Expr) -> Option<&ValueLoop> {
     match &e.kind {
         ExprKind::LoopValue(value) => Some(value),
@@ -24862,7 +22114,6 @@ fn loop_value(e: &Expr) -> Option<&ValueLoop> {
     }
 }
 
-/// What a value of `ty` is when it succeeds: `T` of `T ~ E`, or `ty` itself.
 fn success_of(ty: &Type) -> Type {
     match ty {
         Type::Or(value, _) => (**value).clone(),
@@ -24870,9 +22121,7 @@ fn success_of(ty: &Type) -> Type {
     }
 }
 
-/// Where the loop giving a value `value` has a `continue` of its own, the first
-/// one, even one that never runs: in map form, it leaves its pass without an
-/// item (see `Checker::map_collection`).
+// Even unreachable `continue` makes map-loop arrays `maybe` per language rule.
 fn continues_loop(value: &ValueLoop) -> Option<Span> {
     let mut effects = LoopEffects::default();
     let own = value.name.as_ref().map(|(name, _)| name.as_str());
@@ -24886,10 +22135,6 @@ fn continues_loop(value: &ValueLoop) -> Option<Span> {
     effects.continued
 }
 
-/// What the expression `e` may do to the loop it is in (see `loop_effects`):
-/// a place given with `&`, a method that may alter its value, a lambda keeping
-/// a place, and the statements of its plan Bs, of the `when`s and `match`es
-/// it holds as values, and of the loops giving it a value.
 fn expr_effects(
     e: &Expr,
     names: &[String],
@@ -24906,7 +22151,6 @@ fn expr_effects(
             effects.changes |= place_root(value).is_some_and(|name| names.contains(&name));
             true
         }
-        // `added` and `without` leave the slice as it was.
         ExprKind::Edit {
             items: value, op, ..
         } => {
@@ -24942,7 +22186,6 @@ fn expr_effects(
     });
 }
 
-/// The variable a place is in: `a` of `a.b[2]`.
 fn place_root(e: &Expr) -> Option<String> {
     let mut e = e;
     loop {
@@ -24954,10 +22197,6 @@ fn place_root(e: &Expr) -> Option<String> {
     }
 }
 
-/// Whether running `block` always leaves it before its end: it always sends
-/// (see `always_sends`), or stops or goes on with a loop around it, with
-/// `break` or `continue`, on every path. A loop inside it doesn't count, as a
-/// `break` inside one stops that loop only.
 fn always_leaves(block: &[Stmt]) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) | StmtKind::Break(..) | StmtKind::Continue(_) => true,
@@ -24984,7 +22223,6 @@ fn always_leaves(block: &[Stmt]) -> bool {
     })
 }
 
-/// The passing a header writes for a parameter a task's type takes `how`.
 fn task_passing(how: &Taken) -> Passing {
     match how {
         Taken::Place(passing) => *passing,
@@ -24994,7 +22232,6 @@ fn task_passing(how: &Taken) -> Passing {
     }
 }
 
-/// Parameter `name` of type `ty`, taken as `passing`, as a header writes it.
 fn shown_param(name: &str, ty: &Type, passing: Passing) -> String {
     match passing {
         Passing::Copy => format!("{}: {}", name, ty),
@@ -25002,11 +22239,6 @@ fn shown_param(name: &str, ty: &Type, passing: Passing) -> String {
     }
 }
 
-/// How a task's type takes parameter `name` of type `ty`, which its header
-/// takes as `passing` (see `Taken`): a region by its name, a place as one, a
-/// `flex` or `bind` value as one the task changes the contents of (which
-/// `Checker::taken_for` makes a value where it is whole), and anything else, a
-/// copy too, as a value.
 fn taken_by(name: &str, ty: &Type, passing: Passing) -> Taken {
     match (ty, passing) {
         (Type::Region, _) => Taken::Region(name.to_string()),
@@ -25017,13 +22249,10 @@ fn taken_by(name: &str, ty: &Type, passing: Passing) -> Taken {
     }
 }
 
-/// Whether a condition always holds: `is (x, y)`, whose items always match.
-/// (Every other condition may be false, so its block may not run.)
 fn always_holds(cond: &Condition) -> bool {
     cond.parts().all(|part| matches!(&part.pattern, Some(pattern) if matches!(pattern.kind, PatternKind::Tuple(_))))
 }
 
-/// How `op` is written.
 fn binary_symbol(op: BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "+",
@@ -25045,8 +22274,6 @@ fn binary_symbol(op: BinaryOp) -> &'static str {
     }
 }
 
-/// `name(value)`, a conversion in a macro's value, with the mistakes it has
-/// when the program runs.
 fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
     use Constant::*;
     let byte = |n: i64, ty: &str| {
@@ -25061,7 +22288,6 @@ fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
         (INT_CAST | "int64", Int(n)) => Ok(Int(n)),
         (INT_CAST | "int64", Unit(n) | Char(n)) => Ok(Int(i64::from(n))),
         (INT_CAST | "int64", Bool(b)) => Ok(Int(i64::from(b))),
-        // As `vela__rt__int_of` does: toward zero, and a float outside the ints stops.
         (INT_CAST | "int64", Float(x))
             if x.is_finite()
                 && x.trunc() >= -9_223_372_036_854_775_808.0
@@ -25102,8 +22328,6 @@ fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
     }
 }
 
-/// `a op b` in a macro's value (see `Checker::fold_constant`), with the types
-/// and the mistakes the operator has when the program runs.
 fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Constant> {
     use Constant::*;
     let symbol = binary_symbol(op);
@@ -25116,7 +22340,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
             )
         })
     };
-    // A float that isn't finite: from dividing by zero, too large, or no number.
     let float = |x: f64, by_zero: bool| match x {
         _ if x.is_finite() => Ok(Float(x)),
         _ if by_zero => err(
@@ -25132,7 +22355,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
     match (op, a, b) {
         (BinaryOp::And, Bool(x), Bool(y)) => Ok(Bool(x && y)),
         (BinaryOp::Or, Bool(x), Bool(y)) => Ok(Bool(x || y)),
-        // A number beside a unit is a unit, as a literal is.
         (
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge,
             x @ (Unit(_) | Int(_)),
@@ -25200,7 +22422,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
             };
             value.map(Int).ok_or_else(|| too_large("an int"))
         }
-        // A unit beside an int: the int is a unit too, as a literal is.
         (
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod,
             x @ (Unit(_) | Int(_)),
@@ -25247,7 +22468,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
             },
             matches!(op, BinaryOp::Div | BinaryOp::Mod) && y == 0.0,
         ),
-        // Worked out wide, so a huge int gives its true sum in the message.
         (BinaryOp::Add | BinaryOp::Sub, Char(c), Int(n)) | (BinaryOp::Add, Int(n), Char(c)) => {
             let value = if op == BinaryOp::Add {
                 i128::from(c) + i128::from(n)
@@ -25263,8 +22483,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
         }
         (BinaryOp::Sub, Char(c), Char(d)) => Ok(Int(i64::from(c) - i64::from(d))),
         (BinaryOp::Add, Text(x), Text(y)) => Ok(Text(x + &y)),
-        // As `check_power` types a power: an int raised to a unit or to 0 or
-        // more is an int, a unit raised to a unit a unit, anything else a float.
         (BinaryOp::Pow, Int(x), Int(y)) if y >= 0 => {
             int_power(x, y).map(Int).ok_or_else(|| too_large("an int"))
         }
@@ -25318,10 +22536,6 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
     }
 }
 
-/// The value of an int expression written with literals only (`-5`,
-/// `60 * 60 * 24`), which the program computes the same way every time, or
-/// `None` for any other expression. Its parts have been checked, so each of
-/// them fits in an `int`.
 fn constant_int(e: &Expr) -> Option<i64> {
     match &e.kind {
         ExprKind::IntLit(n) => Some(*n),
@@ -25334,8 +22548,7 @@ fn constant_int(e: &Expr) -> Option<i64> {
                 BinaryOp::Sub => a.checked_sub(b),
                 BinaryOp::Mul => a.checked_mul(b),
                 BinaryOp::Div => a.checked_div(b),
-                // The remainder of a division by -1 is 0, which Rust's
-                // `checked_rem` leaves out for the smallest int.
+                // Special-case `-1` remainder since Rust's `checked_rem` overflows on `i64::MIN % -1`.
                 BinaryOp::Mod if b == -1 => Some(0),
                 BinaryOp::Mod => a.checked_rem(b),
                 BinaryOp::Pow if b >= 0 => int_power(a, b),
@@ -25346,9 +22559,6 @@ fn constant_int(e: &Expr) -> Option<i64> {
     }
 }
 
-/// Rejects int arithmetic the program would stop on every time it runs: a
-/// division or remainder by a constant zero, and a constant whose result
-/// doesn't fit in an `int`. Anything else is checked as the program runs.
 fn check_constant_arithmetic(
     op: BinaryOp,
     l: &Expr,
@@ -25382,7 +22592,6 @@ fn check_constant_arithmetic(
     }
 }
 
-/// A key written out, as text a message can quote: `"a"`, `4`, `'x'`, `true`.
 fn constant_key(e: &Expr) -> Option<String> {
     match &e.kind {
         ExprKind::TextLit(text) => Some(format!("\"{}\"", text)),
@@ -25393,11 +22602,6 @@ fn constant_key(e: &Expr) -> Option<String> {
     }
 }
 
-/// Why `key` can't be a map's key, or `None` when it can: a value compared by
-/// what it is and hashed, with nothing inside that changes or has no order of
-/// its own (a float's nan is equal to nothing, itself included).
-/// A type a generic declaration takes (`is_param` says which names are) is
-/// checked where a use gives it one (see `settle_applications`).
 fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
     match key {
         _ if key.is_integer() => None,
@@ -25414,8 +22618,6 @@ fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
     }
 }
 
-/// The smallest and the largest value of the whole number type `ty`, or `None`
-/// for any other type.
 fn integer_range(ty: &Type) -> Option<(i128, i128)> {
     match ty {
         Type::Int8 => Some((i8::MIN as i128, i8::MAX as i128)),
@@ -25430,7 +22632,6 @@ fn integer_range(ty: &Type) -> Option<(i128, i128)> {
     }
 }
 
-/// Checks that `n` fits in `ty`, where it is a whole number type.
 fn fits_type(n: i128, ty: &Type, span: Span) -> Result<()> {
     if let Some((min, max)) = integer_range(ty) {
         if n >= min && n <= max {
@@ -25450,9 +22651,6 @@ fn fits_type(n: i128, ty: &Type, span: Span) -> Result<()> {
     Ok(())
 }
 
-/// Makes `e`, when it is a whole number written out (`200`, `-1`, `3 - 1`), a
-/// value of the whole number type `target` (`b + 1` with `b: unit`, `flex n:
-/// int8 = -5`), if it fits: whether it was one.
 fn numeric_literal(e: &mut Expr, target: &Type) -> Result<bool> {
     if e.ty != Some(Type::Int) {
         return Ok(false);
@@ -25468,11 +22666,6 @@ fn numeric_literal(e: &mut Expr, target: &Type) -> Result<bool> {
     Ok(true)
 }
 
-/// Where a place written by a step (see `Checker::step_to_assignment`) calls a
-/// task or changes something, which naming it twice would do twice; `None` for
-/// a place made only of names, fields, items, pointers, and arithmetic.
-/// The parts `value` adds to text with `+=`, into `region`: those of a
-/// `+` chain, and the pieces of text holding values that names no region.
 fn step_parts(value: Expr, region: &str, at: Span, parts: &mut Vec<Expr>) {
     match value.kind {
         ExprKind::Binary(BinaryOp::Add, left, right) => {
@@ -25504,7 +22697,6 @@ fn changing_part(e: &Expr) -> Option<Span> {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => {
             changing_part(a).or_else(|| changing_part(b))
         }
-        // `xs[int(b)]`: a conversion is no task, and gives the same value each time.
         ExprKind::Call { name, args, .. } if number_cast(name).is_some() => {
             args.iter().find_map(changing_part)
         }
@@ -25512,7 +22704,6 @@ fn changing_part(e: &Expr) -> Option<Span> {
     }
 }
 
-/// A type as a message names one: 'a float', 'text'.
 fn a_type(ty: &Type) -> String {
     match ty {
         Type::Text(_) => "text".to_string(),
@@ -25521,10 +22712,6 @@ fn a_type(ty: &Type) -> String {
     }
 }
 
-/// Checks `l ** r` and returns its type. An int raised to a power it can't be
-/// told is 0 or more may be a fraction, so it is a float, as is any power with a
-/// float; an int raised to a unit or to a constant 0 or more stays an int, and a
-/// unit raised to a unit a unit.
 fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<Type> {
     let number = |ty: &Type| ty.is_numeric();
     if !number(lt) || !number(rt) {
@@ -25576,9 +22763,6 @@ fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<T
             }
             _ => Ok(Type::Float),
         },
-        // `x ** 2` with `x: int8`: a sized number raised to a power of its own
-        // type stays one, checked to fit as it runs; a signed one's power is a
-        // constant 0 or more, since a negative one makes a fraction.
         (Type::Float32, Type::Float32) => Ok(Type::Float32),
         (sized, power) if sized == power && sized.is_integer() => {
             if sized.is_signed_int() && !constant_int(r).is_some_and(|exponent| exponent >= 0) {
@@ -25607,8 +22791,6 @@ fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<T
     }
 }
 
-/// Makes `e`, when it is a float written out (`2.5`, `-0.5`), a `float32`:
-/// whether it was one.
 fn float32_literal(e: &mut Expr) -> bool {
     let written = match &mut e.kind {
         ExprKind::FloatLit(_) => true,
@@ -25621,7 +22803,6 @@ fn float32_literal(e: &mut Expr) -> bool {
     written
 }
 
-/// `base ** exponent` for ints, `exponent` 0 or more, or `None` when it doesn't fit.
 fn int_power(base: i64, exponent: i64) -> Option<i64> {
     match base {
         0 => Some(i64::from(exponent == 0)),
@@ -25631,9 +22812,6 @@ fn int_power(base: i64, exponent: i64) -> Option<i64> {
     }
 }
 
-/// Checks `l op r` where one side is a char, and returns its type: a char moved
-/// by an int (`c + 1`, `1 + c`, `c - 1`) is a char, and the distance from one
-/// char to another (`c - 'a'`) is an int. Nothing else is arithmetic on chars.
 fn char_arithmetic(
     op: BinaryOp,
     l: &Expr,
@@ -25688,7 +22866,6 @@ fn char_arithmetic(
             );
         }
     };
-    // `'z' + 200`: a char and a number both written out, so the result is known.
     let (char_side, number) = if *lt == Type::Char { (l, r) } else { (r, l) };
     if let (ExprKind::CharLit(c), Some(n)) = (&char_side.kind, constant_int(number)) {
         let moved = if op == BinaryOp::Add {
@@ -25709,8 +22886,6 @@ fn char_arithmetic(
     Ok(ty)
 }
 
-/// Rejects `value`, the exact result of a constant int operation at `span`,
-/// when it doesn't fit in an `int`.
 fn fits_int(value: i128, span: Span) -> Result<()> {
     if value > i128::from(i64::MAX) {
         return err(
@@ -25735,11 +22910,7 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
     Ok(())
 }
 
-/// The hint for a task of type `actual` given where one of type `expected` is,
-/// which differ only in how they take a value: one changing what it reaches,
-/// `flex`, or taking the caller's place. Empty where that isn't why.
 fn task_way_hint(actual: &Type, expected: &Type) -> String {
-    // A task changing what a value reaches goes only where the type says so.
     let task_of = |ty: &Type| match ty {
         Type::Task(task) => Some(task.as_ref().clone()),
         Type::Closure(closure) => Some(closure.task.clone()),
@@ -25768,7 +22939,6 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
                 .collect(),
             ..wanted
         };
-        // Written as the type expected is: a lambda's with its region.
         let marked = match expected {
             Type::Closure(closure) => Type::Closure(Box::new(ClosureType {
                 task: marked,
@@ -25816,7 +22986,6 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
             marked
         );
     }
-    // A task taking the caller's place goes only where the type says so.
     if let (Some(given), Some(wanted)) = (task_of(actual), task_of(expected))
         && given.params == wanted.params
         && let Some(passing) =
@@ -25839,10 +23008,7 @@ fn task_way_hint(actual: &Type, expected: &Type) -> String {
     String::new()
 }
 
-/// Why a value of type `actual` doesn't fit where `expected` is required, or
-/// nothing when there is nothing useful to say.
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
-    // A lambda that keeps what it uses goes only where its own type does.
     if let (Type::Closure(closure), Type::Task(_)) = (actual, expected) {
         return format!(
             "; a lambda that keeps what it uses goes only where a type naming its region is expected, as '[@{0}](…)', since a task's type names none and the lambda could outlive '{0}'",
@@ -25853,13 +23019,11 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
     if !ways.is_empty() {
         return ways;
     }
-    // `P#0`: the type of one item of a group's tuple, which no code writes.
     if let Some(item) = [actual, expected].into_iter().find_map(|ty| match ty {
         Type::Param(name) if name.contains(GROUP_ITEM) => Some(name.clone()),
         _ => None,
     }) {
         let (group, place) = item.split_once(GROUP_ITEM).unwrap_or((item.as_str(), "0"));
-        // Against `P` alone, which the two are told apart from.
         let turn = [actual, expected]
             .into_iter()
             .any(|ty| matches!(ty, Type::Param(name) if name == group));
@@ -25871,8 +23035,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         } else {
             String::new()
         };
-        // Values are counted from 1, as the messages about them say, and a
-        // tuple's items from 0, as the program writes them.
         let value = place.parse::<usize>().map_or(1, |k| k + 1);
         return format!(
             "; {0} is the type of value {1} of the group '{2}...', item {3} of its tuple{4}",
@@ -25894,8 +23056,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         }
         (_, Type::Or(_, error)) if fits_regions(actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
         (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T ~ E' can hold".to_string(),
-        // A task's regions are its own: `text` is text that lasts, and `text@r`
-        // text of any region.
         (Type::Task(_), Type::Task(_)) if strip_all_regions(actual) == strip_all_regions(expected) => {
             "; a task's type says which regions its values are in, as its header does: 'text' is text that lasts as long as the program, and 'text@r' text of any region the caller gives".to_string()
         }
@@ -25909,7 +23069,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             format!("; this text is in region '{}', and text here must last as long as the program, as a literal does", region)
         }
         (Type::Text(Some(region)), Type::Text(Some(other))) => format!("; this text is in region '{}', and text here is in region '{}'", region, other),
-        // Pointers or text: what a shape or kind holds is in its region.
         (Type::Named(name, Some(region)), Type::Named(expected_name, Some(other))) if name == expected_name && region != ANY_REGION && other != ANY_REGION => {
             format!("; a value can't move to another region: what it holds in region '{}' is never stored in region '{}'", region, other)
         }
@@ -25918,7 +23077,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             region, name
         ),
         _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
-            // Text, or a shape or kind, inside what is given says it best.
             let inner = [Some(expected), expected.extracted()]
                 .into_iter()
                 .flatten()
@@ -25935,9 +23093,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
                 "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
             }
         }
-        // The same shape, differing in a part inside it: a value is wrapped as
-        // part of a `maybe` or a `T ~ E`, but a value already made is never
-        // reached into, so it is built again from its parts (see `join_types`).
         _ if remade_inside(actual, expected) => {
             let parts = match actual {
                 Type::Tuple(items) => format!(", as in '({})'", (0..items.len()).map(|i| format!("v.{}", i)).collect::<Vec<_>>().join(", ")),
@@ -25950,8 +23105,6 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
     }
 }
 
-/// The first text, or shape or kind, in `actual` whose region differs from the
-/// region of the one in the same place in `expected`, with that one.
 fn region_mismatch<'a>(actual: &'a Type, expected: &'a Type) -> Option<(&'a Type, &'a Type)> {
     match (actual, expected) {
         (Type::Text(a), Type::Text(e)) | (Type::Named(_, a), Type::Named(_, e)) => {
@@ -25970,16 +23123,12 @@ fn region_mismatch<'a>(actual: &'a Type, expected: &'a Type) -> Option<(&'a Type
     }
 }
 
-/// Where the values a list receives come from when one value gives them all:
-/// the several a call sends, or the items of one tuple.
 #[derive(Clone, Copy, PartialEq)]
 enum Given {
     Sent,
     Items,
 }
 
-/// Whether one value gives them all by being a tuple taken apart, rather than
-/// a call sending several.
 fn given_by(values: &[Expr]) -> Given {
     match values {
         [only] if matches!(only.ty, Some(Type::Tuple(_))) => Given::Items,
@@ -25987,10 +23136,6 @@ fn given_by(values: &[Expr]) -> Given {
     }
 }
 
-/// Checks that a value of type `actual`, one of the several a call sends or the
-/// items of a tuple (`given`), fits where `expected` is required. Nothing can
-/// change it on the way, so unlike a single value it never becomes a `maybe` or
-/// a `T ~ E` here.
 fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result<()> {
     if fits_regions(actual, expected) {
         return Ok(());
@@ -26022,17 +23167,13 @@ fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result
     )
 }
 
-/// What `scan` takes, for a call that takes something else.
 const SCAN_TAKES: &str = "'scan' takes the prompt it shows, and the type of a number to read, as in 'scan(\"Name: \") at r' or 'scan(\"Age: \", int)'";
 
-/// The type a typed `scan` names, `int` or `float`: the number it reads. It is a
-/// type, not a value, so it is never checked as one.
 fn scanned_type(arg: &Expr) -> Result<Type> {
     if let ExprKind::Var(name) = &arg.kind {
         if let Some(number) = number_cast(name).filter(|number| *number != Type::Char) {
             return Ok(number);
         }
-        // Text is what `scan` reads by itself, so naming it says to leave it out.
         if matches!(Type::builtin(name), Some(Type::Text(_))) {
             return err(
                 arg.span,
@@ -26046,9 +23187,6 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
     )
 }
 
-/// The error for a call whose `T ~ E` result is thrown away.
-/// The argument a pipe's call holds the value before the pipe as, before the
-/// call is checked (see `ExprKind::Pipe`).
 fn piped_arg(call: &mut Expr) -> Option<&mut Expr> {
     match &mut call.kind {
         ExprKind::Call { args, .. }
@@ -26061,9 +23199,6 @@ fn piped_arg(call: &mut Expr) -> Option<&mut Expr> {
     }
 }
 
-/// What a pipe's call calls, checked, as a message's example writes it:
-/// `scale`, `x.plus` for a method called on a value, `Till.opened` for a
-/// shared one.
 fn piped_name(call: &Expr) -> String {
     match &call.kind {
         ExprKind::Call { name, args, .. } => match (method_parts(name), args.first()) {
@@ -26077,8 +23212,6 @@ fn piped_name(call: &Expr) -> String {
     }
 }
 
-/// Which argument of its call the value before a pipe is, counted from 1, as
-/// the call writes them (a method's value not among them).
 fn piped_position(call: &Expr) -> usize {
     match &call.kind {
         ExprKind::Call { args, .. }
@@ -26092,7 +23225,6 @@ fn piped_position(call: &Expr) -> usize {
     }
 }
 
-/// What a pipe's call calls, as a message names it: `'scale'`.
 fn piped_callee(call: &Expr) -> String {
     match &call.kind {
         ExprKind::Call { name, .. } => format!("'{}'", name),
@@ -26103,7 +23235,6 @@ fn piped_callee(call: &Expr) -> String {
 }
 
 fn ignored_error(task: &str) -> String {
-    // A method is called on a value, and written so.
     if let Some((owner, method)) = method_parts(task) {
         return format!(
             "the error '{0}{1}{2}' may send is ignored; handle it with a plan B, as in 'value.{2}(…) {{ failure e … }}', or with match",
@@ -26116,7 +23247,6 @@ fn ignored_error(task: &str) -> String {
     )
 }
 
-/// The error for a `_` that would drop a value holding an error.
 fn dropped_error(ty: &Type) -> String {
     format!(
         "'_' would drop the error in a value of type {}; give it a name, then handle it with a plan B or match",
@@ -26124,7 +23254,6 @@ fn dropped_error(ty: &Type) -> String {
     )
 }
 
-/// Example names for a list of `n` values, as in `fixed a, b = …`.
 fn example_names(n: usize) -> String {
     let names: Vec<String> = (0..n.min(3))
         .filter_map(|i| u8::try_from(i).ok())
@@ -26137,12 +23266,8 @@ fn example_names(n: usize) -> String {
     }
 }
 
-/// Checks the header of a method named `str`, which turns the value it is
-/// called on into text for `x.str() at r` (and `text(x) at r`), so it has the
-/// one header those can call.
 fn check_str_method(t: &TaskDef) -> Result<()> {
     let written = "a method named 'str' turns the value it is called on into text, so it is written 'str(r: region) -> text@r'";
-    // `show` and text holding values write the value from any file.
     if t.private {
         return err(
             t.span,
@@ -26165,7 +23290,6 @@ fn check_str_method(t: &TaskDef) -> Result<()> {
     Ok(())
 }
 
-/// `1 argument`, `2 arguments`.
 fn count(n: usize, noun: &str) -> String {
     if n == 1 {
         format!("1 {}", noun)
@@ -26174,16 +23298,7 @@ fn count(n: usize, noun: &str) -> String {
     }
 }
 
-/// The program's name for `name` declared in module `module`: `module.name`,
-/// or just `name` in the main file.
-/// Gathers the startup decorators of each module's tasks, each a call
-/// `d(task, args)`, into a task of the module (see `ast::STARTUP`), which runs
-/// where the program starts: the modules in the program's order, their tasks in
-/// the order written, and a task's decorators the nearest first, as Python runs
-/// them. Its body is checked as any task's, with no variable or region yet.
-/// `error`, found in a value worked out where the program starts (`what`: a
-/// decorator's or a wrapper's), said as such: no variable and no region exist
-/// there yet.
+/// Rewrites region/variable diagnostics into startup-context messages for decorators and wrapper args.
 fn at_start_error(mut error: Error, what: &str) -> Error {
     let no_region = format!(
         "{} are worked out where the program starts, before any region exists, so none of them can be made in one",
@@ -26202,8 +23317,6 @@ fn at_start_error(mut error: Error, what: &str) -> Error {
     error
 }
 
-/// The call of its wrapper in the body of a task or layer with wrappers (see
-/// `Checker::settle_wrapped`): the body's one statement, or the value it sends.
 fn wrapper_call(body: &mut Block) -> Option<&mut Expr> {
     match &mut body.first_mut()?.kind {
         StmtKind::Expr(call) => Some(call),
@@ -26212,35 +23325,19 @@ fn wrapper_call(body: &mut Block) -> Option<&mut Expr> {
     }
 }
 
-/// What some code may call (see `Checker::note_calls`).
 #[derive(Default)]
 struct Calls {
-    /// The tasks it calls or names as values, and the `str` methods of the
-    /// values it writes.
     tasks: Vec<String>,
-    /// Whether it calls a task held as a value, which may be any task named as
-    /// one somewhere.
     invokes: bool,
 }
 
-/// What each task's body may call, for the order the values of wrappers are
-/// worked out in where the program starts (see `Checker::order_start_values`).
+/// Call graph used to topologically order startup wrapper value initializers.
 struct CallGraph {
     calls: HashMap<String, Calls>,
-    /// The tasks each task names as values, but the next layer a wrapper's
-    /// layer gives its wrapper: a layer is reached only through the task it
-    /// belongs to, which names it (see `Checker::add_wrappers`).
     named: HashMap<String, Vec<String>>,
-    /// The tasks a call of a task held as a value may reach where the program
-    /// starts: every task named as a value in what can run or be read there (a
-    /// shared field's first value, a value worked out there, and the bodies they
-    /// may reach), but none named only where the program runs later, such as a
-    /// startup decorator's (see `settle_values`).
     values: Vec<String>,
 }
 
-/// How a task is reached from a value (see `CallGraph::reach`): from the value
-/// itself, called by another task, or through a task held as a value.
 #[derive(Clone)]
 enum Reached {
     Start,
@@ -26265,7 +23362,6 @@ impl CallGraph {
                     calls.insert(task.name.clone(), found);
                     named.insert(task.name.clone(), names);
                 }
-                // What a shared field holds where the program starts.
                 Item::Shape(shape) => {
                     for value in shape
                         .shared
@@ -26285,8 +23381,6 @@ impl CallGraph {
         }
     }
 
-    /// Adds to `values` every task named as a value in the bodies the code
-    /// making `roots` may reach, until they reach no more.
     fn settle_values(&mut self, roots: &Calls, values: Vec<String>) {
         for name in values {
             if !self.values.contains(&name) {
@@ -26309,7 +23403,6 @@ impl CallGraph {
         }
     }
 
-    /// Every task the code that makes `roots` may reach, each with how.
     fn reach(&self, roots: &Calls) -> HashMap<String, Reached> {
         let mut reached: HashMap<String, Reached> = HashMap::new();
         let mut next: Vec<String> = Vec::new();
@@ -26356,14 +23449,9 @@ impl CallGraph {
         reached
     }
 
-    /// The tasks `target` is reached through, from the value, as a message
-    /// ends: ` through 'describe'`, or nothing for a value calling it itself.
     fn path(&self, reached: &HashMap<String, Reached>, target: &str) -> String {
-        // From `target` back to the value: each task's name, and `None` where a
-        // task held as a value is called.
         let mut steps: Vec<Option<String>> = Vec::new();
         let mut at = target.to_string();
-        // Each task is reached once, so the path back ends.
         for _ in 0..reached.len() {
             match reached.get(&at) {
                 Some(Reached::From(from)) => at = from.clone(),
@@ -26398,8 +23486,6 @@ impl CallGraph {
     }
 }
 
-/// Notes the task `e` names as a value, if it does, but a wrapper's layer
-/// (see `CallGraph::named`).
 fn note_value(e: &Expr, names: &mut Vec<String>) {
     if let ExprKind::TaskValue(name) = &e.kind
         && !name.contains(LAYER)
@@ -26409,8 +23495,6 @@ fn note_value(e: &Expr, names: &mut Vec<String>) {
     }
 }
 
-/// A task as a message about what calls it names it: a wrapper's layer as its
-/// task, a method through its shape or kind, and a lambda as one.
 fn called_name(name: &str) -> String {
     let name = name.split(LAYER).next().unwrap_or(name);
     if is_lambda(name) {
@@ -26422,16 +23506,11 @@ fn called_name(name: &str) -> String {
     }
 }
 
-/// The order of the tasks in `units` whose wrapper values are worked out where
-/// the program starts: each after the tasks its values `needs`, and in the
-/// order of `units` otherwise. A circle of them has no order, and is given
-/// back: each value in it, with the task it calls.
 fn start_order<'a>(
     units: &[&'a str],
     needs: &HashMap<&'a str, Vec<(&'a str, &'a StartValue)>>,
 ) -> std::result::Result<Vec<&'a str>, Vec<(&'a StartValue, String)>> {
-    // Visiting, then done; the walk keeps its own stack, so a long line of
-    // values can't overflow the compiler's.
+    // Iterative DFS avoids overflowing compiler stack on deep start-value chains.
     let mut state: HashMap<&str, bool> = HashMap::new();
     let mut order = Vec::new();
     for &unit in units {
@@ -26451,7 +23530,6 @@ fn start_order<'a>(
                         stack.push((other, 0));
                     }
                     Some(false) => {
-                        // A circle: from `other` along the stack to here, and back.
                         let from = stack.iter().position(|(on, _)| *on == other).unwrap_or(0);
                         let tasks: Vec<&str> = stack
                             .get(from..)
@@ -26486,7 +23564,6 @@ fn start_order<'a>(
     Ok(order)
 }
 
-/// Calls `f` on every expression in `block`, through the blocks inside it.
 fn walk_block(block: &[Stmt], f: &mut dyn FnMut(&Expr)) {
     for stmt in block {
         walk_stmt(stmt, f);
@@ -26570,8 +23647,6 @@ fn visit_target(target: &Target, f: &mut dyn FnMut(&Expr) -> bool) {
     }
 }
 
-/// Calls `f` on `e` and every expression inside it, through the blocks of its
-/// plan Bs and of the `match`es and `when`s it holds as values.
 fn walk_expr(e: &Expr, f: &mut dyn FnMut(&Expr)) {
     visit_expr(e, &mut |e| {
         f(e);
@@ -26585,8 +23660,6 @@ fn visit_block(block: &[Stmt], f: &mut dyn FnMut(&Expr) -> bool) {
     }
 }
 
-/// Calls `f` on `e` and every expression inside it, as `walk_expr` does, but
-/// not inside one for which `f` says `false`.
 fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
     if !f(e) {
         return;
@@ -26715,19 +23788,14 @@ fn add_startups(items: &mut Vec<Item>) {
     items.extend(startups.into_iter().map(Item::Task));
 }
 
-/// The types written as one word that no declaration makes, which a type
-/// test names after `maybe`.
 pub const BUILTIN_TYPE_WORDS: &[&str] = &[
     "int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8",
     "unit", "float", "float64", "float32", "text", "bool", "char",
 ];
 
-/// The region of what a type test takes from an item whose type is not known
-/// yet: no name in the task is it, so nothing taken lasts past the call, as
-/// the item may be in a region of the caller's.
+/// Placeholder region for unknown-type tuple item tests so borrows never escape the call.
 const UNNAMED_REGION: &str = "#item";
 
-/// A task value called, as a message names it: `f`, `c.step`, `fs[…]`, `pick(…)`.
 fn callee_text(callee: &Expr) -> String {
     match &callee.kind {
         ExprKind::Var(name) => name.clone(),
@@ -26740,10 +23808,7 @@ fn callee_text(callee: &Expr) -> String {
     }
 }
 
-/// The mistake of a call of the generic `task` (a task, method or wrapper, as
-/// `what` says) whose type `param` is found to be `ty`, in [`OWN_REGION`].
 fn own_region_type(what: &str, task: &str, param: &str, ty: &Type) -> String {
-    // The region the task value takes, named as the header would name it.
     let shown = ty.map_regions(&mut |region| {
         Some(if region == OWN_REGION {
             "a".to_string()
@@ -26760,10 +23825,6 @@ fn own_region_type(what: &str, task: &str, param: &str, ty: &Type) -> String {
     )
 }
 
-/// Whether `region` is one no block declares, so no block's end frees it:
-/// the region of a value made without pointers, of what a type test takes
-/// from an item, or of a type found inside a task type.
-/// `a`, or `(a, b)` for names that take a tuple apart, as written.
 fn bound_text(bound: &Bound) -> String {
     if bound.parts.is_empty() {
         return bound.name.clone();
@@ -26779,7 +23840,6 @@ fn bound_text(bound: &Bound) -> String {
     )
 }
 
-/// Where each name `bound` declares is written.
 fn bound_spans(bound: &Bound, spans: &mut Vec<Span>) {
     if bound.parts.is_empty() {
         spans.push(bound.span);
@@ -26787,25 +23847,19 @@ fn bound_spans(bound: &Bound, spans: &mut Vec<Span>) {
     bound.parts.iter().for_each(|part| bound_spans(part, spans));
 }
 
-/// The region a copy of a value of type `ty` would name in a message: the
-/// value's own, or `r`.
 fn copy_region(ty: &Type) -> &str {
-    // A method can't allocate in the region of the value it is called on.
+    // Methods cannot allocate directly in the receiver's own region.
     ty.regions()
         .into_iter()
         .find(|region| !unnamed_region(region) && *region != THIS_WORD)
         .unwrap_or("r")
 }
 
-/// Where the suggested copy names the owner, a value with no short text of its
-/// own, as a literal holding it (see `copied_text`).
+/// Sentinel placeholder replaced by the containing literal when suggesting `.copy()` fixes.
 const OWNER_MARK: &str = "\u{0}";
 
-/// The values a loop that gives one may give: its last line's, and every
-/// `break = v` in it.
 fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
     match &stmt.kind {
-        // A `break` in its `finally` block is the loop around it's.
         StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => {
             last_values(finally.as_ref().unwrap_or(body), values);
             body.iter().for_each(|stmt| break_values(stmt, values));
@@ -26822,7 +23876,6 @@ fn loop_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
     }
 }
 
-/// Every `break = v` in `stmt`, through its blocks.
 fn break_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
     let mut blocks: Vec<&'a [Stmt]> = Vec::new();
     match &stmt.kind {
@@ -26857,19 +23910,11 @@ fn unnamed_region(region: &str) -> bool {
     [ANY_REGION, UNNAMED_REGION, OWN_REGION].contains(&region)
 }
 
-/// The region of a type found inside a task type given to a generic task,
-/// where the task type's own region is named like another of the generic
-/// task's (see `regions_named_as`): no call gives it, so nothing in it fits
-/// anything.
+/// Sentinel region for nested callback params so instantiations cannot unify them with caller regions.
 const OWN_REGION: &str = "#own";
 
-/// Why a type can't be tested where it is written.
 const TYPE_TEST_ON_A_READ: &str = "a type after 'is' tests a tuple's item read with '.#' from a tuple with a name, as in 'when t.#2 is maybe int {x}'";
 
-/// What a read of a tuple's item, `t.#k`, is known to find: `Some(Some(type))`
-/// for an item, `Some(None)` past the tuple's end, and nothing where the type
-/// isn't known yet (a group's tuple, or an item holding a `T`, in the task
-/// taking it).
 fn item_state(read: &Expr) -> Option<Option<Type>> {
     match &read.kind {
         ExprKind::Wrap(inner) if matches!(inner.kind, ExprKind::Field(..)) => match &inner.ty {
@@ -26884,8 +23929,6 @@ fn item_state(read: &Expr) -> Option<Option<Type>> {
     }
 }
 
-/// The tuple's name and the item's place of `t.#k`, a read of a tuple with a
-/// name, as the checker leaves it: as written, or the item in a `maybe`.
 fn safe_read_of(read: &Expr) -> Option<(String, usize)> {
     let (ExprKind::Field(base, item), safe) = (match &read.kind {
         ExprKind::Wrap(inner) => (&inner.kind, true),
@@ -26905,30 +23948,20 @@ fn safe_read_of(read: &Expr) -> Option<(String, usize)> {
     ))
 }
 
-/// Whether two types are one, their regions aside: `text@r` is a `text`.
 fn same_ignoring_regions(a: &Type, b: &Type) -> bool {
     a.without_regions() == b.without_regions()
 }
 
-/// The type a plan B on `t.#5` past the tuple's end settles from its block (see
-/// `Checker::past_end_plan_b`); no type can be named so.
+/// Sentinel type for past-end tuple Plan Bs (`t.#5 { 0 }`).
 const PAST_END: &str = "#past";
 
-/// Whether `e` is `t.#5` read past the tuple's end: always `none`, of a
-/// `maybe` the place it goes says.
 fn past_end(e: &Expr) -> bool {
     matches!(&e.kind, ExprKind::Field(_, item) if item.starts_with(SAFE_ITEM))
         && e.ty == Some(Type::None)
 }
 
-/// Why the tuple of a group's values can't be unpacked into names.
 const GROUP_TUPLE_UNPACKED: &str = "this is the tuple of a group's values, which holds as many items as each use gives, so no list of names fits it; read its items as 't.0', or as 't.#0', a maybe";
 
-/// The type `name` is given in a copy of a task: the one `given` names, and
-/// for a group's `P` alone, the type of the value of the turn of an `each` over
-/// its values. Where no value has one (a group of none, or a tuple's item past
-/// the values given, both in code a copy never runs), a type stands in. A
-/// generic task read with nothing given changes nothing.
 fn copy_type(given: &HashMap<String, Type>, name: &str) -> Option<Type> {
     if given.is_empty() {
         return None;
@@ -26947,10 +23980,6 @@ fn copy_type(given: &HashMap<String, Type>, name: &str) -> Option<Type> {
         .or_else(|| name.contains(GROUP_ITEM).then(placeholder_type))
 }
 
-/// `ty` in a copy of a task given `given`: the types given in place of the
-/// names it takes (see `copy_type`), with a group's tuple made at least two
-/// items long (see `padded_group_tuples`). A generic task read with nothing
-/// given keeps its types.
 fn in_copy(ty: &Type, given: &HashMap<String, Type>) -> Type {
     if given.is_empty() {
         return ty.clone();
@@ -26961,16 +23990,11 @@ fn in_copy(ty: &Type, given: &HashMap<String, Type>) -> Type {
     )
 }
 
-/// The type standing in, in a copy of a task, for one no value has (see
-/// `copy_type`): never read, since the code holding it never runs.
 fn placeholder_type() -> Type {
     Type::Int
 }
 
-/// `ty` with each tuple of fewer than two items, which only a group's tuple
-/// is in a copy given fewer than two values, made two items long: that tuple
-/// is never made there (see `substitute_group_tuple`), and C has no tuple of
-/// none.
+/// Pads `< 2`-element tuples in runtime type positions because C lacks 0/1-element structs.
 fn padded_group_tuples(ty: &Type) -> Type {
     let boxed = |inner: &Type| Box::new(padded_group_tuples(inner));
     match ty {
@@ -27004,8 +24028,6 @@ fn padded_group_tuples(ty: &Type) -> Type {
     }
 }
 
-/// Names the loop `value`, which gives the variable `name` at `at` its value,
-/// as that variable: unless written with `=>`, since a loop has one name.
 fn name_value_loop(value: &mut ValueLoop, name: &str, at: Span) -> Result<()> {
     if let Some((written, written_at)) = value.name.as_ref().filter(|_| value.arrow) {
         return err(
@@ -27020,8 +24042,6 @@ fn name_value_loop(value: &mut ValueLoop, name: &str, at: Span) -> Result<()> {
     Ok(())
 }
 
-/// The values the last line of `block` gives, through the branches of a
-/// `when` or a `match` there.
 fn last_values<'a>(block: &'a [Stmt], values: &mut Vec<&'a Expr>) {
     match block.last().map(|stmt| &stmt.kind) {
         Some(StmtKind::Expr(e)) => values.push(e),
@@ -27038,7 +24058,6 @@ fn last_values<'a>(block: &'a [Stmt], values: &mut Vec<&'a Expr>) {
     }
 }
 
-/// Calls `f` on each value the last line of `block` gives (see `last_values`).
 fn last_values_mut(block: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
     match block.last_mut().map(|stmt| &mut stmt.kind) {
         Some(StmtKind::Expr(e)) => f(e),
@@ -27056,8 +24075,6 @@ fn last_values_mut(block: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
     }
 }
 
-/// `each x in xs … fi { 0 }` starting the last line of a block that gives a
-/// value is the value of a loop, which a line of its own would only fail with.
 fn last_loop_gives(last: &mut Stmt) {
     if let StmtKind::Expr(Expr {
         kind: ExprKind::PlanB { value, .. },
@@ -27069,8 +24086,6 @@ fn last_loop_gives(last: &mut Stmt) {
     }
 }
 
-/// Whether the value `e` may fail, as its type says, but the value a branch
-/// gives where another fails, which is made one that may (`Wrap`).
 fn may_fail(e: &Expr) -> bool {
     let e = match &e.kind {
         ExprKind::Wrap(inner) => inner,
@@ -27079,14 +24094,10 @@ fn may_fail(e: &Expr) -> bool {
     matches!(e.ty, Some(Type::Or(..) | Type::Fail(_)))
 }
 
-/// Whether `cond` is `true` as written, which never ends a loop.
 fn says_true(cond: &Condition) -> bool {
     cond.single() && cond.pattern.is_none() && matches!(cond.value.kind, ExprKind::BoolLit(true))
 }
 
-/// Whether `cond`, in a copy of a task, is known true or false: a condition
-/// of numbers and bools written out, as `args.len` becomes (see
-/// `substitute_expr`).
 fn known_condition(cond: &Condition) -> Option<bool> {
     let mut taken = Some(true);
     for part in cond.parts() {
@@ -27099,11 +24110,6 @@ fn known_condition(cond: &Condition) -> Option<bool> {
     taken
 }
 
-/// Whether one part of a condition is known to hold: a `bool` the compiler
-/// works out, a tuple's items, which always match, and what a type test leaves
-/// where the item's type is known (see `settle_type_tests`): its value taken,
-/// which is always there, and `none` matched on a read, which holds past the
-/// tuple's end and nowhere else.
 fn known_part(part: &Condition) -> Option<bool> {
     let item = item_state(&part.value);
     match part.pattern.as_ref().map(|pattern| &pattern.kind) {
@@ -27119,7 +24125,6 @@ fn known_bool(e: &Expr) -> Option<bool> {
     match &e.kind {
         ExprKind::BoolLit(b) => Some(*b),
         ExprKind::Unary(UnaryOp::Not, inner) => known_bool(inner).map(|b| !b),
-        // Either side decides it where it is the one that would.
         ExprKind::Binary(op @ (BinaryOp::And | BinaryOp::Or), a, b) => {
             let decides = *op == BinaryOp::Or;
             match (known_bool(a), known_bool(b)) {
@@ -27153,9 +24158,6 @@ fn known_int(e: &Expr) -> Option<i64> {
     }
 }
 
-/// The type of `(args...)` for the group `group`, `(P...) ~ maybe P#0`: the
-/// tuple of its values when there are two or more, and when there is one or
-/// none, a failure holding that one value, or none.
 fn group_tuple_type(group: &str) -> Type {
     Type::Or(
         Box::new(Type::Tuple(vec![Type::Group(group.to_string())])),
@@ -27163,7 +24165,6 @@ fn group_tuple_type(group: &str) -> Type {
     )
 }
 
-/// The group a group's tuple holds, `(P...)`.
 fn group_in_tuple(items: &[Type]) -> Option<String> {
     match items {
         [Type::Group(group)] => Some(group.clone()),
@@ -27171,21 +24172,14 @@ fn group_in_tuple(items: &[Type]) -> Option<String> {
     }
 }
 
-/// The type of item `place` of the group `group`'s tuple, `P#0`: the type the
-/// call gives that value, in each copy of the task.
 fn group_item(group: &str, place: usize) -> String {
     format!("{}{}{}", group, GROUP_ITEM, place)
 }
 
-/// The types given for the group of types `name`, kept among the types given
-/// a call as a tuple of them (see `Checker::group_call_info`).
 fn group_types(given: &HashMap<String, Type>, name: &str) -> Option<Vec<Type>> {
     group_items(given, name).map(|(types, _)| types)
 }
 
-/// The types given for the group `name`, with how a task takes each: a group
-/// holding a place is kept as the parameters of a task type, which say so,
-/// and one holding only values as a tuple (see `group_binding`).
 fn group_items(given: &HashMap<String, Type>, name: &str) -> Option<(Vec<Type>, Vec<Taken>)> {
     match given.get(name) {
         Some(Type::Tuple(types)) => Some((types.clone(), vec![Taken::Value; types.len()])),
@@ -27196,11 +24190,7 @@ fn group_items(given: &HashMap<String, Type>, name: &str) -> Option<(Vec<Type>, 
     }
 }
 
-/// The type given for a group of `types`, each taken as `taken` says: a tuple
-/// of them where all are values, and otherwise the parameters of a task type
-/// sending [`GROUP_SENDS`], which only a group's types are (see
-/// `group_items`). Its C name says how each is taken, so a use giving a
-/// place and one giving a value have copies of their own.
+/// Encodes variadic group types with passing modes (value vs place) so monomorphized C signatures stay distinct.
 fn group_binding(types: Vec<Type>, taken: Vec<Taken>) -> Type {
     if taken.iter().all(|how| *how == Taken::Value) {
         return Type::Tuple(types);
@@ -27212,12 +24202,6 @@ fn group_binding(types: Vec<Type>, taken: Vec<Taken>) -> Type {
     }))
 }
 
-/// The types a call gives, by the name of the type each is given for, with the
-/// types given for one group (`P#0`, `P#1`, …; see `Checker::group_call_info`)
-/// kept together as the one type given for the group, a tuple of them, in the
-/// group's place.
-/// A value a task value the call gives takes as a place (in `taken`) is a
-/// place in the group too (see `group_binding`).
 fn packed_groups(types: Vec<(&str, TypeArg)>, taken: &HashMap<String, Taken>) -> Vec<TypeArg> {
     let mut packed: Vec<(Vec<Type>, Vec<Taken>, Span, bool)> = Vec::new();
     let mut group: Option<&str> = None;
@@ -27255,16 +24239,10 @@ fn packed_groups(types: Vec<(&str, TypeArg)>, taken: &HashMap<String, Taken>) ->
         .collect()
 }
 
-/// The name of the parameter holding the `i`th value of the group parameter
-/// `name` in a task made for its types: `args__1`. No Vela name holds `__`.
 fn group_value(name: &str, i: usize) -> String {
     format!("{}__{}", name, i + 1)
 }
 
-/// The values of a call in a task made for a group's types: `args...` becomes
-/// the parameters the group parameter became, each a value of its own.
-/// A value the group holds as a place is given on as that place, marked, to a
-/// task (`places`), and read as a value by `show`.
 fn spread_values(args: &mut Vec<Expr>, given: &HashMap<String, Type>, places: bool) {
     let Some(at) = args
         .iter()
@@ -27307,10 +24285,6 @@ fn spread_values(args: &mut Vec<Expr>, given: &HashMap<String, Type>, places: bo
     args.splice(at..=at, values);
 }
 
-/// The type a call in a copy gives the group of the task it calls, written
-/// `ty` in the task the copy is made of (`(int, P...)` as a tuple), with the
-/// values of this copy's group in place of `P...`, places as places (see
-/// `spread_values`).
 fn group_given_in_copy(ty: &Type, given: &HashMap<String, Type>) -> Type {
     let Type::Tuple(items) = ty else {
         return ty
@@ -27337,22 +24311,15 @@ fn group_given_in_copy(ty: &Type, given: &HashMap<String, Type>) -> Type {
     group_binding(types, taken)
 }
 
-/// The mark before the place of a tuple's item read in a maybe, `t.#0`, kept
-/// in the field's name until the checker makes it the read it is (see
-/// `Checker::check_safe_item`).
 pub const SAFE_ITEM: char = '#';
 
-/// Added to a group's name, the key in the types a copy of a task is given
-/// that marks it a group, holding its types (see `copy_type`).
+/// Key suffix marking a group type-parameter entry.
 const GROUP_MARK: &str = "...";
 
-/// Added to a group's name, the key holding the type of the value of the turn
-/// of an `each` over its values (see `Checker::each_of_group`).
+/// Key suffix storing the per-iteration element type for `each v in group`.
 const GROUP_TURN: &str = "*";
 
-/// The marker between a group's name and the place of one of its types, in
-/// the names a call of a task taking a group gives them (`P#0`), which no Vela
-/// name holds.
+/// Separator between a group param name and element index (`P#0`).
 const GROUP_ITEM: char = '#';
 
 fn qualify(module: &str, name: &str) -> String {
@@ -27363,8 +24330,6 @@ fn qualify(module: &str, name: &str) -> String {
     }
 }
 
-/// `ty`, a shape or a kind, in the region `of` is in: `AppError@r` for
-/// `AppError` and `ParseErr@r`.
 fn in_region_of(ty: &Type, of: &Type) -> Type {
     let region = match of {
         Type::Named(_, region) => region.clone(),
@@ -27381,9 +24346,6 @@ fn in_region_of(ty: &Type, of: &Type) -> Type {
     }
 }
 
-/// The name in the program of `variant`, the `i`th of kind `kind`: its tag in
-/// the kind's module, or, for one the kind has from a kind it imitates, a
-/// name through the kind (see `ast::imitated_variant`).
 fn variant_name(kind: &KindDef, i: usize, variant: &Variant) -> String {
     if i < kind.imitated {
         imitated_variant(&kind.name, &variant.tag)
@@ -27396,20 +24358,14 @@ fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {
     Err(Error::at(span, msg))
 }
 
-/// The mistakes as they are reported: each once, in the order a reader meets
-/// them, which is by file (the program's main file first), then line, then
-/// column. The checker finds them in the order it checks — every declaration
-/// before any task's body — and the same mistake can be found twice, by two
-/// checks that each had to work the type out. A mistake about no position at
-/// all (a compiler bug) comes last.
+/// Sorts deduplicated errors by `(file == main, line, col)` with span-less internal errors last.
 fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
     let mut seen = HashSet::new();
     let mut errors: Vec<Error> = errors
         .into_iter()
         .filter(|error| seen.insert((error.span.map(Span::place_key), error.message.clone())))
         .collect();
-    // A stable sort, so two mistakes at one position stay in the order they
-    // were found.
+    // Stable sort preserves discovery order for ties at the same span.
     errors.sort_by_key(|error| match error.span {
         Some(span) => (0, span.file, span.line, span.col),
         None => (1, 0, 0, 0),
@@ -27417,10 +24373,6 @@ fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
     errors
 }
 
-/// The warning that `what` (`'==' compares Point by where it is`) reads where
-/// the parameter `name`, of type `ty`, is, which the compiler chose from its
-/// `size`; `declared` is the type as the task writes it, for the hint, and
-/// `given` names the use that gave the type, in a task that takes types.
 fn chosen_message(
     what: &str,
     name: &str,
@@ -27430,7 +24382,6 @@ fn chosen_message(
     given: Option<String>,
 ) -> String {
     let written = ty.without_regions();
-    // An address (`'&x' is where …`) compares no items, so '~=' is no way out.
     let address = what.starts_with("'&");
     let (whose, subject, words) = match (name == THIS, address) {
         (true, false) => (
@@ -27483,9 +24434,6 @@ fn chosen_message(
     )
 }
 
-/// The end of the message for changing a parameter that never changes: how to
-/// write one the task may change, and, with `shares`, that its copy still
-/// names what the caller's value holds. Empty for anything else.
 fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
     if info.kept && info.passing == Passing::FixedRef {
         return format!(
@@ -27514,7 +24462,6 @@ fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
             name, info.ty
         );
     }
-    // The task's own copy of a twofold value still names what the caller's does.
     let own = match &info.ty {
         Type::Slice(..) => "the task's own copy of the slice, whose items are the caller's",
         Type::Map(..) => "the task's own copy of the map, which names the caller's map",
@@ -27528,18 +24475,13 @@ fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
     )
 }
 
-/// A step from a variable to a place in it: a field, an item, or what a
-/// pointer points to (see `place_path`).
 #[derive(Debug, Clone, PartialEq)]
 enum Step {
     Field(String),
-    /// An item at a number known before the program runs, or at one that isn't.
     Item(Option<i64>),
     Deref,
 }
 
-/// What `place`, which `is_place` refuses, is instead, for a message: '… and
-/// this is {}, with no place of its own'.
 fn no_place(place: &Expr) -> &'static str {
     match &place.kind {
         ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
@@ -27558,8 +24500,6 @@ fn no_place(place: &Expr) -> &'static str {
     }
 }
 
-/// Whether a field of `base` is worked out from the value rather than kept
-/// in it: `len` of an array, a slice, or text.
 fn worked_out(base: &Expr) -> bool {
     matches!(
         base.ty,
@@ -27567,9 +24507,6 @@ fn worked_out(base: &Expr) -> bool {
     )
 }
 
-/// Notes `e`, when it is an address (`&x`) of a parameter the compiler chose
-/// how to give, or of a part of one, in a task made for types (see
-/// `Made::reads_chosen`).
 fn note_chosen_address(e: &Expr, made: &mut Made) {
     let ExprKind::Ref(place) = &e.kind else {
         return;
@@ -27585,9 +24522,6 @@ fn note_chosen_address(e: &Expr, made: &mut Made) {
     }
 }
 
-/// The variable a place written as `e` starts at, through its fields and
-/// items, and where it is named: not through a pointer or a slice, whose items
-/// are a place of their own, wherever the pointer or the slice is.
 fn param_root(e: &Expr) -> Option<(&str, Span)> {
     match &e.kind {
         ExprKind::Var(name) => Some((name, e.span)),
@@ -27602,15 +24536,10 @@ fn param_root(e: &Expr) -> Option<(&str, Span)> {
     }
 }
 
-/// Whether `a` and `b` are parts of one variable (`line.from`, `line.to`),
-/// which are where they are alike however the variable was given.
 fn same_root(a: &Expr, b: &Expr) -> bool {
     matches!((param_root(a), param_root(b)), (Some((x, _)), Some((y, _))) if x == y)
 }
 
-/// Whether `e` is written as a place: a variable, a shared field, what a
-/// pointer points to, or a field or an item of one. (In a task made for
-/// types, no variant is of a type the task takes, so a name is a variable.)
 fn names_place(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::Deref(_) => true,
@@ -27624,8 +24553,6 @@ fn names_place(e: &Expr) -> bool {
     }
 }
 
-/// The place `e` names, as its variable and the steps from it, or `None` for a
-/// value that isn't a place.
 fn place_path(e: &Expr) -> Option<Vec<Step>> {
     let mut steps = Vec::new();
     let mut at = e;
@@ -27636,8 +24563,6 @@ fn place_path(e: &Expr) -> Option<Vec<Step>> {
                 steps.reverse();
                 return Some(steps);
             }
-            // A shared field is one place for the whole program, named as it is
-            // written, which no variable's name is.
             ExprKind::Shared { shape, field } => {
                 steps.push(Step::Field(shared_key(shape, field)));
                 steps.reverse();
@@ -27663,9 +24588,6 @@ fn place_path(e: &Expr) -> Option<Vec<Step>> {
     }
 }
 
-/// Whether two places may be the same, or one part of the other: they start at
-/// the same variable and no step tells them apart. A pointer is not what it
-/// points to, so `p` and `p^` are two places.
 fn overlaps(a: &[Step], b: &[Step]) -> bool {
     let (shorter, longer) = if a.len() <= b.len() { (a, b) } else { (b, a) };
     if longer.get(shorter.len()) == Some(&Step::Deref) {
@@ -27678,12 +24600,10 @@ fn overlaps(a: &[Step], b: &[Step]) -> bool {
     })
 }
 
-/// A place as a program writes it: `a.b[2]`, `p^.x`.
 fn path_text(path: &[Step]) -> String {
     let mut text = String::new();
     for (i, step) in path.iter().enumerate() {
         match step {
-            // `.n` inside a method is a field of the value it is called on.
             Step::Field(name) if i == 0 && name == THIS && path.len() > 1 => {}
             Step::Field(name) if i == 0 => text.push_str(name),
             Step::Field(name) => {
@@ -27698,22 +24618,16 @@ fn path_text(path: &[Step]) -> String {
     text
 }
 
-/// What takes a place that changes: a `flex&` parameter, or a `flex&` local
-/// reference, by its name, which the errors about the place name.
 enum Taker<'a> {
     Param(&'a str),
     BindParam(&'a str),
     Reference(&'a str),
-    /// A reference that changes the contents of a place but never assigns it whole.
     BindReference(&'a str),
-    /// A lambda keeping the variable as a place, `[flex& count, @r]`.
     Kept(&'a str),
-    /// A lambda keeping the variable as a bind place, `[bind& count, @r]`.
     KeptBind(&'a str),
 }
 
 impl Taker<'_> {
-    /// Whether it changes only the contents of the place, as `bind&` does.
     fn is_bind(&self) -> bool {
         matches!(
             self,
@@ -27721,7 +24635,6 @@ impl Taker<'_> {
         )
     }
 
-    /// How an error about the place starts.
     fn lead(&self) -> String {
         match self {
             Taker::Param(name) => format!("'{}' is given the place itself, to change", name),
@@ -27743,7 +24656,6 @@ impl Taker<'_> {
         }
     }
 
-    /// What giving it `place` is, for the error that it changes `.this`.
     fn using(&self, place: &str) -> String {
         match self {
             Taker::Param(name) | Taker::BindParam(name) => {
@@ -27757,8 +24669,6 @@ impl Taker<'_> {
     }
 }
 
-/// `ty`, written in a bound of a declaration taking `types`, with their names
-/// as those types: `Iterator<T>` read as `Iterator<Param(T)>`.
 fn named_params(ty: &Type, types: &[TypeParam]) -> Type {
     ty.replace_names(&|name| {
         types
@@ -27768,8 +24678,6 @@ fn named_params(ty: &Type, types: &[TypeParam]) -> Type {
     })
 }
 
-/// Pattern `pattern` with the types it takes as `given` says, in its fields'
-/// types and its methods' headers: what a follower giving them is asked for.
 fn with_given(pattern: &PatternDef, given: &HashMap<String, Type>) -> PatternDef {
     if given.is_empty() {
         return pattern.clone();

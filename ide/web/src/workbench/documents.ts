@@ -1,25 +1,13 @@
-// The files open in tabs: their editor state, what was last saved, and how
-// they relate to the file on disk. No DOM here, so it can be tested alone.
-
 import type { EditorState, Text } from "@codemirror/state";
 
-export type DiskState =
-  /** The file matches what the editor last read or saved. */
-  | "in-sync"
-  /** Another program changed the file while the editor had unsaved edits. */
-  | "changed"
-  /** The file was deleted or moved away. */
-  | "deleted";
+export type DiskState = "in-sync" | "changed" | "deleted";
 
 export interface OpenDocument {
   path: string;
   state: EditorState;
-  /** The text as last read from or saved to disk. */
   saved: Text;
-  /** The file's hash for `saved`, sent with the next save. */
   hash: string;
   disk: DiskState;
-  /** Where the editor was scrolled when the tab was left. */
   scrollTop: number;
 }
 
@@ -36,12 +24,10 @@ export function parentFolder(path: string): string {
   return slash < 0 ? "" : path.slice(0, slash);
 }
 
-/** Whether `path` is `folder` itself or inside it. */
 export function isWithin(path: string, folder: string): boolean {
   return path === folder || path.startsWith(`${folder}/`);
 }
 
-/** Why a name can't be used for a new or renamed entry, or null if it can. */
 export function nameProblem(name: string): string | null {
   const segments = name.split("/");
   if (segments.some((s) => s === "" || s === "." || s === "..")) return "Use plain names, separated by / for folders.";
@@ -50,10 +36,6 @@ export function nameProblem(name: string): string | null {
   return null;
 }
 
-/**
- * The smallest single change turning `before` into `after` (the differing
- * middle, between their common start and end), or null if they are equal.
- */
 export function textChange(before: string, after: string): { from: number; to: number; insert: string } | null {
   if (before === after) return null;
   const shorter = Math.min(before.length, after.length);
@@ -66,12 +48,10 @@ export function textChange(before: string, after: string): { from: number; to: n
 
 export class Documents {
   private readonly open = new Map<string, OpenDocument>();
-  /** Tab order. */
   private order: string[] = [];
   active: string | null = null;
   private readonly listeners = new Set<() => void>();
 
-  /** Called after any change to the set of documents, their order, or state. */
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -99,7 +79,6 @@ export class Documents {
     this.changed();
   }
 
-  /** Removes a document; returns the path that should become active. */
   remove(path: string): string | null {
     const index = this.order.indexOf(path);
     if (index < 0) return this.active;
@@ -112,7 +91,6 @@ export class Documents {
     return this.active;
   }
 
-  /** Records a save or reload: `text` is now what the file on disk holds. */
   markSaved(path: string, text: Text, hash: string): void {
     const doc = this.open.get(path);
     if (!doc) return;
@@ -122,7 +100,6 @@ export class Documents {
     this.changed();
   }
 
-  /** Updates paths after a file or folder was renamed from `from` to `to`. */
   renamed(from: string, to: string): void {
     const moves = this.order.filter((path) => isWithin(path, from)).map((path) => [path, to + path.slice(from.length)] as const);
     if (moves.length === 0) return;
@@ -138,7 +115,6 @@ export class Documents {
     this.changed();
   }
 
-  /** The open documents inside `folder` (or that file). */
   within(folder: string): OpenDocument[] {
     return this.all.filter((doc) => isWithin(doc.path, folder));
   }

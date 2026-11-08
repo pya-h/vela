@@ -1,8 +1,3 @@
-//! Diagnostics, outline, go-to-definition, and highlighting of half-typed
-//! code, plus a tolerance test that runs every request on every prefix of the
-//! example programs.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -10,20 +5,16 @@ use std::path::{Path, PathBuf};
 
 use vela_analysis::{Analysis, Diagnostic, LineIndex, Location, OutlineItem, Severity, SymbolKind, TokenClass};
 
-/// The UTF-16 offset of the `nth` (0-based) occurrence of `needle`.
 fn at(source: &str, needle: &str, nth: usize) -> usize {
     let byte = source.match_indices(needle).nth(nth).unwrap_or_else(|| panic!("no {:?} #{}", needle, nth)).0;
     LineIndex::new(source).utf16_of(byte)
 }
 
-/// The text of a UTF-16 location.
 fn text(source: &str, location: Location) -> String {
     let index = LineIndex::new(source);
     source[index.byte_of_utf16(location.from)..index.byte_of_utf16(location.to)].to_string()
 }
 
-/// Asserts that the name starting at `(needle, nth)` (the `nth` occurrence
-/// of `needle`) is declared at the name starting at `declaration`.
 fn assert_definition(source: &str, name_use: (&str, usize), declaration: (&str, usize)) {
     let name: String = declaration.0.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
     let found = Analysis::new(source).definition(at(source, name_use.0, name_use.1));
@@ -72,11 +63,8 @@ fi
 
 #[test]
 fn definitions_of_declarations_and_uses() {
-    // A task used before its declaration.
     assert_definition(SHAPES, ("total", 0), ("total", 1));
-    // A declaration goes to itself.
     assert_definition(SHAPES, ("total", 1), ("total", 1));
-    // Variables, parameters, variants, types, and case bindings.
     assert_definition(SHAPES, ("p.x", 0), ("p =", 0));
     assert_definition(SHAPES, ("q.x", 0), ("q:", 0));
     assert_definition(SHAPES, ("Dimmed(4)", 0), ("Dimmed(level", 0));
@@ -98,7 +86,6 @@ fn a_files_own_kind_leads_to_its_variants() {
     assert_eq!((hover.code.as_str(), hover.doc.as_str()), ("Dimmed(level: int)", "A variant of kind Light."));
     assert_eq!(analysis.hover(at(&source, "glow =", 0)).unwrap().code, "fixed glow: Light");
 
-    // Completion after the kind's name: its variants, as values.
     let completions = |marked: &str| {
         let offset = marked.find("@@").unwrap();
         let source = marked.replacen("@@", "", 1);
@@ -107,10 +94,8 @@ fn a_files_own_kind_leads_to_its_variants() {
     let variants = completions(&SHAPES.replace("    show(total(p))\n", "    show(Light.@@)\n"));
     let offered: Vec<(&str, Option<&str>)> = variants.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
     assert_eq!(offered, [("Red", None), ("Dimmed", Some("Dimmed(${level})"))]);
-    // A shape's name and an unknown name have no variants.
     assert_eq!(completions(&SHAPES.replace("    show(total(p))\n", "    show(Point.@@)\n")).len(), 0);
     assert_eq!(completions(&SHAPES.replace("    show(total(p))\n", "    show(Lights.@@)\n")).len(), 0);
-    // A variant the kind doesn't have resolves to nothing.
     let wrong = SHAPES.replace("    show(total(p))\n", "    show(Light.Blue)\n");
     assert_eq!(Analysis::new(&wrong).definition(at(&wrong, "Blue", 0)), None);
     assert_eq!(Analysis::new(&wrong).hover(at(&wrong, "Blue", 0)), None);
@@ -118,22 +103,18 @@ fn a_files_own_kind_leads_to_its_variants() {
 
 #[test]
 fn field_definitions_use_the_type_of_the_value() {
-    // Two shapes have a field `x`: the checker's types pick the right one.
     let analysis = Analysis::new(SHAPES);
     let point_x = at(SHAPES, "x: int", 0);
     let size_x = at(SHAPES, "x: int", 1);
     let go = |needle: &str| analysis.definition(at(SHAPES, needle, 0) + needle.len() - 1).map(|l| l.from);
     assert_eq!(go("p.x"), Some(point_x));
     assert_eq!(go("s.x"), Some(size_x));
-    // Shape literal fields, in any order.
     assert_eq!(go("{ y"), Some(at(SHAPES, "y: int", 0)));
     assert_eq!(go("Size { x"), Some(size_x));
 }
 
 #[test]
 fn field_definitions_are_exact_except_on_a_line_with_a_mistake() {
-    // The checker goes on after a mistake, so only the line that has one is left
-    // without types; there, a field is found by its name when one shape has it.
     let source = format!(
         "{}task broken()\n    fixed q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing, q.y, q.x)\n    show(q.x)\nfi\n",
         SHAPES
@@ -141,13 +122,8 @@ fn field_definitions_are_exact_except_on_a_line_with_a_mistake() {
     let analysis = Analysis::new(&source);
     assert_eq!(analysis.diagnostics().len(), 1);
     let go = |nth: usize, needle: &str| analysis.definition(at(&source, needle, nth) + 2).map(|l| l.from);
-    // `SHAPES` itself uses `q.x` and `q.y` once, in `total`.
-    // Before the line with the mistake, and after it: the checker's type picks
-    // `Point.x` over `Size.x`.
     assert_eq!(go(1, "q.x"), Some(at(&source, "x: int", 0)));
     assert_eq!(go(3, "q.x"), Some(at(&source, "x: int", 0)));
-    // On that line: only `Point` has `y`, so that one is found by its name;
-    // both shapes have `x`, so that one is unknown.
     assert_eq!(go(1, "q.y"), Some(at(&source, "y: int", 0)));
     assert_eq!(go(2, "q.x"), None);
 }
@@ -170,10 +146,8 @@ task main()
 fi
 ";
     assert_definition(source, ("label", 1), ("label", 0));
-    // The `else` branch doesn't see the `when` branch's variable...
     assert_eq!(Analysis::new(source).definition(at(source, "label", 2) + 1), None);
     assert_eq!(class_at(source, "label", 2), TokenClass::Variable);
-    // ...and has its own.
     assert_definition(source, ("label", 4), ("label", 3));
     assert_definition(source, ("i)", 0), ("i in", 0));
 }
@@ -206,7 +180,6 @@ fi
 ";
     assert_definition(source, ("problem)", 0), ("problem", 0));
     assert_definition(source, ("fallback\n    }", 0), ("fallback =", 0));
-    // A plan B's names end with its block, and an `is` pattern's with its branch.
     assert_eq!(Analysis::new(source).definition(at(source, "fallback)", 0)), None);
     assert_definition(source, ("value + n", 0), ("value}", 0));
     assert_eq!(Analysis::new(source).definition(at(source, "value)", 0)), None);
@@ -216,7 +189,6 @@ fi
     assert_eq!(class_at(source, "text\n    <- 1", 0), TokenClass::TypeBuiltin);
     assert_eq!(class_at(source, "failure problem", 0), TokenClass::Keyword);
 
-    // Blocks inside a plan B don't end it early.
     let source = "\
 kind Light
     Red
@@ -250,7 +222,6 @@ fi
 ";
     assert_definition(source, ("inside\n    }", 0), ("inside =", 0));
     assert_eq!(Analysis::new(source).definition(at(source, "inside)", 0)), None);
-    // A binding isn't visible in its own plan B, only after it.
     assert_eq!(Analysis::new(source).definition(at(source, "own\n    }", 0)), None);
     assert_definition(source, ("own)", 0), ("own =", 0));
 }
@@ -285,17 +256,13 @@ fi
     assert_eq!(class_at(source, "r: region", 0), TokenClass::Region);
     assert_eq!(class_at(source, "region,", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "r)", 0), TokenClass::Region);
-    // A header's `@r` names the region parameter; `in r` refers to it.
     assert_definition(source, ("r) ->", 0), ("r: region", 0));
     assert_definition(source, ("r\n", 0), ("r: region", 0));
-    // A region the header only names is declared where it first appears.
     assert_definition(source, ("s) -> int", 0), ("s) -> int", 0));
     assert_eq!(class_at(source, "s) -> int", 0), TokenClass::Region);
-    // Region statements, used as arguments and after `new@`.
     assert_definition(source, ("nodes, none", 0), ("nodes\n", 0));
     assert_definition(source, ("nodes int", 0), ("nodes\n", 0));
     assert_eq!(class_at(source, "nodes, first", 0), TokenClass::Region);
-    // A region declared in a block ends with it.
     assert_definition(source, ("inner", 0), ("inner", 0));
     let analysis = Analysis::new(source);
     assert_eq!(analysis.diagnostics(), []);
@@ -304,7 +271,6 @@ fi
 
 #[test]
 fn half_typed_code_still_resolves_and_highlights() {
-    // The first task is never closed and a string is unterminated.
     let source = "\
 task first(n: int) -> int
     fixed twice = n * 2
@@ -324,7 +290,6 @@ fi
     assert_eq!(class_at(source, "second", 0), TokenClass::Task);
     assert_eq!(class_at(source, "`", 0), TokenClass::Invalid);
     let outline: Vec<(String, usize)> = analysis.outline().into_iter().map(|item| (item.name, item.to)).collect();
-    // The unclosed task ends at its last token.
     let first_end = at(source, "twice\n\ntask", 0) + "twice".len();
     assert_eq!(outline, [("first".to_string(), first_end), ("second".to_string(), at(source, "\nfi", 0) + 3)]);
 }
@@ -333,7 +298,6 @@ fi
 fn diagnostics_cover_the_token_the_error_points_at() {
     assert_eq!(Analysis::new(SHAPES).diagnostics(), []);
 
-    // Non-ASCII text before the error: offsets are UTF-16.
     let source = "task main()\n    show(\"é𝄞\")\n    show(missing)\nfi\n";
     let from = at(source, "missing", 0);
     assert_eq!(
@@ -348,7 +312,6 @@ fn diagnostics_cover_the_token_the_error_points_at() {
         }]
     );
 
-    // An error inside a token covers one character; one at the end of a line covers nothing.
     let escape = "task main()\n    show(\"a\\qb\")\nfi\n";
     let d = &Analysis::new(escape).diagnostics()[0];
     assert_eq!((d.from, d.to), (at(escape, "\\q", 0), at(escape, "\\q", 0) + 1));
@@ -359,8 +322,6 @@ fn diagnostics_cover_the_token_the_error_points_at() {
 
 #[test]
 fn every_mistake_is_marked_where_it_is() {
-    // Three lines with a mistake, in two tasks: each is marked on its own line,
-    // and the lines between them are checked as usual.
     let source = "task twice(n: Nope) -> int\n    <- 2\nfi\n\ntask main()\n    fixed ok = 1\n    show(missing)\n    show(ok + 1)\n    show(gone)\nfi\n";
     let analysis = Analysis::new(source);
     let marks: Vec<(Option<usize>, Option<usize>, String)> =
@@ -373,7 +334,6 @@ fn every_mistake_is_marked_where_it_is() {
             (Some(9), Some(10), "unknown variable 'gone'".to_string()),
         ]
     );
-    // Each marker covers its own word.
     let missing = &analysis.diagnostics()[1];
     assert_eq!((missing.from, missing.to), (at(source, "missing", 0), at(source, "missing", 0) + "missing".len()));
 }
@@ -427,7 +387,6 @@ fn vela_files(dir: &str) -> Vec<PathBuf> {
     files
 }
 
-/// Whether every `${` in a snippet template is closed by a `}`.
 fn balanced_snippet(template: &str) -> bool {
     let mut rest = template;
     while let Some(open) = rest.find("${") {
@@ -439,7 +398,6 @@ fn balanced_snippet(template: &str) -> bool {
     true
 }
 
-/// Runs completion and hover at `offset` and checks the results.
 fn check_cursor(analysis: &Analysis, offset: usize, length: usize, what: &str) {
     let completions = analysis.complete(offset);
     assert!(completions.from <= completions.to && completions.to == offset, "{} at {}: {:?}", what, offset, (completions.from, completions.to));
@@ -452,8 +410,6 @@ fn check_cursor(analysis: &Analysis, offset: usize, length: usize, what: &str) {
     }
 }
 
-/// Runs every request on `source` and checks the results are well formed:
-/// completion and hover at the end, or, if `everywhere`, at every token.
 fn check_well_formed(source: &str, what: &str, everywhere: bool) {
     let analysis = Analysis::new(source);
     let length = source.encode_utf16().count();
@@ -480,7 +436,6 @@ fn check_well_formed(source: &str, what: &str, everywhere: bool) {
             check_cursor(&analysis, token.to, length, what);
         }
     }
-    // A definition always names the same identifier as the name it came from.
     let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable, TokenClass::Region];
     for token in tokens.iter().filter(|t| names.contains(&t.class)) {
         if let Some(target) = analysis.definition(token.from) {
@@ -492,7 +447,6 @@ fn check_well_formed(source: &str, what: &str, everywhere: bool) {
 
 #[test]
 fn every_request_works_on_every_prefix_of_the_examples() {
-    // Every half-typed state of a real program, cut at each token boundary.
     for file in vela_files("examples") {
         let source = fs::read_to_string(&file).unwrap();
         let mut cuts: Vec<usize> = vela::lexer::highlight(&source).iter().flat_map(|t| [t.range.start, t.range.end]).collect();
@@ -507,8 +461,6 @@ fn every_request_works_on_every_prefix_of_the_examples() {
             check_well_formed(&fs::read_to_string(&file).unwrap(), &file.display().to_string(), true);
         }
     }
-    // Every failing fixture has one mistake; files holding several of them at
-    // once, which the checker now reports together, are analyzed as well.
     let fixtures = vela_files("tests/fail");
     for (nth, group) in fixtures.chunks(4).enumerate() {
         let together: String = group
@@ -521,8 +473,7 @@ fn every_request_works_on_every_prefix_of_the_examples() {
     }
 }
 
-/// A fixture as one part of a file holding several: without its `# error:` line,
-/// and with its `main` task named `main{nth}`, since a file has one `main`.
+/// Strips `#` header lines and renames `main` so fixtures can share one file.
 fn one_of_many(source: &str, nth: usize) -> String {
     source
         .lines()
@@ -540,7 +491,6 @@ fn a_call_names_a_task_even_when_a_variable_has_its_name() {
     assert_eq!(class_at(source, "double(4)", 0), TokenClass::Task);
     assert_definition(source, ("double(4)", 0), ("double(n", 0));
     assert_definition(source, ("double)", 0), ("double =", 0));
-    // A variable isn't visible in its own initializer.
     let source = "task main()\n    fixed y = y + 1\nfi\n";
     assert_eq!(Analysis::new(source).definition(at(source, "y + 1", 0)), None);
 }
@@ -605,7 +555,6 @@ fn very_deep_types_are_analyzed_without_a_crash() {
 fn a_variable_on_a_line_with_an_unclosed_brace_is_visible_on_the_next() {
     let source = "shape P\n    x: int\nfi\n\ntask main()\n    fixed p = P { x: 1\n    show(p)\nfi\n";
     assert_definition(source, ("p)", 0), ("p =", 0));
-    // A plan B spanning lines still hides the name inside it.
     let plan_b = "task main()\n    fixed m: maybe int = none\n    fixed n = m { failure e\n        n\n    }\n    show(n)\nfi\n";
     assert_eq!(Analysis::new(plan_b).definition(at(plan_b, "n\n    }", 0)), None);
     assert_definition(plan_b, ("n)", 0), ("n =", 0));

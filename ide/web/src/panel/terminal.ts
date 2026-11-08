@@ -1,6 +1,3 @@
-// A terminal view: xterm.js sized to its element, in the editor's fonts and
-// the current theme's colors. Links open with Ctrl/⌘+click.
-
 import "@xterm/xterm/css/xterm.css";
 
 import { FitAddon } from "@xterm/addon-fit";
@@ -11,10 +8,8 @@ import type { TerminalSize } from "../api/types";
 import { h, hasShortcutModifier, isMac } from "../workbench/dom";
 
 const FONT = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
-/** How long to wait after the last layout change before telling the process its size. */
 const RESIZE_DELAY = 80;
 
-/** xterm.js theme keys and the CSS variables (`--terminal-…`, see styles/panel.css) they come from. */
 const THEME_VARIABLES = {
   background: "bg",
   foreground: "fg",
@@ -42,7 +37,6 @@ const THEME_VARIABLES = {
   scrollbarSliderActiveBackground: "scrollbar-hover",
 } as const satisfies Partial<Record<keyof ITheme, string>>;
 
-/** The current theme's terminal colors; any the stylesheet doesn't define keep xterm.js's default. */
 function currentTheme(): ITheme {
   const style = getComputedStyle(document.documentElement);
   const entries = Object.entries(THEME_VARIABLES)
@@ -51,8 +45,6 @@ function currentTheme(): ITheme {
   return Object.fromEntries(entries) as ITheme;
 }
 
-/** Ctrl/⌘+S, Ctrl/⌘+Shift+S, Ctrl/⌘+P, and Ctrl/⌘+Shift+O, which the workbench handles. */
-/** Opens a link from the terminal, if Ctrl or ⌘ is held and it is a web address. */
 export function openLink(event: MouseEvent, uri: string, open: (uri: string) => void = (u) => void window.open(u, "_blank", "noopener,noreferrer")): boolean {
   if (!(event.ctrlKey || event.metaKey) || !/^https?:\/\//i.test(uri)) return false;
   open(uri);
@@ -66,11 +58,8 @@ export function isWorkbenchShortcut(event: KeyboardEvent, mac = isMac): boolean 
 }
 
 export interface TerminalViewOptions {
-  /** The accessible name, such as "Terminal". */
   label: string;
-  /** Keystrokes and pastes. */
   onData(data: string): void;
-  /** The terminal's size changed (after layout settles). */
   onResize(size: TerminalSize): void;
 }
 
@@ -93,16 +82,13 @@ export class TerminalView {
       cursorInactiveStyle: "none",
       allowProposedApi: false,
       theme: currentTheme(),
-      // Links a program writes with the terminal's hyperlink sequence open like
-      // the addresses found in its text: with Ctrl or ⌘, and only for web addresses.
       linkHandler: { activate: (event, uri) => openLink(event, uri) },
     });
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(
       new WebLinksAddon((event, uri) => openLink(event, uri)),
     );
-    // Saving and the pickers work from a terminal too: xterm.js would send
-    // these keys to the program (Ctrl+S would even pause its output).
+    // Keep save/picker shortcuts out of the PTY (Ctrl+S pauses terminal output).
     this.terminal.attachCustomKeyEventHandler((event) => !isWorkbenchShortcut(event));
     this.terminal.onData((data) => this.options.onData(data));
     new MutationObserver(() => {
@@ -110,12 +96,9 @@ export class TerminalView {
     }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
-  /**
-   * Puts the terminal in its element, once the element is in the page and the
-   * font has loaded (xterm.js measures the font when it opens).
-   */
   open(): Promise<void> {
     this.opening ??= (async () => {
+      // Wait for fonts so xterm.js measures final cell dimensions.
       await Promise.all([document.fonts.load(`13px ${FONT}`), document.fonts.load(`600 13px ${FONT}`)]).catch(() => undefined);
       this.terminal.options.theme = currentTheme();
       this.terminal.open(this.element);
@@ -125,7 +108,6 @@ export class TerminalView {
     return this.opening;
   }
 
-  /** Fits the terminal to its element, if the element is shown, and returns the size. */
   fit(): TerminalSize {
     if (this.element.offsetWidth > 0 && this.element.offsetHeight > 0 && this.fitAddon.proposeDimensions()) {
       this.fitAddon.fit();

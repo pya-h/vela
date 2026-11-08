@@ -1,8 +1,3 @@
-// Each test gets its own vela-studio server on a fresh copy of examples/ (its
-// programs and the folders of modules they include), and
-// fails if the page logs an error (including Content-Security-Policy
-// violations, which the page reports as errors).
-
 import { type ChildProcess, spawn } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,18 +10,13 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const binary = process.env["VELA_STUDIO_BIN"] ?? join(repo, "target", "debug", "vela-studio");
 
 export interface Studio {
-  /** The address vela-studio printed, with its token. */
   url: string;
   workspace: string;
   read(name: string): string;
-  /** Writes a file in the workspace, creating its folders. */
   write(name: string, content: string): void;
-  /** Deletes a file or folder in the workspace. */
   remove(name: string): void;
   exists(name: string): boolean;
-  /** Errors the page logged; checked empty after each test. */
   errors: string[];
-  /** Declares an error the test expects, such as a refused request's log line. */
   allowError(pattern: RegExp): void;
 }
 
@@ -91,7 +81,6 @@ export const test = base.extend<{ studio: Studio }>({
 
 export { expect };
 
-/** Opens the page and waits for the workbench. */
 export async function launch(page: Page, studio: Studio): Promise<void> {
   await page.goto(studio.url);
   await expect(page.locator(".app")).toBeVisible();
@@ -111,13 +100,11 @@ export async function openFile(page: Page, path: string): Promise<void> {
   await expect(page.locator(".cm-content")).toBeVisible();
 }
 
-/** Puts the cursor at the end of 1-based line `line`. */
 export async function cursorAtEndOf(page: Page, line: number): Promise<void> {
   await page.locator(".cm-line").nth(line - 1).click();
   await page.keyboard.press("End");
 }
 
-/** The text a panel terminal ("output" or "terminal") shows. */
 export function terminal(page: Page, view: "output" | "terminal"): Locator {
   return page.locator(`#panel-view-${view} .xterm-rows`);
 }

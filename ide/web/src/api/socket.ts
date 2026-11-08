@@ -1,24 +1,15 @@
-// The WebSocket connecting a terminal view to a session on the server (see
-// ide/server/src/ws.rs): the token goes first, then binary messages carry
-// keystrokes and output, and text messages carry resizes and the exit.
-
 import type { ExitInfo, TerminalSize } from "./types";
 
-/** Close codes the server uses. */
 export const CLOSE_UNAUTHORIZED = 4401;
 export const CLOSE_NO_SESSION = 4404;
 export const CLOSE_REPLACED = 4409;
 
 export interface SessionHandlers {
-  /** Terminal output, starting with what the session printed before connecting. */
   output(data: Uint8Array): void;
-  /** The process ended; the connection closes right after. */
   exit(exit: ExitInfo): void;
-  /** The connection ended without an exit, with the WebSocket close code. */
   lost(code: number): void;
 }
 
-/** The parts of the browser's WebSocket used here, so tests can stand in. */
 export interface SocketLike {
   binaryType: string;
   readonly readyState: number;
@@ -32,7 +23,6 @@ export interface SocketLike {
 const CONNECTING = 0;
 const OPEN = 1;
 
-/** The WebSocket address of a session, on the page's own server. */
 export function sessionUrl(place: { protocol: string; host: string }, id: string): string {
   const scheme = place.protocol === "https:" ? "wss" : "ws";
   return `${scheme}://${place.host}/api/session/${encodeURIComponent(id)}/ws`;
@@ -55,9 +45,7 @@ export class SessionSocket {
   private readonly socket: SocketLike;
   private authenticated = false;
   private ended = false;
-  /** The latest size, sent once connected. */
   private size: TerminalSize | null = null;
-  /** Keystrokes typed while connecting. */
   private readonly queued: Uint8Array<ArrayBuffer>[] = [];
 
   constructor(url: string, token: string, private readonly handlers: SessionHandlers, open: (url: string) => SocketLike = (u) => new WebSocket(u)) {
@@ -77,12 +65,10 @@ export class SessionSocket {
     };
   }
 
-  /** Whether the process has exited or the connection is gone. */
   get isEnded(): boolean {
     return this.ended;
   }
 
-  /** Sends keystrokes (text is sent as UTF-8). */
   send(data: string | Uint8Array<ArrayBuffer>): void {
     if (this.ended) return;
     const bytes = typeof data === "string" ? encoder.encode(data) : data;
@@ -96,10 +82,9 @@ export class SessionSocket {
     if (this.authenticated && this.socket.readyState === OPEN) this.sendResize(size);
   }
 
-  /** Disconnects without reporting anything (the session keeps running until stopped or idle). */
   dispose(): void {
     this.ended = true;
-    // Closing a socket that is still connecting logs an error in browsers; close it once open.
+    // Closing a CONNECTING WebSocket logs a console error in browsers; defer until open.
     if (this.socket.readyState === CONNECTING) {
       this.socket.onopen = () => this.socket.close(1000, "closed by the page");
     } else {

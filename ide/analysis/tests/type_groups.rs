@@ -1,8 +1,3 @@
-//! Type groups in the editor: `P...` among a task's types, `args: P...`,
-//! `(P...) -> R`, and `f(args...)`, highlighted and hovered as they are
-//! declared.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -90,7 +85,6 @@ fn values_named_around_a_group_read_as_declared() {
     assert_eq!(hover(AROUND, "next: (P"), "next: (P..., @r) -> text@r");
     assert_eq!(hover(AROUND, "r: region, args"), "r: region");
     assert_eq!(class(AROUND, "args..., r)"), Some(TokenClass::Parameter));
-    // A task type's region is its own, and no region of the task's.
     assert_eq!(class(AROUND, "a, P...) -> [T]"), Some(TokenClass::Region));
     let source = AROUND.replace("<- next(r, args...)", "<- next(a, args...)");
     let diagnostics = Analysis::new(&source).diagnostics();

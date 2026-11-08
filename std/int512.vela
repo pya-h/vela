@@ -1,15 +1,6 @@
-; std/int512: 512-bit signed integers in two's complement.
-; A program brings it in with `include std/int512 {Int512, int512, zero512}`,
-; then calls arithmetic methods on values (`a.plus(b)`, `a.times(b)`), converts
-; to/from primitive numbers and text (`a.str() at r`, `int512_parse("123") ?`),
-; and tests comparisons (`a.cmp(b)`, `a.less(b)`, `a == b`).
-; Every arithmetic operation adheres strictly to Vela's checked-arithmetic rules:
-; overflow past 512 bits or division by zero immediately stops the program.
+; std/int512: checked two's-complement 512-bit signed integers.
 
-; A shape whose pattern asks for these methods by name answers the operator
-; each names: + calls plus, - calls minus, * calls times, / calls div, % calls
-; rem, a comparison calls cmp and reads its int beside 0, and a negation in
-; front calls neg (see docs/vela.html#operators).
+; Compiler lowers +, -, *, /, %, unary -, and cmp-against-0 comparisons to these methods.
 pattern Numeric<T>
     plus(other: T) -> T
     minus(other: T) -> T
@@ -23,128 +14,100 @@ fi
 shape Int512::Numeric<Int512>
     limbs: [uint64#8]
 
-    ; Adds another 512-bit integer to this one. Stops the program on signed overflow.
     plus(other: Int512) -> Int512
         <- native_add(.this, other)
     fi
 
-    ; Subtracts another 512-bit integer from this one. Stops the program on signed overflow.
     minus(other: Int512) -> Int512
         <- native_sub(.this, other)
     fi
 
-    ; Multiplies this integer by another. Stops the program on signed overflow.
     times(other: Int512) -> Int512
         <- native_mul(.this, other)
     fi
 
-    ; Divides this integer by another, truncating toward zero. Stops the program on
-    ; division by zero or on MIN / -1 overflow.
     div(other: Int512) -> Int512
         <- native_div(.this, other)
     fi
 
-    ; Computes the remainder of division by another integer. Stops the program on
-    ; division by zero.
     rem(other: Int512) -> Int512
         <- native_rem(.this, other)
     fi
 
-    ; Negates this integer (-this). Stops the program on MIN negation overflow.
     neg() -> Int512
         <- native_neg(.this)
     fi
 
-    ; Computes the absolute value of this integer (|this|). Stops the program on MIN overflow.
     abs() -> Int512
         <- native_abs(.this)
     fi
 
-    ; Compares this integer with another: returns -1 if this < other, 0 if this == other,
-    ; and 1 if this > other.
     cmp(other: Int512) -> int
         <- native_cmp(.this, other)
     fi
 
-    ; Whether this integer is strictly less than another.
     less(other: Int512) -> bool
         <- native_cmp(.this, other) < 0
     fi
 
-    ; Converts this integer to an int64. Stops the program if the value does not fit.
     to_int64() -> int64
         <- native_to_int64(.this)
     fi
 
-    ; Converts this integer to a uint64. Stops the program if negative or does not fit.
     to_uint64() -> uint64
         <- native_to_uint64(.this)
     fi
 
-    ; Formats this integer as decimal text into region `r`.
     str(r: region) -> text@r
         <- native_to_text(.this, r)
     fi
 
-    ; Returns an Int512 representing zero.
     shared zero() -> Int512
         <- Int512 { limbs: [0, 0, 0, 0, 0, 0, 0, 0] }
     fi
 
-    ; Returns an Int512 representing one.
     shared one() -> Int512
         <- Int512 { limbs: [1, 0, 0, 0, 0, 0, 0, 0] }
     fi
 
-    ; The smallest 512-bit signed integer (-2 ** 511).
     shared min_value() -> Int512
         flex res = Int512.zero()
         res.limbs[7] = uint64(9223372036854775807) + 1
         <- res
     fi
 
-    ; The largest 512-bit signed integer (2 ** 511 - 1).
     shared max_value() -> Int512
         fixed half = uint64(9223372036854775807)
         fixed max_u64 = half + 1 + half
         <- Int512 { limbs: [max_u64, max_u64, max_u64, max_u64, max_u64, max_u64, max_u64, half] }
     fi
 
-    ; Creates an Int512 from an int64.
     shared from_int(n: int64) -> Int512
         <- native_from_int64(n)
     fi
 
-    ; Creates an Int512 from a uint64.
     shared from_uint(n: uint64) -> Int512
         <- native_from_uint64(n)
     fi
 
-    ; Parses decimal text into an Int512, failing with ParseError if invalid or out of range.
     shared parse(s: text) -> Int512 ~ ParseError
         <- int512_parse(s)
     fi
 fi
 
-; Creates an Int512 initialized to zero.
 task zero512() -> Int512
     <- Int512 { limbs: [0, 0, 0, 0, 0, 0, 0, 0] }
 fi
 
-; Creates an Int512 initialized from a 64-bit signed int.
 task int512(n: int64) -> Int512
     <- native_from_int64(n)
 fi
 
-; Creates an Int512 initialized from a 64-bit unsigned int.
 task int512_from_uint64(n: uint64) -> Int512
     <- native_from_uint64(n)
 fi
 
-; Parses an Int512 from decimal text with optional leading '-' or '+'.
-; Supports base prefixes '0x', '0o', '0b' for hex, octal, and binary.
-; Fails with ParseError.NotANumber if text contains non-digits or is empty.
-; Fails with ParseError.TooLarge if number exceeds 512-bit range.
+; Accepts optional sign and `0x` / `0o` / `0b` prefixes.
 task int512_parse(s: text) -> Int512 ~ ParseError
     fixed status = native_parse_status(s)
     when status == 1
@@ -155,12 +118,10 @@ task int512_parse(s: text) -> Int512 ~ ParseError
     <- native_parse_value(s)
 fi
 
-; Parses an Int512 from text (alternate name for int512_parse).
 task int512_from_text(s: text) -> Int512 ~ ParseError
     <- int512_parse(s)
 fi
 
-; Native limb routines implemented in runtime/vela_rt.h:
 priv native task native_add(a: Int512, b: Int512) -> Int512
 priv native task native_sub(a: Int512, b: Int512) -> Int512
 priv native task native_mul(a: Int512, b: Int512) -> Int512

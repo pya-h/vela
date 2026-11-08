@@ -1,9 +1,3 @@
-//! Text in the editor: its length, `t.len`, its parts, `t[a..b]`, joins,
-//! `str`, and text holding values, `"n = {n}" at r`, with
-//! the compiler's types and with the types read from the declarations while
-//! the file doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -46,8 +40,6 @@ task main()
 fi
 ";
 
-/// `PROGRAM` with `code` at the cursor, and a first line in `main` that
-/// either checks or stops the checker before anything else in `main`.
 fn program(checks: bool, code: &str) -> String {
     let first = if checks { "show(0)" } else { "show(unknown)" };
     PROGRAM.replace("CHECK", first).replace("    @@\n", &format!("    {}\n", code))
@@ -59,7 +51,6 @@ fn completions(marked: &str) -> Vec<CompletionItem> {
     Analysis::new(&source).complete(LineIndex::new(&source).utf16_of(at)).items
 }
 
-/// The code and doc of the hover at the first occurrence of `needle`.
 fn hover(source: &str, needle: &str) -> (String, String) {
     let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
     let hover = Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle));
@@ -96,7 +87,6 @@ fn a_part_of_text_is_text_where_the_text_is_whether_or_not_the_file_checks() {
         assert_eq!(hover(&source, "kept =").0, "fixed kept: text@r", "{}", when);
         assert_eq!(hover(&source, "inside =").0, "fixed inside: text", "{}", when);
     }
-    // A comparison's type comes from the checker.
     assert_eq!(hover(&program(true, "show(0)"), "before =").0, "fixed before: bool");
 }
 
@@ -117,7 +107,6 @@ fn text_completes_its_length_str_and_copy() {
 fn a_misspelled_length_says_what_text_has() {
     let source = "task main()\n    fixed name = \"Ada\"\n    show(name.size)\n    show(name.len())\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
-    // Both lines are wrong, and both are reported: reading the length is no call.
     assert_eq!(
         messages,
         [
@@ -194,7 +183,6 @@ fn names_inside_braces_are_names_like_any() {
     assert_eq!(hover(&source, "count}\" at").0, "fixed count: int");
     let target = analysis.definition(index.utf16_of(inside)).expect("a definition");
     assert_eq!(index.byte_of_utf16(target.from), source.find("count =").unwrap());
-    // The text around the values is text, braces and all; the values are code.
     let line = source.find("\"{name} is").unwrap();
     let classes: Vec<(&str, String)> = analysis
         .tokens()

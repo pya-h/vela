@@ -1,14 +1,7 @@
-//! The words for variables, `fixed` and `flex`, which replaced `bind` and
-//! `hold` (Part 22). The old words are reserved with no use yet: Studio colors
-//! them as keywords, never offers them, and shows the compiler's error where
-//! one is written. `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
 
-/// Every form the words take.
 const PROGRAM: &str = "\
 task bump(flex& n: int)
     n = n + 1
@@ -58,15 +51,12 @@ fn hover(source: &str, needle: &str) -> Option<String> {
     Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).map(|hover| hover.code)
 }
 
-/// The labels completion offers at `@@`.
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").unwrap();
     let source = marked.replacen("@@", "", 1);
     Analysis::new(&source).complete(LineIndex::new(&source).utf16_of(at)).items.into_iter().map(|item| item.label).collect()
 }
 
-/// The one diagnostic of `source`: where it starts, as line and column, and
-/// what it says.
 fn only_error(source: &str) -> (usize, usize, String) {
     let diagnostics = Analysis::new(source).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
@@ -74,7 +64,6 @@ fn only_error(source: &str) -> (usize, usize, String) {
     (d.line.unwrap(), d.col.unwrap(), d.message.clone())
 }
 
-/// Whether `source` has no diagnostics.
 fn checks(source: &str) {
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new(), "{:?}", source);
 }
@@ -159,7 +148,6 @@ fn the_old_words_are_never_offered() {
         assert!(!offered.iter().any(|label| ["hold", "hold&"].contains(&label.as_str())), "{:?}: {:?}", marked, offered);
     }
     assert!(labels("task main()\n    @@\nfi\n").iter().any(|label| label == "fixed"));
-    // Nothing follows a reserved word: the word is the error.
     for marked in ["task main()\n    fixed x = 1\n    bind @@\nfi\n", "task main()\n    fixed x = 1\n    hold @@\nfi\n"] {
         assert!(labels(marked).is_empty(), "{:?}: {:?}", marked, labels(marked));
     }
@@ -170,7 +158,6 @@ fn a_type_that_never_changes_is_asked_for_with_frozen() {
     assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["frozen", "same", "similar", "shown", "ordered"]);
     let source = "shape Box<T: frozen>\n    value: T\nfi\n";
     assert_eq!(class_at(source, "frozen>"), Some(TokenClass::Keyword));
-    // 'fixed' is the word for a variable, so a type can't be asked for it.
     let wrong = "shape Box<T: fixed>\n    value: T\nfi\n";
     let diagnostics = Analysis::new(wrong).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);

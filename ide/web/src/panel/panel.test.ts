@@ -65,7 +65,6 @@ describe("problems", () => {
     const live = [{ path: "a.vela", diagnostics: [diagnostic(3, "unknown variable 'x'")] }];
     const same = collectProblems(live, new Map([["a.vela", failure("vela", "unknown variable 'x'", 3)]]));
     expect(problemCount(same)).toBe(1);
-    // Fixed since the build: the build's error is out of date.
     const fixed = collectProblems([{ path: "a.vela", diagnostics: [] }], new Map([["a.vela", failure("vela", "unknown variable 'x'", 3)]]));
     expect(problemCount(fixed)).toBe(0);
     const closed = collectProblems([], new Map([["a.vela", failure("vela", "unknown variable 'x'", 3)]]));
@@ -82,11 +81,9 @@ describe("problems", () => {
       [7, "error"],
     ]);
     expect(problemCount(files)).toBe(2);
-    // The status bar tells them apart: warnings alone don't stop a build.
     expect(severityCounts(files)).toEqual({ errors: 1, warnings: 1 });
     const warned = collectProblems([{ path: "a.vela", diagnostics: [warning] }], new Map());
     expect(severityCounts(warned)).toEqual({ errors: 0, warnings: 1 });
-    // A build failure is an error.
     const built = collectProblems([], new Map([["b.vela", failure("no-main", "program has no 'main' task")]]));
     expect(built[0]?.problems[0]?.severity).toBe("error");
     expect(severityCounts(built)).toEqual({ errors: 1, warnings: 0 });
@@ -97,7 +94,6 @@ describe("problems", () => {
     const closed = collectProblems([], new Map([["main.vela", inModule]]));
     expect(closed.map((f) => f.path)).toEqual(["lib/geometry.vela"]);
     expect(closed[0]?.problems[0]).toMatchObject({ line: 4, source: "build" });
-    // With the program's file open, its analysis shows the error at the `include`.
     const open = collectProblems([{ path: "main.vela", diagnostics: [diagnostic(1, "lib/geometry.vela:4:5: unknown variable 'x'")] }], new Map([["main.vela", inModule]]));
     expect(problemCount(open)).toBe(1);
   });

@@ -1,9 +1,3 @@
-//! Kind imitation in the editor: `kind AppError::ParseErr & errs.Missing` has
-//! the variants of the kinds it imitates, so the editor hovers, colors and
-//! completes them through it as it does its own, here and from another module.
-//! In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -80,7 +74,6 @@ fn a_kind_hovers_with_the_variants_it_imitates() {
     let source = program("show(e)");
     let (code, _) = hover(&source, "AppError::");
     assert_eq!(code, "kind AppError::ParseErr & errs.Missing\n    Empty ; from ParseErr\n    Bad(place: int) ; from ParseErr\n    NoFile(name: text) ; from Missing\n    Io(code: int)\nfi");
-    // A variant written through the imitating kind is the variant itself.
     let (code, doc) = hover(&source, "Bad(3)");
     assert_eq!(code, "Bad(place: int)");
     assert!(doc.contains("ParseErr"), "{}", doc);
@@ -113,7 +106,6 @@ fn the_variants_a_kind_imitates_are_offered_through_it() {
     for name in ["Empty", "Bad", "NoFile", "Io"] {
         assert!(found.contains(&name.to_string()), "{:?}", found);
     }
-    // A match on a value of it is offered with a case for each.
     let found = completions(&program("ma@@"));
     let matched = found.iter().find(|item| item.label == "match e").expect("a match on e");
     let snippet = matched.snippet.as_deref().unwrap_or_default();

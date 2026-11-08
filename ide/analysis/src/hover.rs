@@ -1,6 +1,3 @@
-//! Hover: a short description of the name under the cursor, written the way
-//! it is declared.
-
 use serde::Serialize;
 
 use crate::TokenClass;
@@ -10,12 +7,9 @@ use vela::ast::Mode;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Hover {
-    /// The range of the hovered name (UTF-16 offsets).
     pub from: usize,
     pub to: usize,
-    /// Vela source describing it, such as `task fib(n: int) -> int`.
     pub code: String,
-    /// A sentence about it, possibly empty.
     pub doc: String,
 }
 
@@ -85,8 +79,6 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ),
 ];
 
-/// What `int("42")` sends when the text is no number: the builtin kind, which a
-/// program reads, passes on, and may send itself, but never declares.
 fn builtin_kind_doc(name: &str) -> Option<(&'static str, &'static str)> {
     match name {
         vela::ast::PARSE_ERROR => Some((
@@ -117,7 +109,6 @@ fn builtin_kind_doc(name: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
-/// The words of `maybe`, error results, and regions, which are easy to forget.
 const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "region",
@@ -196,18 +187,14 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ),
 ];
 
-/// What `@this` is, in a method's header or body.
 const THIS_REGION_DOC: &str = "The region the value this method is called on lives in. The method may send what the value holds there and take values in it, but can't allocate in it, since nothing gives a method the region.";
 
-/// The hover for the classified token covering `byte`, as `(code, doc)` and
-/// the token's byte range.
 pub(crate) fn hover(
     k: &Knowledge,
     byte: usize,
 ) -> Option<((String, String), std::ops::Range<usize>)> {
     let tokens = &k.scan.tokens;
-    // The token under `byte`, or else the one ending there: at the boundary of
-    // `n)`, the name is what a hover means.
+    // Fall back to a token ending at `byte` so hovering right after a name (e.g. before `)`) finds it.
     let under = tokens
         .iter()
         .find(|t| t.range.start <= byte && byte < t.range.end);
@@ -237,14 +224,12 @@ fn hover_token(
             format!("task {}(value: anything with str, …)", text),
             "Writes each value, with nothing between them, then ends the line: show(\"n = \", n) prints n = 5. An array or slice is written [1, 2], a tuple (1, \"a\"), a maybe none or { 4 }, a pointer as its address (0x7ffd…), and text inside any of them in quotes. A shape is written as a literal of the fields any file reads (Point { x: 1, y: 2 }) and a kind as its variant (Circle(1.5)), unless it has a method str of its own, which writes it in a region show makes for the line. show() writes an empty line, and the values are written left to right.".to_string(),
         ),
-        // `.this`: the value the method around it is called on.
         (TokenClass::Keyword, _) if text == vela::ast::THIS_WORD => {
             let owner = owner_around(k, token.range.start);
             let code = owner.map_or_else(|| format!(".{}", text), |owner| format!(".{}: {}", text, owner.name));
             let doc = "The value this method is called on. A kind's method takes it apart with match .this, and a method marked alters may assign it.";
             (code, doc.to_string())
         }
-        // `~`, which gives a type its error side.
         (TokenClass::Operator, _) if text == "~" => (
             "T ~ E".to_string(),
             "A T when it succeeds, or an error E when it fails. Read it with match, is, or a plan B: x { fallback }. Only a task's own error, never a maybe or the value type again.".to_string(),
@@ -253,19 +238,14 @@ fn hover_token(
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
             (code.to_string(), doc.to_string())
         }
-        // The builtin kind that reading a number sends, and its two variants,
-        // which no file declares (see `ast::parse_error_kind`).
         (TokenClass::Type | TokenClass::Variant, None) if builtin_kind_doc(text).is_some() => {
             let (code, doc) = builtin_kind_doc(text)?;
             (code.to_string(), doc.to_string())
         }
-        // `@this` in a method's body, which its header didn't name.
         (TokenClass::Region, None) if text == vela::ast::THIS_WORD => (format!("region {}", text), THIS_REGION_DOC.to_string()),
-        // `xs.len` and `t.len`, which no shape declares.
         (TokenClass::Field, None) if text == "len" => {
             ("len: int".to_string(), "The number of items of an array or slice, or the number of bytes of text.".to_string())
         }
-        // `t.0`: an item of a tuple.
         (TokenClass::Field, None) if text.parse::<usize>().is_ok() => {
             let ty = k.at_byte(token.range.start).and_then(|q| k.type_ending_at(q));
             let code = ty.map_or_else(|| format!("item {}", text), |ty| format!("item {}: {}", text, ty));
@@ -309,8 +289,6 @@ fn hover_token(
     Some((info, token.range.clone()))
 }
 
-/// A pattern's name, written `flex name` when the pattern can assign it,
-/// `bind name` when only its contents may change.
 fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
     match k.pattern_name_mode(at) {
         Mode::Flex => (
@@ -388,7 +366,6 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             };
             let task = parent.map(|p| p.name.as_str()).unwrap_or("?");
             let code = if symbol.detail.is_empty() { symbol.name.clone() } else { format!("{}: {}", symbol.name, symbol.detail) };
-            // Each word joined by `&` is one thing every type given for it allows.
             let allows = match symbol.detail.as_str() {
                 "" => "Its values can be stored, passed, and sent, and nothing else.".to_string(),
                 words => words
@@ -429,17 +406,12 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         SymbolKind::Shape | SymbolKind::Kind => {
             let keyword = if symbol.kind == SymbolKind::Shape { "shape" } else { "kind" };
             let private = if symbol.private { "priv " } else { "" };
-            // The types a shape takes go on its own line, as written; its
-            // fields and a kind's variants each go on a line of their own.
             let takes = if symbol.detail.starts_with('<') || symbol.detail.starts_with(':') { symbol.detail.as_str() } else { "" };
             let mut code = format!("{}{} {}{}\n", private, keyword, symbol.name, takes);
-            // A kind's variants from the kinds it imitates come first, each
-            // saying which kind it is from.
             for (_, variant) in k.members(id, SymbolKind::Variant).filter(|(_, variant)| variant.parent != Some(id)) {
                 let from = variant.parent.and_then(|kind| k.symbol(kind)).map_or("?", |kind| vela::ast::unqualified(&kind.name));
                 code.push_str(&format!("    {}{} ; from {}\n", vela::ast::unqualified(&variant.name), variant.detail, from));
             }
-            // The default methods it has from the patterns it follows.
             let followed = crate::scan::followed_methods(k.symbols(), id, &|written| k.global(written, SymbolKind::Pattern));
             let mut tail = String::new();
             for method in followed.iter().filter_map(|&method| k.symbol(method)).filter(|method| method.default) {
@@ -448,12 +420,10 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 tail.push_str(&format!("    {}{}{} ; from {}\n", alters, method.name, method.detail, from));
             }
             for (_, member) in k.children(id) {
-                // Another file's private members are its own, as completion leaves them out too.
                 if member.kind == SymbolKind::TypeParam || (member.private && symbol.module.is_some()) {
                     continue;
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
-                // A method's own word, `alters` or `shared`, is its intro.
                 let (private, alters) = if member.kind == SymbolKind::Method {
                     (if member.private { "priv ".to_string() } else { String::new() }, member.intro.map_or(String::new(), |word| format!("{} ", word)))
                 } else {
@@ -547,7 +517,6 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             }
         }
         SymbolKind::Variable => match symbol.intro {
-            // `found = each …`: the variable a loop gives its value names it.
             Some(LOOP_NAME) if symbol.detail == "=" => (
                 format!("{} = loop", symbol.name),
                 "The name of a loop, given by the variable the loop gives its value, which 'break' in a loop inside it gives to stop it, as in 'break found = v'.".to_string(),
@@ -601,7 +570,6 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
     })
 }
 
-/// The shape or kind of this file whose block holds `byte`.
 fn owner_around<'a>(k: &Knowledge<'a>, byte: usize) -> Option<&'a crate::scan::Symbol> {
     k.symbols().iter().find(|s| {
         s.module.is_none()
@@ -611,7 +579,6 @@ fn owner_around<'a>(k: &Knowledge<'a>, byte: usize) -> Option<&'a crate::scan::S
     })
 }
 
-/// Whether `byte` is inside a method of this file.
 fn is_in_method(k: &Knowledge, byte: usize) -> bool {
     k.symbols().iter().any(|s| {
         s.module.is_none()
@@ -621,8 +588,6 @@ fn is_in_method(k: &Knowledge, byte: usize) -> bool {
     })
 }
 
-/// The task or method of this file around `byte`, as a message names it:
-/// `task fib`, or `method Counter.step`.
 fn task_around(k: &Knowledge, byte: usize) -> Option<String> {
     let around = |s: &&crate::scan::Symbol| {
         s.module.is_none() && s.range.start <= byte && byte < s.range.end
@@ -646,7 +611,6 @@ fn task_around(k: &Knowledge, byte: usize) -> Option<String> {
         .map(|task| format!("task {}", task.name))
 }
 
-/// For a declaration of another file, which module it is from.
 fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
     match symbol.module.and_then(|m| k.scan.modules.get(m)) {
         Some(module) => {
@@ -662,8 +626,6 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
     }
 }
 
-/// The words a shape's member is declared with before its name, as a hover
-/// writes them: `priv`, `read`, and for a shared field, `shared` and `flex`.
 fn shared_words(member: &Symbol) -> String {
     let private = if member.private { "priv " } else { "" };
     if !member.shared {

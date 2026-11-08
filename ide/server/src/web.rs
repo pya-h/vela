@@ -1,6 +1,3 @@
-//! Embedded in release builds, read from `ide/web/dist` in debug ones;
-//! until the frontend is built, the page explains how.
-
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -18,11 +15,9 @@ use crate::security::{content_security_policy, random_hex};
 #[allow_missing = true]
 struct Frontend;
 
-/// Shown when `ide/web/dist` hasn't been built.
 const NOT_BUILT_PAGE: &str = include_str!("not-built.html");
 const NOT_BUILT_STYLE: &str = include_str!("not-built.css");
 const NOT_BUILT_STYLE_PATH: &str = "vela-studio-not-built.css";
-/// Replaced in HTML pages by a fresh nonce for each response.
 const NONCE_PLACEHOLDER: &str = "__VELA_CSP_NONCE__";
 
 pub async fn serve(State(studio): State<Arc<Studio>>, method: Method, uri: Uri) -> Response {
@@ -36,7 +31,7 @@ pub async fn serve(State(studio): State<Arc<Studio>>, method: Method, uri: Uri) 
     let path = if path.is_empty() { "index.html" } else { path };
     let (body, content_type, cache) = match Frontend::get(path) {
         Some(file) => {
-            // Vite puts content-hashed files in assets/, so they never change.
+            // Vite puts content-hashed files in assets/.
             let cache = if path.starts_with("assets/") {
                 "public, max-age=31536000, immutable"
             } else {

@@ -1,14 +1,9 @@
-/* The window layout: title bar, sidebar with explorer and outline, tabs,
-   editor, and the welcome screen (the panel and status bar are in panel.css). */
-
 .app {
   --sidebar-width: 260px;
   display: grid;
   grid-template-rows: 40px minmax(0, 1fr) 24px;
   height: 100%;
 }
-
-/* Title bar ------------------------------------------------------------------- */
 
 .titlebar {
   display: flex;
@@ -43,8 +38,6 @@
 .titlebar-spacer {
   flex: 1;
 }
-
-/* Workspace grid --------------------------------------------------------------- */
 
 .workspace {
   display: grid;
@@ -98,8 +91,6 @@
   background: var(--accent);
 }
 
-/* Sidebar sections -------------------------------------------------------------------- */
-
 .sidebar-section {
   display: flex;
   flex-direction: column;
@@ -148,8 +139,6 @@
   width: 24px;
   height: 24px;
 }
-
-/* File tree --------------------------------------------------------------------------- */
 
 .tree,
 .outline-list {
@@ -225,8 +214,6 @@
   color: var(--faint);
 }
 
-/* Outline ------------------------------------------------------------------------------- */
-
 .outline-row {
   --depth: 0;
   display: flex;
@@ -263,8 +250,6 @@
   font-size: 11px;
   text-overflow: ellipsis;
 }
-
-/* Tabs and editor -------------------------------------------------------------------------- */
 
 .editor-area {
   display: grid;
@@ -314,7 +299,6 @@
   color: var(--fg);
 }
 
-/* The accent line under the active tab. */
 .tab::after {
   position: absolute;
   right: 0;
@@ -387,7 +371,6 @@
   visibility: visible;
 }
 
-/* Unsaved: a dot, which becomes the close button on hover. */
 .tab.dirty .tab-dot {
   display: block;
   grid-area: 1 / 1;
@@ -410,8 +393,6 @@
   min-height: 0;
   overflow: hidden;
 }
-
-/* Welcome ----------------------------------------------------------------------------------- */
 
 .welcome {
   display: flex;

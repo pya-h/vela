@@ -1,6 +1,3 @@
-//! Running programs and terminals, through a real server on 127.0.0.1 and
-//! its WebSocket protocol (see `src/ws.rs`).
-
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 mod common;
@@ -32,7 +29,6 @@ struct Server {
     dir: TempDir,
 }
 
-/// Starts a server on a free loopback port for a workspace holding `files`.
 async fn server(test: &str, files: &[(&str, &str)], configure: impl FnOnce(&mut Config)) -> Server {
     let dir = TempDir::new(test);
     for (path, content) in files {
@@ -67,7 +63,6 @@ impl Server {
         reply.json()["session"].as_str().unwrap().to_string()
     }
 
-    /// Opens a session's WebSocket from this server's page, without authenticating.
     async fn connect_unauthenticated(&self, id: &str, origin: &str) -> Result<Socket, tokio_tungstenite::tungstenite::Error> {
         let mut request = format!("ws://127.0.0.1:{}/api/session/{}/ws", self.port, id).into_client_request().unwrap();
         request.headers_mut().insert("origin", origin.parse().unwrap());
@@ -81,7 +76,6 @@ impl Server {
         socket
     }
 
-    /// Waits until `condition` holds, failing after a few seconds.
     async fn eventually(&self, what: &str, condition: impl Fn(&Studio) -> bool) {
         for _ in 0..200 {
             if condition(&self.studio) {
@@ -93,7 +87,6 @@ impl Server {
     }
 }
 
-/// What a socket received until the server closed it or `until` matched the output.
 #[derive(Debug, Default)]
 struct Received {
     output: String,
@@ -180,7 +173,6 @@ async fn stop_ends_a_running_program_and_a_new_run_replaces_it() {
     let exit = receive(&mut socket, never).await.exit.unwrap();
     assert!(exit["signal"].is_string(), "{}", exit);
 
-    // Starting a run stops the one before.
     let first = server.run("forever.vela").await;
     let mut first_socket = server.connect(&first).await;
     sleep(Duration::from_millis(200)).await;
@@ -255,20 +247,16 @@ async fn websockets_require_the_token_and_a_known_session() {
     let id = server.terminal().await;
     let origin = format!("http://127.0.0.1:{}", server.port);
 
-    // A wrong token, or anything but the auth message first, is refused.
     for first in [json!({ "type": "auth", "token": "0".repeat(64) }).to_string(), json!({ "type": "resize", "cols": 1, "rows": 1 }).to_string()] {
         let mut socket = server.connect_unauthenticated(&id, &origin).await.unwrap();
         socket.send(Message::text(first)).await.unwrap();
         assert_eq!(receive(&mut socket, never).await.close, Some(4401));
     }
-    // An unknown session.
     let mut socket = server.connect("0123").await;
     assert_eq!(receive(&mut socket, never).await.close, Some(4404));
-    // Another website's page can't even open the socket.
     let refused = server.connect_unauthenticated(&id, "http://evil.example").await;
     assert!(matches!(refused, Err(tokio_tungstenite::tungstenite::Error::Http(ref response)) if response.status() == 403), "{:?}", refused.map(|_| ()));
 
-    // A second connection to a session replaces the first.
     let mut first = server.connect(&id).await;
     sleep(Duration::from_millis(100)).await;
     let _second = server.connect(&id).await;
@@ -280,7 +268,6 @@ async fn idle_sessions_are_stopped_and_removed() {
     let server = server("idle", &[], |config| config.idle_timeout = Duration::from_millis(300)).await;
     let id = server.terminal().await;
     let session = server.studio.sessions.get(&id).unwrap();
-    // Connected sessions stay open, even when quiet.
     let socket = server.connect(&id).await;
     sleep(Duration::from_millis(700)).await;
     assert!(session.is_alive());
@@ -288,7 +275,6 @@ async fn idle_sessions_are_stopped_and_removed() {
     server.eventually("the idle terminal to end", |studio| studio.sessions.get(&id).is_none()).await;
     assert!(!session.is_alive());
 
-    // The same for a session nobody ever connects to.
     let id = server.terminal().await;
     let session = server.studio.sessions.get(&id).unwrap();
     server.eventually("the unconnected terminal to end", |studio| studio.sessions.get(&id).is_none()).await;
@@ -301,7 +287,6 @@ async fn terminals_are_limited() {
     let _first = server.terminal().await;
     let second = server.post("/api/terminal", json!({})).await;
     assert_eq!(second.status, StatusCode::TOO_MANY_REQUESTS);
-    // A run doesn't count as a terminal.
     server.dir.write("hello.vela", HELLO);
     server.run("hello.vela").await;
 }
@@ -336,7 +321,6 @@ async fn a_run_whose_build_fails_still_stops_the_running_program() {
     assert!(receive(&mut socket, never).await.exit.unwrap()["signal"].is_string());
 }
 
-/// Whether a process runs `sleep SECONDS`.
 #[cfg(target_os = "linux")]
 fn sleeping(seconds: &str) -> bool {
     std::fs::read_dir("/proc").unwrap().flatten().any(|entry| {
@@ -372,7 +356,6 @@ async fn a_terminal_that_exited_frees_its_place() {
     let mut socket = server.connect(&first).await;
     socket.send(Message::binary(b"exit\n".to_vec())).await.unwrap();
     assert!(receive(&mut socket, never).await.exit.is_some());
-    // Its session lingers for the page, but a new terminal can start.
     server.terminal().await;
 }
 
@@ -406,11 +389,9 @@ async fn concurrent_runs_leave_one_program_running() {
 async fn a_client_that_stops_reading_doesnt_block_others() {
     let server = server("stalled", &[], |_| {}).await;
     let id = server.terminal().await;
-    // A client that never reads, while the shell writes without end.
     let mut stalled = server.connect(&id).await;
     stalled.send(Message::binary(b"yes\n".to_vec())).await.unwrap();
     sleep(Duration::from_millis(500)).await;
-    // A new connection still gets the output, and replaces the stalled one.
     let mut second = server.connect(&id).await;
     let received = receive(&mut second, |output| output.contains("y\r\ny")).await;
     assert!(received.output.contains('y'));
@@ -442,12 +423,10 @@ async fn shutdown_stops_every_session() {
     assert_eq!(built.len(), 1, "{:?}", built);
     server.studio.sessions.shutdown().await;
     assert!(sessions.iter().all(|session| !session.is_alive()));
-    // The sessions are gone, and so is the built program's folder.
     assert!(server.studio.sessions.get(&run).is_none() && server.studio.sessions.get(&terminal).is_none());
     assert!(!built[0].exists());
 }
 
-/// The folders where this test process built a program called `name`.
 fn built_programs(name: &str) -> Vec<std::path::PathBuf> {
     let prefix = format!("vela-studio-{}-", std::process::id());
     std::fs::read_dir(std::env::temp_dir())

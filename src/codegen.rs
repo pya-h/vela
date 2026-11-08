@@ -4,8 +4,6 @@ use crate::ast::*;
 use crate::check;
 use crate::error::{Error, Result};
 
-/// Accumulates C source line by line and tracks indentation. Appending to a
-/// `String` cannot fail, so no method returns a `Result`.
 #[derive(Default)]
 struct CWriter {
     out: String,
@@ -25,8 +23,6 @@ impl CWriter {
         self.out.push('\n');
     }
 
-    /// Writes `header {` (or just `{` for an empty header) and indents the
-    /// lines that follow.
     fn open(&mut self, header: &str) {
         if header.is_empty() {
             self.line("{");
@@ -36,7 +32,6 @@ impl CWriter {
         self.depth += 1;
     }
 
-    /// Ends the innermost block with `}` followed by `trailer`, as in `} Point;`.
     fn close_with(&mut self, trailer: &str) {
         self.depth = self.depth.saturating_sub(1);
         self.line(&format!("}}{}", trailer));
@@ -46,7 +41,6 @@ impl CWriter {
         self.close_with("");
     }
 
-    /// Ends the innermost block and opens the next one, as in `} else {`.
     fn reopen(&mut self, keyword: &str) {
         self.close_with(&format!(" {} {{", keyword));
         self.depth += 1;
@@ -57,23 +51,8 @@ impl CWriter {
 /// chain in C, which a C compiler nests (see `Generator::gen_when`).
 const ELSE_IF_ARMS: usize = 64;
 
-/// Generates C from a program that has already been checked by
-/// `check::Checker`. Types come from the checker's annotations; the generator
-/// does no type inference of its own. A missing annotation or other broken
-/// checker guarantee is reported as an internal compiler error.
-///
-/// An expression is normally one C expression. One that contains a plan B
-/// (`x { … }`), a change to a slice (`xs.del()`), or a `scan` needs statements, so
-/// generating it writes those statements ("the prelude") before the line that
-/// uses its value; see `gen_operands`.
-///
-/// A `region r` is an arena, `vela__rt__region r[1]`: as an array, `r` is a
-/// pointer to it, like a region parameter. Every block frees the regions it
-/// declared when it closes, and a `<-` frees every region the task declared
-/// before it returns.
+/// Generates ISO C11 from the checked AST; multi-statement expressions emit preludes prior to their host statement.
 pub struct Generator {
-    /// Whether the program writes no notices to standard error, as of a
-    /// startup decorator whose failure it passes over (`--no-notices`).
     quiet: bool,
     w: CWriter,
     temp_counter: u64,
@@ -81,59 +60,26 @@ pub struct Generator {
     /// the item a step reads, `m[k]` in `m[k] += 1`, read through the
     /// address it was found at (see the `Assign` arm of `gen_stmt`).
     replaced: Option<(*const Expr, String)>,
-    /// The C of the value each pipe being written gives its call, the
-    /// innermost last, which its `Piped` is written as (see `gen_pipe`).
     piped: Vec<String>,
     kinds: HashMap<String, KindDef>,
     shapes: HashMap<String, ShapeDef>,
-    /// The shapes and kinds holding text or pointers, whose values a copy
-    /// goes through (see `check::regional_types` and `check::textual_types`).
     copied_through: HashSet<String>,
-    /// The return type of the task being generated.
     ret: Type,
-    /// The regions declared in each block being generated, outermost first.
     regions: Vec<Vec<String>>,
-    /// The names of the task's results, in order, when it names them.
     results: Vec<String>,
-    /// The name of the task being generated, for runtime messages.
     task: String,
-    /// The methods that change the value they are called on, which take it by
-    /// pointer (see `signature`), by the name of the task each is.
     altering: HashSet<String>,
-    /// The names in the task being generated that are pointers to a place,
-    /// read through them: the value a method that alters it is called on, every
-    /// `flex&` parameter, and the references of the blocks being generated.
     pointers: HashSet<String>,
-    /// The parameters of the task being generated that are passed by a hidden
-    /// pointer (see `HIDDEN_ABOVE`), which are in `pointers` too.
     hidden: HashSet<String>,
-    /// For each task, by the name it is generated under, which of its
-    /// parameters are passed by a hidden pointer, in order.
     hidden_params: HashMap<String, Vec<bool>>,
-    /// The C names of the regions the `show` calls being generated make for the
-    /// values written by their own `str`, innermost last (see `gen_show`). A
-    /// `show` nests inside another only through a plan B of one of its values.
     shown: Vec<String>,
-    /// The tasks named as values whose C takes its values otherwise than
-    /// their type does, each given a function that does (see `gen_adapter`).
     adapted: HashSet<String>,
-    /// Where the code being generated is, for a runtime message, when it is
-    /// no task's own: a value worked out where the program starts, as
-    /// `decorator 'route' on task 'home'` (see `location`).
     place: Option<String>,
-    /// The loops around the code being generated, innermost last.
     loops: Vec<LoopLabels>,
-    /// The name `outer =>` gave the loop about to be generated.
     loop_name: Option<String>,
-    /// What the loop about to be generated gives, when it is a value.
     loop_giving: Option<Giving>,
 }
 
-/// A loop in map form being generated (see `ValueLoop`): the temporary
-/// gathering its items, a collection of type `coll_ty`, an array or a slice in
-/// `region`; what each pass gives, `pass_ty`, an item or an item `~` the loop's
-/// failure; and, for an array, the counter of its passes, each pass's item at
-/// its own place, so a pass a `continue` leaves keeps its `none`.
 #[derive(Clone)]
 struct MapAcc {
     acc_name: String,
@@ -143,9 +89,6 @@ struct MapAcc {
     idx_name: String,
 }
 
-/// A loop that gives a value (see `ValueLoop`): the temporary holding it, of
-/// type `ty`, `V ~ LoopResult<B, M>`, and whether its passes give it, each on
-/// its last line, rather than nothing.
 #[derive(Clone)]
 struct Giving {
     result: String,
@@ -206,8 +149,6 @@ impl Generator {
         Self::default()
     }
 
-    /// The generator for a program that writes notices to standard error, or
-    /// none (see `quiet`).
     pub fn with_notices(mut self, notices: bool) -> Self {
         self.quiet = !notices;
         self
@@ -221,15 +162,9 @@ impl Generator {
             if let Item::Task(t) = item
                 && t.owner.as_ref().is_some_and(|owner| owner.alters)
             {
-                // One task is generated for each set of types a method of a
-                // shape that takes them is used with, and each is an item of
-                // its own, so every one of them is listed here.
                 self.altering.insert(t.name.clone());
             }
             match item {
-                // A shape or kind that takes types generates nothing: the one
-                // made for each set of types it is given is generated in its
-                // place (see the checker's `shape_instance` and `kind_instance`).
                 Item::Kind(k) if k.types.is_empty() => {
                     self.kinds.insert(k.name.clone(), k.clone());
                 }
@@ -241,8 +176,6 @@ impl Generator {
                 Item::Task(_) | Item::Macro(_) => {}
             }
         }
-        // Which parameters each task takes by a hidden pointer, known before
-        // any call or declaration is written.
         self.hidden_params.clear();
         for item in items {
             if let Item::Task(t) = item {
@@ -263,7 +196,6 @@ impl Generator {
         self.w.line("#include \"vela_rt.h\"");
         self.w.blank();
 
-        // Macros, each the value the checker computed for it.
         let mut defined = false;
         for item in items {
             if let Item::Macro(m) = item {
@@ -277,10 +209,7 @@ impl Generator {
             self.w.blank();
         }
 
-        // Types. A typedef for every shape, kind, `maybe`, and `or` comes first,
-        // so any type can point to any other (or to itself); then the kinds' tag
-        // enums; then the struct bodies, each after the types it contains by
-        // value.
+        // Emit typedefs, tag enums, then topologically ordered struct bodies so C self-references and embeddings compile.
         for item in items {
             if let Some(name) = type_name(item) {
                 self.w
@@ -295,8 +224,6 @@ impl Generator {
                     .line(&format!("typedef struct {0} {0};", map_entry(ty)));
             }
         }
-        // A task type is a pointer to a function, whose types need only be
-        // declared, as the lines above do.
         for ty in &used.tasks {
             self.gen_task_type(ty);
         }
@@ -325,8 +252,6 @@ impl Generator {
         self.gen_map_helpers(&used);
         self.gen_compares(&used)?;
         self.gen_widens(&used)?;
-        // A slice made of another whose items hold anything in a region is
-        // copied as `copy()` copies (see `gen_new`).
         let mut copied = used.copied.list.clone();
         for slice in used
             .slice_copied
@@ -342,8 +267,6 @@ impl Generator {
         self.gen_closure_helpers(&used);
         self.w.blank();
 
-        // Shared fields: one variable each for the whole program, given its
-        // first value where the program starts.
         let shared: Vec<(String, &SharedField)> = items
             .iter()
             .filter_map(|item| match item {
@@ -364,9 +287,6 @@ impl Generator {
             self.w.blank();
         }
 
-        // Forward declarations for tasks. A generic task generates nothing: one
-        // task per set of types a call gives it is generated in its place (see
-        // the checker's `expand_instances`).
         for item in items {
             if let Item::Task(t) = item
                 && t.types.is_empty()
@@ -422,13 +342,11 @@ impl Generator {
                         "a shared field without its first value",
                     ));
                 };
-                // A wrapper's value worked out here names where it is written.
                 self.place = member.start.clone();
                 let value = self.gen_expr(value)?;
                 self.place = None;
                 self.w.line(&format!("{} = {};", name, value));
             }
-            // The startup decorators, after the shared fields they may fill.
             for item in items {
                 if let Item::Task(t) = item
                     && is_startup(&t.name)
@@ -444,10 +362,6 @@ impl Generator {
         Ok(std::mem::take(&mut self.w.out))
     }
 
-    /// Which parameters a task of type `task` takes by a hidden pointer: each
-    /// that is larger than `HIDDEN_ABOVE`, as a task's plain parameter is. A
-    /// value the task changes through, `flex`, is one C type with a value, since
-    /// a task taking it as a value goes where it is expected.
     fn hidden_of_type(&self, task: &TaskType) -> Vec<bool> {
         task.params
             .iter()
@@ -459,11 +373,7 @@ impl Generator {
             .collect()
     }
 
-    /// The C type of task type `ty`: a pointer to a function taking its values
-    /// as a task takes them, `typedef int64_t (*vela__task__1__int__int)(int64_t);`.
     fn gen_task_type(&mut self, ty: &Type) {
-        // `[@r](int) -> int`: the function, which takes what the lambda keeps
-        // first, and what it keeps, a block of its region.
         if let Type::Closure(closure) = ty {
             let task = &closure.task;
             let hidden = self.hidden_of_type(task);
@@ -506,11 +416,6 @@ impl Generator {
         ));
     }
 
-    /// For each type of a lambda that keeps what it uses, once every type is
-    /// complete: the call of a value of it, `vela__call__closure__…(f, …)`,
-    /// which reads the value once, and the function a plain task value given
-    /// where one is expected runs as, given the task where it keeps its
-    /// copies (see `ExprKind::Kept`).
     fn gen_closure_helpers(&mut self, used: &UsedTypes) {
         for ty in &used.tasks {
             let Type::Closure(closure) = ty else { continue };
@@ -563,11 +468,7 @@ impl Generator {
         }
     }
 
-    /// For task `name`, named as a value, a function taking its values as its
-    /// type does, when the task's own C takes them otherwise: a large `flex`
-    /// or `fixed` parameter is copied into the task, where a task value reads
-    /// it where the caller keeps it, and a native task takes every value as it
-    /// is (see `is_hidden`).
+    /// Emits an ABI wrapper when a named task with hidden-ptr or native ABI is used as a function value.
     fn gen_adapter(&mut self, items: &[Item], name: &str) {
         let Some(t) = items.iter().find_map(|item| match item {
             Item::Task(t) if t.name == name => Some(t),
@@ -575,7 +476,6 @@ impl Generator {
         }) else {
             return;
         };
-        // `.this` of an `alters` method is the caller's place, as `flex&` is.
         let alters = self.altering.contains(name);
         let taken = t
             .params
@@ -622,7 +522,6 @@ impl Generator {
                 _ => format!("v{}", i),
             })
             .collect();
-        // A lambda that keeps what it uses is given what it keeps first.
         let (params, args): (Vec<String>, Vec<String>) = match t.kept {
             Some(_) => (
                 std::iter::once(format!("void* {}", KEPT_PARAM))
@@ -655,8 +554,6 @@ impl Generator {
         self.adapted.insert(name.to_string());
     }
 
-    /// The C value of task `name` named as a value: its function, or the one
-    /// that takes its values as its type does (see `gen_adapter`).
     fn task_value(&self, name: &str) -> String {
         if self.adapted.contains(name) {
             adapter_name(name)
@@ -665,9 +562,6 @@ impl Generator {
         }
     }
 
-    /// `[@r](…) … fi`, the value of lambda `lambda`, which keeps what it uses:
-    /// its function, and a block of region `region` holding the region and a
-    /// copy of each variable it uses (see `check::kept_name`).
     fn gen_closure(&mut self, e: &Expr, lambda: &str, region: &str) -> Result<String> {
         let kept = kept_name(lambda);
         let fields: Vec<Field> = self
@@ -685,7 +579,6 @@ impl Generator {
             let value = if field.ty == Type::Region {
                 c_ident(&field.name)
             } else if field.passing.is_ref() {
-                // A place: the variable's address, as a `flex&` parameter is given.
                 let mut var = Expr::new(ExprKind::Var(field.name.clone()), e.span);
                 var.ty = field.ty.ptr_inner().cloned();
                 format!("({})({})", c_type(&field.ty), self.gen_address(&var)?)
@@ -706,11 +599,7 @@ impl Generator {
         ))
     }
 
-    /// `f(x)`, the call of the task value `callee` holds: the value is read
-    /// first, then the arguments, left to right, each given as the task's type
-    /// takes it.
     fn gen_invoke(&mut self, e: &Expr, callee: &Expr, args: &[Expr]) -> Result<String> {
-        // A lambda that keeps what it uses is called with what it keeps.
         let (task, call) = match callee.ty()? {
             Type::Task(task) => (task.as_ref(), None),
             Type::Closure(closure) => (
@@ -748,15 +637,10 @@ impl Generator {
         Ok(format!("({})({})", function, values.join(", ")))
     }
 
-    /// Which parameters of the task generated as `task` are passed by a
-    /// hidden pointer, in order.
     fn hidden_of(&self, task: &str) -> &[bool] {
         self.hidden_params.get(task).map_or(&[], Vec::as_slice)
     }
 
-    /// Whether parameter `p` of `t` is passed by a hidden pointer: one that
-    /// never changes, of a type larger than `HIDDEN_ABOVE` bytes. A native
-    /// task's C is the runtime's, which takes its values as they are.
     fn is_hidden(&self, t: &TaskDef, p: &Field, alters: bool) -> bool {
         !t.native
             && p.passing == Passing::Copy
@@ -765,8 +649,6 @@ impl Generator {
             && self.c_layout(&p.ty).0 > HIDDEN_ABOVE
     }
 
-    /// The size and alignment, in bytes, of a value of `ty` in the C this
-    /// writes (see `Layout`).
     fn c_layout(&self, ty: &Type) -> (usize, usize) {
         Layout {
             shapes: &self.shapes,
@@ -781,10 +663,6 @@ impl Generator {
         format!("vela__{}__{}", prefix, n)
     }
 
-    /// A name for the region a `show` makes for its line (see `gen_show`). It
-    /// goes where the regions a block declares go, and those are written through
-    /// `c_ident`, which leaves this name as it is: no Vela name holds `__`, so
-    /// no region of a program is called this.
     fn shown_region(&mut self) -> String {
         let n = self.temp_counter;
         self.temp_counter += 1;
@@ -813,7 +691,6 @@ impl Generator {
         self.w.close_with(&format!(" {};", tag_type));
     }
 
-    /// The C a macro's `#define` holds: its value, as a literal of its type.
     fn macro_value(&mut self, value: &Expr) -> Result<String> {
         Ok(match (&value.kind, value.ty()?) {
             (ExprKind::IntLit(i64::MIN), Type::Int) => {
@@ -854,8 +731,6 @@ impl Generator {
     /// `maybe`'s and an `or`'s members are always initialized, so either can be
     /// read.
     fn gen_compound(&mut self, ty: &Type) {
-        // A map: its entries, and the header its values point to (see the
-        // runtime's notes on maps, and `gen_map_helpers`).
         if let Type::Map(key, value, _) = ty {
             self.w.open(&format!("struct {}", map_entry(ty)));
             self.w.line("uint64_t hash;");
@@ -911,12 +786,7 @@ impl Generator {
         self.w.close_with(";");
     }
 
-    /// The hash and the equality of each type of key a map has, then each map
-    /// type's table: made, searched, added to, remade, read, taken from, and
-    /// read out as slices. They are `static inline` and marked as maybe unused,
-    /// so a program that uses only some of them builds without a warning for
-    /// the rest (clang warns of an unused `static inline` function of the
-    /// program itself, not only of a header's).
+    /// Marks generated static inline map helpers MAYBE_UNUSED to suppress unused warnings.
     fn gen_map_helpers(&mut self, used: &UsedTypes) {
         for key in &used.map_keys {
             let (ctype, word) = (c_type(key), type_word(key));
@@ -998,7 +868,6 @@ impl Generator {
             let hash = format!("vela__rt__kept_hash(vela__hash__{}(key))", type_word(key));
             let same = |a: &str| format!("vela__keyeq__{}({}, key)", type_word(key), a);
             let name = |what: &str| item_helper(what, map);
-            // Made, with room for `hint` keys.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline {}* {}(vela__rt__region* r, int64_t hint)",
                 m,
@@ -1024,7 +893,6 @@ impl Generator {
             self.w.line("m->region = r;");
             self.w.line("return m;");
             self.w.close();
-            // The slot holding `key`, or -1.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline int64_t {}(const {}* m, {} key, uint64_t h)",
                 name("map_slot"),
@@ -1046,7 +914,6 @@ impl Generator {
             self.w.line("i = (i + 1) & m->mask;");
             self.w.close();
             self.w.close();
-            // Entry `entry` in the first slot free from its hash on.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline void {}({}* m, uint64_t h, int64_t entry)",
                 name("map_place"),
@@ -1058,8 +925,6 @@ impl Generator {
             self.w.close();
             self.w.line("m->slots[i] = (uint32_t)(entry + 2);");
             self.w.close();
-            // Made again when its entries are full: twice as large when more
-            // than half of them are kept, and in place when half are gone.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline void {}({}* m)",
                 name("map_remake"),
@@ -1094,7 +959,6 @@ impl Generator {
                 .line(&format!("{}(m, m->entries[i].hash, i);", name("map_place")));
             self.w.close();
             self.w.close();
-            // `m[key] = value`: the key's value replaced, or the key added last.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline void {}({}* m, {} key, {} value)",
                 name("map_set"),
@@ -1121,7 +985,6 @@ impl Generator {
             self.w.line("m->used++;");
             self.w.line("m->live++;");
             self.w.close();
-            // `m[key]`, where the value is: the program stops without the key.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline {}* {}({}* m, {} key, const char* at)",
                 v,
@@ -1139,7 +1002,6 @@ impl Generator {
             self.w.close();
             self.w.line("return &m->entries[m->slots[s] - 2].value;");
             self.w.close();
-            // `m[#key]`: the value, or none.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline {} {}(const {}* m, {} key)",
                 maybe,
@@ -1160,7 +1022,6 @@ impl Generator {
                 some("m->entries[m->slots[s] - 2].value")
             ));
             self.w.close();
-            // `m.del(key)`: the key taken out, and its value given, or none.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline {} {}({}* m, {} key)",
                 maybe,
@@ -1183,7 +1044,6 @@ impl Generator {
             self.w.line("m->live--;");
             self.w.line(&format!("return {};", some("entry->value")));
             self.w.close();
-            // `m.has(key)`.
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline bool {}(const {}* m, {} key)",
                 name("map_has"),
@@ -1196,8 +1056,6 @@ impl Generator {
                 hash
             ));
             self.w.close();
-            // `new [K: V]([k: v, …])`: the pairs added in order, so a key
-            // given twice keeps its last value.
             self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {0}* {1}(vela__rt__region* r, int64_t n, {2} const* keys, {3} const* values)", m, name("map_of"), k, v));
             self.w
                 .line(&format!("{}* m = {}(r, n * 2);", m, name("map_new")));
@@ -1207,7 +1065,6 @@ impl Generator {
             self.w.close();
             self.w.line("return m;");
             self.w.close();
-            // `m.keys at r` and `m.values at r`: a slice in `r`, in order.
             for (what, ty, member) in [
                 ("map_keys", &**key, "key"),
                 ("map_values", &**value, "value"),
@@ -1243,8 +1100,6 @@ impl Generator {
         }
     }
 
-    /// Whether `each` goes through a map, `m` or `&m`, or one side of one,
-    /// `m.keys` or `m.values`.
     fn walks_map(&self, items: &Expr) -> bool {
         match &items.kind {
             ExprKind::MapOp { region: None, .. } => true,
@@ -1253,11 +1108,6 @@ impl Generator {
         }
     }
 
-    /// `each` through a map's entries: `name` gets the key (or, through
-    /// `m.values`, the value) and `second` the value. Through `m` or one side
-    /// of it, the entries are those there when the loop started, as many as
-    /// there were, as a slice's items are; through `&m`, the map as it is at
-    /// each pass. An entry taken out is skipped when its turn comes.
     fn gen_each_map(
         &mut self,
         name: &str,
@@ -1345,12 +1195,9 @@ impl Generator {
         Ok(())
     }
 
-    /// The helpers for arrays and slices that the program uses, each a C
-    /// function so that an array or slice given to it is evaluated once.
     fn gen_item_helpers(&mut self, used: &UsedTypes) {
         for ty in &used.lookups {
             let maybe = c_type(&Type::Maybe(Box::new(lookup_item(ty))));
-            // A maybe of a pointer is the pointer, NULL for none.
             let item = lookup_item(ty);
             let (none, some) = if is_pointer(&item) {
                 ("NULL".to_string(), "items[i]".to_string())
@@ -1382,8 +1229,6 @@ impl Generator {
                         .line(&format!("{} const* items = s.items;", c_type(&item)));
                     self.w.line("int64_t len = s.len;");
                 }
-                // `T const*`: the items don't change, whatever they are (a
-                // pointer item stays a pointer to what can change).
                 _ => self.w.open(&format!(
                     "static {} {}({} const* items, int64_t len, int64_t i)",
                     maybe,
@@ -1418,7 +1263,6 @@ impl Generator {
             ));
             self.w
                 .line("vela__rt__part(from, to, s.len, \"slice\", at);");
-            // A part ending where the slice's room is used up can grow into it.
             self.w.line(&format!(
                 "return ({}){{ .items = s.items + from, .len = to - from, .room = s.room }};",
                 ctype
@@ -1443,7 +1287,6 @@ impl Generator {
                 ctype,
                 item_helper("copy", slice)
             ));
-            // The source exists, so its size in bytes can't overflow.
             self.w.line(&format!("{0}* items = vela__rt__region_alloc(r, (size_t)s.len * sizeof({0}), _Alignof({0}));", items));
             self.w.line(&format!(
                 "memcpy(items, s.items, (size_t)s.len * sizeof({}));",
@@ -1498,7 +1341,6 @@ impl Generator {
                 ctype,
                 items
             ));
-            // Any index from 0 to the length: the item goes before item `i`, or last.
             self.w.line("vela__rt__index(i, s->len + 1, at);");
             self.w.line(&format!("{0}* items = vela__rt__items_insert(r, s->items, s->len, &s->room, i, sizeof({0}), _Alignof({0}));", items));
             self.w.line("items[i] = value;");
@@ -1579,11 +1421,6 @@ impl Generator {
         }
     }
 
-    /// The comparisons a program makes that need a function of their own:
-    /// `vela__same__K` for `==` on a kind (its variant, then what it carries,
-    /// each by its own rule) and on a slice (its view), and `vela__similar__K`
-    /// for `~=`, item by item. Each takes the two values' addresses, and all
-    /// are declared before any is defined, since a kind's calls another's.
     fn gen_compares(&mut self, used: &UsedTypes) -> Result<()> {
         for (what, types) in [("same", &used.same), ("similar", &used.similar)] {
             for ty in types {
@@ -1621,7 +1458,6 @@ impl Generator {
                 c_type(ty)
             ));
             match ty {
-                // The same keys, each with similar values, in any order.
                 Type::Map(_, value, _) => {
                     let pointer = is_pointer(value);
                     self.w
@@ -1705,8 +1541,6 @@ impl Generator {
                         self.compare_item("similar", inner, "a->value", "b->value")
                     ));
                 }
-                // Every field but shared ones, `priv` ones too: they are all
-                // part of the value.
                 Type::Named(name, _) if self.shapes.contains_key(name) => {
                     let fields: Vec<Field> = self
                         .shapes
@@ -1743,10 +1577,6 @@ impl Generator {
         Ok(())
     }
 
-    /// Whether two values `a` and `b` of type `ty`, both places, compare, as a
-    /// C test, by `how`: `same` (`==`, each by its own rule) or `similar`
-    /// (`~=`, item by item). A number, a bool, and a pointer compare as C does
-    /// either way, and text by its bytes.
     fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
         match ty {
             _ if ty.is_numeric()
@@ -1754,7 +1584,6 @@ impl Generator {
             {
                 format!("{} == {}", a, b)
             }
-            // `==` on maps is which map: the handle.
             Type::Map(..) if how == "same" => format!("{} == {}", a, b),
             Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
             // A `maybe` of a pointer is the pointer, `NULL` for none.
@@ -1767,7 +1596,6 @@ impl Generator {
                     self.compare_item(how, inner, &format!("{}.value", a), &format!("{}.value", b))
                 )
             }
-            // By where they are: two places are one only when both values are.
             _ if how == "same" && !matches!(ty, Type::Slice(..)) && !self.is_kind(ty) => {
                 format!("(const void*)&{} == (const void*)&{}", a, b)
             }
@@ -1779,9 +1607,6 @@ impl Generator {
         matches!(ty, Type::Named(name, _) if self.kinds.contains_key(name))
     }
 
-    /// Whether `==` compares values of type `ty` by where they are (see the
-    /// checker's `by_place`): an array, a shape, a tuple, and a kind that can
-    /// carry one.
     fn by_place(&self, ty: &Type) -> bool {
         self.by_place_in(ty, &mut Vec::new())
     }
@@ -1803,8 +1628,6 @@ impl Generator {
                     .iter()
                     .flat_map(|variant| &variant.payload)
                     .any(|field| {
-                        // A `maybe` a variant carries compares what it holds (see
-                        // `kind_comparable`), so by that value's own rule.
                         let carried = match &field.ty {
                             Type::Maybe(inner) => inner.as_ref(),
                             other => other,
@@ -1818,9 +1641,6 @@ impl Generator {
         }
     }
 
-    /// For each two kinds a value goes from and to (see `ExprKind::Widen`),
-    /// `vela__widen__A__into__B`, which gives the variant of the second that
-    /// has the name of the first's, carrying the same values.
     fn gen_widens(&mut self, used: &UsedTypes) -> Result<()> {
         for (from, to) in &used.widened {
             let (Type::Named(source, _), Type::Named(target, _)) = (from, to) else {
@@ -1841,7 +1661,6 @@ impl Generator {
             self.w.open("switch (v.tag)");
             let last = kind.variants.len().saturating_sub(1);
             for (i, variant) in kind.variants.iter().enumerate() {
-                // The last one is the rest, so every way through gives a value.
                 let label = if i == last {
                     "default:".to_string()
                 } else {
@@ -1877,8 +1696,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The body of `vela__same__K` or `vela__similar__K` (by `how`) for the
-    /// kind `name`: the same variant, and what it carries compared.
     fn gen_kind_compare(&mut self, name: &str, how: &str) -> Result<()> {
         let Some(kind) = self.kinds.get(name).cloned() else {
             return Err(Error::internal(format!("no kind '{}' to compare", name)));
@@ -1925,10 +1742,6 @@ impl Generator {
         Ok(())
     }
 
-    /// For each type a program copies (`x.copy() at r`), `vela__copied__K`, which
-    /// copies a value into a region; and for each type a copy goes through,
-    /// `vela__fix__K`, which replaces what a value copied byte for byte holds
-    /// in regions with copies (see `vela__rt__copy` in the runtime).
     fn gen_copies(&mut self, copied: &[Type]) {
         let mut fixed: Vec<Type> = Vec::new();
         let mut waiting: Vec<Type> = copied.iter().map(fix_type).collect();
@@ -1972,15 +1785,10 @@ impl Generator {
         }
     }
 
-    /// Whether `new [T](xs)` making a `slice` of another copies at every
-    /// depth, as `copy()` does: where its items hold text, a slice, a map or a
-    /// pointer, so the new slice shares nothing with the one it is made of.
     fn copies_deep(&self, slice: &Type) -> bool {
         self.needs_fix(&fix_type(item_type(slice)))
     }
 
-    /// Whether a value of type `ty` holds anything in a region that a copy
-    /// replaces: text, a slice, or a pointer, directly or by value.
     fn needs_fix(&self, ty: &Type) -> bool {
         match ty {
             Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) => true,
@@ -1992,8 +1800,6 @@ impl Generator {
         }
     }
 
-    /// The types whose values a value of type `ty` holds, directly or behind
-    /// a pointer or slice, which its fix may need to fix too.
     fn fix_parts(&self, ty: &Type) -> Vec<Type> {
         match ty {
             Type::Ptr(inner, _)
@@ -2022,10 +1828,6 @@ impl Generator {
         }
     }
 
-    /// The fix of a map's header just copied into the copy's region: its
-    /// entries up to the last one used, and its slots, copied, and each key and
-    /// value kept copied in turn. Its room ends at its entries, so the next key
-    /// added remakes the table in the new region (see `gen_map_helpers`).
     fn gen_fix_table(&mut self, ty: &Type) {
         let Type::Map(key, value, _) = ty else { return };
         let (header, entry) = (compound_name(ty), map_entry(ty));
@@ -2056,7 +1858,6 @@ impl Generator {
         self.w.close();
     }
 
-    /// `vela__fix__K` for `ty`, which `needs_fix`.
     fn gen_fix(&mut self, ty: &Type) {
         let ctype = c_type(ty);
         self.w.open(&format!(
@@ -2100,8 +1901,6 @@ impl Generator {
                 ));
                 self.w.close();
             }
-            // The header is copied once however many values point to it, so
-            // two names for one map stay one map; its table is copied after.
             Type::Map(..) => {
                 let header = compound_name(ty);
                 self.w.line(&format!(
@@ -2202,10 +2001,6 @@ impl Generator {
         self.w.close();
     }
 
-    /// Reading a number of type `ty` from text: the number, or the reason the
-    /// text was none, as a `ParseError` (see `ast::parse_error_kind`). The
-    /// runtime reads the text and says which; this turns that into the
-    /// `ty ~ ParseError` the program holds.
     fn gen_read_number(&mut self, ty: &Type) {
         let (from, value) = (format!("vela__rt__{}_of_text", type_word(ty)), c_type(ty));
         let or = Type::Or(
@@ -2239,10 +2034,6 @@ impl Generator {
         self.w.close();
     }
 
-    /// Reading a number of type `ty` from input: the number, the input having
-    /// ended, or the line being no number, as an `InputError` (see
-    /// `ast::input_error_kind`). The runtime shows the prompt, reads the line,
-    /// and frees it, so nothing here needs a region.
     fn gen_scan_number(&mut self, ty: &Type) {
         let (from, value) = (format!("vela__rt__{}_of_input", type_word(ty)), c_type(ty));
         let or = Type::Or(
@@ -2271,7 +2062,6 @@ impl Generator {
             tag_value(INPUT_ERROR, ENDED)
         ));
         self.w.close();
-        // The line was no number, and the reason is the one reading text gives.
         self.w.line(&format!(
             "{} why = read == VELA__RT__READ_TOO_LARGE ? {} : {};",
             tag_type(PARSE_ERROR),
@@ -2289,10 +2079,6 @@ impl Generator {
         self.w.close();
     }
 
-    /// The functions that write values as text, for `show` and `str` (see
-    /// `UsedTypes::note_write`): each type's `write` puts a value in a writer,
-    /// and its `text` makes one text of it in a region. All are declared before
-    /// any is defined, since an array's writes its items'.
     fn gen_writers(&mut self, used: &UsedTypes) -> Result<()> {
         for ty in &used.writes {
             self.w.line(&format!(
@@ -2318,7 +2104,6 @@ impl Generator {
                 written_c_type(ty)
             ));
             match ty {
-                // A shape's or kind's own `str` makes the text itself.
                 Type::Named(owner, _) if self.has_own_str(owner) => self
                     .w
                     .line(&format!("return {};", self.own_str_call(owner, "r")?)),
@@ -2343,13 +2128,10 @@ impl Generator {
         Ok(())
     }
 
-    /// Whether the shape or kind `owner` gives its own method `str`.
     fn has_own_str(&self, owner: &str) -> bool {
         self.str_task(owner).is_some()
     }
 
-    /// The task the method `str` of the shape or kind `owner` is (see
-    /// `str_task`).
     fn str_task(&self, owner: &str) -> Option<String> {
         let given = match (self.shapes.get(owner), self.kinds.get(owner)) {
             (Some(shape), _) => shape.given.as_slice(),
@@ -2359,9 +2141,6 @@ impl Generator {
         str_task(owner, given, |task| self.hidden_params.contains_key(task))
     }
 
-    /// A shape's or kind's name as its default text writes it: its own name,
-    /// wherever it is read, and a shape made for types written as given them,
-    /// `Box<int>` (see `ShapeDef::given`).
     fn written_name(&self, name: &str) -> String {
         let given = match (self.shapes.get(name), self.kinds.get(name)) {
             (Some(shape), _) => shape.given.as_slice(),
@@ -2385,8 +2164,6 @@ impl Generator {
         }
     }
 
-    /// The call of the method `str` a shape or kind `owner` gives, on the value
-    /// `v`, into the region `region`.
     fn own_str_call(&self, owner: &str, region: &str) -> Result<String> {
         let method = self
             .str_task(owner)
@@ -2399,9 +2176,6 @@ impl Generator {
         Ok(format!("{}({}, {})", mangle(&method), value, region))
     }
 
-    /// `write` for a value of type `ty`: `[1, 2]` for an array or slice,
-    /// `(1, "a")` for a tuple, `none` or `{ 4 }` for a `maybe`, and what its own
-    /// `str` gives for a shape or kind, made in a region of its own.
     fn gen_writer(&mut self, ty: &Type) -> Result<()> {
         self.w.open(&format!(
             "static void {}(vela__rt__writer* w, {} v)",
@@ -2424,7 +2198,6 @@ impl Generator {
                 self.w.close();
                 self.w.line("VELA__RT__PUT(w, \"]\");");
             }
-            // `["a": 1, "b": 2]`, in the order the keys were added; `[:]` empty.
             Type::Map(key, value, _) => {
                 self.w.open("if (v->live == 0)");
                 self.w.line("VELA__RT__PUT(w, \"[:]\");");
@@ -2481,8 +2254,6 @@ impl Generator {
                 ));
                 self.w.line("vela__rt__region_free(r);");
             }
-            // Without one, a shape is written as a literal of its fields that
-            // any file reads, `Point { x: 1, y: 2 }`.
             Type::Named(name, _) if self.shapes.contains_key(name) => {
                 let fields: Vec<Field> = self
                     .shapes
@@ -2519,8 +2290,6 @@ impl Generator {
                     self.w.line("VELA__RT__PUT(w, \" }\");");
                 }
             }
-            // And a kind as the variant it holds, with the values it carries as
-            // a call gives them, `Circle(1.5)`.
             Type::Named(name, _) if self.kinds.contains_key(name) => {
                 let Some(kind) = self.kinds.get(name).cloned() else {
                     return Err(Error::internal(format!("no kind '{}' to write", name)));
@@ -2595,8 +2364,6 @@ impl Generator {
         self.w.open(&signature(t, alters, &hidden, &|name| {
             self.shapes.contains_key(name)
         }));
-        // A native task's body is the runtime function it stands for, given
-        // its parameters as they are (see `ast::NATIVE`).
         if t.native {
             let function = crate::library::native(&t.name).ok_or_else(|| {
                 Error::internal_at(
@@ -2614,8 +2381,6 @@ impl Generator {
             self.w.close();
             return Ok(());
         }
-        // What a lambda keeps: its region, and a pointer to each copy, which
-        // it reads and changes where it is kept.
         if t.kept.is_some() {
             let kept = kept_name(&t.name);
             let fields: Vec<Field> = self
@@ -2636,7 +2401,6 @@ impl Generator {
                     ));
                     self.w.line(&format!("(void){};", c_ident(&field.name)));
                 } else if field.passing.is_ref() {
-                    // A place the lambda keeps: the variable itself.
                     self.w.line(&format!(
                         "{0} {1} = vela__block->{1};",
                         c_type(&field.ty),
@@ -2696,7 +2460,6 @@ impl Generator {
             Type::Or(value, _) if **value == Type::Nothing => {
                 self.w.line(&format!("return {};", success(&t.ret)));
             }
-            // Reaching the end of a task sends its results as they are.
             _ if !self.results.is_empty() => {
                 let results = self.current_results();
                 self.w.line(&format!("return {};", results));
@@ -2711,11 +2474,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The task running a file's startup decorators, `t`: each call in turn,
-    /// and one that can fail tested: a failure stops the program, or, for one
-    /// written `$d?` (see `TaskDef::passes`), is a notice and the program goes
-    /// on. Either way standard error says which decorator failed on which task,
-    /// and why, unless the program writes no notices and goes on.
     fn gen_startup(&mut self, t: &TaskDef) -> Result<()> {
         self.enter_block();
         for (stmt, passes) in t
@@ -2729,8 +2487,6 @@ impl Generator {
                     "a startup decorator that is no call",
                 ));
             };
-            // A runtime error in its values names the decorator and its task,
-            // not the task the decorators are gathered into.
             if let ExprKind::Call { name, args, .. } = &call.kind {
                 let decorated = match args.first().map(|arg| &arg.kind) {
                     Some(ExprKind::Var(task) | ExprKind::TaskValue(task)) => notice_name(task),
@@ -2784,8 +2540,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The C expression for the task's named results as they are now: the one
-    /// result, or a result struct holding them all.
     fn current_results(&self) -> String {
         let names: Vec<String> = self.results.iter().map(|name| c_ident(name)).collect();
         match names.as_slice() {
@@ -2808,11 +2562,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A block that gives a value, assigned to `into`: its statements, then its
-    /// last line, which is the value. The assignment happens before the block's
-    /// regions are freed, as a plan B's does. Where the last line is a `when` or
-    /// a `match`, its own branches assign it; where every path sends, nothing is
-    /// assigned and the block is generated as it is.
     fn gen_value_block(&mut self, body: &[Stmt], into: &str) -> Result<()> {
         let Some((last, rest)) = body.split_last() else {
             return self.gen_block(body);
@@ -2833,9 +2582,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A `match` or a `when` used as a value: a temporary holds it, every branch
-    /// assigns it, and the temporary is what the expression reads. C has no
-    /// statement that is also a value, so this is the shape `gen_plan_b` uses.
     fn gen_choice(&mut self, e: &Expr, stmt: &Stmt) -> Result<String> {
         let ty = e.ty()?.clone();
         let result = self.fresh_temp("chosen");
@@ -2847,8 +2593,6 @@ impl Generator {
         Ok(result)
     }
 
-    /// The statement a `match` or a `when` used as a value is, generated with
-    /// each of its blocks giving the value into `into`.
     fn gen_branching_value(&mut self, stmt: &Stmt, into: Option<&str>) -> Result<()> {
         match &stmt.kind {
             StmtKind::When(arms, else_b) => self.gen_when(arms, else_b.as_deref(), into),
@@ -2860,9 +2604,6 @@ impl Generator {
         }
     }
 
-    /// Starts a loop, named `name` (which `outer =>` gave it) or not: what a
-    /// `break` or a `continue` in it goes to. Called once what is found before
-    /// the loop starts is found, since a `break` there is not this loop's.
     fn enter_loop(&mut self, (name, giving): (Option<String>, Option<Giving>), has_finally: bool) {
         let (stop, next) = (self.fresh_temp("stop"), self.fresh_temp("next"));
         let ran = if giving.as_ref().is_some_and(|g| g.map_acc.is_some()) {
@@ -2915,15 +2656,10 @@ impl Generator {
         });
     }
 
-    /// The name and what it gives of the loop about to be generated, taken
-    /// before what is found before it starts, which may hold loops of its own.
     fn take_loop(&mut self) -> (Option<String>, Option<Giving>) {
         (self.loop_name.take(), self.loop_giving.take())
     }
 
-    /// The body of a pass of the innermost loop: one that gives a value
-    /// gives it on its last line, or, giving nothing, ends the pass with a
-    /// success.
     fn gen_pass(&mut self, body: &[Stmt]) -> Result<()> {
         let innermost = self.loops.last().cloned();
         if let Some(ran) = innermost.as_ref().and_then(|l| l.ran.as_ref()) {
@@ -2957,10 +2693,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A pass of a loop in map form, `map`, giving `giving`: its item is put at
-    /// the pass's place in an array, or added to a slice; a pass that fails
-    /// makes the loop fail with that failure, and stops it, freeing the regions
-    /// opened in the loop, which is `depth` regions deep.
     fn gen_map_pass(
         &mut self,
         body: &[Stmt],
@@ -3045,10 +2777,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A loop's `finally` block, after its passes, run when the final one
-    /// ended as passes do. It is outside the loop, so the loop's labels are
-    /// put aside meanwhile: a `break` or a `continue` there is the loop
-    /// around it's.
     fn gen_finally(&mut self, finally: &[Stmt]) -> Result<()> {
         let Some(innermost) = self.loops.pop() else {
             return Err(Error::internal_at(
@@ -3082,8 +2810,6 @@ impl Generator {
         generated
     }
 
-    /// A loop that gives a value, the expression `e`: a temporary holds it,
-    /// the failure `Skipped` until a pass gives one.
     fn gen_loop_value(&mut self, e: &Expr, value: &ValueLoop) -> Result<String> {
         let ty = e.ty()?.clone();
         let result = self.fresh_temp("looped");
@@ -3120,8 +2846,6 @@ impl Generator {
         Ok(result)
     }
 
-    /// The failure `tag` of `LoopResult` as a value of `ty`, the type of a loop
-    /// that gives one: `Broke` holding `value`, or `none`.
     fn loop_failure(
         &mut self,
         ty: &Type,
@@ -3182,9 +2906,6 @@ impl Generator {
         self.gen_expr(&typed(ExprKind::Wrap(Box::new(failure)), ty.clone()))
     }
 
-    /// Inside an open `while (1)`: the test of `cond`, which stops the loop
-    /// when it fails, and `body` where it holds, the names its patterns bind
-    /// seen there.
     fn gen_tested_pass(&mut self, cond: &Condition, body: &Block) -> Result<()> {
         if !cond.single() {
             let matched = self.fresh_temp("matched");
@@ -3218,9 +2939,6 @@ impl Generator {
         }
     }
 
-    /// The end of a pass of the innermost loop, inside its C body after the
-    /// pass's regions are freed: where a `continue` goes. A loop written out
-    /// for a group's values ends several passes, each with a label of its own.
     fn end_pass(&mut self) {
         let Some(innermost) = self
             .loops
@@ -3238,19 +2956,12 @@ impl Generator {
         }
     }
 
-    /// Ends the innermost loop, after its C statement: where a `break` goes.
     fn leave_loop(&mut self) {
         if let Some(ended) = self.loops.pop().filter(|ended| ended.stopped) {
             self.w.line(&format!("{}: ;", ended.stop));
         }
     }
 
-    /// `break` (`stop`) or `continue`, of the loop named `name` or the
-    /// innermost: the regions declared inside that loop so far are freed,
-    /// newest first, as a `<-` frees the task's, and a `goto` leaves the pass.
-    /// In a loop that gives a value, a `break` makes it fail with `Broke`,
-    /// holding `value`, and a `continue` with `EndedByContinue`, which a later
-    /// pass replaces.
     fn gen_jump(
         &mut self,
         stop: bool,
@@ -3305,17 +3016,11 @@ impl Generator {
         Ok(())
     }
 
-    /// Starts a block that may declare regions.
     fn enter_block(&mut self) {
         self.regions.push(Vec::new());
     }
 
-    /// Ends the block `block`, freeing the regions it declared, newest first.
-    /// (After a final `<-`, `break`, or `continue`, which free them themselves,
-    /// nothing more runs.)
     fn leave_block(&mut self, block: &[Stmt]) {
-        // A reference is read through its pointer in its own block only: a
-        // block beside it may use the name for a variable of its own.
         for stmt in block {
             if let StmtKind::Binding {
                 names,
@@ -3341,8 +3046,6 @@ impl Generator {
         }
     }
 
-    /// Frees every region the task has declared so far, newest first, before
-    /// a `<-` leaves it. Whether any exist.
     fn free_all_regions(&mut self) -> bool {
         let all: Vec<String> = self.regions.iter().flatten().cloned().collect();
         for region in all.iter().rev() {
@@ -3352,8 +3055,6 @@ impl Generator {
         !all.is_empty()
     }
 
-    /// Generates `stmts`, the first statements of `scope`: a variable declared
-    /// in them counts as read if anything after it in `scope` reads it.
     fn gen_statements(&mut self, stmts: &[Stmt], scope: &[Stmt]) -> Result<()> {
         for (i, stmt) in stmts.iter().enumerate() {
             self.gen_stmt(stmt)?;
@@ -3382,14 +3083,12 @@ impl Generator {
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt.kind {
-            // The checker makes every one the assignment it is.
             StmtKind::Step { .. } => {
                 return Err(Error::internal_at(
                     stmt.span,
                     "a step the checker left as it was",
                 ));
             }
-            // A change to a slice drops the item `del` gives, and a `scan` the line.
             StmtKind::Expr(Expr {
                 kind: ExprKind::Edit { items, op, args },
                 span,
@@ -3407,18 +3106,12 @@ impl Generator {
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                // A plan B that gives no value is all prelude, and one that
-                // does gives a temporary, which the statement drops.
                 if matches!(e.kind, ExprKind::PlanB { .. }) && !expr.is_empty() {
                     self.w.line(&format!("(void){};", expr));
                 } else if !expr.is_empty() {
                     self.w.line(&format!("{};", expr));
                 }
             }
-            // `flex& y = &x`: a pointer to the place, read through it; one that
-            // only reads, `fixed& y = &x`, or a `bind&` of a type with no
-            // contents, may name a value passed by a hidden pointer, which is
-            // `const`.
             StmtKind::Binding {
                 names,
                 mode,
@@ -3443,8 +3136,6 @@ impl Generator {
                         _ if read_only => format!("&{}", self.gen_place(place)?),
                         _ => self.gen_receiver(place)?,
                     };
-                    // `T const*`, which for a pointer type is a pointer to a
-                    // constant pointer, not to what it points to.
                     let constant = if read_only { " const" } else { "" };
                     self.w.line(&format!(
                         "{}{}* {} = {};",
@@ -3473,16 +3164,13 @@ impl Generator {
                     if !bound.parts.is_empty()
                         && bound.leaves().iter().all(|leaf| leaf.name == DISCARD)
                     {
-                        // `(_, _)`: nothing to declare.
                         self.drop_value(&value);
                     } else if !bound.parts.is_empty() {
-                        // The tuple is kept once, and each name takes its item.
                         let tuple = self.fresh_temp("tuple");
                         self.w
                             .line(&format!("{} {} = {};", c_type(ty), tuple, value));
                         self.gen_unpacked(bound, &tuple)?;
                     } else if bound.name == DISCARD {
-                        // Nothing to declare: the value is computed and dropped.
                         self.drop_value(&value);
                     } else {
                         self.w.line(&format!(
@@ -3495,8 +3183,6 @@ impl Generator {
                 }
             }
             StmtKind::Assign(targets, values) => {
-                // The checker guarantees every place is a variable, field, or
-                // deref, all of which generate valid C lvalues.
                 if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice())
                     && let ExprKind::Index(_, index) = &lhs.kind
                     && !matches!(index.kind, ExprKind::Range(..))
@@ -3524,7 +3210,6 @@ impl Generator {
                     && let ExprKind::Index(map, key) = &lhs.kind
                     && let Some(map_ty @ Type::Map(..)) = &map.ty
                 {
-                    // `m[k] = v`: the key's value replaced, or the key added.
                     let helper = item_helper("map_set", &map_ty.without_regions());
                     let [map, key, value] =
                         <[String; 3]>::try_from(self.gen_operands(&[map, key, rhs])?).map_err(
@@ -3592,8 +3277,6 @@ impl Generator {
                 }
             }
             StmtKind::When(arms, else_b) => self.gen_when(arms, else_b.as_deref(), None)?,
-            // A C block of its own: its regions are freed, and the files opened
-            // in them closed, at its end (see `leave_block`).
             StmtKind::Block(body) => {
                 self.w.open("");
                 self.gen_block(body)?;
@@ -3615,8 +3298,6 @@ impl Generator {
                 None,
                 stmt.span,
             )?,
-            // `each v in args` written out: a block for each value, and a
-            // `continue` goes to the end of the one it is in.
             StmtKind::Turns(turns) => {
                 let name = self.take_loop();
                 self.enter_loop(name, false);
@@ -3629,13 +3310,10 @@ impl Generator {
                 self.leave_loop();
             }
             StmtKind::Parted(parted) => {
-                // `{ start; while (1) { test; body; next: step; } stop: }`: the
-                // step runs after a `continue` too, and never after a `break`.
                 let name = self.take_loop();
                 self.w.open("");
                 for (i, item) in parted.start.iter().enumerate() {
                     self.gen_stmt(item)?;
-                    // A name of the loop's own that it only sets is unread in C.
                     if let StmtKind::Binding { names, .. } = &item.kind {
                         for bound in names
                             .iter()
@@ -3674,8 +3352,6 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Loop(cond, body, finally) if !cond.single() => {
-                // `loop m is {x} and x > 0`: each part tested inside the one
-                // before, the body inside them all, and a failed part ends it.
                 let name = self.take_loop();
                 self.enter_loop(name, finally.is_some());
                 let matched = self.fresh_temp("matched");
@@ -3694,8 +3370,6 @@ impl Generator {
                 self.leave_loop();
             }
             StmtKind::Loop(cond, body, finally) => {
-                // The condition is tested inside the loop, so a `break` in
-                // its plan B stops this one.
                 let name = self.take_loop();
                 self.enter_loop(name, finally.is_some());
                 match &cond.pattern {
@@ -3705,7 +3379,6 @@ impl Generator {
                         self.gen_pass(body)?;
                     }
                     None => {
-                        // The condition's prelude runs before every test.
                         self.w.open("while (1)");
                         let c = self.gen_expr(&cond.value)?;
                         self.w.open(&format!("if (!{})", parenthesized(&c)));
@@ -3729,10 +3402,6 @@ impl Generator {
                 self.finish_loop(finally.as_deref())?;
                 self.leave_loop();
             }
-            // `each v in &xs`: the place is found once, and its length and
-            // items are read through it at each pass, as they are then.
-            // `each k, v in m`, `each k in m.keys`, and `each k, v in &m`: the
-            // entries in order, skipping those taken out.
             StmtKind::Each(name, second, items, body, finally) if self.walks_map(items) => {
                 let named = self.take_loop();
                 self.gen_each_map(
@@ -3791,9 +3460,6 @@ impl Generator {
             StmtKind::Each(name, _, items, body, finally)
                 if !matches!(items.kind, ExprKind::Range(..)) =>
             {
-                // What it goes through is found once: an array is copied, and a
-                // slice is a view found then, so the loop goes through the items
-                // where they were when it started, as many as there were.
                 let named = self.take_loop();
                 let ty = items.ty()?.clone();
                 let (item, len) = match &ty {
@@ -3840,9 +3506,6 @@ impl Generator {
             StmtKind::Each(name, _, range, body, finally) => {
                 let named = self.take_loop();
                 let (a, b) = self.gen_range(range)?;
-                // The end of the range is evaluated once, before the first
-                // iteration. (The checker forbids shadowing, so `b` cannot
-                // refer to a different variable called `name`.)
                 let end = self.fresh_temp("end");
                 let name = c_ident(name);
                 self.enter_loop(named, finally.is_some());
@@ -3858,8 +3521,6 @@ impl Generator {
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases, None)?,
             StmtKind::Send(values) if values.is_empty() => {
-                // A task's own regions are freed first; the results are locals,
-                // and can't point into one of them.
                 let results = (!self.results.is_empty()).then(|| self.current_results());
                 self.free_all_regions();
                 match (results, &self.ret) {
@@ -3876,8 +3537,6 @@ impl Generator {
             }
             StmtKind::Send(values) => {
                 let expr = self.gen_sent_value(values, stmt.span)?;
-                // `<- next(n)` in a copy whose `R` is `nothing`: the call runs,
-                // and the task sends nothing.
                 if self.ret == Type::Nothing {
                     if !expr.is_empty() {
                         self.w.line(&format!("{};", expr));
@@ -3889,8 +3548,6 @@ impl Generator {
                 if self.regions.iter().all(Vec::is_empty) {
                     self.w.line(&format!("return {};", expr));
                 } else {
-                    // The value may read memory in the regions, so it is
-                    // computed before they are freed.
                     let result = self.fresh_temp("result");
                     self.w
                         .line(&format!("{} {} = {};", c_type(&self.ret), result, expr));
@@ -3911,10 +3568,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The C expressions for `wanted` values received by a list of names or
-    /// places: one per value, or the members of the result struct of a single
-    /// call that sends them all. Values are evaluated in order, before the
-    /// first of them is stored, so `a, b = b, a` swaps.
     fn gen_value_list(
         &mut self,
         wanted: usize,
@@ -3925,12 +3578,8 @@ impl Generator {
             let operands: Vec<&Expr> = values.iter().collect();
             let mut given = self.gen_operands(&operands)?;
             if wanted > 1 {
-                // Each value is stored before any of them is, since a place
-                // assigned here may be read by a later value.
                 for (value, expr) in given.iter_mut().zip(values) {
                     if matches!(expr.ty()?, Type::Nothing) {
-                        // A call that sends nothing, received by `_`: it runs here
-                        // (or already has, as a prelude, when it wrote nothing).
                         if !value.is_empty() {
                             self.w.line(&format!("{};", value));
                         }
@@ -3945,7 +3594,6 @@ impl Generator {
             }
             return Ok(given);
         }
-        // One call giving every value, or one tuple giving its items.
         let [call] = values else {
             return Err(Error::internal_at(
                 span,
@@ -3972,8 +3620,6 @@ impl Generator {
             .collect())
     }
 
-    /// Declares the names `( … )` takes from the tuple `tuple`, a C expression
-    /// read without effects.
     fn gen_unpacked(&mut self, group: &Bound, tuple: &str) -> Result<()> {
         for (i, part) in group.parts.iter().enumerate() {
             let item = format!("{}.{}", tuple, tuple_member(i));
@@ -3994,9 +3640,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The pointers to the places `target` writes to, with how each is read from
-    /// the value given (a member path of tuples, empty for the value itself),
-    /// found before any value is computed.
     fn gen_target_places(
         &mut self,
         target: &Target,
@@ -4025,18 +3668,13 @@ impl Generator {
         Ok(())
     }
 
-    /// Writes `value`, which is received by a `_`, as a statement that drops it.
     fn drop_value(&mut self, value: &str) {
         if !value.is_empty() {
             self.w.line(&format!("(void){};", parenthesized(value)));
         }
     }
 
-    /// An assignment to several places, or to a single `_`.
     fn gen_multi_assign(&mut self, targets: &[Target], values: &[Expr], span: Span) -> Result<()> {
-        // Every place is found before the values run, since a value may change
-        // what a later place refers to, and a place assigned here may be read
-        // by a later value.
         let mut places = Vec::new();
         for target in targets {
             let mut parts = Vec::new();
@@ -4047,10 +3685,8 @@ impl Generator {
         let given = self.gen_value_list(targets.len(), values, span)?;
         for (((parts, target), value), ty) in places.into_iter().zip(targets).zip(given).zip(types)
         {
-            // A tuple taken apart is kept once, and each place takes its item.
             let value = match target {
                 Target::Tuple(..) if parts.iter().all(|(place, _)| place.is_none()) => {
-                    // `(_, _)`: nothing is written.
                     self.drop_value(&value);
                     continue;
                 }
@@ -4073,8 +3709,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The one C expression a `<-` sends: the value, or a result struct holding
-    /// every value.
     fn gen_sent_value(&mut self, values: &[Expr], span: Span) -> Result<String> {
         if let [only] = values {
             return self.gen_expr(only);
@@ -4103,9 +3737,6 @@ impl Generator {
         ))
     }
 
-    /// The value a `match` or `is` tests, as a C expression that can be
-    /// read several times: a variable is used directly, anything else is
-    /// stored in a temporary first.
     fn gen_subject(&mut self, expr: &Expr) -> Result<String> {
         let value = self.gen_expr(expr)?;
         if matches!(expr.kind, ExprKind::Var(_)) {
@@ -4117,7 +3748,6 @@ impl Generator {
         Ok(subject)
     }
 
-    /// The C condition under which `pattern` matches `subject`, of type `ty`.
     fn pattern_test(&self, ty: &Type, subject: &str, pattern: &Pattern) -> Result<String> {
         let test = match (&pattern.kind, ty) {
             (PatternKind::Any, _) => "1".to_string(),
@@ -4134,7 +3764,6 @@ impl Generator {
             (PatternKind::Variant { tag, .. }, Type::Named(kind, _)) => {
                 format!("{}.tag == {}", subject, tag_value(kind, tag))
             }
-            // A tuple's items always match; the names take them.
             (PatternKind::Tuple(_), _) => "1".to_string(),
             _ => {
                 return Err(Error::internal_at(
@@ -4146,8 +3775,6 @@ impl Generator {
         Ok(test)
     }
 
-    /// Declares the names `pattern` binds from `subject`, of type `ty`, for the
-    /// block `body`.
     fn gen_pattern_bindings(
         &mut self,
         ty: &Type,
@@ -4167,7 +3794,6 @@ impl Generator {
             (PatternKind::Fail(names), Type::Or(_, error)) => {
                 bound_names(names, error, format!("{}.error", subject), &mut bindings);
             }
-            // `(x, y)`: the items of the tuple itself.
             (PatternKind::Tuple(names), _) => {
                 bound_names(names, ty, subject.to_string(), &mut bindings)
             }
@@ -4205,22 +3831,14 @@ impl Generator {
             named = true;
             self.w
                 .line(&format!("{} {} = {};", c_type(&ty), c_ident(name), value));
-            // A pattern must name every value, even ones its block never reads.
             self.use_if_unread(name, body);
         }
-        // A tuple's items always match, so its test reads nothing; with every
-        // item dropped (`is (_, _)`), nothing would read the value at all.
         if !named && matches!(pattern.kind, PatternKind::Tuple(_)) {
             self.w.line(&format!("(void){};", subject));
         }
         Ok(())
     }
 
-    /// Generates a `when`, and the `else when`s after it: as C's `else if`
-    /// where each arm after the first is one condition that needs nothing
-    /// before it and there are at most `ELSE_IF_ARMS`, and otherwise each arm
-    /// in turn, the one that runs going to the end past the rest, so the C
-    /// stays flat however long the chain is.
     fn gen_when(
         &mut self,
         arms: &[WhenArm],
@@ -4255,9 +3873,7 @@ impl Generator {
             self.w.close();
             return Ok(());
         }
-        // Each arm in turn at one depth, however many there are, and the arm
-        // that runs leaves for the end: a C compiler nests an `else if` chain,
-        // and a long one is more than it takes.
+        // Flatten long `else when` chains with `goto` to avoid C compiler `else if` nesting limits.
         let end = self.fresh_temp("when_end");
         for arm in arms {
             self.gen_parts(&arm.cond, &arm.body, &mut |g| {
@@ -4275,7 +3891,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A `when` of one arm, and its `else`.
     fn gen_one_when(
         &mut self,
         cond: &Condition,
@@ -4284,9 +3899,6 @@ impl Generator {
         into: Option<&str>,
     ) -> Result<()> {
         if !cond.single() {
-            // `when m is {x} and x > 0`: each part tested inside the one before
-            // and the block inside them all, so what a part binds is seen after
-            // it; the `else` runs where any part failed.
             let matched = self.fresh_temp("matched");
             if else_b.is_some() {
                 self.w.line(&format!("bool {} = false;", matched));
@@ -4326,10 +3938,6 @@ impl Generator {
         Ok(())
     }
 
-    /// The tests of a condition joined with `and`, each inside the one before,
-    /// with what an `is` binds declared in its own; `inner` writes what runs
-    /// when every part holds, inside them all. A part's statements, such as a
-    /// call's with a plan B, run only when the parts before it held.
     fn gen_parts(
         &mut self,
         cond: &Condition,
@@ -4359,7 +3967,6 @@ impl Generator {
         Ok(())
     }
 
-    /// One branch's block: giving a value into `into`, or plain statements.
     fn gen_branch_block(&mut self, body: &[Stmt], into: Option<&str>) -> Result<()> {
         match into {
             Some(into) => self.gen_value_block(body, into),
@@ -4367,10 +3974,6 @@ impl Generator {
         }
     }
 
-    /// Generates a `match`. On a kind, it is a `switch` on the tag, with `_` as
-    /// `default`; on a `maybe` or `T ~ E`, an `if`/`else` chain whose last case
-    /// needs no test. Each case body gets its own C block, so different cases
-    /// may bind the same names. The matched value is evaluated exactly once.
     fn gen_match(&mut self, expr: &Expr, cases: &[Case], into: Option<&str>) -> Result<()> {
         let ty = expr.ty()?.clone();
         let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
@@ -4392,8 +3995,6 @@ impl Generator {
                     format!("match on unknown kind '{}'", kind_name),
                 ));
             }
-            // Case labels line up with their `switch`, so the switch's own braces
-            // do not indent.
             self.w.line(&format!("switch ({}.tag) {{", subject));
             for case in cases {
                 match &case.pattern.kind {
@@ -4424,7 +4025,6 @@ impl Generator {
                 };
                 match (i, test) {
                     (0, Some(test)) => self.w.open(&format!("if ({})", test)),
-                    // A lone `_`, which never reads the subject.
                     (0, None) => {
                         self.w.open("");
                         self.w.line(&format!("(void){};", subject));
@@ -4474,7 +4074,6 @@ impl Generator {
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let value = self.gen_expr(operand)?;
-            // A variable after the last prelude reads the same value whenever C reads it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
             let in_order =
                 last_prelude.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
@@ -4483,9 +4082,6 @@ impl Generator {
         Ok(values)
     }
 
-    /// What C reads of `operand`, whose C is `value`: kept in a variable of its
-    /// own when `in_order`, so it is worked out before a later operand's
-    /// prelude runs (see `gen_operands`).
     fn operand_value(&mut self, operand: &Expr, value: String, in_order: bool) -> Result<String> {
         let constant = matches!(
             operand.kind,
@@ -4497,8 +4093,6 @@ impl Generator {
                 | ExprKind::NoneLit
                 | ExprKind::Macro { .. }
         );
-        // A value-less operand (`xs.add(v)`, or a call of a task sending
-        // nothing, in a list of values) runs in order as a statement.
         if in_order && *operand.ty()? == Type::Nothing {
             if !value.is_empty() {
                 self.w.line(&format!("{};", value));
@@ -4508,8 +4102,6 @@ impl Generator {
             let tmp = self.fresh_temp("arg");
             let ty = operand.ty()?;
             match &operand.kind {
-                // An address read (`&a == &b`), typed `^T`: only compared, so
-                // kept as one, which a place that never changes gives too.
                 ExprKind::Ref(place)
                     if place
                         .ty
@@ -4518,7 +4110,6 @@ impl Generator {
                 {
                     self.w.line(&format!("const void* {} = {};", tmp, value));
                 }
-                // A place given to a `flex&` parameter is its address.
                 ExprKind::Ref(_) => {
                     self.w
                         .line(&format!("{}* {} = {};", c_type(operand.ty()?), tmp, value))
@@ -4553,8 +4144,6 @@ impl Generator {
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let effect_after = last_effect.is_some_and(|last| i < last);
-            // As in `gen_operands`: before the last operand that may change
-            // something, or that one itself when others follow it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
             let in_order =
                 last_effect.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
@@ -4570,8 +4159,6 @@ impl Generator {
                         .line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
                     values.push(format!("&{}", tmp));
                 } else {
-                    // A copy made where the argument is read, which lasts as long
-                    // as the block, so the call writes no statement of its own.
                     values.push(format!(
                         "&((struct {{ {} value; }}){{ {} }}).value",
                         c_type(operand.ty()?),
@@ -4613,10 +4200,6 @@ impl Generator {
         Ok(values)
     }
 
-    /// Whether `e` is a place in the task's own memory, which only the task
-    /// changes: a local variable (not a reference or a `flex&` parameter, which
-    /// may name memory in a region), a parameter passed by a hidden pointer,
-    /// or a field or an array item of one.
     fn kept_place(&self, e: &Expr) -> bool {
         match &e.kind {
             ExprKind::Var(name) => !self.pointers.contains(name) || self.hidden.contains(name),
@@ -4633,7 +4216,6 @@ impl Generator {
         }
     }
 
-    /// The address of a place `kept_place` accepts.
     fn address_of(&mut self, e: &Expr) -> Result<String> {
         match &e.kind {
             ExprKind::Var(name) if self.hidden.contains(name) => Ok(c_ident(name)),
@@ -4642,9 +4224,6 @@ impl Generator {
         }
     }
 
-    /// The C expression for `e`. Each kind of expression with more to do than
-    /// a word has a function of its own: this function's frame is on the
-    /// stack once per nesting level of an expression.
     fn gen_expr(&mut self, e: &Expr) -> Result<String> {
         if let Some((replaced, text)) = &self.replaced
             && std::ptr::eq(*replaced, e)
@@ -4671,7 +4250,6 @@ impl Generator {
                 };
                 let plain = c_type(&Type::Task(Box::new(closure.task.clone())));
                 let kept = match (region, &value.kind) {
-                    // A task named here: where the program keeps it.
                     (None, ExprKind::TaskValue(name)) => {
                         format!("(void*)&{}", kept_task_name(name))
                     }
@@ -4694,7 +4272,6 @@ impl Generator {
                 ))
             }
             ExprKind::Invoke { callee, args } => self.gen_invoke(e, callee, args),
-            // The checker makes every one the `New` it stands for.
             ExprKind::Shortcut { .. } => Err(Error::internal_at(
                 e.span,
                 "a shortcut the checker left as it was",
@@ -4740,7 +4317,6 @@ impl Generator {
                     )),
                 }
             }
-            // The checker makes every one the `Var` it stands for.
             ExprKind::RegionAfter(_) => Err(Error::internal_at(
                 e.span,
                 "a region written after a call that the checker left as it was",
@@ -4752,13 +4328,7 @@ impl Generator {
             ExprKind::Var(name) if self.pointers.contains(name) => {
                 Ok(format!("(*{})", c_ident(name)))
             }
-            // The place given to a `flex&` parameter: its address, worked out
-            // where the argument is, as its value would be (`gen_operands`
-            // keeps it in order with the others).
             ExprKind::Ref(place) => self.gen_address(place),
-            // The region the `show` being generated makes for the values written
-            // by their own `str`, which has a name of its own in C (see
-            // `gen_show`), so that one `show` inside another keeps its own.
             ExprKind::Var(name) if name == SHOWN => self.shown.last().cloned().ok_or_else(|| {
                 Error::internal_at(e.span, "the region of a 'show' read outside one")
             }),
@@ -4774,8 +4344,6 @@ impl Generator {
                     Type::Map(..) => {
                         format!("{}({}, {})", item_helper("lookup", &key), value, index)
                     }
-                    // An array's items are read where they are, even in a value
-                    // made for the expression, which lasts as long as it does.
                     Type::Array(_, count) => format!(
                         "{}(({}).items, INT64_C({}), {})",
                         item_helper("lookup", &key),
@@ -4794,8 +4362,6 @@ impl Generator {
             ExprKind::Binary(op, l, r) => self
                 .gen_binary(e, *op, l, r)
                 .map(|binary| parenthesized(&binary)),
-            // A value of a kind made for its types is of that kind, which its type
-            // names (see `ExprKind::Construct`).
             ExprKind::Construct {
                 kind, tag, args, ..
             } => {
@@ -4808,16 +4374,12 @@ impl Generator {
             ExprKind::New {
                 ty, value, region, ..
             } => {
-                // The checker settles the region of a `new` that names none
-                // (see `Checker::region_or_default`).
                 let region = region
                     .as_deref()
                     .ok_or_else(|| Error::internal_at(e.span, "a 'new' with no region"))?;
                 self.gen_new(e, ty, value, region)
             }
             ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
-            // Each use of a task taking a group gives its values one by one
-            // (see `Checker::substitute_expr`).
             ExprKind::Spread(_) => Err(Error::internal_at(
                 e.span,
                 "a group's values given on whole outside a task that takes a group",
@@ -4827,7 +4389,6 @@ impl Generator {
                 e.span,
                 "range outside 'each' reached code generation",
             )),
-            // The error value itself; `Wrap` makes it part of a `T ~ E`.
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::Widen(inner) => self.gen_widen(e, inner),
@@ -4847,8 +4408,6 @@ impl Generator {
             ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
-            // The checker turns every method call into the call of the task the
-            // method is (see `Checker::check_method_call`).
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
                 e.span,
                 format!("the method call '{}' reached code generation", name),
@@ -4856,13 +4415,7 @@ impl Generator {
         }
     }
 
-    /// `a + b at region`: the parts, evaluated in order, joined into new text.
-    ///
-    /// Each part is read as it is, so the text is allocated once: text joins as
-    /// the text it is, and a number is written into a buffer on the stack that
-    /// lasts until the join has read it. Other values are made into text first.
     fn gen_join(&mut self, parts: &[Expr], region: &str) -> Result<String> {
-        // What each part reads, and how it becomes text.
         let read: Vec<(&Expr, Option<&str>)> = parts
             .iter()
             .map(|part| match &part.kind {
@@ -4906,7 +4459,6 @@ impl Generator {
         ))
     }
 
-    /// `value.str() at region`, the expression `e`, on a value with `str` built in.
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
         let _ = e;
         let helper = text_function(value.ty()?);
@@ -4914,7 +4466,6 @@ impl Generator {
         Ok(format!("{}({}, {})", helper, c_ident(region), value))
     }
 
-    /// `value.copy() at region`, the expression `e`.
     fn gen_copy(&mut self, e: &Expr, value: &Expr, region: Option<&str>) -> Result<String> {
         let region = region.ok_or_else(|| {
             Error::internal_at(
@@ -4946,12 +4497,6 @@ impl Generator {
         ))
     }
 
-    /// `items.added(…)` or `items.without(…)` at `span`, a copy in `region` made
-    /// with one change: a complete copy of `items`, as `copy()` makes, then the
-    /// change made to it with the helper `add` or `del` uses, or `m[k] = v` and
-    /// `m.del(k)` for a map. A value added is copied into `region` too, so the
-    /// new value shares nothing with what it was made of. The C expression for
-    /// the copy, made in statements before it.
     fn gen_changed(
         &mut self,
         span: Span,
@@ -5046,8 +4591,6 @@ impl Generator {
         Ok(copy)
     }
 
-    /// `value`, a C expression of type `ty`, copied into the region `r` names
-    /// when it holds anything in a region, or as it is.
     fn copied_into(&self, ty: &Type, r: &str, value: &str) -> String {
         if self.needs_fix(&fix_type(ty)) {
             format!("{}({}, {})", copy_helper("copied", ty), r, value)
@@ -5056,10 +4599,6 @@ impl Generator {
         }
     }
 
-    /// `scan(prompt) at region`, at `span`, which it writes as a prelude, so it
-    /// reads in order with the rest of the expression around it: the C
-    /// expression for the `maybe text` it gives, or nothing when it is a
-    /// `statement` of its own.
     fn gen_scan(
         &mut self,
         e: &Expr,
@@ -5070,8 +4609,6 @@ impl Generator {
         let span = e.span;
         let (prompt, typed) = match (args, region) {
             ([prompt], Some(region)) => (prompt, Err(region)),
-            // A typed read names no region, and the type it reads is the value
-            // of the `T ~ InputError` it gives.
             ([prompt, _], None) => match e.ty()? {
                 Type::Or(number, _) => (prompt, Ok((**number).clone())),
                 other => {
@@ -5109,10 +4646,6 @@ impl Generator {
         Ok(line)
     }
 
-    /// `items.add(…)` or `items.del(…)`, at `span`, which it writes as a
-    /// prelude: the C expression for the item `del` gives, or nothing for
-    /// `add`, or when the change is a `statement` of its own. The slice's
-    /// place is found before the arguments are evaluated, as an assignment's.
     fn gen_edit(
         &mut self,
         span: Span,
@@ -5122,7 +4655,6 @@ impl Generator {
         statement: bool,
     ) -> Result<String> {
         let slice = items.ty()?.clone();
-        // `m.del(k)`: the map is its handle, read as any value is.
         if let (Type::Map(_, value, _), [key]) = (&slice, args) {
             let [map, key] = <[String; 2]>::try_from(self.gen_operands(&[items, key])?)
                 .map_err(|_| Error::internal_at(span, "'del' without its map"))?;
@@ -5214,11 +4746,9 @@ impl Generator {
         Ok(item)
     }
 
-    /// `base.field`, or an array's or slice's `len`.
     fn gen_field(&mut self, base: &Expr, field: &str) -> Result<String> {
         let b = self.gen_expr(base)?;
         match base.ty()? {
-            // An array's length is its type's; the array is still read.
             Type::Array(_, count) => {
                 Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count))
             }
@@ -5234,7 +4764,6 @@ impl Generator {
         }
     }
 
-    /// `[a, b, c]`, the expression `e`.
     fn gen_array(&mut self, e: &Expr, values: &[Expr]) -> Result<String> {
         let operands: Vec<&Expr> = values.iter().collect();
         let given = self.gen_operands(&operands)?;
@@ -5245,7 +4774,6 @@ impl Generator {
         ))
     }
 
-    /// `(a, b)`, the expression `e`.
     fn gen_tuple(&mut self, e: &Expr, values: &[Expr]) -> Result<String> {
         let operands: Vec<&Expr> = values.iter().collect();
         let given = self.gen_operands(&operands)?;
@@ -5257,13 +4785,11 @@ impl Generator {
         Ok(format!("(({}){{ {} }})", c_type(e.ty()?), items.join(", ")))
     }
 
-    /// `[value#count]`, the expression `e`.
     fn gen_repeat(&mut self, e: &Expr, value: &Expr) -> Result<String> {
         let value = self.gen_expr(value)?;
         Ok(format!("{}({})", item_helper("fill", e.ty()?), value))
     }
 
-    /// A call of a task, or of `show`, the expression `e`.
     fn gen_call(
         &mut self,
         e: &Expr,
@@ -5277,14 +4803,9 @@ impl Generator {
         if let Some(into) = number_cast(name) {
             return self.gen_number_cast(e, &into, args);
         }
-        // A call of a generic task calls the one made for the types it gives.
         let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
         let called = instance_name(name, &given);
-        // A method that changes the value it is called on is given the place it
-        // is in, found before the arguments are read, as an assignment's is.
-        // The place is found before the arguments are read, unless none of them
-        // can change anything: then its address is an expression, which writes
-        // no statement, so the call is no prelude (see `has_prelude`).
+        // Resolve `alters` receiver place before evaluating arguments unless all trailing arguments are pure.
         let (first, rest) = match args.split_first() {
             // A value made here, `xs.map(f).collect(r)`, is kept in a C array
             // of one, whose name is the address the method changes it at.
@@ -5320,8 +4841,6 @@ impl Generator {
                     .unwrap_or(false)
             })
             .collect();
-        // A method that changes the value it is called on may be given a part
-        // of it to copy, `c.grow(c.big)`, which it must not see change.
         let mut values = if hidden.contains(&true) {
             self.gen_hidden_operands(&rest, &hidden, first.is_none())?
         } else {
@@ -5333,16 +4852,6 @@ impl Generator {
         Ok(format!("{}({})", mangle(&called), values.join(", ")))
     }
 
-    /// `show(a, b, …)`, the expression `e`: each value is written where it is
-    /// read, so the values are written, and anything they do happens, left to
-    /// right. Every value but the last is written without ending the line,
-    /// which the last one does, so `show` of one value is the one call it
-    /// always was; `show()` is the end of a line alone.
-    ///
-    /// A value written by its own `str` makes text, which needs a region: the
-    /// line gets one of its own, freed once it ends, so the text lasts exactly
-    /// as long as writing it takes (see `check::show_with_str`). Every value is
-    /// written as a statement, so the free comes after the last of them.
     fn gen_show(&mut self, e: &Expr, args: &[Expr]) -> Result<String> {
         let shown = args
             .iter()
@@ -5374,7 +4883,6 @@ impl Generator {
         Ok(String::new())
     }
 
-    /// The values of a `show`, each written where it is read (see `gen_show`).
     fn gen_shown(&mut self, e: &Expr, args: &[Expr]) -> Result<()> {
         let Some((last, before)) = args.split_last() else {
             self.w.line("vela__rt__show_line();");
@@ -5389,11 +4897,6 @@ impl Generator {
         Ok(())
     }
 
-    /// `int(x)`, `float(x)`, or `unit(x)`, the expression `e`: a value turned
-    /// into a number. A number turned into its own type is the value itself, a
-    /// bool is 1 or 0 as C makes it, and an int or a unit is a float exactly, as
-    /// a unit is an int. A float turned into an int, and a number turned into a
-    /// unit, can fail, so only they are checked at runtime.
     fn gen_number_cast(&mut self, e: &Expr, into: &Type, args: &[Expr]) -> Result<String> {
         let [value] = args else {
             return Err(Error::internal_at(
@@ -5403,8 +4906,6 @@ impl Generator {
         };
         let from = value.ty()?.clone();
         let expr = self.gen_expr(value)?;
-        // Text is read by the helper generated for the type it gives, which
-        // carries the reason when the text is no number.
         if matches!(from, Type::Text(_)) {
             return Ok(format!("{}({})", read_helper(into), expr));
         }
@@ -5424,8 +4925,6 @@ impl Generator {
             _ => None,
         };
 
-        // A `uint64` past the largest int stops the program before it is
-        // read as an int, then made the whole number type it goes into.
         if from == Type::Uint64 && (into.is_integer() || *into == Type::Char) {
             let whole = format!("vela__rt__int_of_uint({}, {})", expr, at);
             return Ok(match int_cast_helper(into) {
@@ -5467,14 +4966,8 @@ impl Generator {
         ))
     }
 
-    /// The address of the place a method that changes the value it is called on
-    /// is called on, or of one given to a `flex&` parameter, which the checker
-    /// has made sure can change.
     fn gen_receiver(&mut self, value: &Expr) -> Result<String> {
         if let ExprKind::Var(name) = &value.kind {
-            // The value a method is called on is already a pointer in a method
-            // that changes it, and so is a `flex&` parameter, so giving either
-            // on passes the pointer.
             if self.pointers.contains(name) {
                 return Ok(c_ident(name));
             }
@@ -5491,8 +4984,6 @@ impl Generator {
         Ok(pointer)
     }
 
-    /// The address of a place that can change, as an expression that writes no
-    /// statement of its own unless the place's index has a prelude.
     fn gen_address(&mut self, place: &Expr) -> Result<String> {
         match &place.kind {
             ExprKind::Var(_) => self.gen_receiver(place),
@@ -5500,7 +4991,6 @@ impl Generator {
         }
     }
 
-    /// `-operand` or `not operand`, the expression `e`.
     fn gen_unary(&mut self, e: &Expr, op: UnaryOp, operand: &Expr) -> Result<String> {
         let expr = self.gen_expr(operand)?;
         // `-x` on an int overflows only for the smallest int; a
@@ -5531,7 +5021,6 @@ impl Generator {
         Ok(format!("({}{})", op_s, expr))
     }
 
-    /// The variant `tag` of `kind` with its payload `args`, the expression `e`.
     fn gen_construct(&mut self, e: &Expr, kind: &str, tag: &str, args: &[Expr]) -> Result<String> {
         let span = e.span;
         let variant = self
@@ -5572,13 +5061,11 @@ impl Generator {
         ))
     }
 
-    /// `new T(value) at region`, the expression `e`: a pointer, or a slice.
     fn gen_new(&mut self, e: &Expr, ty: &Type, value: &Expr, region: &str) -> Result<String> {
         let span = e.span;
         if let Type::Map(key, item, _) = ty {
             let map = e.ty()?.without_regions();
             let ExprKind::Pairs(pairs) = &value.kind else {
-                // Another map, copied into the region, its keys and values too.
                 let source = self.gen_expr(value)?;
                 return Ok(format!(
                     "{}({}, {})",
@@ -5639,9 +5126,6 @@ impl Generator {
             }
             let source = self.gen_expr(value)?;
             let source = match value.ty()? {
-                // A view of the array, which lives until the copy is made.
-                // The array may be read through a hidden `const` pointer; the
-                // copy only reads the view.
                 Type::Array(_, count) => format!(
                     "(({}){{ .items = ({}*)({}).items, .len = INT64_C({}) }})",
                     c_type(slice),
@@ -5651,8 +5135,6 @@ impl Generator {
                 ),
                 _ => source,
             };
-            // A slice made of another shares nothing with it, at any depth;
-            // one made of the values written holds them as they are.
             if !matches!(value.kind, ExprKind::Array(_)) && self.copies_deep(slice) {
                 return Ok(format!(
                     "{}({}, {})",
@@ -5680,10 +5162,8 @@ impl Generator {
         ))
     }
 
-    /// A shape literal of `name`.
     fn gen_struct_init(&mut self, name: &str, fields: &[FieldInit]) -> Result<String> {
         if fields.is_empty() {
-            // Initializes the placeholder member of an empty shape.
             return Ok(format!("(({}){{ 0 }})", mangle(name)));
         }
         let operands: Vec<&Expr> = fields.iter().map(|field| &field.value).collect();
@@ -5696,8 +5176,6 @@ impl Generator {
         Ok(format!("(({}){{ {} }})", mangle(name), fields.join(", ")))
     }
 
-    /// `xs[i]` or `xs[a..b]`, the expression `e`. `place` is the array `base`
-    /// names as a place, already generated, when `e` is assigned to.
     fn gen_index(
         &mut self,
         e: &Expr,
@@ -5722,7 +5200,6 @@ impl Generator {
                         (array, index)
                     }
                 };
-                // The checker has made sure a constant index is in range.
                 let index = match constant {
                     Some(constant) => constant,
                     None => format!("vela__rt__index({}, INT64_C({}), {})", index, count, at),
@@ -5745,7 +5222,6 @@ impl Generator {
                     .map_err(|_| Error::internal_at(e.span, "an index without its text"))?;
                 Ok(format!("vela__rt__text_at({}, {}, {})", text, index, at))
             }
-            // Where the key's value is in the map's table: a place too.
             Type::Map(..) => {
                 let helper = item_helper("map_at", &base.ty()?.without_regions());
                 let [map, key] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
@@ -5759,7 +5235,6 @@ impl Generator {
         }
     }
 
-    /// `base[from..to]`, the expression `e`: a slice, or a part of text.
     fn gen_slice(&mut self, e: &Expr, base: &Expr, from: &Expr, to: &Expr) -> Result<String> {
         let at = self.location(e.span);
         if matches!(base.ty()?, Type::Text(_)) {
@@ -5774,7 +5249,6 @@ impl Generator {
         let slice = e.ty()?;
         let source = match base.ty()? {
             Type::Array(_, count) => {
-                // The array is in a region: the slice points at its items there.
                 let array = self.gen_place(base)?;
                 let items = if has_prelude(from) || has_prelude(to) {
                     let items = self.fresh_temp("items");
@@ -5820,9 +5294,6 @@ impl Generator {
         ))
     }
 
-    /// A place an assignment writes to, as a C lvalue. An item of an array is
-    /// part of the array's own place, which is found before the index's
-    /// prelude runs, if it has one.
     fn gen_place(&mut self, e: &Expr) -> Result<String> {
         match &e.kind {
             ExprKind::Field(base, field) if matches!(base.ty, Some(Type::Named(..))) => {
@@ -5849,20 +5320,11 @@ impl Generator {
         }
     }
 
-    /// A value becoming part of a `maybe` or `T ~ E`, the type of `e`.
-    /// A value of a kind made a value of a kind imitating it (see
-    /// `ExprKind::Widen`), by the function that does so for the two (see
-    /// `gen_widens`).
     fn gen_widen(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
         let helper = widen_helper(inner.ty()?, e.ty()?);
         Ok(format!("{}({})", helper, self.gen_expr(inner)?))
     }
 
-    /// `a |> f(b)` (see `ExprKind::Pipe`): the value first, in a temporary
-    /// the call's `Piped` is written as, then the call. Where the value can
-    /// fail, the call runs only when it succeeded, and the pipe fails with its
-    /// error otherwise, each error made a value of the one the pipe fails with
-    /// where they differ (see `pipe_widens`).
     fn gen_pipe(&mut self, e: &Expr, call: &Expr) -> Result<String> {
         let value = piped_value(call)
             .ok_or_else(|| Error::internal_at(e.span, "a pipe giving its value to no call"))?;
@@ -5921,7 +5383,6 @@ impl Generator {
                 self.w.close();
             }
             Type::Nothing => {
-                // A call giving nothing is a statement of its own.
                 self.w.line(&format!("{};", called));
                 self.w
                     .line(&format!("{} = ({}){{ .ok = true }};", result, ctype));
@@ -5993,9 +5454,6 @@ impl Generator {
         }
     }
 
-    /// Works out, for what it does, the tuple of `none` read past its end as
-    /// `t.#k` (see `Checker::check_safe_item`), a stop included; `none` itself
-    /// is nothing to.
     fn work_out_none(&mut self, none: &Expr) -> Result<()> {
         if let ExprKind::Field(tuple, _) = &none.kind
             && !without_effects(tuple)
@@ -6006,9 +5464,6 @@ impl Generator {
         Ok(())
     }
 
-    /// A plan B, `value { body }`, the plan B `e`. Its prelude stores `value`,
-    /// then runs `body` if there is nothing to extract; its C expression is the
-    /// temporary holding the result (empty when it gives no value).
     fn gen_plan_b(
         &mut self,
         e: &Expr,
@@ -6035,15 +5490,11 @@ impl Generator {
                 ));
             }
         };
-        // A plan B giving `none` made the whole a `maybe` of what the value
-        // holds: the value when it is there, wrapped.
         let held = match &value_ty {
             Type::Maybe(inner) | Type::Or(inner, _) => &**inner,
             _ => &value_ty,
         };
         let extracted = match &result_ty {
-            // What the value holds may be a maybe itself, when a generic filled
-            // one in (`maybe T` with `T` a `maybe int`).
             Type::Maybe(inner) if inner.without_regions() == held.without_regions() => {
                 match (&value_ty, is_pointer(inner)) {
                     (Type::Maybe(_), _) => subject.clone(),
@@ -6083,7 +5534,6 @@ impl Generator {
             ));
             self.use_if_unread(name, body);
         }
-        // The value is stored before the block's regions are freed.
         match result.is_empty() {
             false => self.gen_value_block(body, &result)?,
             true => self.gen_block(body)?,
@@ -6092,7 +5542,6 @@ impl Generator {
         Ok(result)
     }
 
-    /// A binary operation without surrounding parentheses.
     fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
         // The code generator recurses through operands, so what each kind of
         // operation writes is in a function of its own, keeping little on the
@@ -6111,8 +5560,6 @@ impl Generator {
         self.binary_of(e, op, l, r, left, right)
     }
 
-    /// `l and r` or `l or r`, where `r` has a prelude, which must only run
-    /// when `l` doesn't decide the result.
     fn gen_short_circuit(&mut self, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
         let left = self.gen_expr(l)?;
         let result = self.fresh_temp("cond");
@@ -6129,10 +5576,6 @@ impl Generator {
         Ok(result)
     }
 
-    /// `l == r` or `l != r` of an array, a shape, a tuple, or a kind carrying
-    /// one, compared by where it is: both sides are places (the checker made
-    /// sure), read as their addresses rather than as values, which could be
-    /// copies.
     fn gen_place_equality(&mut self, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
         let not = if op == BinaryOp::Ne { "!" } else { "" };
         let left = self.gen_address(l)?;
@@ -6159,7 +5602,6 @@ impl Generator {
         ))
     }
 
-    /// `l op r` in C, given `left` and `right`, the C of its operands.
     fn binary_of(
         &mut self,
         e: &Expr,
@@ -6178,7 +5620,6 @@ impl Generator {
             op,
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar
         ) {
-            // `m == none` tests a maybe.
             let maybe = match (l.ty()?, r.ty()?) {
                 (Type::Maybe(inner), Type::None) => Some((inner, &left)),
                 (Type::None, Type::Maybe(inner)) => Some((inner, &right)),
@@ -6194,8 +5635,6 @@ impl Generator {
                 });
             }
         }
-        // `&a == &b` and `&a == p`: where the places are. A place that never
-        // changes is `const` in C, so both sides are read as addresses alone.
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
             && [l, r]
                 .into_iter()
@@ -6213,8 +5652,6 @@ impl Generator {
                 other_side(&left, right, "const void*")
             ));
         }
-        // A value compared by a function of its own is given to it by address,
-        // a copy in a compound literal that lasts as long as the expression.
         let by_address =
             |value: &str, ty: &Type| format!("({} const[1]){{ {} }}", c_type(ty), value);
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
@@ -6229,7 +5666,6 @@ impl Generator {
                 by_address(&right, ty)
             ));
         }
-        // Text compares by contents, not by address, alike or similar.
         if matches!(l.ty()?, Type::Text(_))
             && !matches!(
                 op,
@@ -6242,7 +5678,6 @@ impl Generator {
             let ty = l.ty()?;
             let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
-                // A number, a bool, and a pointer are similar when equal.
                 _ if ty.is_numeric()
                     || matches!(ty, Type::Char | Type::Bool | Type::Ptr(..) | Type::Task(_)) =>
                 {
@@ -6269,7 +5704,6 @@ impl Generator {
             });
         }
         if matches!(l.ty()?, Type::Text(_)) {
-            // Text is ordered by its bytes.
             let symbol = match op {
                 BinaryOp::Lt => "<",
                 BinaryOp::Gt => ">",
@@ -6287,7 +5721,6 @@ impl Generator {
                 left, right, symbol
             ));
         }
-        // `**`: an int or unit power is exact and checked, and any other is C's `pow`.
         if op == BinaryOp::Pow {
             // `math.e ** x` is `exp(x)`, which C computes more closely than `pow`.
             if matches!(&l.kind, ExprKind::Macro { name, .. } if name == crate::library::MATH_E) {
@@ -6308,7 +5741,6 @@ impl Generator {
                     parenthesized(&left),
                     parenthesized(&right)
                 ),
-                // A smaller int is raised as an int, and checked to fit.
                 ty => match narrow_of(ty) {
                     Some(narrow) => format!(
                         "{}(vela__rt__pow((int64_t){}, (int64_t){}, {}), {})",
@@ -6326,8 +5758,6 @@ impl Generator {
                 },
             });
         }
-        // A char moved by an int is computed as an int, and checked to be a
-        // char; the distance between two chars is an int, computed below.
         if *e.ty()? == Type::Char {
             let at = self.location(e.span);
             let helper = if op == BinaryOp::Add { "add" } else { "sub" };
@@ -6336,9 +5766,6 @@ impl Generator {
                 helper, left, right, at, at
             ));
         }
-        // Units and the other ints smaller than 64 bits are computed as ints,
-        // where no sum or difference of two of them overflows (a product of
-        // two `uint32`s may, and is checked), and the result is checked to fit.
         if let Some(narrow) = narrow_of(e.ty()?)
             && matches!(
                 op,
@@ -6359,7 +5786,6 @@ impl Generator {
             };
             return Ok(format!("{}({}, {})", narrow, whole, at));
         }
-        // A `uint64` is computed as one, checked by functions of its own.
         if *e.ty()? == Type::Uint64 {
             let helper = match op {
                 BinaryOp::Add => Some("add"),
@@ -6380,7 +5806,6 @@ impl Generator {
             }
         }
         if op == BinaryOp::Mod && e.ty()?.is_float() {
-            // C's `%` is integer-only.
             return Ok(format!("vela__rt__fmod({}, {})", left, right));
         }
         // Two integer literals would be computed in C's `int`, which is often 32
@@ -6435,8 +5860,6 @@ impl Generator {
         Ok(format!("{} {} {}", left, op_s, right))
     }
 
-    /// Where an operation is, for a runtime message: a C string literal
-    /// `"LINE:COL in task 'NAME'"`.
     fn location(&self, span: Span) -> String {
         match &self.place {
             Some(place) => format!(
@@ -6445,7 +5868,6 @@ impl Generator {
                 span.col,
                 escape_c_string(place)
             ),
-            // A lambda has no name a program writes; its place says which.
             None if is_lambda(&self.task) => format!("\"{}:{} in a lambda\"", span.line, span.col),
             None => format!(
                 "\"{}:{} in task '{}'\"",
@@ -6484,7 +5906,6 @@ fn other_side(left: &str, right: String, c_ty: &str) -> String {
     }
 }
 
-/// `text` in parentheses, unless it is a plain name or number.
 fn parenthesized(text: &str) -> String {
     let simple = text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     if simple {
@@ -6498,8 +5919,6 @@ fn is_pointer(ty: &Type) -> bool {
     matches!(ty, Type::Ptr(..))
 }
 
-/// The types of the `wanted` values `values` give: one each, or the several a
-/// call sends, or a tuple's items.
 fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> {
     if values.len() == wanted {
         return values.iter().map(|value| value.ty().cloned()).collect();
@@ -6519,9 +5938,6 @@ fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> 
     }
 }
 
-/// The names `names` binds from the value `value` of type `ty`, each with the
-/// C expression that reads it: one name takes the value, and `(a, b)` reads a
-/// tuple's items.
 fn bound_names<'p>(
     names: &'p Names,
     ty: &Type,
@@ -6546,7 +5962,6 @@ fn bound_names<'p>(
     }
 }
 
-/// The C member holding item `i` of a tuple: `i0`, `i1`, ….
 fn tuple_member(i: usize) -> String {
     format!("i{}", i)
 }
@@ -6555,13 +5970,10 @@ fn result_member(i: usize) -> String {
     format!("r{}", i)
 }
 
-/// The success of a `nothing ~ E` task, as a C compound literal.
 fn success(ret: &Type) -> String {
     format!("(({}){{ .ok = true }})", c_type(ret))
 }
 
-/// The runtime task that writes a value of builtin type `ty`: the one that
-/// ends the line when `ends`, which the last value `show` is given does.
 fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
         Type::Uint64 => "uint",
@@ -6575,9 +5987,6 @@ fn written_helper(ty: &Type, ends: bool) -> String {
 }
 
 impl Generator {
-    /// The statement `show` writes a value `value` of type `ty` with, ending the
-    /// line when `ends`: a number, a bool, or text by the runtime's own helper, and
-    /// anything else through a writer to the output (see `Generator::gen_writer`).
     fn shown(&self, e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
         let written = match ty {
             ty if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Text(_)) => {
@@ -6618,15 +6027,10 @@ impl Generator {
         })
     }
 
-    /// What a task value is written as: its type, `task (int) -> int`, with each
-    /// shape or kind by its own name. A value can't say which task it holds.
     fn task_text(&self, ty: &Type) -> String {
         format!("task {}", ty.map_names(&|name| self.written_name(name)))
     }
 
-    /// The statement that writes `value`, of type `ty`, inside another value: text
-    /// in quotes, a pointer as its address, and anything but a number or a bool
-    /// by its type's `write`.
     fn put_item(&self, ty: &Type, value: &str) -> String {
         match ty {
             Type::Uint64 => format!("vela__rt__put_uint(w, {});", value),
@@ -6646,10 +6050,6 @@ impl Generator {
     }
 }
 
-/// The task the method `str` of the shape or kind `owner` is, when it gives
-/// one, of the tasks `exists` knows: a shape made for the types `given` has
-/// the `str` of the shape it was made from, made for them (`Box__of__int`
-/// has `Box__on__str__of__int`).
 fn str_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Option<String> {
     let own = method_name(owner, STR);
     if exists(&own) {
@@ -6669,8 +6069,6 @@ pub struct Layout<'a> {
 }
 
 impl Layout<'_> {
-    /// The size and alignment, in bytes, of a value of `ty` in the C the
-    /// generator writes, as a 64-bit target lays it out.
     pub fn of(&self, ty: &Type) -> (usize, usize) {
         match ty {
             Type::Int
@@ -6680,7 +6078,6 @@ impl Layout<'_> {
             | Type::None
             | Type::Region
             | Type::Task(_) => (8, 8),
-            // Its function and what it keeps.
             Type::Closure(_) => (16, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
             Type::Int32 | Type::Uint32 | Type::Float32 => (4, 4),
@@ -6715,7 +6112,6 @@ impl Layout<'_> {
                 let Some(kind) = self.kinds.get(name) else {
                     return (8, 8);
                 };
-                // The tag, an enum, and the union of the variants' values.
                 let (mut size, mut align) = (0, 1);
                 for variant in &kind.variants {
                     if !variant.payload.is_empty() {
@@ -6734,7 +6130,6 @@ impl Layout<'_> {
         }
     }
 
-    /// The size and alignment of a C struct of members of the `types`.
     fn struct_layout<'a>(&self, types: impl IntoIterator<Item = &'a Type>) -> (usize, usize) {
         let (mut size, mut align) = (0usize, 1usize);
         for ty in types {
@@ -6746,23 +6141,15 @@ impl Layout<'_> {
     }
 }
 
-/// Whether a parameter the compiler chooses how to give (`x: T`) is given by
-/// where the caller keeps it, for a value of `size` bytes: one larger than
-/// `HIDDEN_ABOVE`.
 pub fn hidden_by_size(size: usize) -> bool {
     size > HIDDEN_ABOVE
 }
 
-/// The generated function that puts a value of type `ty` in a writer.
 fn write_helper(ty: &Type) -> String {
     format!("vela__write__{}", type_word(ty))
 }
 
-/// The generated function that makes a value of type `ty` into text in a
-/// region, `x.str() at r`.
-/// The C type a value of `ty` is given to its `write` and `text` helpers as:
-/// its own, but an address for a pointer, which is only written, and may be
-/// the address of a place that never changes (`"{&x}"`).
+/// Uses `const void*` for pointers so formatting immutable places like `"{&x}"` compiles cleanly.
 fn written_c_type(ty: &Type) -> String {
     match ty {
         Type::Ptr(..) => "const void*".to_string(),
@@ -6770,9 +6157,6 @@ fn written_c_type(ty: &Type) -> String {
     }
 }
 
-/// A task as a notice names it: alone when the program's own file has it, and
-/// after its module's name otherwise (`web.route`, for `lib/web`), so the same
-/// task name in two modules can be told apart, however a file includes them.
 pub(crate) fn notice_name(name: &str) -> String {
     let name = shown_name(name);
     match name.rsplit_once(MODULE_SEPARATOR) {
@@ -6786,10 +6170,6 @@ pub(crate) fn notice_name(name: &str) -> String {
     }
 }
 
-/// The C type a task value's function takes parameter `ty` as, given `how`
-/// (see `Taken`): a place as a pointer, one only read to a `const` place, a
-/// region as the region, and a value as itself, or a pointer to it where it is
-/// `hidden`.
 fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
     match how {
         Taken::Place(Passing::FlexRef | Passing::BindRef) => format!("{}*", c_type(ty)),
@@ -6799,12 +6179,8 @@ fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
     }
 }
 
-/// A task named in a runtime message as the program writes it: a method
-/// through the shape or kind it belongs to, and a wrapper's layer as the task
-/// it wraps (see `ast::layer_name`).
 fn shown_name(name: &str) -> String {
     let name = name.split(LAYER).next().unwrap_or(name);
-    // A copy made for the types a use gives is named as the task it copies.
     let name = name.split("__of__").next().unwrap_or(name);
     match method_parts(name) {
         Some((owner, method)) => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
@@ -6812,8 +6188,6 @@ fn shown_name(name: &str) -> String {
     }
 }
 
-/// The C function making a value of type `ty` text in a region:
-/// `f(region, value)`.
 fn text_function(ty: &Type) -> String {
     match ty {
         Type::Uint64 => "vela__rt__uint_str".to_string(),
@@ -6822,7 +6196,6 @@ fn text_function(ty: &Type) -> String {
         ty if ty.is_float() => "vela__rt__float_str".to_string(),
         Type::Bool => "vela__rt__bool_str".to_string(),
         Type::Text(_) => "vela__rt__text_str".to_string(),
-        // A pointer is its address, written as a writer does.
         other => text_helper(&other.without_regions()),
     }
 }
@@ -6831,20 +6204,14 @@ fn text_helper(ty: &Type) -> String {
     format!("vela__text__{}", type_word(ty))
 }
 
-/// The generated task that reads a number of type `ty` from text: `int("42")`,
-/// `float("2.5")`, and `unit("7")`.
 fn read_helper(ty: &Type) -> String {
     format!("vela__read__{}", type_word(ty))
 }
 
-/// The generated task that reads a number of type `ty` from input:
-/// `scan("Age: ", int)`.
 fn scan_helper(ty: &Type) -> String {
     format!("vela__scan__{}", type_word(ty))
 }
 
-/// Whether the expression contains a plan B, a change to a slice, or a `scan`,
-/// so generating it writes a prelude.
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::Spread(inner) => has_prelude(inner),
@@ -6854,7 +6221,6 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Edit { .. }
         | ExprKind::Scan { .. }
         | ExprKind::Pipe(_) => true,
-        // A temporary its pipe wrote before the call.
         ExprKind::Piped(_) => false,
         ExprKind::IntLit(_)
         | ExprKind::FloatLit(_)
@@ -6874,8 +6240,6 @@ fn has_prelude(e: &Expr) -> bool {
             let all: Vec<&Expr> = std::iter::once(callee.as_ref()).chain(args).collect();
             all.iter().any(|e| has_prelude(e)) || ordered(&all)
         }
-        // `t.#5` past the end of a tuple that changes something to work out:
-        // a statement works it out (see `work_out_none`).
         ExprKind::Field(inner, item)
             if item.starts_with(check::SAFE_ITEM)
                 && e.ty == Some(Type::None)
@@ -6922,8 +6286,6 @@ fn has_prelude(e: &Expr) -> bool {
             fields.iter().any(|field| has_prelude(&field.value))
                 || ordered(&fields.iter().map(|field| &field.value).collect::<Vec<_>>())
         }
-        // The checker rewrites a method call into a call; read as one anyway,
-        // so nothing here depends on that having happened.
         ExprKind::MethodCall { value, args, .. } => {
             has_prelude(value)
                 || args.iter().any(has_prelude)
@@ -6936,9 +6298,6 @@ fn has_prelude(e: &Expr) -> bool {
     }
 }
 
-/// Whether `e` is a value made where it is written, which a method that
-/// changes the value it is called on may be called on (see
-/// `check::altered_part`).
 fn made_here(e: &Expr) -> bool {
     matches!(
         e.kind,
@@ -6949,45 +6308,22 @@ fn made_here(e: &Expr) -> bool {
     )
 }
 
-/// Whether `gen_operands` stores some of `operands` in temporaries to read
-/// them left to right, which is a prelude: one of several may change
-/// something.
 fn ordered(operands: &[&Expr]) -> bool {
     operands.len() > 1 && operands.iter().any(|e| !changes_nothing(e))
 }
 
-/// The `maybe`, `or`, array, and slice types a program uses, which each need a
-/// C struct, and the helpers it needs for them: `show` for a `maybe`, and
-/// writing one before another value of the same `show`; for a
-/// slice, reading an item, slicing, copying into a region, and filling one; for
-/// an array, filling it. Types are kept without regions.
 struct UsedTypes {
     compounds: TypeList,
-    /// The types whose values are written as text through a generated
-    /// `write` (see `note_write`), each after the types inside it.
     writes: TypeList,
-    /// The types whose values `str` makes into text through a generated
-    /// `text`: those with a `write`, and shapes and kinds with their own `str`.
     texts: TypeList,
-    /// For each shape or kind without its own `str`, the types its default
-    /// text writes: a shape's fields that aren't `priv`, a kind's payloads.
     parts: HashMap<String, Vec<Type>>,
-    /// The numbers read from text, `int("42")` and `float("2.5")`, each of which
-    /// needs the helper that turns what the runtime reads into a value or a
-    /// `ParseError`.
     read: TypeList,
-    /// The numbers read from input, `scan("Age: ", int)`, each of which needs the
-    /// helper that turns what the runtime reads into a value or an `InputError`.
     scanned: TypeList,
     slice_at: TypeList,
-    /// The types of the maps' keys, each tuple after its items.
     map_keys: TypeList,
-    /// The values read with a lookup that gives none out of range, `t.at(i)`.
     lookups: TypeList,
     slice_part: TypeList,
     slice_copy: TypeList,
-    /// The slices made of another slice or array, `new [T](xs)`, which copy
-    /// at every depth where their items hold anything in a region.
     slice_copied: TypeList,
     slice_fill: TypeList,
     slice_add: TypeList,
@@ -6995,36 +6331,19 @@ struct UsedTypes {
     slice_del: TypeList,
     slice_pop: TypeList,
     array_fill: TypeList,
-    /// The types of the values the program copies with `copy()`.
     copied: TypeList,
-    /// The kinds and slices `==` compares by a function of its own (see
-    /// `Generator::gen_compares`), and the kinds those kinds carry.
     same: TypeList,
-    /// The types `~=` compares item by item, and the types inside them.
     similar: TypeList,
-    /// Each shape's fields, every one, and each kind's carried values, for
-    /// what `~=` and `==` compare inside them.
     fields: HashMap<String, Vec<Type>>,
-    /// The kinds, which `==` compares by variant rather than by place.
     kinds: HashSet<String>,
-    /// Whether the program calls `scan`.
     scans: bool,
-    /// The task types values have, each after the task types inside it, by
-    /// the C type each is (see `Generator::gen_task_type`).
     tasks: Vec<Type>,
     task_words: HashSet<String>,
-    /// The tasks named as values, in the order first named.
     task_values: Vec<String>,
-    /// The tasks named where a lambda that keeps what it uses is expected,
-    /// each with the C type of its value (see `ExprKind::Kept`).
     kept_tasks: Vec<(String, String)>,
-    /// Each kind a value goes from, with the kind imitating it that it goes
-    /// to (see `ExprKind::Widen`), without regions, in the order first noted.
     widened: Vec<(Type, Type)>,
 }
 
-/// Types in the order they were first noted, with a set beside them so that
-/// noting one again, and asking whether one is there, takes no search.
 #[derive(Default)]
 struct TypeList {
     list: Vec<Type>,
@@ -7040,7 +6359,6 @@ impl TypeList {
         self.list.is_empty()
     }
 
-    /// Adds `ty` as it is, unless it is there.
     fn insert(&mut self, ty: Type) {
         if !self.set.contains(&ty) {
             self.set.insert(ty.clone());
@@ -7062,19 +6380,15 @@ impl<'a> IntoIterator for &'a TypeList {
     }
 }
 
-/// Adds `ty`, without regions, to `list` unless it is there.
 fn note(list: &mut TypeList, ty: &Type) {
     list.insert(ty.without_regions());
 }
 
 impl UsedTypes {
-    /// Notes that values of type `ty` are made text in a region (see
-    /// `text_function`).
     fn note_text(&mut self, ty: &Type) {
         if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Text(_)) {
             return;
         }
-        // A shape's or kind's own `str` needs no `write`.
         if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
             self.note_write(ty);
         }
@@ -7172,11 +6486,8 @@ impl UsedTypes {
         }
         for item in items {
             match item {
-                // The fields of a shape that takes types hold `T`, which no C
-                // type answers; the shapes made from it hold the types given.
                 Item::Shape(s) if s.types.is_empty() => {
                     s.fields.iter().for_each(|f| used.add(&f.ty));
-                    // A shared field's first value is written where the program starts.
                     for member in &s.shared {
                         used.add(&member.field.ty);
                         if let Some(value) = &member.field.default {
@@ -7191,14 +6502,10 @@ impl UsedTypes {
                     .flat_map(|v| &v.payload)
                     .for_each(|f| used.add(&f.ty)),
                 Item::Kind(_) => {}
-                // A generic task's own types hold `T`, which no C type
-                // answers; the tasks made from it hold the types it is given.
                 Item::Task(t) if t.types.is_empty() => {
                     t.params.iter().for_each(|p| used.add(&p.ty));
                     used.add(&t.ret);
                     used.block(&t.body);
-                    // A startup decorator's error is made text where it fails
-                    // (see `Generator::gen_startup`).
                     if is_startup(&t.name) {
                         for stmt in &t.body {
                             if let StmtKind::Expr(Expr {
@@ -7217,18 +6524,13 @@ impl UsedTypes {
         used
     }
 
-    /// Records `ty` and every type inside it. Regions don't change a type's C
-    /// struct, so they are left out.
     fn add(&mut self, ty: &Type) {
         let ty = &ty.without_regions();
-        // One recorded already had every type inside it recorded first.
         if self.compounds.contains(ty) {
             return;
         }
         match ty {
             Type::Ptr(inner, _) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
-            // Every type it takes and sends has a C type first, which its own
-            // names; its regions are its own, so they are left as they are.
             Type::Task(task) => {
                 if self.task_words.contains(&type_word(ty)) {
                     return;
@@ -7239,8 +6541,6 @@ impl UsedTypes {
                     self.tasks.push(ty.clone());
                 }
             }
-            // Its function's type too, which a plain task value it is made of
-            // is (see `gen_closure_helpers`).
             Type::Closure(closure) => {
                 if self.task_words.contains(&type_word(ty)) {
                     return;
@@ -7275,8 +6575,6 @@ impl UsedTypes {
                     self.compounds.insert(ty.clone());
                 }
             }
-            // A map's helpers give a maybe of a value and slices of its keys
-            // and values, so those types are made with it.
             Type::Map(key, value, _) => {
                 if self.compounds.contains(ty) {
                     return;
@@ -7293,8 +6591,6 @@ impl UsedTypes {
         }
     }
 
-    /// Records that `key` is a map's key, which needs a hash and an equality
-    /// of its own, and so do a tuple's items, first.
     fn note_key(&mut self, key: &Type) {
         let key = key.without_regions();
         if self.map_keys.contains(&key) {
@@ -7306,9 +6602,6 @@ impl UsedTypes {
         self.map_keys.insert(key);
     }
 
-    /// Records that values of type `ty` are written as text, and so are the
-    /// values inside them: a number, a bool, text, and a pointer are put by the
-    /// runtime, and anything else by a `write` of its own.
     fn note_write(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
@@ -7322,8 +6615,6 @@ impl UsedTypes {
                 self.note_write(value);
             }
             Type::Tuple(items) => items.iter().for_each(|item| self.note_write(item)),
-            // A shape or kind written by default writes its parts; one that
-            // holds itself (through a slice, say) is noted once.
             Type::Named(name, _) => {
                 if self.writes.contains(&ty) {
                     return;
@@ -7334,14 +6625,11 @@ impl UsedTypes {
                 }
                 return;
             }
-            // Nothing else is written as text; the checker made sure of it.
             _ => return,
         }
         note(&mut self.writes, &ty);
     }
 
-    /// Records that `==` compares values of type `ty`: a kind, and a slice,
-    /// by a function of its own, and so the kinds and slices a kind carries.
     fn note_same(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
@@ -7360,9 +6648,6 @@ impl UsedTypes {
         }
     }
 
-    /// Records that `~=` compares values of type `ty`, and so the values
-    /// inside them: a number, a bool, text, and a pointer are compared where
-    /// they are, and anything else by a function of its own.
     fn note_similar(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
@@ -7392,7 +6677,6 @@ impl UsedTypes {
         }
     }
 
-    /// Records the types of the names a binding declares, and of the tuples it unpacks.
     fn bound(&mut self, bound: &Bound) {
         if let Some(ty) = &bound.ty {
             self.add(ty);
@@ -7400,7 +6684,6 @@ impl UsedTypes {
         bound.parts.iter().for_each(|part| self.bound(part));
     }
 
-    /// Records what the places of an assignment read.
     fn target(&mut self, target: &Target) {
         match target {
             Target::Discard(_) => {}
@@ -7478,8 +6761,6 @@ impl UsedTypes {
         }
     }
 
-    /// Notes that a value of kind `from` is made one of `to`, the kind
-    /// imitating it (see `widened`).
     fn widen(&mut self, from: &Type, to: &Type) {
         let pair = (from.without_regions(), to.without_regions());
         if !self.widened.contains(&pair) {
@@ -7533,7 +6814,6 @@ impl UsedTypes {
                     self.expr(key);
                 }
             }
-            // A map made from another map copies it.
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Map(..)) => {
                 if !matches!(value.kind, ExprKind::Pairs(_))
                     && let Some(ty) = &value.ty
@@ -7545,21 +6825,16 @@ impl UsedTypes {
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
                 let Some(slice) = &e.ty else { return };
                 match &value.kind {
-                    // The repeated value fills the slice; it makes no array.
                     ExprKind::Repeat { value: item, count } => {
                         note(&mut self.slice_fill, slice);
                         self.expr(item);
                         self.expr(count);
                     }
-                    // `new [T]()` copies nothing.
                     ExprKind::Array(values) if values.is_empty() => {}
-                    // The values written, copied item by item.
                     ExprKind::Array(_) => {
                         note(&mut self.slice_copy, slice);
                         self.expr(value);
                     }
-                    // Another slice or array, copied at every depth where the
-                    // items hold anything in a region (see `Generator::gen_new`).
                     _ => {
                         note(&mut self.slice_copied, slice);
                         self.expr(value);
@@ -7579,8 +6854,6 @@ impl UsedTypes {
                 }
                 self.expr(inner)
             }
-            // Each error of a pipe's steps that is not the one it fails with
-            // is made a value of that one (see `gen_pipe`).
             ExprKind::Pipe(call) => {
                 if let Some(Type::Or(_, error)) = &e.ty {
                     let before = piped_value(call).and_then(|value| value.ty.as_ref());
@@ -7595,7 +6868,6 @@ impl UsedTypes {
                 self.expr(call)
             }
             ExprKind::Piped(inner) => self.expr(inner),
-            // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::LoopValue(value) => {
                 self.block(std::slice::from_ref(&value.stmt));
@@ -7606,7 +6878,6 @@ impl UsedTypes {
                 }
             }
             ExprKind::Lookup(base, index) => {
-                // A map's lookup is one of its own helpers.
                 if let Some(ty) = base.ty.as_ref().filter(|ty| !matches!(ty, Type::Map(..))) {
                     note(&mut self.lookups, &lookup_key(ty));
                 }
@@ -7615,7 +6886,6 @@ impl UsedTypes {
             }
             ExprKind::Index(base, index) => {
                 match (&index.kind, &base.ty, &e.ty) {
-                    // A part of text needs no helper of its own.
                     (ExprKind::Range(..), _, Some(slice @ Type::Slice(..))) => {
                         note(&mut self.slice_part, slice)
                     }
@@ -7640,13 +6910,11 @@ impl UsedTypes {
                     .into_iter()
                     .any(|side| matches!(side.kind, ExprKind::Ref(_)));
                 match (op, &a.ty) {
-                    // `m == none` tests the maybe, and compares no values.
                     (BinaryOp::Eq | BinaryOp::Ne, Some(ty))
                         if !refs && ![&a.ty, &b.ty].contains(&&Some(Type::None)) =>
                     {
                         self.note_same(ty)
                     }
-                    // `none ~= m` is typed by its other side.
                     (BinaryOp::Similar | BinaryOp::NotSimilar, Some(Type::None)) => {}
                     (BinaryOp::Similar | BinaryOp::NotSimilar, Some(ty))
                         if !matches!(b.ty, Some(Type::None)) =>
@@ -7663,7 +6931,6 @@ impl UsedTypes {
                 self.expr(b);
             }
             ExprKind::Call { name, args, .. } => {
-                // `int(t)` and `float(t)` on text need the helper that reads it.
                 if let Some(into) = number_cast(name)
                     && args
                         .first()
@@ -7705,10 +6972,6 @@ impl UsedTypes {
                 self.expr(value)
             }
             ExprKind::Scan { args, .. } => {
-                // A typed read needs the helper that reads a number and the
-                // struct of the `T ~ InputError` it gives; a line read needs
-                // the one that reads text, whose `maybe text` has a struct even
-                // when it isn't kept.
                 match (&e.ty, args.len()) {
                     (Some(ty @ Type::Or(number, _)), 2) => {
                         note(&mut self.scanned, number);
@@ -7719,7 +6982,6 @@ impl UsedTypes {
                         self.add(&Type::Maybe(Box::new(Type::Text(None))));
                     }
                 }
-                // The type a typed read names is a type, not a value.
                 args.iter().take(1).for_each(|arg| self.expr(arg));
             }
             ExprKind::Edit { items, op, args } => {
@@ -7732,7 +6994,6 @@ impl UsedTypes {
                     };
                     note(list, slice);
                 }
-                // What `added` puts in its copy is copied there with it.
                 if *op == EditOp::Added {
                     match &items.ty {
                         Some(Type::Slice(item, _)) => note(&mut self.copied, item),
@@ -7750,10 +7011,6 @@ impl UsedTypes {
     }
 }
 
-/// Whether any statement in `block` reads the variable `name`, as C's
-/// unused-variable warnings see it: assigning to the variable or to one of its
-/// fields is not a read. (Vela has no shadowing, so every `name` in the
-/// variable's scope refers to it.)
 fn block_reads(block: &[Stmt], name: &str) -> bool {
     block.iter().any(|stmt| stmt_reads(stmt, name))
 }
@@ -7804,8 +7061,6 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     }
 }
 
-/// Whether assigning to `target` reads `name`. Writing to a variable or its
-/// fields doesn't read it; writing through a pointer (`p^ = …`) reads `p`.
 fn target_reads(target: &Target, name: &str) -> bool {
     match target {
         Target::Discard(_) => false,
@@ -7814,13 +7069,10 @@ fn target_reads(target: &Target, name: &str) -> bool {
     }
 }
 
-/// Whether assigning to the place `target` reads `name`.
 fn place_reads(target: &Expr, name: &str) -> bool {
     match &target.kind {
         ExprKind::Var(_) => false,
         ExprKind::Field(base, _) => place_reads(base, name),
-        // Writing an item of an array writes the array; a slice is read to
-        // find its item.
         ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) => {
             place_reads(base, name) || expr_reads(index, name)
         }
@@ -7842,8 +7094,6 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Shared { .. }
         | ExprKind::TypeOf(_)
         | ExprKind::TaskValue(_) => false,
-        // It reads the variables it keeps too, each of which a `(void)` marks
-        // read where it is declared (see `use_if_unread`).
         ExprKind::Closure { region, .. } if region == name => true,
         ExprKind::Kept {
             region: Some(region),
@@ -7854,12 +7104,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Invoke { callee, args } => {
             expr_reads(callee, name) || args.iter().any(|arg| expr_reads(arg, name))
         }
-        // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => {
             region.as_deref() == Some(name) || expr_reads(value, name)
         }
-        // `t.#5` past the tuple's end is none, and reads the tuple only for what
-        // working it out does (see `work_out_none`).
         ExprKind::Field(inner, item)
             if item.starts_with(check::SAFE_ITEM)
                 && e.ty == Some(Type::None)
@@ -7902,25 +7149,18 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
                 || key.as_deref().is_some_and(|key| expr_reads(key, name))
         }
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
-        // The same statement a `match` or a `when` on its own is.
         ExprKind::Choice(stmt) => block_reads(std::slice::from_ref(stmt), name),
         ExprKind::LoopValue(value) => block_reads(std::slice::from_ref(&value.stmt), name),
-        // `scan` reads the region it keeps the line in, where it keeps one, and
-        // the prompt. The type a typed read names is a type, not a value, so a
-        // variable of that name is not read by it.
         ExprKind::Scan { args, region, .. } => {
             region.as_deref() == Some(name) || args.iter().take(1).any(|arg| expr_reads(arg, name))
         }
-        // Joining text, and a value turned into text, read the region the text goes in.
         ExprKind::Join { parts, region, .. } => {
             region == name || parts.iter().any(|part| expr_reads(part, name))
         }
         ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),
-        // `copy` reads the region it copies into.
         ExprKind::Copy { value, region, .. } | ExprKind::Shortcut { value, region, .. } => {
             region.as_deref() == Some(name) || expr_reads(value, name)
         }
-        // `add` reads the region it may allocate in.
         ExprKind::Edit { items, op, args } => {
             let region = match &items.ty {
                 Some(Type::Slice(_, Some(region))) if *op == EditOp::Add => region == name,
@@ -7933,10 +7173,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
 
 fn type_name(item: &Item) -> Option<&str> {
     match item {
-        // A shape that takes types is not a C type: see `generate`.
         Item::Shape(s) if !s.types.is_empty() => None,
-        // The values of wrappers worked out where the program starts are
-        // shared fields of a shape no value of which is ever made.
         Item::Shape(s) if s.name == START_VALUES => None,
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) if !k.types.is_empty() => None,
@@ -7945,14 +7182,11 @@ fn type_name(item: &Item) -> Option<&str> {
     }
 }
 
-/// A type with a C struct definition: a shape or kind, or a `maybe` or `or`.
 enum TypeDef<'a> {
     Item(&'a Item),
     Compound(&'a Type),
 }
 
-/// The C names of the struct definitions a value of type `ty` contains by
-/// value, which must come before any struct embedding it.
 fn value_dependencies(ty: &Type) -> Vec<String> {
     match ty {
         Type::Named(name, _) => vec![mangle(name)],
@@ -7967,10 +7201,6 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     }
 }
 
-/// Shapes, kinds, and compound types in source order, except that each comes
-/// after every type it contains by value, since C needs a struct's complete
-/// definition before it can be embedded. (The checker has rejected types that
-/// contain themselves by value.)
 fn type_order<'a>(items: &'a [Item], compounds: &'a [Type]) -> Result<Vec<TypeDef<'a>>> {
     let mut by_name: HashMap<String, TypeDef<'a>> = HashMap::new();
     let mut names = Vec::new();
@@ -8002,7 +7232,6 @@ fn visit_type<'a>(
     finished: &mut HashMap<String, bool>,
     order: &mut Vec<TypeDef<'a>>,
 ) -> Result<()> {
-    // Each type being entered, with its dependencies, reversed so the next is last.
     let mut stack: Vec<(String, TypeDef<'a>, Vec<String>)> = Vec::new();
     let mut next = Some(root.to_string());
     loop {
@@ -8015,7 +7244,6 @@ fn visit_type<'a>(
                         name
                     )));
                 }
-                // A builtin type has no definition.
                 None => {
                     if let Some(def) = by_name.remove(&name) {
                         finished.insert(name.clone(), false);
@@ -8041,7 +7269,6 @@ fn visit_type<'a>(
     }
 }
 
-/// The types a definition contains by value.
 fn dependencies_of(def: &TypeDef) -> Vec<String> {
     match def {
         TypeDef::Item(Item::Shape(s)) => s
@@ -8065,7 +7292,6 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             types.iter().flat_map(value_dependencies).collect()
         }
         TypeDef::Compound(Type::Array(items, _)) => value_dependencies(items),
-        // Its entries hold a key and a value each.
         TypeDef::Compound(Type::Map(key, value, _)) => value_dependencies(key)
             .into_iter()
             .chain(value_dependencies(value))
@@ -8074,8 +7300,6 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
     }
 }
 
-/// Whether evaluating `e` changes nothing a later value could read: no call,
-/// no change to a slice, no line read. (It may still stop the program.)
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::IntLit(_)
@@ -8088,7 +7312,6 @@ fn changes_nothing(e: &Expr) -> bool {
         | ExprKind::Var(_)
         | ExprKind::Shared { .. }
         | ExprKind::TaskValue(_) => true,
-        // A temporary its pipe wrote before the call.
         ExprKind::Piped(_) => true,
         ExprKind::Field(inner, _)
         | ExprKind::Deref(inner)
@@ -8112,8 +7335,6 @@ fn changes_nothing(e: &Expr) -> bool {
 /// runs (see `Generator::gen_call`). The user chose 64 bytes: eight words.
 pub const HIDDEN_ABOVE: usize = 64;
 
-/// Whether parameter `p` of a task is a pointer to the caller's place in C: a
-/// `flex&` one, or the value a method that `alters` it is called on.
 fn is_pointer_param(p: &Field, alters: bool) -> bool {
     p.passing.is_ref() || (alters && p.name == THIS)
 }
@@ -8131,24 +7352,16 @@ fn owns_copy(t: &TaskDef, p: &Field, alters: bool, hidden: bool) -> bool {
     !t.native && !hidden && !is_pointer_param(p, alters) && p.ty != Type::Region
 }
 
-/// The C name of the value given for `name`, a copy the task makes its own
-/// (see `owns_copy`): `vela__given__this` for `.this`. No Vela name holds
-/// `__`, so it is no other name.
 fn given_name(name: &str) -> String {
     format!("vela__given__{}", name.trim_start_matches('.'))
 }
 
-/// The C variable holding task `name`, kept where a lambda that keeps what it
-/// uses is expected (see `ExprKind::Kept`).
 fn kept_task_name(name: &str) -> String {
     format!("vela__kept_task__{}", mangle(name))
 }
 
-/// The C name of what a lambda that keeps what it uses is given first: the
-/// block of its region holding what it keeps (see `Generator::gen_closure`).
 const KEPT_PARAM: &str = "vela__kept";
 
-/// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
 fn signature(
     t: &TaskDef,
     alters: bool,
@@ -8165,8 +7378,6 @@ fn signature(
             } else {
                 c_ident(&p.name)
             };
-            // A large value that never changes is read where the caller keeps
-            // it (see `HIDDEN_ABOVE`).
             if hidden.get(i).copied().unwrap_or(false) {
                 return format!("const {}* {}", c_type(&p.ty), param_name);
             }
@@ -8191,7 +7402,6 @@ fn signature(
             format!("{} {}", c_type(&p.ty), param_name)
         })
         .collect();
-    // A lambda that keeps what it uses is given what it keeps first.
     let params: Vec<String> = t
         .kept
         .as_ref()
@@ -8208,35 +7418,15 @@ fn signature(
     format!("{} {}({})", c_type(&t.ret), mangle(&t.name), params)
 }
 
-// C names. Vela names start with an ASCII letter and never contain `__`, so
-// the generated C names below have distinct shapes and can't collide with each
-// other, with the runtime (`vela__rt__*`), or with C:
-//
-//   vela_Point, vela_area         tasks, shapes, kinds          (`mangle`)
-//   vela_shapes__1__geometry__0__area   another module's          (`c_name`)
-//   vela___2____1__common__1__text__0__pad   one above the main file's folder
-//   vela_Shape__Tag               a kind's tag enum type        (`tag_type`)
-//   vela_Shape__tag_Circle        a variant's tag value         (`tag_value`)
-//   vela__int                     a local or field named like C (`c_ident`)
-//   vela__maybe__int              a `maybe` struct              (`c_type`)
-//   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
-//   vela__write__maybe__int       a value put in a writer       (`write_helper`)
-//   vela__text__array__4__int     a value made into text        (`text_helper`)
-//   vela__array__4__int           an array struct               (`c_type`)
-//   vela__slice__int              a slice struct                (`c_type`)
-//   vela__at__slice__int          a helper for a slice or array (`item_helper`)
-//   vela__end__0, vela__empty__   compiler temporaries and members
-//
-// A region is a local or parameter like any other (`c_ident`); regions don't
-// change C types, so `^int@a` and `^int@b` are both `int64_t*`.
+// C name mangling conventions (user identifiers start ASCII and reject `__`):
+//   vela_<name> / vela_<mod>__0__<name>   tasks, shapes, kinds (`/` -> __1__, `..` -> __2__)
+//   vela__<name>                         keyword-escaped locals, compound types, helpers
+// Regions are erased from C types (`^int@a` and `^int@b` both lower to `int64_t*`).
 
-/// The C name of the function that takes task `name`'s values as its type
-/// does (see `Generator::gen_adapter`). No Vela name holds `__`.
 fn adapter_name(name: &str) -> String {
     format!("{}__as_value", mangle(name))
 }
 
-/// The C name of a task, shape, or kind.
 fn mangle(name: &str) -> String {
     format!("vela_{}", c_name(name))
 }
@@ -8254,7 +7444,6 @@ fn shared_name(shape: &str, field: &str) -> String {
     format!("vela_{}__shared_{}", c_name(shape), field)
 }
 
-/// The C name of a macro, a `#define`.
 fn macro_name(name: &str) -> String {
     format!("VELA_MACRO_{}", c_name(name))
 }
@@ -8263,20 +7452,11 @@ fn tag_value(kind: &str, tag: &str) -> String {
     format!("vela_{}__tag_{}", c_name(kind), tag)
 }
 
-/// A task, shape, or kind name as part of a C name: the name with its module's
-/// path folded into it (see `flat_name`). No Vela name contains `__`, and none
-/// starts with a digit, so the result can't be any other name, or read as a
-/// word the generated names use.
 fn c_name(name: &str) -> String {
     flat_name(name)
 }
 
-/// The C name of a local, parameter, field, or variant union member: the Vela
-/// name itself, unless C could read it as something else, such as a keyword
-/// or a macro from a standard header.
 fn c_ident(name: &str) -> String {
-    // The value a method is called on is named `.this`, which no Vela name can
-    // be (see `ast::THIS`), so C needs a name for it.
     if name == THIS {
         return "vela__this".to_string();
     }
@@ -8289,15 +7469,11 @@ fn c_ident(name: &str) -> String {
 
 fn collides_with_c(name: &str) -> bool {
     C_RESERVED.contains(&name)
-        // Our own prefix, and POSIX's reserved `_t` type suffix.
         || name.starts_with("vela_")
         || name.ends_with("_t")
-        // Object-like macros such as EOF, NULL, and INT64_MAX.
         || name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
-/// C11 and C23 keywords, and lowercase object-like macros that the runtime's
-/// headers (or common compilers) may define.
 const C_RESERVED: &[&str] = &[
     "alignas",
     "alignof",
@@ -8360,14 +7536,9 @@ const C_RESERVED: &[&str] = &[
 
 fn c_type(ty: &Type) -> String {
     match ty {
-        // A generic declaration is never generated: each use is generated with
-        // the type it gives, so these would be compiler bugs (see `instances`
-        // and `shape_instance`).
         Type::Param(name) => format!("/*type {}*/", name),
         Type::Group(name) => format!("/*group {}*/", name),
         Type::Applied(applied) => format!("/*shape {}*/", applied.name),
-        // Nor is a program with a type the checker couldn't work out, since that
-        // program has an error (see `Type::Unknown`).
         Type::Unknown => "/*unknown type*/".to_string(),
         Type::Int => "int64_t".to_string(),
         Type::Int8 => "int8_t".to_string(),
@@ -8395,16 +7566,11 @@ fn c_type(ty: &Type) -> String {
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => {
             format!("vela__{}", type_word(ty))
         }
-        // A map is a pointer to its table's header, in its region.
         Type::Map(..) => format!("vela__{}*", type_word(ty)),
-        // A task is a pointer to its function (see `Generator::gen_task_type`),
-        // and a lambda that keeps what it uses that and what it keeps.
         Type::Task(_) | Type::Closure(_) => format!("vela__{}", type_word(ty)),
     }
 }
 
-/// The C name of the struct a compound type is: its C type, or for a map the
-/// header its values point to.
 fn compound_name(ty: &Type) -> String {
     match ty {
         Type::Map(..) => format!("vela__{}", type_word(ty)),
@@ -8412,7 +7578,6 @@ fn compound_name(ty: &Type) -> String {
     }
 }
 
-/// The C struct of one entry of a map's table: its hash, key, and value.
 fn map_entry(ty: &Type) -> String {
     format!("vela__entry__{}", type_word(ty))
 }
@@ -8424,14 +7589,10 @@ fn item_type(ty: &Type) -> &Type {
     }
 }
 
-/// The C name of a generated helper for an array or slice type:
-/// `vela__at__slice__int`, `vela__fill__array__4__int`.
 fn item_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_word(ty))
 }
 
-/// What a lookup (`xs[#i]`, `t.at(i)`) into a value of type `ty` gives when
-/// it finds an item: the item, or a char of text.
 fn lookup_item(ty: &Type) -> Type {
     match ty {
         Type::Text(_) => Type::Char,
@@ -8440,8 +7601,6 @@ fn lookup_item(ty: &Type) -> Type {
     }
 }
 
-/// The type a lookup's helper is made for, one per kind of value and item: an
-/// array of any count is read through its items (`[T#0]` stands for them all).
 fn lookup_key(ty: &Type) -> Type {
     match ty.without_regions() {
         Type::Array(items, _) => Type::Array(items, 0),
@@ -8449,12 +7608,7 @@ fn lookup_key(ty: &Type) -> Type {
     }
 }
 
-/// The C name of a generated helper for copies of values of type `ty`:
-/// `vela__copied__ptr__n_Node`, `vela__fix__text`.
-/// The C name of the function making a value of kind `from` one of kind `to`,
-/// which imitates it (see `Generator::gen_widens`).
-/// The value a pipe's call holds as its `Piped` argument (see
-/// `ExprKind::Pipe`), where fitting the parameter may have wrapped it.
+/// Unwraps `Wrap`/`Widen`/`Kept` wrappers to locate the underlying piped expression.
 fn piped_value(call: &Expr) -> Option<&Expr> {
     let (ExprKind::Call { args, .. }
     | ExprKind::Invoke { args, .. }
@@ -8502,7 +7656,6 @@ fn fix_type(ty: &Type) -> Type {
 /// `1e300` for very large or small magnitudes. The lexer rejects non-finite
 /// literals, so `inf`/`NaN` never reach here.
 fn c_float_literal(n: f64) -> String {
-    // Debug formatting always includes a decimal point or an exponent.
     format!("{:?}", n)
 }
 
@@ -8527,13 +7680,6 @@ fn escape_c_string(s: &str) -> String {
     out
 }
 
-/// The runtime helper that computes the int operation `e` (`op` on the
-/// operands, `r` the right one), stopping the program when its result doesn't
-/// fit or it divides by zero; `None` when C's operator can't go wrong: `e`
-/// isn't int arithmetic, or it divides by a literal other than 0 and -1.
-/// The runtime function that checks a whole number computed as an int fits in
-/// `ty`, an int type smaller than 64 bits (a unit among them), or `None` for any
-/// other type.
 fn narrow_of(ty: &Type) -> Option<&'static str> {
     match ty {
         Type::Int8 => Some("vela__rt__int8_of"),
@@ -8561,7 +7707,6 @@ fn checked_int_helper(op: BinaryOp, e: &Expr, r: &Expr) -> Result<Option<&'stati
     })
 }
 
-/// The value of an integer literal, possibly negated.
 fn int_value(e: &Expr) -> Option<i64> {
     match &e.kind {
         ExprKind::IntLit(n) => Some(*n),
@@ -8570,8 +7715,6 @@ fn int_value(e: &Expr) -> Option<i64> {
     }
 }
 
-/// An integer literal, possibly negated, as a 64-bit C constant: `INT64_C(5)`,
-/// `(-INT64_C(5))`. `None` for any other expression.
 fn int_constant(e: &Expr) -> Option<String> {
     match &e.kind {
         ExprKind::IntLit(n) => Some(format!("INT64_C({})", n)),

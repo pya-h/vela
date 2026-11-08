@@ -1,14 +1,4 @@
-//! Language analysis for Vela Studio: highlighting, diagnostics, outline,
-//! go-to-definition, completion, and hover for one Vela source file, with the
-//! other files of its program (the modules it includes) that the editor gives.
-//!
-//! Everything is computed from the compiler itself: tokens come from
-//! `vela::lexer::highlight`, errors from `vela::driver::front_end`, and names
-//! from a declaration scan over the compiler's tokens (see `scan`), which keeps
-//! working while the file has errors. Nothing here does I/O.
-//!
-//! All offsets in the results are UTF-16 offsets into the source, as
-//! JavaScript strings and CodeMirror count them.
+//! Offsets in public results are UTF-16 code units; `scan` still runs when front-end reports errors.
 
 mod complete;
 mod hover;
@@ -43,7 +33,6 @@ pub struct Token {
 #[serde(rename_all = "kebab-case")]
 pub enum Severity {
     Error,
-    /// What the program does that it may not mean; it builds all the same.
     Warning,
 }
 
@@ -51,35 +40,26 @@ pub enum Severity {
 pub struct Diagnostic {
     pub from: usize,
     pub to: usize,
-    /// The compiler's 1-based line and column, absent for an internal
-    /// compiler error, which has no position.
+    /// Absent for internal compiler errors without a source position.
     pub line: Option<usize>,
     pub col: Option<usize>,
     pub message: String,
     pub severity: Severity,
 }
 
-/// A task, shape, kind, type alias, or macro, with its fields or variants and
-/// its methods as children (and a variant's payload fields as its children).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineItem {
     pub name: String,
     pub kind: SymbolKind,
-    /// A task's or a method's parameters and return type, a field's type, or
-    /// a variant's payload, as written.
     pub detail: String,
-    /// The whole declaration.
     pub from: usize,
     pub to: usize,
-    /// The declared name.
     pub name_from: usize,
     pub name_to: usize,
     pub children: Vec<OutlineItem>,
 }
 
-/// A range of source, such as the name a definition points to, in the
-/// analyzed file or, with `path`, in another file of the program.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub from: usize,
@@ -88,30 +68,19 @@ pub struct Location {
     pub path: Option<String>,
 }
 
-/// The analysis of one version of a source file. Create one per change and
-/// ask it anything; it keeps what it was made from, so an editor can keep the
-/// last one while the text is the same (see `Analysis::is_of`).
 pub struct Analysis {
-    /// The file's text, which `index` holds.
     index: LineIndex<'static>,
     path: String,
-    /// The program's other files, by path, which analyses of one program
-    /// share while they don't change.
     sources: Arc<HashMap<String, String>>,
     scan: scan::Scan,
-    /// What the compiler found: every mistake, and the checked types.
     checked: types::Checked,
 }
 
 impl Analysis {
-    /// The analysis of a file on its own: a module it includes can't be read.
     pub fn new(source: &str) -> Self {
         Analysis::of_program(source.to_string(), String::new(), Arc::default())
     }
 
-    /// The analysis of the file at `path` (`/`-separated), whose program's
-    /// other files are in `sources`, by path. A file it includes that isn't there is
-    /// reported by `missing_modules`, for the editor to fetch.
     pub fn with_modules(source: &str, path: &str, sources: &HashMap<String, String>) -> Self {
         Analysis::of_program(
             source.to_string(),
@@ -120,7 +89,6 @@ impl Analysis {
         )
     }
 
-    /// `with_modules`, sharing `sources` with other analyses of the program.
     pub fn of_program(source: String, path: String, sources: Arc<HashMap<String, String>>) -> Self {
         let context = types::Context {
             path: &path,
@@ -137,8 +105,6 @@ impl Analysis {
         }
     }
 
-    /// Whether this is the analysis of `source` at `path`, among `sources`:
-    /// then it answers anything a new one would.
     pub fn is_of(&self, source: &str, path: &str, sources: &Arc<HashMap<String, String>>) -> bool {
         self.source() == source && self.path == path && Arc::ptr_eq(&self.sources, sources)
     }
@@ -154,16 +120,12 @@ impl Analysis {
         }
     }
 
-    /// The paths of the files the program includes, directly or through other
-    /// modules, that weren't given, in the order they are needed.
     pub fn missing_modules(&self) -> Vec<String> {
         self.checked.missing.clone()
     }
 
-    /// Every piece of source to highlight, in order and without overlaps.
-    /// Whitespace and newlines are not included.
     pub fn tokens(&self) -> Vec<Token> {
-        // The tokens are in order, so one cursor converts them all in a pass.
+        // Tokens are ordered, so one cursor converts all offsets in a single pass.
         let mut cursor = self.index.cursor();
         self.scan
             .tokens
@@ -176,20 +138,13 @@ impl Analysis {
             .collect()
     }
 
-    /// The compiler's diagnostics: every mistake it found, in source order. The
-    /// range of each covers the token it points at, or one character when it
-    /// points inside a token, or is empty at the end of a line.
-    ///
-    /// The warnings come among them, in source order too: what the program
-    /// does that it may not mean, though it builds. Only this file's: a
-    /// module's warnings are its own, shown where it is open, while its
-    /// mistakes stop this file's program too, so they are shown here.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         let errors = self
             .checked
             .errors
             .iter()
             .map(|error| self.diagnostic(error, Severity::Error));
+        // Warnings stay scoped to the main file; module errors still fail this program.
         let warnings = self
             .checked
             .warnings
@@ -197,12 +152,11 @@ impl Analysis {
             .filter(|warning| warning.span.is_none_or(|span| span.file == 0))
             .map(|warning| self.diagnostic(warning, Severity::Warning));
         let mut all: Vec<Diagnostic> = errors.chain(warnings).collect();
-        // A stable sort: the errors stay first at one position.
+        // Stable sort keeps errors ahead of warnings at the same position.
         all.sort_by_key(|d| (d.line.is_none(), d.line, d.col));
         all
     }
 
-    /// One mistake, or one warning, as the editor marks it.
     fn diagnostic(&self, error: &Error, severity: Severity) -> Diagnostic {
         let Some(found) = error.span else {
             return Diagnostic {
@@ -214,8 +168,6 @@ impl Analysis {
                 severity,
             };
         };
-        // An error in another file is shown at the `include` that leads to it, with
-        // that file's path and position.
         let files: &[SourceFile] = &self.checked.files;
         let span = SourceFile::in_main_file(files, found);
         let message = match files.get(found.file) {
@@ -239,7 +191,7 @@ impl Analysis {
                     LexKind::Token(LexedToken::Newline) | LexKind::Token(LexedToken::Eof)
                 )
         });
-        // An error from another file underlines the whole module path of the `include`.
+        // Cross-file errors underline the entire `include` module path instead of a single segment.
         let path_end = (found.file > 0).then(|| {
             let lexed = &self.scan.lexed;
             let first = lexed.iter().position(|t| t.range.start == start)?;
@@ -273,10 +225,8 @@ impl Analysis {
         }
     }
 
-    /// The file's tasks, shapes, kinds, type aliases, and macros, in source order.
     pub fn outline(&self) -> Vec<OutlineItem> {
         let symbols = &self.scan.symbols;
-        // Each symbol's children, in order, found in one pass.
         let mut children = vec![Vec::new(); symbols.len()];
         for (id, symbol) in symbols.iter().enumerate() {
             if let Some(list) = symbol.parent.and_then(|parent| children.get_mut(parent)) {
@@ -327,13 +277,11 @@ impl Analysis {
         }
     }
 
-    /// Where the name at `offset` is declared. The cursor may be anywhere in
-    /// the name or just after it; a name that starts at the cursor wins over
-    /// one that ends there.
     pub fn definition(&self, offset: usize) -> Option<Location> {
         let byte = self.index.byte_of_utf16(offset);
         let tokens = &self.scan.tokens;
         let knowledge = infer::Knowledge::new(self.source(), &self.scan, &self.checked);
+        // Prefer a symbol starting at the cursor over one ending there.
         let symbol = tokens
             .iter()
             .filter(|t| t.range.start <= byte && byte < t.range.end)
@@ -345,7 +293,6 @@ impl Analysis {
                     .find_map(|t| knowledge.symbol_of(t))
             })?;
         let symbol = self.scan.symbols.get(symbol)?;
-        // A module's name leads to its file.
         if symbol.kind == SymbolKind::Module {
             let module = self.scan.modules.iter().find(|m| {
                 self.scan
@@ -363,7 +310,6 @@ impl Analysis {
             });
         }
         match symbol.module.and_then(|m| self.scan.modules.get(m)) {
-            // Vela's library is no file the editor can open.
             Some(module) if module.library => None,
             Some(module) => {
                 let source = module.source.as_deref()?;
@@ -385,14 +331,9 @@ impl Analysis {
         }
     }
 
-    /// What may be typed at `offset`: keywords, snippets, names, fields, or
-    /// types, depending on where the cursor is.
     pub fn complete(&self, offset: usize) -> Completions {
         let byte = self.index.byte_of_utf16(offset);
-        // `first<|>(xs)`, as an editor closing the `<` leaves it: the types a
-        // use gives are being written, though `<>` is read as one operator,
-        // not similar. They are completed as if the two stood apart; nothing
-        // offered reaches past the cursor, so the ranges stay the file's.
+        // An auto-closed `<` leaves `first<>`, which lexes as the `<>` operator; split it so type args complete.
         if byte > 0 && self.source().get(byte - 1..byte + 1) == Some("<>") {
             let apart = format!(
                 "{} {}",
@@ -416,8 +357,6 @@ impl Analysis {
         }
     }
 
-    /// A description of the name at `offset`: its declaration, type, or
-    /// signature.
     pub fn hover(&self, offset: usize) -> Option<Hover> {
         let knowledge = infer::Knowledge::new(self.source(), &self.scan, &self.checked);
         let ((code, doc), range) = hover::hover(&knowledge, self.index.byte_of_utf16(offset))?;

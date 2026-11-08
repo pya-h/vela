@@ -1,6 +1,3 @@
-// Running, building, problems, the terminal, and the status bar, against a
-// real vela-studio that builds with the C compiler.
-
 import { cursorAtEndOf, expect, launch, lineText, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
 const FOREVER = "task main()\n    flex n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
@@ -13,7 +10,6 @@ test("runs the saved file and shows how it ended", async ({ page, studio }) => {
   await page.keyboard.type('show("and again")');
   await page.keyboard.press("F5");
 
-  // Running saves the file first.
   await expect(page.locator(".panel-tab.active")).toHaveText("Output");
   await expect(terminal(page, "output")).toContainText("Hello, Vela!");
   await expect(terminal(page, "output")).toContainText("and again");
@@ -22,7 +18,6 @@ test("runs the saved file and shows how it ended", async ({ page, studio }) => {
   await expect(tab(page, "hello.vela")).not.toHaveClass(/dirty/);
   await expect(page.locator(".status-run")).toContainText(/hello\.vela exited with code 0/);
   await expect(page.locator(".run-button")).toHaveAttribute("data-state", "idle");
-  // The editor kept the focus.
   await expect(page.locator(".cm-content")).toBeFocused();
 });
 
@@ -44,7 +39,6 @@ test("Ctrl+Enter runs and the Stop button stops", async ({ page, studio }) => {
   await expect(run).toHaveAttribute("data-state", "idle");
   await expect(page.locator(".status-run")).toContainText("forever.vela stopped");
 
-  // Shift+F5 stops too.
   await page.keyboard.press("F5");
   await expect(run).toHaveAttribute("data-state", "running");
   await page.keyboard.press("Shift+F5");
@@ -69,7 +63,6 @@ test("problems come from editing and from builds", async ({ page, studio }) => {
   studio.write("helper.vela", "task helper()\n    show(1)\nfi\n");
   await launch(page, studio);
 
-  // A live error: the status bar counts it, and choosing it selects it.
   await openFile(page, "hello.vela");
   await cursorAtEndOf(page, 4);
   await page.keyboard.press("Enter");
@@ -87,7 +80,6 @@ test("problems come from editing and from builds", async ({ page, studio }) => {
   await problem.click();
   expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("missing");
 
-  // Running it shows the compiler's message in Output and the same problem once.
   await page.keyboard.press("F5");
   await expect(page.locator(".panel-tab.active")).toContainText("Problems");
   await expect(problem).toHaveCount(1);
@@ -96,7 +88,6 @@ test("problems come from editing and from builds", async ({ page, studio }) => {
   await expect(terminal(page, "output")).toContainText("hello.vela:5:10: error: unknown variable 'missing'");
   await expect(terminal(page, "output")).toContainText("── build failed ──");
 
-  // A failure only the build finds: no main task.
   await treeRow(page, "helper.vela").click();
   // F5 runs the active file, so wait until the click has opened it.
   await expect(tab(page, "helper.vela")).toHaveClass(/active/);
@@ -106,7 +97,6 @@ test("problems come from editing and from builds", async ({ page, studio }) => {
   await expect(page.locator(".problem-file", { hasText: "helper.vela" })).toContainText("program has no 'main' task");
   await expect(page.locator(".panel-badge")).toHaveText("2");
 
-  // Fixing both clears the list.
   await tab(page, "hello.vela").click();
   await cursorAtEndOf(page, 5);
   await page.keyboard.press("Shift+Home");
@@ -132,7 +122,6 @@ test("builds without running", async ({ page, studio }) => {
 
 test("the terminal runs a shell in the workspace", async ({ page, studio }) => {
   await launch(page, studio);
-  // A slow start, so the first command is typed before the shell exists.
   await page.route("**/api/terminal", async (route) => {
     const response = await route.fetch();
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -141,7 +130,6 @@ test("the terminal runs a shell in the workspace", async ({ page, studio }) => {
   await page.keyboard.press("Control+Backquote");
   await expect(page.locator(".panel-tab.active")).toHaveText("Terminal");
   const shell = terminal(page, "terminal");
-  // The terminal has the focus right away, even while its shell starts.
   await expect(page.locator("#panel-view-terminal textarea")).toBeFocused();
   await page.keyboard.type("ls; echo vela-$((6 * 7))\n");
   await expect(shell).toContainText("vela-42");
@@ -155,7 +143,6 @@ test("the terminal runs a shell in the workspace", async ({ page, studio }) => {
   await expect(shell).toContainText("again-2");
   await expect(shell).not.toContainText("exited with code 3");
 
-  // Ctrl+` from the terminal hides the panel and returns to the editor.
   await page.keyboard.press("Control+Backquote");
   await expect(page.locator(".main-column")).toHaveClass(/panel-hidden/);
 });
@@ -167,7 +154,6 @@ test("the panel toggles and is remembered", async ({ page, studio }) => {
   await expect(page.locator(".main-column")).not.toHaveClass(/panel-hidden/);
   await expect(page.locator(".panel-tab.active")).toHaveText(/^Problems/);
   await expect(page.locator(".panel")).toContainText("No problems in the open files.");
-  // Arrow keys move between the tabs.
   await page.locator(".panel-tab", { hasText: "Problems" }).press("ArrowRight");
   await expect(page.locator(".panel-tab.active")).toHaveText("Output");
   await expect(page.locator(".panel-tab", { hasText: "Output" })).toBeFocused();

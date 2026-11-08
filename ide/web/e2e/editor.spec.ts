@@ -1,6 +1,3 @@
-// Vela language support in the browser: highlighting, diagnostics,
-// completion, hover, navigation, and the pickers.
-
 import { cursorAtEndOf, expect, launch, lineText, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
 test("highlights and outlines a Vela file", async ({ page, studio }) => {
@@ -29,7 +26,6 @@ test("reports compiler errors as you type", async ({ page, studio }) => {
   await expect(page.locator(".cm-lint-marker-error")).toBeVisible();
   await page.locator(".cm-lintRange-error").hover();
   await expect(page.locator(".cm-tooltip-lint")).toContainText("unknown variable 'missing'");
-  // Fixing it clears the error; closing brackets were inserted automatically.
   expect(await lineText(page, 5)).toBe("    show(missing)");
   await page.keyboard.press("Control+Backspace");
   await page.keyboard.type("1");
@@ -45,13 +41,11 @@ test("completes names and expands snippets", async ({ page, studio }) => {
   const popup = page.locator(".cm-tooltip-autocomplete");
   const option = (label: string) => popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: new RegExp(`^${label}$`) }) });
   await expect(option("fib")).toBeVisible();
-  // Pick `fib`, which inserts a call with a field for its parameter.
   await option("fib").click();
   expect(await lineText(page, 14)).toBe("        fib(n)");
   await page.keyboard.type("i");
   expect(await lineText(page, 14)).toBe("        fib(i)");
 
-  // A statement snippet, indented to the block.
   await page.keyboard.press("Escape");
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
@@ -107,7 +101,6 @@ test("regions: highlighting, hover, and completion of region names", async ({ pa
   await nodes.first().hover();
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("region nodes");
 
-  // After the `at` of a `new`, the regions it can allocate in.
   await cursorAtEndOf(page, 13);
   await page.keyboard.press("Enter");
   await page.keyboard.type("fixed two = new int(2) at ");
@@ -119,7 +112,6 @@ test("regions: highlighting, hover, and completion of region names", async ({ pa
   expect(await lineText(page, 14)).toBe("    fixed two = new int(2) at nodes");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 
-  // In a call, a region parameter's argument offers only regions.
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("fixed three = push(");
@@ -144,7 +136,6 @@ test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ 
   await maybe.hover();
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("maybe T");
 
-  // After `is`, the patterns of the value's type.
   await cursorAtEndOf(page, 10);
   await page.keyboard.press("Enter");
   await page.keyboard.type("when m is ");
@@ -155,7 +146,6 @@ test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ 
   await expect(option("none")).toBeVisible();
   await page.keyboard.press("Escape");
 
-  // A plan B's block is indented, and its `}` lines up with the line that opened it.
   await page.keyboard.press("Home");
   await page.keyboard.press("Shift+End");
   await page.keyboard.type("fixed n = m {");
@@ -174,13 +164,11 @@ test("named results: highlighting, hover, and setting them", async ({ page, stud
   await launch(page, studio);
   await openFile(page, "named.vela");
   const content = page.locator(".cm-content");
-  // The name in the header is the result, not a type.
   const header = content.locator(".cm-line").first();
   await expect(header.locator(".tok-variable", { hasText: /^total$/ })).toHaveCount(1);
   await header.locator(".tok-variable", { hasText: /^total$/ }).hover();
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("result total: int");
 
-  // Setting a result is offered as a statement of its own.
   await cursorAtEndOf(page, 6);
   await page.keyboard.press("Enter");
   await page.keyboard.press("Control+Space");
@@ -192,7 +180,6 @@ test("named results: highlighting, hover, and setting them", async ({ page, stud
   expect(await lineText(page, 7)).toBe("    total <- 0");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 
-  // A result is not a variable: `=` says so.
   await page.keyboard.press("Home");
   await page.keyboard.press("Shift+End");
   await page.keyboard.type("    total = 0");
@@ -209,15 +196,11 @@ test("several results: highlighting, hover, and completion of the names", async 
   await launch(page, studio);
   await openFile(page, "results.vela");
   const content = page.locator(".cm-content");
-  // Both result types are types, not variables.
   await expect(content.locator(".cm-line").first().locator(".tok-type-builtin", { hasText: /^int$/ })).toHaveCount(4);
 
-  // Each name takes the type of the value in its place.
   await content.locator(".tok-variable", { hasText: /^q$/ }).first().hover();
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("fixed q: int");
 
-  // Another result type after a comma in a header, but no name to suggest
-  // after a comma in a `fixed`.
   await cursorAtEndOf(page, 1);
   await page.keyboard.type(", ");
   await page.keyboard.press("Control+Space");
@@ -249,7 +232,6 @@ test("modules: highlighting, hover, definitions, errors, and running", async ({ 
   await treeRow(page, "app").click();
   await openFile(page, "app/main.vela");
   const content = page.locator(".cm-content");
-  // The module's file is fetched, and its names are known.
   await expect(content.locator(".tok-module", { hasText: /^geometry$/ })).toHaveCount(2);
   await expect(content.locator(".tok-task", { hasText: /^area$/ })).toHaveCount(1);
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
@@ -257,14 +239,12 @@ test("modules: highlighting, hover, definitions, errors, and running", async ({ 
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("task geometry.area(side: int) -> int");
   await expect(page.locator(".vs-hover .vs-hover-doc")).toHaveText("From module geometry (app/shapes/geometry.vela).");
 
-  // Completion after the module's name offers what it declares, but not its private task.
   await cursorAtEndOf(page, 4);
   await page.keyboard.press("Enter");
   await page.keyboard.type("show(geometry.");
   const popup = page.locator(".cm-tooltip-autocomplete");
   await expect(popup.locator(".cm-completionLabel")).toHaveText(["area"]);
   await page.keyboard.press("Escape");
-  // Remove the line again.
   await page.keyboard.press("End");
   await page.keyboard.press("Shift+Home");
   await page.keyboard.press("Shift+Home");
@@ -272,12 +252,10 @@ test("modules: highlighting, hover, definitions, errors, and running", async ({ 
   await page.keyboard.press("Backspace");
   expect(await lineText(page, 5)).toBe("fi");
 
-  // Going to the definition opens the module's file, at the task.
   await content.locator(".tok-task", { hasText: /^area$/ }).click({ modifiers: ["ControlOrMeta"] });
   await expect(tab(page, "app/shapes/geometry.vela")).toHaveClass(/active/);
   expect(await page.evaluate(() => getSelection()?.toString())).toBe("area");
 
-  // An unsaved error in the module shows in the file that includes it, at its `include`.
   await cursorAtEndOf(page, 2);
   await page.keyboard.type(" + missing");
   await tab(page, "app/main.vela").click();
@@ -287,7 +265,6 @@ test("modules: highlighting, hover, definitions, errors, and running", async ({ 
   await page.mouse.move(0, 0);
   await expect(page.locator(".cm-tooltip-lint")).toHaveCount(0);
 
-  // Fixing it and running saves the module too.
   await tab(page, "app/shapes/geometry.vela").click();
   for (let i = 0; i < " + missing".length; i++) await page.keyboard.press("Backspace");
   await page.keyboard.type(" * 1");

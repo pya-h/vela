@@ -1,8 +1,3 @@
-//! Sized numbers in the editor: `int8` to `int64`, `uint8` to `uint64`,
-//! `float32` and `float64` colored and hovered as types, offered after a `:`,
-//! and their mistakes shown. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};

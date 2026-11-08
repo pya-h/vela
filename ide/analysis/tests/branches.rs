@@ -1,19 +1,12 @@
-//! Branches in the editor: `else when` chains, and a `match` or a `when` used as
-//! a value — the words, the types the branches settle on, what each branch's
-//! names reach, and what Studio offers inside one.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
 
-/// The UTF-16 offset of the `nth` (0-based) occurrence of `needle`.
 fn at(source: &str, needle: &str, nth: usize) -> usize {
     let byte = source.match_indices(needle).nth(nth).unwrap_or_else(|| panic!("no {:?} #{}", needle, nth)).0;
     LineIndex::new(source).utf16_of(byte)
 }
 
-/// The code and the doc a hover shows at the first occurrence of `needle`.
 fn hover(source: &str, needle: &str) -> (String, String) {
     let hover = Analysis::new(source).hover(at(source, needle, 0)).unwrap_or_else(|| panic!("no hover at {:?}", needle));
     (hover.code, hover.doc)
@@ -66,10 +59,7 @@ fn both_words_of_an_else_when_are_keywords() {
 
 #[test]
 fn a_name_a_branch_binds_stays_in_that_branch() {
-    // `level` is the pattern's name in the branch that matched it.
     assert_eq!(class_at(CHAIN, "level)", 0), TokenClass::Variable);
-    // One `fi` closes the whole chain, so what follows is the enclosing block
-    // again: a name from a branch is gone, and the block's own names are back.
     assert_eq!(class_at(CHAIN, "score)", 0), TokenClass::Variable);
     let after = CHAIN.replace("    show(score)\n", "    show(level)\n");
     let complaints: Vec<String> = Analysis::new(&after).diagnostics().into_iter().map(|d| d.message).collect();
@@ -141,17 +131,13 @@ fn a_match_and_a_when_used_as_values_check() {
 
 #[test]
 fn hover_shows_the_type_the_branches_settle_on() {
-    // A case gives an int and another `none`, so the whole is a maybe int.
     assert_eq!(hover(VALUES, "half = match").0, "fixed half: maybe int");
-    // Text from a `when` inside a case.
     assert_eq!(hover(VALUES, "label = match").0, "fixed label: text");
-    // The name a case's pattern binds, inside that case.
     assert_eq!(hover(VALUES, "value / 2").0, "value: int");
 }
 
 #[test]
 fn a_value_a_case_gives_is_read_as_a_value_not_a_pattern() {
-    // `case Ok value = value / 2`: the pattern ends at the `=`.
     assert_eq!(class_at(VALUES, "Ok value = value", 0), TokenClass::Variant);
     assert_eq!(class_at(VALUES, "value = value", 0), TokenClass::Variable);
     assert_eq!(class_at(VALUES, "value / 2", 0), TokenClass::Variable);
@@ -165,7 +151,6 @@ fn completion_offers_a_match_and_a_when_where_a_value_goes() {
     assert!(items.contains(&"match".to_string()), "{:?}", items);
     assert!(items.contains(&"when".to_string()), "{:?}", items);
     assert!(items.contains(&"match … = value".to_string()), "{:?}", items);
-    // Inside a case's value, the names visible there, including the pattern's.
     let inside = labels("kind K\n    Ok(v: int)\nfi\n\ntask main()\n    fixed k = Ok(1)\n    fixed n = match k\n    case Ok v = @@\n    fi\n    show(n)\nfi\n");
     assert!(inside.contains(&"v".to_string()), "{:?}", inside);
 }
@@ -182,7 +167,6 @@ fn a_loop_is_not_offered_a_when() {
 
 #[test]
 fn a_half_typed_value_still_highlights_and_says_what_it_can() {
-    // Studio reads a file that does not check from its tokens alone.
     let source = "task main()\n    fixed n = match missing\n    case Ok v = v\n    fi\n    show(n)\nfi\n";
     assert!(!Analysis::new(source).diagnostics().is_empty());
     assert_eq!(class_at(source, "match missing", 0), TokenClass::Keyword);

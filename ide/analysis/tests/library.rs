@@ -1,9 +1,3 @@
-//! Vela's library in the editor: `include std/files` needs no file from the
-//! editor, since the library is the compiler's own, and highlighting,
-//! diagnostics, hover, and completion follow its names as they do a module of
-//! the program's. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -26,7 +20,6 @@ fn main_with(code: &str) -> String {
     MAIN.replace("    @@\n", &format!("    {}\n", code))
 }
 
-/// The UTF-16 offset of the first `needle` in `source`.
 fn at(source: &str, needle: &str) -> usize {
     let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
     LineIndex::new(source).utf16_of(byte)
@@ -59,13 +52,11 @@ fn hover_and_definitions_know_the_library() {
     assert_eq!(exists.code, "exists() -> bool");
     assert!(exists.doc.starts_with("A method of shape disk.File"), "{}", exists.doc);
     let file = analysis.hover(at(&source, "File {")).unwrap();
-    // Its own private field and method are the library's.
     assert!(file.code.starts_with("shape disk.File\n    read path: text\n    read state: disk.FileState\n    read mode: maybe disk.FileMode\n    alters open("), "{}", file.code);
     assert!(!file.code.contains("handle") && !file.code.contains("left_closed"), "{}", file.code);
     assert_eq!(file.doc, "From module disk (Vela's library).");
     let module = analysis.hover(at(&source, "disk (")).unwrap();
     assert_eq!((module.code.as_str(), module.doc.as_str()), ("include std/files => disk", "A module of Vela's library, which comes with the compiler."));
-    // The library is no file the editor can open.
     assert_eq!(analysis.definition(at(&source, "File {")), None);
     assert_eq!(analysis.definition(at(&source, "disk (")), None);
     assert_eq!(analysis.tokens().into_iter().find(|t| t.from == at(&source, "disk.File")).unwrap().class, TokenClass::Module);
@@ -75,7 +66,6 @@ fn hover_and_definitions_know_the_library() {
 fn completion_offers_the_library() {
     assert!(labels(&main_with("show(here.@@)")).contains(&"exists".to_string()));
     assert!(labels(&main_with("show(disk.@@)")).contains(&"File".to_string()));
-    // Its private native task is its own.
     assert!(!labels(&main_with("show(disk.@@)")).contains(&"path_exists".to_string()));
     let at_path = labels("include @@\n");
     assert!(at_path.contains(&"std/files".to_string()), "{:?}", at_path);
@@ -90,10 +80,8 @@ fn native_is_a_word_only_before_task() {
     let class = |offset: usize| analysis.tokens().into_iter().find(|t| t.from == offset).unwrap().class;
     assert_eq!(class(0), TokenClass::Keyword);
     assert_ne!(class(at(source, "native = 1")), TokenClass::Keyword);
-    // Only the library has native tasks.
     assert!(analysis.diagnostics()[0].message.starts_with("'native' marks a task whose body the compiler writes in C"));
 }
-
 
 const MATH: &str = "\
 include std/math (P)

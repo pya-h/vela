@@ -1,5 +1,3 @@
-// Light and dark themes: the system's choice until the user picks one.
-
 import { iconButton } from "./dom";
 import { icon } from "./icons";
 import { load, save } from "./storage";
@@ -10,7 +8,6 @@ const isTheme = (value: unknown): value is ThemeName | null => value === "dark" 
 
 const systemTheme = () => window.matchMedia("(prefers-color-scheme: light)");
 
-/** The theme the user chose, or the system's; set on the page before anything is shown. */
 export function applyInitialTheme(): void {
   document.documentElement.dataset["theme"] = load("theme", null, isTheme) ?? (systemTheme().matches ? "light" : "dark");
 }

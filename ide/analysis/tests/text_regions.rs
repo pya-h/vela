@@ -1,9 +1,3 @@
-//! Text in regions in the editor: `text@r`, and shapes and kinds holding text
-//! that name a region, with the compiler's types and with the types read from
-//! the declarations while the file doesn't check. In the sources below, `@@`
-//! marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex};
@@ -45,8 +39,6 @@ task main()
 fi
 ";
 
-/// `PROGRAM` with a first line in `main` that either checks or stops the
-/// checker before anything else in `main`.
 fn program(checks: bool) -> String {
     PROGRAM.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" })
 }
@@ -72,8 +64,6 @@ fn hover_shows_text_and_shapes_in_regions_whether_or_not_the_file_checks() {
         assert_eq!(hover_code(&source, "held ="), "fixed held: Person@r", "{}", when);
         assert_eq!(hover_code(&source, "first ="), "fixed first: text@r", "{}", when);
         assert_eq!(hover_code(&source, "label ="), "fixed label: text@r", "{}", when);
-        // Text of no region in particular lasts, and an array takes a region
-        // any of its items has.
         assert_eq!(hover_code(&source, "either ="), "fixed either: text", "{}", when);
         assert_eq!(hover_code(&source, "both ="), "fixed both: [text@r#2]", "{}", when);
     }

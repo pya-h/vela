@@ -1,8 +1,5 @@
-// Calls the vela-studio server's JSON API with the session token.
-
 import type { BuildResult, EntryKind, FileContent, Info, RunResult, TerminalSize, Tree } from "./types";
 
-/** A request the server refused, with its status and `{error, …}` body. */
 export class ApiError extends Error {
   override name = "ApiError";
 
@@ -49,10 +46,6 @@ export class StudioApi {
     return this.call("GET", `/api/file?path=${encodeURIComponent(path)}`);
   }
 
-  /**
-   * Replaces a file's contents. With `baseHash`, the server refuses (409,
-   * `body.hash` = the current hash) if the file changed since that version.
-   */
   writeFile(path: string, content: string, baseHash?: string): Promise<{ hash: string }> {
     return this.call("PUT", "/api/file", baseHash === undefined ? { path, content } : { path, content, baseHash });
   }
@@ -69,17 +62,14 @@ export class StudioApi {
     return this.call("POST", "/api/file/delete", { path });
   }
 
-  /** Builds a file without running it; a failed build is a normal answer. */
   build(path: string): Promise<BuildResult> {
     return this.call("POST", "/api/build", { path });
   }
 
-  /** Builds a file and runs it in a new session, stopping the previous run. */
   run(path: string, size: TerminalSize): Promise<RunResult> {
     return this.call("POST", "/api/run", { path, ...size });
   }
 
-  /** Opens a shell in the workspace folder. */
   terminal(size: TerminalSize): Promise<{ session: string }> {
     return this.call("POST", "/api/terminal", size);
   }
@@ -109,7 +99,7 @@ export class StudioApi {
     try {
       json = text ? JSON.parse(text) : undefined;
     } catch {
-      // Not JSON, such as a plain-text rejection; reported below.
+      // Plain-text error responses fall through to response.statusText below.
     }
     if (!response.ok) {
       const errorBody = json && typeof json === "object" ? (json as Record<string, unknown>) : {};

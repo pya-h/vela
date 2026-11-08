@@ -1,5 +1,3 @@
-// A context menu at the pointer, navigable with the keyboard.
-
 import { h } from "./dom";
 
 export interface MenuItem {
@@ -10,7 +8,6 @@ export interface MenuItem {
 }
 
 let openMenu: HTMLElement | null = null;
-/** Removes the open menu's window listeners. */
 let cleanup: (() => void) | null = null;
 
 export function closeMenu(): void {
@@ -22,7 +19,6 @@ export function closeMenu(): void {
 
 export function showMenu(x: number, y: number, items: (MenuItem | "separator")[]): void {
   closeMenu();
-  // Focus goes back where it was when the menu is dismissed with Escape.
   const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const buttons: HTMLButtonElement[] = [];
   const menu = h(
@@ -61,7 +57,7 @@ export function showMenu(x: number, y: number, items: (MenuItem | "separator")[]
     }
   });
   document.body.append(menu);
-  // Keep the menu on screen (positions set through the CSSOM, allowed by the page's policy).
+  // Clamp to viewport through the CSSOM to satisfy CSP.
   const { width, height } = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(x, window.innerWidth - width - 4)}px`;
   menu.style.top = `${Math.min(y, window.innerHeight - height - 4)}px`;

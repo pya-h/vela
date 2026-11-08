@@ -1,9 +1,3 @@
-//! The short forms of slices (and maps) in the editor: `[1, 2, ...] at r` is
-//! a slice in `r`, hovered with the compiler's types, and with the same types
-//! read from the values while the file doesn't check. In the sources below,
-//! `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex};

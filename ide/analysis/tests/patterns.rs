@@ -1,10 +1,3 @@
-//! Patterns in the editor: `pattern Shaped … fi` with fields, method headers
-//! and default methods, shapes following it (`shape Circle::Shaped`), and a task
-//! asking for it (`<T: Shaped>`): colored, hovered, in the outline, and the
-//! default methods offered on a follower's values. In the sources below, `@@`
-//! marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, SymbolKind, TokenClass};
@@ -95,14 +88,10 @@ fn a_pattern_and_its_members_are_colored() {
     assert_eq!(class_at(&source, "this) -> bool"), Some(TokenClass::Type));
     assert_eq!(class_at(&source, "Shaped\n    name: text\n    radius"), Some(TokenClass::Type));
     assert_eq!(class_at(&source, "Shaped>(xs"), Some(TokenClass::Type));
-    // Inside a default, the value's fields and methods; a parameter of a
-    // header with no body is no variable after its line.
     assert_eq!(class_at(&source, "name}: {"), Some(TokenClass::Field));
     assert_eq!(class_at(&source, "area()}\" at r"), Some(TokenClass::Method));
     assert_eq!(class_at(&source, "other.area()"), Some(TokenClass::Parameter));
-    // A follower's value has the default methods.
     assert_eq!(class_at(&source, "describe(r), total"), Some(TokenClass::Method));
-    // A variable named `pattern` is only a variable.
     let plain = "task main()\n    fixed pattern = 1\n    show(pattern)\nfi\n";
     let classes: Vec<TokenClass> = Analysis::new(plain).tokens().into_iter().filter(|t| &plain[t.from..t.to] == "pattern").map(|t| t.class).collect();
     assert_eq!(classes, [TokenClass::Variable, TokenClass::Variable]);
@@ -117,7 +106,6 @@ fn a_pattern_hovers_with_what_it_asks_for() {
         "pattern Shaped\n    name: text\n    area() -> float\n    start()\n    stop()\n    describe(r: region) -> text@r ; default\n    larger(other: this) -> bool ; default\nfi"
     );
     assert!(doc.contains("follows it"), "{}", doc);
-    // A follower lists the defaults it has from it.
     let (code, _) = hover(&source, "Circle::");
     assert!(code.starts_with("shape Circle::Shaped\n"), "{}", code);
     assert!(code.contains("    describe(r: region) -> text@r ; from Shaped\n"), "{}", code);

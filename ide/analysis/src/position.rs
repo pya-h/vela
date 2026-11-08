@@ -1,22 +1,13 @@
-//! Converting between the three ways positions are written: the compiler's
-//! line and column (1-based, columns counted in characters), byte offsets
-//! (for slicing the source), and UTF-16 offsets (JavaScript string indices,
-//! which editors such as CodeMirror use).
-
 use std::borrow::Cow;
 use std::ops::Range;
 
 use vela::ast::Span;
 
-/// Line starts of one source text, for fast position conversion.
+/// Converts between byte offsets, 1-based char line/column `Span`s, and JS UTF-16 offsets.
 pub struct LineIndex<'a> {
     source: Cow<'a, str>,
-    /// Byte offset of the start of each line.
     starts: Vec<usize>,
-    /// UTF-16 offset of the start of each line.
     starts_utf16: Vec<usize>,
-    /// Whether each line is plain ASCII, where bytes, characters, and UTF-16
-    /// units are the same and positions convert without counting.
     ascii: Vec<bool>,
 }
 
@@ -29,7 +20,6 @@ impl<'a> LineIndex<'a> {
         &self.source
     }
 
-    /// The index of a text it keeps itself.
     pub fn owned(source: String) -> LineIndex<'static> {
         LineIndex::of(Cow::Owned(source))
     }
@@ -60,14 +50,11 @@ impl<'a> LineIndex<'a> {
         }
     }
 
-    /// The byte offset of a compiler position. A column past the end of its
-    /// line stops at the line's end, and a line past the last one at the end
-    /// of the source.
     pub fn byte_of(&self, span: Span) -> usize {
         let Some(&start) = span.line.checked_sub(1).and_then(|i| self.starts.get(i)) else {
             return self.source.len();
         };
-        // The compiler's columns start after a byte order mark.
+        // Compiler columns start after a leading BOM.
         let start = if start == 0 && self.source.starts_with('\u{feff}') {
             '\u{feff}'.len_utf8()
         } else {
@@ -84,8 +71,6 @@ impl<'a> LineIndex<'a> {
         offset
     }
 
-    /// The UTF-16 offset of a byte offset, which is clamped to the source and
-    /// rounded down to a character boundary.
     pub fn utf16_of(&self, byte: usize) -> usize {
         let byte = self.floor_char_boundary(byte);
         let line = self
@@ -104,9 +89,6 @@ impl<'a> LineIndex<'a> {
         start_utf16 + text.chars().map(char::len_utf16).sum::<usize>()
     }
 
-    /// The byte offset of a UTF-16 offset, clamped to the source. An offset
-    /// in the middle of a character (between the two halves of a surrogate
-    /// pair) moves to the start of that character.
     pub fn byte_of_utf16(&self, utf16: usize) -> usize {
         let line = self
             .starts_utf16
@@ -137,13 +119,10 @@ impl<'a> LineIndex<'a> {
         offset
     }
 
-    /// A byte range as a UTF-16 range.
     pub fn utf16_range(&self, range: &Range<usize>) -> Range<usize> {
         self.utf16_of(range.start)..self.utf16_of(range.end)
     }
 
-    /// A converter for byte offsets given in increasing order, which counts
-    /// each character once instead of from its line's start each time.
     pub(crate) fn cursor(&self) -> Utf16Cursor<'_, 'a> {
         Utf16Cursor {
             index: self,
@@ -161,17 +140,13 @@ impl<'a> LineIndex<'a> {
     }
 }
 
-/// See `LineIndex::cursor`.
 pub(crate) struct Utf16Cursor<'i, 'a> {
     index: &'i LineIndex<'a>,
-    /// The last offset converted, a character boundary, and its UTF-16 offset.
     byte: usize,
     utf16: usize,
 }
 
 impl Utf16Cursor<'_, '_> {
-    /// The UTF-16 offset of `byte`, as `LineIndex::utf16_of` gives it. An
-    /// offset before the last one starts over from its line.
     pub(crate) fn utf16_of(&mut self, byte: usize) -> usize {
         let byte = self.index.floor_char_boundary(byte);
         if byte < self.byte {

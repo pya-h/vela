@@ -1,9 +1,3 @@
-//! Task values in the editor: a task named without `()`, a task's type written
-//! `(int) -> int`, and the call of a value that holds a task, hovered with their
-//! types whether or not the file checks; a task changing what a slice it is
-//! given reaches says 'flex' for it in its type.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -41,8 +35,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse, where the types are read from the source alone.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {
@@ -85,7 +77,6 @@ fn a_parameter_after_one_of_a_task_type_is_a_parameter() {
     let byte = source.find("n: int").unwrap();
     let token = Analysis::new(source).tokens().into_iter().find(|t| t.from == byte).unwrap();
     assert_eq!(token.class, TokenClass::Parameter);
-    // The header's own arrow still starts its results.
     let ret = source.rfind("int").unwrap();
     let token = Analysis::new(source).tokens().into_iter().find(|t| t.from == ret).unwrap();
     assert_eq!(token.class, TokenClass::TypeBuiltin);
@@ -132,8 +123,6 @@ fi
         assert_eq!(hover(&source, "totalled ="), "fixed totalled: (fixed& int) -> int", "{}", when);
         assert_eq!(hover(&source, "squared ="), "fixed squared: (@r, int) -> [int]@r", "{}", when);
         assert_eq!(hover(&source, "kept:"), "flex kept: maybe (@r, int) -> [int]@r", "{}", when);
-        // A region taken by default is a region still, and what a call through
-        // the value sends is in the region the call gives.
         assert_eq!(hover(&source, "kinder ="), "fixed kinder: (@r, int) -> [int]@r", "{}", when);
         assert_eq!(hover(&source, "made ="), "fixed made: [int]@q", "{}", when);
     }
@@ -163,8 +152,6 @@ fi
 
 #[test]
 fn a_value_given_where_a_region_goes_names_no_region() {
-    // A file that doesn't parse, read from the source alone; the spaces
-    // before `default` don't matter.
     let source = "\
 task pick(r: region  default, xs: [int]@r) -> [int]@r
     <- xs

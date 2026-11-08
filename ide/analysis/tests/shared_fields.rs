@@ -1,10 +1,3 @@
-//! A shape's shared fields in the editor (`shared made: int = 0`): each is a
-//! field of the shape itself, colored and hovered as one where it is declared
-//! and where `Shape.f` reads it, completed after the shape's name and never
-//! after a value's, and never offered in a literal; all of it holds while the
-//! file doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -74,14 +67,11 @@ fn a_shared_field_hovers_with_its_words_and_says_how_it_is_read() {
         assert_eq!(code, "shared read seen: int", "{}", when);
         assert!(doc.contains("only the methods of its shape change it"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "secret: int").0, "priv shared flex secret: int", "{}", when);
-        // The shape lists them with their words.
         let shape = hover(&source, "Meter\n").0;
         assert!(shape.contains("    shared start: int\n") && shape.contains("    shared read seen: int\n"), "{}: {}", when, shape);
         assert!(shape.contains("    priv shared flex secret: int\n"), "{}: {}", when, shape);
-        // An ordinary field beside them is as it was.
         assert_eq!(hover(&source, "count: int").0, "count: int", "{}", when);
     }
-    // Where the program reads one, the hover is the field's.
     let source = program(true, "show(counted)");
     assert_eq!(hover(&source, "made + 1").0, "shared flex made: int");
     assert_eq!(hover(&source, "start\n").0, "shared start: int");
@@ -100,7 +90,6 @@ fn the_words_are_keywords_and_the_names_fields() {
     assert_eq!(class_at("read seen"), Some(TokenClass::Keyword));
     assert_eq!(class_at("start: int"), Some(TokenClass::Field));
     assert_eq!(class_at("seen: int"), Some(TokenClass::Field));
-    // `Meter.made`: the shape, then its field.
     assert_eq!(class_at("Meter.made = "), Some(TokenClass::Type));
     assert_eq!(class_at("made = Meter"), Some(TokenClass::Field));
 }
@@ -147,10 +136,8 @@ fn a_shapes_member_line_offers_the_words_of_a_shared_field() {
     let shape = |line: &str| format!("shape Meter\n    count: int = 0\n    {}\nfi\n\ntask main()\nfi\n", line);
     assert!(labels(&completions(&shape("@@"))).contains(&"shared"));
     assert!(labels(&completions(&shape("priv @@"))).contains(&"shared"));
-    // Or `new`, the name of a shared method.
     assert_eq!(labels(&completions(&shape("shared @@"))), ["flex", "bind", "read", "new"]);
     assert_eq!(labels(&completions(&shape("priv shared @@"))), ["flex", "bind", "read", "new"]);
-    // A kind has no fields, so no shared ones, but shared methods.
     let kind = "kind Mood\n    Calm\n    shared @@\nfi\n";
     assert_eq!(labels(&completions(kind)), ["new"]);
 }

@@ -1,13 +1,9 @@
-// A quick picker: type to filter a list, arrows to move, Enter to choose.
-
 import { h } from "./dom";
 import { type Match, fuzzyFilter } from "./fuzzy";
 
 export interface PickItem {
   label: string;
-  /** Shown dimmed after the label, and matched too. */
   detail?: string;
-  /** A short badge before the label, such as a symbol kind. */
   badge?: { text: string; className: string };
 }
 
@@ -22,7 +18,6 @@ function highlighted(text: string, positions: Set<number>, offset: number): Node
     nodes.push(runMatched ? h("mark", { text: run }) : document.createTextNode(run));
     run = "";
   };
-  // Positions are string indices (UTF-16 code units), as the matcher counts.
   for (let i = 0; i < text.length; i++) {
     const matched = positions.has(i + offset);
     if (matched !== runMatched) {
@@ -37,14 +32,13 @@ function highlighted(text: string, positions: Set<number>, offset: number): Node
 
 let pickers = 0;
 
-/** Shows the picker; resolves to the chosen item, or null if dismissed. */
 export function pick<T extends PickItem>(placeholder: string, items: readonly T[], empty = "No matches"): Promise<T | null> {
   return new Promise((resolve) => {
     let chosen: T | null = null;
     let results: { item: T; match: Match }[] = [];
     let selected = 0;
 
-    // Unique ids: a closed picker stays in the page for a moment.
+    // Unique DOM ids while the previous dialog fades out for 200ms after closing.
     const id = `palette-${++pickers}`;
     const input = h("input", {
       class: "palette-input",

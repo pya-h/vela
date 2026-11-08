@@ -1,7 +1,3 @@
-// The file tree: folders expand and collapse (remembered per workspace),
-// files open on click, and a context menu or keys create, rename, and delete.
-// Keyboard: arrows move and expand, Enter opens, F2 renames, Delete deletes.
-
 import type { Entry, Tree } from "../api/types";
 import { parentFolder } from "./documents";
 import { h, iconButton } from "./dom";
@@ -66,7 +62,6 @@ export class Explorer {
     this.render();
   }
 
-  /** Highlights the open file and expands the folders around it. */
   setActive(path: string | null): void {
     this.active = path;
     if (path !== null) {
@@ -79,20 +74,17 @@ export class Explorer {
     this.list.querySelector(".tree-row.active")?.scrollIntoView({ block: "nearest" });
   }
 
-  /** Expands a folder, such as one just created or containing a new file. */
   expand(folder: string): void {
     for (let f = folder; f !== ""; f = parentFolder(f)) this.expanded.add(f);
     this.persist();
   }
 
-  /** The folder new entries go in: the selected folder, or the selected file's folder. */
   selectedFolder(): string {
     const row = this.rows.find((r) => r.entry.path === this.selected);
     if (!row) return "";
     return row.entry.kind === "folder" ? row.entry.path : parentFolder(row.entry.path);
   }
 
-  /** Follows a rename in the remembered expanded folders. */
   renamed(from: string, to: string): void {
     for (const path of [...this.expanded]) {
       if (path === from || path.startsWith(`${from}/`)) {
@@ -159,7 +151,7 @@ export class Explorer {
         icon(isFolder ? "folder" : "file", "icon entry-icon"),
         h("span", { class: "tree-name", text: entry.name }),
       );
-      // The indentation, through the CSSOM (allowed by the page's policy).
+      // Set via CSSOM to satisfy Content-Security-Policy (no inline style attributes).
       row.style.setProperty("--depth", String(depth));
       return row;
     });
@@ -187,7 +179,6 @@ export class Explorer {
     }
   }
 
-  /** Focuses a row: the active file's, or else the first. */
   focus(): void {
     const rows = [...this.list.querySelectorAll<HTMLElement>(".tree-row")];
     (rows.find((row) => row.tabIndex === 0) ?? rows[0])?.focus();
@@ -269,12 +260,10 @@ export class Explorer {
   }
 }
 
-/** Every file in the tree, for the quick picker. */
 export function allFiles(entries: Entry[]): Entry[] {
   return entries.flatMap((entry) => (entry.kind === "folder" ? allFiles(entry.children ?? []) : [entry]));
 }
 
-/** Whether the tree has an entry at `path`. */
 export function hasEntry(entries: Entry[], path: string): boolean {
   return entries.some((entry) => entry.path === path || (entry.kind === "folder" && path.startsWith(`${entry.path}/`) && hasEntry(entry.children ?? [], path)));
 }

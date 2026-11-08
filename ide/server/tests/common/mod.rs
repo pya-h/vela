@@ -1,5 +1,3 @@
-//! Helpers shared by the server tests: temporary workspaces and requests.
-
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -15,13 +13,10 @@ use serde_json::Value;
 use tower::ServiceExt;
 use vela_studio::{Config, Studio, Token, router};
 
-/// The port the router tests pretend to listen on.
 pub const PORT: u16 = 4000;
 
 pub const HELLO: &str = "task main()\n    show(\"Hello, Vela!\")\nfi\n";
 
-/// A fresh folder holding a workspace (`ws/`) and space beside it
-/// (`outside/`), removed when the test passes.
 pub struct TempDir(pub PathBuf);
 
 impl TempDir {
@@ -43,7 +38,6 @@ impl TempDir {
         self.0.join("outside")
     }
 
-    /// Writes a file in the workspace, creating its folders.
     pub fn write(&self, path: &str, content: impl AsRef<[u8]>) -> PathBuf {
         let full = self.workspace().join(path);
         fs::create_dir_all(full.parent().unwrap()).unwrap();
@@ -95,7 +89,6 @@ impl Reply {
     }
 }
 
-/// A request as the IDE page sends it: this server's host and the token.
 pub fn request(studio: &Studio, method: Method, uri: &str, body: Option<Value>) -> axum::http::request::Builder {
     let builder = Request::builder()
         .method(method)
@@ -113,14 +106,12 @@ pub async fn send(app: &Router, request: Request<Body>) -> Reply {
     Reply { status, headers, body }
 }
 
-/// Sends an authenticated request with an optional JSON body.
 pub async fn call(app: &Router, studio: &Studio, method: Method, uri: &str, body: Option<Value>) -> Reply {
     let builder = request(studio, method, uri, body.clone());
     let body = body.map_or_else(Body::empty, |json| Body::from(json.to_string()));
     send(app, builder.body(body).unwrap()).await
 }
 
-/// Percent-encodes a query value.
 pub fn encode(value: &str) -> String {
     value
         .bytes()

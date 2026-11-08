@@ -1,6 +1,3 @@
-// The Terminal tab: a shell in the workspace folder. It starts when the tab is
-// first shown; when the shell exits (or can't start), any key starts a new one.
-
 import { ApiError, type StudioApi } from "../api/client";
 import { SessionSocket, sessionUrl } from "../api/socket";
 import { ansi, exitLine } from "./format";
@@ -11,10 +8,8 @@ export class Shell {
   private socket: SessionSocket | null = null;
   private session: string | null = null;
   private starting = false;
-  /** The shell has ended; the next key starts another. */
   private ended = false;
   private stopped = false;
-  /** Typed while the shell starts; sent once it has. */
   private typed: string[] = [];
 
   constructor(private readonly api: StudioApi) {
@@ -33,13 +28,11 @@ export class Shell {
     });
   }
 
-  /** Opens the view and starts a shell if none is running. */
   async show(): Promise<void> {
     await this.view.open();
     if (!this.socket && !this.starting && !this.ended) await this.start();
   }
 
-  /** Ends the running shell, if any, and starts a new one in a clear terminal. */
   async restart(): Promise<void> {
     if (this.starting) return;
     this.socket?.dispose();
@@ -51,7 +44,6 @@ export class Shell {
     await this.start();
   }
 
-  /** Stops the shell; its exit is shown, and a key starts a new one. */
   kill(): void {
     if (this.session === null || this.ended) return;
     this.stopped = true;
@@ -78,7 +70,7 @@ export class Shell {
           this.end(`\r\n${ansi.red("The connection to the terminal was lost.")} ${ansi.dim("Press any key to start a new one.")}\r\n`);
         },
       });
-      // The size now, not when the request started: the panel may have changed meanwhile.
+      // Re-measure in case the panel resized while `/api/terminal` was in flight.
       this.socket.resize(this.view.fit());
       for (const data of this.typed.splice(0)) this.socket.send(data);
     } catch (error) {

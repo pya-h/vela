@@ -1,11 +1,3 @@
-//! What a fixed name owns, a slice, a map or a pointer, is never given to what
-//! may change it (Part 22, phase 2.3): Studio shows the compiler's error where
-//! the value is given, for a call that sends back what it was given too, and
-//! none where a task only reads what it is given to make something new; a
-//! lambda is followed to what it sends back. A slice made of another is a
-//! complete copy, owned by no one (phase 2.4).
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::Analysis;
@@ -56,7 +48,6 @@ fn a_lambda_is_followed_to_what_it_sends_back() {
         diagnostics("    fixed xs = [1, 2, ...]\n    flex f = [@r]() -> [int]@r <- xs fi\n    show(f())\n"),
         [(16, 14, "'f' is given a lambda that may send back what fixed 'xs' owns, and nothing changes through what a fixed name owns; make 'f' fixed, or have the lambda send back a copy, as in '<- xs.copy() at r'".to_string())]
     );
-    // One that only reads what it keeps to make something new gives nothing owned.
     assert_eq!(diagnostics("    fixed xs = [1, 2, ...]\n    flex f = [@r]() -> [int]@r <- xs.copy() at r fi\n    flex ys = f()\n    ys[0] = 0\n"), []);
 }
 

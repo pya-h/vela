@@ -1,9 +1,3 @@
-/* The readers of numbers in text in runtime/vela_rt.h, tested directly:
- * `int("42")` and `float("2.5")`, with the edges of an int, numbers too large
- * for each type, and text that is no number at all. Compiled by tests/runtime.rs
- * as strict C11 (and with sanitizers where available); prints "ok" when every
- * check passes. */
-
 #include "vela_rt.h"
 
 static int failures = 0;
@@ -87,7 +81,6 @@ int main(void) {
     number("nan", 1, 0);
     number("0x10", 1, 0);
     number(" 2.5", 1, 0);
-    /* A number far past the largest double, and one far below the smallest. */
     char big[512];
     memset(big, '9', sizeof big);
     big[500] = 0;

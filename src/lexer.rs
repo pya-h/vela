@@ -7,10 +7,8 @@ use crate::error::{Error, Result};
 pub enum Token {
     Int(i64),
     Float(f64),
-    /// `'a'`: one byte, as a char.
     Char(u8),
     Text(String),
-    /// Text holding values, `"n = {n}"`: its pieces in order.
     Interpolated(Vec<Piece>),
     True,
     False,
@@ -18,61 +16,38 @@ pub enum Token {
     Task,
     Fixed,
     Flex,
-    /// `bind` and `hold`, reserved words with no use yet: the old spellings of
-    /// `fixed` and `flex`, which a program can't take as names, and which are an
-    /// error wherever they are written (see `Parser::parse_file`).
+    /// Reserved (formerly fixed/flex); diagnosed cleanly in the parser.
     Bind,
     Hold,
-    /// `<-`, which sends a task's result (the counterpart of `->` in its header).
     Send,
     Shape,
     Kind,
     When,
     Else,
     Loop,
-    /// `endless`: a loop that never ends by itself, `loop || ||` said in a word.
     Endless,
     Each,
-    /// `break`: stops the loop around it, or the one it names, `break outer`.
     Break,
-    /// `continue`: ends this pass of the loop around it, or of the one it
-    /// names, `continue outer`, and goes on with the next.
     Continue,
-    /// `block`: a block of its own, which ends at its `fi` with its names and
-    /// regions.
     Block,
     In,
     Match,
     Case,
     New,
-    /// `region`: declares a region, or is the type of a region parameter.
     Region,
     And,
     Or,
     Not,
-    /// `&`, which joins the words a generic type must allow (`<T: same & shown>`),
-    /// marks a place given to `flex&` (`f(&a)`), and makes `flex&` and `fixed&`.
-    /// Vela writes `and` for both conditions at once.
     Amp,
     Fi,
-    /// `finally`: runs after a loop finishes normally, giving its single value.
     Finally,
     Maybe,
     Is,
-    /// `fail`, the verb: makes a failure, as in `<- fail e`.
     Fail,
-    /// `failure`, the noun: names a failure where one is matched, as in
-    /// `case failure e` and a plan B's first line.
     Failure,
-    /// `include`: makes another file's tasks, shapes, and kinds usable in this one.
     Include,
-    /// `priv`: keeps a task, shape, kind, or shape's field to its own file.
     Priv,
-    /// `shared`: a shape's field that is one value for the whole program rather
-    /// than part of each value, reached through the shape's name, `X.f`.
     Shared,
-    /// `type`: reserved, and read after a dot, `x.type`, the type of a value
-    /// as code writes it.
     Type,
     Ident(String),
     LParen,
@@ -82,42 +57,23 @@ pub enum Token {
     LBracket,
     RBracket,
     Colon,
-    /// `#`, which separates an array's type or value from its count, as in
-    /// item #4: `[int#4]`, `[0#4]`.
     Hash,
-    /// `$`, which marks a decorator before a task: `$d`, `$d(args)`, or the
-    /// wrappers `$(w1, w2(a))`.
     Dollar,
-    /// `?`, after a startup decorator whose failure doesn't stop the program:
-    /// `$route("/")?`.
     Question,
     Comma,
     Dot,
     Arrow,
-    /// `=>`, which gives an included module or name another name:
-    /// `include shop/cart => basket`, and names a loop: `outer => each x in xs`.
     FatArrow,
-    /// `||`, which parts a loop's start, condition and step:
-    /// `loop flex i = 0 || i < 10 || i++`. Nowhere else: Vela writes `or`.
     Parts,
-    /// `|>`, `|>>`, `|>>>`…: a pipe, giving the value before it to the call
-    /// after it as the argument its count of `>` says, `a |>> f(b)` being
-    /// `f(b, a)` (see `ast::ExprKind::Pipe`).
     Pipe(usize),
     Range,
-    /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
-    /// of the values rather than an array.
     Ellipsis,
     Plus,
     Minus,
     Star,
-    /// `**`: a number raised to a power.
     Power,
-    /// `++` and `--`, after a place: one more, or one less.
     Increment,
     Decrement,
-    /// `+=`, `-=`, `*=`, `/=`, `%=`, and `**=`: a place given the result of its
-    /// operator on it and a value.
     PlusAssign,
     MinusAssign,
     StarAssign,
@@ -134,29 +90,16 @@ pub enum Token {
     Ge,
     Assign,
     Caret,
-    /// `~`, which separates a type from the error it can be instead:
-    /// `int ~ ParseError`.
     Tilde,
-    /// `~=`: whether two values are similar, item by item.
     Similar,
-    /// `<>`: whether two values aren't similar, `not (a ~= b)`. Where types
-    /// are read, it is `< … >` with nothing inside.
     NotSimilar,
-    /// `@`, which names the region a type lives in (`^Node@r`) or `new`
-    /// allocates in (`new@r T(v)`). The word `at` is `Token::At`.
     AtSign,
-    /// The word `at`, which names the region a `new` allocates in:
-    /// `new T(v) at r`, the same as `new@r T(v)`.
     At,
-    /// `_`, which matches or binds a value without naming it.
     Underscore,
     Newline,
     Eof,
 }
 
-/// Every keyword with its token: the one list of Vela's reserved words, used
-/// by the lexer and by tools such as editors. `bind` and `hold` are reserved
-/// with no use yet (see `Token::Bind`).
 pub const KEYWORDS: &[(&str, Token)] = &[
     ("task", Token::Task),
     ("fixed", Token::Fixed),
@@ -197,8 +140,6 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("type", Token::Type),
 ];
 
-/// The escapes allowed in text literals: the character after `\` and the
-/// character it stands for.
 pub const ESCAPES: &[(char, char)] = &[
     ('n', '\n'),
     ('t', '\t'),
@@ -215,12 +156,9 @@ pub const ESCAPES: &[(char, char)] = &[
 /// recursion could overflow the stack (see `parser::MAX_NESTING`).
 const MAX_TEXT_NESTING: usize = 32;
 
-/// A piece of text holding values (`Token::Interpolated`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Piece {
-    /// Text as written, its escapes read.
     Text(String),
-    /// A value, `{…}`: its tokens, between its `{` and its `}`.
     Value {
         open: Box<LexToken>,
         tokens: Vec<LexToken>,
@@ -229,10 +167,7 @@ pub enum Piece {
 }
 
 impl Token {
-    /// Whether the token can be part of a type written inside the `< … >` of the
-    /// types a declaration takes or a call gives. Reading a `<` as the start of
-    /// those types rather than as a comparison looks for the matching `>`
-    /// through these (see `Parser::at_type_args`).
+    /// Tokens valid inside generic `<...>` arguments (see `Parser::at_type_args`).
     pub fn writes_type(&self) -> bool {
         matches!(
             self,
@@ -252,13 +187,10 @@ impl Token {
                 | Token::Hash
                 | Token::Int(_)
                 | Token::Dot
-                // `Box<(int) -> int>`: a task's type.
                 | Token::Arrow
         )
     }
 
-    /// A human-readable description for diagnostics, e.g. `'fi'` or
-    /// `identifier 'x'`.
     pub fn describe(&self) -> String {
         if let Some((word, _)) = KEYWORDS.iter().find(|(_, token)| token == self) {
             return format!("'{}'", word);
@@ -318,14 +250,12 @@ impl Token {
             Token::NotSimilar => "<>",
             Token::AtSign => "@",
             Token::Underscore => "_",
-            // Keywords are found in `KEYWORDS` above.
             _ => return format!("{:?}", self),
         };
         format!("'{}'", symbol)
     }
 }
 
-/// A float as Vela writes it: digits with a `.`, never an exponent.
 fn float_text(value: f64) -> String {
     let text = value.to_string();
     if text.contains('.') || !value.is_finite() {
@@ -335,9 +265,6 @@ fn float_text(value: f64) -> String {
     }
 }
 
-/// The bases a whole number may be written in besides ten, by the letter after
-/// its `0`: the base, and the digits it has, for messages. `int(text)` reads
-/// the same ones (see `vela__rt__read_int`).
 fn based(letter: char) -> Option<(u32, &'static str)> {
     match letter {
         'x' => Some((16, "a hex digit (0-9, a-f)")),
@@ -386,7 +313,6 @@ fn read_based(raw: &str) -> std::result::Result<i64, String> {
     }
 }
 
-/// A number written in the base `letter` names, for messages.
 fn based_example(letter: char) -> &'static str {
     match letter {
         'x' => "0xff_ff",
@@ -395,33 +321,23 @@ fn based_example(letter: char) -> &'static str {
     }
 }
 
-/// A token from `highlight`, with its exact extent in the source.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexToken {
     pub kind: LexKind,
-    /// Position of the token's first character.
     pub start: Span,
-    /// Position just after the token's last character.
     pub end: Span,
-    /// The token's byte range in the source.
     pub range: Range<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LexKind {
     Token(Token),
-    /// A `;` comment, up to (not including) the end of the line.
     Comment,
-    /// Text the compiler rejects, with the error it reports. The first
-    /// `Invalid` token's error is exactly the error `Lexer::tokenize` returns.
+    /// First `Invalid` token carries the exact error returned by `Lexer::tokenize`.
     Invalid(Error),
 }
 
-/// Splits `source` into tokens without ever failing, for editors: text the
-/// compiler would reject becomes an `Invalid` token and lexing continues after
-/// it, and comments are kept. The result always ends with `Eof`. For source the
-/// compiler accepts, the tokens other than comments are exactly those
-/// `Lexer::tokenize` returns.
+/// Infallible editor lexer turning compiler errors into `Invalid` tokens and retaining comments.
 pub fn highlight(source: &str) -> Vec<LexToken> {
     let mut lexer = Lexer::new(source);
     let mut tokens = Vec::new();
@@ -437,22 +353,15 @@ pub fn highlight(source: &str) -> Vec<LexToken> {
 
 pub struct Lexer {
     source: Vec<char>,
-    /// Index of the next character in `source`.
     pos: usize,
-    /// Byte offset of the next character.
     byte: usize,
     line: usize,
     col: usize,
-    /// The file the source is, for the positions of its tokens (see `Span::file`).
     file: usize,
-    /// How many values in text the lexer is inside (see `MAX_TEXT_NESTING`).
     nesting: usize,
-    /// Whether the text being read holds values nested too deeply, the error
-    /// reported for it whatever else is wrong.
     too_deep: bool,
 }
 
-/// A saved lexer position, for backing up.
 #[derive(Clone, Copy)]
 struct Mark {
     pos: usize,
@@ -486,8 +395,6 @@ impl Lexer {
         }
     }
 
-    /// Returns every token (ending with `Eof`) and, in parallel, its position
-    /// and where it ends, or the first error.
     pub fn tokenize(mut self) -> Result<(Vec<Token>, Vec<Span>, Vec<Span>)> {
         let mut tokens = Vec::new();
         let mut spans = Vec::new();
@@ -510,7 +417,6 @@ impl Lexer {
         }
     }
 
-    /// Whether the next characters end a line: `\n`, or the `\r\n` of a CRLF file.
     fn at_line_end(&self) -> bool {
         self.peek() == '\n' || (self.peek() == '\r' && self.peek2() == '\n')
     }
@@ -529,7 +435,6 @@ impl Lexer {
         self.source.get(self.pos + 1).copied().unwrap_or('\0')
     }
 
-    /// Consumes and returns the next character (`'\0'` at the end).
     fn advance(&mut self) -> char {
         let c = self.peek();
         if self.at_end() {
@@ -563,15 +468,12 @@ impl Lexer {
         self.col = mark.col;
     }
 
-    /// Whether the next character is a `\r` that isn't part of a CRLF line
-    /// end, as old Mac files end lines: an error, since the file would read as
-    /// one line.
+    /// Reject lone CR (classic Mac endings) so files do not collapse onto line 1.
     fn lone_cr(&self) -> bool {
         self.peek() == '\r' && self.peek2() != '\n'
     }
 
     fn skip_whitespace(&mut self) {
-        // A `\r` is only the start of a CRLF line end (see `lone_cr`).
         while matches!(self.peek(), ' ' | '\t') || (self.peek() == '\r' && self.peek2() == '\n') {
             self.advance();
         }
@@ -609,7 +511,6 @@ impl Lexer {
             return LexKind::Token(Token::Newline);
         }
 
-        // `;` starts a comment, as it adds a remark to a sentence.
         if c == ';' {
             while !self.at_line_end() && !self.at_end() && !self.lone_cr() {
                 self.advance();
@@ -630,7 +531,6 @@ impl Lexer {
         }
 
         if c == '_' {
-            // `_` alone is a symbol; a name can't start with it.
             if !(self.peek2().is_alphanumeric() || self.peek2() == '_') {
                 self.advance();
                 return LexKind::Token(Token::Underscore);
@@ -689,7 +589,6 @@ impl Lexer {
                     Token::Dot
                 }
             }
-            // `x++` and `x += 1`, statements of their own (see `ast::StmtKind::Step`).
             '+' if self.peek() == '+' => {
                 self.advance();
                 Token::Increment
@@ -768,13 +667,10 @@ impl Lexer {
             }
             '&' | '|' => {
                 let word = if c == '&' { "and" } else { "or" };
-                // `||` parts a loop's start, condition and step; the parser
-                // says 'or' wherever else it stands (see `Parser::parse_loop`).
                 if c == '|' && self.peek() == c {
                     self.advance();
                     Token::Parts
                 } else if c == '|' && self.peek() == '>' {
-                    // `|>>`: as many `>` as the argument the value becomes.
                     let mut count = 0;
                     while self.peek() == '>' {
                         self.advance();
@@ -793,8 +689,6 @@ impl Lexer {
                         format!("unexpected character '{}'; Vela writes '{}'", c, word),
                     );
                 } else {
-                    // A single `&` joins the words a generic type must allow; the
-                    // parser reports it as 'and' anywhere else.
                     Token::Amp
                 }
             }
@@ -822,14 +716,11 @@ impl Lexer {
                     Token::Gt
                 }
             }
-            // `escape_debug` keeps control characters such as NUL readable.
             _ => return invalid(loc, format!("unexpected character '{}'", c.escape_debug())),
         };
         LexKind::Token(tok)
     }
 
-    /// Skips the rest of a malformed name, including any non-ASCII letters, so
-    /// it becomes one invalid token.
     fn skip_name(&mut self) {
         while self.peek().is_alphanumeric() || self.peek() == '_' {
             self.advance();
@@ -850,8 +741,7 @@ impl Lexer {
         if s.contains("__") {
             return invalid(loc, format!("'{}': names cannot contain '__'", s));
         }
-        // Every keyword is two to eight lowercase letters, so most names are
-        // told apart without comparing them to each.
+        // Every keyword is 2-8 lowercase ASCII letters.
         let could_be_keyword =
             (2..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
         let token = KEYWORDS
@@ -864,7 +754,6 @@ impl Lexer {
     }
 
     fn number(&mut self, loc: Span) -> LexKind {
-        // `s` is the number without its underscores; `raw` is as written, for messages.
         let mut s = String::new();
         let mut raw = String::new();
         let digits = |lexer: &mut Self, s: &mut String, raw: &mut String| {
@@ -872,7 +761,6 @@ impl Lexer {
                 let c = lexer.advance();
                 s.push(c);
                 raw.push(c);
-                // Underscores between digits are ignored: 1_000_000 reads as 1000000.
                 if lexer.peek() == '_' && lexer.peek2().is_ascii_digit() {
                     raw.push(lexer.advance());
                 }
@@ -898,7 +786,7 @@ impl Lexer {
         }
         digits(self, &mut s, &mut raw);
         if item && !(self.peek().is_ascii_alphabetic() || self.peek() == '_') {
-            // `t.01` and `t.1_0` would read as `t.1` and `t.10`.
+            // Reject leading zeros and underscores on tuple indices (`t.01`, `t.1_0`).
             if raw != s || (s.len() > 1 && s.starts_with('0')) {
                 let plain = s.trim_start_matches('0');
                 let plain = if plain.is_empty() { "0" } else { plain };
@@ -954,8 +842,6 @@ impl Lexer {
         }
     }
 
-    /// A whole number written in another base, `0x1F`, `0o17`, or `0b101`
-    /// (see `based`), with underscores between its digits as a decimal one has.
     fn based_number(&mut self, loc: Span) -> LexKind {
         let mut raw = String::new();
         raw.push(self.advance());
@@ -964,7 +850,6 @@ impl Lexer {
         while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
             raw.push(self.advance());
         }
-        // `0x1F.5`: a number in another base is whole.
         if self.peek() == '.' && self.peek2().is_ascii_digit() {
             raw.push(self.advance());
             while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
@@ -984,19 +869,15 @@ impl Lexer {
         }
     }
 
-    /// A text literal, which may hold values (`"n = {n}"`). An invalid one is
-    /// still read up to its closing quote, reporting its first error. One whose
-    /// line ends before its closing quote is an error; as a token it ends with
-    /// its line, so the lines after it are lexed normally.
+    /// Stops unterminated strings at end-of-line so following lines recover cleanly.
     fn string(&mut self, loc: Span) -> LexKind {
-        self.advance(); // opening "
+        self.advance();
         if self.nesting == 0 {
             self.too_deep = false;
         }
         let mut s = String::new();
         let mut pieces = Vec::new();
         let mut error = None;
-        // Where the literal's first line ends, in case it is unterminated.
         let mut line_end = None;
         while !self.at_end() {
             match self.peek() {
@@ -1032,7 +913,7 @@ impl Lexer {
                     self.nesting -= 1;
                     match value {
                         Some(value) => pieces.push(value),
-                        None => break, // the line ended inside the value
+                        None => break,
                     }
                 }
                 '}' => {
@@ -1044,10 +925,10 @@ impl Lexer {
                     let escape_loc = self.location();
                     self.advance();
                     if self.at_end() {
-                        break; // backslash at end of file: unterminated
+                        break;
                     }
                     if self.at_line_end() && self.peek() == '\r' {
-                        self.advance(); // a CRLF line end reads like LF
+                        self.advance();
                     }
                     if self.peek() == '\n' {
                         line_end.get_or_insert(self.mark());
@@ -1081,8 +962,6 @@ impl Lexer {
                         }
                     }
                 }
-                // Text ends on the line it starts, so a missing `"` is reported
-                // where it is missing, not at a later literal.
                 c if c == '\n' || self.at_line_end() => break,
                 _ => s.push(self.advance()),
             }
@@ -1093,11 +972,8 @@ impl Lexer {
         LexKind::Invalid(error.unwrap_or_else(|| Error::at(loc, "text isn't closed on its line; end it with '\"' (a line break in text is written '\\n')")))
     }
 
-    /// A char literal, `'a'`: one byte, written as itself or as an escape of
-    /// text (`'\n'`), or `'\''` for the quote. It ends on its line, so a missing
-    /// quote is reported there, as for text.
     fn char_literal(&mut self, loc: Span) -> LexKind {
-        self.advance(); // opening '
+        self.advance();
         let unclosed = || {
             invalid(
                 loc,
@@ -1162,12 +1038,10 @@ impl Lexer {
                 "a char holds one character; for more, write text between double quotes, as in \"ab\"",
             );
         }
-        self.advance(); // closing '
+        self.advance();
         LexKind::Token(Token::Char(value as u8))
     }
 
-    /// Skips the rest of a char literal that went wrong, up to its closing
-    /// quote on the same line: whether there was one.
     fn skip_char_rest(&mut self) -> bool {
         while !self.at_end() && !self.at_line_end() {
             if self.advance() == '\'' {
@@ -1177,9 +1051,6 @@ impl Lexer {
         false
     }
 
-    /// A value in text, `{…}`, with the cursor at its `{`: its tokens, up to the
-    /// `}` that closes it (the braces of a plan B inside it pair up). Records
-    /// its first error in `error`, and returns `None` when the line ends first.
     fn value(&mut self, error: &mut Option<Error>) -> Option<Piece> {
         let open = self.next_item();
         let mut tokens = Vec::new();

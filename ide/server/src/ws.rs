@@ -1,17 +1,4 @@
-//! The WebSocket connecting a terminal view to a session.
-//!
-//! Browsers can't set headers on a WebSocket, so the client authenticates
-//! with its first message, `{"type": "auth", "token": "…"}`. After that:
-//!
-//! - client to server: binary messages are keystrokes; text messages are
-//!   JSON control messages, `{"type": "resize", "cols": 80, "rows": 24}`;
-//! - server to client: binary messages are terminal output (recent output
-//!   first, on connecting); a text message `{"type": "exit", "code": 0,
-//!   "signal": null, "durationMs": 3}` reports the end of the process, and
-//!   the server then closes the socket.
-//!
-//! Close codes: 4401 unauthorized, 4404 no such session, 4409 replaced by a
-//! newer connection to the same session.
+//! Browser WebSockets cannot send custom headers, so auth arrives as the first text frame (`{"type":"auth","token":"…"}`).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,12 +14,9 @@ use tokio::time::timeout;
 use crate::Studio;
 use crate::session::Event;
 
-/// How long a new connection has to send the token.
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
-/// The largest message a client may send (a big paste).
 const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
-/// Keystrokes kept while the process isn't reading its input. Past this,
-/// more is dropped, as a terminal drops input its full buffer can't take.
+/// Drop excess keystrokes when the PTY stalls, matching terminal input queues.
 const MAX_PENDING_INPUT: usize = 4 * 1024 * 1024;
 
 pub const CLOSE_UNAUTHORIZED: u16 = 4401;
@@ -67,9 +51,7 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
         return close(socket, CLOSE_NO_SESSION, "no such session").await;
     };
 
-    // Keystrokes the process isn't reading yet. While they wait, output keeps
-    // flowing (the process may be writing rather than reading), and messages
-    // are still read, so a closed page or a resize is noticed at once.
+    // Buffer keystrokes when the PTY stalls so output and resize/close messages keep moving.
     let input = session.input();
     let mut pending: Vec<u8> = Vec::new();
     let mut input_closed = false;
@@ -88,12 +70,10 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
                     }
                     return;
                 }
-                // The session ended or another connection replaced this one.
                 None => return close(socket, CLOSE_REPLACED, "session closed or opened elsewhere").await,
             },
             permit = input.reserve(), if !pending.is_empty() && !input_closed => match permit {
                 Ok(permit) => permit.send(std::mem::take(&mut pending)),
-                // The terminal takes no more input; drop what was typed.
                 Err(_) => {
                     input_closed = true;
                     pending = Vec::new();
@@ -117,14 +97,9 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
     }
 }
 
-/// How long closing may take, including waiting for the client's answer.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Sends a close frame and waits for the client's answer before dropping the
-/// connection. Dropping it at once, with messages from the client still
-/// unread (a resize, a keystroke), resets the TCP connection, and the browser
-/// may then discard what was sent just before, such as the exit message. A
-/// client that stops reading can't hold the connection open past the timeout.
+/// Wait for the client's close frame so unread client frames don't trigger a TCP RST that drops the exit message.
 async fn close(mut socket: WebSocket, code: u16, reason: &'static str) {
     let _ = timeout(CLOSE_TIMEOUT, async {
         if socket.send(Message::Close(Some(CloseFrame { code, reason: Utf8Bytes::from_static(reason) }))).await.is_err() {

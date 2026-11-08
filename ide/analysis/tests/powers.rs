@@ -1,7 +1,3 @@
-//! `**` in the editor: colored as an operator, and a power's type hovered as
-//! the checker gives it, whether or not the file checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -24,8 +20,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse, where the types are read from the source alone.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {

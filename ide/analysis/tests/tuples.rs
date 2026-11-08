@@ -1,9 +1,3 @@
-//! Tuples in the editor: `(int, text)` types and values, items read as `t.0`,
-//! and names that unpack a tuple, with the compiler's types and with the types
-//! read from the source while the file doesn't check. In the sources below,
-//! `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -171,7 +165,6 @@ fn completion_offers_types_inside_a_tuple_type() {
         ];
         assert_eq!(labels(&program(checks, "fixed typed: (int, @@) = (1, 2)")), types, "checks: {}", checks);
         assert_eq!(labels(&program(checks, "fixed typed: (@@) = (1, 2)")), types, "checks: {}", checks);
-        // A parameter, a field, and a result take items of their own.
         assert_eq!(labels("task f(t: (int, @@))\nfi\n"), types);
         assert_eq!(
             labels("shape Holder\n    t: (int, @@)\nfi\n"),
@@ -181,8 +174,6 @@ fn completion_offers_types_inside_a_tuple_type() {
             ]
         );
         assert_eq!(labels("task f() -> (int, @@)\nfi\n"), types);
-        // A name of a binding, and one of a parameter, are still being declared,
-        // and a parameter may be one the task changes.
         assert!(labels(&program(checks, "fixed one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
         assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"]);
     }
@@ -228,7 +219,6 @@ fi
     assert_eq!(hover(source, "held: maybe").0, "fixed held: maybe (int ~ text)");
     assert_eq!(hover(source, "plain: (int)").0, "fixed plain: int");
     assert_eq!(hover(source, "inner = v").0, "fixed inner: int ~ text");
-    // And while the file does not check, where types are read as they are written.
     let typing = source.replace("    show(kept(held), plain)", "    show(unknown)\n    show(kept(held), plain)");
     assert!(!Analysis::new(&typing).diagnostics().is_empty());
     assert_eq!(hover(&typing, "v: maybe").0, "v: maybe (int ~ text)");

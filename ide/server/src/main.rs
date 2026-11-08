@@ -40,8 +40,7 @@ fn main() -> ExitCode {
         }
     };
     let result = runtime.block_on(run(options));
-    // Don't wait on blocking work that may never finish (a read stuck on a
-    // file another program holds).
+    // Don't block exit on stuck filesystem reads.
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -52,7 +51,6 @@ fn main() -> ExitCode {
     }
 }
 
-/// Returns `Ok(None)` when help was requested.
 fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, String> {
     let mut workspace = None;
     let mut port = 0;
@@ -61,7 +59,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
     let mut args = args;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            // After `--`, an argument is the folder even if it starts with `-`.
+            // Allow workspace folders starting with `-`.
             "--" if !only_folders => only_folders = true,
             _ if only_folders && workspace.is_some() => {
                 return Err("only one workspace folder can be given".to_string());
@@ -90,7 +88,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
 }
 
 async fn run(options: Options) -> Result<(), String> {
-    // Loopback only: there is deliberately no option to listen elsewhere.
+    // Loopback only by design.
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, options.port))
         .await
         .map_err(|e| format!("cannot listen on 127.0.0.1:{}: {}", options.port, e))?;
@@ -105,7 +103,7 @@ async fn run(options: Options) -> Result<(), String> {
         )
     })?;
 
-    // The token travels in the fragment, which browsers never send to servers.
+    // Browsers never send the URL fragment over HTTP.
     let url = format!("http://127.0.0.1:{}/#token={}", port, token.as_str());
     println!(
         "Vela Studio is running for {}",
@@ -113,9 +111,7 @@ async fn run(options: Options) -> Result<(), String> {
     );
     println!("  {}", url);
     println!("Press Ctrl+C to stop.");
-    // The browser opens a private page holding a one-time code, not the token
-    // or the code itself: its command line can be read by other users of this
-    // machine. The page is kept until Vela Studio stops.
+    // Launch via a private HTML file instead of putting the code on the browser's command line.
     let mut _launch_page = None;
     if options.open {
         match studio.launch_page() {

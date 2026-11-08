@@ -1,9 +1,3 @@
-//! A region written after a call in the editor: `f(x) at r` and `f(x)@r` give
-//! a task or a method the region it takes last, as `x.str() at r` always did,
-//! with the compiler's types and with the types read from the source while the
-//! file doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -84,7 +78,6 @@ fn a_region_after_a_call_is_the_one_it_takes_last_whether_or_not_the_file_checks
         assert_eq!(hover(&source, "after ="), "fixed after: text@work", "{}", when);
         assert_eq!(hover(&source, "tight ="), "fixed tight: text@work", "{}", when);
         assert_eq!(hover(&source, "inside ="), "fixed inside: text@work", "{}", when);
-        // A result that is neither text nor a pointer keeps its own type.
         assert_eq!(hover(&source, "tag ="), "fixed tag: Tag@work", "{}", when);
         assert_eq!(hover(&source, "planned ="), "fixed planned: text@work", "{}", when);
         assert_eq!(hover(&source, "method ="), "fixed method: text@work", "{}", when);

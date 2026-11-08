@@ -1,7 +1,3 @@
-// Runs Vela's language analysis (the compiler's lexer, parser, and checker,
-// compiled to WebAssembly) and exchanges JSON with it. See ide/wasm/src/lib.rs
-// for the memory protocol.
-
 import type { Completions, Diagnostic, Hover, Language, Location, OutlineItem, ProgramContext, Query, QueryResults, Token } from "./protocol";
 
 interface Exports {
@@ -11,7 +7,6 @@ interface Exports {
   vela_free_response(ptr: number): void;
 }
 
-/** A request the module rejected, or a crash inside the module. */
 export class AnalysisError extends Error {
   override name = "AnalysisError";
 }
@@ -30,17 +25,11 @@ function instantiate(module: WebAssembly.Module): Exports {
 
 type Results<Q extends readonly Query[]> = { [I in keyof Q]: Q[I] extends Query ? QueryResults[Q[I]["kind"]] : never };
 
-/**
- * `text` with each lone surrogate (half of a character, as a paste or a
- * half-deleted emoji can leave) replaced by U+FFFD. JSON can't carry a lone
- * surrogate to the module, and one code unit replaces one, so offsets stay
- * the same.
- */
+/** Replaces lone UTF-16 surrogates 1-for-1 with U+FFFD so JSON serialization succeeds without shifting JS offsets. */
 export function wellFormed(text: string): string {
   return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
 }
 
-/** Whether two sets of module texts are the same, path for path. */
 function sameModules(a: Record<string, string>, b: Record<string, string>): boolean {
   const paths = Object.keys(a);
   return paths.length === Object.keys(b).length && paths.every((path) => Object.hasOwn(b, path) && a[path] === b[path]);
@@ -48,18 +37,12 @@ function sameModules(a: Record<string, string>, b: Record<string, string>): bool
 
 export class VelaAnalysis {
   private exports: Exports;
-  /**
-   * The modules the module was last sent, which it keeps: a request with the
-   * same ones says so instead of sending their text again. Null when it keeps
-   * none, as after a restart.
-   */
   private sentModules: Record<string, string> | null = null;
 
   private constructor(private readonly module: WebAssembly.Module) {
     this.exports = instantiate(module);
   }
 
-  /** Compiles the module from its bytes or from a fetch response. */
   static async load(wasm: BufferSource | Response | PromiseLike<Response>): Promise<VelaAnalysis> {
     const source = await wasm;
     const module =
@@ -67,15 +50,8 @@ export class VelaAnalysis {
     return new VelaAnalysis(module);
   }
 
-  /**
-   * Answers several queries about one version of `source` at once, analyzing
-   * it only once. `context` gives the file's path and the modules it may include.
-   * Throws `AnalysisError` if the module rejects the request or crashes; after
-   * a crash the module is restarted, so later calls work.
-   */
   request<const Q extends readonly Query[]>(source: string, queries: Q, context?: ProgramContext): Results<Q> {
     let response = this.send(source, queries, context);
-    // The module kept no modules after all: send them.
     if (response.resend === true && context) {
       this.sentModules = null;
       response = this.send(source, queries, context);
@@ -89,10 +65,6 @@ export class VelaAnalysis {
     return response.results as Results<Q>;
   }
 
-  /**
-   * Everything that changes when the text changes, in one call, with the
-   * modules the program includes that `context` didn't give (`missing`).
-   */
   file(source: string, context?: ProgramContext): { tokens: Token[]; diagnostics: Diagnostic[]; outline: OutlineItem[]; missing: string[] } {
     const [tokens, diagnostics, outline, missing] = this.request(
       source,
@@ -118,11 +90,6 @@ export class VelaAnalysis {
     return this.request("", [{ kind: "language" }] as const)[0];
   }
 
-  /**
-   * Sends one request, without the modules when the module keeps the same
-   * ones. The modules sent count as kept only once the module answered without
-   * an error: one it refused may have left the old ones kept.
-   */
   private send(source: string, queries: readonly Query[], context?: ProgramContext): { results?: unknown[]; error?: string; resend?: boolean } {
     type Response = { results?: unknown[]; error?: string; resend?: boolean };
     if (!context) return this.call(JSON.stringify({ source: wellFormed(source), queries })) as Response;
@@ -131,6 +98,7 @@ export class VelaAnalysis {
     }
     const sent = { ...context.modules };
     const modules = Object.fromEntries(Object.entries(sent).map(([path, text]) => [path, wellFormed(text)]));
+    // Clear first: a rejected call may still have altered kept modules inside WASM.
     this.sentModules = null;
     const response = this.call(JSON.stringify({ source: wellFormed(source), path: context.path, modules, queries })) as Response;
     if (typeof response.error !== "string") this.sentModules = sent;
@@ -145,14 +113,13 @@ export class VelaAnalysis {
       const request = vela_alloc(bytes.length) >>> 0;
       new Uint8Array(memory.buffer, request, bytes.length).set(bytes);
       const response = vela_handle(request, bytes.length) >>> 0;
-      // Memory may have grown during the call, so views are made afterwards.
+      // Recreate views because `vela_handle` may grow WebAssembly memory.
       const length = new DataView(memory.buffer).getUint32(response, true);
       json = decoder.decode(new Uint8Array(memory.buffer, response + 4, length));
       vela_free_response(response);
     } catch (error) {
       if (error instanceof WebAssembly.RuntimeError) {
-        // A trap can leave the module's memory inconsistent: start a fresh
-        // instance, which keeps no modules.
+        // Re-instantiate after a WASM trap since linear memory may be corrupted.
         this.exports = instantiate(this.module);
         this.sentModules = null;
         throw new AnalysisError(`the analysis module crashed: ${error.message}`);

@@ -1,8 +1,3 @@
-//! Lambdas that keep what they use, `[@r](x: int) -> int … fi`: their types,
-//! their parameters, the variables of the code around them they keep, and the
-//! calls through them, hovered whether or not the file checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -31,8 +26,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse, where the types are read from the source alone.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {

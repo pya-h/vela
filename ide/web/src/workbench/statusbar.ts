@@ -1,6 +1,3 @@
-// The status bar: problems and the last run on the left (each opens its panel
-// tab), the cursor position and the file's language on the right.
-
 import type { RunStatus } from "../panel/runner";
 import { fileName } from "./documents";
 import { h } from "./dom";
@@ -37,7 +34,6 @@ export class StatusBar {
     this.setCursor(null);
   }
 
-  /** The errors and the warnings found, which are told apart: a program with only warnings builds. */
   setProblems(errors: number, warnings = 0): void {
     this.problems.classList.toggle("has-problems", errors > 0);
     this.problems.classList.toggle("has-warnings", errors === 0 && warnings > 0);
@@ -79,7 +75,6 @@ export class StatusBar {
     }
   }
 
-  /** The cursor (1-based line and column) and selection length, or null with no editor. */
   setCursor(cursor: { line: number; col: number; selected: number } | null, language: string | null = null): void {
     this.cursor.hidden = cursor === null;
     this.language.hidden = language === null;

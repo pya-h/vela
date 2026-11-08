@@ -1,14 +1,9 @@
-// Modal dialogs on the native <dialog> element, which handles focus and
-// Escape. Each returns a promise for the user's answer.
-
 import { h } from "./dom";
 
 export interface Choice<T> {
   label: string;
   value: T;
-  /** The highlighted default action. */
   primary?: boolean;
-  /** A destructive action. */
   danger?: boolean;
 }
 
@@ -16,7 +11,6 @@ let dialogs = 0;
 
 function open(content: HTMLElement[], className = ""): HTMLDialogElement {
   const dialog = h("dialog", { class: `dialog ${className}`.trim() }, ...content);
-  // Screen readers announce the dialog by its title and message.
   const id = `dialog-${++dialogs}`;
   const title = dialog.querySelector(".dialog-title");
   const message = dialog.querySelector(".dialog-message");
@@ -30,14 +24,13 @@ function open(content: HTMLElement[], className = ""): HTMLDialogElement {
   }
   document.body.append(dialog);
   dialog.addEventListener("close", () => {
-    // Removed a little later, so the answer's handlers still find it.
+    // Delay removal slightly so click/focus handlers settle before DOM detachment.
     setTimeout(() => dialog.remove(), 200);
   });
   dialog.showModal();
   return dialog;
 }
 
-/** Asks a question with buttons; resolves to the chosen value, or `cancel` on Escape. */
 export function choose<T>(title: string, message: string, choices: Choice<T>[], cancel: T): Promise<T> {
   return new Promise((resolve) => {
     let answer = cancel;
@@ -69,10 +62,6 @@ export function confirm(title: string, message: string, action: string, danger =
   return choose(title, message, [{ label: "Cancel", value: false }, { label: action, value: true, primary: !danger, danger }], false);
 }
 
-/**
- * Asks for a line of text. `validate` returns an error to show, or null. The
- * initial selection covers `select` (default: all of `initial`).
- */
 export function prompt(
   title: string,
   label: string,

@@ -1,8 +1,3 @@
-//! Comparing a maybe, in the editor: a plan B that gives `none` makes the
-//! whole a `maybe`, and the name bound to it is one, whether or not the file
-//! checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex};
@@ -36,8 +31,6 @@ task main()
 fi
 ";
 
-/// The program as it is, with a mistake the checker reads past, or with one
-/// the parser stops at, so that nothing the checker found is there.
 fn programs() -> [String; 3] {
     [PROGRAM.replace("CHECK", "show(0)"), PROGRAM.replace("CHECK", "show(unknown)"), PROGRAM.replace("CHECK", "show(") + "task ("]
 }
@@ -58,14 +51,11 @@ fn a_plan_b_giving_none_is_a_maybe_whether_or_not_the_file_checks() {
         assert_eq!(hover(&source, "b = scan"), "fixed b: maybe int", "{}", source);
         assert_eq!(hover(&source, "m = half"), "fixed m: maybe int", "{}", source);
         assert_eq!(hover(&source, "n = half"), "fixed n: int", "{}", source);
-        // Over several lines, when the last line is `none`, and not otherwise.
         assert_eq!(hover(&source, "k = half"), "fixed k: maybe int", "{}", source);
         assert_eq!(hover(&source, "j = half"), "fixed j: int", "{}", source);
     }
 }
 
-/// `is` joined with `and`: the name the pattern binds is seen after its `and`
-/// and in the block, and not after the `when`.
 const JOINED: &str = "\
 task half(n: int) -> maybe int
     when n % 2 == 0
@@ -131,7 +121,6 @@ fn a_condition_holding_an_is_goes_on_with_and_and_another_is() {
     assert!(next_part.contains(&"is".to_string()) && next_part.contains(&"and".to_string()) && !next_part.contains(&"or".to_string()), "{:?}", next_part);
     let test = after("b is { x } and x > 0");
     assert!(test.contains(&"and".to_string()) && !test.contains(&"or".to_string()), "{:?}", test);
-    // Without an `is`, both still join.
     let plain = after("b == none");
     assert!(plain.contains(&"is".to_string()) && plain.contains(&"or".to_string()), "{:?}", plain);
 }

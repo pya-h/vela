@@ -1,9 +1,3 @@
-/* The writer in runtime/vela_rt.h, tested directly: what `show` and `str`
- * write for values inside others (numbers, bools, quoted text, addresses),
- * text built past the writer's first buffer, and the stack views a join reads
- * numbers from. Compiled by tests/runtime.rs as strict C11 (and with sanitizers
- * where available); prints "ok" when every check passes. */
-
 #include "vela_rt.h"
 
 static int failures = 0;
@@ -19,7 +13,6 @@ static void same(const char* what, vela__rt__text got, const char* wanted) {
 int main(void) {
     vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };
 
-    /* Numbers, bools, and text as values inside others are written. */
     vela__rt__writer w = VELA__RT__BUILDER;
     vela__rt__put_int(&w, -42);
     VELA__RT__PUT(&w, " ");
@@ -34,7 +27,6 @@ int main(void) {
     vela__rt__put_text(&w, VELA__RT__TEXT("bare"));
     same("values", vela__rt__built(&w, r), "-42 2.5 nan true \"a \\\"b\\\"\\\\\\n\\t\\r\" bare");
 
-    /* A zero inside text is escaped, and the rest of the text kept. */
     vela__rt__put_quoted(&w, (vela__rt__text){ "a\0b", 3 });
     same("zero", vela__rt__built(&w, r), "\"a\\0b\"");
 
@@ -42,10 +34,8 @@ int main(void) {
     vela__rt__put_quoted(&w, VELA__RT__TEXT("{x} }{"));
     same("braces", vela__rt__built(&w, r), "\"\\{x\\} \\}\\{\"");
 
-    /* Nothing written is empty text. */
     same("empty", vela__rt__built(&w, r), "");
 
-    /* Past the first buffer, the text is whole. */
     for (int i = 0; i < 1000; i++) {
         vela__rt__put_int(&w, i % 10);
     }
@@ -55,7 +45,6 @@ int main(void) {
         failures++;
     }
 
-    /* An address is C's hex, which the reader reads back. */
     int64_t place = 0;
     vela__rt__put_address(&w, &place);
     vela__rt__text address = vela__rt__built(&w, r);

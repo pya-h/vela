@@ -1,10 +1,3 @@
-//! A block of its own, `block … fi`, in the editor: the word is a keyword, a
-//! name declared inside is seen only there, so two blocks may each declare one
-//! of the same name, completion offers the word where a statement starts and
-//! nothing after it, and all of it holds while the file doesn't check. In the
-//! sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};

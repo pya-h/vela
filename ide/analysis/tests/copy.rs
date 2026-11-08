@@ -1,9 +1,3 @@
-//! Copies into a region in the editor: `x.copy()`, `x.copy() at r`, and
-//! `x.copy()@r`, with the compiler's types and with the types read from the
-//! source while the file doesn't check. In the sources below, `@@` marks the
-//! cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};
@@ -94,7 +88,6 @@ fn completion_offers_copy_on_values_holding_text_slices_or_pointers() {
         assert!(labels(&program(checks, "fixed again = line.copy() @@")).contains(&"at".to_string()), "checks: {}", checks);
         assert!(labels(&program(checks, "fixed again = line.copy()@ @@")).contains(&"kept".to_string()), "checks: {}", checks);
     }
-    // A pointer's fields are reached through `^`; the pointer itself is copied.
     let through = completions(&program(true, "show(node.@@)"));
     let copy = through.iter().find(|item| item.label == "copy").expect("copy is offered");
     assert_eq!(copy.snippet.as_deref(), Some(".copy()"));

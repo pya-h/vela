@@ -1,7 +1,3 @@
-//! Decorators in the editor: `$d` and `$d(values)` above a task, whose name is
-//! the decorator task's and whose `$` explains itself.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -155,7 +151,6 @@ fi
     let at = LineIndex::new(source).utf16_of(source.find("enroll\n    $").unwrap());
     let declared = LineIndex::new(source).utf16_of(source.find("enroll(f").unwrap());
     assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));
-    // Where the program has a mistake, the names still say what they are.
     let broken = source.replace("show(f(2))", "show(unknown)");
     assert_eq!(hover(&broken, "enroll\n    $"), "shared enroll(f: (int) -> int)");
     assert_eq!(hover(&broken, "cube\n    show"), "shared cube(n: int) -> int");
@@ -212,7 +207,6 @@ fn a_method_of_every_value_takes_wrappers_and_a_method_of_its_type_wraps_it() {
         assert_eq!(class_at(&source, "guarded)"), Some(TokenClass::Method));
         assert!(hover(&source, "guarded)").starts_with("alters guarded(next: (flex& Account, int) -> bool"), "{}", hover(&source, "guarded)"));
     }
-    // One that only reads the value can't wrap one that alters it.
     let source = ON_METHODS.replace("CHECK", "show(0)").replace("alters guarded(", "guarded(").replace("<- next(&.this, amount)", "<- false");
     let diagnostics = Analysis::new(&source).diagnostics();
     assert!(diagnostics.iter().any(|d| d.message.starts_with("method 'withdraw' alters the value")), "{:?}", diagnostics);

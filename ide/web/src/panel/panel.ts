@@ -1,7 +1,3 @@
-// The panel below the editor: Terminal, Output, and Problems tabs. It is
-// resized by dragging its top edge (or with arrow keys there), hidden and shown
-// with Ctrl+J, and remembers its height, tab, and visibility.
-
 import { h, iconButton, shortcutLabel } from "../workbench/dom";
 import { icon } from "../workbench/icons";
 import { isBoolean, load, save } from "../workbench/storage";
@@ -15,14 +11,11 @@ const TABS: { id: PanelTab; label: string }[] = [
 ];
 
 const HEIGHT = { min: 100, initial: 260 };
-/** The editor's smallest height beside the panel. */
 const EDITOR_MIN = 120;
 
 export interface PanelContent {
   element: HTMLElement;
-  /** Buttons shown in the header while the tab is active. */
   actions: HTMLElement[];
-  /** Called when the tab is shown (after layout), and whether to focus it. */
   shown(focus: boolean): void;
 }
 
@@ -41,7 +34,6 @@ export class Panel {
   private height = load("panel-height", HEIGHT.initial, isHeight);
   private count = 0;
 
-  /** Called after the panel's own hide button hid it (so focus can go somewhere useful). */
   onHidden: () => void = () => {};
 
   constructor(private readonly contents: Record<PanelTab, PanelContent>) {
@@ -110,23 +102,20 @@ export class Panel {
     return this.tab;
   }
 
-  /** Attaches the panel to the column holding the editor above it, and restores it. */
   mount(column: HTMLElement): void {
     this.column = column;
-    // A remembered height may not fit a smaller window.
     window.addEventListener("resize", () => this.apply());
     this.apply();
     if (this.visible) requestAnimationFrame(() => this.show(this.tab, false));
   }
 
-  /** Shows the panel on `tab`. */
   show(tab: PanelTab, focus = true): void {
     this.tab = tab;
     this.visible = true;
     save("panel-tab", tab);
     save("panel-visible", true);
     this.apply();
-    // After layout, so a terminal can measure itself.
+    // Wait for layout so terminal fit measures non-zero dimensions.
     requestAnimationFrame(() => this.contents[tab].shown(focus));
   }
 
@@ -141,7 +130,6 @@ export class Panel {
     else this.show(this.tab);
   }
 
-  /** The number on the Problems tab, which pulses when it changes. */
   setCount(count: number): void {
     const changed = count !== this.count;
     this.count = count;
@@ -150,7 +138,7 @@ export class Panel {
     this.buttons.get("problems")?.setAttribute("aria-label", count === 1 ? "Problems (1 problem)" : `Problems (${count} problems)`);
     if (changed && count > 0) {
       this.badge.classList.remove("pulse");
-      // Restart the animation.
+      // Force reflow to restart the CSS pulse animation.
       void this.badge.offsetWidth;
       this.badge.classList.add("pulse");
     }
@@ -160,7 +148,6 @@ export class Panel {
     if (!this.column) return;
     this.column.classList.toggle("panel-hidden", !this.visible);
     this.column.style.setProperty("--panel-height", `${this.fittedHeight()}px`);
-    // The resize handle's value, for assistive technology.
     this.resizer.setAttribute("aria-valuemin", String(HEIGHT.min));
     this.resizer.setAttribute("aria-valuemax", String(Math.max(HEIGHT.min, this.column.clientHeight - 120)));
     this.resizer.setAttribute("aria-valuenow", String(this.fittedHeight()));
@@ -175,7 +162,6 @@ export class Panel {
     this.actions.replaceChildren(...this.contents[this.tab].actions);
   }
 
-  /** The height, leaving the editor above at least a few lines. */
   private fittedHeight(): number {
     const room = (this.column?.clientHeight ?? 0) - EDITOR_MIN;
     return room > HEIGHT.min ? Math.min(this.height, room) : HEIGHT.min;

@@ -1,9 +1,3 @@
-/* The copies in runtime/vela_rt.h (`value.copy() at r`), tested directly: text,
- * items, pointers that share what they point to, cycles, a list longer than a C
- * stack could walk by recursion, and a table that grows many times. Compiled by
- * tests/runtime.rs as strict C11 (and with sanitizers where available); prints
- * "ok" when every check passes. */
-
 #include "vela_rt.h"
 
 static int failures = 0;
@@ -23,7 +17,6 @@ struct Node {
     Node* other;
 };
 
-/* What generated code does for `Node`: copies its text and its pointers. */
 static void fix_node(vela__rt__copy* c, void* at) {
     Node* node = at;
     node->label = vela__rt__copy_text(c, node->label);
@@ -40,7 +33,6 @@ int main(void) {
     vela__rt__region from[1] = { VELA__RT__REGION_EMPTY };
     vela__rt__region to[1] = { VELA__RT__REGION_EMPTY };
 
-    /* Text: the same bytes, a NUL among them, in the other region. */
     vela__rt__copy c = { .r = to };
     vela__rt__text text = vela__rt__copy_text(&c, VELA__RT__TEXT("he\0lo"));
     check(text.len == 5 && memcmp(text.bytes, "he\0lo", 5) == 0, "text keeps its bytes");
@@ -48,7 +40,6 @@ int main(void) {
     check(vela__rt__copy_text(&c, VELA__RT__TEXT("")).len == 0, "empty text");
     vela__rt__copy_finish(&c);
 
-    /* Items: byte for byte, and no items at all. */
     c = (vela__rt__copy){ .r = to };
     int64_t numbers[3] = { 1, 2, 3 };
     int64_t* items = vela__rt__copy_items(&c, numbers, 3, sizeof(int64_t), _Alignof(int64_t));
@@ -57,8 +48,6 @@ int main(void) {
     check(vela__rt__copy_pointer(&c, NULL, sizeof(Node), _Alignof(Node), fix_node) == NULL, "none stays none");
     vela__rt__copy_finish(&c);
 
-    /* Two pointers to one node give two pointers to one copy, and a cycle
-     * stays a cycle. */
     Node* shared = make(from, 7, VELA__RT__TEXT("shared"), NULL);
     Node* first = make(from, 1, VELA__RT__TEXT("first"), shared);
     first->other = shared;

@@ -82,7 +82,7 @@ impl From<std::io::Error> for ApiError {
 
 type ApiResult = Result<Response, ApiError>;
 
-/// `Json`, with a malformed body answered as `{"error": …}` like every other error.
+/// `Json` extractor returning `{"error": …}` on rejection.
 pub struct ApiJson<T>(pub T);
 
 impl<S: Send + Sync, T> FromRequest<S> for ApiJson<T>
@@ -99,7 +99,7 @@ where
     }
 }
 
-/// `Query`, with a malformed query answered as `{"error": …}`.
+/// `Query` extractor returning `{"error": …}` on rejection.
 pub struct ApiQuery<T>(pub T);
 
 impl<S: Send + Sync, T: serde::de::DeserializeOwned> FromRequestParts<S> for ApiQuery<T> {
@@ -113,7 +113,7 @@ impl<S: Send + Sync, T: serde::de::DeserializeOwned> FromRequestParts<S> for Api
     }
 }
 
-// Off the async threads, so the executor is never stalled by fs or compiler work.
+// Keep fs and compiler work off the async executor.
 async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, ApiError> {
@@ -127,8 +127,7 @@ pub struct LaunchRequest {
     code: String,
 }
 
-/// Exchanges the one-time launch code for the token: `{"token": …}`. This is
-/// the one endpoint without the token (it's how the page gets it).
+/// Only endpoint without a bearer token; exchanges the one-time launch code.
 pub async fn launch(
     State(studio): State<Arc<Studio>>,
     ApiJson(request): ApiJson<LaunchRequest>,
@@ -186,8 +185,7 @@ pub async fn read_file(
 pub struct WriteRequest {
     path: String,
     content: String,
-    /// The hash from when the editor read the file; the write fails if the
-    /// file has changed since.
+    /// Hash from the read; fails with `Changed` if disk was modified in between.
     base_hash: Option<String>,
 }
 
@@ -247,8 +245,6 @@ pub struct BuildRequest {
     path: String,
 }
 
-/// A failed build is a normal answer: `{"ok": false,
-/// "error": {kind, message, line, col, rendered}}`.
 pub async fn build(
     State(studio): State<Arc<Studio>>,
     ApiJson(request): ApiJson<BuildRequest>,
@@ -257,7 +253,7 @@ pub async fn build(
         blocking(move || compile::build(&studio.workspace, &request.path, &studio.config.cc))
             .await??;
     Ok(match built {
-        // The program is removed with its folder here; only running keeps it.
+        // `ScratchDir` cleans up the executable on drop; only `run` keeps it.
         Ok(_program) => Json(json!({ "ok": true })),
         Err(failure) => Json(json!({ "ok": false, "error": failure })),
     }
@@ -288,14 +284,11 @@ pub struct RunRequest {
     size: TerminalSize,
 }
 
-/// A failed build is answered as from `build`; a new session stops the
-/// previous run: `{"ok": true, "session": id}`.
 pub async fn run(
     State(studio): State<Arc<Studio>>,
     ApiJson(request): ApiJson<RunRequest>,
 ) -> ApiResult {
-    // A new run replaces the running program even when its build fails, since
-    // the page no longer offers a way to stop the old one.
+    // Stop any running program even if the new build fails (the UI only keeps one active run).
     studio.sessions.stop_run();
     let built = blocking({
         let studio = studio.clone();
@@ -325,7 +318,6 @@ pub async fn run(
     Ok(Json(json!({ "ok": true, "session": id })).into_response())
 }
 
-/// Opens a shell in the workspace folder: `{"session": id}`.
 pub async fn terminal(
     State(studio): State<Arc<Studio>>,
     ApiJson(size): ApiJson<TerminalSize>,

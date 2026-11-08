@@ -1,9 +1,3 @@
-//! `x.type` and numbers in other bases in the editor: `type` is a reserved
-//! word, colored and hovered as one after a dot, offered after every value's
-//! dot; `0x1F`, `0o17`, `0b101` are numbers, and a wrong one is reported. In
-//! the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
@@ -77,7 +71,6 @@ fn every_value_offers_its_type_and_a_shape_or_statement_start_does_not() {
             let offered = completions(&program(checks, &format!("show({}.@@)", value)));
             assert!(labels(&offered).contains(&"type"), "{} checks {}: {:?}", value, checks, labels(&offered));
         }
-        // A shape's name is no value: it offers its shared fields only.
         assert!(!labels(&completions(&program(checks, "show(Point.@@)"))).contains(&"type"), "checks {}", checks);
         assert!(!labels(&completions(&program(checks, "@@"))).contains(&"type"), "checks {}", checks);
     }

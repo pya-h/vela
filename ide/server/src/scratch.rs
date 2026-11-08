@@ -1,13 +1,9 @@
-//! Outside the workspace, so a build never touches the user's files.
-
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::security::random_hex;
 
-/// A fresh folder in the system's temporary directory that only this user can
-/// open, removed when dropped.
 #[derive(Debug)]
 pub struct ScratchDir {
     path: PathBuf,
@@ -22,9 +18,7 @@ impl ScratchDir {
                 std::process::id(),
                 random_hex(8)?
             ));
-            // `create_dir` fails on an existing folder, so none is ever reused.
-            // Only this user may look inside: it holds built programs, and the
-            // browser's launch page.
+            // `create_dir` fails on existing paths so a folder is never reused; 0700 keeps builds and launch pages private.
             let mut builder = fs::DirBuilder::new();
             #[cfg(unix)]
             std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);

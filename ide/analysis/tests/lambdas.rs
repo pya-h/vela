@@ -1,8 +1,3 @@
-//! Lambdas in the editor: a task with no name, written where its value goes,
-//! hovered with its type whether or not the file checks, and left out of the
-//! outline.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, TokenClass};
@@ -51,7 +46,6 @@ fn a_lambda_hovers_with_its_type_whether_or_not_the_file_checks() {
         assert_eq!(hover(&source, "say ="), "fixed say: (text) -> nothing", "{}", when);
         assert_eq!(hover(&source, "after ="), "fixed after: int", "{}", when);
     }
-    // A call spanning lines is typed from the checked program.
     for when in ["checked", "declared"] {
         assert_eq!(hover(&program(when), "squared ="), "fixed squared: int", "{}", when);
     }
@@ -81,7 +75,6 @@ fn a_lambda_closes_with_its_own_fi_and_stays_out_of_the_outline() {
         let outline = Analysis::new(&source).outline();
         let names: Vec<&str> = outline.iter().map(|item| item.name.as_str()).collect();
         assert_eq!(names, ["apply", "main"], "{}", when);
-        // `main` ends at its own `fi`, after every lambda's.
         let main = outline.iter().find(|item| item.name == "main").unwrap();
         assert_eq!(main.to, LineIndex::new(&source).utf16_of(source.rfind("fi").unwrap() + 2), "{}", when);
     }
@@ -96,11 +89,8 @@ fn a_task_type_parameter_is_no_lambda() {
     assert_eq!(Analysis::new(source).outline().len(), 1);
 }
 
-
 #[test]
 fn a_task_type_after_a_comma_or_a_parenthesis_is_no_lambda() {
-    // A result that is a task's type, and a tuple holding one: neither opens a
-    // block, so the methods and tasks after them are outlined.
     let source = "\
 task one() -> int
     <- 1
@@ -140,7 +130,6 @@ fi
     let members: Vec<&str> = outline[1].children.iter().map(|item| item.name.as_str()).collect();
     assert_eq!(members, ["v", "pair", "get", "last"]);
     assert_eq!(hover(source, "get()"), "get() -> int");
-    // A lambda after a comma is still one.
     let lambda = "task apply(n: int, f: () -> int) -> int\n    <- f()\nfi\n\ntask main()\n    show(apply(1, () -> int <- 2 fi))\nfi\n";
     assert_eq!(Analysis::new(lambda).diagnostics(), Vec::new());
     assert_eq!(Analysis::new(lambda).outline().len(), 2);
@@ -166,8 +155,6 @@ fi
     let analysis = Analysis::new(source);
     let tokens = analysis.tokens();
     let class = |needle: &str| tokens.iter().find(|t| t.from == at(needle)).map(|t| t.class);
-    // The names before the arrow and in the body are its parameters; the body
-    // is a value, not a type.
     assert_eq!(class("y -> y"), Some(TokenClass::Parameter));
     assert_eq!(class("y * total"), Some(TokenClass::Parameter));
     assert_eq!(class("total, 2)"), Some(TokenClass::Variable));
@@ -175,9 +162,7 @@ fi
     assert_eq!(class("n + total"), Some(TokenClass::Parameter));
     let definition = analysis.definition(at("y * total")).expect("a definition");
     assert_eq!(definition.from, at("y -> y"));
-    // Past the lambda's body the name is gone.
     assert!(analysis.definition(at("y)\nfi")).is_none());
-    // After the arrow a value goes, so names are offered, not only types.
     let typing = "task main()\n    fixed total = 3\n    fixed f: (int) -> int = x -> t\nfi\n";
     let byte = typing.find("-> t\n").unwrap() + 4;
     let items = Analysis::new(typing).complete(LineIndex::new(typing).utf16_of(byte)).items;

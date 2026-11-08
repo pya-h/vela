@@ -1,17 +1,5 @@
-//! Programs and shells running in pseudo-terminals.
-//!
-//! Each session has three helpers: a thread reading the terminal's output, a
-//! thread writing keystrokes to it, and a thread waiting for the process to
-//! exit. A task, the pump, gathers their events. It keeps the recent output,
-//! so a WebSocket that connects late (or reconnects) sees everything, and
-//! forwards output to the one connected WebSocket, if any. When the client is
-//! slow, the pump holds back reading output, and so the program writing it
-//! waits, as in a real terminal; it still handles its other events meanwhile.
-//!
-//! A session without a WebSocket for `idle_timeout` is stopped and removed.
-//! Stopping sends SIGHUP to the process group (the process leads a new
-//! session, so its group holds its children too), then SIGKILL if it's still
-//! running shortly after.
+//! PTY sessions: slow WebSocket clients pause PTY reads via backpressure without
+//! blocking control/idle timers; idle or stopped sessions tear down their process group.
 
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read, Write};
@@ -30,32 +18,28 @@ use tokio::time::{sleep, sleep_until};
 use crate::scratch::ScratchDir;
 use crate::security::random_hex;
 
-/// How much recent output a session keeps for a WebSocket that connects later.
 const SCROLLBACK_BYTES: usize = 1024 * 1024;
-/// After the process exits, how long to wait for the rest of its output
-/// before reporting the exit anyway (a background process may keep the
-/// terminal open).
+/// Wait briefly after exit for trailing output from background children keeping the PTY open.
 const OUTPUT_GRACE: Duration = Duration::from_millis(250);
-/// How long a stopped process has to exit before it is killed.
 const STOP_GRACE: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionKind {
-    /// A built program.
     Run,
-    /// A shell in the workspace.
     Terminal,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Exit {
-    /// The exit code; 1 when killed by a signal, as the terminal library reports it.
+    /// Exit code (`1` when killed by signal, per `portable-pty`).
     pub code: u32,
-    /// The signal that ended the process, such as `Hangup`, if any.
     pub signal: Option<String>,
     pub duration_ms: u64,
 }
 
+#[derive(Debug)]
 pub enum Event {
     Output(Bytes),
     Exit(Exit),
@@ -64,15 +48,12 @@ pub enum Event {
 #[derive(Debug)]
 pub enum SessionError {
     TooManyTerminals,
-    /// The server is shutting down.
     Closing,
     Spawn(String),
 }
 
 enum Control {
-    /// Connects a WebSocket, replacing the one before (which is closed).
     Attach(mpsc::Sender<Event>),
-    /// Stops the process and ends the session once its exit is reported.
     End,
 }
 
@@ -87,13 +68,10 @@ pub struct Session {
 }
 
 impl Session {
-    /// Connects a WebSocket; `false` if the session has ended.
     pub fn attach(&self, events: mpsc::Sender<Event>) -> bool {
         self.control.send(Control::Attach(events)).is_ok()
     }
 
-    /// Where keystrokes for the process go. Sending waits while its input is
-    /// backed up; the channel closes when the terminal stops taking input.
     pub fn input(&self) -> mpsc::Sender<Vec<u8>> {
         self.input.clone()
     }
@@ -112,8 +90,6 @@ impl Session {
         self.alive.load(Ordering::SeqCst)
     }
 
-    /// Hangs up the process group, and kills it if it's still running after
-    /// a moment.
     pub fn stop(&self) {
         if !self.is_alive() {
             return;
@@ -153,17 +129,13 @@ fn signal(pid: Option<u32>, _killer: Box<dyn ChildKiller + Send + Sync>, which: 
         Signal::Hangup => libc::SIGHUP,
         Signal::Kill => libc::SIGKILL,
     };
-    // SAFETY: `kill` has no memory-safety preconditions. A negative pid
-    // addresses the process group, which the child leads (it called setsid).
+    // SAFETY: `kill` has no memory-safety preconditions; negative pid signals the child's setsid process group.
     unsafe {
         libc::kill(-pid, number);
     }
 }
 
-/// Hangs up every process still in the session whose leader, `leader`, has
-/// just exited (the child called setsid, so the session's id is its pid).
-/// Processes that ignore hangups keep running. Only on Linux, where `/proc`
-/// lists each process's session.
+/// SIGHUP processes still in `leader`'s setsid session after exit (Linux `/proc` only).
 #[cfg(target_os = "linux")]
 fn hang_up_session(leader: u32) {
     let Ok(entries) = std::fs::read_dir("/proc") else {
@@ -209,15 +181,12 @@ fn lock<T: ?Sized>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 pub struct Sessions {
     open: Mutex<HashMap<String, Arc<Session>>>,
-    /// The run session, if one is open: starting another run stops it. Held
-    /// while a run starts, so concurrent runs can't both survive.
+    /// Held while starting a run so concurrent runs can't both survive.
     run: Mutex<Option<String>>,
-    /// Held while a terminal starts, from checking the limit until it is
-    /// registered, so concurrent requests can't start more than the limit.
+    /// Serializes terminal limit check through registration.
     terminal_start: Mutex<()>,
     idle_timeout: Duration,
     max_terminals: usize,
-    /// Set by `shutdown`: no new sessions start.
     closing: AtomicBool,
 }
 
@@ -237,8 +206,7 @@ impl Sessions {
         lock(&self.open).get(id).cloned()
     }
 
-    /// The sessions of `kind` whose process is still running. (One that has
-    /// exited lingers until its page disconnects, but doesn't count.)
+    /// Running sessions of `kind` (exited sessions lingering for their WebSocket don't count).
     pub fn count(&self, kind: SessionKind) -> usize {
         lock(&self.open)
             .values()
@@ -253,7 +221,6 @@ impl Sessions {
         }
     }
 
-    /// `scratch` (a built program's folder) is removed when the session ends.
     pub fn spawn(
         self: &Arc<Self>,
         kind: SessionKind,
@@ -269,7 +236,6 @@ impl Sessions {
         {
             return Err(SessionError::TooManyTerminals);
         }
-        // For a run, the lock is held until the new run is registered.
         let mut run = (kind == SessionKind::Run).then(|| lock(&self.run));
         if let Some(previous) = run.as_mut().and_then(|run| run.take())
             && let Some(session) = self.get(&previous)
@@ -281,14 +247,13 @@ impl Sessions {
 
         let pair = native_pty_system().openpty(size).map_err(spawn_error)?;
         let child = pair.slave.spawn_command(command).map_err(spawn_error)?;
-        // The terminal's other end now belongs to the child; keeping it open
-        // here would hide the end of its output.
+        // Drop slave end here so output reaches EOF when the child exits.
         drop(pair.slave);
         let mut orphan = child.clone_killer();
         let started = self.start(kind, child, pair.master, scratch);
         match (&started, run.as_mut()) {
             (Ok(id), Some(run)) => **run = Some(id.clone()),
-            // Nothing would ever stop or wait for it.
+            // Kill orphan if spawning failed before registration.
             (Err(_), _) => drop(orphan.kill()),
             _ => {}
         }
@@ -325,9 +290,7 @@ impl Sessions {
         spawn_thread("vela-studio-wait", move || {
             let status = child.wait();
             waiting.store(false, Ordering::SeqCst);
-            // Jobs it left running in process groups of their own get the
-            // hangup a closed terminal gives. (Their session keeps the pid in
-            // use, so nothing else can have taken it yet.)
+            // Hang up detached jobs that inherited this setsid session (PID cannot be reused while held).
             if let Some(pid) = pid {
                 hang_up_session(pid);
             }
@@ -433,7 +396,6 @@ fn write_input(mut writer: Box<dyn Write + Send>, mut input: mpsc::Receiver<Vec<
     }
 }
 
-/// Recent output, dropping the oldest bytes past the limit.
 struct Scrollback {
     bytes: VecDeque<u8>,
 }
@@ -451,7 +413,6 @@ struct Pump {
     id: String,
     session: Arc<Session>,
     idle_timeout: Duration,
-    /// Removed when the pump ends.
     _scratch: Option<ScratchDir>,
 }
 
@@ -466,8 +427,7 @@ impl Pump {
             bytes: VecDeque::new(),
         };
         let mut subscriber: Option<mpsc::Sender<Event>> = None;
-        // An event the subscriber had no room for. While one waits, no more
-        // output is read, which holds back the program; everything else goes on.
+        // Buffered when the client falls behind; stops reading PTY output until delivered.
         let mut held: Option<Event> = None;
         let mut idle_since = Some(tokio::time::Instant::now());
         let mut output_done = false;
@@ -521,16 +481,13 @@ impl Pump {
                     }
                 },
                 status = &mut exit, if exited.is_none() => {
-                    // The waiter thread always sends; without it, report a failure.
                     let info = status.unwrap_or(Exit { code: 1, signal: None, duration_ms: 0 });
                     exited = Some((info, tokio::time::Instant::now()));
                 },
                 Some(message) = control.recv() => match message {
                     Control::Attach(events) => {
-                        // The replay includes anything held for the previous subscriber.
                         held = None;
                         let replay: Vec<u8> = scrollback.bytes.iter().copied().collect();
-                        // A new channel has room for both messages.
                         let mut connected = replay.is_empty() || events.try_send(Event::Output(Bytes::from(replay))).is_ok();
                         if connected && reported && let Some((info, _)) = &exited {
                             connected = events.try_send(Event::Exit(info.clone())).is_ok();
@@ -547,7 +504,6 @@ impl Pump {
                         self.session.stop();
                     }
                 },
-                // A closed WebSocket starts the idle clock.
                 () = async { if let Some(events) = &watched { events.closed().await } }, if watched.is_some() && !waiting => {
                     subscriber = None;
                     idle_since = Some(tokio::time::Instant::now());
@@ -557,14 +513,12 @@ impl Pump {
                     if reported {
                         break;
                     }
-                    // Nobody is watching a running process: stop it, and end
-                    // once its exit is noticed.
                     ending = true;
                     idle_since = None;
                     self.session.stop();
                 },
             }
-            // A stopped session doesn't wait for a subscriber that stopped reading.
+            // Don't block session teardown on an unresponsive subscriber.
             if ending && held.is_some() && exited.is_some() {
                 held = None;
             }
@@ -573,9 +527,6 @@ impl Pump {
     }
 }
 
-/// Sends `event` to the subscriber, if any, without waiting: with no room, it
-/// is held for later; with the subscriber gone, it is dropped and the idle
-/// clock starts.
 fn deliver(
     event: Event,
     held: &mut Option<Event>,

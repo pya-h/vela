@@ -1,8 +1,3 @@
-//! Maps in the editor: `[K: V]@r` hovered and completed with the compiler's
-//! types, and with the same types read from the declarations and values while
-//! the file doesn't check. In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex};

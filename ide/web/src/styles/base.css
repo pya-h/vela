@@ -1,6 +1,3 @@
-/* Design tokens, both themes, and the shared building blocks: buttons,
-   inputs, dialogs, menus, toasts, and the quick picker. */
-
 :root {
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -12,7 +9,6 @@
   --slow: 220ms;
 }
 
-/* Dark, the default: the docs' slate and sky palette. */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -183,8 +179,6 @@ kbd {
   flex: none;
 }
 
-/* Buttons ------------------------------------------------------------------ */
-
 .button {
   display: inline-flex;
   align-items: center;
@@ -350,8 +344,6 @@ kbd {
   color: var(--syn-module);
 }
 
-/* Dialogs ------------------------------------------------------------------- */
-
 .dialog,
 .palette {
   border: 1px solid var(--border-strong);
@@ -407,8 +399,6 @@ kbd {
   justify-content: flex-end;
   gap: 8px;
 }
-
-/* Quick picker ---------------------------------------------------------------- */
 
 .palette {
   width: min(560px, calc(100vw - 32px));
@@ -472,8 +462,6 @@ kbd {
   color: var(--muted);
 }
 
-/* Menu ------------------------------------------------------------------------ */
-
 .menu {
   position: fixed;
   z-index: 50;
@@ -520,8 +508,6 @@ kbd {
   background: var(--border);
 }
 
-/* Toasts ------------------------------------------------------------------------- */
-
 .toasts {
   position: fixed;
   right: 16px;
@@ -562,8 +548,6 @@ kbd {
   flex: 1;
   padding-top: 1px;
 }
-
-/* Full-page screens: loading, missing token, errors ------------------------------------ */
 
 .screen {
   display: grid;
@@ -606,8 +590,6 @@ kbd {
 .loading span {
   animation: pulse 1.2s var(--ease) infinite;
 }
-
-/* Motion --------------------------------------------------------------------------- */
 
 @keyframes fade-in {
   from {

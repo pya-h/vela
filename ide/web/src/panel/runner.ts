@@ -1,8 +1,3 @@
-// Running and building the active file. Output shows the program in its own
-// terminal (keystrokes go to it), closed by a line with how it ended; a failed
-// build shows the compiler's message there and is kept for the Problems list
-// until that file is built again.
-
 import type { StudioApi } from "../api/client";
 import { SessionSocket, sessionUrl } from "../api/socket";
 import type { BuildFailure, ExitInfo } from "../api/types";
@@ -18,19 +13,14 @@ export type RunStatus =
   | { kind: "failed"; path: string; failure: BuildFailure };
 
 export interface RunnerEvents {
-  /** The status changed. */
   status(status: RunStatus): void;
-  /** The build failures changed (see `failures`). */
   failures(): void;
 }
 
 export class Runner {
   readonly output: TerminalView;
-  /** What the status shows: the build in progress, or else `lane`. */
   private current: RunStatus = { kind: "idle" };
-  /** The program's status: idle, running, exited, built, or failed. */
   private lane: RunStatus = { kind: "idle" };
-  /** A build (or the build step of a run) in progress. */
   private building: { path: string; run: boolean; besideProgram: boolean } | null = null;
   private socket: SessionSocket | null = null;
   private session: string | null = null;
@@ -52,25 +42,18 @@ export class Runner {
     return this.current;
   }
 
-  /** The last failed build of each file that hasn't been built again since. */
   get failures(): ReadonlyMap<string, BuildFailure> {
     return this.failed;
   }
 
-  /** Whether a build is in progress (a running program alone doesn't count). */
   get busy(): boolean {
     return this.building !== null;
   }
 
-  /** Whether a program is running, and can be stopped. */
   get running(): boolean {
     return this.session !== null;
   }
 
-  /**
-   * Builds and runs `path` (saved already), replacing a running program. The
-   * Output view should be shown, so the program gets its size.
-   */
   async run(path: string): Promise<void> {
     if (this.busy) return;
     this.socket?.dispose();
@@ -114,21 +97,16 @@ export class Runner {
     }
   }
 
-  /**
-   * Builds `path` without running it. Output shows the result unless a
-   * program is running there. Resolves to whether the build succeeded, or
-   * null if it couldn't be tried.
-   */
   async build(path: string): Promise<boolean | null> {
     if (this.busy) return null;
-    // While a program runs, Output and the status stay the program's.
+    // Leave Output and status owned by the active run while building alongside it.
     const running = this.running;
     this.building = { path, run: false, besideProgram: running };
     this.setStatus(this.lane);
     try {
       const result = await this.api.build(path);
       this.building = null;
-      // The program may have ended meanwhile; its Output is still left alone.
+      // Preserve Output even if the running program exited during the build.
       if (!running) {
         this.output.terminal.reset();
         this.output.write(`${ansi.cyan("⚒")} ${ansi.bold(path)}\r\n`);
@@ -155,7 +133,6 @@ export class Runner {
     }
   }
 
-  /** Stops the running program; Output then shows that it stopped. */
   stop(): void {
     if (this.session === null) return;
     this.stopped = true;
@@ -166,7 +143,6 @@ export class Runner {
     this.output.terminal.clear();
   }
 
-  /** Follows a renamed file or folder in the kept failures. */
   renamed(from: string, to: string): void {
     let changed = false;
     for (const [path, failure] of [...this.failed]) {
@@ -179,7 +155,6 @@ export class Runner {
     if (changed) this.events.failures();
   }
 
-  /** Forgets the failures of a deleted file or folder. */
   deleted(path: string): void {
     let changed = false;
     for (const failed of [...this.failed.keys()]) {
@@ -211,11 +186,6 @@ export class Runner {
     this.setStatus({ kind: "failed", path, failure });
   }
 
-  /**
-   * Sets the program's status and shows it, unless a build is in progress:
-   * then the build shows, except a build started beside a running program,
-   * which leaves the program's status (its Stop button, and how it ended) in place.
-   */
   private setStatus(status: RunStatus): void {
     this.lane = status;
     const building = this.building;

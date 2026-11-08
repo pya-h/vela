@@ -1,6 +1,3 @@
-// Vela support in CodeMirror states, with the real analysis module. These
-// run without a browser: commands get a minimal stand-in for the view.
-
 import { CompletionContext, type CompletionResult, type CompletionSource, snippet } from "@codemirror/autocomplete";
 import { insertNewlineAndIndent, toggleComment } from "@codemirror/commands";
 import { foldable, getIndentation, indentOnInput } from "@codemirror/language";
@@ -18,7 +15,6 @@ beforeAll(async () => {
   analyzer = new Analyzer(analysis, analysis.language());
 });
 
-/** A state for `source`, with the cursor at `|` (removed). */
 function stateFor(source: string): EditorState {
   const at = source.indexOf("|");
   const doc = at < 0 ? source : source.slice(0, at) + source.slice(at + 1);
@@ -29,7 +25,6 @@ function stateFor(source: string): EditorState {
   });
 }
 
-/** Just enough of an EditorView for commands and completions. */
 function fakeView(initial: EditorState): EditorView & { state: EditorState } {
   const view = {
     state: initial,
@@ -158,7 +153,6 @@ describe("completion", () => {
     expect(words?.from).toBe(PROGRAM.indexOf("|"));
     expect(complete(PROGRAM)).toBeNull();
     expect(complete(PROGRAM, true)?.options.map((o) => o.label)).toContain("fixed");
-    // A pointer's fields, its address as text, its copy, and its type.
     expect(complete(PROGRAM.replace("|", "show(p.|)"))?.options.map((o) => o.label)).toEqual(["x", "y", "str", "copy", "type"]);
   });
 
@@ -171,7 +165,6 @@ describe("completion", () => {
     if (typeof option?.apply !== "function") throw new Error("snippet without apply");
     option.apply(view, option, result!.from, head);
     expect(view.state.doc.toString()).toContain("    when condition\n        \n    fi\n");
-    // The first field, `condition`, is selected.
     const selected = view.state.selection.main;
     expect(view.state.sliceDoc(selected.from, selected.to)).toBe("condition");
   });
@@ -196,7 +189,6 @@ describe("completion", () => {
     if (typeof fib?.apply !== "function") throw new Error("no apply for fib");
     fib.apply(view, fib, result!.from, view.state.selection.main.head);
     expect(view.state.doc.line(6).text).toBe("        fib(n)");
-    // The snippet's field is still selected after re-indenting.
     const selected = view.state.selection.main;
     expect(view.state.sliceDoc(selected.from, selected.to)).toBe("n");
   });

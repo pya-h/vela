@@ -2,16 +2,11 @@ use crate::ast::*;
 use crate::error::{Error, Result};
 use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
-/// A loop's start, condition and step, each the first and the one after the
-/// last position of its items (see `Parser::loop_parts`).
 type LoopParts = Vec<Vec<(usize, usize)>>;
 
-/// The error for `||` where it parts no loop's parts.
 const PARTS_AS_OR: &str = "unexpected '||'; Vela writes 'or'";
-/// The mistake of a macro written inside a task, shape, or kind.
 const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line";
 
-/// A type alias inside a block, which names a type for the whole file.
 const MISPLACED_TYPE_ALIAS: &str = "a type alias is written outside every task, shape, and kind, as in 'alias SampleTask => (int) -> int' at the start of a line";
 
 const MISPLACED_PATTERN: &str = "a pattern is written outside every task, shape, and kind, as in 'pattern Shaped' at the start of a line, and closes with 'fi'";
@@ -23,50 +18,30 @@ const MISPLACED_PATTERN: &str = "a pattern is written outside every task, shape,
 /// its WebAssembly module with it) instead of reporting an error.
 pub const MAX_NESTING: usize = 100;
 
-/// What a tuple type needs, for the `(` of one that has too few items. One type
-/// in parentheses is that type, so only `()` and `(T,)` are reported.
 const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'";
 
-/// The same for a tuple of values, and what both say about `(1, 2,)`.
 const TUPLE_ITEMS: &str = "a tuple holds two or more items, as in '(1, \"Ada\")'";
 const TUPLE_TRAILING_COMMA: &str = "a tuple has no comma after its last item";
 
-/// `fail` written where a failure is matched and named. The verb makes a
-/// failure; the noun names one, so every program written before this says
-/// `fail` in a pattern.
+/// Migration hint: `failure` names errors in patterns while `fail` constructs them.
 const FAILURE_NAMES: &str = "a case form names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
 
-/// `fail` on the first line of a plan B, where the failure it handles is named.
 const PLAN_B_NAMES: &str =
     "a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'";
 
-/// `failure` written where a value goes: the mirror of `FAILURE_NAMES`.
 const FAIL_MAKES: &str = "'failure' names a failure in a case form; to make one, write 'fail', as in '<- fail e'";
 
-/// A second region after one already written: `f(x)@r at r2`, or `a + b at r at r2`.
 const REGION_ALREADY_NAMED: &str =
     "the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'";
 
-/// What `place_region` did with a region written after a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Placing {
     Placed,
-    /// The call already has its region written after it.
     Already,
-    /// Nothing there takes a region written after it.
     Nowhere,
 }
 
-/// Gives the region written after `expr`, `f(x) at r` or `f(x)@r`, to the call
-/// `expr` is: a task's or a method's, whose last argument it becomes (see
-/// `ExprKind::RegionAfter`), or a `scan` or a copy, whose region it is. With
-/// `through_prefix`, for `at r` over the whole of what comes before it, a
-/// `fail`, `-`, or `not` in front of the call is looked through, since none of
-/// them makes memory; `@r` belongs to the call right before it and looks
-/// through nothing. Which calls take a region is the checker's to say.
 fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool) -> Placing {
-    // `m.keys at r`: a map's keys made into a slice in `r` (the checker says
-    // so when the value is no map).
     if let ExprKind::Field(_, word) = &expr.kind
         && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
     {
@@ -98,15 +73,11 @@ fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool)
     }
 }
 
-/// Whether `@r` right after `expr` names a region `place_region` can give it.
 fn takes_region_after(expr: &Expr) -> bool {
     matches!(expr.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Scan { .. } | ExprKind::Copy { .. })
         || matches!(&expr.kind, ExprKind::Field(_, word) if matches!(MapOp::from_word(word), Some(MapOp::Keys | MapOp::Values)))
 }
 
-/// Where a `name: type` is written, which settles what may follow the type: a
-/// shape's field takes `= value`, a task's parameter takes `default` on a region
-/// it is given, and a variant's value takes neither (see `parse_field`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Slot {
     Field,
@@ -117,58 +88,33 @@ enum Slot {
 pub struct Parser {
     tokens: Vec<Token>,
     spans: Vec<Span>,
-    /// Where each token ends, just after its last character.
     ends: Vec<Span>,
     pos: usize,
-    /// Current nesting level; see `MAX_NESTING`.
     depth: usize,
-    /// The operators open around the one being read, of every chain: `**`
-    /// chains and ones in parentheses go deeper by recursing, not by a loop.
     operators: usize,
-    /// The parts of the written types, for errors about them (see `TypePlaces`).
     type_places: TypePlaces,
-    /// The parts of the type being parsed.
     type_parts: Vec<(String, Span)>,
-    /// The file's `include` lines, which come before its items.
     includes: Vec<Include>,
-    /// The file's type aliases, which name types and are no items: the
-    /// resolver puts their types where their names are written.
     type_aliases: Vec<AliasDef>,
-    /// The file's patterns, which are no items: the checker reads them, and
-    /// the resolver gives each shape and kind following one its defaults.
     patterns: Vec<PatternDef>,
     /// Whether the header being read is a pattern's, where a `,` after its
     /// results may start the next header (see `parse_results`).
     in_pattern: bool,
-    /// The methods of the shape or kind just read, each a task of its own (see
-    /// `method_name`), which the file's items take in after it.
     methods: Vec<Item>,
-    /// The lambdas of the item just read, each a task of its own (see
-    /// `ast::lambda_name`), which the file's items take in after it.
     lambdas: Vec<Item>,
-    /// How many lambdas the file has so far, which numbers the next one.
     lambda_count: usize,
-    /// Whether the code being read is a generic task's or a generic shape's or
-    /// kind's method, where no lambda is written yet.
     in_generic: bool,
-    /// The position of a `<-` that may send without starting a line: the first
-    /// token of a lambda's body written on the line of its header.
     send_after_header: Option<usize>,
-    /// Whether a loop that gives a value was read, which needs `std/loops`.
     loop_values: bool,
 }
 
-/// An `is` joined with `or`, or after one.
 const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside";
 
 impl Parser {
-    /// `tokens`, `spans` and `ends` are parallel, as produced by
-    /// `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
         Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
     }
 
-    /// Whether the file has a loop that gives a value (see `ValueLoop`).
     pub fn loop_values(&self) -> bool {
         self.loop_values
     }
@@ -185,7 +131,6 @@ impl Parser {
         std::mem::take(&mut self.patterns)
     }
 
-    /// Where the parts of every type parsed so far are.
     pub fn type_places(&mut self) -> TypePlaces {
         std::mem::take(&mut self.type_places)
     }
@@ -219,18 +164,13 @@ impl Parser {
                 continue;
             }
             items.push(self.parse_item()?);
-            // The methods of a shape or a kind are tasks of the file, after it.
             items.append(&mut self.methods);
-            // So are its lambdas.
             items.append(&mut self.lambdas);
             self.skip_newlines();
         }
         Ok(items)
     }
 
-    /// `include path`, `include path => alias`, `include path (part, …)`, or
-    /// `include path {part, …}`, where the path is names and `..` separated by
-    /// `/`, and a part is a name, maybe followed by `=> alias`.
     fn parse_include(&mut self) -> Result<Include> {
         self.advance();
         let span = self.peek_span();
@@ -289,7 +229,6 @@ impl Parser {
         Ok(Include { path, span, name_span, alias, parts, only_parts })
     }
 
-    /// `=> name` after an included module or part, if it is there.
     fn parse_alias(&mut self) -> Result<Option<Binding>> {
         if !self.match_token(Token::FatArrow) {
             return Ok(None);
@@ -302,8 +241,6 @@ impl Parser {
         self.includes.iter().any(|included| included.local_name() == Some(name))
     }
 
-    /// After a name at the cursor's previous token: `.member` when the name is a
-    /// module this file includes, giving `module.member`; otherwise the name alone.
     fn qualified(&mut self, name: String) -> Result<String> {
         if !self.is_module(&name) || !self.check(Token::Dot) {
             return Ok(name);
@@ -313,11 +250,6 @@ impl Parser {
         Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
     }
 
-    /// `qualified` for a name that starts a value. A name, a dot, and a call is
-    /// a kind's variant (`Shape.Circle(…)`, or `geometry.Shape.Circle(…)`) or a
-    /// method called on a value (`p.area(…)`), which look the same until the
-    /// file's names are known; `parse_suffix` reads the dot and the call, and
-    /// keeps both readings for the resolver (see `ExprKind::MethodCall`).
     fn value_name(&mut self, name: String) -> Result<String> {
         self.qualified(name)
     }
@@ -352,7 +284,6 @@ impl Parser {
         }
     }
 
-    /// Enters one nesting level, failing past `MAX_NESTING`. Pair with `leave`.
     fn enter(&mut self) -> Result<()> {
         self.depth += 1;
         if self.depth > MAX_NESTING {
@@ -364,8 +295,6 @@ impl Parser {
         Ok(())
     }
 
-    /// `enter`, for one more operator: a long chain is told how to split,
-    /// since each operator deepens the tree. Pair with `leave_operators`.
     fn enter_operator(&mut self) -> Result<()> {
         let at = self.peek_span();
         let operators = self.operators;
@@ -405,7 +334,6 @@ impl Parser {
         }
         let previous = self.pos.checked_sub(1).and_then(|p| self.tokens.get(p));
         let next = self.tokens.get(self.pos + 1);
-        // A `#` starting a line outside every block, where a macro goes.
         let macro_line = match previous {
             None | Some(Token::Newline) => self.peek_span().col == 1,
             Some(Token::Priv) => true,
@@ -420,16 +348,13 @@ impl Parser {
             (Token::Assign, Some(Token::Eq), _) => "; to compare, write '=='".to_string(),
             (Token::Assign, Some(Token::Range), _) => "; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3".to_string(),
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
-            // `case Skip = break`: a jump is a statement, which a block holds.
             (Token::Break | Token::Continue, _, _) if expected == "an expression" => {
                 format!("; {} is a statement, not a value, so it goes in a block, as on the line after a 'case', or in a plan B: '{{ {} }}'", self.peek().describe(), self.peek().describe().trim_matches('\''))
             }
-            // `0...3` and `0..=3`: a range has two dots and leaves its end out.
             (Token::Ellipsis, _, _) => "; a range is written with two dots, as in '0..3', which leaves 3 out, and '...' ends the values of a slice, as in '[1, 2, ...] at r'".to_string(),
-            // `.05`: the digits after the dot lost their leading zeros as a number.
+            // Reject leading-dot floats like `.05`.
             (Token::Dot, _, Some(Token::Int(_))) => "; a number starts with a digit, so write '0' before the '.'".to_string(),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
-            // `show(x++)` or `++x`: a step is a statement of its own.
             (Token::Increment | Token::Decrement, _, _) => {
                 let symbol = self.peek().describe();
                 format!("; {0} goes after a place, on a line of its own, as in 'x{1}', and gives no value", symbol, symbol.trim_matches('\''))
@@ -438,9 +363,7 @@ impl Parser {
                 let symbol = self.peek().describe();
                 format!("; {} changes a place, on a line of its own, as in 'x {} 2', and gives no value", symbol, symbol.trim_matches('\''))
             }
-            // A comment written as other languages write one.
-            // `#task = 1`, `#MAX(a, b) = …`, and `#define N 4` at a line's start:
-            // a macro written as it can't be.
+            // Diagnose `#` comments and C/macro syntax written outside valid `#NAME =` macros.
             (Token::Hash, _, Some(next)) if macro_line && !matches!(next, Token::Ident(_)) && next.describe().trim_matches('\'').bytes().all(|b| b.is_ascii_lowercase()) => {
                 format!("; a macro is named by a name of its own, and {} is one of Vela's words", next.describe())
             }
@@ -449,8 +372,6 @@ impl Parser {
             }
             (Token::Hash, _, Some(Token::Ident(_))) if macro_line => "; a macro is written '#NAME = value', and a comment starts with ';'".to_string(),
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
-            // `&` joins the words after a type's `:`, and marks a place given at
-            // a call, which starts a value.
             (Token::Dollar, _, _) => "; '$' marks a decorator, written on the lines above a task or a shared method, as in '$register' or '$route(\"/\")'".to_string(),
             (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'flex&' or 'fixed&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
@@ -462,10 +383,6 @@ impl Parser {
         self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline))
     }
 
-    /// The error for a `<-` that doesn't start a line. After something that
-    /// can end a value in a condition or statement, it was most likely meant as
-    /// `< -`; on the line of a task's header, an `each`, or a `case`, the block's
-    /// body was meant to start on the next line.
     fn misplaced_send(&self) -> Error {
         let line_start = (0..self.pos).rev().find(|&p| self.tokens.get(p) == Some(&Token::Newline)).map_or(0, |p| p + 1);
         if let Some(opener @ (Token::Task | Token::Each | Token::Case)) = self.tokens.get(line_start) {
@@ -501,14 +418,10 @@ impl Parser {
         Error::at(self.peek_span(), message)
     }
 
-    /// `expect(Token::Fi)` for the block opened by `opener` at `opened`: when the
-    /// file ends, or a new task, shape, or kind starts first, the error says which
-    /// block is still open.
     fn expect_fi(&mut self, opener: &str, opened: Span) -> Result<()> {
         if self.match_token(Token::Fi) {
             return Ok(());
         }
-        // An indented macro was meant to be inside the block.
         let first = if self.check(Token::Priv) { 1 } else { 0 };
         if self.at_macro_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_MACRO));
@@ -520,7 +433,6 @@ impl Parser {
             return Err(Error::at(self.peek_span(), MISPLACED_PATTERN));
         }
         if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace) {
-            // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
                 Token::Else if opener == "task" => " (or an 'else' without its 'when')",
                 Token::Case if opener == "task" => " (or a 'case' outside a 'match')",
@@ -564,14 +476,11 @@ impl Parser {
         self.peek() == &tok
     }
 
-    /// Rejects a line holding just `end`, where a block could close. Blocks
-    /// close with `fi`; `end` is an ordinary name, but alone on a line it is
-    /// never meaningful code, so it is almost certainly the old keyword.
+    /// Diagnoses legacy `end` keyword on its own line.
     fn reject_stray_end(&self) -> Result<()> {
         self.reject_stray_end_in(false)
     }
 
-    /// `reject_stray_end` in a block that closes with `}` when `plan_b`.
     fn reject_stray_end_in(&self, plan_b: bool) -> Result<()> {
         let is_end = matches!(self.peek(), Token::Ident(name) if name == "end");
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
@@ -582,12 +491,9 @@ impl Parser {
         Ok(())
     }
 
-    /// Whether the next token starts a top-level item, which can't appear
-    /// inside a block (so a block before it is missing its `fi`).
     fn at_item_start(&self) -> bool {
         match self.peek() {
             Token::Task | Token::Shape | Token::Kind | Token::Include => true,
-            // `priv` also marks a shape's field.
             Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
             _ => self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
@@ -619,15 +525,12 @@ impl Parser {
             && matches!(at(2), Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof) | None)
     }
 
-    /// Whether the cursor is at `macro NAME =`, a macro as other languages
-    /// write it (see `ast::MACRO`).
     fn at_macro_word(&self) -> bool {
         matches!(self.peek(), Token::Ident(word) if word == MACRO)
             && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
             && matches!(self.tokens.get(self.pos + 2), Some(Token::Assign | Token::Colon))
     }
 
-    /// `#NAME = value`, at `#`, on a line of its own.
     fn parse_macro(&mut self) -> Result<MacroDef> {
         self.advance();
         let span = self.peek_span();
@@ -645,8 +548,6 @@ impl Parser {
         Ok(MacroDef { name, value, span, private: false })
     }
 
-    /// Whether the tokens `ahead` of the cursor start a type alias: `alias`
-    /// and a name.
     fn at_pattern_after(&self, ahead: usize) -> bool {
         matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == PATTERN)
             && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
@@ -657,7 +558,6 @@ impl Parser {
         matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == ALIAS) && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
     }
 
-    /// `alias Name => type`, or `priv alias Name => type`, on a line of its own.
     fn parse_type_alias(&mut self) -> Result<AliasDef> {
         let private = self.match_token(Token::Priv);
         self.advance();
@@ -716,7 +616,6 @@ impl Parser {
             Token::Shape => self.parse_shape().map(Item::Shape),
             Token::Kind => self.parse_kind().map(Item::Kind),
             Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', or 'kind', got 'fi'; is there an extra 'fi' above it?")),
-            // `use m` or `import m`, as other languages bring in a file.
             Token::Ident(word)
                 if (word == "use" || word == "import")
                     && self.at_line_start()
@@ -755,8 +654,6 @@ impl Parser {
         }
     }
 
-    /// Decorators, `$d` or `$d(args)`, several on a line or on lines of their
-    /// own, and the task they are written before, at the first `$`.
     fn parse_decorated(&mut self) -> Result<Item> {
         let first = self.peek_span();
         let (decorators, wrappers) = self.parse_decorator_lines()?;
@@ -772,9 +669,6 @@ impl Parser {
         Ok(item)
     }
 
-    /// The decorators on the lines above a task or a shared method, at the first
-    /// `$`: the startup decorators, and the wrappers, each the call of its name
-    /// with its own values.
     fn parse_decorator_lines(&mut self) -> Result<(Vec<Decorator>, Vec<Expr>)> {
         let mut decorators = Vec::new();
         let mut wrappers = Vec::new();
@@ -801,7 +695,6 @@ impl Parser {
         Ok((decorators, wrappers))
     }
 
-    /// `d` or `d(values)` after a `$`: a startup decorator's name and values.
     fn parse_startup_decorator(&mut self) -> Result<Decorator> {
         let span = self.peek_span();
         if !matches!(self.peek(), Token::Ident(_)) {
@@ -809,27 +702,20 @@ impl Parser {
         }
         let name = self.decorator_name()?;
         let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
-        // `$d?`: a failure of the decorator lets the program go on.
         let passes = self.match_token(Token::Question);
         Ok((name, args, span, passes))
     }
 
-    /// The name of a decorator, a task: `d`, `m.d`, or a shared method, `X.m`
-    /// or `m.X.m`, which the resolver tells apart from a module's task.
     fn decorator_name(&mut self) -> Result<String> {
         let name = self.expect_ident()?;
         let mut name = self.qualified(name)?;
-        // Any more is the resolver's to tell apart, and to refuse.
         while self.match_token(Token::Dot) {
-            // `X.new`: the one keyword a member may be named, a shared method.
             let member = if self.match_token(Token::New) { NEW_WORD.to_string() } else { self.expect_ident()? };
             name = format!("{}{}{}", name, MODULE_SEPARATOR, member);
         }
         Ok(name)
     }
 
-    /// `(w1, w2(values), …)` after a `$`: wrapper decorators, each kept as the
-    /// call of its name with its own values.
     fn parse_wrappers(&mut self, wrappers: &mut Vec<Expr>) -> Result<()> {
         let opened = self.peek_span();
         self.advance();
@@ -838,7 +724,6 @@ impl Parser {
         }
         loop {
             let span = self.peek_span();
-            // `$(.checked)`: a method of the value the wrapped method is called on.
             let member = self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)));
             if member {
                 self.advance();
@@ -873,7 +758,6 @@ impl Parser {
         Ok(task)
     }
 
-    /// `task name<types>(params) -> results`, at `task`: a task with no body yet.
     fn parse_task_header(&mut self) -> Result<TaskDef> {
         self.advance();
         let span = self.peek_span();
@@ -889,14 +773,10 @@ impl Parser {
         Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None, shortcut: false })
     }
 
-    /// Whether the cursor is at `native task` (see `ast::NATIVE`).
     fn at_native(&self) -> bool {
         matches!(self.peek(), Token::Ident(word) if word == NATIVE) && self.tokens.get(self.pos + 1) == Some(&Token::Task)
     }
 
-    /// `native task name(params) -> results`: a task whose body is a function
-    /// of the runtime, so its header is all there is of it. Whether its file
-    /// may have one is for loading to say (see `modules::load`).
     fn parse_native(&mut self) -> Result<TaskDef> {
         let opened = self.peek_span();
         self.advance();
@@ -906,8 +786,6 @@ impl Parser {
             return Err(self.unexpected("the end of the line: a native task is its header alone"));
         }
         self.skip_newlines();
-        // A body written anyway is read, so that loading says what is wrong: in
-        // a program, that it has no native tasks at all.
         if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) && !self.at_type_alias_after(0) && !self.at_pattern_after(0) {
             task.body = self.parse_block()?;
             self.expect_fi("task", opened)?;
@@ -915,8 +793,6 @@ impl Parser {
         Ok(task)
     }
 
-    /// `<T, U: ordered>` after a declaration's name: the types it takes, with
-    /// what each one must allow. Empty for a declaration that takes none.
     fn parse_type_params(&mut self, groups: bool) -> Result<Vec<TypeParam>> {
         // `<>` reads as one token, `not similar`, wherever values are.
         if self.check(Token::NotSimilar) {
@@ -928,7 +804,6 @@ impl Parser {
         let mut params: Vec<TypeParam> = Vec::new();
         loop {
             if self.check(Token::Gt) {
-                // `<T,>`: a type follows every comma.
                 let message = match params.is_empty() {
                     true => "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none",
                     false => "expected the name of another type after ',', as in '<T, U>'; leave the ',' out when there is none",
@@ -943,7 +818,6 @@ impl Parser {
             if let Some(before) = params.iter().find(|param| param.name == name) {
                 return Err(Error::at(span, format!("'{}' is already taken at {}:{}", name, before.span.line, before.span.col)));
             }
-            // `P...`: a group of types, which only a task takes.
             let group = self.check(Token::Ellipsis);
             if group {
                 if !groups {
@@ -966,10 +840,6 @@ impl Parser {
         Ok(params)
     }
 
-    /// The words after a type's `:`, joined by `&`: what every type given for it
-    /// must allow, each one thing, and the patterns it must follow, each a name
-    /// that is no word (which the resolver checks names a pattern). A word
-    /// another already means is an error, since it says nothing new.
     #[allow(clippy::type_complexity)]
     fn parse_needs(&mut self) -> Result<(Vec<(Need, Span)>, Vec<Followed>)> {
         let mut kept: Vec<(Need, Span)> = Vec::new();
@@ -982,7 +852,6 @@ impl Parser {
                 if let Some(before) = patterns.iter().find(|before| before.name == pattern) {
                     return Err(Error::at(span, format!("'{}' is written twice, at {}:{} too", pattern, before.span.line, before.span.col)));
                 }
-                // `Iterator<T>`: the types it gives the pattern.
                 let types = if self.check(Token::Lt) { self.parse_given_types()? } else { Vec::new() };
                 patterns.push(Followed { name: pattern, types, span });
                 if !self.match_token(Token::Amp) {
@@ -1004,9 +873,6 @@ impl Parser {
         }
     }
 
-    /// The results after a task's `->`: one, or several separated by commas,
-    /// each a type or a name and a type (`total: int`). Either all of them are
-    /// named or none is.
     fn parse_results(&mut self, results: &mut Vec<ResultDef>) -> Result<Type> {
         let mut types = Vec::new();
         loop {
@@ -1014,7 +880,6 @@ impl Parser {
                 let expected = if types.is_empty() { "expected a return type after '->'" } else { "expected another result after ','" };
                 return Err(Error::at(self.peek_span(), expected));
             }
-            // A name only when a `:` follows it; a result's type is a name too.
             let named = matches!(self.peek(), Token::Ident(_)) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
             let name = if named {
                 let at = self.peek_span();
@@ -1073,7 +938,6 @@ impl Parser {
             let (decorators, wrappers) = self.parse_member_decorators("shape")?;
             let private = self.match_token(Token::Priv);
             self.reject_misplaced_method_words()?;
-            // `shared new(…) -> X`: a method of the shape itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance();
                 let mut method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
@@ -1099,7 +963,6 @@ impl Parser {
                 self.skip_newlines();
                 continue;
             }
-            // `read shared f`: the words go the other way round.
             if matches!(self.peek(), Token::Ident(word) if word == READ) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
                 return Err(Error::at(self.peek_span(), format!("'shared' goes first, as in 'shared {} f: int = 0'", READ)));
             }
@@ -1118,9 +981,6 @@ impl Parser {
         Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false, follows })
     }
 
-    /// A shape's `shared` field, with the cursor at `shared` and `private` saying
-    /// `priv` came before it: `shared f: int = 0`, `shared flex f: int = 0`, or
-    /// `shared read f: int = 0`. It always names its first value.
     fn parse_shared_field(&mut self, shape: &str, types: &[TypeParam], private: bool, methods: &[TaskDef]) -> Result<SharedField> {
         let at = self.peek_span();
         self.advance();
@@ -1176,8 +1036,6 @@ impl Parser {
         Ok(SharedField { field, flex, bind, start: None })
     }
 
-    /// Rejects a field written below a method: a shape's or a kind's block reads
-    /// as its values and then what they do.
     fn reject_field_below_method(&self, methods: &[TaskDef], what: &str) -> Result<()> {
         let Some(first) = methods.first() else { return Ok(()) };
         let name = first.owner.as_ref().map_or("", |owner| owner.name.as_str());
@@ -1191,16 +1049,10 @@ impl Parser {
         ))
     }
 
-    /// Whether the cursor is at a member of a shape or a kind that is a method
-    /// rather than a field or a variant: a name followed by `(`, or by `<` for
-    /// one that names types (which `parse_method` refuses), with `alters` allowed
-    /// before it.
     fn at_method(&self) -> bool {
         self.at_method_from(self.pos)
     }
 
-    /// `at_method` for the member starting at token `pos`; `new(`, a shared
-    /// method's name, counts too, which `parse_method` reads.
     fn at_method_from(&self, pos: usize) -> bool {
         let mut pos = pos;
         if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_) | Token::New)) {
@@ -1209,10 +1061,6 @@ impl Parser {
         matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
     }
 
-    /// The decorators on the lines above a member of a shape or a kind (`what`),
-    /// which must be a shared method: one called on its type, which the
-    /// program can give a decorator where it starts, and a wrapper at each
-    /// call. None where no `$` starts the member.
     fn parse_member_decorators(&mut self, what: &str) -> Result<(Vec<Decorator>, Vec<Expr>)> {
         if !self.check(Token::Dollar) {
             return Ok((Vec::new(), Vec::new()));
@@ -1223,16 +1071,13 @@ impl Parser {
         if self.tokens.get(at) == Some(&Token::Shared) && self.at_method_from(at + 1) {
             return Ok(lines);
         }
-        // In a kind, a variant carrying values looks like a method here, unless
-        // `alters` says it is one; the kind tells them apart after.
+        // Distinguishes `Kind.Tag(payload)` from methods via `alters` before full kind inspection.
         let alters = matches!(self.tokens.get(at), Some(Token::Ident(word)) if word == ALTERS);
         let method = self.at_method_from(at) || alters;
-        // A method of every value takes wrappers, which run at each call.
         if method && lines.0.is_empty() {
             return Ok(lines);
         }
         let follows = self.tokens.get(at).unwrap_or(&Token::Eof).describe();
-        // Only wrappers: what follows takes none.
         if lines.0.is_empty() {
             let what_follows = match self.tokens.get(at) {
                 Some(Token::Shared) => "a shared field, which holds a value rather than running".to_string(),
@@ -1254,8 +1099,6 @@ impl Parser {
         Err(Error::at(first, format!("a startup decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}", what, follows)))
     }
 
-    /// Refuses `alters shared f(…)`, which a shared method never is, with the
-    /// cursor at a member of a shape or a kind.
     fn reject_misplaced_method_words(&self) -> Result<()> {
         if matches!(self.peek(), Token::Ident(word) if word == ALTERS) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
             return Err(Error::at(self.peek_span(), SHARED_NEVER_ALTERS));
@@ -1263,10 +1106,6 @@ impl Parser {
         Ok(())
     }
 
-    /// A method of the shape or kind `owner`, which takes `types`: its name, its
-    /// parameters, what it sends, and its body, with `alters` before it when it
-    /// changes the value it is called on. It becomes a task whose first parameter
-    /// holds that value (see `method_name` and `THIS`).
     fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, is_shared: bool, above: Above) -> Result<TaskDef> {
         let Above { fields, shared, methods } = above;
         let opened = self.peek_span();
@@ -1281,7 +1120,6 @@ impl Parser {
             _ => None,
         };
         let span = self.peek_span();
-        // `new` is a keyword, and a shared method's name: `X.new(…)` makes an X.
         let name = match self.peek() {
             Token::New if is_shared => {
                 self.advance();
@@ -1327,14 +1165,10 @@ impl Parser {
         if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
             return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
-        // `map<R>(f: (T) -> R)`: types of its own, after those of the shape
-        // or kind, which the values a call gives tell.
         let own = self.parse_type_params(false)?;
         if let Some(clash) = own.iter().find(|param| types.iter().any(|outer| outer.name == param.name)) {
             return Err(Error::at(clash.span, format!("'{}' is already a type '{}' takes; name the method's own type otherwise, as in '<R>'", clash.name, owner)));
         }
-        // A shared method has no value it is called on; the one it is called on
-        // is of the shape's types alone.
         let mut params = if is_shared { Vec::new() } else { vec![receiver(owner, types, span)] };
         let types: Vec<TypeParam> = types.iter().cloned().chain(own).collect();
         let types = types.as_slice();
@@ -1397,10 +1231,8 @@ impl Parser {
             }
             let (decorators, wrappers) = self.parse_member_decorators("kind")?;
             let variant_span = self.peek_span();
-            // `priv` goes before a method, whose name is what the checks below read.
             let private = self.match_token(Token::Priv);
             self.reject_misplaced_method_words()?;
-            // `shared make(…) -> K`: a method of the kind itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance();
                 let mut method = self.parse_method(&name, "kind", &types, private, true, Above { fields: &[], shared: &[], methods: &methods })?;
@@ -1418,8 +1250,7 @@ impl Parser {
             if self.check(Token::New) {
                 return Err(Error::at(self.peek_span(), new_only_shared(&name)));
             }
-            // A variant carries its values in parentheses, as a method takes its
-            // parameters, so `alters` or a `->` after them tells them apart.
+            // `alters` or trailing `->` disambiguates kind methods from payloaded variants.
             if self.at_method() && !self.at_variant_payload(&methods) {
                 let mut method = self.parse_method(&name, "kind", &types, private, false, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
@@ -1444,7 +1275,6 @@ impl Parser {
             self.skip_newlines();
         }
         self.expect_fi("kind", opened)?;
-        // `Kind.Tag(…)` makes a variant, so a shared method can't take its name.
         for method in &methods {
             let Some(owner) = method.owner.as_ref().filter(|owner| owner.shared) else { continue };
             if let Some(variant) = variants.iter().find(|variant| variant.tag == owner.name) {
@@ -1461,10 +1291,6 @@ impl Parser {
         Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, follows: Vec::new(), imitated: 0 })
     }
 
-    /// `::Other & Shown` after a kind's or a shape's (`what`) name and types:
-    /// the kinds a kind imitates and the patterns either follows, each a type
-    /// with where it is written, which the resolver tells apart. Empty when no
-    /// `::` follows the name.
     fn parse_after_colons(&mut self, what: &str, name: &str) -> Result<Vec<(Type, Span)>> {
         if !self.check(Token::Colon) {
             return Ok(Vec::new());
@@ -1504,10 +1330,7 @@ impl Parser {
         Ok(after)
     }
 
-    /// `pattern Shaped … fi`, or `priv pattern …`: its fields, then its methods,
-    /// each line one header, or several parted by `,`. A line of one header
-    /// followed by a line that starts no member (a bare `name()` counts) starts
-    /// that method's default body, closed by `fi`; any other is required.
+    /// Comma-separated headers stay headers; a non-member line opens the preceding method's default body.
     fn parse_pattern_def(&mut self) -> Result<PatternDef> {
         let private = self.match_token(Token::Priv);
         let opened = self.peek_span();
@@ -1524,7 +1347,6 @@ impl Parser {
         self.skip_newlines();
         let mut fields: Vec<Field> = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
-        // The last default body that started with a bare call, `reset()`.
         let mut last_bare: Option<(Span, String, String)> = None;
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.reject_pattern_words()?;
@@ -1559,8 +1381,7 @@ impl Parser {
             }
             self.skip_newlines();
             if line.len() == 1 && !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() && !self.at_pattern_member() {
-                // `reset()` alone on the line after a header starts its body;
-                // a mistake after it may mean two headers were meant.
+                // A bare `call()` on the next line starts a default body rather than another header.
                 let bare = matches!((self.tokens.get(self.pos), self.tokens.get(self.pos + 1), self.tokens.get(self.pos + 2), self.tokens.get(self.pos + 3)), (Some(Token::Ident(_)), Some(Token::LParen), Some(Token::RParen), Some(Token::Newline | Token::Eof)));
                 let bare = bare.then(|| (self.peek_span(), match self.peek() { Token::Ident(name) => name.clone(), _ => String::new() }));
                 let lambdas = self.lambdas.len();
@@ -1599,7 +1420,6 @@ impl Parser {
         Ok(PatternDef { name, types, fields, methods, span, private })
     }
 
-    /// Refuses what a pattern's member doesn't take, at its start.
     fn reject_pattern_words(&self) -> Result<()> {
         let at = self.peek_span();
         match self.peek() {
@@ -1614,10 +1434,7 @@ impl Parser {
         }
     }
 
-    /// Whether the cursor starts a pattern's member rather than a statement: a
-    /// field, `name: type`, or a method's header that no statement can be, with
-    /// `alters`, a parameter, results, or another header after a `,`. A bare
-    /// `name()` alone on its line is a statement here.
+    /// Lookahead separating pattern fields/headers from statements inside default bodies.
     fn at_pattern_member(&self) -> bool {
         let pos = self.pos;
         let token = |at: usize| self.tokens.get(at);
@@ -1650,10 +1467,6 @@ impl Parser {
         }
     }
 
-    /// A method's header in a pattern, which `parse_method` reads in a shape:
-    /// `alters` maybe, its name, its parameters, and its results. It becomes a
-    /// task named as the method, whose first parameter holds the value it is
-    /// called on, of the type following the pattern; its body is read after.
     fn parse_pattern_header(&mut self, fields: &[Field], methods: &[TaskDef]) -> Result<TaskDef> {
         let opened = self.peek_span();
         let alters_span = match self.peek() {
@@ -1681,7 +1494,6 @@ impl Parser {
         if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
             return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
-        // `fold<A>(…)`: types of its own, which the values a call gives tell.
         let own = self.parse_type_params(false)?;
         if !self.check(Token::LParen) {
             return Err(self.unexpected(&format!("'(' and the parameters of method '{}', as in '{}() -> int'", name, name)));
@@ -1733,12 +1545,7 @@ impl Parser {
         })
     }
 
-    /// Whether the `(` after a name inside a kind holds a variant's values rather
-    /// than a method's parameters, which are written the same way. A variant's
-    /// line ends after them and it carries at least one; a method is told by
-    /// `alters`, by naming what it sends, by taking no parameters, or by another
-    /// method above it. A kind's first method that takes parameters and sends
-    /// nothing is the one thing this can't tell apart: it names `-> nothing`.
+    /// Distinguishes variant payloads from method parameters inside a kind block.
     fn at_variant_payload(&self, methods: &[TaskDef]) -> bool {
         if !methods.is_empty() || matches!(self.peek(), Token::Ident(word) if word == ALTERS) {
             return false;
@@ -1750,13 +1557,11 @@ impl Parser {
                 Some(Token::LParen) => depth += 1,
                 Some(Token::RParen) => {
                     depth = match depth.checked_sub(1) {
-                        // A variant's line ends after its values.
                         Some(0) => return named && matches!(self.tokens.get(pos + 1), Some(Token::Newline | Token::Eof) | None),
                         Some(left) => left,
                         None => return false,
                     };
                 }
-                // A variant carries named values, `Circle(r: float)`.
                 Some(Token::Colon) if depth == 1 => named = true,
                 Some(_) => {}
                 None => return false,
@@ -1765,8 +1570,6 @@ impl Parser {
         false
     }
 
-    /// A failure to read the values in parentheses inside a kind, where a
-    /// variant and a method are written alike, with what tells them apart.
     fn kind_member(error: Error) -> Error {
         if !error.message.starts_with("expected ':'") {
             return error;
@@ -1780,16 +1583,11 @@ impl Parser {
         }
     }
 
-    /// `name: type`, `r: region default` in a task's parameters (see
-    /// `ast::DEFAULT`), and `size: int = 0` for a shape's field, which `slot`
-    /// says which of these is being read.
     fn parse_field(&mut self, slot: Slot) -> Result<Field> {
         let span = self.peek_span();
         if self.check(Token::Priv) {
             return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
         }
-        // A name after `read` is a field it marks, which a parameter and a
-        // variant's value never are (`parse_shape` reads the ones that are).
         if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
             return Err(Error::at(span, format!("only a shape's field can be '{}', not a parameter or a variant's value", READ)));
         }
@@ -1798,7 +1596,6 @@ impl Parser {
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let mut ty = self.parse_type()?;
-        // `args: P...`: the values of a group of types the task takes.
         if self.check(Token::Ellipsis) {
             ty = self.group_type(ty, slot == Slot::Param, "a parameter's type, as in 'args: P...'")?;
         }
@@ -1807,12 +1604,6 @@ impl Parser {
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
-    /// `flex`, `flex&`, `fixed`, `fixed&`, `bind` or `bind&` before a task's
-    /// parameter, which makes it the task's own copy to change, the caller's
-    /// place, always a copy, the caller's place only read, or a bind place whose
-    /// contents may change but which is never assigned as a whole (see
-    /// `Passing`). A shape's field and a variant's value change with the value
-    /// they are part of, and say so.
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
         let (base, word) = match self.peek() {
             Token::Flex => (Passing::Flex, "flex"),
@@ -1878,7 +1669,6 @@ impl Parser {
             return Ok(false);
         }
         let at = self.peek_span();
-        // `read step()`: a method says what it changes with `alters`.
         if matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::Lt)) {
             return Err(Error::at(at, format!("only a field can be '{}', not a method; a method that changes the value it is called on says '{}'", READ, ALTERS)));
         }
@@ -1895,9 +1685,6 @@ impl Parser {
         Ok(true)
     }
 
-    /// `= value` after a shape's field or a task's parameter: the value a
-    /// literal that leaves the field out gives it, or a call that leaves the
-    /// parameter out. A variant's value has none, and says so.
     fn match_field_default(&mut self, slot: Slot) -> Result<Option<Expr>> {
         let at = self.peek_span();
         if !self.match_token(Token::Assign) {
@@ -1909,9 +1696,6 @@ impl Parser {
         Ok(Some(self.parse_expr()?))
     }
 
-    /// Checks the values `params` fall back on, which only the last of them
-    /// have: a call leaves out a tail of the list, never a value between two it
-    /// gives. A place, a region, and a group's values have none to fall back on.
     fn check_param_defaults(params: &[Field]) -> Result<()> {
         let Some(first) = params.iter().position(|param| param.default.is_some()) else { return Ok(()) };
         for param in params.iter().filter(|param| param.default.is_some()) {
@@ -1947,9 +1731,6 @@ impl Parser {
         ))
     }
 
-    /// The word `default` after a task's parameter, which makes the region it
-    /// takes its body's default (the checker refuses it on anything else). A
-    /// field or a variant's value is never one, and says so.
     fn match_default(&mut self, params: bool) -> Result<bool> {
         if !matches!(self.peek(), Token::Ident(word) if word == DEFAULT) {
             return Ok(false);
@@ -1967,7 +1748,6 @@ impl Parser {
         Ok(true)
     }
 
-    /// `(name: type, ...)`; `slot` as in `parse_field`.
     fn parse_field_list(&mut self, slot: Slot) -> Result<Vec<Field>> {
         self.expect(Token::LParen)?;
         let mut fields = Vec::new();
@@ -1986,9 +1766,6 @@ impl Parser {
         Ok(fields)
     }
 
-    /// A type, with an optional error type: `int`, `^Node@r`, `maybe int`,
-    /// `int ~ ParseError`. `^` and `maybe` bind tighter than `@`, and `@`
-    /// tighter than `~`.
     fn parse_type(&mut self) -> Result<Type> {
         let start = self.peek_span();
         self.type_parts.clear();
@@ -2008,7 +1785,6 @@ impl Parser {
         self.parse_error_side(value)
     }
 
-    /// At the `~` after `value`, a type: the error type, and the whole type.
     fn parse_error_side(&mut self, value: Type) -> Result<Type> {
         self.advance();
         self.type_parts.push(("~".to_string(), self.peek_span()));
@@ -2020,9 +1796,7 @@ impl Parser {
         Ok(Type::Or(Box::new(value), Box::new(error)))
     }
 
-    /// `or` where a type's `~` belongs. Every program written before the
-    /// separator changed says `or` there, so it is worth teaching rather than
-    /// reporting as an unexpected word.
+    /// Diagnoses legacy `or` error separator in types where `~` is required.
     fn no_or_in_type(&mut self) -> Result<()> {
         if self.check(Token::Or) {
             return Err(Error::at(
@@ -2033,8 +1807,6 @@ impl Parser {
         Ok(())
     }
 
-    /// A type without `~`, and the region it lives in: `maybe ^Node@r` is
-    /// `(maybe ^Node)@r`, whose pointer and `Node` both live in `r`.
     fn parse_simple_type(&mut self) -> Result<Type> {
         let span = self.peek_span();
         let ty = self.parse_prefixed_type()?;
@@ -2044,8 +1816,6 @@ impl Parser {
         self.parse_type_region(span, ty)
     }
 
-    /// After the `@` of `ty`, written at `span`: the region it lives in, and
-    /// the type in it.
     fn parse_type_region(&mut self, span: Span, ty: Type) -> Result<Type> {
         let region_span = self.peek_span();
         let region = self.expect_ident()?;
@@ -2061,9 +1831,6 @@ impl Parser {
             let at = self.type_parts.iter().find(|(part, _)| *part == format!("@{}", inner)).map_or(region_span, |(_, at)| *at);
             return Err(Error::at(at, format!("everything a value in region '{0}' holds is in '{0}'; remove '@{1}'", region, inner)));
         }
-        // A part that already names the region holds text or pointers itself,
-        // as `(int, text@r)@r` and `[text@r]@r` do, even when nothing is left
-        // to fill in.
         let mut named = !ty.regions().is_empty();
         let ty = ty.map_regions_of_names(&mut |_| {
             named = true;
@@ -2075,8 +1842,6 @@ impl Parser {
         Ok(ty)
     }
 
-    /// A type without `or` or `@`: a name, after any `^` and `maybe`, or an
-    /// array or slice in brackets.
     fn parse_prefixed_type(&mut self) -> Result<Type> {
         let span = self.peek_span();
         if self.match_token(Token::Region) {
@@ -2118,9 +1883,6 @@ impl Parser {
         self.parse_named_type(span)
     }
 
-    /// Whether the cursor, at `[`, starts what a lambda keeps: `[@r]`,
-    /// `[flex @r]`, `[bind @r]`, or a place first, `[flex& count, @r]`, before a
-    /// lambda or its type.
     fn at_kept(&self) -> bool {
         match self.tokens.get(self.pos + 1) {
             Some(Token::AtSign) => true,
@@ -2131,9 +1893,6 @@ impl Parser {
         }
     }
 
-    /// At `[`, what a lambda keeps: the region, `@r`, `flex @r` or `bind @r`,
-    /// and the variables it keeps as places, `flex& count`, `bind& count` and
-    /// `fixed& big`, in any order, then `]`.
     fn parse_kept(&mut self) -> Result<(String, KeptMode, Span, Vec<KeptPlace>)> {
         let opened = self.peek_span();
         self.advance();
@@ -2141,7 +1900,6 @@ impl Parser {
         let mut places: Vec<KeptPlace> = Vec::new();
         loop {
             let at = self.peek_span();
-            // `fixed` only starts a place, `fixed& big`; a region is `@r`.
             let fixed = self.match_token(Token::Fixed);
             let mode = if fixed {
                 KeptMode::Plain
@@ -2193,8 +1951,6 @@ impl Parser {
         Ok((region, mode, at, places))
     }
 
-    /// `[@r](int) -> int`, at `[` written at `span`: the type of a lambda that
-    /// keeps what it uses in `r` (see `Type::Closure`).
     fn parse_closure_type(&mut self, span: Span) -> Result<Type> {
         let (region, mode, at, places) = self.parse_kept()?;
         if let Some(place) = places.first() {
@@ -2224,12 +1980,9 @@ impl Parser {
         Ok(Type::Closure(Box::new(ClosureType { task: *task, region, mode })))
     }
 
-    /// A type named at `span` and the cursor, with the types a shape is given.
     fn parse_named_type(&mut self, span: Span) -> Result<Type> {
         let name = self.expect_ident()?;
         let mut name = self.qualified(name)?;
-        // `geometry.Point` for a module this file doesn't include: a dotted name
-        // the resolver reports as naming nothing.
         while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
             self.advance();
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
@@ -2273,23 +2026,15 @@ impl Parser {
         Ok(types)
     }
 
-    /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items,
-    /// or one type alone, which the parentheses only group — the way to write
-    /// `maybe (int ~ text)`, since `maybe int ~ text` reads as `(maybe int) ~ text`.
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
         let mut items = Vec::new();
-        // How each item is given, which only a task's type says (see `Taken`),
-        // with where the first that isn't a value is written.
         let mut taken = Vec::new();
         let mut marked: Option<(Span, String)> = None;
-        // `() -> int`: a task that takes nothing.
         if self.check(Token::RParen) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
             self.advance();
             return self.parse_task_type(items, taken);
         }
         loop {
-            // `()` and `(int,)`: a missing item, rather than a missing name;
-            // `(int, text,)`: the comma is the one after the last item.
             if self.check(Token::RParen) {
                 return match items.as_slice() {
                     [] | [_] => Err(Error::at(opened, TUPLE_TYPE_ITEMS)),
@@ -2297,7 +2042,6 @@ impl Parser {
                 };
             }
             let at = self.peek_span();
-            // `fixed T` reads as `T`, but only a task's type takes a word.
             let fixed_value = self.check(Token::Fixed) && !matches!(self.tokens.get(self.pos + 1), Some(Token::Amp));
             let how = self.parse_taken()?;
             if (how != Taken::Value || fixed_value) && marked.is_none() {
@@ -2310,10 +2054,8 @@ impl Parser {
                 };
                 marked = Some((at, written));
             }
-            // `@r`: a region, whose name is all there is of it.
             let item = if matches!(how, Taken::Region(_)) { Type::Region } else { self.parse_type_parts()? };
             taken.push(how);
-            // `(P...) -> R`: a task's type taking a group of types, all it takes.
             if self.check(Token::Ellipsis) {
                 let written = match taken.last() {
                     Some(Taken::Region(name)) => Some(format!("@{}", name)),
@@ -2331,8 +2073,6 @@ impl Parser {
                     }
                     None => {}
                 }
-                // One group, with any values the task takes alone around it,
-                // `(@a, P...) -> R`.
                 let first = !items.iter().any(|item| matches!(item, Type::Group(_)));
                 if !first {
                     return Err(Error::at(self.peek_span(), "a task's type takes one group of types, as in '(int, P...) -> R'; the values around it are named one by one"));
@@ -2349,7 +2089,6 @@ impl Parser {
         if !self.match_token(Token::RParen) {
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
-        // `(int, text) -> int`: a task's type.
         if self.check(Token::Arrow) {
             return self.parse_task_type(items, taken);
         }
@@ -2359,16 +2098,12 @@ impl Parser {
         if let Some((at, written)) = marked {
             return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
         }
-        // One item, with no comma after it (which the loop reports above): the
-        // parentheses group that type rather than making a tuple of it.
         if items.len() == 1 {
             return Ok(items.remove(0));
         }
         Ok(Type::Tuple(items))
     }
 
-    /// `ty` followed by `...`, at the `...`: the group of types `ty` names,
-    /// where `allowed` says one may be written, and `where_` is where one is.
     fn group_type(&mut self, ty: Type, allowed: bool, where_: &str) -> Result<Type> {
         let at = self.peek_span();
         let Type::Named(name, None) = &ty else {
@@ -2381,26 +2116,16 @@ impl Parser {
         Ok(Type::Group(name.clone()))
     }
 
-    /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
-    /// what the task sends, one type, `nothing` when it sends no value. The
-    /// arrow is always written, since `(int)` alone is `int` in parentheses.
     fn parse_task_type(&mut self, params: Vec<Type>, taken: Vec<Taken>) -> Result<Type> {
         self.advance();
         if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
             return Err(Error::at(self.peek_span(), "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'"));
         }
         let ret = self.parse_type_parts()?;
-        // A group, `(P...) -> R`, is all a task's type takes, and as values.
         let taken = if taken.len() == params.len() { taken } else { vec![Taken::Value; params.len()] };
         Ok(Type::Task(Box::new(TaskType { params, taken, ret })))
     }
 
-    /// How a parameter of a task's type is given, written before its type:
-    /// `flex&`, `fixed&` or `bind&` for the caller's place, `@r` for a region
-    /// (whose type is then all of it), `flex` or `bind` for a value whose items
-    /// the task changes, `fixed` or nothing for a value. The checker reads
-    /// `flex` or `bind` before a whole value, which has no items the caller
-    /// sees, as nothing (see `Checker::resolve_task_type`).
     fn parse_taken(&mut self) -> Result<Taken> {
         if self.match_token(Token::AtSign) {
             if !matches!(self.peek(), Token::Ident(_)) {
@@ -2416,9 +2141,6 @@ impl Parser {
         };
         let at = self.peek_span();
         self.advance();
-        // `flex [int]@r`, `bind [int]@r` and `fixed int`: a value, which the
-        // task may change through or not; `flex&` and `bind&` are one word, as
-        // in a header.
         if !self.check(Token::Amp) {
             return Ok(match base {
                 Passing::Flex => Taken::Flex,
@@ -2441,11 +2163,7 @@ impl Parser {
         }))
     }
 
-    /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a
-    /// map, with `:V]` for `text: V]`. The item type may have its own region and
-    /// error type (`[^int@r#4]`).
     fn parse_bracketed_type(&mut self) -> Result<Type> {
-        // `[:float]`: a map whose keys are text.
         if self.match_token(Token::Colon) {
             let value = Box::new(self.parse_type_parts()?);
             self.expect(Token::RBracket)?;
@@ -2463,7 +2181,6 @@ impl Parser {
         self.parse_array_count(items)
     }
 
-    /// After the item type of an array, `items`: `#count]`.
     fn parse_array_count(&mut self, items: Box<Type>) -> Result<Type> {
         if !self.match_token(Token::Hash) {
             let error = self.unexpected("'#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r'");
@@ -2495,8 +2212,6 @@ impl Parser {
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
-            // `else`, `case`, `finally`, and `}` can't start a statement: they end an
-            // enclosing block, so this one is missing its end.
             let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace);
             if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek()) {
                 break;
@@ -2552,8 +2267,6 @@ impl Parser {
         }
     }
 
-    /// The loop `stmt`, named `name`, as a statement: with a plan B after its
-    /// `fi`, a loop that fails as one giving a value does, and gives nothing.
     fn loop_with_plan_b(&mut self, stmt: Stmt, name: Option<(String, Span)>, span: Span) -> Result<Stmt> {
         if !self.check(Token::LBrace) {
             return Ok(match name {
@@ -2569,16 +2282,10 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Expr(value), span))
     }
 
-    /// An assignment, to one place or to a list of them, a result update, or an
-    /// expression used as a statement.
     fn parse_simple_stmt(&mut self, span: Span) -> Result<Stmt> {
-        // `name <- value`, or `a, b <- …`: sets results. The checker knows
-        // which names are results of this task.
         if self.at_result_update() {
             return self.parse_set_results(span);
         }
-        // `_` only takes a value, and `(a, b) =` unpacks a tuple, so a line
-        // starting with either is an assignment.
         if self.check(Token::Underscore) || self.at_target_group(true) {
             let first = self.parse_target()?;
             return self.parse_assignment(span, first);
@@ -2594,8 +2301,6 @@ impl Parser {
                 "++" | "--" => Expr::new(ExprKind::IntLit(1), at),
                 _ => self.parse_expr()?,
             };
-            // A statement ends its line, or a block or plan B on one line:
-            // `when ok x++ else x-- fi`, `f() { n++ }`.
             if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
                 return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
             }
@@ -2604,8 +2309,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Expr(expr), span))
     }
 
-    /// The rest of an assignment whose first place is `first`: any more places,
-    /// then `= values`.
     fn parse_assignment(&mut self, span: Span, first: Target) -> Result<Stmt> {
         let mut targets = vec![first];
         while self.match_token(Token::Comma) {
@@ -2624,8 +2327,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Assign(targets, values), span))
     }
 
-    /// Whether the statement at the cursor is `name(, name)* <-`, which sets
-    /// results. A `<-` anywhere else in a line is still an error.
     fn at_result_update(&self) -> bool {
         let mut p = self.pos;
         loop {
@@ -2640,7 +2341,6 @@ impl Parser {
         }
     }
 
-    /// `name(, name)* <- values`: sets the named results.
     fn parse_set_results(&mut self, span: Span) -> Result<Stmt> {
         let mut names = Vec::new();
         loop {
@@ -2658,8 +2358,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::SetResults(names, values), span))
     }
 
-    /// One place an assignment writes to, `_`, or `(a, b, …)`, the places of a
-    /// tuple's items.
     fn parse_target(&mut self) -> Result<Target> {
         let span = self.peek_span();
         if self.match_token(Token::Underscore) {
@@ -2675,7 +2373,6 @@ impl Parser {
         Ok(Target::Place(self.parse_expr()?))
     }
 
-    /// After the `(` at `opened` of places unpacking a tuple: the places and `)`.
     fn parse_target_parts(&mut self, opened: Span) -> Result<Vec<Target>> {
         let mut parts = vec![self.parse_target()?];
         while self.match_token(Token::Comma) {
@@ -2688,9 +2385,6 @@ impl Parser {
         Ok(parts)
     }
 
-    /// Whether the cursor is at `(` of places unpacking a tuple: parentheses on
-    /// one line with a comma directly inside, and, at the start of a statement
-    /// (`statement`), followed by `=` or `,`.
     fn at_target_group(&self, statement: bool) -> bool {
         if !self.check(Token::LParen) {
             return false;
@@ -2714,7 +2408,6 @@ impl Parser {
         false
     }
 
-    /// One value, or several separated by commas.
     fn parse_value_list(&mut self) -> Result<Vec<Expr>> {
         let mut values = vec![self.parse_expr()?];
         while self.match_token(Token::Comma) {
@@ -2723,10 +2416,7 @@ impl Parser {
         Ok(values)
     }
 
-    /// Rejects `send` used as the old keyword: alone on its line, or followed
-    /// by a value on the same line. `send` is an ordinary name, but neither is
-    /// meaningful code with it (a value can't follow a name), so it is almost
-    /// certainly a send written the old way.
+    /// Diagnoses legacy `send` statement syntax where `<-` is required.
     fn reject_old_send(&self) -> Result<()> {
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
         let old_keyword = matches!(
@@ -2753,8 +2443,6 @@ impl Parser {
         Ok(())
     }
 
-    /// `fixed name [: type] [, name [: type]]* = values`, or the same with
-    /// `flex`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, mode: Mode) -> Result<Stmt> {
         let word = mode.word();
         self.advance();
@@ -2763,8 +2451,6 @@ impl Parser {
         self.parse_binding_names(mode, reference, span)
     }
 
-    /// A binding after its word: its names, `=`, and its values. A loop's
-    /// start reads the ones after the first this way, which its word covers.
     fn parse_binding_names(&mut self, mode: Mode, reference: bool, span: Span) -> Result<Stmt> {
         let word = mode.word();
         let mut names = vec![self.parse_bound()?];
@@ -2792,8 +2478,6 @@ impl Parser {
         self.check(Token::Amp) && self.pos.checked_sub(1).and_then(|word| self.ends.get(word)) == Some(&self.peek_span())
     }
 
-    /// The `&` of `flex&` or `fixed&` before a binding's name, written against
-    /// the word just read, which makes the binding a reference.
     fn match_reference(&mut self, word: &str) -> Result<bool> {
         if !self.check(Token::Amp) {
             return Ok(false);
@@ -2812,14 +2496,10 @@ impl Parser {
         let span = self.peek_span();
         self.advance();
         let when = self.parse_when_rest(span)?;
-        // One `fi` closes a whole chain, however many `else when`s it has.
         self.expect_fi("when", span)?;
         Ok(when)
     }
 
-    /// A `when` after its keyword: its condition and block, then the arms of
-    /// an `else when …` chain, in a loop, and an `else`, or neither. The `fi`
-    /// closing the chain is the caller's to expect.
     fn parse_when_rest(&mut self, span: Span) -> Result<Stmt> {
         let mut arms = Vec::new();
         let mut at = span;
@@ -2866,7 +2546,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Loop(cond, body, finally), span))
     }
 
-    /// A loop's body and its optional `finally` block, closed by `fi`.
     fn parse_loop_body(&mut self, word: &str, span: Span) -> Result<(Block, Option<Block>)> {
         self.skip_newlines();
         let body = self.parse_block_until(&[Token::Fi, Token::Finally])?;
@@ -2882,8 +2561,6 @@ impl Parser {
         Ok((body, finally))
     }
 
-    /// `break` or `continue`, and the name of the loop it stops or goes on
-    /// with, when it is not the innermost one: `break outer`.
     fn parse_jump(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let stop = self.check(Token::Break);
@@ -2897,7 +2574,6 @@ impl Parser {
             }
             _ => None,
         };
-        // `break = v`: what a loop that gives a value fails with.
         let value = if self.check(Token::Assign) {
             if !stop {
                 return Err(Error::at(self.peek_span(), "a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value"));
@@ -2916,8 +2592,6 @@ impl Parser {
         Ok(Stmt::new(if stop { StmtKind::Break(name, value) } else { StmtKind::Continue(name) }, span))
     }
 
-    /// `endless`, then its statements from the next line, closed by `fi`: a
-    /// loop that never ends by itself, `loop || ||` said in a word.
     fn parse_endless(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance();
@@ -2946,8 +2620,6 @@ impl Parser {
         while let Some(token) = self.tokens.get(end) {
             match token {
                 Token::Eof => break,
-                // The condition alone goes on past the line, inside a block
-                // or brackets.
                 Token::Newline if (blocks == 0 && depth == 0) || bars.len() != 1 => break,
                 Token::Parts if depth == 0 => bars.push(end),
                 Token::Lt => {
@@ -2976,7 +2648,6 @@ impl Parser {
         ends.push(end);
         let mut parts = Vec::new();
         for (i, (&first, &last)) in bounds.iter().zip(&ends).enumerate() {
-            // The condition is one value, or none.
             let items = if i == 1 { if first < last { vec![(first, last)] } else { Vec::new() } } else { loop_items(self, first, last) };
             parts.push(items);
         }
@@ -2990,14 +2661,11 @@ impl Parser {
         Ok(Some(parts))
     }
 
-    /// The rest of `loop start || condition || step` (see `loop_parts`).
     fn parse_parted_loop(&mut self, span: Span, parts: LoopParts) -> Result<Stmt> {
         let mut parts = parts.into_iter();
         let start = parts.next().unwrap_or_default();
         let cond = parts.next().unwrap_or_default();
         let step = parts.next().unwrap_or_default();
-        // The start: statements, until `flex` or `fixed` declares the names
-        // after it, each item one.
         let mut declaring: Option<Mode> = None;
         let mut started = Vec::new();
         let items = start.len();
@@ -3068,13 +2736,10 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
-    /// After an item of a loop's parts, which ends at `last`; `what` is
-    /// what may follow it.
     fn end_loop_item(&mut self, last: usize, what: &str) -> Result<()> {
         if self.pos < last {
             return Err(self.unexpected(what));
         }
-        // A block an item opens closes on the loop's line.
         if self.pos > last {
             return Err(Error::at(
                 self.spans.get(last).copied().unwrap_or_default(),
@@ -3084,9 +2749,6 @@ impl Parser {
         Ok(())
     }
 
-    /// `outer => loop …` or `outer => each …`: a loop and its name, which a
-    /// `break` or a `continue` in a loop inside it gives to stop it or go on
-    /// with it.
     fn parse_named_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let name = self.expect_ident()?;
@@ -3105,7 +2767,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Named(name, Box::new(inner)), span))
     }
 
-    /// `block`, then its statements from the next line, closed by `fi`.
     fn parse_plain_block(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance();
@@ -3122,9 +2783,7 @@ impl Parser {
         let opened = self.peek_span();
         self.advance();
         let span = self.peek_span();
-        // `_` drops a map's key or value (the checker allows it only there).
         let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
-        // `each k, v in m`: a map's key, and the value that goes with it.
         let second = if self.match_token(Token::Comma) {
             let at = self.peek_span();
             let second = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
@@ -3138,11 +2797,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Each(name, second, range, body, finally), span))
     }
 
-    /// A `match`. A case written `case p = value` gives that value, and one
-    /// written as a block gives the value on the block's last line; both are the
-    /// same case with a one-statement body, and whether the `match` gives a value
-    /// at all is the checker's to say (see `check::Checker::check_match`), since a
-    /// `match` on the last line of a block gives one wherever that block does.
     fn parse_match(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance();
@@ -3179,9 +2833,6 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Match(expr, cases), span))
     }
 
-    /// What a `case` or `is` (the `keyword`) matches: `Circle r`, `{value}`,
-    /// `none`, `fail e`, `(x, y)`, or `_`. A name it binds may be written
-    /// `flex name`, which makes it a variable that can be assigned.
     fn parse_pattern(&mut self, keyword: &str) -> Result<Pattern> {
         let span = self.peek_span();
         let kind = match self.peek() {
@@ -3193,7 +2844,6 @@ impl Parser {
                 self.advance();
                 PatternKind::None
             }
-            // `t.#5 is maybe int {x}`: a test of the type of a tuple's item.
             Token::Maybe if keyword == "is" => {
                 let ty = self.parse_type()?;
                 let form = match self.peek() {
@@ -3230,9 +2880,7 @@ impl Parser {
                 self.advance();
                 PatternKind::Fail(self.parse_pattern_names()?)
             }
-            // The verb makes a failure; a pattern names one with the noun.
             Token::Fail => return Err(Error::at(self.peek_span(), FAILURE_NAMES)),
-            // `(x, y)`, `flex (x, y)` or `bind (x, y)`: the items of a tuple.
             Token::LParen | Token::Flex | Token::Bind => {
                 let names = self.parse_pattern_names()?;
                 if names.parts.is_empty() {
@@ -3247,13 +2895,11 @@ impl Parser {
                 PatternKind::Tuple(names)
             }
             Token::Ident(_) => {
-                // `Circle`, `Shape.Circle`, or `geometry.Shape.Circle`.
                 let mut written = vec![self.expect_ident()?];
                 while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
                     self.advance();
                     written.push(self.expect_ident()?);
                 }
-                // `case Option<int>.Some v`: the value matched has its types.
                 if self.at_kind_types() {
                     let kind = written.join(".");
                     return Err(Error::at(
@@ -3263,8 +2909,6 @@ impl Parser {
                 }
                 let module_first = written.first().is_some_and(|first| self.is_module(first));
                 let tag = written.pop().unwrap_or_default();
-                // A kind after a name that isn't a module this file includes is
-                // left for the resolver, which says what the name is instead.
                 if written.len() > 2 || (written.len() == 1 && module_first) {
                     return Err(Error::at(
                         span,
@@ -3274,7 +2918,6 @@ impl Parser {
                         ),
                     ));
                 }
-                // `is int {x}`: a type test, which names a maybe.
                 if keyword == "is" && written.is_empty() && crate::check::BUILTIN_TYPE_WORDS.contains(&tag.as_str()) && self.check(Token::LBrace) {
                     return Err(Error::at(span, format!("a tuple's item read with '.#' is a maybe, so a type test writes its type as one, as in 'is maybe {0} {{x}}'", tag)));
                 }
@@ -3300,9 +2943,6 @@ impl Parser {
         Ok(Pattern { kind, span })
     }
 
-    /// What a pattern names: `name`, `_`, or `(a, b)`, the names of a tuple's
-    /// items, each of which `flex` may make changeable or `bind` may make its
-    /// contents changeable.
     fn parse_pattern_names(&mut self) -> Result<Names> {
         let span = self.peek_span();
         let mode = if self.match_token(Token::Flex) {
@@ -3323,7 +2963,6 @@ impl Parser {
         Ok(Names { name: String::new(), span, mode, parts: parts? })
     }
 
-    /// After the `(` at `opened` of a pattern's names: the names and `)`.
     fn parse_pattern_parts(&mut self, opened: Span) -> Result<Vec<Names>> {
         let mut parts = vec![self.parse_pattern_names()?];
         while self.match_token(Token::Comma) {
@@ -3336,8 +2975,6 @@ impl Parser {
         Ok(parts)
     }
 
-    /// A name a binding declares, with its type, or `(a, b, …)`, the names of a
-    /// tuple's items.
     fn parse_bound(&mut self) -> Result<Bound> {
         let span = self.peek_span();
         if self.match_token(Token::LParen) {
@@ -3363,7 +3000,6 @@ impl Parser {
         Ok(Bound { name, span: name_span, ty, ty_span, parts: Vec::new() })
     }
 
-    /// After the `(` at `opened` of names unpacking a tuple: the names and `)`.
     fn parse_bound_parts(&mut self, opened: Span) -> Result<Vec<Bound>> {
         let mut parts = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
@@ -3403,9 +3039,6 @@ impl Parser {
         }
     }
 
-    /// `region name`
-    /// `region r`, or `region r default`, which makes it the block's default
-    /// region (see `ast::DEFAULT`).
     fn parse_region(&mut self) -> Result<Stmt> {
         self.advance();
         let span = self.peek_span();
@@ -3421,13 +3054,6 @@ impl Parser {
         Ok(expr)
     }
 
-    /// A `when` or `loop` condition: `value`, `value is pattern`, or parts
-    /// like these joined with `and` (`m is {x} and x > 0`), explaining `=`
-    /// written for `==`. The parts are read above `and`, so that one can be an
-    /// `is`; where none is, they become one `bool` as `and` makes it, and an
-    /// `or` after them goes on as it does in any value. An `is` is never joined
-    /// with `or`, nor after `not`: a name it binds would be bound on one path
-    /// only.
     fn parse_condition(&mut self) -> Result<Condition> {
         const AND_PRECEDENCE: u8 = 2;
         let mut parts = Vec::new();
@@ -3437,7 +3063,6 @@ impl Parser {
             if self.check(Token::Assign) {
                 return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
             }
-            // `t.#5? is maybe int`: the `?` asks for the item's type itself.
             let asks_at = self.peek_span();
             let asks = self.match_token(Token::Question);
             if asks && !self.check(Token::Is) {
@@ -3485,7 +3110,6 @@ impl Parser {
             return Err(Error::at(self.peek_span(), IS_WITH_OR));
         }
         if !matched {
-            // `a and b`, and maybe `or c`: one value, as `parse_expr` reads it.
             let mut values = parts.into_iter().map(|(value, _)| value);
             let first = values.next().ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))?;
             let joined = values.zip(joins).fold(first, |left, (right, span)| Expr::new(ExprKind::Binary(BinaryOp::And, Box::new(left), Box::new(right)), span));
@@ -3502,8 +3126,6 @@ impl Parser {
         chained.map(|chained| *chained).ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))
     }
 
-    /// The binary operator `token` stands for, with its precedence (higher
-    /// binds tighter). `..` is handled apart from these, as it doesn't chain.
     fn binary_op(token: &Token) -> Option<(BinaryOp, u8)> {
         Some(match token {
             Token::Or => (BinaryOp::Or, 1),
@@ -3526,40 +3148,25 @@ impl Parser {
         })
     }
 
-    /// Precedence of `|>`: above comparisons and below `..` and `+`, so
-    /// `a + 1 |> f() == 3` is `f(a + 1) == 3`.
     const PIPE_PRECEDENCE: u8 = 5;
 
-    /// Precedence of `..`: between pipes and `+`/`-`.
     const RANGE_PRECEDENCE: u8 = 6;
 
-    /// Precedence of `**`, above `*` and below a prefix `-`, which takes only the
-    /// value right after it: `-2 ** 2` is `(-2) ** 2`. It groups from the right.
     const POWER_PRECEDENCE: u8 = 9;
 
-    /// Precedence of `+`, whose chains `at r` joins.
     const ADD_PRECEDENCE: u8 = 7;
 
-    /// Parses operators of precedence `min` or higher by precedence climbing,
-    /// left-associative, with each node's span at its operator. `a..b` takes one
-    /// `..` (`a..b..c` is not a range). Climbing keeps the recursion per
-    /// parenthesis shallow, which matters for `MAX_NESTING`.
+    /// Precedence climbing keeps expression stack depth bounded under `MAX_NESTING`.
     fn parse_binary(&mut self, min: u8) -> Result<Expr> {
         let left = self.parse_unary()?;
         self.parse_operators(left, min)
     }
 
-    /// The operators of precedence `min` or higher after `left`, the first
-    /// operand `parse_binary` read. (A function of its own: `parse_binary`'s
-    /// frame is on the stack once per nesting level, and a debug build gives a
-    /// frame room for everything its function could hold at once.)
+    // Outlined from `parse_binary` to minimize recursive stack frame size under `MAX_NESTING`.
     fn parse_operators(&mut self, mut left: Expr, min: u8) -> Result<Expr> {
-        // Each operator deepens the tree by one level, like a parenthesis.
         let mut levels = 0;
         let mut ranged = false;
         loop {
-            // A loop's `||`s are read before its parts (see `parse_loop`), so
-            // one here stands where an `or` was meant.
             if self.check(Token::Parts) {
                 return Err(Error::at(self.peek_span(), PARTS_AS_OR));
             }
@@ -3572,18 +3179,14 @@ impl Parser {
                     left = self.parse_join(left)?;
                     self.reject_after_region()?;
                 } else if added {
-                    // A chain in parentheses names its region with `@`.
                     return Err(Error::at(
                         self.peek_span(),
                         "a '+' chain in parentheses names its region with '@', as in '(a + b)@r'; without them, write 'a + b at r'",
                     ));
                 } else {
-                    // Everything before `at` is one call, not a chain: the
-                    // region is the call's (see `place_region`).
                     left = self.parse_call_region(left)?;
                 }
             }
-            // A line that starts with `|>` goes on with the chain before it.
             if self.check(Token::Newline) && min <= Self::PIPE_PRECEDENCE && !ranged && self.pipe_on_next_line() {
                 while self.check(Token::Newline) {
                     self.advance();
@@ -3612,14 +3215,12 @@ impl Parser {
             if precedence < min {
                 break;
             }
-            // A range is an operand of comparisons only (`x < 0..5` is left as before).
             if ranged && precedence > Self::RANGE_PRECEDENCE {
                 break;
             }
             self.enter_operator()?;
             levels += 1;
             self.advance();
-            // `2 ** 3 ** 2` is `2 ** (3 ** 2)`.
             let next = if op == BinaryOp::Pow { precedence } else { precedence + 1 };
             let right = self.parse_binary(next)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
@@ -3628,8 +3229,6 @@ impl Parser {
         Ok(left)
     }
 
-    /// Whether the line after the cursor, at the end of a line, starts with
-    /// `|>`, after any blank lines: it goes on with the chain before it.
     fn pipe_on_next_line(&self) -> bool {
         let mut at = self.pos;
         while self.tokens.get(at) == Some(&Token::Newline) {
@@ -3638,11 +3237,6 @@ impl Parser {
         matches!(self.tokens.get(at), Some(Token::Pipe(_)))
     }
 
-    /// `value |> f(b)`, with the cursor at the `|>` and `count` the number of
-    /// its `>`: the call after it, given `value` as its argument `count`, as a
-    /// `Piped` among the ones it writes (`f(value, b)`; `f(b, value)` for
-    /// `|>>`), in a `Pipe`. A plan B after the call is the pipe's, and so
-    /// handles every step before it as well: `a |> f() { 0 }`.
     fn parse_pipe(&mut self, value: Expr, count: usize) -> Result<Expr> {
         let span = self.peek_span();
         let pipe = Token::Pipe(count).describe();
@@ -3694,7 +3288,6 @@ impl Parser {
                 ));
             }
         };
-        // The region written after the call stays its last argument.
         let written = args.iter().filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_))).count();
         if count > written + 1 {
             return Err(Error::at(
@@ -3714,7 +3307,6 @@ impl Parser {
             ));
         }
         args.insert(count - 1, Expr::new(ExprKind::Piped(Box::new(value)), span));
-        // `a |> f() + 1`: the call is the whole step.
         if Self::binary_op(self.peek()).is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE) {
             let op = self.peek().describe();
             let symbol = op.trim_matches('\'');
@@ -3733,10 +3325,6 @@ impl Parser {
         Ok(piped)
     }
 
-    /// `a + b + c at r`, `(a + b)@r`, `"n = {n}" at r`, or `"n = {n}"@r`, with
-    /// `chain` the `+` chain or the text holding values read, and the cursor at
-    /// `at` or `@`: new text in `r` holding the chain's operands, or the text's
-    /// pieces, each value turned into text in `r`.
     fn parse_join(&mut self, chain: Expr) -> Result<Expr> {
         self.advance();
         let region_span = self.peek_span();
@@ -3744,8 +3332,6 @@ impl Parser {
         let span = chain.span;
         let mut parts = Vec::new();
         let mut waiting = vec![chain];
-        // Operands left to right: the right operand of each `+` waits until
-        // everything on its left is taken.
         while let Some(expr) = waiting.pop() {
             match expr.kind {
                 ExprKind::Binary(BinaryOp::Add, left, right) => {
@@ -3761,9 +3347,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Join { parts, region, region_span }, span))
     }
 
-    /// `at r` after `expr`, which is not a `+` chain: the region of the call it
-    /// is, or of the call a `fail`, `-`, or `not` before it is written on (see
-    /// `place_region`), with the plan B that may follow: `f(x) at r { … }`.
     fn parse_call_region(&mut self, mut expr: Expr) -> Result<Expr> {
         let at = self.peek_span();
         self.advance();
@@ -3772,7 +3355,6 @@ impl Parser {
         match place_region(&mut expr, &region, region_span, true) {
             Placing::Placed => {}
             Placing::Already => return Err(Error::at(at, REGION_ALREADY_NAMED)),
-            // `[1, 2] at r`: an array, which is no slice and names no region.
             Placing::Nowhere if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) => {
                 return Err(Error::at(
                     at,
@@ -3796,10 +3378,6 @@ impl Parser {
         Ok(expr)
     }
 
-    /// Refuses what may not follow `at r`, which names the region of everything
-    /// before it and so comes last: another `+` part, which would read as if the
-    /// region were the whole chain's, a second region, and a field, an item, or a
-    /// `^` of the value, which would read as if they were the region's.
     fn reject_after_region(&self) -> Result<()> {
         match self.peek() {
             Token::Dot | Token::LBracket | Token::Caret => Err(Error::at(
@@ -3815,11 +3393,7 @@ impl Parser {
         }
     }
 
-    /// Text holding values, `"n = {n}"`, at `span` and the cursor: a join of
-    /// its pieces whose region is still to come (`at r` or `@r`, which
-    /// `parse_join` reads), so it is left empty; the checker asks for one where
-    /// none comes. (A function of its own: `parse_primary`'s frame is on the
-    /// stack once per nesting level.)
+    // Outlined from `parse_primary` to keep recursion frames small under `MAX_NESTING`.
     fn parse_interpolated(&mut self, span: Span) -> Result<Expr> {
         let Token::Interpolated(pieces) = self.peek().clone() else { return Err(Error::internal_at(span, "text holding values that isn't")) };
         self.advance();
@@ -3833,9 +3407,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Join { parts, region: String::new(), region_span: span }, span))
     }
 
-    /// The value inside `{…}` in text, from its `tokens` and its closing `}`:
-    /// read by this parser, on those tokens in place of the file's, so nesting
-    /// counts as anywhere else.
     fn parse_text_value(&mut self, tokens: Vec<LexToken>, close: &LexToken) -> Result<Expr> {
         let (mut kinds, mut spans) = (Vec::new(), Vec::new());
         for token in tokens {
@@ -3857,7 +3428,6 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Result<Expr> {
-        // The noun names a failure; making one is the verb's work.
         if self.check(Token::Failure) {
             return Err(Error::at(self.peek_span(), FAIL_MAKES));
         }
@@ -3867,8 +3437,7 @@ impl Parser {
         self.parse_postfix()
     }
 
-    /// `fail e`, `-x`, `not x`, or `&a`. (A function of its own: `parse_unary`'s frame
-    /// is on the stack once per nesting level.)
+    // Outlined from `parse_unary` to keep recursion frames small under `MAX_NESTING`.
     fn parse_prefixed(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         if self.match_token(Token::Fail) {
@@ -3896,9 +3465,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Unary(op, Box::new(expr)), span))
     }
 
-    /// The value after `fail`, `-`, or `not`, which takes only the value right
-    /// after it, and text holding values with its region: `fail "{n} is
-    /// negative" at r`.
     fn parse_operand(&mut self) -> Result<Expr> {
         let operand = self.parse_unary()?;
         if self.check(Token::At) && pending_region(&operand) {
@@ -3913,12 +3479,8 @@ impl Parser {
         self.parse_suffixes(expr, parenthesized)
     }
 
-    /// What follows `expr`, read by `parse_postfix` (and `parenthesized` when
-    /// written in parentheses): a region its text is joined into, fields,
-    /// items, `^`, and plan Bs. (A function of its own: `parse_postfix`'s frame
-    /// is on the stack once per nesting level.)
+    // Outlined from `parse_postfix` to keep recursion frames small under `MAX_NESTING`.
     fn parse_suffixes(&mut self, mut expr: Expr, parenthesized: bool) -> Result<Expr> {
-        // `(a + b)@r` or `"n = {n}"@r`: text joined into `r`.
         if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)))) {
             expr = self.parse_join(expr)?;
         }
@@ -3930,8 +3492,6 @@ impl Parser {
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
                 }
-                // `ops[0](x)`, `pick()(x)`, or `(f)(x)`: the task a value holds,
-                // called. A name's own call is read with the name.
                 Token::LParen if parenthesized || calls_value(&expr) => {
                     self.enter()?;
                     levels += 1;
@@ -3939,8 +3499,6 @@ impl Parser {
                     let args = self.parse_arg_list()?;
                     expr = Expr::new(ExprKind::Invoke { callee: Box::new(expr), args }, span);
                 }
-                // `f(x)@r`: the region of the call right before it, which a
-                // further suffix may follow (`x.str()@r.len`).
                 Token::AtSign if takes_region_after(&expr) => {
                     let at = self.peek_span();
                     self.advance();
@@ -3955,7 +3513,6 @@ impl Parser {
             }
         }
         self.leave(levels);
-        // `[1, 2]@r`: an array, which is no slice and names no region.
         if self.check(Token::AtSign) && matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) {
             return Err(Error::at(
                 self.peek_span(),
@@ -3971,9 +3528,7 @@ impl Parser {
         Ok(expr)
     }
 
-    /// `.field`, `[index]`, `^`, or a plan B after `expr`, with the cursor at
-    /// its first token. (A function of its own: `parse_postfix`'s frame is on
-    /// the stack once per nesting level of every expression.)
+    // Outlined from `parse_postfix` to keep recursion frames small under `MAX_NESTING`.
     fn parse_suffix(&mut self, expr: Expr) -> Result<Expr> {
         let span = self.peek_span();
         match self.peek() {
@@ -3981,7 +3536,6 @@ impl Parser {
             Token::Dot => {
                 self.advance();
                 let span = self.peek_span();
-                // `t.#0`: an item of a tuple in a maybe, none past its end.
                 if self.check(Token::Hash) {
                     self.advance();
                     let Token::Int(n) = self.peek() else {
@@ -3991,7 +3545,6 @@ impl Parser {
                     self.advance();
                     return Ok(Expr::new(ExprKind::Field(Box::new(expr), item), span));
                 }
-                // `t.0`: an item of a tuple.
                 if let Token::Int(n) = self.peek() {
                     let item = n.to_string();
                     self.advance();
@@ -3999,15 +3552,11 @@ impl Parser {
                 }
                 let field = self.expect_member()?;
                 let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
-                // `m.Option<int>.None`: a kind of a module, given its types.
                 if self.at_kind_types()
                     && let Some((kind, _)) = dotted_name(&expr)
                 {
                     return self.parse_kind_types_use(kind, span);
                 }
-                // A `<` here opens the types a use gives (a method takes none of
-                // its own, which `dotted_name_use` says), never a comparison:
-                // see `at_type_args`.
                 if self.check(Token::LParen) || self.at_type_args() || (self.check(Token::LBrace) && self.at_shape_literal()) {
                     return self.dotted_name_use(expr);
                 }
@@ -4015,7 +3564,6 @@ impl Parser {
             }
             Token::LBracket => {
                 self.advance();
-                // `xs[#i]`: the item at `i` in a maybe, none out of range.
                 if self.match_token(Token::Hash) {
                     let index = self.parse_expr()?;
                     if let ExprKind::Range(..) = index.kind {
@@ -4039,8 +3587,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Expr> {
-        // Each kind of value is read by a function of its own: this one's
-        // frame is on the stack once per nesting level.
+        // Outlined primary arm to keep `parse_primary` stack frames small under `MAX_NESTING`.
         let span = self.peek_span();
         match self.peek() {
             Token::Parts => Err(Error::at(span, PARTS_AS_OR)),
@@ -4059,7 +3606,6 @@ impl Parser {
             Token::LParen if self.at_shortcut_lambda() => self.parse_shortcut_lambda_parens(None, span),
             Token::LParen => self.parse_parenthesized(),
             Token::Match | Token::When => self.parse_choice(span),
-            // A loop that gives a value, and one named so where no variable names it.
             Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
             Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
                 let name = (name.clone(), span);
@@ -4083,8 +3629,6 @@ impl Parser {
                 self.advance();
                 self.parse_shortcut_lambda(vec![(DISCARD.to_string(), span)], None, span)
             }
-            // `.this`, `.field`, or `.method(…)`: the value a method is called
-            // on, and what it holds.
             Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type))
                 || (self.tokens.get(self.pos + 1) == Some(&Token::New) && self.tokens.get(self.pos + 2) == Some(&Token::LParen)) =>
             {
@@ -4095,8 +3639,6 @@ impl Parser {
         }
     }
 
-    /// A literal at `span` and the cursor: a number, a char, text, `true`,
-    /// `false`, or `none`.
     fn parse_literal(&mut self, span: Span) -> Result<Expr> {
         let kind = match self.peek() {
             Token::Int(n) => ExprKind::IntLit(*n),
@@ -4112,9 +3654,6 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// A `match` or a `when` at `span` and the cursor, where a value is
-    /// expected: its branches give the value, each on the last line of its
-    /// block.
     fn parse_choice(&mut self, span: Span) -> Result<Expr> {
         self.enter()?;
         let chosen = if self.check(Token::Match) { self.parse_match()? } else { self.parse_when()? };
@@ -4122,9 +3661,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Choice(Box::new(chosen)), span))
     }
 
-    /// A `loop`, `each` or `endless` at `span` and the cursor, where a value is
-    /// expected, named `name` with `=>`: its passes give the value, each on the
-    /// last line of its body (see `ValueLoop`).
     fn parse_loop_value(&mut self, span: Span, name: Option<(String, Span)>) -> Result<Expr> {
         self.enter()?;
         let stmt = match self.peek() {
@@ -4136,7 +3672,6 @@ impl Parser {
         Ok(self.loop_value(stmt?, name, true, span))
     }
 
-    /// The loop `stmt` as a value (see `ValueLoop`).
     fn loop_value(&mut self, stmt: Stmt, name: Option<(String, Span)>, gives: bool, span: Span) -> Expr {
         self.loop_values = true;
         let arrow = name.is_some();
@@ -4144,9 +3679,6 @@ impl Parser {
         Expr::new(ExprKind::LoopValue(Box::new(value)), span)
     }
 
-    /// `.this`, `.field`, or `.method(…)` at `span`, with the cursor at the
-    /// dot: the value a method is called on, and what it holds. Only a method
-    /// has one, which the checker says; here it is a value like any other.
     fn parse_member_of_this(&mut self, span: Span) -> Result<Expr> {
         self.advance();
         let at = self.peek_span();
@@ -4156,17 +3688,13 @@ impl Parser {
             return Ok(value);
         }
         let expr = Expr::new(ExprKind::Field(Box::new(value), member), at);
-        // A `{` after it is a plan B on the member, which `parse_suffix`
-        // reads: no shape is named `.x`.
         if self.check(Token::LParen) || self.at_type_args() {
             return self.dotted_name_use(expr);
         }
         Ok(expr)
     }
 
-    /// A value that starts with a name, at `span` and the cursor: a variable,
-    /// a call, or a shape literal. (A function of its own: `parse_primary`'s
-    /// frame is on the stack once per nesting level.)
+    // Outlined from `parse_primary` to keep recursion frames small under `MAX_NESTING`.
     fn parse_name_use(&mut self, span: Span) -> Result<Expr> {
         let name = self.expect_ident()?;
         let name = self.value_name(name)?;
@@ -4179,9 +3707,6 @@ impl Parser {
         if self.at_kind_types() {
             return self.parse_kind_types_use(name, span);
         }
-        // The types a use gives are read only where a call or a shape
-        // literal follows them (see `at_type_args`), so one of `(` and
-        // `{` comes next for certain.
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
             if self.check(Token::LParen) {
@@ -4199,28 +3724,19 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// `scan(prompt) at r` or `scan(prompt)@r`, with the cursor at `(`. (A
-    /// function of its own: `parse_primary`'s frame is on the stack once per
-    /// nesting level.)
+    // Outlined from `parse_primary` to keep recursion frames small under `MAX_NESTING`.
     fn parse_scan(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
         if self.check(Token::In) {
-            // A read that names a type reads a number, which needs no region, so
-            // nothing follows its call; the checker settles what a type may be.
             let hint = match args.len() {
                 1 => "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range",
                 _ => "'scan' reading a number names no region, so nothing follows the call, as in 'scan(\"Age: \", int)'; 'in' counts through a range",
             };
             return Err(Error::at(self.peek_span(), hint));
         }
-        // A line read into a region names one, and a number read from a line
-        // names none, which the checker tells apart by what the call takes. The
-        // region comes after, `at r` or `@r`, as for any call (see
-        // `place_region`); until then its position is where one would be written.
         let region_span = self.peek_span();
         Ok(Expr::new(ExprKind::Scan { args, region: None, region_span }, span))
     }
-
 
     /// Whether the cursor, at `(`, starts a full lambda: parentheses with typed parameters
     /// or empty parentheses followed by `->` and a return type with `<-` or a multiline block.
@@ -4300,15 +3816,8 @@ impl Parser {
         true
     }
 
-    /// `(params) -> type`, then its body on the lines after it or on its own
-    /// line, and `fi`, at `(`: a task with no name, which takes nothing from the
-    /// task around it. It becomes a task of the file (see `ast::lambda_name`),
-    /// and the value here names it.
     fn parse_lambda(&mut self) -> Result<Expr> {
-        // Its header and the task it becomes are read and made by functions
-        // of their own: this one's frame is on the stack once per lambda
-        // nested in another, and it counts as a level of its own, as a block
-        // does, since its frames are larger than a block's.
+        // Outlined and counted toward `MAX_NESTING` because lambda frames exceed plain block frames.
         self.enter()?;
         let span = self.peek_span();
         let (params, ret, results) = self.parse_lambda_header(span)?;
@@ -4323,10 +3832,6 @@ impl Parser {
         Ok(self.add_lambda(span, params, ret, results, body, None, false))
     }
 
-    /// `[@r](params) -> type`, its body, and `fi`, at `[`: a lambda that keeps
-    /// what it uses from the code around it in region `r`, with `[flex @r]`
-    /// changing its copies and `[bind @r]` letting their contents change (see
-    /// `ExprKind::Closure`).
     fn parse_closure_lambda(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         let (region, mode, _, places) = self.parse_kept()?;
@@ -4348,7 +3853,6 @@ impl Parser {
             let written = format!("[{}@{}]", mode_word, region);
             return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
         }
-        // A level of its own, as for any lambda (see `parse_lambda`).
         self.enter()?;
         let header = self.peek_span();
         let (params, ret, results) = self.parse_lambda_header(header)?;
@@ -4366,7 +3870,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
     }
 
-    /// A shortcut one-line lambda without `<-` or `fi`: `x -> x * 2`, `(a, b) -> a + b`, or `() -> 42`.
     fn parse_shortcut_lambda(&mut self, params: Vec<(String, Span)>, kept: Option<Kept>, span: Span) -> Result<Expr> {
         if self.in_generic {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
@@ -4404,7 +3907,6 @@ impl Parser {
         }
     }
 
-    /// Parenthesized shortcut lambda: `(x) -> expr`, `(a, b) -> expr`, or `() -> expr`.
     fn parse_shortcut_lambda_parens(&mut self, kept: Option<Kept>, span: Span) -> Result<Expr> {
         self.expect(Token::LParen)?;
         let mut params = Vec::new();
@@ -4426,7 +3928,6 @@ impl Parser {
         self.parse_shortcut_lambda(params, kept, span)
     }
 
-    /// A lambda's header at `span` and the cursor, up to its body.
     fn parse_lambda_header(&mut self, span: Span) -> Result<(Vec<Field>, Type, Vec<ResultDef>)> {
         if self.in_generic {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
@@ -4454,8 +3955,6 @@ impl Parser {
         Ok((params, ret, results))
     }
 
-    /// Makes the lambda at `span` a task of the file, and gives the value
-    /// naming it.
     #[allow(clippy::too_many_arguments)]
     fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>, shortcut: bool) -> Expr {
         self.lambda_count += 1;
@@ -4481,10 +3980,7 @@ impl Parser {
         Expr::new(ExprKind::Var(name), span)
     }
 
-    /// A lambda's body on the line of its header, opened at `opened`, and its
-    /// `fi`, which ends the line's statements: `(x: int) -> int <- x * 2 fi`.
     fn parse_lambda_line(&mut self, opened: Span) -> Result<Block> {
-        // It may start by sending, though `<-` starts no line there.
         let outer = self.send_after_header.replace(self.pos);
         let mut body = Vec::new();
         let result = loop {
@@ -4503,8 +3999,6 @@ impl Parser {
         result.map(|()| body)
     }
 
-    /// The mistake in a lambda opened at `opened` whose body starts on its
-    /// header's line and has no `fi` on it.
     fn unclosed_lambda_line(&self, opened: Span) -> Error {
         Error::at(
             self.peek_span(),
@@ -4515,12 +4009,10 @@ impl Parser {
         )
     }
 
-    /// `(value)`, or a tuple, `(a, b, …)`, on one line.
     fn parse_parenthesized(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance();
         let first = self.parse_expr()?;
-        // `(args...)`: a group's values made into a tuple, as `args.tuple` is.
         if self.check(Token::Ellipsis) {
             self.advance();
             if !self.check(Token::RParen) {
@@ -4533,7 +4025,7 @@ impl Parser {
             self.expect(Token::RParen)?;
             return Ok(first);
         }
-        // A tuple holds its values in a frame of its own, as an array does.
+        // Outlined tuple frame counted toward `MAX_NESTING`.
         self.enter()?;
         let mut values = vec![first];
         let result = loop {
@@ -4543,8 +4035,6 @@ impl Parser {
             if self.check(Token::Newline) {
                 break Err(Error::at(self.peek_span(), "a tuple is written on one line, as in '(1, \"Ada\")'"));
             }
-            // `(1,)`: one value in parentheses is only grouped, as one type is.
-            // `(1, 2,)`: the comma is the one after the last item.
             if self.check(Token::RParen) {
                 break Err(match values.as_slice() {
                     [_] => Error::at(span, TUPLE_ITEMS.to_string()),
@@ -4560,10 +4050,8 @@ impl Parser {
         result.map(|()| Expr::new(ExprKind::Tuple(values), span))
     }
 
-    /// `[a, b, c]` or `[value#count]`, on one line.
     fn parse_array(&mut self) -> Result<Expr> {
-        // An array holds its values in a frame of its own, and takes more stack
-        // than most expressions, so it counts as a level of its own.
+        // Outlined array frame counted toward `MAX_NESTING`.
         self.enter()?;
         let result = self.parse_array_inner();
         self.leave(1);
@@ -4576,7 +4064,6 @@ impl Parser {
         if self.check(Token::RBracket) {
             return Err(Error::at(span, "an array holds at least one value, as in '[0#4]'"));
         }
-        // `[...]`: a slice of no values, which says nothing of their type.
         if self.check(Token::Ellipsis) {
             return Err(Error::at(span, "a slice of no values can't tell what type its items are; name it, as in 'new [int]() at r'"));
         }
@@ -4589,7 +4076,6 @@ impl Parser {
             self.expect_array_end(span, false)?;
             return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));
         }
-        // `["a": 1, "b": 2]`: the pairs of a map.
         if self.match_token(Token::Colon) {
             let value = self.parse_expr()?;
             let pairs = self.parse_pairs_after(vec![(first, value)], span, false)?;
@@ -4600,7 +4086,6 @@ impl Parser {
             if self.check(Token::Newline) {
                 return Err(Error::at(self.peek_span(), "an array is written on one line, as in '[1, 2, 3]'"));
             }
-            // `[1, 2, ...]`: the values of a slice, which can grow.
             if self.match_token(Token::Ellipsis) {
                 self.expect_array_end(span, false)?;
                 let value = Expr::new(ExprKind::Array(values), span);
@@ -4614,9 +4099,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Array(values), span))
     }
 
-    /// The pairs of a map after its first, up to and including the `]`; with
-    /// `names`, a key is a bare name, its own text, or text in quotes (the
-    /// `[:V]` form of `new`).
     fn parse_pairs_after(&mut self, mut pairs: Vec<(Expr, Expr)>, opened: Span, names: bool) -> Result<Vec<(Expr, Expr)>> {
         while self.match_token(Token::Comma) {
             if self.check(Token::Newline) {
@@ -4637,7 +4119,6 @@ impl Parser {
         Ok(pairs)
     }
 
-    /// A key of the `[:V]` form: a bare name, which is its own text, or text.
     fn parse_named_key(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         match self.peek().clone() {
@@ -4653,8 +4134,6 @@ impl Parser {
         }
     }
 
-    /// A map's pairs, with the region written after them, if any: a shortcut
-    /// for a map of its own, or pairs given to `new`.
     fn pairs_with_region(&mut self, pairs: Vec<(Expr, Expr)>, span: Span) -> Result<Expr> {
         let value = Expr::new(ExprKind::Pairs(pairs), span);
         if self.check(Token::At) || self.check(Token::AtSign) {
@@ -4663,9 +4142,6 @@ impl Parser {
         Ok(value)
     }
 
-    /// The region after a shortcut's values, `[1, 2, ...] at r` or
-    /// `[1, 2, ...]@r`, or none, for the block's default; `value` is what the
-    /// brackets hold.
     fn parse_shortcut(&mut self, value: Expr, span: Span) -> Result<Expr> {
         let (region, region_span) = if self.match_token(Token::At) || self.match_token(Token::AtSign) {
             let region_span = self.peek_span();
@@ -4676,8 +4152,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Shortcut { value: Box::new(value), region, region_span }, span))
     }
 
-    /// The `]` closing the array opened at `opened`; `one` when it holds one
-    /// value so far.
     fn expect_array_end(&mut self, opened: Span, one: bool) -> Result<()> {
         if self.match_token(Token::RBracket) {
             return Ok(());
@@ -4689,15 +4163,7 @@ impl Parser {
         Err(self.unexpected("']'"))
     }
 
-    /// A call or shape literal after a field, as in `p.area()`, `p.x.f()`, or
-    /// `geometry.Point { x: 1 }` where `geometry` isn't a module this file
-    /// includes (`value_name` joins the names that are). A call is a method
-    /// called on the value, which keeps the reading as one dotted name too when
-    /// the value is a name: `Light.Red(…)` is a variant and `m.f(…)` a module's
-    /// task, and only the file's names tell them apart (see the resolver). A
-    /// change to a slice, `xs.add(…)` or `xs.del(…)`, and a copy, `x.copy()`,
-    /// are neither. (A function of its own: `parse_postfix`'s frame is on the
-    /// stack once per nesting level.)
+    /// Parses method/variant calls and shape literals after field chains, retaining dotted forms for module resolution.
     fn dotted_name_use(&mut self, expr: Expr) -> Result<Expr> {
         if matches!(&expr.kind, ExprKind::Field(_, word) if word == COPY) && self.check(Token::LParen) {
             return self.parse_copy(expr);
@@ -4712,8 +4178,6 @@ impl Parser {
             let args = self.parse_arg_list()?;
             let ExprKind::Field(items, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a change without its slice")) };
             let edit = Expr::new(ExprKind::Edit { items, op, args }, expr.span);
-            // `xs.added(v)` and `xs.without(i)` make a copy, which goes where a
-            // copy goes: the region after them, `at r`, or the place's.
             if op.makes_copy() {
                 if self.check(Token::In) {
                     return Err(Error::at(self.peek_span(), format!("'{0}' names its region with 'at', as in 'xs.{0}(v) at r' (or 'xs.{0}(v)@r'); 'in' counts through a range", op.word())));
@@ -4722,9 +4186,6 @@ impl Parser {
             }
             return Ok(edit);
         }
-        // `p.pick<int>(…)`: a task of a module is named before its types (see
-        // `value_name`), so what is left here is a method, which takes none of
-        // its own yet, or a variant, which takes none at all.
         let dotted = dotted_name(&expr);
         if self.at_type_args()
             && let ExprKind::Field(_, member) = &expr.kind
@@ -4740,14 +4201,11 @@ impl Parser {
         if self.check(Token::LParen) {
             let span = expr.span;
             let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a call without the value it is on")) };
-            // `dotted_name` has read the whole of it, the method's name too.
             let dotted = dotted.map(|(whole, _)| whole);
             let args = self.parse_arg_list()?;
             return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
         }
         let Some((name, span)) = dotted else { return Ok(expr) };
-        // `m.Box<int> { … }`: the types a use gives, told from a comparison by
-        // the `{` that must follow the closing `>`.
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
             self.parse_struct_init(name, types)?
@@ -4763,13 +4221,9 @@ impl Parser {
     /// that: `a < b > (c)` would compare a bool with `>`, and `a < b > {` has no
     /// value after the `>` at all, so both are errors either way.
     fn at_type_args(&self) -> bool {
-        // `Box<> { … }`: no value starts with `{`, so this `<>` is no 'not
-        // similar' but types left empty (see `parse_type_args`).
         if self.check(Token::NotSimilar) {
             return matches!(self.tokens.get(self.pos + 1), Some(Token::LBrace));
         }
-        // A call follows the types a task is given, and a literal the types a
-        // shape is given.
         self.type_args_close().is_some_and(|close| matches!(self.tokens.get(close + 1), Some(Token::LParen | Token::LBrace)))
     }
 
@@ -4788,8 +4242,6 @@ impl Parser {
         })
     }
 
-    /// The position of the `>` closing the types a use gives, when the cursor
-    /// is at their `<`, with only what a type is written with in between.
     fn type_args_close(&self) -> Option<usize> {
         if !self.check(Token::Lt) {
             return None;
@@ -4802,7 +4254,6 @@ impl Parser {
         for p in self.pos + 1.. {
             match self.tokens.get(p) {
                 Some(Token::Gt) if grouped > 0 && depth == 0 => return None,
-                // `>` closes the types, or, nested, one type's own.
                 Some(Token::Gt) if depth == 0 => return Some(p),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
@@ -4816,8 +4267,6 @@ impl Parser {
         None
     }
 
-    /// `Option<int>.None` or `Option<int>.Some(3)`, with the cursor at `<`
-    /// after `kind`, written at `span`: a variant of a kind given its types.
     fn parse_kind_types_use(&mut self, kind: String, span: Span) -> Result<Expr> {
         let types = self.parse_type_args()?;
         self.expect(Token::Dot)?;
@@ -4829,7 +4278,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::Construct { kind, tag, args, types }, span))
     }
 
-    /// After the `<` of the types a call gives: the types and `>`.
     fn parse_type_args(&mut self) -> Result<Vec<TypeArg>> {
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are"));
@@ -4852,10 +4300,6 @@ impl Parser {
         Ok(types)
     }
 
-    /// `value.str(r)` or `value.str()`, with the cursor at `(` and `expr` the
-    /// field `str` of the value: the method call `str`. A region written after
-    /// it, `at r` or `@r`, is read as it is after any call (see
-    /// `place_region`), and with none the checker gives it the block's default.
     fn parse_str(&mut self, expr: Expr) -> Result<Expr> {
         let dotted = dotted_name(&expr).map(|(whole, _)| whole);
         let span = expr.span;
@@ -4864,9 +4308,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span))
     }
 
-    /// `text(value)`, at `span`, with the cursor at `(`: the method call `str` on
-    /// the value, whose region is written after it as for any call
-    /// (`text(n) at r`, `text(n)@r`; see `place_region`).
     fn parse_text_cast(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
         let [value] = <[Expr; 1]>::try_from(args).map_err(|args| {
@@ -4876,8 +4317,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args: Vec::new(), dotted: None }, span))
     }
 
-    /// `value.copy()`, with the cursor at `(` and `expr` the field `copy` of the
-    /// value, and the region after it: `at r`, `@r`, or none.
     fn parse_copy(&mut self, expr: Expr) -> Result<Expr> {
         let ExprKind::Field(value, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a copy without its value")) };
         let args = self.parse_arg_list()?;
@@ -4887,27 +4326,20 @@ impl Parser {
         if self.check(Token::In) {
             return Err(Error::at(self.peek_span(), "a copy names its region with 'at', as in 'x.copy() at r' (or 'x.copy()@r'); 'in' counts through a range"));
         }
-        // The region comes after, `at r` or `@r`, as for any call (see
-        // `place_region`); with none, the place the copy goes names it.
         Ok(Expr::new(ExprKind::Copy { value, region: None, region_span: expr.span }, expr.span))
     }
 
-    /// Whether the `{` at the cursor, after a name, opens a shape literal
-    /// (`Point { x: 1 }` or `Marker {}`) rather than a plan B (`x { 0 }`).
     fn at_shape_literal(&self) -> bool {
         let after = |n: usize| self.tokens.get(self.pos + n).unwrap_or(&Token::Eof);
         matches!(after(1), Token::RBrace) || (matches!(after(1), Token::Ident(_)) && matches!(after(2), Token::Colon))
     }
 
-    /// `value { … }`, with the cursor at `{`: a plan B, whose block may start
-    /// with `fail e` to name the error.
     fn parse_plan_b(&mut self, value: Expr) -> Result<Expr> {
         let opened = self.peek_span();
         self.advance();
         let same_line = !self.check(Token::Newline);
         self.skip_newlines();
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
-        // `Point {` with its fields on the next line: a line never starts with `name:`.
         if !same_line && matches!(self.peek(), Token::Ident(_)) && matches!(next, Token::Colon) {
             let example = dotted_name(&value).map_or_else(|| "Point { ".to_string(), |(name, _)| format!("{} {{ ", name));
             return Err(Error::at(
@@ -4915,9 +4347,6 @@ impl Parser {
                 format!("a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'", example),
             ));
         }
-        // `{ failure e` names the failure this plan B handles. `fail` and a name
-        // here is the old spelling of that, never a value: a fallback replaces
-        // the value, so a failure is sent (`<- fail e`) rather than given.
         if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
             return Err(Error::at(self.peek_span(), PLAN_B_NAMES));
         }
@@ -4942,19 +4371,14 @@ impl Parser {
         Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
-    /// `new T(value) at r` or `new@r T(value)`; `new [T] at r` for an empty
-    /// value, as `new [T]() at r` writes it.
     fn parse_new(&mut self) -> Result<Expr> {
-        // A `new` holds a type and a value, and takes more stack than most
-        // expressions, so it counts as a level of its own.
+        // Outlined `new` frame counted toward `MAX_NESTING`.
         self.enter()?;
         let result = self.parse_new_inner();
         self.leave(1);
         result
     }
 
-    /// Whether the `(` at the cursor opens a tuple type followed by the value
-    /// `new` copies, `(int, int)((1, 2))`, rather than arguments alone.
     fn tuple_type_follows(&self) -> bool {
         let mut depth = 0usize;
         for pos in self.pos.. {
@@ -4976,8 +4400,6 @@ impl Parser {
     fn parse_new_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance();
-        // `new(…)` alone: a shared method's call written without its shape.
-        // (`new (int, int)((1, 2))` names a tuple type, then gives its value.)
         if self.check(Token::LParen) && !self.tuple_type_follows() {
             return Err(Error::at(
                 span,
@@ -4995,11 +4417,8 @@ impl Parser {
             None
         };
         let ty_span = self.peek_span();
-        // `new [:float](…)`: a map whose keys are text, written as names.
         let named_keys = self.check(Token::LBracket) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
         let ty = self.parse_type()?;
-        // `new [T]`, `new [K: V]` or `new Point`, with no `( )`: the empty
-        // value `()` writes, which is all `new` can make without one.
         let bare = !self.check(Token::LParen);
         if bare && self.check(Token::LBrace) {
             let example = if matches!(ty, Type::Named(..) | Type::Applied(..)) { format!("{0}({0} {{ … }})", ty) } else { format!("{}(…)", ty) };
@@ -5010,11 +4429,6 @@ impl Parser {
         }
         let empty = bare || self.check(Token::RParen);
         let empty_at = if bare { ty_span } else { self.peek_span() };
-        // `new [T]() at r` makes an empty slice; its value is an array of no
-        // values, which no literal can write. `new [K: V]() at r` makes an
-        // empty map, of no pairs. `new Point() at r` makes a shape of the
-        // values its fields fall back on, which the checker sees all have one
-        // (see `Checker::check_new`).
         let value = if empty && matches!(ty, Type::Slice(..)) {
             Expr::new(ExprKind::Array(Vec::new()), empty_at)
         } else if empty && matches!(ty, Type::Map(..)) {
@@ -5064,8 +4478,6 @@ impl Parser {
         } else {
             None
         };
-        // Without a region, the block's default is the region, which only the
-        // checker knows; it reports the ones that have none (see `check_new`).
         let (region, region_span) = match before.or(after) {
             Some((region, at)) => (Some(region), at),
             None => (None, self.peek_span()),
@@ -5073,8 +4485,6 @@ impl Parser {
         Ok(Expr::new(ExprKind::New { ty: Box::new(ty), ty_span, value: Box::new(value), region, region_span }, span))
     }
 
-    /// `Point { x: 1 }`, or `Box<int> { value: none }` with `types` the ones the
-    /// literal names, with the cursor at `{`.
     fn parse_struct_init(&mut self, name: String, types: Vec<TypeArg>) -> Result<ExprKind> {
         let shape_name = name.clone();
         self.advance();
@@ -5107,7 +4517,6 @@ impl Parser {
         if !self.check(Token::RParen) {
             loop {
                 let arg = self.parse_expr()?;
-                // `f(args...)` or `f(r, args..., s)`: a group's values, once.
                 if self.check(Token::Ellipsis) {
                     let at = self.peek_span();
                     self.advance();
@@ -5127,19 +4536,14 @@ impl Parser {
         Ok(args)
     }
 
-    /// The name after a dot: a name, `type`, the one reserved word read there
-    /// (`x.type`), `new` (a shared method), or `at` before a `(`.
     fn expect_member(&mut self) -> Result<String> {
         if self.match_token(Token::Type) {
             return Ok(TYPE_WORD.to_string());
         }
-        // `X.new(…)`: the one keyword a member may be named, a shared method,
-        // which `X.new` names as a value.
         if self.check(Token::New) {
             self.advance();
             return Ok(NEW_WORD.to_string());
         }
-        // `t.at(i)`: a keyword too, read as the method text has before its `(`.
         if self.check(Token::At) && self.tokens.get(self.pos + 1) == Some(&Token::LParen) {
             self.advance();
             return Ok(AT.to_string());
@@ -5154,7 +4558,6 @@ impl Parser {
         }
     }
 
-    /// The error for a missing name at the cursor, explaining reserved words.
     fn name_expected(&self) -> Error {
         match KEYWORDS.iter().find(|(_, keyword)| keyword == self.peek()) {
             Some((word, _)) => Error::at(
@@ -5198,16 +4601,11 @@ fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
             _ => continue,
         };
         let before = i.checked_sub(1).and_then(|at| tokens.get(at)).map(|(token, _, _)| *token);
-        // Where a line or a pattern starts, `(` may begin the names a variable's
-        // word takes apart, as in `fixed (a, b) = t` or `is flex(x, y)`.
         let starts_line = matches!(before, None | Some(Token::Newline));
         let starts = starts_line || matches!(before, Some(Token::Is | Token::Case | Token::Each | Token::Loop));
         let as_word = match tokens.get(i + 1) {
             Some((Token::Ident(_) | Token::Amp, _, _)) => true,
-            // `[flex @r]`, a lambda's copies, and not a type such as `text@r`.
             Some((Token::AtSign, _, _)) => matches!(before, Some(Token::LBracket)),
-            // Written against the word at a line's start, it is a call, as
-            // `hold(1)` is, unless the names are assigned to.
             Some((Token::LParen, next, _)) => starts && (next != end || !starts_line || assigned_after(tokens, i + 1)),
             _ => false,
         };
@@ -5220,7 +4618,6 @@ fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
     None
 }
 
-/// Whether the `(` at `open` in `tokens` closes with `)` and `=` after it.
 fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
     let mut depth = 0;
     for (at, (token, _, _)) in tokens.iter().enumerate().skip(open) {
@@ -5239,8 +4636,6 @@ fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
     false
 }
 
-/// The error for a bare `called()` read as the first line of the default body
-/// of pattern method `method`, after which the pattern didn't read on.
 fn two_headers(called: &str, method: &str) -> String {
     format!(
         "'{0}()' is read as the first line of the body of '{1}', since a line of one header followed by a statement starts that method's body; to ask for both methods, write them on one line, as in '{1}(), {0}()'",
@@ -5248,15 +4643,11 @@ fn two_headers(called: &str, method: &str) -> String {
     )
 }
 
-/// The words a generic type can be asked to allow, for a message, from what
-/// most types allow to what fewest do.
 pub fn needs_list() -> String {
     let words: Vec<String> = [Need::Frozen, Need::Same, Need::Similar, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
 }
 
-/// Why `narrower` already means `wider`, for the message that says to write one
-/// word alone.
 fn why_means(narrower: Need, wider: Need) -> String {
     let value = match narrower {
         Need::Ordered => "a value with an order is a number or text, which",
@@ -5275,10 +4666,6 @@ fn why_means(narrower: Need, wider: Need) -> String {
     format!("{} {}", value, also)
 }
 
-/// Whether a region written on `ty` belongs to what it holds, because `ty`
-/// keeps none of its own: a tuple or an array, or a `maybe` or `T ~ E` of one.
-/// (A pointer, a slice, and a shape or kind keep the region they are given, and
-/// the checker reports what such a value holds in another region.)
 fn keeps_no_region(ty: &Type) -> bool {
     match ty {
         Type::Tuple(_) | Type::Array(..) => true,
@@ -5288,7 +4675,6 @@ fn keeps_no_region(ty: &Type) -> bool {
     }
 }
 
-/// Whether `ty` is `region`, or holds it (as `maybe region` would).
 fn mentions_region(ty: &Type) -> bool {
     match ty {
         Type::Region => true,
@@ -5299,11 +4685,7 @@ fn mentions_region(ty: &Type) -> bool {
     }
 }
 
-/// `a.b.c` for a chain of fields on a variable, with where `a` is written.
-/// The parameter that holds the value a method of `owner` is called on, at the
-/// position of the method's name. The value names the region it lives in
-/// (`@this`), which the checker drops where the shape or kind lives in none; a
-/// shape that takes types is named with them, as its own fields name them.
+/// Implicit `.this` receiver parameter; `@this` is stripped later for regionless types.
 pub fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
     let region = Some(THIS_WORD.to_string());
     let ty = if types.is_empty() {
@@ -5315,20 +4697,14 @@ pub fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
     Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, passing: Passing::Copy, default: None }
 }
 
-/// The message for `new` named as anything but a shared method of `owner`.
 fn new_only_shared(owner: &str) -> String {
     format!("'new' names only a shared method, one called on '{0}' itself, as in 'shared new(…) -> {0}', then '{0}.new(…)'", owner)
 }
 
-/// The message for `alters` on a shared method.
 const SHARED_NEVER_ALTERS: &str = "a shared method is called on its shape or kind, with no value it could change, so it is never 'alters'";
 
-/// A startup decorator as written: its name, its values, where it is, and
-/// whether a failure of it passes (`$d?`).
 type Decorator = (String, Vec<Expr>, Span, bool);
 
-/// Gives `task` the decorators written above it: each startup decorator a call
-/// taking the task first, then its values, and the wrappers as they are.
 fn decorate(task: &mut TaskDef, decorators: Vec<Decorator>, wrappers: Vec<Expr>) {
     task.wrappers = wrappers;
     task.passes = decorators.iter().map(|(_, _, _, passes)| *passes).collect();
@@ -5342,8 +4718,6 @@ fn decorate(task: &mut TaskDef, decorators: Vec<Decorator>, wrappers: Vec<Expr>)
         .collect();
 }
 
-/// What a shape or a kind declares above a method, whose names the method's
-/// can't take (see `Parser::parse_method`).
 #[derive(Clone, Copy)]
 struct Above<'a> {
     fields: &'a [Field],
@@ -5351,8 +4725,6 @@ struct Above<'a> {
     methods: &'a [TaskDef],
 }
 
-/// Refuses a field or shared field named like one written above it in the
-/// same shape: both are named after a dot, so they can't share a name.
 fn reject_same_name(field: &Field, fields: &[Field], shared: &[SharedField]) -> Result<()> {
     let before = fields.iter().chain(shared.iter().map(|member| &member.field)).find(|before| before.name == field.name);
     match before {
@@ -5361,8 +4733,6 @@ fn reject_same_name(field: &Field, fields: &[Field], shared: &[SharedField]) -> 
     }
 }
 
-/// Refuses a member named `this`, which is the whole value inside a method, so
-/// nothing written after a dot could reach it.
 fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
     if name != THIS_WORD {
         return Ok(());
@@ -5373,7 +4743,6 @@ fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
     ))
 }
 
-/// The types a declaration takes, as they are written: `<T, U>`.
 fn type_param_list(types: &[TypeParam]) -> String {
     let names: Vec<&str> = types.iter().map(|param| param.name.as_str()).collect();
     format!("'<{}>'", names.join(", "))
@@ -5381,8 +4750,6 @@ fn type_param_list(types: &[TypeParam]) -> String {
 
 fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
     match &expr.kind {
-        // The value a method is called on is no part of a name: `.this` and
-        // `.x` are its own, and `.x.f(…)` calls a method on the field.
         ExprKind::Var(name) if name == THIS => None,
         ExprKind::Var(name) => Some((name.clone(), expr.span)),
         ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
@@ -5390,15 +4757,10 @@ fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
     }
 }
 
-/// Whether `expr` is text holding values whose region is still to come (see
-/// `Parser::parse_interpolated`).
 pub(crate) fn pending_region(expr: &Expr) -> bool {
     matches!(&expr.kind, ExprKind::Join { region, .. } if region.is_empty())
 }
 
-/// The `pieces` of text holding values, joined into `region`, added to
-/// `parts`: its text as it is, and each value turned into text in the region.
-/// A value that is itself text holding values gives its own pieces.
 pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: Span, parts: &mut Vec<Expr>) {
     for piece in pieces {
         if pending_region(&piece) {
@@ -5417,9 +4779,6 @@ pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: S
     }
 }
 
-/// Whether a `(` right after `expr` calls the task its value holds: after an
-/// item, a call, a pointer's value, or a tuple's item (`t.0(x)`). A name's own
-/// call, and a method's, are read with the name.
 fn calls_value(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::Index(..) | ExprKind::Call { .. } | ExprKind::Invoke { .. } | ExprKind::Deref(_) | ExprKind::MethodCall { .. } => true,
@@ -5428,7 +4787,6 @@ fn calls_value(expr: &Expr) -> bool {
     }
 }
 
-/// The operator a step is written with (`++`, `+=`, …) and how, or none.
 pub fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
     Some(match token {
         Token::Increment => (BinaryOp::Add, "++"),
@@ -5448,7 +4806,6 @@ pub fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
 /// too (no token at their positions).
 pub trait LineTokens {
     fn token_at(&self, p: usize) -> Option<&Token>;
-    /// Whether the `>` at `p` touches what follows it.
     fn gt_touches_next(&self, p: usize) -> bool;
 }
 
@@ -5465,10 +4822,6 @@ impl LineTokens for Parser {
     }
 }
 
-/// How the token at `p` nests what follows it: brackets, and the words a
-/// `fi` closes, which `blocks` counts, the `when` of an `else when` aside, as
-/// one `fi` closes the chain. A lambda opens a block at its `(` as well as
-/// the parentheses, so that its `fi` closes its own. Whether it nests.
 fn nests(tokens: &impl LineTokens, p: usize, depth: &mut usize, blocks: &mut usize) -> bool {
     match tokens.token_at(p) {
         Some(Token::LParen) if lambda_at(tokens, p) => {
@@ -5497,7 +4850,6 @@ fn nests(tokens: &impl LineTokens, p: usize, depth: &mut usize, blocks: &mut usi
 /// full lambda's header, its result type then its body, rather than a
 /// shortcut lambda's value, as in `() -> 42`. Studio reads it so too.
 pub fn empty_lambda_has_results(line: &[&Token]) -> bool {
-    // Nothing after the arrow: the body is on the lines after the header.
     if line.is_empty() {
         return true;
     }
@@ -5569,10 +4921,6 @@ pub fn empty_lambda_has_results(line: &[&Token]) -> bool {
     false
 }
 
-/// Whether the `(` at `p` starts a lambda, as the parser tells one (see
-/// `Parser::at_lambda`): it takes nothing or starts with a parameter, its
-/// parentheses close on their line, and `->` follows them. One in a type,
-/// after `:` or `->`, is a task's type.
 fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
     if p > 0 && matches!(tokens.token_at(p - 1), Some(Token::Colon | Token::Arrow)) {
         return false;
@@ -5594,8 +4942,6 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
                     if !arrow || next != Some(&Token::RParen) {
                         return arrow;
                     }
-                    // `() -> 42` is a shortcut lambda, which opens no block. A
-                    // comment, which Studio gives no token, ends the line.
                     let line: Vec<&Token> = (q + 2..).map_while(|at| tokens.token_at(at)).take_while(|token| !matches!(token, Token::Newline | Token::Eof)).collect();
                     return empty_lambda_has_results(&line);
                 }
@@ -5612,17 +4958,11 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
     }
 }
 
-/// The `>` closing the types a use gives, when the `<` at `p` opens them, as
-/// the parser reads them: a call follows the types a task is given, a
-/// literal the types a shape is given, and a variant, its `.` touching the
-/// `>`, the types a kind is given.
 pub fn types_close(tokens: &impl LineTokens, p: usize) -> Option<usize> {
     if tokens.token_at(p) != Some(&Token::Lt) {
         return None;
     }
     let mut depth = 0usize;
-    // Parentheses pair up inside the types, and no `>` inside them closes
-    // anything: `(i < n), m > (k)` compares.
     let mut grouped = 0usize;
     for q in p + 1.. {
         match tokens.token_at(q) {
@@ -5656,7 +4996,6 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
     let mut items = Vec::new();
     let mut start = first;
     let (mut depth, mut blocks) = (0usize, 0usize);
-    // The `<…>`s open in a type written after `:`.
     let mut typed: Option<usize> = None;
     let mut places = 1usize;
     let mut values: Option<usize> = None;
@@ -5686,7 +5025,6 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
             }
             Some(Token::Comma) => {
                 let parts = match values {
-                    // `a, b = …`: another place, or the end of a statement with none.
                     None if sets_places(tokens, start, p) => {
                         places += 1;
                         false
@@ -5714,9 +5052,6 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
     items
 }
 
-/// Whether the tokens from `first` to the one before `last` are places an
-/// assignment or a declaration sets, as `flex q` and `t.x` are, rather than
-/// a statement of its own, as `advance(&it)` is.
 fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
     let mut depth = 0usize;
     first < last
@@ -5736,9 +5071,6 @@ fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
         })
 }
 
-/// Whether a loop's item starts at `p`: `flex` or `fixed`, a name and the
-/// type it is written with, or what sets a place, before the next `,` or
-/// `last`.
 fn starts_loop_item(tokens: &impl LineTokens, p: usize, last: usize) -> bool {
     if matches!(tokens.token_at(p), Some(Token::Flex | Token::Fixed)) {
         return true;

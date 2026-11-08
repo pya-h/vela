@@ -4,7 +4,6 @@ use crate::ast::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
-    /// Where the error was found, if it relates to a source position.
     pub span: Option<Span>,
     pub message: String,
 }
@@ -17,9 +16,6 @@ impl Error {
         }
     }
 
-    /// A broken invariant between compiler passes, such as code generation
-    /// finding an expression the checker never typed. This is a bug in the
-    /// compiler, not in the program being compiled, so it has no position.
     pub fn internal(message: impl AsRef<str>) -> Self {
         Error {
             span: None,
@@ -27,8 +23,7 @@ impl Error {
         }
     }
 
-    /// An internal error about the code at `span`. The position is part of
-    /// the message, for bug reports, rather than a diagnostic location.
+    // Location goes into the message because ICEs have no user diagnostic span.
     pub fn internal_at(span: Span, message: impl AsRef<str>) -> Self {
         Error::internal(format!(
             "{} (at {}:{})",

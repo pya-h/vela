@@ -17,18 +17,11 @@ enum Action {
 
 struct Options {
     input: String,
-    /// The executable, or with `--emit-c` the C file (standard output if absent).
     output: Option<String>,
     emit_c: bool,
-    /// Only parse and type-check; do not generate C or build.
     check: bool,
-    /// Build without optimizing the C: much faster to build, slower to run.
     quick: bool,
-    /// The program writes no notices to standard error, as of a startup
-    /// decorator whose failure it passes over.
     no_notices: bool,
-    /// Shows every warning a rule that says something once for each task or
-    /// file holds back (see `check::Checker::warn_once`).
     repeat_warnings: bool,
 }
 
@@ -58,8 +51,7 @@ fn main() {
     }
 }
 
-/// Reads the command line. `--help` wins at once; `--version` wins once the
-/// rest of the arguments are valid, so a wrong argument is still an error.
+// `--help` wins at once, while `--version` still validates the remaining flags first.
 fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut input = None;
     let mut output = None;
@@ -73,7 +65,6 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut args = args;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            // After `--`, every argument is a file, even one starting with `-`.
             "--" if !only_files => only_files = true,
             _ if only_files => {
                 if input.is_some() {
@@ -134,8 +125,6 @@ fn run(opts: &Options) -> Result<(), String> {
 
     let path = Path::new(&opts.input);
     if opts.check {
-        // Everything a build checks before generating C, so a program that
-        // passes can be built.
         let (items, warnings) = driver::check_program(path, &source, &mut driver::read_from_disk)
             .map_err(|e| e.render(&opts.input))?;
         if !driver::has_main(&items) {
@@ -177,7 +166,7 @@ fn run(opts: &Options) -> Result<(), String> {
 
     let output = opts.output.as_deref().unwrap_or("a.out");
     let cc = driver::c_compiler_from_env();
-    // After every other argument, so it wins over an `-O` in `CC` too.
+    // Placed after `$CC` words so `-O0` wins over any `-O` flag in `CC`.
     let cc = if opts.quick {
         format!("{} -O0", cc)
     } else {
@@ -195,9 +184,6 @@ fn run(opts: &Options) -> Result<(), String> {
     write_stdout(&format!("compiled: {}\n", output))
 }
 
-/// Writes a program's warnings to standard error, where its mistakes go; the
-/// program builds all the same. With `repeat`, it writes the repeats a rule
-/// that says something once holds back too.
 fn warn(warnings: &driver::Warnings, input: &str, repeat: bool) {
     let rendered = if repeat {
         warnings.render_repeating(input)
@@ -209,8 +195,6 @@ fn warn(warnings: &driver::Warnings, input: &str, repeat: bool) {
     }
 }
 
-/// Writes to standard output. A closed pipe (`vela x.vela --emit-c | head`)
-/// just ends the output; other failures are errors, not panics.
 fn write_stdout(text: &str) -> Result<(), String> {
     let mut stdout = io::stdout().lock();
     match stdout

@@ -1,15 +1,4 @@
-//! Programs made of several files. A file includes another with
-//! `include geometry`, which loads `geometry.vela` from its folder, and names
-//! what it declares as `geometry.area`; `include geometry (area)` also brings
-//! `area` in unqualified.
-//!
-//! Loading reads every file a program includes, from the file it is compiled
-//! from (the main file). Resolving then gives every task, shape, and kind one name
-//! for the whole program: its own name in the main file, and `module.Name` in
-//! any other (`geometry.Point`). Module names are unique in a program, so these
-//! names never collide, and they read as Vela does. Every name written in a
-//! file that stands for one of them is rewritten to it, so the checker and the
-//! code generator see one program in which every name means one thing.
+//! Multi-file loading and name resolution: rewrites declarations to program-unique `module.Name` form.
 
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -21,23 +10,14 @@ use crate::lexer::Lexer;
 use crate::library;
 use crate::parser::{MAX_NESTING, Parser, needs_list, receiver};
 
-/// One file of a program: file number `i` of a program is `files[i]`, and
-/// positions in it have `Span::file == i`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
-    /// The path the file was read from, relative to where the main file's path
-    /// is relative to.
     pub path: PathBuf,
     pub source: String,
-    /// Where the `include` that loaded it is, in another file of the program;
-    /// none for the main file.
     pub included_at: Option<Span>,
 }
 
 impl SourceFile {
-    /// The position in the main file that leads to `span` in `files`: `span`
-    /// itself in the main file, and otherwise the `include` in the main file
-    /// through which its file was loaded.
     pub fn in_main_file(files: &[SourceFile], span: Span) -> Span {
         let mut at = span;
         // Each step goes to a file loaded earlier, so this ends.
@@ -54,8 +34,6 @@ impl SourceFile {
     }
 }
 
-/// The file `include` path `parts` names, from a file in `folder`: the parts joined
-/// with `.vela` added, and `.` and `..` settled.
 pub fn module_file(folder: &Path, parts: &[String]) -> PathBuf {
     let mut path = folder.to_path_buf();
     for part in parts {
@@ -65,43 +43,23 @@ pub fn module_file(folder: &Path, parts: &[String]) -> PathBuf {
     normalize(&path)
 }
 
-/// Reads the file at a path, for loading a program's modules. The command line
-/// reads from the disk; an editor can give the text of unsaved files, or keep
-/// a program inside its folder.
 pub type Loader<'a> = dyn FnMut(&Path) -> io::Result<String> + 'a;
 
-/// What the checker needs to know about one module of a program.
 #[derive(Debug, Clone, Default)]
 pub struct ModuleScope {
-    /// The module's identity, the prefix of its items' names in the program:
-    /// its path from the main file's folder, without `.vela` (`shapes/geometry`);
-    /// empty for the main file.
     pub name: String,
-    /// The file it is.
     pub file: usize,
-    /// The modules it includes.
     pub includes: Vec<IncludeScope>,
-    /// The names its `include` lines bring in by name: each as this file writes
-    /// it (its alias, if it has one), the name it stands for (`m.a`), and the
-    /// position where it is brought in.
     pub imports: Vec<(String, String, Span)>,
-    /// How this file writes the names of the program.
     pub spelling: Spelling,
 }
 
-/// A module that another includes.
 #[derive(Debug, Clone, Default)]
 pub struct IncludeScope {
-    /// The name the including file names it by, if any: its alias or the
-    /// path's last part; none when only its parts are included.
     pub local: Option<String>,
-    /// Its identity (see `ModuleScope::name`).
     pub id: String,
-    /// The path's last part, which names it unless it has an alias.
     pub file_name: String,
-    /// The path as written.
     pub written: String,
-    /// Where the name it is named by is written (or its path's last part).
     pub span: Span,
 }
 
@@ -120,13 +78,6 @@ impl ModuleScope {
     }
 }
 
-/// How one file writes the names of the program's tasks, shapes, kinds, and
-/// variants. A name of the program is its module's identity, a `.`, and its
-/// own name (`shapes/geometry.Point`), or its own name alone in the main file.
-/// A file writes it as its own name when it declares it or brings it in by
-/// name (or by the alias it gives it), through its module's name otherwise
-/// (`geometry.Point`), or through its kind's name for a variant (`Shape.Circle`).
-/// A name the file has no way to write keeps the program's name.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Spelling {
     names: HashMap<String, String>,
@@ -144,9 +95,6 @@ impl Spelling {
         ty.map_names(&|name| self.name(name))
     }
 
-    /// `text`, a message, with each of the program's names in it as the file
-    /// writes it. A name is a whole word of letters, digits, `_`, `.`, and `/`,
-    /// which no other part of a message is written with.
     pub fn text(&self, text: &str) -> String {
         if self.names.is_empty() {
             return text.to_string();
@@ -184,17 +132,11 @@ impl Spelling {
     }
 }
 
-/// A loaded and resolved program, ready to check.
 #[derive(Debug, Clone, Default)]
 pub struct Program {
-    /// Every item of every module, the main file's last.
     pub items: Vec<Item>,
-    /// One per module, the main file's first.
     pub modules: Vec<ModuleScope>,
-    /// Where the parts of written types are, in every file.
     pub type_places: TypePlaces,
-    /// Every pattern of every module, its names as the program names them
-    /// (see `PatternDef`).
     pub patterns: Vec<PatternDef>,
     /// For each default method a shape or kind has from a pattern that takes
     /// types, by the name of its copy: each type the pattern takes, with the
@@ -203,47 +145,31 @@ pub struct Program {
     pub stand_ins: HashMap<String, Vec<(String, Type)>>,
 }
 
-/// How many modules can include one another in a chain, like `MAX_NESTING` for
-/// code: loading follows each chain recursively.
+/// Bounded by `MAX_NESTING` because module loading recurses along include chains.
 const MAX_MODULE_DEPTH: usize = MAX_NESTING;
 
-/// Loads the program whose main file is `source`, read from `path`, with every
-/// module it includes, directly or through other modules, read by `loader`. The
-/// files are returned even when loading fails, so an error in any of them can
-/// be shown with its source line.
+/// Loads main file and transitive includes; returns all parsed files even on error for diagnostics.
 pub fn load(path: &Path, source: &str, loader: &mut Loader) -> (Vec<SourceFile>, Result<Program>) {
     let mut state = State::default();
     let result = state.load(path, source, loader);
     (state.files, result)
 }
 
-/// What one walk of a module resolves (see `State::resolve`).
 #[derive(Clone, Copy)]
 enum Pass<'a> {
-    /// The names in the types of its type aliases, which make the program's
-    /// aliases.
     Aliases,
-    /// The kinds each of its kinds imitates (see `KindDef::imitates`), with the
-    /// program's aliases put in.
     Imitated(&'a TypeAliases),
-    /// The names in its items, with the program's aliases put in.
     Items(&'a TypeAliases),
 }
 
-/// A module being loaded.
 struct Module {
-    /// Its identity (see `ModuleScope::name`); empty for the main file.
     id: String,
     file: usize,
     includes: Vec<Include>,
-    /// For each of `includes`, the module it loads.
     included: Vec<usize>,
     items: Vec<Item>,
-    /// Its type aliases, which name types and are no items (see `TypeAliases`).
     type_aliases: Vec<AliasDef>,
-    /// Its patterns, which are no items either (see `PatternDef`).
     patterns: Vec<PatternDef>,
-    /// Whether it has a loop that gives a value (see `Parser::loop_values`).
     loop_values: bool,
 }
 
@@ -251,13 +177,8 @@ struct Module {
 struct State {
     files: Vec<SourceFile>,
     modules: Vec<Module>,
-    /// Each loaded file's module, by its `identity`.
     by_path: HashMap<PathBuf, usize>,
-    /// The modules being loaded, outermost first, to find a module that
-    /// includes itself through others.
     loading: Vec<usize>,
-    /// The modules whose own modules are all loaded, each after the modules it
-    /// includes.
     order: Vec<usize>,
     type_places: TypePlaces,
 }
@@ -324,7 +245,6 @@ impl State {
                 Pass::Imitated(&aliases),
             )?;
         }
-        // `Kind.Variant` names a variant a kind has from one it imitates too.
         let mut variants = variants;
         imitated_variants(&self.modules, &mut variants)?;
         let mut scopes = Vec::new();
@@ -359,9 +279,6 @@ impl State {
         })
     }
 
-    /// Lexes and parses `source` as the next file, the module with identity
-    /// `id`, read from `path`, which `key` tells from every other file, loaded by
-    /// the `include` at `included_at`.
     fn parse(
         &mut self,
         id: String,
@@ -401,7 +318,6 @@ impl State {
         Ok(index)
     }
 
-    /// Loads every module that module `index` includes, and theirs, in order.
     fn visit(&mut self, index: usize, loader: &mut Loader) -> Result<()> {
         self.loading.push(index);
         let includes = self
@@ -424,8 +340,6 @@ impl State {
             .get(index)
             .is_some_and(|module| library::is_library(&module.id));
         let mut targets = Vec::new();
-        // The includes seen so far, by the file each names and by the name it
-        // is known by, to find one included twice.
         let mut files: HashMap<PathBuf, Span> = HashMap::new();
         let mut locals: HashMap<&str, Span> = HashMap::new();
         for include in &includes {
@@ -550,9 +464,6 @@ impl State {
             .map_or(Path::new(""), |f| f.path.as_path())
     }
 
-    /// The message for a module that includes itself: the modules being loaded
-    /// from `start`, then `target` again, each by its path from the main file's
-    /// folder (the main file by its name).
     fn cycle(&self, start: usize, target: usize) -> String {
         let name = |index: usize| match self.modules.get(index) {
             Some(module) if module.id.is_empty() => self
@@ -575,8 +486,6 @@ impl State {
         )
     }
 
-    /// Resolves the names in module `index` that `pass` reads, and returns what
-    /// the checker needs to know about it.
     fn resolve(
         &mut self,
         index: usize,
@@ -701,7 +610,6 @@ impl State {
                 if let Some((alias, at)) = &part.alias {
                     if entry.what == What::Variant {
                         let tag = entry.kind.as_deref().map_or("Kind", unqualified);
-                        // The kind as this line would let the file write it.
                         let kind = match (
                             include.parts.iter().find(|listed| listed.name == tag),
                             include.local_name(),
@@ -833,9 +741,6 @@ impl State {
     }
 }
 
-/// How module `module`, which declares `own`, writes the program's names (see
-/// `Spelling`), given the names its `include` lines bring in (`imports`, as in
-/// `ModuleScope`) and the modules it includes (`includes`).
 fn spelling(
     module: &Module,
     own: Option<&Names>,
@@ -870,12 +775,9 @@ fn spelling(
     for (written, full, _) in imports {
         names.insert(full.clone(), written.clone());
     }
-    // What a loop that gives a value fails with is named by its own name
-    // where the file brings in no way to write it.
     names
         .entry(library::LOOP_RESULT.to_string())
         .or_insert_with(|| unqualified(library::LOOP_RESULT).to_string());
-    // A variant not written otherwise is written through its kind.
     for (kind, tags) in variants {
         let Some(kind) = names.get(kind).cloned() else {
             continue;
@@ -886,9 +788,7 @@ fn spelling(
                 .or_insert_with(|| format!("{}{}{}", kind, MODULE_SEPARATOR, tag));
         }
     }
-    // A name the file can't write, of a module whose identity reads like the
-    // name the file gives another module (`c.Thing` from `c.vela`, where
-    // `include x => c`), starts with `./`, to tell them apart.
+    // Prefix `./` when an unwriteable shadowed module id collides with another include's alias.
     let taken: HashSet<&str> = includes
         .iter()
         .filter_map(|include| {
@@ -903,13 +803,10 @@ fn spelling(
             .entry(full.to_string())
             .or_insert_with(|| format!("./{}", full));
     }
-    // The main file's names are already written as the program names them.
     names.retain(|full, written| full != written);
     Spelling { names }
 }
 
-/// The module of Vela's library that `include` names, when its path starts with
-/// `std`: its name after `std/` and its source.
 fn library_module(include: &Include) -> Result<Option<(String, &'static str)>> {
     let Some((first, rest)) = include.path.split_first() else {
         return Ok(None);
@@ -941,9 +838,6 @@ fn library_module(include: &Include) -> Result<Option<(String, &'static str)>> {
     }
 }
 
-/// What tells the module `include` loads, from a file in `folder`, from every
-/// other: a module of the library by its name, which no file on the disk has,
-/// and any other by the file it is.
 fn include_key(folder: &Path, include: &Include) -> PathBuf {
     match include.path.first() {
         Some(first) if first == library::ROOT => {
@@ -953,9 +847,7 @@ fn include_key(folder: &Path, include: &Include) -> PathBuf {
     }
 }
 
-/// Rejects a native task (see `ast::NATIVE`) outside Vela's library, and one of
-/// the library whose body the runtime doesn't have, in the module with identity
-/// `id` that declares `items`.
+/// Native declarations are restricted to `std/*` modules backed by runtime primitives.
 fn check_natives(id: &str, items: &[Item]) -> Result<()> {
     for item in items {
         let Item::Task(task) = item else { continue };
@@ -999,8 +891,6 @@ fn check_natives(id: &str, items: &[Item]) -> Result<()> {
     Ok(())
 }
 
-/// Rejects a module named like a builtin type, task, or kind in a file, `name`
-/// written at `span`, which its qualified names would read as.
 fn check_module_name(name: &str, span: Span) -> Result<()> {
     if Type::builtin(name).is_some() {
         return err(
@@ -1020,8 +910,6 @@ fn check_module_name(name: &str, span: Span) -> Result<()> {
             ),
         );
     }
-    // A name of a builtin kind would stand for two things in the file: the
-    // module, and the kind or variant every file writes (see `ast::builtin_kinds`).
     if let Some(kind) = builtin_kind_of(name) {
         return err(
             span,
@@ -1043,9 +931,6 @@ fn check_module_name(name: &str, span: Span) -> Result<()> {
     Ok(())
 }
 
-/// The identity of the module in the file at `path`: its path from the main
-/// file's folder `main_folder`, with `/` between the parts and without
-/// `.vela`, as in `shapes/geometry` or `../common/text`.
 pub fn module_id(main_folder: &Path, path: &Path) -> String {
     let folder = identity(main_folder);
     let folder: Vec<Component> = folder.components().collect();
@@ -1067,12 +952,7 @@ pub fn module_id(main_folder: &Path, path: &Path) -> String {
     id.join("/")
 }
 
-/// The path that tells which file `path` is: from the working directory, when
-/// there is one, and normalized. A relative `..` can climb above the folder a
-/// program's paths start from, as in `../app/config` read from the folder
-/// `app`, which is `config`; only the working directory knows that folder's
-/// name. (Such a path can only be read from the disk: an editor keeps a
-/// program inside its folder.)
+/// Normalize relative to CWD so `../app/config` resolves canonically across entry paths.
 fn identity(path: &Path) -> PathBuf {
     match std::env::current_dir() {
         Ok(dir) => normalize(&dir.join(path)),
@@ -1080,8 +960,6 @@ fn identity(path: &Path) -> PathBuf {
     }
 }
 
-/// `path` with `.` removed and each `..` taking away the folder before it,
-/// where there is one: the same file always gets the same path.
 fn normalize(path: &Path) -> PathBuf {
     let mut parts: Vec<Component> = Vec::new();
     for part in path.components() {
@@ -1096,7 +974,6 @@ fn normalize(path: &Path) -> PathBuf {
     parts.iter().collect()
 }
 
-/// What a name declared in a module is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum What {
     Task,
@@ -1122,22 +999,15 @@ impl What {
     }
 }
 
-/// A task, shape, kind, type alias, variant, or macro declared in a module.
 #[derive(Debug, Clone)]
 struct Entry {
-    /// Its name in the whole program: `shapes/geometry.area`, or `area` in the
-    /// main file.
     full: String,
     what: What,
-    /// Whether it is `priv`; a variant is as private as its kind.
     private: bool,
     span: Span,
-    /// For a variant, its kind's name in the program.
     kind: Option<String>,
 }
 
-/// An entry for a builtin kind or one of its variants, which no file declares,
-/// so its position is in no file of the program (see `ast::builtin_kinds`).
 fn builtin_kind_entry(name: &str, what: What, kind: Option<String>) -> Entry {
     Entry {
         full: name.to_string(),
@@ -1148,10 +1018,6 @@ fn builtin_kind_entry(name: &str, what: What, kind: Option<String>) -> Entry {
     }
 }
 
-/// The message for a name a builtin kind or one of its variants owns, which a
-/// part brought in under another name may not take either (see
-/// `ast::builtin_kinds`, `check_module_name` for a module, and
-/// `check::collect_declarations` for a declaration).
 fn builtin_kind_clash(name: &str) -> Option<String> {
     if !BUILTIN_KIND_NAMES.contains(&name) {
         return None;
@@ -1168,15 +1034,10 @@ fn builtin_kind_clash(name: &str) -> Option<String> {
     })
 }
 
-/// A module's declarations, by the names they are written with.
 type Names = HashMap<String, Entry>;
 
-/// The variants of every kind of the program, by the kind's name in the
-/// program, then the variant's own name.
 type Variants = HashMap<String, HashMap<String, Entry>>;
 
-/// The names module `module` declares. When two items share a name, the first
-/// is kept; the checker reports the second.
 fn own_names(module: &Module) -> Names {
     let full = |name: &str| {
         if module.id.is_empty() {
@@ -1234,7 +1095,6 @@ fn own_names(module: &Module) -> Names {
 /// that `Kind.Variant` finds it and the checker reports the clash.
 fn variants_of_kinds(modules: &[Module]) -> Variants {
     let mut variants = Variants::new();
-    // The variants of the builtin kinds, written through them as any kind's are.
     for kind in builtin_kinds() {
         let tags = variants.entry(kind.name.clone()).or_default();
         for variant in kind.variants {
@@ -1268,11 +1128,6 @@ fn variants_of_kinds(modules: &[Module]) -> Variants {
     variants
 }
 
-/// Adds to `variants` each variant a kind has from the kinds it imitates,
-/// named through it (`AppError.Empty`; see `imitated_variant`), once it is
-/// known that no kind imitates itself, through others or not, that each kind
-/// imitated is given the types it takes, and that no two variants of a kind
-/// share a name.
 fn imitated_variants(modules: &[Module], variants: &mut Variants) -> Result<()> {
     let builtin = builtin_kinds();
     let mut kinds: HashMap<String, &KindDef> = builtin
@@ -1317,11 +1172,6 @@ fn imitated_variants(modules: &[Module], variants: &mut Variants) -> Result<()> 
     Ok(())
 }
 
-/// The names of the variants of kind `full` (its name in the program), those
-/// it has from the kinds it imitates first, each with the kind it is declared
-/// in and where this kind has it from (its own position, for its own). `done`
-/// keeps the kinds already read, and `through` the kinds being read, to find
-/// one that imitates itself.
 fn kind_tags(
     full: &str,
     kinds: &HashMap<String, &KindDef>,
@@ -1447,7 +1297,6 @@ fn kind_tags(
     Ok(tags)
 }
 
-/// The kind a kind imitates names, `Option` in `Option<int>`.
 fn base_name(ty: &Type) -> Option<&String> {
     match ty {
         Type::Named(name, _) => Some(name),
@@ -1456,12 +1305,7 @@ fn base_name(ty: &Type) -> Option<&String> {
     }
 }
 
-/// Gives each shape and kind that follows patterns the default methods it
-/// doesn't write itself, each a copy of the pattern's called on a value of the
-/// follower (its header and body name the type following the pattern as
-/// `THIS_TYPE`, which the checker reads as the follower), and adds to
-/// each pattern's module, for each default method, the generic task it is
-/// checked as once (see `pattern_default`).
+/// Injects pattern default methods onto followers plus one generic task per default for single check.
 fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)>> {
     let mut stand_ins = HashMap::new();
     let patterns: HashMap<String, PatternDef> = modules
@@ -1542,8 +1386,6 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
                 };
                 let mut task = method.clone();
                 task.name = pattern_default(&pattern.name, own);
-                // The type following it, then the types the pattern takes, which
-                // its body names (`T` of `Iterator<T>`).
                 let this = TypeParam {
                     name: THIS_TYPE.to_string(),
                     span: pattern.span,
@@ -1570,12 +1412,6 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
     stand_ins
 }
 
-/// Puts in each kind that imitates others the variants it has from them,
-/// before its own (see `KindDef::imitated`): each carries what it carries in
-/// the kind it comes from, with the types given that kind in place of the
-/// ones it takes, and is written where that kind is named. Every name in the
-/// program is resolved by now, so a variant carries the same types wherever
-/// it is put.
 fn imitate(modules: &mut [Module]) {
     let mut kinds: HashMap<String, KindDef> = builtin_kinds()
         .into_iter()
@@ -1599,7 +1435,6 @@ fn imitate(modules: &mut [Module]) {
     }
 }
 
-/// The variants kind `name` has from the kinds it imitates (see `imitate`).
 fn imitated_of(
     name: &str,
     kinds: &HashMap<String, KindDef>,
@@ -1656,18 +1491,9 @@ fn imitated_of(
     variants
 }
 
-/// The type each type alias of the program stands for, by the alias's name in
-/// the program, with the names in it written as the program names them and
-/// the aliases in it left as they are (see `expand_aliases`).
 type TypeAliases = HashMap<String, Type>;
 
-/// `ty` with each type alias in it put in its place, and each alias in that
-/// alias's type, as if the type it stands for were written there: `Names@r`,
-/// with `alias Names => [text]`, is `[text]@r`. `stack` holds the aliases being
-/// put in, to find one that stands for itself, and `at` where an alias of the
-/// program is written, for errors. An alias written with a region, of a type
-/// that lives in none, adds the region, the alias, and its type to `unplaced`
-/// (see `Resolver::ty`).
+/// Expands aliases recursively, distributing outer `@region` modifiers when the alias target has none.
 fn expand_aliases(
     ty: &Type,
     aliases: &TypeAliases,
@@ -1786,48 +1612,26 @@ fn expand_aliases(
     })
 }
 
-/// What a file can name of a module it includes under a name.
 struct ModuleNames<'a> {
     names: &'a Names,
-    /// The parts brought in under another name, which the module's name can't
-    /// reach: each part's name, with its alias and where that is written.
     hidden: HashMap<String, Binding>,
 }
 
-/// Rewrites the names written in one module to their names in the program.
 struct Resolver<'a> {
     own: Names,
-    /// The modules this one includes, by the name it names each by.
     modules: HashMap<String, ModuleNames<'a>>,
-    /// The names brought in by name, by the name this file writes (an alias if
-    /// there is one), with where each is brought in.
     imports: HashMap<String, (Entry, Span)>,
-    /// The modules this one includes that its path's last part doesn't name:
-    /// that part, the name it is included under (if any), and the path.
     unnamed: Vec<(String, Option<String>, String)>,
     variants: &'a Variants,
-    /// The names each module of the program declares, for a kind's methods,
-    /// which its file may name with no name of the module (`include m {K}`).
     tables: &'a [Names],
     type_places: &'a TypePlaces,
-    /// The program's type aliases, put in where their names are written; none
-    /// while the types of the aliases themselves are read (see `State::resolve`).
     aliases: &'a TypeAliases,
-    /// The names of the types the declaration being walked takes: they name no
-    /// shape or kind, so a written type naming one is left as it is.
     params: Vec<String>,
-    /// How this file writes the program's names, for errors naming a type.
     spelling: Spelling,
-    /// Inside a pattern, the names that stand for the type following it:
-    /// `this` and the pattern's own (see `THIS_TYPE`).
     this_names: Vec<String>,
 }
 
 impl Resolver<'_> {
-    /// A type alias, with its name and the names in its type written as the
-    /// program names them. Each name in the type names a shape, a kind, or
-    /// another alias, since only here is the type of an alias nothing uses
-    /// read; the checker checks the rest of it in each place it is put.
     fn type_alias(&self, alias: &mut AliasDef) -> Result<()> {
         let name = alias.name.as_str();
         if Type::builtin(name).is_some() {
@@ -1903,11 +1707,6 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// The kinds kind `k` imitates, each written as the program names it, with
-    /// the aliases in it put in. Each must name a kind, with no region, since
-    /// the variants it gives name none.
-    /// The patterns written among them are the patterns it follows, which go
-    /// to `follows`.
     fn imitated(&mut self, k: &mut KindDef) -> Result<()> {
         if k.imitates.is_empty() {
             return Ok(());
@@ -1932,9 +1731,7 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// The patterns shape `s` follows, each written as the program names it.
     fn followed(&mut self, s: &mut ShapeDef) -> Result<()> {
-        // The types it gives a pattern may be ones it takes: `::Iterator<T>`.
         let full = self.own_full(&s.name);
         self.enter_type_params(&s.types, "shape", &full)?;
         let read = self.followed_in(s);
@@ -1987,9 +1784,6 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// The pattern `written`, at `at`, names, as the program names it, when it
-    /// names one; `before` holds the patterns already followed, which none may
-    /// be twice.
     fn followed_pattern(
         &self,
         written: &Type,
@@ -2016,8 +1810,6 @@ impl Resolver<'_> {
                 ),
             );
         }
-        // `::Iterator<int>`: the types it gives the pattern, which the checker
-        // matches with those the pattern takes.
         let pattern = match written {
             Type::Applied(applied) if types => {
                 let given = applied
@@ -2050,8 +1842,6 @@ impl Resolver<'_> {
         Ok(Some(pattern))
     }
 
-    /// The patterns each type a declaration takes must follow, written as the
-    /// program names them (see `TypeParam::patterns`).
     fn type_patterns(&self, types: &mut [TypeParam]) -> Result<()> {
         for Followed {
             name,
@@ -2090,9 +1880,6 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// A pattern, with its name and the names in its fields' types and its
-    /// methods written as the program names them, and `this` and its own name
-    /// the type following it (`THIS_TYPE`).
     fn pattern_def(&mut self, pattern: &mut PatternDef) -> Result<()> {
         let name = pattern.name.as_str();
         if Type::builtin(name).is_some() {
@@ -2240,7 +2027,6 @@ impl Resolver<'_> {
             Type::Applied(applied) if applied.region.is_none() => Some(&applied.name),
             _ => None,
         };
-        // A type alias standing for one names it too.
         if !named.is_some_and(|full| self.is_kind(full)) {
             return err(
                 at,
@@ -2254,8 +2040,6 @@ impl Resolver<'_> {
         Ok(read)
     }
 
-    /// Whether `full`, a name in the program, is a kind's: a builtin one, or
-    /// one a module declares.
     fn is_kind(&self, full: &str) -> bool {
         builtin_kinds().iter().any(|kind| kind.name == full)
             || std::iter::once(&self.own)
@@ -2272,8 +2056,6 @@ impl Resolver<'_> {
                 self.type_patterns(&mut t.types)?;
                 for param in &mut t.params {
                     param.ty = self.ty(&param.ty, param.ty_span)?;
-                    // The value a parameter falls back on names the program's
-                    // things as a field's does.
                     if let Some(value) = &mut param.default {
                         self.expr(value)?;
                     }
@@ -2291,7 +2073,6 @@ impl Resolver<'_> {
                     }
                     other => self.ty(other, spans.first().copied().unwrap_or(t.span))?,
                 };
-                // A decorator's call names the program's things as the body does.
                 let result = t
                     .decorators
                     .iter_mut()
@@ -2307,8 +2088,6 @@ impl Resolver<'_> {
                 self.type_patterns(&mut s.types)?;
                 for field in &mut s.fields {
                     field.ty = self.ty(&field.ty, field.ty_span)?;
-                    // A field's default names the program's things as the body
-                    // of a task does: `state: State = State.Idle`.
                     if let Some(value) = &mut field.default {
                         self.expr(value)?;
                     }
@@ -2341,9 +2120,6 @@ impl Resolver<'_> {
         }
     }
 
-    /// Brings the types a declaration takes into scope, so the types written in
-    /// it name them rather than a shape or kind of the same name, which would be
-    /// two types under one name.
     fn enter_type_params(&mut self, types: &[TypeParam], what: &str, name: &str) -> Result<()> {
         for param in types {
             if let Some(entry) = self.lookup(&param.name, param.span, false)?
@@ -2364,19 +2140,12 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// The program's name for an item this module declares.
     fn own_full(&self, name: &str) -> String {
         self.own
             .get(name)
             .map_or_else(|| name.to_string(), |entry| entry.full.clone())
     }
 
-    /// The declaration a written name stands for: a name of this module or one
-    /// brought in by name; `m.Name` in a module this file includes;
-    /// `Kind.Variant` or `m.Kind.Variant`. `None` for an undotted name that
-    /// names none of them, which the checker reports (or which is a variable).
-    /// `at` is where the name is written, for errors, and `calls` whether it is
-    /// called.
     fn lookup(&self, written: &str, at: Span, calls: bool) -> Result<Option<Entry>> {
         // The value a method is called on is named `.this`, which is no
         // declaration of any file and holds a `.` no name of one can (see
@@ -2470,8 +2239,6 @@ impl Resolver<'_> {
         }
     }
 
-    /// The end of an error for `name`, written where a kind belongs, when a
-    /// module this file includes by name has a kind of that name.
     fn kind_hint(&self, name: &str) -> String {
         let mut locals: Vec<&String> = self.modules.keys().collect();
         locals.sort();
@@ -2487,10 +2254,6 @@ impl Resolver<'_> {
             })
     }
 
-    /// The end of a "names nothing" error for `written`, whose first name
-    /// `first` this file doesn't give a module or kind: how the module with that
-    /// file name is included, if it is, or for a call, the change to a slice it
-    /// may mean.
     fn unnamed_hint(&self, written: &str, first: &str, calls: bool) -> String {
         match self
             .unnamed
@@ -2553,7 +2316,6 @@ impl Resolver<'_> {
         Ok(entry.clone())
     }
 
-    /// The variant `tag` of `kind`, which this file writes `kind_name`.
     fn variant(&self, kind: &Entry, kind_name: &str, tag: &str, at: Span) -> Result<Entry> {
         match self.variants.get(&kind.full).and_then(|tags| tags.get(tag)) {
             Some(entry) => Ok(entry.clone()),
@@ -2565,7 +2327,6 @@ impl Resolver<'_> {
                 ),
             ),
             None => {
-                // `Kind.m` without `(…)`, naming a method of the kind.
                 let method = method_name(&kind.full, tag);
                 match self.has_method(&method) {
                     true => err(
@@ -2581,7 +2342,6 @@ impl Resolver<'_> {
         }
     }
 
-    /// Whether the program declares method `method` (its name in the program).
     fn has_method(&self, method: &str) -> bool {
         std::iter::once(&self.own)
             .chain(self.tables)
@@ -2589,7 +2349,6 @@ impl Resolver<'_> {
             .any(|entry| entry.full == method)
     }
 
-    /// The kind `name` (as written, maybe `m.Kind`) stands for, if it names one.
     fn kind(&self, name: &str, at: Span) -> Result<Option<Entry>> {
         if !name.contains(MODULE_SEPARATOR)
             || name.split(MODULE_SEPARATOR).count() == 2
@@ -2624,10 +2383,7 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// A pattern's kind, as in `case Shape.Circle`, rewritten to its name in the
-    /// program.
     fn pattern(&self, pattern: &mut Pattern) -> Result<()> {
-        // `maybe geometry.Point {p}`: the type a test names, as anywhere.
         if let PatternKind::Typed { ty, .. } = &mut pattern.kind {
             *ty = self.ty(ty, pattern.span)?;
             return Ok(());
@@ -2667,11 +2423,7 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// A decorator's call, `d(…)`, whose name may be a shared method's,
-    /// `X.m` or `m.X.m`, as a call of one is written.
     fn decorator(&self, call: &mut Expr) -> Result<()> {
-        // `$(.checked)`: a method of the value, which the checker finds on the
-        // wrapped method's type.
         if let ExprKind::Call { name, args, .. } = &mut call.kind
             && name.starts_with(MEMBER_WRAPPER)
         {
@@ -2685,7 +2437,6 @@ impl Resolver<'_> {
             *name = method;
             return args.iter_mut().try_for_each(|arg| self.expr(arg));
         }
-        // `Kind.Tag`, a variant, makes a value; a decorator is a task.
         if let ExprKind::Call { name, .. } = &call.kind
             && name.contains(MODULE_SEPARATOR)
             && self
@@ -2703,11 +2454,7 @@ impl Resolver<'_> {
         self.expr(call)
     }
 
-    /// `Light.Red(…)` or `m.f(…)`, a variant or a module's task read as a method
-    /// called on a value, rewritten to the call it is; whether `expr` was one. A
-    /// name before the dot is a module this file includes or a kind, and
-    /// anything else, or anything longer, is a value with a method. (A function of its own: `expr`'s
-    /// frame is on the stack once per nesting level.)
+    // Outlined to keep `Resolver::expr` stack frames small.
     fn call_as_name(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::MethodCall {
             dotted: Some(dotted),
@@ -2717,8 +2464,6 @@ impl Resolver<'_> {
             return Ok(false);
         };
         let parts: Vec<&str> = dotted.split(MODULE_SEPARATOR).collect();
-        // `X.new(…)`: a shared method, called on the shape or kind itself,
-        // whose task is named like any method's (see `method_name`).
         if let Some(name) = self.shared_method(&parts, expr.span)? {
             let ExprKind::MethodCall { args, .. } = &mut expr.kind else {
                 return Ok(false);
@@ -2731,11 +2476,8 @@ impl Resolver<'_> {
             };
             return Ok(true);
         }
-        // A name is `Kind.Variant`, `m.f`, or `m.Kind.Variant`; more after it
-        // is a method called on the variant, as in `Suit.Spades.name()`.
         let named = match parts.as_slice() {
             [module, _] if self.modules.contains_key(*module) => true,
-            // `m.Blue.str()` is a method called on the variant `m.Blue`.
             [module, second, _] if self.modules.contains_key(*module) => !self
                 .modules
                 .get(*module)
@@ -2761,11 +2503,6 @@ impl Resolver<'_> {
         Ok(true)
     }
 
-    /// The task a call written `X.m(…)`, `Kind.m(…)`, or `m.X.m(…)` (as
-    /// `parts`) calls: the method `m` of the shape or kind, which the checker
-    /// requires to be shared. A kind's variant is no method, so `Kind.Tag(…)`
-    /// is none. No variable is named like a shape or a kind, so the name is
-    /// the type's.
     fn shared_method(&self, parts: &[&str], at: Span) -> Result<Option<String>> {
         let (owner, method) = match parts {
             [owner, method] if !self.modules.contains_key(*owner) => (owner.to_string(), *method),
@@ -2788,12 +2525,7 @@ impl Resolver<'_> {
         }
     }
 
-    /// `Suit.Hearts` (or `m.Suit.Hearts`), a variant read as a field of a
-    /// name, rewritten to the variant, or `Point.made`, a shared field of a
-    /// shape, rewritten to `ExprKind::Shared`; whether `expr` was one. No
-    /// variable can be named like a kind or a shape (see `Checker::define`).
-    /// (A function of its own:
-    /// `expr`'s frame is on the stack once per nesting level.)
+    // Outlined to keep `Resolver::expr` stack frames small.
     fn variant_as_field(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::Field(base, tag) = &expr.kind else {
             return Ok(false);
@@ -2801,18 +2533,14 @@ impl Resolver<'_> {
         let ExprKind::Var(name) = &base.kind else {
             return Ok(false);
         };
-        // `m.P`: a macro of a module this file includes.
         if let Some(module) = self.modules.get(name.as_str()) {
             let entry = self.member(name, module, tag, expr.span)?;
-            // `m.square`: a task of the module, named as a value.
             if matches!(entry.what, What::Macro | What::Task) {
                 expr.kind = ExprKind::Var(entry.full);
                 return Ok(true);
             }
         }
         if let Some(kind) = self.kind(name, base.span)? {
-            // `Kind.m`, a shared method named as a value, which the checker
-            // knows from a method of every value (see `Checker::check_shared_use`).
             let method = method_name(&kind.full, tag);
             if !self
                 .variants
@@ -2827,13 +2555,10 @@ impl Resolver<'_> {
                 return Ok(true);
             }
             let variant = self.variant(&kind, name, tag, expr.span)?;
-            // Where the kind is written, as for `Kind.Variant(…)`.
             expr.span = base.span;
             expr.kind = ExprKind::Var(variant.full);
             return Ok(true);
         }
-        // `Shape.f` (or `m.Shape.f`): a shared field of the shape. No variable
-        // is named like a shape either, so the name is the shape's.
         let entry = match name.contains(MODULE_SEPARATOR) {
             true => self.lookup(name, base.span, false)?,
             false => self
@@ -2841,13 +2566,11 @@ impl Resolver<'_> {
                 .filter(|entry| entry.what == What::Shape),
         };
         if let Some(entry) = entry {
-            // `P.len`: a field of a macro's value.
             if entry.what == What::Macro {
                 return Ok(false);
             }
             if entry.what == What::Shape {
                 let field = tag.clone();
-                // Where the field's name is written, as for a field of a value.
                 expr.kind = ExprKind::Shared {
                     shape: entry.full,
                     field,
@@ -2869,8 +2592,6 @@ impl Resolver<'_> {
         Ok(false)
     }
 
-    /// A written type, at `span`, with its shape and kind names rewritten and
-    /// each type alias put in (see `expand_aliases`).
     fn ty(&self, ty: &Type, span: Span) -> Result<Type> {
         let ty = self.names_in(ty, span)?;
         if self.aliases.is_empty() {
@@ -2900,8 +2621,6 @@ impl Resolver<'_> {
         Ok(expanded)
     }
 
-    /// Where the part `name` of the type written at `span` is (see
-    /// `TypePlaces`), or `span` when it has no place of its own.
     fn place(&self, span: Span, name: &str) -> Span {
         self.type_places
             .get(&span.place_key())
@@ -2909,8 +2628,6 @@ impl Resolver<'_> {
             .map_or(span, |(_, at)| *at)
     }
 
-    /// Where the type written at `span` names the type alias `alias` (its name
-    /// in the program), or `span` when it is named in another alias.
     fn alias_place(&self, span: Span, alias: &str) -> Span {
         let parts = self
             .type_places
@@ -2927,8 +2644,6 @@ impl Resolver<'_> {
             .map_or(span, |(_, at)| *at)
     }
 
-    /// A written type, at `span`, with its shape, kind, and type alias names
-    /// rewritten.
     fn names_in(&self, ty: &Type, span: Span) -> Result<Type> {
         let task = |task: &TaskType| -> Result<TaskType> {
             let params = task
@@ -2943,7 +2658,6 @@ impl Resolver<'_> {
             })
         };
         Ok(match ty {
-            // In a pattern, the type following it.
             Type::Named(name, region) if self.this_names.contains(name) => {
                 Type::Named(THIS_TYPE.to_string(), region.clone())
             }
@@ -2956,8 +2670,6 @@ impl Resolver<'_> {
                     ),
                 );
             }
-            // A type the declaration takes, not a shape or kind (see
-            // `enter_type_params`).
             Type::Named(name, _) if self.params.contains(name) => ty.clone(),
             Type::Applied(applied) => {
                 let at = self.place(span, &applied.name);
@@ -3037,7 +2749,6 @@ impl Resolver<'_> {
         block.iter_mut().try_for_each(|stmt| self.stmt(stmt))
     }
 
-    /// A name a binding declares, with its written type, or the names of a tuple's items.
     fn bound(&self, bound: &mut Bound) -> Result<()> {
         if let (Some(ty), Some(at)) = (&bound.ty, bound.ty_span) {
             bound.ty = Some(self.ty(ty, at)?);
@@ -3045,7 +2756,6 @@ impl Resolver<'_> {
         bound.parts.iter_mut().try_for_each(|part| self.bound(part))
     }
 
-    /// A place an assignment writes to, or the places of a tuple's items.
     fn target(&self, target: &mut Target) -> Result<()> {
         match target {
             Target::Discard(_) => Ok(()),
@@ -3158,7 +2868,6 @@ impl Resolver<'_> {
             return args.iter_mut().try_for_each(|arg| self.expr(arg));
         }
         match &mut expr.kind {
-            // A region is a name of the task, never of the program.
             ExprKind::IntLit(_)
             | ExprKind::FloatLit(_)
             | ExprKind::CharLit(_)
@@ -3166,13 +2875,11 @@ impl Resolver<'_> {
             | ExprKind::TextLit(_)
             | ExprKind::NoneLit
             | ExprKind::RegionAfter(_) => Ok(()),
-            // Only the resolver makes one, above.
             ExprKind::Shared { .. }
             | ExprKind::TypeOf(_)
             | ExprKind::Macro { .. }
             | ExprKind::TaskValue(_) => Ok(()),
             ExprKind::Spread(inner) => self.expr(inner),
-            // The lambda is a task of the file, named as its variable would be.
             ExprKind::Closure { lambda, .. } => {
                 self.rename(lambda, span, &[What::Variant, What::Macro, What::Task])
             }
@@ -3181,8 +2888,6 @@ impl Resolver<'_> {
                 self.expr(callee)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
-            // A variable keeps its name. No variable can be named like a variant
-            // or a macro (see `Checker::define`), so one written as a value is renamed.
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant, What::Macro]),
             ExprKind::Call { name, types, args } => {
                 self.rename(name, span, &[What::Task, What::Variant])?;
@@ -3191,8 +2896,6 @@ impl Resolver<'_> {
                 }
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
-            // A method is named by the type of the value it is called on, which
-            // only the checker knows, so nothing here is renamed.
             ExprKind::MethodCall { value, args, .. } => {
                 self.expr(value)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
@@ -3202,8 +2905,6 @@ impl Resolver<'_> {
                 types,
                 fields,
             } => {
-                // An alias names a type, and a value is written with the
-                // shape's own name.
                 if let Some(entry) = self
                     .lookup(name, span, false)?
                     .filter(|entry| entry.what == What::Alias)
@@ -3229,7 +2930,6 @@ impl Resolver<'_> {
                     return err(span, message);
                 }
                 self.rename(name, span, &[What::Shape, What::Kind])?;
-                // The types a literal names are written types too.
                 for (ty, at) in types.iter_mut() {
                     *ty = self.ty(&ty.clone(), *at)?;
                 }
@@ -3237,8 +2937,6 @@ impl Resolver<'_> {
                     .iter_mut()
                     .try_for_each(|field| self.expr(&mut field.value))
             }
-            // `Option<int>.None`: the kind and its variant, named as the file
-            // writes them, and the types written types too.
             ExprKind::Construct {
                 kind,
                 tag,
@@ -3257,7 +2955,6 @@ impl Resolver<'_> {
                             entry.what.word(),
                             tag
                         ),
-                        // `(a < b, c >.x)`: two comparisons, read as a kind given types.
                         None if types.len() > 1 => format!(
                             "unknown kind '{0}'; if '{0} < …, … >.{1}' compares, put the comparison before the ',' in parentheses, as in '({0} < …), … >.{1}'",
                             kind, tag
@@ -3312,7 +3009,6 @@ impl Resolver<'_> {
                 self.expr(value)?;
                 self.block(body)
             }
-            // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.stmt(stmt),
             ExprKind::LoopValue(value) => self.stmt(&mut value.stmt),
             ExprKind::Edit { items, args, .. } => {
@@ -3328,17 +3024,10 @@ impl Resolver<'_> {
         }
     }
 
-    /// `Kind.add(…)`, `Kind.del(…)`, `Kind.added(…)`, `Kind.without(…)`, or
-    /// `Kind.copy()`, which the parser reads as
-    /// a change to a slice or a copy, rewritten to the call of the kind's
-    /// variant; whether `expr` was one. No variable can be named like a kind
-    /// (see `Checker::define`). (A function of its own: `expr`'s frame is on the
-    /// stack once per nesting level.)
+    // Outlined to keep `Resolver::expr` stack frames small.
     fn edit_as_variant(&self, expr: &mut Expr) -> Result<bool> {
         let (items, word) = match &expr.kind {
             ExprKind::Edit { items, op, .. } => (items, op.word()),
-            // `Kind.added(…)` and `Kind.without(…)`, which the parser reads as
-            // a copy made with a change.
             ExprKind::Copy {
                 value,
                 region: None,
@@ -3356,7 +3045,6 @@ impl Resolver<'_> {
             return Ok(false);
         }
         let written = format!("{}{}{}", name, MODULE_SEPARATOR, word);
-        // Where the kind is written, as for any `Kind.Variant(…)`.
         expr.span = items.span;
         let args = match &mut expr.kind {
             ExprKind::Edit { args, .. } => std::mem::take(args),

@@ -1,14 +1,9 @@
-// The tab strip: one tab per open document, with a dot for unsaved changes
-// that turns into a close button on hover. Middle-click closes. Keyboard:
-// arrows move between tabs, Enter opens, Delete closes.
-
 import { type Documents, fileName, isDirty, parentFolder } from "./documents";
 import { h } from "./dom";
 import { icon } from "./icons";
 
 export interface TabActions {
   activate(path: string): void;
-  /** Closes a tab, resolving once it is closed (or the user kept it). */
   close(path: string): Promise<unknown>;
 }
 
@@ -26,7 +21,7 @@ export class Tabs {
 
   private render(): void {
     const docs = this.documents.all;
-    // Re-render only when something visible changed (this runs on every edit).
+    // Runs on every edit; skip rebuilding DOM unless visible tab state changed.
     const key = JSON.stringify(docs.map((d) => [d.path, isDirty(d), d.disk, d.path === this.documents.active]));
     if (key === this.rendered) return;
     const added = new Set(docs.map((d) => d.path));
@@ -63,12 +58,10 @@ export class Tabs {
                   event.preventDefault();
                   this.actions.activate(doc.path);
                 } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                  // Arrows move between tabs, as in any tab list.
                   event.preventDefault();
                   const index = docs.indexOf(doc) + (event.key === "ArrowRight" ? 1 : -1);
                   this.focusTab(docs[(index + docs.length) % docs.length]?.path);
                 } else if (event.key === "Delete") {
-                  // Focus stays in the tab list, on the tab that is now active.
                   void this.actions.close(doc.path).then(() => this.focusTab(this.documents.active ?? undefined));
                 }
               },

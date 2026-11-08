@@ -1,5 +1,3 @@
-// Short notifications in the corner, announced to screen readers.
-
 import { h, iconButton } from "./dom";
 import { icon } from "./icons";
 

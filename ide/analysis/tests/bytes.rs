@@ -1,10 +1,3 @@
-//! The byte-sized types in the editor: `unit`, a whole number from 0 to 255,
-//! and `char`, a character, with `t[i]` and `t.at(i)`, hovered, completed, and
-//! colored with the compiler's types, and with the same types
-//! read from the declarations while the file doesn't check. In the sources
-//! below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};

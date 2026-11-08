@@ -1,9 +1,3 @@
-//! Type aliases in the editor: `alias SampleTask => (int) -> int` outside every
-//! task, colored as a type, hovered with the type it stands for, listed in the
-//! outline, and completed where a type goes, by name and through its module.
-//! In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::collections::HashMap;
@@ -80,12 +74,10 @@ fn a_type_alias_hovers_with_the_type_it_stands_for() {
     assert_eq!(code, "alias SampleTask => (int) -> int");
     assert!(doc.contains("another name for (int) -> int"), "{}", doc);
     assert_eq!(hover(&source, "Cents =>").0, "priv alias Cents => int");
-    // A use hovers as the alias it names, here and in another module.
     assert_eq!(hover(&source, "SampleTask#2").0, "alias SampleTask => (int) -> int");
     let (code, doc) = hover(&source, "Corner =");
     assert_eq!(code, "alias Corner => shapes.Point");
     assert!(doc.contains("shapes"), "{}", doc);
-    // A value of a type written with an alias has the type it stands for.
     assert_eq!(hover(&source, "tasks:").0, "fixed tasks: [(int) -> int#2]");
 }
 
@@ -102,7 +94,6 @@ fn a_type_alias_is_colored_as_a_type() {
     assert_eq!(class_at("SampleTask#2"), Some(TokenClass::Type));
     assert_eq!(class_at("Cents) ->"), Some(TokenClass::Type));
     assert_eq!(class_at("Corner ="), Some(TokenClass::Type));
-    // A variable named `alias` is only a variable.
     let plain = "task main()\n    fixed alias = 1\n    show(alias)\nfi\n";
     let classes: Vec<TokenClass> = Analysis::new(plain).tokens().into_iter().filter(|t| &plain[t.from..t.to] == "alias").map(|t| t.class).collect();
     assert_eq!(classes, [TokenClass::Variable, TokenClass::Variable]);

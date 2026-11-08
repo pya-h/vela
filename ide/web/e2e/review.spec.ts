@@ -1,7 +1,3 @@
-// Fixes from the review of the whole project: shortcuts in dialogs and
-// terminals, the context menu, renaming a file to .vela, and building while a
-// program runs.
-
 import { cursorAtEndOf, expect, launch, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
 const FOREVER = "task main()\n    flex n = 0\n    loop true\n        n = n + 1\n    fi\nfi\n";
@@ -19,7 +15,6 @@ test("shortcuts inside a dialog do nothing, not the browser's action", async ({ 
     await page.keyboard.press(key);
     await expect(page.locator("body")).toHaveAttribute("data-last-prevented", /:true$/);
   }
-  // Still the one picker, and no panel opened behind it.
   await expect(page.getByRole("dialog")).toHaveCount(1);
 });
 
@@ -43,7 +38,6 @@ test("the context menu works again after Escape", async ({ page, studio }) => {
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
-  // Focus went back to the row.
   await expect(treeRow(page, "fib.vela")).toBeFocused();
   await treeRow(page, "fib.vela").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Rename…" }).click();
@@ -73,7 +67,6 @@ test("a build while a program runs keeps the Stop button and the run's result", 
   const run = page.locator(".run-button");
   await expect(run).toHaveAttribute("data-state", "running");
 
-  // A slow build beside it.
   let release: () => void = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route("**/api/build", async (route) => {
@@ -82,7 +75,6 @@ test("a build while a program runs keeps the Stop button and the run's result", 
   });
   await page.keyboard.press("Control+Shift+B");
   await expect(run).toHaveAttribute("data-state", "running");
-  // The program can still be stopped, and its end is kept after the build.
   await page.keyboard.press("Shift+F5");
   await expect(page.locator(".status-run")).toContainText("forever.vela stopped");
   release();

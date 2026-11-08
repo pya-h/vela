@@ -64,7 +64,6 @@ describe("VelaAnalysis", () => {
   it("covers every non-space character of every example with a token", () => {
     for (const name of readdirSync(examples).filter((f) => f.endsWith(".vela"))) {
       const source = readFileSync(join(examples, name), "utf8");
-      // The modules an example includes are next to it, fetched as the editor does.
       const context = { path: name, modules: {} as Record<string, string> };
       for (let missing = analysis.file(source, context).missing; missing.length > 0; missing = analysis.file(source, context).missing) {
         for (const path of missing) context.modules[path] = readFileSync(join(examples, path), "utf8");
@@ -140,18 +139,15 @@ describe("VelaAnalysis", () => {
       "task first<T: ordered>(xs: [T]@r) -> maybe T\n    each v in xs\n        <- v\n    fi\n    <- none\nfi\n\ntask main()\n    region r\n    fixed ns: [int]@r = new [int]([2, 3]) at r\n    show(first<int>(ns))\nfi\n";
     const { tokens, diagnostics, outline } = analysis.file(source);
     expect(diagnostics).toEqual([]);
-    // The type is a type wherever it is written, and the word is the language's.
     expect(tokens.find((t) => t.from === source.indexOf("T: ordered"))?.class).toBe("type");
     expect(tokens.find((t) => t.from === source.indexOf("ordered"))?.class).toBe("keyword");
     expect(tokens.find((t) => t.from === source.indexOf("T]@r"))?.class).toBe("type");
     expect(tokens.find((t) => t.from === source.indexOf("int>"))?.class).toBe("type-builtin");
-    // The outline lists it under the task, with the word it must allow.
     const [task] = outline;
     expect(task?.detail).toBe("<T: ordered>(xs: [T]@r) -> maybe T");
     expect(task?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([["T", "type-param", "ordered"]]);
     expect(SYMBOL_BADGES[task?.children[0]?.kind ?? "task"].text).toBe("T");
     expect(analysis.hover(source, source.indexOf("T]@r"))?.doc).toContain("A type task first takes");
-    // The words after a type's ':', and types where a call names them.
     const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
     expect(words).toEqual(["frozen", "same", "similar", "shown", "ordered"]);
     const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
@@ -205,7 +201,6 @@ describe("VelaAnalysis", () => {
     expect(classAt("step(by")).toBe("method");
     expect(classAt("step(2)")).toBe("method");
     expect(classAt("by\n")).toBe("parameter");
-    // A method's `fi` closes the method: `main` and every member are outlined.
     const [shape, main] = outline;
     expect(main?.name).toBe("main");
     expect(shape?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([
@@ -354,7 +349,6 @@ describe("VelaAnalysis", () => {
     expect(own.file(source, context).diagnostics).toEqual([]);
     expect(own.hover(source, source.indexOf("hello"), { ...context, modules: { ...context.modules } })?.code).toBe("task a.hello()");
     expect(sent.map((body) => "modules" in JSON.parse(body))).toEqual([true, false]);
-    // Changed modules are sent again.
     const changed = { path: "main.vela", modules: { "lib/a.vela": "task other()\nfi\n" } };
     expect(own.file(source, changed).diagnostics).not.toEqual([]);
     expect("modules" in JSON.parse(sent[2] ?? "{}")).toBe(true);
@@ -411,7 +405,6 @@ describe("VelaAnalysis", () => {
       },
     };
     expect(() => crashing.file("task main()\nfi\n")).toThrow(/crashed: unreachable/);
-    // A fresh instance answers the next request.
     expect(crashing.file("task main()\nfi\n").tokens.length).toBe(5);
   });
 });

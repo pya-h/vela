@@ -1,8 +1,3 @@
-//! `vela::driver`, the compile pipeline shared by the `vela` command and
-//! other tools: it must report every failure as a structured error, rendered
-//! exactly as the command prints it.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use std::fs;
@@ -12,7 +7,6 @@ use std::process::Command;
 use vela::ast::{Item, Span, StmtKind, Type};
 use vela::driver::{self, BuildError};
 
-/// A fresh directory for one test; removed when the test passes.
 struct TempDir(PathBuf);
 
 impl TempDir {
@@ -76,7 +70,6 @@ fn a_program_without_main_is_not_an_executable() {
     let err = driver::build(source, Path::new("lib.vela"), Path::new("unused-output"), &cc(), true).unwrap_err();
     assert!(matches!(err, BuildError::NoMain), "{:?}", err);
     assert_eq!(err.render("lib.vela", source), "lib.vela: error: program has no 'main' task");
-    // Its C can still be generated.
     assert!(driver::generate_c(source).unwrap().contains("void vela_helper(void)"));
 }
 
@@ -102,7 +95,6 @@ fn a_missing_c_compiler_is_reported() {
 fn c_compiler_failures_keep_the_generated_c() {
     let dir = TempDir::new("c-failure");
     let input = dir.write("hello.vela", HELLO);
-    // Makes the C compiler fail on otherwise valid generated C.
     let failing_cc = format!("{} -include vela-missing-header.h", cc());
     let err = driver::build(HELLO, &input, &dir.0.join("hello"), &failing_cc, true).unwrap_err();
     let BuildError::CFailed { messages, build_dir } = &err else { panic!("{:?}", err) };
@@ -123,20 +115,15 @@ fn partial_front_end_keeps_the_types_found_around_an_error() {
         StmtKind::Binding { names, .. } => names.first().and_then(|bound| bound.ty.clone()),
         other => panic!("expected a binding, got {:?}", other),
     };
-    // The checker goes on after a mistake, so the lines on both sides of it are
-    // checked and only the line with the mistake is left without types.
     assert_eq!(binding_type(0), Some(Type::Float));
     assert_eq!(binding_type(2), Some(Type::Bool));
 
-    // A program that doesn't parse has no items.
     let broken = driver::front_end_partial("task main(\n");
     assert!(broken.items.is_none() && broken.errors.len() == 1);
 }
 
 #[test]
 fn every_mistake_is_reported_once_in_source_order() {
-    // One in a declaration, one in each task body, and one that the first would
-    // have hidden: the checker reports them all, in the order they are written.
     let source = "task twice(n: Nope) -> int\n    <- n\nfi\n\ntask main()\n    fixed a = twice(2)\n    show(missing)\n    show(a, gone)\nfi\n";
     let partial = driver::front_end_partial(source);
     let found: Vec<(usize, usize, &str)> =
@@ -150,8 +137,6 @@ fn every_mistake_is_reported_once_in_source_order() {
         ]
     );
 
-    // Every line with a mistake is reported, however many there are; how many
-    // the command shows at once is `MAX_SHOWN` (see the `cli` tests).
     let many: String = (0..driver::MAX_SHOWN + 3).map(|i| format!("    show(missing{})\n", i)).collect();
     let errors = driver::front_end_partial(&format!("task main()\n{}fi\n", many)).errors;
     assert_eq!(errors.len(), driver::MAX_SHOWN + 3);
@@ -159,9 +144,6 @@ fn every_mistake_is_reported_once_in_source_order() {
 
 #[test]
 fn an_else_when_chain_has_no_limit_on_its_arms() {
-    // One `fi` closes a whole chain, whose arms every pass goes through in a
-    // loop, on the small stacks of test threads too: plain conditions, ones
-    // with a pattern, and as a value; and its C is flat, not nested.
     let arms = 5000;
     let plain: String = (0..arms).map(|i| format!("    else when n == {}\n        show({})\n", i, i)).collect();
     let source = format!("task main()\n    fixed n = 3\n    when n < 0\n        show(-1)\n{}    else\n        show(0)\n    fi\nfi\n", plain);
@@ -220,13 +202,10 @@ fn deep_nesting_is_an_error_not_a_crash() {
         let error = driver::generate_c(&source).expect_err(what);
         assert!(error.message.contains("nested too deeply"), "{}: {}", what, error.message);
     }
-    // A long chain of operators is told how to split.
     let error = driver::generate_c(&program(vec!["1"; deep].join(" + "))).expect_err("an operator chain");
     assert!(error.message.contains("this chain of operators has more than") && error.message.contains("fixed part ="), "{}", error.message);
-    // And so is one of `**`, which groups to the right.
     let error = driver::generate_c(&program(vec!["1"; deep].join(" ** "))).expect_err("a power chain");
     assert!(error.message.contains("this chain of operators has more than"), "{}", error.message);
-    // Just below the limit still compiles.
     let near = limit - 5;
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
     driver::generate_c(&ok).unwrap();
@@ -266,7 +245,6 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // plan B, and its block.
     let scans = format!("task main()\n    region r\n    show({}\"\"{})\nfi\n", "scan(".repeat(near / 3), ") at r { \"\" }".repeat(near / 3));
     driver::generate_c(&scans).unwrap();
-    // Tuples in tuples, read back item by item, and unpacked into names.
     let tuples = format!(
         "task main()\n    fixed t = {}1{}\n    show(t{})\n    fixed {}a{} = t\n    show(a)\nfi\n",
         "(".repeat(near / 2 - 1),
@@ -286,8 +264,6 @@ fn deep_nesting_is_an_error_not_a_crash() {
 
 #[test]
 fn long_chains_of_types_are_checked_without_a_crash() {
-    // Each shape contains the next, by value or through a pointer, declared
-    // before it: checking and ordering the types follows the whole chain.
     let count = 20_000;
     let chain = |field: &str, last: &str| {
         let shapes: String = (0..count).map(|i| format!("shape S{}\n    next: {}S{}\nfi\n", i, field, i + 1)).collect();
@@ -301,7 +277,6 @@ fn long_chains_of_types_are_checked_without_a_crash() {
     assert!(error.message.contains("can never be created"), "{}", error.message);
 }
 
-/// A loader over files held in memory, which records every path it is asked for.
 fn memory_loader<'a>(files: &'a [(&'a str, &'a str)], asked: &'a std::cell::RefCell<Vec<String>>) -> impl FnMut(&Path) -> std::io::Result<String> + 'a {
     move |path: &Path| {
         let path = path.to_string_lossy().replace('\\', "/");
@@ -323,9 +298,6 @@ fn a_program_loads_each_module_once_through_its_loader() {
     ];
     let asked = std::cell::RefCell::new(Vec::new());
     let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
-    // Paths are relative to the file with the `include`, with `..` settled, and a
-    // module used twice is read once. A module's names in the program start with
-    // its path from the main file's folder.
     assert_eq!(*asked.borrow(), ["app/shapes/geometry.vela", "app/text/labels.vela"]);
     // The tasks, in order; the program also holds the builtin kind that reading
     // a number sends, which no file declares.
@@ -345,7 +317,6 @@ fn a_warning_in_a_module_names_the_file_of_the_use_that_gave_its_types() {
     let asked = std::cell::RefCell::new(Vec::new());
     let warnings = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().1;
     let rendered = warnings.render("app/main.vela");
-    // Shown in the module, where the '==' is, naming the use in the main file.
     assert!(rendered.starts_with("app/compare.vela:2:8: warning: '==' compares P by where it is"), "{}", rendered);
     assert!(rendered.contains("(where 'same' is given P, at 9:10 in the main file)"), "{}", rendered);
     assert!(rendered.contains("write 'fixed& a: T'"), "{}", rendered);
@@ -364,7 +335,6 @@ fn the_library_comes_with_the_compiler_and_is_never_read_from_a_loader() {
     let asked = std::cell::RefCell::new(Vec::new());
     let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
     assert_eq!(*asked.borrow(), ["app/tools.vela"]);
-    // The library's native task is the runtime's function, and its File the library's.
     assert!(c.contains("return vela__rt__files_path_exists(path);"), "{}", c);
     assert!(c.contains("vela_std__1__files__0__File"), "{}", c);
 }
@@ -422,7 +392,6 @@ fn an_error_in_a_module_names_that_file() {
         error.render("main.vela"),
         "lib.vela:2:10: error: arithmetic requires numeric operands\n 2 |     <- n * \"2\"\n   |          ^"
     );
-    // A program in one file can't load modules, and says which is missing.
     let partial = driver::front_end_partial(main);
     assert_eq!(partial.errors[0].message, "can't find module 'lib': there is no file 'lib.vela'");
 }
@@ -447,13 +416,10 @@ fn long_chains_of_modules_are_an_error_not_a_crash() {
         driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&borrowed, &asked))
     };
     let limit = vela::parser::MAX_NESTING;
-    // The main file and `limit - 1` modules: `limit` files in the chain.
     check(limit - 1).unwrap();
     for length in [limit, limit + 50] {
         let error = check(length).unwrap_err();
         assert_eq!(error.first().message, format!("modules include one another too deeply (more than {} in a chain)", limit));
-        // At the include that would make the chain too long, even when the last
-        // module includes nothing.
         let span = error.first().span.unwrap();
         let file = error.files.get(span.file).unwrap();
         assert_eq!((file.path.to_str(), span.line, span.col), (Some(format!("m{}.vela", limit - 1).as_str()), 1, 9));

@@ -1,6 +1,3 @@
-// A small helper for building elements. Text is always set as text, never
-// parsed as HTML.
-
 type Child = Node | string | null | undefined | false;
 
 interface Props {
@@ -28,23 +25,16 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props = 
   return element;
 }
 
-/** A button with an icon and an accessible label. */
 export function iconButton(icon: SVGSVGElement, label: string, onClick: (event: MouseEvent) => void, className = "icon-button"): HTMLButtonElement {
   return h("button", { class: className, title: label, attrs: { type: "button", "aria-label": label }, on: { click: onClick } }, icon);
 }
 
-/** Whether the platform uses ⌘ rather than Ctrl for shortcuts. */
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-/**
- * Whether `event` holds the platform's shortcut modifier: ⌘ on a Mac, where
- * Ctrl keeps its terminal and text-editing meanings, and Ctrl elsewhere.
- */
 export function hasShortcutModifier(event: KeyboardEvent, mac = isMac): boolean {
   return mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 }
 
-/** A shortcut as shown to the user: `Mod-s` → `Ctrl+S` or `⌘S` (`Ctrl` stays Ctrl, `⌃` on a Mac). */
 export function shortcutLabel(key: string): string {
   const parts = key.split("-");
   const names = parts.map((part) => {

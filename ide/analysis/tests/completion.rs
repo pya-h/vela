@@ -1,8 +1,3 @@
-//! Completion and hover: what is offered at each kind of position, with the
-//! compiler's types when the file checks and declared types when it doesn't.
-//! In the sources below, `@@` marks the cursor.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, CompletionItem, CompletionKind, Completions, Hover, LineIndex};
@@ -46,12 +41,10 @@ task main()
 fi
 ";
 
-/// Replaces the `@@` in `PROGRAM` with `code` (which has its own `@@`).
 fn in_main(code: &str) -> String {
     PROGRAM.replace("    @@\n", &format!("    {}\n", code))
 }
 
-/// The completions at `@@`, and the source without the marker.
 fn complete(marked: &str) -> (Completions, String) {
     let at = marked.find("@@").expect("a @@ marker");
     let source = marked.replacen("@@", "", 1);
@@ -94,12 +87,8 @@ fn item_level_offers_declarations() {
 fn private_offers_the_declarations_it_can_mark() {
     let after = "task main()\nfi\n\npriv @@";
     assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "fixed"]);
-    // The word being typed is completed too.
     assert_offers("priv sh@@", &["shape"], &["priv"]);
-    // A shape's private field is a name being declared, a private method may
-    // say it changes its value, and a private field may be shared.
     assert_eq!(labels("shape S\n    priv @@\nfi\n"), ["alters", "shared"]);
-    // Not a statement.
     assert_eq!(labels(&in_main("priv @@")), Vec::<String>::new());
 }
 
@@ -110,29 +99,23 @@ fn statements_offer_keywords_snippets_and_visible_names() {
         &["fixed", "flex", "when", "each", "match", "fi", "p", "line", "figure", "total", "area", "origin", "show", "match figure"],
         &["task", "else", "case", "Circle", "x", "hidden", "true", "send"],
     );
-    // The word being typed is replaced.
     let (completions, source) = complete(&in_main("ma@@"));
     assert_eq!(completions.from, LineIndex::new(&source).utf16_of(source.find("ma\n").unwrap()));
     assert!(completions.items.iter().any(|i| i.label == "match figure"));
 
-    // A match with every case of the value's kind.
     assert_eq!(
         item(PROGRAM, "match figure").snippet.as_deref(),
         Some("match figure\ncase Circle ${radius}\n\t\ncase Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}\nfi")
     );
-    // Calls get a field per parameter.
     assert_eq!(item(PROGRAM, "area").snippet.as_deref(), Some("area(${s})"));
     assert_eq!(item(PROGRAM, "origin").apply.as_deref(), Some("origin()"));
     assert_eq!(item(PROGRAM, "total").detail, "int");
-    // `else` and `case` where they can close a branch.
     assert_offers(&in_main("when true\n        @@"), &["else", "fi"], &["case"]);
     assert_offers(&in_main("match figure\n    @@"), &["case"], &["else"]);
 }
 
 #[test]
 fn the_program_used_by_these_tests_compiles() {
-    // So the tests below see the compiler's types, not only the fallbacks
-    // used while a file has an error.
     assert_eq!(Analysis::new(&PROGRAM.replace("    @@\n", "")).diagnostics(), Vec::new());
 }
 
@@ -142,9 +125,7 @@ fn expressions_offer_values() {
     assert_eq!(item(&in_main("fixed q = @@"), "Circle").snippet.as_deref(), Some("Circle(${radius})"));
     assert_eq!(item(&in_main("fixed q = @@"), "Dot").snippet, None);
     assert_eq!(item(&in_main("fixed q = @@"), "Rectangle").detail, "Shape (width: float, height: float)");
-    // A variable is not visible in its own initializer.
     assert_offers(&in_main("fixed q = 1\n    fixed r = @@"), &["q"], &["r"]);
-    // A shape is offered as a literal with its fields.
     assert_eq!(item(&in_main("fixed q = @@"), "Point").snippet.as_deref(), Some("Point { x: ${x}, y: ${y} }"));
 }
 
@@ -176,10 +157,8 @@ fn fields_follow_the_type_of_the_value() {
     assert_offers(&in_main("show(line.start.@@)"), &["x", "y"], &["finish"]);
     assert_offers(&in_main("show(origin().@@)"), &["x", "y"], &[]);
     assert_offers(&in_main("show(line.finish^.@@)"), &["x", "y"], &[]);
-    // A kind value has no fields, only its text and its type, which every value has.
     assert_eq!(labels(&in_main("show(figure.@@)")), ["str", "type"]);
 
-    // Through a pointer, the field is reached with `^.`, replacing the dot.
     let marked = in_main("show(line.finish.@@)");
     let (completions, source) = complete(&marked);
     assert_eq!(completions.from, LineIndex::new(&source).utf16_of(source.find("finish.").unwrap() + "finish".len()));
@@ -188,7 +167,6 @@ fn fields_follow_the_type_of_the_value() {
 
 #[test]
 fn fields_still_complete_when_the_rest_of_the_file_is_broken() {
-    // The line after the cursor doesn't parse, so no compiler types are available.
     let broken = |code: &str| PROGRAM.replace("    @@\n", &format!("    {}\n    fixed broken = (\n", code));
     assert_offers(&broken("show(p.@@)"), &["x", "y"], &[]);
     assert_offers(&broken("show(line.start.@@)"), &["x", "y"], &[]);
@@ -202,16 +180,12 @@ fn case_offers_the_variants_not_yet_matched() {
     assert_offers(&marked, &["Rectangle", "Dot", "all remaining cases"], &["Circle", "p", "fixed"]);
     assert_eq!(item(&marked, "Rectangle").snippet.as_deref(), Some("Rectangle ${width} ${height}"));
     assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}"));
-    // The bindings after a variant are new names.
     assert_eq!(labels(&in_main("match figure\n    case Rectangle @@\n    fi")), Vec::<String>::new());
-    // A case written through the kind covers its variant too.
     let through_kind = in_main("match figure\n    case Shape.Circle r\n        show(r)\n    case @@\n    fi");
     assert_offers(&through_kind, &["Rectangle", "Dot", "all remaining cases"], &["Circle"]);
     assert_eq!(item(&through_kind, "all remaining cases").snippet.as_deref(), Some("Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}"));
-    // After `case Shape.`, the variants not matched yet, however they were written.
     let after_kind = in_main("match figure\n    case Circle r\n        show(r)\n    case Shape.Dot\n        show(0)\n    case Shape.@@\n    fi");
     assert_eq!(labels(&after_kind), ["Rectangle"]);
-    // A `_` written doesn't hide the variants still named.
     assert_eq!(labels(&in_main("match figure\n    case _\n        show(0)\n    case Shape.@@\n    fi")), ["Circle", "Rectangle", "Dot"]);
 }
 
@@ -226,7 +200,6 @@ fn case_snippets_never_link_fields_of_different_variants() {
     );
     let marked = source.replace("    @@\n", "    match r\n    case @@\n    fi\n");
     assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("Exact ${value}\n\t\ncase Between ${value2} ${high}\n\t\ncase Missing\n\t${}"));
-    // A single case needs no renaming.
     assert_eq!(item(&marked, "Between").snippet.as_deref(), Some("Between ${value} ${high}"));
 }
 
@@ -234,7 +207,6 @@ fn case_snippets_never_link_fields_of_different_variants() {
 fn shape_literals_offer_the_missing_fields() {
     assert_offers(&in_main("fixed q = Point { x: 1, @@ }"), &["y"], &["x", "p"]);
     assert_eq!(item(&in_main("fixed q = Point { @@"), "x").snippet.as_deref(), Some("x: ${}"));
-    // A value after the colon is an expression.
     assert_offers(&in_main("fixed q = Point { x: @@ }"), &["p", "total"], &["y"]);
 }
 
@@ -252,19 +224,13 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
-    // A parameter's name is new, but it may be one the task changes.
     for marked in ["task f(@@", "task f(a: int, @@"] {
         assert_eq!(labels(marked), ["flex", "flex&", "bind", "bind&", "fixed", "fixed&"], "at {:?}", marked);
     }
-    // A field's or a method's name is new, but it may be private, a shape's
-    // field may be read-only or shared, and a method may change its value or
-    // be shared. A kind has no fields, so nothing there is read-only, but its
-    // methods may be shared.
     assert_eq!(labels("shape S\n    @@"), ["priv", "read", "shared", "alters"]);
     assert_eq!(labels("kind K\n    V\n    @@"), ["priv", "alters", "shared"]);
 }
 
-/// The hover at the `nth` occurrence of `needle` (offset `shift` into it).
 fn hover(source: &str, needle: &str, nth: usize) -> Hover {
     let byte = source.match_indices(needle).nth(nth).unwrap_or_else(|| panic!("no {:?}", needle)).0;
     let offset = LineIndex::new(source).utf16_of(byte);
@@ -295,14 +261,12 @@ fn hover_describes_declarations() {
     assert_eq!(hover(&source, "show", 0).code, "task show(value: anything with str, \u{2026})");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
-    // The hovered range is the name.
     let h = hover(&source, "total >", 0);
     assert_eq!(h.to - h.from, "total".len());
 }
 
 #[test]
 fn show_takes_several_values() {
-    // A value after a comma completes like the first one, and the file checks.
     assert_offers(&in_main("show(\"total: \", @@)"), &["total", "p", "area", "true"], &["fi", "task"]);
     assert_offers(&in_main("show(total, @@)"), &["p", "line", "show"], &["else"]);
     let checked = "task main()\n    fixed n = 1\n    show(\"n = \", n, \"!\")\n    show()\nfi\n";
@@ -341,12 +305,10 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     assert!(hover(source, "int(\"42\")", 0).doc.contains("turns a value into one"), "{:?}", hover(source, "int(\"42\")", 0).doc);
     assert!(hover(source, "NotANumber", 0).doc.contains("no number at all"), "{:?}", hover(source, "NotANumber", 0).doc);
     assert!(hover(source, "TooLarge", 0).doc.contains("not one the type holds"), "{:?}", hover(source, "TooLarge", 0).doc);
-    // The type a reading gives, and the kind where an error type goes.
     let bound = "task main()\n    fixed n = int(\"42\")\n    show(n { 0 })\nfi\n";
     assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
     assert_eq!(hover(bound, "n =", 0).code, "fixed n: int ~ ParseError");
     assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["nothing"]);
-    // Hovering the kind itself shows what it is.
     let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        failure e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
     assert_eq!(Analysis::new(named).diagnostics(), Vec::new());
     assert!(hover(named, "ParseError", 0).code.starts_with("kind ParseError"), "{:?}", hover(named, "ParseError", 0).code);
@@ -361,8 +323,6 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
     assert!(hover(source, "Ended", 0).doc.contains("input has ended"), "{:?}", hover(source, "Ended", 0).doc);
     assert!(hover(source, "NoNumber why", 0).code.starts_with("NoNumber(why: ParseError)"), "{:?}", hover(source, "NoNumber why", 0).code);
     assert!(hover(source, "scan", 0).doc.contains("names no region"), "{:?}", hover(source, "scan", 0).doc);
-    // The type it gives, with the compiler's types and with the types read from
-    // the source while the file doesn't check.
     for checks in [true, false] {
         let shown = if checks { "show(age { 0 })" } else { "show(unknown)" };
         let bound = format!("task main()\n    fixed age = scan(\"Age: \", int)\n    fixed size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
@@ -370,11 +330,8 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
         assert_eq!(hover(&bound, "age =", 0).code, "fixed age: int ~ InputError", "checks: {}", checks);
         assert_eq!(hover(&bound, "size =", 0).code, "fixed size: float ~ InputError", "checks: {}", checks);
     }
-    // The two types this form reads, offered after the prompt, and the kind
-    // where an error type goes.
     assert_eq!(labels(&in_main("fixed age = scan(\"Age: \", @@)")), ["int", "float", "unit"]);
     assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["nothing"]);
-    // A region follows a line read, and never a number read.
     assert_offers(&in_main("fixed line = scan(\"Name: \") @@"), &["at"], &[]);
     assert_offers(&in_main("fixed age = scan(\"Age: \", int) @@"), &[], &["at"]);
 }
@@ -387,17 +344,13 @@ fn the_cases_of_a_kind_no_file_declares_are_offered() {
     assert_eq!(labels(&of("match e\n    case @@\n    fi")), ["Ended", "NoNumber", "_", "all remaining cases"]);
     assert_eq!(labels(&of("when e is @@\n    fi")), ["Ended", "NoNumber"]);
     assert_eq!(labels(&of("match e\n    case InputError.@@\n    fi")), ["Ended", "NoNumber"]);
-    // A case already written is not offered again, and `is` takes one case only.
     assert_eq!(labels(&of("match e\n    case Ended\n        show(0)\n    case @@\n    fi")), ["NoNumber", "_"]);
-    // The variant that holds a reason is taken apart by a pattern, and written
-    // as a value with parentheses.
     let pattern = item(&of("match e\n    case @@\n    fi"), "NoNumber");
     assert_eq!(pattern.snippet.as_deref(), Some("NoNumber ${why}"));
     assert_eq!(pattern.detail, "InputError (why: ParseError)");
     let value = item("task f() -> int ~ ParseError\n    <- fail ParseError.@@\nfi\n", "NotANumber");
     assert_eq!(value.detail, "ParseError");
     assert_eq!(item(&of("fixed e2 = InputError.@@"), "NoNumber").snippet.as_deref(), Some("NoNumber(${why})"));
-    // The match with every case, offered for a value of one.
     assert_eq!(
         item(&of("@@"), "match e").snippet.as_deref(),
         Some("match e\ncase Ended\n\t\ncase NoNumber ${why}\n\t${}\nfi")
@@ -465,8 +418,6 @@ fn values_holding_pointers_are_in_the_region_of_their_parts_whether_or_not_the_f
 
 #[test]
 fn a_value_turned_into_a_number_reads_as_that_number() {
-    // `int(x)` and `float(x)` are calls named by the type they give, so the
-    // editor reads them as that number, whether or not the file checks.
     let source = "task main()\n    fixed n = 7\n    fixed f = float(n)\n    fixed w = int(2.9)\n    fixed c = int(n > 3)\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "f =", 0).code, "fixed f: float");
@@ -475,7 +426,6 @@ fn a_value_turned_into_a_number_reads_as_that_number() {
     let broken = source.replace("    fixed c =", "    show(missing)\n    fixed c =");
     assert_eq!(hover(&broken, "f =", 0).code, "fixed f: float");
     assert_eq!(hover(&broken, "w =", 0).code, "fixed w: int");
-    // Hovering the name of the call says what it does.
     assert!(hover(source, "float(n)", 0).doc.contains("float(n) turns an int"), "{:?}", hover(source, "float(n)", 0).doc);
 }
 
@@ -491,11 +441,9 @@ fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
         ("wrapped =", "fixed wrapped: bool"),
         ("both =", "fixed both: bool"),
         ("mixed =", "fixed mixed: float"),
-        // An int and a float don't mix, so the arithmetic has no type to read.
         ("crossed =", "fixed crossed"),
         ("whole =", "fixed whole: int"),
         ("inner =", "fixed inner: int"),
-        // An operand of unknown type leaves the arithmetic's type unknown.
         ("unknown =", "fixed unknown"),
     ] {
         assert_eq!(hover(&source, needle, 0).code, code, "at {:?}", needle);
@@ -527,13 +475,10 @@ fn in_outcomes(code: &str) -> String {
 #[test]
 fn types_offer_maybe_and_error_types() {
     assert_offers(&in_outcomes("fixed x: @@"), &["maybe", "int", "Problem"], &["nothing", "m"]);
-    // After `maybe`, another type, but not `maybe` or `nothing` again.
     assert_offers(&in_outcomes("fixed x: maybe @@"), &["int", "Problem"], &["maybe", "nothing"]);
     assert_offers(&in_outcomes("fixed x: maybe ^@@"), &["int"], &["m"]);
-    // After `or` in a type, the error type, which is never nothing or a maybe.
     assert_offers("task f() -> int ~ @@\nfi\n", &["text"], &["nothing", "maybe"]);
     assert_offers(&in_outcomes("fixed x: int ~ @@"), &["Problem"], &["m", "total"]);
-    // `or` between values is still an expression.
     assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
 }
 
@@ -550,7 +495,6 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
     assert_offers(&in_outcomes("when m is @@"), &["{value}", "none"], &["failure e", "total"]);
     assert_offers(&in_outcomes("when r is @@"), &["{value}", "failure e"], &["none"]);
     assert_offers(&in_outcomes("when parse(\"x\") { failure _\n        0\n    } is @@"), &[], &[]);
-    // The names a pattern or plan B declares are new.
     for marked in [
         in_outcomes("when m is {@@"),
         in_outcomes("when r is failure @@"),
@@ -560,7 +504,6 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
-    // A kind's `_` case.
     let marked = PROGRAM.replace("    @@\n", "    match figure\n    case Dot\n        show(1)\n    case @@\n    fi\n");
     assert_offers(&marked, &["_", "Circle"], &["Dot"]);
 }
@@ -569,12 +512,10 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
 fn plan_b_blocks_offer_values_and_statements() {
     assert_offers(&in_outcomes("fixed n = m { @@"), &["total", "m", "fail", "none"], &[]);
     assert_offers(&in_outcomes("fixed n = m {\n        @@"), &["fixed", "total", "when"], &[]);
-    // `}` closes a plan B, not `fi`, and only its first line may name the failure.
     let marked = in_outcomes("when total > 0\n        fixed n = r {\n            @@");
     assert_offers(&marked, &["failure", "fixed"], &["fi", "else"]);
     assert_eq!(item(&marked, "failure").snippet.as_deref(), Some("failure ${e}"));
     assert_offers(&in_outcomes("fixed n = r {\n        failure e\n        @@"), &["fixed"], &["failure", "fi"]);
-    // After the plan B closes, the blocks around it continue.
     assert_offers(&in_outcomes("when total > 0\n        fixed n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["failure"]);
     assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
     assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase failure ${e}\n\t${}\nfi"));
@@ -592,9 +533,7 @@ fn hover_describes_maybe_and_error_names() {
     assert_eq!(hover(&source, "r =", 0).code, "fixed r: int ~ Problem");
     assert_eq!(hover(&source, "maybe int", 0).code, "maybe T");
     assert_eq!(hover(&source, "none", 0).code, "none");
-    // `~` explains itself (its class is an operator, as the snapshots show).
     assert_eq!(hover(&source, "~ Problem", 0).code, "T ~ E");
-    // The two words say which is which.
     assert_eq!(hover(&source, "failure problem", 0).code, "failure e");
     assert!(hover(&source, "failure problem", 0).doc.contains("Names the failure"), "{:?}", hover(&source, "failure problem", 0).doc);
     let sending = "task f() -> int ~ text\n    <- fail \"x\"\nfi\n";
@@ -645,7 +584,6 @@ fi
 #[test]
 fn regions_are_offered_where_a_region_is_named() {
     let in_main = |code: &str| REGIONS.replace("    @@\n", "    <- 0\n").replace("    fixed first = push(nodes, none)\n", &format!("    fixed first = push(nodes, none)\n    {}\n", code));
-    // After `@` in a type, every visible region.
     assert_offers(&in_main("flex later: maybe ^Node@ @@"), &["nodes"], &["first", "int"]);
     // `new` allocates, so a region a task only names in its types isn't offered.
     assert_offers(&in_main("fixed two = new int(2) at @@"), &["nodes"], &["first"]);
@@ -654,9 +592,7 @@ fn regions_are_offered_where_a_region_is_named() {
     assert_offers(&in_sum("fixed p: maybe ^int@ @@"), &["s"], &[]);
     assert_offers(&in_sum("fixed p = new int(1) at @@"), &[], &["s"]);
     assert_eq!(item(&in_sum("fixed p: maybe ^int@ @@"), "s").detail, "region, named in the task's types");
-    // In a header, the regions named so far on its line.
     assert_offers("task link(a: ^int@left, b: ^int@ @@", &["left"], &[]);
-    // A parameter's type can be `region`; a statement can declare one.
     assert_offers("task make(r: @@", &["region", "int"], &[]);
     assert_offers(&in_main("fixed x: @@"), &["int"], &["region"]);
     assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … at"]);
@@ -686,12 +622,10 @@ fn hover_describes_regions() {
     assert_eq!(hover(&source, "region nodes", 0).code, "region r");
     assert_eq!(hover(&source, "new Node", 0).code, "new T(value) at r");
     assert_eq!(hover(&source, "first =", 0).code, "fixed first: ^Node@nodes");
-    // While the file doesn't check, written types still show their regions.
     let broken = source.replace("    <- 0\n", "    <- missing\n").replace("fixed first = push(nodes, none)", "fixed first: maybe ^Node@nodes = none\n    fixed two = new@nodes int(2)");
     assert_eq!(hover(&broken, "first:", 0).code, "fixed first: maybe ^Node@nodes");
     assert_eq!(hover(&broken, "two =", 0).code, "fixed two: ^int@nodes");
     assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
-    // `at` names a region, and `in` counts through a range.
     assert!(hover(&source, "at r", 0).doc.contains("Allocates in region r"));
     assert!(hover("task main()\n    each i in 0..3\n        show(i)\n    fi\nfi\n", "in 0", 0).doc.contains("Counts from a"));
 }
@@ -726,12 +660,9 @@ fi
     let checks = source.replace("    @@\n", "");
     let broken = source.replace("    @@\n", "    show(missing)\n");
     for source in [&checks, &broken] {
-        // The task's `r` and `q` are the caller's `nodes`: from the region
-        // argument, from an argument's type, or from a plan B's fallback.
         assert_eq!(hover(source, "a =", 0).code, "fixed a: ^Node@nodes");
         assert_eq!(hover(source, "b =", 0).code, "fixed b: ^Node@nodes");
         assert_eq!(hover(source, "c =", 0).code, "fixed c: ^Node@nodes");
-        // A result no argument gives a region to is in none, which hover explains.
         let n = hover(source, "n}", 0);
         assert_eq!(n.code, "n: ^Node@_");
         assert!(n.doc.contains("@_ means no region"), "{:?}", n.doc);
@@ -762,7 +693,6 @@ fn types_follow_a_region_and_error_types_follow_a_regional_type() {
 fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
     let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        fixed r = parse(\"x\") { failure e\n            @@\n        }\n    fi\nfi\n";
     assert_offers(source, &["show", "e"], &["fi", "else"]);
-    // While the file doesn't check, the binding still has the value's type, not the error's.
     let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    fixed r = parse(\"x\") { failure e\n        0\n    }\n    show(r)\nfi\n";
     assert_eq!(hover(broken, "r = parse", 0).code, "fixed r: int");
 }
@@ -772,9 +702,7 @@ fn only_a_value_that_can_fail_has_an_error_to_name() {
     let source = "task main()\n    fixed m: maybe int = none\n    fixed n = m {\n        @@\n    }\nfi\n";
     assert_offers(source, &["show"], &["fail", "failure"]);
     let failing = "task get() -> int ~ text\n    <- 1\nfi\ntask main()\n    fixed n = get() {\n        @@\n    }\nfi\n";
-    // The noun names the failure a plan B handles; the verb belongs where a value goes.
     assert_offers(failing, &["failure"], &["fail"]);
-    // `fail` as a value only where some type can hold an error.
     assert_offers("task main()\n    fixed x = @@\nfi\n", &["true"], &["fail"]);
 }
 
@@ -786,13 +714,10 @@ fn a_case_binding_of_a_kind_in_a_region_keeps_the_region() {
 
 #[test]
 fn block_words_fit_where_they_are() {
-    // Right after `match`, only a case.
     let matching = "kind K\n    A(v: int)\n    B\nfi\ntask main()\n    fixed k = A(1)\n    match k\n    @@\nfi\n";
     assert_eq!(labels(matching), vec!["case".to_string()]);
-    // A `when` has one `else`.
     let second_else = "task main()\n    when true\n        show(1)\n    else\n        @@\n    fi\nfi\n";
     assert_offers(second_else, &["fi", "show"], &["else"]);
-    // A maybe's cases include `_`.
     let maybe = "task main()\n    fixed m: maybe int = 1\n    match m\n    case {v}\n        show(v)\n    case @@\n    fi\nfi\n";
     assert_offers(maybe, &["none", "_"], &["{value}"]);
 }
@@ -803,9 +728,7 @@ fn after_a_finished_value_only_words_that_continue_it() {
     assert_offers(&in_task("when m @@"), &["is", "and", "or"], &["m", "show", "new"]);
     assert_offers(&in_task("each i @@"), &["in"], &["and", "m"]);
     assert_offers(&in_task("fixed p = new int(1) @@"), &["at", "and"], &["m", "in"]);
-    // After a written type, only the `~` that gives it an error side.
     assert_offers("task f() -> int @@", &["~"], &["and", "is", "or"]);
-    // Right after an operator, values again.
     assert_offers(&in_task("fixed x = 1 + @@"), &["m"], &["and"]);
 }
 
@@ -838,7 +761,6 @@ task main()
 fi
 ";
 
-/// `RESULTS` with `@@` replaced by `code` (which has its own `@@`).
 fn in_results(code: &str) -> String {
     RESULTS.replace("    @@\n", &format!("    {}\n", code))
 }
@@ -847,27 +769,22 @@ fn in_results(code: &str) -> String {
 fn several_results_are_typed_and_completed() {
     assert_eq!(Analysis::new(&RESULTS.replace("    @@\n", "")).diagnostics(), Vec::new());
 
-    // Each name in a list takes the type of the value in its place.
     assert_eq!(hover(RESULTS, "q,", 0).code, "fixed q: int");
     assert_eq!(hover(RESULTS, "r =", 0).code, "fixed r: int");
     assert_eq!(hover(RESULTS, "first", 0).code, "fixed first: float");
     assert_eq!(hover(RESULTS, "second", 0).code, "fixed second: bool");
     assert_eq!(hover(RESULTS, "divmod", 0).code, "task divmod(a: int, b: int) -> int, int");
 
-    // The same while the file doesn't check, from the declarations alone.
     let broken = in_results("show(missing)");
     assert_eq!(hover(&broken, "q,", 0).code, "fixed q: int");
     assert_eq!(hover(&broken, "second", 0).code, "fixed second: bool");
     assert_eq!(hover(&broken, "r =", 0).code, "fixed r: int");
 
-    // Another result type after a comma, where `nothing` is not one.
     assert_offers("task f() -> int, @@", &["int", "text", "maybe"], &["nothing", "f"]);
     assert_offers("task f() -> int, ^@@", &["int"], &["nothing"]);
     assert_offers("task f() -> int, int, @@", &["float"], &["nothing"]);
-    // A parameter list's comma still declares a name.
     assert_offers("task f(a: int, @@", &[], &["int", "a"]);
 
-    // Another name after a comma in a `fixed`, then values after the `=`.
     assert_offers(&in_results("fixed a, @@"), &[], &["int", "q", "divmod"]);
     assert_offers(&in_results("flex a, b = 1, @@"), &["q", "divmod", "true"], &["fixed"]);
     assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["fixed"]);
@@ -889,7 +806,6 @@ task main()
 fi
 ";
 
-/// `NAMED` with `@@` replaced by `code` (which has its own `@@`).
 fn in_named(code: &str) -> String {
     NAMED.replace("    @@\n", &format!("    {}\n", code))
 }
@@ -898,8 +814,6 @@ fn in_named(code: &str) -> String {
 fn named_results_are_names_of_the_task() {
     assert_eq!(Analysis::new(&NAMED.replace("    @@\n", "")).diagnostics(), Vec::new());
 
-    // The name in the header is the result, not a type, and it keeps its type
-    // where it is set and read.
     let hover_total = hover(NAMED, "total", 0);
     assert_eq!(hover_total.code, "result total: int");
     assert!(hover_total.doc.contains("task score") && hover_total.doc.contains("total <- …"), "{}", hover_total.doc);
@@ -907,25 +821,20 @@ fn named_results_are_names_of_the_task() {
     assert_eq!(hover(NAMED, "total + 50", 0).code, "result total: int");
     assert_eq!(hover(NAMED, "score(3, 1)", 0).code, "task score(hits: int, misses: int) -> total: int");
 
-    // A result's type comes from the header, regions and all.
     let regional = "shape Node\n    value: int\nfi\ntask build(r: region, n: int) -> list: maybe ^Node@r, count: int\n    list, count <- none, 0\nfi\n";
     assert_eq!(hover(regional, "list, count", 0).code, "result list: maybe ^Node@r");
     assert_eq!(hover(regional, "count <- none", 0).code, "result count: int");
 
-    // A named result's type is the task's result type, as a call gives it.
     let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    fixed s, p = pair()\n    show(missing)\nfi\n";
     assert_eq!(hover(broken, "s, p = pair", 0).code, "fixed s: int");
     assert_eq!(hover(broken, "p = pair", 0).code, "fixed p: int");
 
-    // Setting a result is offered as a statement, inside its task only.
     assert_offers(&in_named("@@"), &["show", "when"], &["total <- "]);
     let inside = "task score(hits: int) -> total: int\n    @@\nfi\n";
     assert_offers(inside, &["total <- ", "when", "hits"], &[]);
     assert_eq!(item(inside, "total <- ").snippet.as_deref(), Some("total <- ${value}"));
     assert_eq!(item(inside, "total <- ").detail, "set result int");
 
-    // A result's type is completed after its `:`, where `nothing` and `region`
-    // are not types a task can send; types after `->` still are offered.
     assert_offers("task f() -> total: @@", &["int", "text", "maybe"], &["total", "region"]);
     assert_offers("task f(r: @@", &["int", "region"], &[]);
     assert_offers("task f() -> @@", &["int", "nothing"], &["region"]);
@@ -937,8 +846,6 @@ fn named_results_are_names_of_the_task() {
     assert_offers("task f() -> total: int, ^@@", &[], &["int", "total", "show"]);
     assert_offers("task f() -> total: int, maybe @@", &[], &["int", "total", "show"]);
     assert_offers("task f() -> total: int, peak: int, @@", &[], &["int", "peak", "show"]);
-    // An unnamed list still takes another type.
     assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["nothing"]);
 }
-
 

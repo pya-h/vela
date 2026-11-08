@@ -1,10 +1,4 @@
-/* The integer checks in runtime/vela_rt.h, tested directly. The runtime uses
- * the C compiler's overflow builtins where it has them; this file defines
- * VELA__RT__PORTABLE_ARITHMETIC to test the plain comparisons used elsewhere,
- * against the builtins as the reference, on every pair of values near the
- * edges. Also the results of division and remainder that don't trap. Compiled
- * by tests/runtime.rs as strict C11 (and with sanitizers where available, which
- * would catch an overflow inside a check); prints "ok" when every check passes. */
+/* Tests VELA__RT__PORTABLE_ARITHMETIC overflow/div fallbacks against C compiler builtins. */
 
 #define VELA__RT__PORTABLE_ARITHMETIC
 #include "vela_rt.h"
@@ -18,7 +12,6 @@ static void check(bool ok, const char* what, int64_t a, int64_t b) {
     }
 }
 
-/* Values near every edge of multiplication and addition. */
 static const int64_t edges[] = {
     INT64_MIN, INT64_MIN + 1, INT64_MIN + 2, INT64_MIN / 2 - 1, INT64_MIN / 2, INT64_MIN / 2 + 1,
     -4294967297, -4294967296, -4294967295, -3037000500, -3037000499, -65536, -1000, -3, -2, -1,
@@ -42,7 +35,6 @@ int main(void) {
         }
     }
 #endif
-    /* Operations that fit give their ordinary results. */
     check(vela__rt__add(INT64_MAX - 1, 1, "") == INT64_MAX, "add", INT64_MAX - 1, 1);
     check(vela__rt__sub(INT64_MIN + 1, 1, "") == INT64_MIN, "sub", INT64_MIN + 1, 1);
     check(vela__rt__mul(-3037000499, 3037000499, "") == -9223372030926249001, "mul", -3037000499, 3037000499);

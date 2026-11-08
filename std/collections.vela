@@ -1,67 +1,44 @@
-; std/collections: lazy iterators over a slice's items and eager tasks over
-; them. A chain of lazy steps, each giving the next item as it is asked, so
-; nothing is gathered until a consumer does; and eager tasks, written to be
-; read in a pipe, that go through all the items and make their slice at once.
-;
-; A slice starts a lazy chain with its chain members, `xs.map(…)`, in a file
-; that includes this module, and an iterator goes on with the same members,
-; `it.filter(…)`. Every step is a value of a shape that follows `Iterator<T>`,
-; holding the iterator it wraps and what it does with each item; `each x in it`
-; and the consumers `collect`, `fold`, `find`, `all`, `any` advance the
-; iterator they are called on, so they are `alters` and ask for a changeable
-; place or a value made where it is written, as in `xs.map(…).collect(r)`.
-;
-; Two values made one: what `zip` gives for each place.
+; std/collections: lazy `Iterator` adapters and eager slice tasks.
+
 shape Pair<A, B>
     first: A
     second: B
 fi
 
-; An item with its place: what `enumerate` gives, from 0.
 shape Indexed<T>
     index: int
     item: T
 fi
 
-; What an iterator is: one `next` after another, each the next item or none.
 pattern Iterator<T>
-    ; The next item, or none once the iterator is done. What every adapter and
-    ; consumer calls; it advances the iterator, so a call asks for a changeable
-    ; place.
+    ; Marked `alters` because advancing consumes the iterator; consumers also require a mutable place.
     alters next() -> maybe T
 
-    ; An iterator giving what `f` gives for each item of this one.
     map<R>(f: (T) -> R) -> MapIter<this, T, R>@this
         <- MapIter { inner: .this, f: f }
     fi
 
-    ; An iterator of the items `keep` holds for.
     filter(keep: (T) -> bool) -> FilterIter<this, T>@this
         <- FilterIter { inner: .this, keep: keep }
     fi
 
-    ; An iterator of at most the first `n` items.
     take(n: int) -> TakeIter<this, T>@this
         <- TakeIter<this, T> { inner: .this, left: n }
     fi
 
-    ; An iterator without the first `n` items.
     skip(n: int) -> SkipIter<this, T>@this
         <- SkipIter<this, T> { inner: .this, left: n }
     fi
 
-    ; An iterator of each item with its place, from 0.
     enumerate() -> EnumerateIter<this, T>@this
         <- EnumerateIter<this, T> { inner: .this, place: 0 }
     fi
 
-    ; An iterator of the items of this one and `other` at each place, as long
-    ; as the shorter; a slice given for `other` is read as its own iterator.
+    ; Slices passed for `other` auto-wrap into `SliceIter`.
     zip<U: Iterator<V>, V>(other: U) -> ZipIter<this, T, U, V>@this
         <- ZipIter<this, T, U, V> { first: .this, second: other }
     fi
 
-    ; Every item left, gathered into a slice in `r`.
     alters collect(r: region) -> [T]@r
         flex made = new [T]() at r
         endless
@@ -71,8 +48,6 @@ pattern Iterator<T>
         <- made
     fi
 
-    ; What `step` gives for `initial` and the first item, then for that and
-    ; the second, and so on: `it.fold(0, (sum, n) -> sum + n)` adds them up.
     alters fold<A>(initial: A, step: (A, T) -> A) -> A
         flex done = initial
         endless
@@ -82,7 +57,6 @@ pattern Iterator<T>
         <- done
     fi
 
-    ; The first item `test` holds for, or none.
     alters find(test: (T) -> bool) -> maybe T
         endless
             fixed item = .next() { <- none }
@@ -93,7 +67,6 @@ pattern Iterator<T>
         <- none
     fi
 
-    ; Whether `test` holds for every item left; true for none.
     alters all(test: (T) -> bool) -> bool
         endless
             fixed item = .next() { break }
@@ -104,7 +77,6 @@ pattern Iterator<T>
         <- true
     fi
 
-    ; Whether `test` holds for some item left; false for none.
     alters any(test: (T) -> bool) -> bool
         endless
             fixed item = .next() { break }
@@ -116,7 +88,6 @@ pattern Iterator<T>
     fi
 fi
 
-; What `map` wraps: an iterator and what it does with each item.
 shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
     inner: I
     f: (T) -> R
@@ -127,7 +98,6 @@ shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
     fi
 fi
 
-; What `filter` wraps: an iterator and what it keeps.
 shape FilterIter<I: Iterator<T>, T>::Iterator<T>
     inner: I
     keep: (T) -> bool
@@ -142,7 +112,6 @@ shape FilterIter<I: Iterator<T>, T>::Iterator<T>
     fi
 fi
 
-; What `take` wraps: an iterator and how many items it may still give.
 shape TakeIter<I: Iterator<T>, T>::Iterator<T>
     inner: I
     left: int
@@ -156,7 +125,6 @@ shape TakeIter<I: Iterator<T>, T>::Iterator<T>
     fi
 fi
 
-; What `skip` wraps: an iterator and how many of its items are passed over.
 shape SkipIter<I: Iterator<T>, T>::Iterator<T>
     inner: I
     left: int
@@ -170,7 +138,6 @@ shape SkipIter<I: Iterator<T>, T>::Iterator<T>
     fi
 fi
 
-; What `enumerate` wraps: an iterator and the place of the next item.
 shape EnumerateIter<I: Iterator<T>, T>::Iterator<Indexed<T>@this>
     inner: I
     place: int
@@ -183,7 +150,6 @@ shape EnumerateIter<I: Iterator<T>, T>::Iterator<Indexed<T>@this>
     fi
 fi
 
-; What `zip` wraps: the two iterators it draws from.
 shape ZipIter<A: Iterator<T>, T, B: Iterator<V>, V>::Iterator<Pair<T, V>@this>
     first: A
     second: B
@@ -195,8 +161,7 @@ shape ZipIter<A: Iterator<T>, T, B: Iterator<V>, V>::Iterator<Pair<T, V>@this>
     fi
 fi
 
-; A slice read an item at a time, from `place` on: the iterator a slice's
-; chain members make, `xs.map(…)` as `SliceIter { items: xs, place: 0 }.map(…)`.
+; Backing iterator synthesized by the compiler for slice adapter chains.
 shape SliceIter<T>::Iterator<T>
     items: [T]
     place: int
@@ -211,15 +176,6 @@ shape SliceIter<T>::Iterator<T>
     fi
 fi
 
-; Eager tasks over a slice's items, written to be read in a pipe,
-; `nums |> filter(n -> n > 2) at r |> map(n -> n * 10) at r`. Each takes the
-; slice first, then what it does with an item, then the region a new slice
-; goes in, last, so `at r` gives it. A program brings them in with
-; `include std/collections (map, filter)`, or names `collections.map(…)` after
-; `include std/collections`. Every step goes through all the items and makes
-; its slice at once; `take` and `skip` make none, as they are views.
-
-; A new slice in `r` of what `f` gives for each item, in order.
 task map<T, R>(xs: [T]@a, f: (T) -> R, r: region) -> [R]@r
     flex made = new [R]() at r
     each x in xs
@@ -228,7 +184,6 @@ task map<T, R>(xs: [T]@a, f: (T) -> R, r: region) -> [R]@r
     <- made
 fi
 
-; A new slice in `r` of the items `keep` holds for, in order.
 task filter<T>(xs: [T]@a, keep: (T) -> bool, r: region) -> [T]@r
     flex made = new [T]() at r
     each x in xs
@@ -239,8 +194,6 @@ task filter<T>(xs: [T]@a, keep: (T) -> bool, r: region) -> [T]@r
     <- made
 fi
 
-; `initial`, then what `step` gives for it and the first item, then for that
-; and the second, and so on: `fold(xs, 0, (sum, n) -> sum + n)` adds them up.
 task fold<T, A>(xs: [T]@a, initial: A, step: (A, T) -> A) -> A
     flex done = initial
     each x in xs
@@ -249,8 +202,6 @@ task fold<T, A>(xs: [T]@a, initial: A, step: (A, T) -> A) -> A
     <- done
 fi
 
-; A new slice in `r` of pairs, an item of `xs` with the item of `ys` at the
-; same place, as long as the shorter of the two.
 task zip<A: frozen, B: frozen>(xs: [A]@a, ys: [B]@b, r: region) -> [(A, B)]@r
     flex made = new [(A, B)]() at r
     loop flex i = 0 || i < xs.len and i < ys.len || i++
@@ -259,8 +210,6 @@ task zip<A: frozen, B: frozen>(xs: [A]@a, ys: [B]@b, r: region) -> [(A, B)]@r
     <- made
 fi
 
-; A new slice in `r` of each item with its place, from 0: `(0, first)`,
-; `(1, second)`, and so on.
 task enumerate<T: frozen>(xs: [T]@a, r: region) -> [(int, T)]@r
     flex made = new [(int, T)]() at r
     flex i = 0
@@ -271,19 +220,16 @@ task enumerate<T: frozen>(xs: [T]@a, r: region) -> [(int, T)]@r
     <- made
 fi
 
-; The first `n` items, a view of the same slice: all of them when it has
-; fewer, none when `n` is below 1.
+; Zero-copy view; clamps out-of-range `n`.
 task take<T>(xs: [T]@a, n: int) -> [T]@a
     <- xs[0..within(n, xs.len)]
 fi
 
-; The items after the first `n`, a view of the same slice: none when it has
-; `n` or fewer, all of them when `n` is below 1.
+; Zero-copy view; clamps out-of-range `n`.
 task skip<T>(xs: [T]@a, n: int) -> [T]@a
     <- xs[within(n, xs.len)..xs.len]
 fi
 
-; The first item `test` holds for, or none.
 task find<T>(xs: [T]@a, test: (T) -> bool) -> maybe T
     each x in xs
         when test(x)
@@ -293,7 +239,6 @@ task find<T>(xs: [T]@a, test: (T) -> bool) -> maybe T
     <- none
 fi
 
-; Whether `test` holds for every item; true for no items.
 task all<T>(xs: [T]@a, test: (T) -> bool) -> bool
     each x in xs
         when not test(x)
@@ -303,7 +248,6 @@ task all<T>(xs: [T]@a, test: (T) -> bool) -> bool
     <- true
 fi
 
-; Whether `test` holds for some item; false for no items.
 task any<T>(xs: [T]@a, test: (T) -> bool) -> bool
     each x in xs
         when test(x)
@@ -313,7 +257,6 @@ task any<T>(xs: [T]@a, test: (T) -> bool) -> bool
     <- false
 fi
 
-; `n` brought within 0 to `count`.
 priv task within(n: int, count: int) -> int
     when n < 0
         <- 0

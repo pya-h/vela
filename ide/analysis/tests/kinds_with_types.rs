@@ -1,8 +1,3 @@
-//! Kinds that take types, `kind Option<T>`: the types they take, the values
-//! of the kinds made for them, named as the program writes them, and the
-//! variants given their types, whether or not the file checks.
-
-// A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
 use vela_analysis::{Analysis, LineIndex, SymbolKind, TokenClass};
@@ -40,8 +35,6 @@ task main()
 fi
 ";
 
-/// The program as it checks, as it parses but doesn't check, and as it
-/// doesn't parse.
 const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
 
 fn program(when: &str) -> String {
@@ -113,7 +106,6 @@ fn a_variant_whose_types_nothing_tells_is_reported() {
     assert!(diagnostic.message.starts_with("cannot infer the type of 'lost'"), "{}", diagnostic.message);
 }
 
-/// The labels offered at `@@`.
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").expect("a @@ marker");
     let source = marked.replacen("@@", "", 1);
