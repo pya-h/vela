@@ -32,7 +32,6 @@ pub use language::{BLOCK_CLOSER, BLOCK_OPENERS, BRANCH_KEYWORDS, Language, langu
 pub use position::LineIndex;
 pub use scan::{SymbolKind, TokenClass};
 
-/// A highlighted piece of source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Token {
     pub from: usize,
@@ -48,7 +47,6 @@ pub enum Severity {
     Warning,
 }
 
-/// A problem the compiler reports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Diagnostic {
     pub from: usize,
@@ -115,15 +113,28 @@ impl Analysis {
     /// other files are in `sources`, by path. A file it includes that isn't there is
     /// reported by `missing_modules`, for the editor to fetch.
     pub fn with_modules(source: &str, path: &str, sources: &HashMap<String, String>) -> Self {
-        Analysis::of_program(source.to_string(), path.to_string(), Arc::new(sources.clone()))
+        Analysis::of_program(
+            source.to_string(),
+            path.to_string(),
+            Arc::new(sources.clone()),
+        )
     }
 
     /// `with_modules`, sharing `sources` with other analyses of the program.
     pub fn of_program(source: String, path: String, sources: Arc<HashMap<String, String>>) -> Self {
-        let context = types::Context { path: &path, sources: &sources };
+        let context = types::Context {
+            path: &path,
+            sources: &sources,
+        };
         let checked = types::Checked::new(&source, context);
         let scan = scan::scan(&source, &checked.field_accesses, context);
-        Analysis { index: LineIndex::owned(source), path, sources, scan, checked }
+        Analysis {
+            index: LineIndex::owned(source),
+            path,
+            sources,
+            scan,
+            checked,
+        }
     }
 
     /// Whether this is the analysis of `source` at `path`, among `sources`:
@@ -137,7 +148,10 @@ impl Analysis {
     }
 
     fn context(&self) -> types::Context<'_> {
-        types::Context { path: &self.path, sources: &self.sources }
+        types::Context {
+            path: &self.path,
+            sources: &self.sources,
+        }
     }
 
     /// The paths of the files the program includes, directly or through other
@@ -151,7 +165,15 @@ impl Analysis {
     pub fn tokens(&self) -> Vec<Token> {
         // The tokens are in order, so one cursor converts them all in a pass.
         let mut cursor = self.index.cursor();
-        self.scan.tokens.iter().map(|t| Token { from: cursor.utf16_of(t.range.start), to: cursor.utf16_of(t.range.end), class: t.class }).collect()
+        self.scan
+            .tokens
+            .iter()
+            .map(|t| Token {
+                from: cursor.utf16_of(t.range.start),
+                to: cursor.utf16_of(t.range.end),
+                class: t.class,
+            })
+            .collect()
     }
 
     /// The compiler's diagnostics: every mistake it found, in source order. The
@@ -163,7 +185,11 @@ impl Analysis {
     /// module's warnings are its own, shown where it is open, while its
     /// mistakes stop this file's program too, so they are shown here.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        let errors = self.checked.errors.iter().map(|error| self.diagnostic(error, Severity::Error));
+        let errors = self
+            .checked
+            .errors
+            .iter()
+            .map(|error| self.diagnostic(error, Severity::Error));
         let warnings = self
             .checked
             .warnings
@@ -194,7 +220,13 @@ impl Analysis {
         let span = SourceFile::in_main_file(files, found);
         let message = match files.get(found.file) {
             Some(file) if found.file > 0 => {
-                format!("{}:{}:{}: {}", types::slashed(&file.path), found.line, found.col, error.message)
+                format!(
+                    "{}:{}:{}: {}",
+                    types::slashed(&file.path),
+                    found.line,
+                    found.col,
+                    error.message
+                )
             }
             _ => error.message.clone(),
         };
@@ -202,19 +234,31 @@ impl Analysis {
         let token = self.scan.lexed.iter().find(|t| {
             t.range.start == start
                 && t.range.end > start
-                && !matches!(t.kind, LexKind::Token(LexedToken::Newline) | LexKind::Token(LexedToken::Eof))
+                && !matches!(
+                    t.kind,
+                    LexKind::Token(LexedToken::Newline) | LexKind::Token(LexedToken::Eof)
+                )
         });
         // An error from another file underlines the whole module path of the `include`.
         let path_end = (found.file > 0).then(|| {
             let lexed = &self.scan.lexed;
             let first = lexed.iter().position(|t| t.range.start == start)?;
-            let path = lexed.get(first..)?.iter().take_while(|t| matches!(t.kind, LexKind::Token(LexedToken::Ident(_) | LexedToken::Slash | LexedToken::Range)));
+            let path = lexed.get(first..)?.iter().take_while(|t| {
+                matches!(
+                    t.kind,
+                    LexKind::Token(LexedToken::Ident(_) | LexedToken::Slash | LexedToken::Range)
+                )
+            });
             path.last().map(|t| t.range.end)
         });
         let end = match token {
             Some(_) if path_end.flatten().is_some() => path_end.flatten().unwrap_or(start),
             Some(token) => token.range.end,
-            None => match self.source().get(start..).and_then(|rest| rest.chars().next()) {
+            None => match self
+                .source()
+                .get(start..)
+                .and_then(|rest| rest.chars().next())
+            {
                 Some(c) if c != '\n' && c != '\r' => start + c.len_utf8(),
                 _ => start,
             },
@@ -242,15 +286,30 @@ impl Analysis {
         symbols
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Alias | SymbolKind::Pattern | SymbolKind::Macro))
+            .filter(|(_, s)| {
+                s.module.is_none()
+                    && matches!(
+                        s.kind,
+                        SymbolKind::Task
+                            | SymbolKind::Shape
+                            | SymbolKind::Kind
+                            | SymbolKind::Alias
+                            | SymbolKind::Pattern
+                            | SymbolKind::Macro
+                    )
+            })
             .map(|(id, _)| self.outline_item(id, &children))
             .collect()
     }
 
     fn outline_item(&self, id: usize, children: &[Vec<usize>]) -> OutlineItem {
         let symbol = self.scan.symbols.get(id);
-        let range = symbol.map(|s| self.index.utf16_range(&s.range)).unwrap_or_default();
-        let name = symbol.map(|s| self.index.utf16_range(&s.name_range)).unwrap_or_default();
+        let range = symbol
+            .map(|s| self.index.utf16_range(&s.range))
+            .unwrap_or_default();
+        let name = symbol
+            .map(|s| self.index.utf16_range(&s.name_range))
+            .unwrap_or_default();
         OutlineItem {
             name: symbol.map(|s| s.name.clone()).unwrap_or_default(),
             kind: symbol.map_or(SymbolKind::Task, |s| s.kind),
@@ -259,7 +318,12 @@ impl Analysis {
             to: range.end,
             name_from: name.start,
             name_to: name.end,
-            children: children.get(id).into_iter().flatten().map(|&child| self.outline_item(child, children)).collect(),
+            children: children
+                .get(id)
+                .into_iter()
+                .flatten()
+                .map(|&child| self.outline_item(child, children))
+                .collect(),
         }
     }
 
@@ -274,15 +338,29 @@ impl Analysis {
             .iter()
             .filter(|t| t.range.start <= byte && byte < t.range.end)
             .find_map(|t| knowledge.symbol_of(t))
-            .or_else(|| tokens.iter().filter(|t| t.range.end == byte).find_map(|t| knowledge.symbol_of(t)))?;
+            .or_else(|| {
+                tokens
+                    .iter()
+                    .filter(|t| t.range.end == byte)
+                    .find_map(|t| knowledge.symbol_of(t))
+            })?;
         let symbol = self.scan.symbols.get(symbol)?;
         // A module's name leads to its file.
         if symbol.kind == SymbolKind::Module {
-            let module = self.scan.modules.iter().find(|m| self.scan.symbols.get(m.symbol).is_some_and(|s| s.name_range == symbol.name_range))?;
+            let module = self.scan.modules.iter().find(|m| {
+                self.scan
+                    .symbols
+                    .get(m.symbol)
+                    .is_some_and(|s| s.name_range == symbol.name_range)
+            })?;
             if module.library {
                 return None;
             }
-            return module.source.as_ref().map(|_| Location { from: 0, to: 0, path: Some(module.path.clone()) });
+            return module.source.as_ref().map(|_| Location {
+                from: 0,
+                to: 0,
+                path: Some(module.path.clone()),
+            });
         }
         match symbol.module.and_then(|m| self.scan.modules.get(m)) {
             // Vela's library is no file the editor can open.
@@ -290,11 +368,19 @@ impl Analysis {
             Some(module) => {
                 let source = module.source.as_deref()?;
                 let range = LineIndex::new(source).utf16_range(&symbol.name_range);
-                Some(Location { from: range.start, to: range.end, path: Some(module.path.clone()) })
+                Some(Location {
+                    from: range.start,
+                    to: range.end,
+                    path: Some(module.path.clone()),
+                })
             }
             None => {
                 let range = self.index.utf16_range(&symbol.name_range);
-                Some(Location { from: range.start, to: range.end, path: None })
+                Some(Location {
+                    from: range.start,
+                    to: range.end,
+                    path: None,
+                })
             }
         }
     }
@@ -308,11 +394,26 @@ impl Analysis {
         // not similar. They are completed as if the two stood apart; nothing
         // offered reaches past the cursor, so the ranges stay the file's.
         if byte > 0 && self.source().get(byte - 1..byte + 1) == Some("<>") {
-            let apart = format!("{} {}", self.source().get(..byte).unwrap_or_default(), self.source().get(byte..).unwrap_or_default());
-            return Analysis::of_program(apart, self.path.clone(), Arc::clone(&self.sources)).complete(offset);
+            let apart = format!(
+                "{} {}",
+                self.source().get(..byte).unwrap_or_default(),
+                self.source().get(byte..).unwrap_or_default()
+            );
+            return Analysis::of_program(apart, self.path.clone(), Arc::clone(&self.sources))
+                .complete(offset);
         }
-        let (items, from, to) = complete::complete(self.source(), &self.scan, &self.checked, self.context(), byte);
-        Completions { from: self.index.utf16_of(from), to: self.index.utf16_of(to), items }
+        let (items, from, to) = complete::complete(
+            self.source(),
+            &self.scan,
+            &self.checked,
+            self.context(),
+            byte,
+        );
+        Completions {
+            from: self.index.utf16_of(from),
+            to: self.index.utf16_of(to),
+            items,
+        }
     }
 
     /// A description of the name at `offset`: its declaration, type, or
@@ -321,6 +422,11 @@ impl Analysis {
         let knowledge = infer::Knowledge::new(self.source(), &self.scan, &self.checked);
         let ((code, doc), range) = hover::hover(&knowledge, self.index.byte_of_utf16(offset))?;
         let range = self.index.utf16_range(&range);
-        Some(Hover { from: range.start, to: range.end, code, doc })
+        Some(Hover {
+            from: range.start,
+            to: range.end,
+            code,
+            doc,
+        })
     }
 }

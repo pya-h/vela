@@ -1,0 +1,11 @@
+; error: 7:26: an 'each' over an iterator advances it: it gives no loop value and its end is a break, so a 'finally' never runs; gather what it gives with 'it.collect(r)', or use the iterator's other consumers
+include std/collections
+
+task main()
+    region r
+    flex nums: [int]@r = new [int]([1, 2, 3]) at r
+    fixed doubled = each n in nums.take(2)
+        n * 2
+    fi
+    show(doubled)
+fi

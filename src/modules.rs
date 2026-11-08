@@ -106,8 +106,6 @@ pub struct IncludeScope {
 }
 
 impl ModuleScope {
-    /// The name that `name`, written unqualified in this module, stands for, if
-    /// it is one brought in with `include`.
     pub fn imported(&self, name: &str) -> Option<&str> {
         self.imports
             .iter()
@@ -115,7 +113,6 @@ impl ModuleScope {
             .map(|(_, full, _)| full.as_str())
     }
 
-    /// The module this one includes under the name `name`.
     pub fn included(&self, name: &str) -> Option<&IncludeScope> {
         self.includes
             .iter()
@@ -136,7 +133,6 @@ pub struct Spelling {
 }
 
 impl Spelling {
-    /// How the file writes the program's name `full`.
     pub fn name(&self, full: &str) -> String {
         self.names
             .get(full)
@@ -144,7 +140,6 @@ impl Spelling {
             .unwrap_or_else(|| full.to_string())
     }
 
-    /// `ty` with its shape and kind names as the file writes them.
     pub fn ty(&self, ty: &Type) -> Type {
         ty.map_names(&|name| self.name(name))
     }
@@ -291,7 +286,6 @@ impl State {
         }
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
         let variants = variants_of_kinds(&self.modules);
-        // Every name in the program, by the identity of its module.
         let mut by_module: HashMap<&str, Vec<&str>> = HashMap::new();
         for entry in tables.iter().flat_map(HashMap::values) {
             if let Some((id, _)) = entry.full.rsplit_once(MODULE_SEPARATOR) {
@@ -1521,7 +1515,6 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
                     }
                     let mut copy = method.clone();
                     copy.name = full;
-                    // The follower's types, then the method's own.
                     copy.types = types
                         .iter()
                         .cloned()
@@ -2183,7 +2176,6 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// `written`, at `at`, a kind kind `kind` imitates, as the program names it.
     fn imitated_kind(&self, written: &Type, at: Span, kind: &str) -> Result<Type> {
         let example = format!("as in 'kind {}::Other'", kind);
         let (name, region) = match written {
@@ -2527,7 +2519,6 @@ impl Resolver<'_> {
         }
     }
 
-    /// `member` of the module this file names `module_name`.
     fn member(
         &self,
         module_name: &str,
@@ -2611,7 +2602,6 @@ impl Resolver<'_> {
         Ok(None)
     }
 
-    /// `name` rewritten, when it stands for a declaration of one of the kinds `whats`.
     fn rename(&self, name: &mut String, at: Span, whats: &[What]) -> Result<()> {
         if let Some(entry) = self.lookup(name, at, whats.contains(&What::Task))?
             && (whats.contains(&entry.what) || name.contains(MODULE_SEPARATOR))
@@ -2621,7 +2611,6 @@ impl Resolver<'_> {
         Ok(())
     }
 
-    /// Each part of a condition joined with `and`.
     fn condition(&self, cond: &mut Condition) -> Result<()> {
         let mut part = Some(cond);
         while let Some(current) = part {

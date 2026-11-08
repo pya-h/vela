@@ -25,7 +25,6 @@ impl<'a> LineIndex<'a> {
         LineIndex::of(Cow::Borrowed(source))
     }
 
-    /// The text it indexes.
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -53,7 +52,12 @@ impl<'a> LineIndex<'a> {
                 ascii.push(true);
             }
         }
-        LineIndex { source, starts, starts_utf16, ascii }
+        LineIndex {
+            source,
+            starts,
+            starts_utf16,
+            ascii,
+        }
     }
 
     /// The byte offset of a compiler position. A column past the end of its
@@ -64,7 +68,11 @@ impl<'a> LineIndex<'a> {
             return self.source.len();
         };
         // The compiler's columns start after a byte order mark.
-        let start = if start == 0 && self.source.starts_with('\u{feff}') { '\u{feff}'.len_utf8() } else { start };
+        let start = if start == 0 && self.source.starts_with('\u{feff}') {
+            '\u{feff}'.len_utf8()
+        } else {
+            start
+        };
         let line = self.source.get(start..).unwrap_or_default();
         let mut offset = start;
         for c in line.chars().take(span.col.saturating_sub(1)) {
@@ -80,8 +88,13 @@ impl<'a> LineIndex<'a> {
     /// rounded down to a character boundary.
     pub fn utf16_of(&self, byte: usize) -> usize {
         let byte = self.floor_char_boundary(byte);
-        let line = self.starts.partition_point(|&start| start <= byte).saturating_sub(1);
-        let (Some(&start), Some(&start_utf16)) = (self.starts.get(line), self.starts_utf16.get(line)) else {
+        let line = self
+            .starts
+            .partition_point(|&start| start <= byte)
+            .saturating_sub(1);
+        let (Some(&start), Some(&start_utf16)) =
+            (self.starts.get(line), self.starts_utf16.get(line))
+        else {
             return 0;
         };
         if self.ascii.get(line) == Some(&true) {
@@ -95,12 +108,21 @@ impl<'a> LineIndex<'a> {
     /// in the middle of a character (between the two halves of a surrogate
     /// pair) moves to the start of that character.
     pub fn byte_of_utf16(&self, utf16: usize) -> usize {
-        let line = self.starts_utf16.partition_point(|&start| start <= utf16).saturating_sub(1);
-        let (Some(&start), Some(&start_utf16)) = (self.starts.get(line), self.starts_utf16.get(line)) else {
+        let line = self
+            .starts_utf16
+            .partition_point(|&start| start <= utf16)
+            .saturating_sub(1);
+        let (Some(&start), Some(&start_utf16)) =
+            (self.starts.get(line), self.starts_utf16.get(line))
+        else {
             return 0;
         };
         if self.ascii.get(line) == Some(&true) {
-            let line_end = self.starts.get(line + 1).copied().unwrap_or(self.source.len());
+            let line_end = self
+                .starts
+                .get(line + 1)
+                .copied()
+                .unwrap_or(self.source.len());
             return (start + utf16.saturating_sub(start_utf16)).min(line_end);
         }
         let mut offset = start;
@@ -123,7 +145,11 @@ impl<'a> LineIndex<'a> {
     /// A converter for byte offsets given in increasing order, which counts
     /// each character once instead of from its line's start each time.
     pub(crate) fn cursor(&self) -> Utf16Cursor<'_, 'a> {
-        Utf16Cursor { index: self, byte: 0, utf16: 0 }
+        Utf16Cursor {
+            index: self,
+            byte: 0,
+            utf16: 0,
+        }
     }
 
     fn floor_char_boundary(&self, byte: usize) -> usize {
@@ -152,7 +178,11 @@ impl Utf16Cursor<'_, '_> {
             self.utf16 = self.index.utf16_of(byte);
         } else {
             let text = self.index.source.get(self.byte..byte).unwrap_or_default();
-            self.utf16 += if text.is_ascii() { text.len() } else { text.chars().map(char::len_utf16).sum() };
+            self.utf16 += if text.is_ascii() {
+                text.len()
+            } else {
+                text.chars().map(char::len_utf16).sum()
+            };
         }
         self.byte = byte;
         self.utf16
@@ -161,7 +191,12 @@ impl Utf16Cursor<'_, '_> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic
+    )]
 
     use super::*;
 
@@ -213,7 +248,11 @@ mod tests {
         let source = "é𝄞x\n𝄞y ab\ncd é";
         let index = LineIndex::new(source);
         let mut cursor = index.cursor();
-        let offsets: Vec<usize> = source.char_indices().map(|(byte, _)| byte).chain([source.len(), source.len() + 3]).collect();
+        let offsets: Vec<usize> = source
+            .char_indices()
+            .map(|(byte, _)| byte)
+            .chain([source.len(), source.len() + 3])
+            .collect();
         for &byte in &offsets {
             assert_eq!(cursor.utf16_of(byte), index.utf16_of(byte), "at {}", byte);
         }

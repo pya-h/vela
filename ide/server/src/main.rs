@@ -1,6 +1,3 @@
-//! `vela-studio [WORKSPACE] [--port N] [--no-open]`: starts Vela Studio on
-//! 127.0.0.1 for the workspace folder and opens it in the browser.
-
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
@@ -20,8 +17,11 @@ fn main() -> ExitCode {
     let options = match parse_args(std::env::args().skip(1)) {
         Ok(Some(options)) => options,
         Ok(None) => {
-            println!("{}\n\nStarts Vela Studio for WORKSPACE (default: the current folder) on 127.0.0.1\n\
-                      and opens it in the browser. The port is random unless --port is given.", USAGE);
+            println!(
+                "{}\n\nStarts Vela Studio for WORKSPACE (default: the current folder) on 127.0.0.1\n\
+                      and opens it in the browser. The port is random unless --port is given.",
+                USAGE
+            );
             return ExitCode::SUCCESS;
         }
         Err(message) => {
@@ -29,7 +29,10 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
         Ok(runtime) => runtime,
         Err(error) => {
             eprintln!("error: cannot start: {}", error);
@@ -60,20 +63,30 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
         match arg.as_str() {
             // After `--`, an argument is the folder even if it starts with `-`.
             "--" if !only_folders => only_folders = true,
-            _ if only_folders && workspace.is_some() => return Err("only one workspace folder can be given".to_string()),
+            _ if only_folders && workspace.is_some() => {
+                return Err("only one workspace folder can be given".to_string());
+            }
             _ if only_folders => workspace = Some(PathBuf::from(arg)),
             "-h" | "--help" => return Ok(None),
             "--no-open" => open = false,
             "--port" => {
                 let value = args.next().ok_or("--port needs a number")?;
-                port = value.parse().map_err(|_| format!("'{}' is not a port number", value))?;
+                port = value
+                    .parse()
+                    .map_err(|_| format!("'{}' is not a port number", value))?;
             }
             _ if arg.starts_with('-') => return Err(format!("unknown option '{}'", arg)),
-            _ if workspace.is_some() => return Err("only one workspace folder can be given".to_string()),
+            _ if workspace.is_some() => {
+                return Err("only one workspace folder can be given".to_string());
+            }
             _ => workspace = Some(PathBuf::from(arg)),
         }
     }
-    Ok(Some(Options { workspace: workspace.unwrap_or_else(|| PathBuf::from(".")), port, open }))
+    Ok(Some(Options {
+        workspace: workspace.unwrap_or_else(|| PathBuf::from(".")),
+        port,
+        open,
+    }))
 }
 
 async fn run(options: Options) -> Result<(), String> {
@@ -84,11 +97,20 @@ async fn run(options: Options) -> Result<(), String> {
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let token = Token::generate().map_err(|e| e.to_string())?;
     let config = Config::new(options.workspace.clone(), port, token.clone());
-    let studio = Studio::new(config).map_err(|e| format!("cannot open workspace '{}': {}", options.workspace.display(), e))?;
+    let studio = Studio::new(config).map_err(|e| {
+        format!(
+            "cannot open workspace '{}': {}",
+            options.workspace.display(),
+            e
+        )
+    })?;
 
     // The token travels in the fragment, which browsers never send to servers.
     let url = format!("http://127.0.0.1:{}/#token={}", port, token.as_str());
-    println!("Vela Studio is running for {}", studio.workspace_root().display());
+    println!(
+        "Vela Studio is running for {}",
+        studio.workspace_root().display()
+    );
     println!("  {}", url);
     println!("Press Ctrl+C to stop.");
     // The browser opens a private page holding a one-time code, not the token
@@ -138,7 +160,13 @@ fn open_browser(url: &str) -> bool {
     } else {
         Command::new("xdg-open")
     };
-    match command.arg(url).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+    match command
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
         Ok(mut child) => {
             // Waited for, so it doesn't linger as a zombie while the server runs.
             std::thread::spawn(move || child.wait());
@@ -150,7 +178,12 @@ fn open_browser(url: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic
+    )]
 
     use super::*;
 
@@ -161,19 +194,39 @@ mod tests {
     #[test]
     fn arguments_choose_the_workspace_port_and_browser() {
         let defaults = parse(&[]).unwrap().unwrap();
-        assert_eq!((defaults.workspace, defaults.port, defaults.open), (PathBuf::from("."), 0, true));
-        let given = parse(&["examples", "--port", "4000", "--no-open"]).unwrap().unwrap();
-        assert_eq!((given.workspace, given.port, given.open), (PathBuf::from("examples"), 4000, false));
+        assert_eq!(
+            (defaults.workspace, defaults.port, defaults.open),
+            (PathBuf::from("."), 0, true)
+        );
+        let given = parse(&["examples", "--port", "4000", "--no-open"])
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (given.workspace, given.port, given.open),
+            (PathBuf::from("examples"), 4000, false)
+        );
         assert!(parse(&["--help"]).unwrap().is_none());
         let dashed = parse(&["--no-open", "--", "-folder"]).unwrap().unwrap();
-        assert_eq!((dashed.workspace, dashed.open), (PathBuf::from("-folder"), false));
+        assert_eq!(
+            (dashed.workspace, dashed.open),
+            (PathBuf::from("-folder"), false)
+        );
     }
 
     #[test]
     fn bad_arguments_are_reported() {
         assert_eq!(parse(&["--port"]).err().unwrap(), "--port needs a number");
-        assert_eq!(parse(&["--port", "99999"]).err().unwrap(), "'99999' is not a port number");
-        assert_eq!(parse(&["--host", "0.0.0.0"]).err().unwrap(), "unknown option '--host'");
-        assert_eq!(parse(&["a", "b"]).err().unwrap(), "only one workspace folder can be given");
+        assert_eq!(
+            parse(&["--port", "99999"]).err().unwrap(),
+            "'99999' is not a port number"
+        );
+        assert_eq!(
+            parse(&["--host", "0.0.0.0"]).err().unwrap(),
+            "unknown option '--host'"
+        );
+        assert_eq!(
+            parse(&["a", "b"]).err().unwrap(),
+            "only one workspace folder can be given"
+        );
     }
 }

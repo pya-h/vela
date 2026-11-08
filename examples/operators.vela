@@ -1,0 +1,39 @@
+; A tiny key exchange, arithmetic written as operators: Int512 follows
+; std/int512's Numeric pattern, so +, *, and % read as plus, times, and rem.
+; Two parties raise a shared base to secret exponents, modulo a public
+; number, and arrive at the same key without sending it.
+include std/int512 {Int512, int512, int512_parse}
+
+task mulmod(x: Int512, y: Int512, modulus: Int512) -> Int512
+    <- (x * y) % modulus
+fi
+
+; base to the exponent, one mulmod at a time (the exponents here are small ints).
+task powmod(base: Int512, exponent: int, modulus: Int512) -> Int512
+    flex result = int512(1)
+    each step in 0..exponent ; the counter is not read, the passes are what counts
+        result = mulmod(result, base, modulus)
+    fi
+    <- result
+fi
+
+task main()
+    region r
+    fixed modulus = int512_parse("1000000000000000000000000000057") { Int512.zero() }
+    fixed base = int512(7)
+
+    fixed alice_secret = 1201
+    fixed bob_secret = 733
+
+    ; Each sends the base raised to their secret; the exponents stay home.
+    fixed alice_sends = powmod(base, alice_secret, modulus)
+    fixed bob_sends = powmod(base, bob_secret, modulus)
+    show("alice sends ", alice_sends.str() at r)
+    show("bob sends   ", bob_sends.str() at r)
+
+    ; Each raises what they got to their own secret: both arrive at the key.
+    fixed alice_key = powmod(bob_sends, alice_secret, modulus)
+    fixed bob_key = powmod(alice_sends, bob_secret, modulus)
+    show("the key     ", alice_key.str() at r)
+    show("agreed: ", alice_key ~= bob_key)
+fi

@@ -17,9 +17,9 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tokio::sync::mpsc::error::TrySendError;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::error::TrySendError;
 
 use axum::body::Bytes;
 use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
@@ -48,9 +48,6 @@ pub enum SessionKind {
     Terminal,
 }
 
-/// How a session's process ended.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Exit {
     /// The exit code; 1 when killed by a signal, as the terminal library reports it.
     pub code: u32,
@@ -59,8 +56,6 @@ pub struct Exit {
     pub duration_ms: u64,
 }
 
-/// What a connected WebSocket receives.
-#[derive(Debug)]
 pub enum Event {
     Output(Bytes),
     Exit(Exit),
@@ -104,7 +99,12 @@ impl Session {
     }
 
     pub fn resize(&self, cols: u16, rows: u16) {
-        let size = PtySize { cols: cols.clamp(1, 1000), rows: rows.clamp(1, 1000), pixel_width: 0, pixel_height: 0 };
+        let size = PtySize {
+            cols: cols.clamp(1, 1000),
+            rows: rows.clamp(1, 1000),
+            pixel_width: 0,
+            pixel_height: 0,
+        };
         let _ = lock(&self.master).resize(size);
     }
 
@@ -143,7 +143,12 @@ enum Signal {
 
 #[cfg(unix)]
 fn signal(pid: Option<u32>, _killer: Box<dyn ChildKiller + Send + Sync>, which: Signal) {
-    let Some(pid) = pid.and_then(|pid| i32::try_from(pid).ok()).filter(|&pid| pid > 0) else { return };
+    let Some(pid) = pid
+        .and_then(|pid| i32::try_from(pid).ok())
+        .filter(|&pid| pid > 0)
+    else {
+        return;
+    };
     let number = match which {
         Signal::Hangup => libc::SIGHUP,
         Signal::Kill => libc::SIGKILL,
@@ -161,12 +166,25 @@ fn signal(pid: Option<u32>, _killer: Box<dyn ChildKiller + Send + Sync>, which: 
 /// lists each process's session.
 #[cfg(target_os = "linux")]
 fn hang_up_session(leader: u32) {
-    let Ok(entries) = std::fs::read_dir("/proc") else { return };
-    for pid in entries.flatten().filter_map(|entry| entry.file_name().to_str()?.parse::<i32>().ok()) {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return;
+    };
+    for pid in entries
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_str()?.parse::<i32>().ok())
+    {
         // `pid (name) state ppid pgrp session …`; the name may hold spaces and parentheses.
         let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
-        let fields: Vec<&str> = stat.rsplit_once(')').map_or("", |(_, rest)| rest).split_whitespace().collect();
-        if fields.get(3).and_then(|session| session.parse::<u32>().ok()) == Some(leader) {
+        let fields: Vec<&str> = stat
+            .rsplit_once(')')
+            .map_or("", |(_, rest)| rest)
+            .split_whitespace()
+            .collect();
+        if fields
+            .get(3)
+            .and_then(|session| session.parse::<u32>().ok())
+            == Some(leader)
+        {
             // SAFETY: `kill` has no memory-safety preconditions.
             unsafe {
                 libc::kill(pid, libc::SIGHUP);
@@ -184,10 +202,11 @@ fn signal(_pid: Option<u32>, mut killer: Box<dyn ChildKiller + Send + Sync>, _wh
 }
 
 fn lock<T: ?Sized>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// The open sessions.
 pub struct Sessions {
     open: Mutex<HashMap<String, Arc<Session>>>,
     /// The run session, if one is open: starting another run stops it. Held
@@ -221,10 +240,12 @@ impl Sessions {
     /// The sessions of `kind` whose process is still running. (One that has
     /// exited lingers until its page disconnects, but doesn't count.)
     pub fn count(&self, kind: SessionKind) -> usize {
-        lock(&self.open).values().filter(|session| session.kind == kind && session.is_alive()).count()
+        lock(&self.open)
+            .values()
+            .filter(|session| session.kind == kind && session.is_alive())
+            .count()
     }
 
-    /// Stops the program started by the latest run, if it is still running.
     pub fn stop_run(&self) {
         let previous = lock(&self.run).take();
         if let Some(session) = previous.and_then(|id| self.get(&id)) {
@@ -232,7 +253,6 @@ impl Sessions {
         }
     }
 
-    /// Starts `command` in a new terminal of `size`, returning the session id.
     /// `scratch` (a built program's folder) is removed when the session ends.
     pub fn spawn(
         self: &Arc<Self>,
@@ -245,7 +265,8 @@ impl Sessions {
             return Err(SessionError::Closing);
         }
         let _terminal_start = (kind == SessionKind::Terminal).then(|| lock(&self.terminal_start));
-        if kind == SessionKind::Terminal && self.count(SessionKind::Terminal) >= self.max_terminals {
+        if kind == SessionKind::Terminal && self.count(SessionKind::Terminal) >= self.max_terminals
+        {
             return Err(SessionError::TooManyTerminals);
         }
         // For a run, the lock is held until the new run is registered.
@@ -274,7 +295,6 @@ impl Sessions {
         started
     }
 
-    /// Sets up the helpers and the pump for a spawned process.
     fn start(
         self: &Arc<Self>,
         kind: SessionKind,
@@ -295,8 +315,12 @@ impl Sessions {
 
         let killer = child.clone_killer();
         let pid = child.process_id();
-        spawn_thread("vela-studio-pty-read", move || read_output(reader, output_tx))?;
-        spawn_thread("vela-studio-pty-write", move || write_input(writer, input_rx))?;
+        spawn_thread("vela-studio-pty-read", move || {
+            read_output(reader, output_tx)
+        })?;
+        spawn_thread("vela-studio-pty-write", move || {
+            write_input(writer, input_rx)
+        })?;
         let waiting = alive.clone();
         spawn_thread("vela-studio-wait", move || {
             let status = child.wait();
@@ -309,8 +333,16 @@ impl Sessions {
             }
             let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
             let exit = match status {
-                Ok(status) => Exit { code: status.exit_code(), signal: status.signal().map(str::to_string), duration_ms },
-                Err(_) => Exit { code: 1, signal: None, duration_ms },
+                Ok(status) => Exit {
+                    code: status.exit_code(),
+                    signal: status.signal().map(str::to_string),
+                    duration_ms,
+                },
+                Err(_) => Exit {
+                    code: 1,
+                    signal: None,
+                    duration_ms,
+                },
             };
             let _ = exit_tx.send(exit);
         })?;
@@ -325,13 +357,17 @@ impl Sessions {
             control: control_tx,
         });
         lock(&self.open).insert(id.clone(), session.clone());
-        let pump = Pump { sessions: self.clone(), id: id.clone(), session, idle_timeout: self.idle_timeout, _scratch: scratch };
+        let pump = Pump {
+            sessions: self.clone(),
+            id: id.clone(),
+            session,
+            idle_timeout: self.idle_timeout,
+            _scratch: scratch,
+        };
         tokio::spawn(pump.run(output_rx, exit_rx, control_rx));
         Ok(id)
     }
 
-    /// Ends every session, waiting briefly for their processes to exit and
-    /// their built programs to be removed (for server shutdown).
     pub async fn shutdown(&self) {
         self.closing.store(true, Ordering::SeqCst);
         let sessions: Vec<Arc<Session>> = lock(&self.open).values().cloned().collect();
@@ -387,7 +423,11 @@ fn read_output(mut reader: Box<dyn Read + Send>, output: mpsc::Sender<Vec<u8>>) 
 
 fn write_input(mut writer: Box<dyn Write + Send>, mut input: mpsc::Receiver<Vec<u8>>) {
     while let Some(bytes) = input.blocking_recv() {
-        if writer.write_all(&bytes).and_then(|()| writer.flush()).is_err() {
+        if writer
+            .write_all(&bytes)
+            .and_then(|()| writer.flush())
+            .is_err()
+        {
             return;
         }
     }
@@ -422,17 +462,17 @@ impl Pump {
         mut exit: oneshot::Receiver<Exit>,
         mut control: mpsc::UnboundedReceiver<Control>,
     ) {
-        let mut scrollback = Scrollback { bytes: VecDeque::new() };
+        let mut scrollback = Scrollback {
+            bytes: VecDeque::new(),
+        };
         let mut subscriber: Option<mpsc::Sender<Event>> = None;
         // An event the subscriber had no room for. While one waits, no more
         // output is read, which holds back the program; everything else goes on.
         let mut held: Option<Event> = None;
         let mut idle_since = Some(tokio::time::Instant::now());
         let mut output_done = false;
-        // The exit, once the process has ended, and when that was noticed.
         let mut exited: Option<(Exit, tokio::time::Instant)> = None;
         let mut reported = false;
-        // Whether the session ends as soon as the exit is reported.
         let mut ending = false;
 
         loop {
@@ -442,13 +482,21 @@ impl Pump {
                 && (output_done || at.elapsed() >= OUTPUT_GRACE)
             {
                 reported = true;
-                deliver(Event::Exit(info.clone()), &mut held, &mut subscriber, &mut idle_since);
+                deliver(
+                    Event::Exit(info.clone()),
+                    &mut held,
+                    &mut subscriber,
+                    &mut idle_since,
+                );
                 if ending {
                     break;
                 }
             }
             let idle_deadline = idle_since.map(|since| since + self.idle_timeout);
-            let grace_deadline = exited.as_ref().filter(|_| !reported).map(|(_, at)| *at + OUTPUT_GRACE);
+            let grace_deadline = exited
+                .as_ref()
+                .filter(|_| !reported)
+                .map(|(_, at)| *at + OUTPUT_GRACE);
             let watched = subscriber.clone();
             let waiting = held.is_some();
 
@@ -460,7 +508,6 @@ impl Pump {
                     }
                     None => output_done = true,
                 },
-                // Room for the held event.
                 permit = async { match &watched { Some(events) => events.reserve().await, None => std::future::pending().await } }, if waiting && watched.is_some() => match permit {
                     Ok(permit) => {
                         if let Some(event) = held.take() {
@@ -535,7 +582,9 @@ fn deliver(
     subscriber: &mut Option<mpsc::Sender<Event>>,
     idle_since: &mut Option<tokio::time::Instant>,
 ) {
-    let Some(events) = subscriber.as_ref() else { return };
+    let Some(events) = subscriber.as_ref() else {
+        return;
+    };
     match events.try_send(event) {
         Ok(()) => {}
         Err(TrySendError::Full(event)) => *held = Some(event),

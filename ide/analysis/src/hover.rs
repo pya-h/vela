@@ -8,7 +8,6 @@ use crate::infer::Knowledge;
 use crate::scan::{LOOP_NAME, Symbol, SymbolKind};
 use vela::ast::Mode;
 
-/// What to show for a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Hover {
     /// The range of the hovered name (UTF-16 offsets).
@@ -21,24 +20,69 @@ pub struct Hover {
 }
 
 const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
-    ("int", "A 64-bit signed integer. int(x) turns a value into one: a float becomes its whole part, toward zero (a float with none to give, such as nan, stops the program), and a bool becomes 1 or 0."),
-    ("float", "A 64-bit floating-point number. float(n) turns an int into one, which always works."),
+    (
+        "int",
+        "A 64-bit signed integer. int(x) turns a value into one: a float becomes its whole part, toward zero (a float with none to give, such as nan, stops the program), and a bool becomes 1 or 0.",
+    ),
+    (
+        "float",
+        "A 64-bit floating-point number. float(n) turns an int into one, which always works.",
+    ),
     ("bool", "true or false."),
-    ("char", "One byte, as C's char: the code of a character, 0 to 255, written 'a' (with the escapes text has, and '\\''). c + 1 and c - 1 move it and c - 'a' is how far apart two are, an int; leaving 0 to 255 stops the program. t[i] reads a byte of text as a char and t.at(i) the same as a maybe char, none out of range. char(n) turns a code into one, int(c) the other way."),
-    ("unit", "A whole number from 0 to 255 in one byte. A number written out becomes one where a unit is expected, and beside one (b + 1); arithmetic that leaves 0 to 255 stops the program. unit(x) turns an int, a float, or a bool into one, and stops the program when it doesn't fit; int(b) and float(b) always work."),
-    ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, a + b at r joins text into region r, and \"n = {n}\" at r is text holding values, each turned into text there (\\{ and \\} write braces). text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
+    (
+        "char",
+        "One byte, as C's char: the code of a character, 0 to 255, written 'a' (with the escapes text has, and '\\''). c + 1 and c - 1 move it and c - 'a' is how far apart two are, an int; leaving 0 to 255 stops the program. t[i] reads a byte of text as a char and t.at(i) the same as a maybe char, none out of range. char(n) turns a code into one, int(c) the other way.",
+    ),
+    (
+        "unit",
+        "A whole number from 0 to 255 in one byte. A number written out becomes one where a unit is expected, and beside one (b + 1); arithmetic that leaves 0 to 255 stops the program. unit(x) turns an int, a float, or a bool into one, and stops the program when it doesn't fit; int(b) and float(b) always work.",
+    ),
+    (
+        "text",
+        "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, a + b at r joins text into region r, and \"n = {n}\" at r is text holding values, each turned into text there (\\{ and \\} write braces). text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is.",
+    ),
     ("nothing", "The return type of a task that sends no value."),
     ("int64", "Another name for int, a 64-bit signed integer."),
-    ("int32", "A 32-bit signed integer, -2147483648 to 2147483647. A number written out becomes one where an int32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
-    ("int16", "A 16-bit signed integer, -32768 to 32767. A number written out becomes one where an int16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
-    ("int8", "An 8-bit signed integer, -128 to 127. A number written out becomes one where an int8 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int8(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
-    ("uint", "Another name for uint64, a 64-bit unsigned integer."),
-    ("uint64", "A 64-bit unsigned integer, 0 to 18446744073709551615. A number written out becomes one where a uint64 is expected, and beside one (n + 1); arithmetic leaving its range stops the program, and so does int(n) of one past the largest int."),
-    ("uint32", "A 32-bit unsigned integer, 0 to 4294967295. A number written out becomes one where a uint32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
-    ("uint16", "A 16-bit unsigned integer, 0 to 65535. A number written out becomes one where a uint16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works."),
-    ("uint8", "Another name for unit, a whole number from 0 to 255 in one byte."),
-    ("float64", "Another name for float, a 64-bit floating-point number."),
-    ("float32", "A 32-bit floating-point number. A float written out becomes one where a float32 is expected, and beside one (f * 2.5). float32(x) turns a number into one, and float(f) turns one into a float."),
+    (
+        "int32",
+        "A 32-bit signed integer, -2147483648 to 2147483647. A number written out becomes one where an int32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works.",
+    ),
+    (
+        "int16",
+        "A 16-bit signed integer, -32768 to 32767. A number written out becomes one where an int16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works.",
+    ),
+    (
+        "int8",
+        "An 8-bit signed integer, -128 to 127. A number written out becomes one where an int8 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. int8(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works.",
+    ),
+    (
+        "uint",
+        "Another name for uint64, a 64-bit unsigned integer.",
+    ),
+    (
+        "uint64",
+        "A 64-bit unsigned integer, 0 to 18446744073709551615. A number written out becomes one where a uint64 is expected, and beside one (n + 1); arithmetic leaving its range stops the program, and so does int(n) of one past the largest int.",
+    ),
+    (
+        "uint32",
+        "A 32-bit unsigned integer, 0 to 4294967295. A number written out becomes one where a uint32 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint32(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works.",
+    ),
+    (
+        "uint16",
+        "A 16-bit unsigned integer, 0 to 65535. A number written out becomes one where a uint16 is expected, and beside one (n + 1); arithmetic leaving its range stops the program. uint16(x) turns a number into one, and stops the program when it doesn't fit; int(n) always works.",
+    ),
+    (
+        "uint8",
+        "Another name for unit, a whole number from 0 to 255 in one byte.",
+    ),
+    (
+        "float64",
+        "Another name for float, a 64-bit floating-point number.",
+    ),
+    (
+        "float32",
+        "A 32-bit floating-point number. A float written out becomes one where a float32 is expected, and beside one (f * 2.5). float32(x) turns a number into one, and float(f) turns one into a float.",
+    ),
 ];
 
 /// What `int("42")` sends when the text is no number: the builtin kind, which a
@@ -49,19 +93,22 @@ fn builtin_kind_doc(name: &str) -> Option<(&'static str, &'static str)> {
             "kind ParseError\n    NotANumber\n    TooLarge\nfi",
             "The error int(t) and float(t) send when the text is no number they can read. A program reads it with match, is, or a plan B, passes on one it was given, and may send one itself (fail ParseError.TooLarge). No file declares it, and no declaration may take its name or its variants.",
         )),
-        vela::ast::NOT_A_NUMBER => {
-            Some(("NotANumber", "A variant of ParseError: the text is no number at all, such as \"4x2\", \"\", or \" 4\" (a number in text carries no spaces, no +, no _, and no exponent)."))
-        }
-        vela::ast::TOO_LARGE => {
-            Some(("TooLarge", "A variant of ParseError: the text is a number, but not one the type holds, such as \"9223372036854775808\" read as an int."))
-        }
+        vela::ast::NOT_A_NUMBER => Some((
+            "NotANumber",
+            "A variant of ParseError: the text is no number at all, such as \"4x2\", \"\", or \" 4\" (a number in text carries no spaces, no +, no _, and no exponent).",
+        )),
+        vela::ast::TOO_LARGE => Some((
+            "TooLarge",
+            "A variant of ParseError: the text is a number, but not one the type holds, such as \"9223372036854775808\" read as an int.",
+        )),
         vela::ast::INPUT_ERROR => Some((
             "kind InputError\n    Ended\n    NoNumber(why: ParseError)\nfi",
             "The error scan(prompt, int) and scan(prompt, float) send when there is no number to read: the input ended, or the line was no number, which holds why. A program reads it with match, is, or a plan B, passes on one it was given, and may send one itself (fail Ended). No file declares it, and no declaration may take its name or its variants.",
         )),
-        vela::ast::ENDED => {
-            Some(("Ended", "A variant of InputError: the input has ended, so there was no line to read a number from. A loop reading numbers stops on it."))
-        }
+        vela::ast::ENDED => Some((
+            "Ended",
+            "A variant of InputError: the input has ended, so there was no line to read a number from. A loop reading numbers stops on it.",
+        )),
         vela::ast::NO_NUMBER => Some((
             "NoNumber(why: ParseError)",
             "A variant of InputError: a line was read, but it was no number. It holds the ParseError reading the line gave, read with a match of its own: case NoNumber why.",
@@ -82,11 +129,31 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "new T(value) at r",
         "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v#n], an array, or a slice; made of an array or a slice, it is a complete copy, as copy() is, sharing nothing at any depth, from any region. An empty value needs no ( ): new [T] at r and new [K: V] at r are empty, and new Point at r is a Point of the values its fields fall back on.",
     ),
-    ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at'). It also names where new text goes: a + b at r joins text, as (a + b)@r does, \"n = {n}\" at r holds values, and scan(prompt) at r reads a line."),
-    ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),
-    ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
-    ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
-    ("is", "value is case form", "The condition holds when the case form matches, as {v}, none, or a variant; its names are visible in the block."),
+    (
+        "at",
+        "new T(value) at r",
+        "Allocates in region r, the same as new@r T(value) ('@' is 'at'). It also names where new text goes: a + b at r joins text, as (a + b)@r does, \"n = {n}\" at r holds values, and scan(prompt) at r reads a line.",
+    ),
+    (
+        "in",
+        "each i in a..b",
+        "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice.",
+    ),
+    (
+        "maybe",
+        "maybe T",
+        "A T, or none. Read it with match, is, or a plan B: x { fallback }.",
+    ),
+    (
+        "none",
+        "none",
+        "The empty maybe. A pointer can't be none; use maybe ^T.",
+    ),
+    (
+        "is",
+        "value is case form",
+        "The condition holds when the case form matches, as {v}, none, or a variant; its names are visible in the block.",
+    ),
     (
         "$",
         "$d, $d(values), $d?, or $(w1, w2(values), .m)",
@@ -97,9 +164,21 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "P..., args: P..., (P...) -> R, f(args...)",
         "After a type a task takes, a group of types: any number, any mix. args: P... takes the values a call gives after the others, (P...) -> R is a task taking them, and f(args...) gives them on, whole. Each use fills the group in with the types of its values, as it fills in a type, so it costs nothing when the program runs. After the values of a slice, as in [1, 2, ...] at r, it makes a slice of them.",
     ),
-    ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A case form names a failure with 'failure' instead."),
-    ("failure", "failure e", "Names the failure a case form matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
-    ("_", "_", "Matches anything left, or drops a value without naming it."),
+    (
+        "fail",
+        "fail error",
+        "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A case form names a failure with 'failure' instead.",
+    ),
+    (
+        "failure",
+        "failure e",
+        "Names the failure a case form matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one.",
+    ),
+    (
+        "_",
+        "_",
+        "Matches anything left, or drops a value without naming it.",
+    ),
     (
         "default",
         "region r default",
@@ -122,16 +201,27 @@ const THIS_REGION_DOC: &str = "The region the value this method is called on liv
 
 /// The hover for the classified token covering `byte`, as `(code, doc)` and
 /// the token's byte range.
-pub(crate) fn hover(k: &Knowledge, byte: usize) -> Option<((String, String), std::ops::Range<usize>)> {
+pub(crate) fn hover(
+    k: &Knowledge,
+    byte: usize,
+) -> Option<((String, String), std::ops::Range<usize>)> {
     let tokens = &k.scan.tokens;
     // The token under `byte`, or else the one ending there: at the boundary of
     // `n)`, the name is what a hover means.
-    let under = tokens.iter().find(|t| t.range.start <= byte && byte < t.range.end);
+    let under = tokens
+        .iter()
+        .find(|t| t.range.start <= byte && byte < t.range.end);
     let ending = tokens.iter().find(|t| t.range.end == byte);
-    [under, ending].into_iter().flatten().find_map(|token| hover_token(k, token))
+    [under, ending]
+        .into_iter()
+        .flatten()
+        .find_map(|token| hover_token(k, token))
 }
 
-fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((String, String), std::ops::Range<usize>)> {
+fn hover_token(
+    k: &Knowledge,
+    token: &crate::scan::Classified,
+) -> Option<((String, String), std::ops::Range<usize>)> {
     let text = k.source.get(token.range.clone()).unwrap_or_default();
     let info = match (token.class, k.symbol_of(token)) {
         (TokenClass::TypeBuiltin, _) => {
@@ -223,8 +313,17 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
 /// `bind name` when only its contents may change.
 fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
     match k.pattern_name_mode(at) {
-        Mode::Flex => (format!("flex {}", typed), format!("{} It can be assigned.", doc)),
-        Mode::Bind => (format!("bind {}", typed), format!("{} It is bound to one value; its contents may change, but it is never assigned as a whole.", doc)),
+        Mode::Flex => (
+            format!("flex {}", typed),
+            format!("{} It can be assigned.", doc),
+        ),
+        Mode::Bind => (
+            format!("bind {}", typed),
+            format!(
+                "{} It is bound to one value; its contents may change, but it is never assigned as a whole.",
+                doc
+            ),
+        ),
         Mode::Fixed => (typed.to_string(), doc.to_string()),
     }
 }
@@ -504,26 +603,47 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
 
 /// The shape or kind of this file whose block holds `byte`.
 fn owner_around<'a>(k: &Knowledge<'a>, byte: usize) -> Option<&'a crate::scan::Symbol> {
-    k.symbols()
-        .iter()
-        .find(|s| s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind) && s.range.start <= byte && byte < s.range.end)
+    k.symbols().iter().find(|s| {
+        s.module.is_none()
+            && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind)
+            && s.range.start <= byte
+            && byte < s.range.end
+    })
 }
 
 /// Whether `byte` is inside a method of this file.
 fn is_in_method(k: &Knowledge, byte: usize) -> bool {
-    k.symbols().iter().any(|s| s.module.is_none() && s.kind == SymbolKind::Method && s.range.start <= byte && byte < s.range.end)
+    k.symbols().iter().any(|s| {
+        s.module.is_none()
+            && s.kind == SymbolKind::Method
+            && s.range.start <= byte
+            && byte < s.range.end
+    })
 }
 
 /// The task or method of this file around `byte`, as a message names it:
 /// `task fib`, or `method Counter.step`.
 fn task_around(k: &Knowledge, byte: usize) -> Option<String> {
-    let around = |s: &&crate::scan::Symbol| s.module.is_none() && s.range.start <= byte && byte < s.range.end;
+    let around = |s: &&crate::scan::Symbol| {
+        s.module.is_none() && s.range.start <= byte && byte < s.range.end
+    };
     let symbols = k.symbols();
-    if let Some(method) = symbols.iter().filter(around).find(|s| s.kind == SymbolKind::Method) {
-        let owner = method.parent.and_then(|p| k.symbol(p)).map_or("?", |p| p.name.as_str());
+    if let Some(method) = symbols
+        .iter()
+        .filter(around)
+        .find(|s| s.kind == SymbolKind::Method)
+    {
+        let owner = method
+            .parent
+            .and_then(|p| k.symbol(p))
+            .map_or("?", |p| p.name.as_str());
         return Some(format!("method {}.{}", owner, method.name));
     }
-    symbols.iter().filter(around).find(|s| s.kind == SymbolKind::Task).map(|task| format!("task {}", task.name))
+    symbols
+        .iter()
+        .filter(around)
+        .find(|s| s.kind == SymbolKind::Task)
+        .map(|task| format!("task {}", task.name))
 }
 
 /// For a declaration of another file, which module it is from.
@@ -531,7 +651,11 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
     match symbol.module.and_then(|m| k.scan.modules.get(m)) {
         Some(module) => {
             let name = k.symbol(module.symbol).map_or("", |s| s.name.as_str());
-            let from = if module.library { "Vela's library".to_string() } else { module.path.clone() };
+            let from = if module.library {
+                "Vela's library".to_string()
+            } else {
+                module.path.clone()
+            };
             format!("From module {} ({}).", name, from)
         }
         None => String::new(),
@@ -543,7 +667,13 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
 fn shared_words(member: &Symbol) -> String {
     let private = if member.private { "priv " } else { "" };
     if !member.shared {
-        return if member.private { private.to_string() } else if member.read { "read ".to_string() } else { String::new() };
+        return if member.private {
+            private.to_string()
+        } else if member.read {
+            "read ".to_string()
+        } else {
+            String::new()
+        };
     }
     let change = if let Some(intro) = member.intro {
         format!("{} ", intro)

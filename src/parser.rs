@@ -173,17 +173,14 @@ impl Parser {
         self.loop_values
     }
 
-    /// The `include` lines of the file parsed.
     pub fn includes(&mut self) -> Vec<Include> {
         std::mem::take(&mut self.includes)
     }
 
-    /// The type aliases of the file parsed.
     pub fn type_aliases(&mut self) -> Vec<AliasDef> {
         std::mem::take(&mut self.type_aliases)
     }
 
-    /// The patterns of the file parsed.
     pub fn patterns(&mut self) -> Vec<PatternDef> {
         std::mem::take(&mut self.patterns)
     }
@@ -193,7 +190,6 @@ impl Parser {
         std::mem::take(&mut self.type_places)
     }
 
-    /// Parses a whole file: its `include` lines (see `includes`), then its items.
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
         let tokens: Vec<(&Token, Span, Span)> = self.tokens.iter().zip(&self.spans).zip(&self.ends).map(|((token, start), end)| (token, *start, *end)).collect();
         if let Some(error) = reserved_word(&tokens) {
@@ -236,7 +232,7 @@ impl Parser {
     /// `include path {part, …}`, where the path is names and `..` separated by
     /// `/`, and a part is a name, maybe followed by `=> alias`.
     fn parse_include(&mut self) -> Result<Include> {
-        self.advance(); // include
+        self.advance();
         let span = self.peek_span();
         if matches!(self.peek(), Token::Newline | Token::Eof) {
             return Err(Error::at(span, "expected a module after 'include', as in 'include geometry'"));
@@ -302,7 +298,6 @@ impl Parser {
         Ok(Some((self.expect_ident()?, at)))
     }
 
-    /// Whether `name` is the name of a module this file includes.
     fn is_module(&self, name: &str) -> bool {
         self.includes.iter().any(|included| included.local_name() == Some(name))
     }
@@ -313,7 +308,7 @@ impl Parser {
         if !self.is_module(&name) || !self.check(Token::Dot) {
             return Ok(name);
         }
-        self.advance(); // .
+        self.advance();
         let member = self.expect_ident()?;
         Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
     }
@@ -463,7 +458,6 @@ impl Parser {
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
     }
 
-    /// Whether the next token is the first on its line.
     fn at_line_start(&self) -> bool {
         self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline))
     }
@@ -635,7 +629,7 @@ impl Parser {
 
     /// `#NAME = value`, at `#`, on a line of its own.
     fn parse_macro(&mut self) -> Result<MacroDef> {
-        self.advance(); // #
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         if self.check(Token::Colon) {
@@ -666,7 +660,7 @@ impl Parser {
     /// `alias Name => type`, or `priv alias Name => type`, on a line of its own.
     fn parse_type_alias(&mut self) -> Result<AliasDef> {
         let private = self.match_token(Token::Priv);
-        self.advance(); // alias
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         if !self.match_token(Token::FatArrow) {
@@ -785,7 +779,7 @@ impl Parser {
         let mut decorators = Vec::new();
         let mut wrappers = Vec::new();
         while self.check(Token::Dollar) {
-            self.advance(); // $
+            self.advance();
             if self.check(Token::LParen) {
                 self.parse_wrappers(&mut wrappers)?;
                 if self.check(Token::Question) {
@@ -838,7 +832,7 @@ impl Parser {
     /// call of its name with its own values.
     fn parse_wrappers(&mut self, wrappers: &mut Vec<Expr>) -> Result<()> {
         let opened = self.peek_span();
-        self.advance(); // (
+        self.advance();
         if self.check(Token::RParen) {
             return Err(Error::at(opened, "'$( … )' names the wrappers of the task below it, as in '$(timed)' or '$(timed, logged(\"sq\"))'; leave it out when there are none"));
         }
@@ -847,7 +841,7 @@ impl Parser {
             // `$(.checked)`: a method of the value the wrapped method is called on.
             let member = self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)));
             if member {
-                self.advance(); // .
+                self.advance();
             }
             if !matches!(self.peek(), Token::Ident(_)) {
                 return Err(self.unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
@@ -881,7 +875,7 @@ impl Parser {
 
     /// `task name<types>(params) -> results`, at `task`: a task with no body yet.
     fn parse_task_header(&mut self) -> Result<TaskDef> {
-        self.advance(); // task
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(true)?;
@@ -905,7 +899,7 @@ impl Parser {
     /// may have one is for loading to say (see `modules::load`).
     fn parse_native(&mut self) -> Result<TaskDef> {
         let opened = self.peek_span();
-        self.advance(); // native
+        self.advance();
         let mut task = self.parse_task_header()?;
         task.native = true;
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
@@ -958,7 +952,7 @@ impl Parser {
                 if let Some(before) = params.iter().find(|param| param.group) {
                     return Err(Error::at(span, format!("a task takes one group of types, and '{}...' is one already", before.name)));
                 }
-                self.advance(); // ...
+                self.advance();
             }
             let (needs, patterns) = if self.match_token(Token::Colon) { self.parse_needs()? } else { (Vec::new(), Vec::new()) };
             params.push(TypeParam { name, span, needs, patterns, group });
@@ -1025,7 +1019,7 @@ impl Parser {
             let name = if named {
                 let at = self.peek_span();
                 let name = self.expect_ident()?;
-                self.advance(); // :
+                self.advance();
                 Some((name, at))
             } else {
                 None
@@ -1063,7 +1057,7 @@ impl Parser {
 
     fn parse_shape(&mut self) -> Result<ShapeDef> {
         let opened = self.peek_span();
-        self.advance(); // shape
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
@@ -1081,7 +1075,7 @@ impl Parser {
             self.reject_misplaced_method_words()?;
             // `shared new(…) -> X`: a method of the shape itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
-                self.advance(); // shared
+                self.advance();
                 let mut method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
@@ -1129,7 +1123,7 @@ impl Parser {
     /// `shared read f: int = 0`. It always names its first value.
     fn parse_shared_field(&mut self, shape: &str, types: &[TypeParam], private: bool, methods: &[TaskDef]) -> Result<SharedField> {
         let at = self.peek_span();
-        self.advance(); // shared
+        self.advance();
         if self.check(Token::Priv) {
             return Err(Error::at(self.peek_span(), "'priv' goes first, as in 'priv shared f: int = 0'"));
         }
@@ -1385,7 +1379,7 @@ impl Parser {
 
     fn parse_kind(&mut self) -> Result<KindDef> {
         let opened = self.peek_span();
-        self.advance(); // kind
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
@@ -1408,7 +1402,7 @@ impl Parser {
             self.reject_misplaced_method_words()?;
             // `shared make(…) -> K`: a method of the kind itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
-                self.advance(); // shared
+                self.advance();
                 let mut method = self.parse_method(&name, "kind", &types, private, true, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
@@ -1484,8 +1478,8 @@ impl Parser {
         if !doubled {
             return Err(Error::at(first, format!("a {} {} with '::' after its name, as in '{} {}::{}'", what, does, what, name, other)));
         }
-        self.advance(); // :
-        self.advance(); // :
+        self.advance();
+        self.advance();
         let mut after = Vec::new();
         loop {
             let at = self.peek_span();
@@ -1517,7 +1511,7 @@ impl Parser {
     fn parse_pattern_def(&mut self) -> Result<PatternDef> {
         let private = self.match_token(Token::Priv);
         let opened = self.peek_span();
-        self.advance(); // pattern
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
@@ -2016,7 +2010,7 @@ impl Parser {
 
     /// At the `~` after `value`, a type: the error type, and the whole type.
     fn parse_error_side(&mut self, value: Type) -> Result<Type> {
-        self.advance(); // ~
+        self.advance();
         self.type_parts.push(("~".to_string(), self.peek_span()));
         let error = self.parse_simple_type()?;
         self.no_or_in_type()?;
@@ -2142,7 +2136,7 @@ impl Parser {
     /// `fixed& big`, in any order, then `]`.
     fn parse_kept(&mut self) -> Result<(String, KeptMode, Span, Vec<KeptPlace>)> {
         let opened = self.peek_span();
-        self.advance(); // [
+        self.advance();
         let mut region: Option<(String, KeptMode, Span)> = None;
         let mut places: Vec<KeptPlace> = Vec::new();
         loop {
@@ -2237,7 +2231,7 @@ impl Parser {
         // `geometry.Point` for a module this file doesn't include: a dotted name
         // the resolver reports as naming nothing.
         while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
-            self.advance(); // .
+            self.advance();
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
         }
         self.type_parts.push((name.clone(), span));
@@ -2259,7 +2253,7 @@ impl Parser {
     /// so they are read with `parse_type_parts` rather than `parse_type`, which
     /// would start a written type of its own.)
     fn parse_given_types(&mut self) -> Result<Vec<Type>> {
-        self.advance(); // <
+        self.advance();
         let mut types = Vec::new();
         loop {
             if self.check(Token::Gt) {
@@ -2290,7 +2284,7 @@ impl Parser {
         let mut marked: Option<(Span, String)> = None;
         // `() -> int`: a task that takes nothing.
         if self.check(Token::RParen) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
-            self.advance(); // )
+            self.advance();
             return self.parse_task_type(items, taken);
         }
         loop {
@@ -2383,7 +2377,7 @@ impl Parser {
         if !allowed {
             return Err(Error::at(at, format!("a group of types, '{}...', is only {}", name, where_)));
         }
-        self.advance(); // ...
+        self.advance();
         Ok(Type::Group(name.clone()))
     }
 
@@ -2391,7 +2385,7 @@ impl Parser {
     /// what the task sends, one type, `nothing` when it sends no value. The
     /// arrow is always written, since `(int)` alone is `int` in parentheses.
     fn parse_task_type(&mut self, params: Vec<Type>, taken: Vec<Taken>) -> Result<Type> {
-        self.advance(); // ->
+        self.advance();
         if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
             return Err(Error::at(self.peek_span(), "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'"));
         }
@@ -2436,7 +2430,7 @@ impl Parser {
             let word = base.word();
             return Err(Error::at(at, format!("'{0}&' is written with '&' against '{0}', as in '({0}& int) -> nothing'", word)));
         }
-        self.advance(); // &
+        self.advance();
         if self.check(Token::AtSign) {
             return Err(Error::at(at, "a region is given as it is, so a task's type writes it '@r' alone, never as a place"));
         }
@@ -2672,7 +2666,7 @@ impl Parser {
             return Ok(Target::Discard(span));
         }
         if self.at_target_group(false) {
-            self.advance(); // (
+            self.advance();
             self.enter()?;
             let parts = self.parse_target_parts(span);
             self.leave(1);
@@ -2763,7 +2757,7 @@ impl Parser {
     /// `flex`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, mode: Mode) -> Result<Stmt> {
         let word = mode.word();
-        self.advance(); // fixed / flex
+        self.advance();
         let reference = self.match_reference(word)?;
         let span = self.peek_span();
         self.parse_binding_names(mode, reference, span)
@@ -2816,7 +2810,7 @@ impl Parser {
 
     fn parse_when(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // when
+        self.advance();
         let when = self.parse_when_rest(span)?;
         // One `fi` closes a whole chain, however many `else when`s it has.
         self.expect_fi("when", span)?;
@@ -2846,13 +2840,13 @@ impl Parser {
                 return Ok(Stmt::new(StmtKind::When(arms, Some(else_block)), span));
             }
             at = self.peek_span();
-            self.advance(); // when
+            self.advance();
         }
     }
 
     fn parse_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // loop
+        self.advance();
         if let Some(parts) = self.loop_parts()? {
             return self.parse_parted_loop(span, parts);
         }
@@ -2877,7 +2871,7 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block_until(&[Token::Fi, Token::Finally])?;
         let finally = if self.check(Token::Finally) {
-            self.advance(); // finally
+            self.advance();
             self.skip_newlines();
             let block = self.parse_block()?;
             Some(block)
@@ -2893,7 +2887,7 @@ impl Parser {
     fn parse_jump(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let stop = self.check(Token::Break);
-        self.advance(); // break or continue
+        self.advance();
         let word = if stop { "break" } else { "continue" };
         let name = match self.peek().clone() {
             Token::Ident(name) => {
@@ -2908,12 +2902,11 @@ impl Parser {
             if !stop {
                 return Err(Error::at(self.peek_span(), "a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value"));
             }
-            self.advance(); // =
+            self.advance();
             Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
-        // Nothing else follows on its line.
         if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
             let what = if stop { "stops" } else { "goes on with" };
             let example = name.as_ref().map_or("outer", |(name, _)| name.as_str());
@@ -2927,7 +2920,7 @@ impl Parser {
     /// loop that never ends by itself, `loop || ||` said in a word.
     fn parse_endless(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // endless
+        self.advance();
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
             return Err(Error::at(
                 self.peek_span(),
@@ -3067,7 +3060,6 @@ impl Parser {
             steps.push(self.parse_stmt()?);
             self.end_loop_item(last, "',' or the end of the line: a loop's step parts its items with ',', and its line ends after them")?;
         }
-        // The line ends after the last part.
         while !matches!(self.peek(), Token::Newline | Token::Eof) {
             self.advance();
         }
@@ -3098,7 +3090,7 @@ impl Parser {
     fn parse_named_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        self.advance(); // =>
+        self.advance();
         let inner = match self.peek() {
             Token::Loop => self.parse_loop()?,
             Token::Endless => self.parse_endless()?,
@@ -3116,7 +3108,7 @@ impl Parser {
     /// `block`, then its statements from the next line, closed by `fi`.
     fn parse_plain_block(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // block
+        self.advance();
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
             return Err(Error::at(self.peek_span(), "a 'block' takes nothing on its line: its statements start on the next one, and 'fi' closes it"));
         }
@@ -3128,7 +3120,7 @@ impl Parser {
 
     fn parse_each(&mut self) -> Result<Stmt> {
         let opened = self.peek_span();
-        self.advance(); // each
+        self.advance();
         let span = self.peek_span();
         // `_` drops a map's key or value (the checker allows it only there).
         let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
@@ -3153,7 +3145,7 @@ impl Parser {
     /// `match` on the last line of a block gives one wherever that block does.
     fn parse_match(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // match
+        self.advance();
         let expr = self.parse_expr()?;
         self.skip_newlines();
         let mut cases = Vec::new();
@@ -3164,7 +3156,7 @@ impl Parser {
             self.expect(Token::Case)?;
             let pattern = self.parse_pattern("case")?;
             if self.check(Token::Assign) {
-                self.advance(); // =
+                self.advance();
                 let value = self.parse_expr()?;
                 let value_span = value.span;
                 cases.push(Case { pattern, body: vec![Stmt::new(StmtKind::Expr(value), value_span)] });
@@ -3258,7 +3250,7 @@ impl Parser {
                 // `Circle`, `Shape.Circle`, or `geometry.Shape.Circle`.
                 let mut written = vec![self.expect_ident()?];
                 while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
-                    self.advance(); // .
+                    self.advance();
                     written.push(self.expect_ident()?);
                 }
                 // `case Option<int>.Some v`: the value matched has its types.
@@ -3324,7 +3316,7 @@ impl Parser {
             let (name, at) = self.parse_bound_name()?;
             return Ok(Names::one(name, at, mode));
         }
-        self.advance(); // (
+        self.advance();
         self.enter()?;
         let parts = self.parse_pattern_parts(span);
         self.leave(1);
@@ -3402,7 +3394,7 @@ impl Parser {
         if !starts_line {
             return Err(self.misplaced_send());
         }
-        self.advance(); // <-
+        self.advance();
         if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
@@ -3415,7 +3407,7 @@ impl Parser {
     /// `region r`, or `region r default`, which makes it the block's default
     /// region (see `ast::DEFAULT`).
     fn parse_region(&mut self) -> Result<Stmt> {
-        self.advance(); // region
+        self.advance();
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let default = self.match_default(true)?;
@@ -3654,7 +3646,7 @@ impl Parser {
     fn parse_pipe(&mut self, value: Expr, count: usize) -> Result<Expr> {
         let span = self.peek_span();
         let pipe = Token::Pipe(count).describe();
-        self.advance(); // |>
+        self.advance();
         if matches!(self.peek(), Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Newline | Token::Eof) {
             return Err(Error::at(self.peek_span(), format!("{} gives the value before it to the call written after it, as in 'xs |> total()'", pipe)));
         }
@@ -3746,7 +3738,7 @@ impl Parser {
     /// `at` or `@`: new text in `r` holding the chain's operands, or the text's
     /// pieces, each value turned into text in `r`.
     fn parse_join(&mut self, chain: Expr) -> Result<Expr> {
-        self.advance(); // `at` or `@`
+        self.advance();
         let region_span = self.peek_span();
         let region = self.expect_ident()?;
         let span = chain.span;
@@ -3774,7 +3766,7 @@ impl Parser {
     /// `place_region`), with the plan B that may follow: `f(x) at r { … }`.
     fn parse_call_region(&mut self, mut expr: Expr) -> Result<Expr> {
         let at = self.peek_span();
-        self.advance(); // at
+        self.advance();
         let region_span = self.peek_span();
         let region = self.expect_ident()?;
         match place_region(&mut expr, &region, region_span, true) {
@@ -3951,7 +3943,7 @@ impl Parser {
                 // further suffix may follow (`x.str()@r.len`).
                 Token::AtSign if takes_region_after(&expr) => {
                     let at = self.peek_span();
-                    self.advance(); // @
+                    self.advance();
                     let region_span = self.peek_span();
                     let region = self.expect_ident()?;
                     if place_region(&mut expr, &region, region_span, false) == Placing::Already {
@@ -4040,7 +4032,7 @@ impl Parser {
                 Ok(Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span))
             }
             _ => {
-                self.advance(); // ^
+                self.advance();
                 Ok(Expr::new(ExprKind::Deref(Box::new(expr)), span))
             }
         }
@@ -4071,8 +4063,8 @@ impl Parser {
             Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
             Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
                 let name = (name.clone(), span);
-                self.advance(); // the name
-                self.advance(); // =>
+                self.advance();
+                self.advance();
                 if !matches!(self.peek(), Token::Loop | Token::Each | Token::Endless) {
                     return Err(Error::at(
                         self.peek_span(),
@@ -4084,11 +4076,11 @@ impl Parser {
             }
             Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::Arrow)) => {
                 let name = name.clone();
-                self.advance(); // the name
+                self.advance();
                 self.parse_shortcut_lambda(vec![(name, span)], None, span)
             }
             Token::Underscore if matches!(self.tokens.get(self.pos + 1), Some(Token::Arrow)) => {
-                self.advance(); // _
+                self.advance();
                 self.parse_shortcut_lambda(vec![(DISCARD.to_string(), span)], None, span)
             }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
@@ -4156,7 +4148,7 @@ impl Parser {
     /// dot: the value a method is called on, and what it holds. Only a method
     /// has one, which the checker says; here it is a value like any other.
     fn parse_member_of_this(&mut self, span: Span) -> Result<Expr> {
-        self.advance(); // .
+        self.advance();
         let at = self.peek_span();
         let member = self.expect_member()?;
         let value = Expr::new(ExprKind::Var(THIS.to_string()), span);
@@ -4263,7 +4255,6 @@ impl Parser {
         if !is_empty {
             return true;
         }
-        // At `() ->`: check tokens on the same line after `->`.
         let mut line_tokens = Vec::new();
         for token in self.tokens.iter().skip(arrow + 1) {
             match token {
@@ -4301,7 +4292,6 @@ impl Parser {
             }
         }
         let (Some(_arrow), Some(rparen)) = (arrow_at, rparen_at) else { return false };
-        // Verify all tokens inside `(...)` are comma-separated idents or underscores
         for token in self.tokens.get(self.pos + 1..rparen).unwrap_or_default() {
             if !matches!(token, Token::Ident(_) | Token::Underscore | Token::Comma) {
                 return false;
@@ -4436,7 +4426,7 @@ impl Parser {
         self.parse_shortcut_lambda(params, kept, span)
     }
 
-    /// The header of a lambda at `span` and the cursor, up to its body.
+    /// A lambda's header at `span` and the cursor, up to its body.
     fn parse_lambda_header(&mut self, span: Span) -> Result<(Vec<Field>, Type, Vec<ResultDef>)> {
         if self.in_generic {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
@@ -4528,15 +4518,15 @@ impl Parser {
     /// `(value)`, or a tuple, `(a, b, …)`, on one line.
     fn parse_parenthesized(&mut self) -> Result<Expr> {
         let span = self.peek_span();
-        self.advance(); // (
+        self.advance();
         let first = self.parse_expr()?;
         // `(args...)`: a group's values made into a tuple, as `args.tuple` is.
         if self.check(Token::Ellipsis) {
-            self.advance(); // ...
+            self.advance();
             if !self.check(Token::RParen) {
                 return Err(Error::at(self.peek_span(), "a group's values make a tuple on their own, as in '(args...)'"));
             }
-            self.advance(); // )
+            self.advance();
             return Ok(Expr::new(ExprKind::Field(Box::new(first), GROUP_TUPLE_WRITTEN.to_string()), span));
         }
         if !self.check(Token::Comma) {
@@ -4582,7 +4572,7 @@ impl Parser {
 
     fn parse_array_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
-        self.advance(); // [
+        self.advance();
         if self.check(Token::RBracket) {
             return Err(Error::at(span, "an array holds at least one value, as in '[0#4]'"));
         }
@@ -4844,7 +4834,7 @@ impl Parser {
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are"));
         }
-        self.advance(); // <
+        self.advance();
         let mut types = Vec::new();
         loop {
             let at = self.peek_span();
@@ -4913,7 +4903,7 @@ impl Parser {
     /// with `fail e` to name the error.
     fn parse_plan_b(&mut self, value: Expr) -> Result<Expr> {
         let opened = self.peek_span();
-        self.advance(); // {
+        self.advance();
         let same_line = !self.check(Token::Newline);
         self.skip_newlines();
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
@@ -4932,7 +4922,7 @@ impl Parser {
             return Err(Error::at(self.peek_span(), PLAN_B_NAMES));
         }
         let error = if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
-            self.advance(); // failure
+            self.advance();
             Some(self.parse_bound_name()?)
         } else {
             None
@@ -4985,7 +4975,7 @@ impl Parser {
 
     fn parse_new_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
-        self.advance(); // new
+        self.advance();
         // `new(…)` alone: a shared method's call written without its shape.
         // (`new (int, int)((1, 2))` names a tuple type, then gives its value.)
         if self.check(Token::LParen) && !self.tuple_type_follows() {
@@ -5016,7 +5006,7 @@ impl Parser {
             return Err(Error::at(self.peek_span(), format!("'new' takes its value in '( )', as in 'new {}'; a 'new' never fails, so no plan B follows it", example)));
         }
         if !bare {
-            self.advance(); // (
+            self.advance();
         }
         let empty = bare || self.check(Token::RParen);
         let empty_at = if bare { ty_span } else { self.peek_span() };
@@ -5037,7 +5027,7 @@ impl Parser {
             Expr::new(ExprKind::StructInit { name, types, fields: Vec::new() }, ty_span)
         } else if named_keys && self.check(Token::LBracket) {
             let opened = self.peek_span();
-            self.advance(); // [
+            self.advance();
             let key = self.parse_named_key()?;
             if !self.match_token(Token::Colon) {
                 return Err(self.unexpected("':' and the value that goes with the key"));
@@ -5087,7 +5077,7 @@ impl Parser {
     /// literal names, with the cursor at `{`.
     fn parse_struct_init(&mut self, name: String, types: Vec<TypeArg>) -> Result<ExprKind> {
         let shape_name = name.clone();
-        self.advance(); // {
+        self.advance();
         let mut fields = Vec::new();
         if !self.check(Token::RBrace) {
             loop {
@@ -5120,7 +5110,7 @@ impl Parser {
                 // `f(args...)` or `f(r, args..., s)`: a group's values, once.
                 if self.check(Token::Ellipsis) {
                     let at = self.peek_span();
-                    self.advance(); // ...
+                    self.advance();
                     if args.iter().any(|arg: &Expr| matches!(arg.kind, ExprKind::Spread(_))) {
                         return Err(Error::at(at, "a call gives one group's values, as in 'next(r, args...)'; give the values of another one by one"));
                     }
@@ -5249,8 +5239,6 @@ fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
     false
 }
 
-/// The words a generic type can be asked to allow, for a message, from what
-/// most types allow to what fewest do.
 /// The error for a bare `called()` read as the first line of the default body
 /// of pattern method `method`, after which the pattern didn't read on.
 fn two_headers(called: &str, method: &str) -> String {
@@ -5260,6 +5248,8 @@ fn two_headers(called: &str, method: &str) -> String {
     )
 }
 
+/// The words a generic type can be asked to allow, for a message, from what
+/// most types allow to what fewest do.
 pub fn needs_list() -> String {
     let words: Vec<String> = [Need::Frozen, Need::Same, Need::Similar, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
@@ -5427,8 +5417,6 @@ pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: S
     }
 }
 
-/// The operator a step statement writes (see `ast::StmtKind::Step`), with how
-/// it is written.
 /// Whether a `(` right after `expr` calls the task its value holds: after an
 /// item, a call, a pointer's value, or a tuple's item (`t.0(x)`). A name's own
 /// call, and a method's, are read with the name.

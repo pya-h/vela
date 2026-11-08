@@ -1,0 +1,66 @@
+  1 | ; A tiny key exchange, arithmetic written as operators: Int512 follows
+    | comment:; A tiny key exchange, arithmetic written as operators: Int512 follows
+  2 | ; std/int512's Numeric pattern, so +, *, and % read as plus, times, and rem.
+    | comment:; std/int512's Numeric pattern, so +, *, and % read as plus, times, and rem.
+  3 | ; Two parties raise a shared base to secret exponents, modulo a public
+    | comment:; Two parties raise a shared base to secret exponents, modulo a public
+  4 | ; number, and arrive at the same key without sending it.
+    | comment:; number, and arrive at the same key without sending it.
+  5 | include std/int512 {Int512, int512, int512_parse}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:,  task:int512_parse  punctuation:}
+  7 | task mulmod(x: Int512, y: Int512, modulus: Int512) -> Int512
+    | keyword:task  task:mulmod  punctuation:(  parameter:x  punctuation::  type:Int512  punctuation:,  parameter:y  punctuation::  type:Int512  punctuation:,  parameter:modulus  punctuation::  type:Int512  punctuation:)  operator:->  type:Int512
+  8 |     <- (x * y) % modulus
+    | keyword:<-  punctuation:(  parameter:x  operator:*  parameter:y  punctuation:)  operator:%  parameter:modulus
+  9 | fi
+    | keyword:fi
+ 11 | ; base to the exponent, one mulmod at a time (the exponents here are small ints).
+    | comment:; base to the exponent, one mulmod at a time (the exponents here are small ints).
+ 12 | task powmod(base: Int512, exponent: int, modulus: Int512) -> Int512
+    | keyword:task  task:powmod  punctuation:(  parameter:base  punctuation::  type:Int512  punctuation:,  parameter:exponent  punctuation::  type-builtin:int  punctuation:,  parameter:modulus  punctuation::  type:Int512  punctuation:)  operator:->  type:Int512
+ 13 |     flex result = int512(1)
+    | keyword:flex  variable:result  operator:=  task:int512  punctuation:(  number:1  punctuation:)
+ 14 |     each step in 0..exponent ; the counter is not read, the passes are what counts
+    | keyword:each  variable:step  keyword:in  number:0  operator:..  parameter:exponent  comment:; the counter is not read, the passes are what counts
+ 15 |         result = mulmod(result, base, modulus)
+    | variable:result  operator:=  task:mulmod  punctuation:(  variable:result  punctuation:,  parameter:base  punctuation:,  parameter:modulus  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 |     <- result
+    | keyword:<-  variable:result
+ 18 | fi
+    | keyword:fi
+ 20 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 21 |     region r
+    | keyword:region  region:r
+ 22 |     fixed modulus = int512_parse("1000000000000000000000000000057") { Int512.zero() }
+    | keyword:fixed  variable:modulus  operator:=  task:int512_parse  punctuation:(  string:"1000000000000000000000000000057"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 23 |     fixed base = int512(7)
+    | keyword:fixed  variable:base  operator:=  task:int512  punctuation:(  number:7  punctuation:)
+ 25 |     fixed alice_secret = 1201
+    | keyword:fixed  variable:alice_secret  operator:=  number:1201
+ 26 |     fixed bob_secret = 733
+    | keyword:fixed  variable:bob_secret  operator:=  number:733
+ 28 |     ; Each sends the base raised to their secret; the exponents stay home.
+    | comment:; Each sends the base raised to their secret; the exponents stay home.
+ 29 |     fixed alice_sends = powmod(base, alice_secret, modulus)
+    | keyword:fixed  variable:alice_sends  operator:=  task:powmod  punctuation:(  variable:base  punctuation:,  variable:alice_secret  punctuation:,  variable:modulus  punctuation:)
+ 30 |     fixed bob_sends = powmod(base, bob_secret, modulus)
+    | keyword:fixed  variable:bob_sends  operator:=  task:powmod  punctuation:(  variable:base  punctuation:,  variable:bob_secret  punctuation:,  variable:modulus  punctuation:)
+ 31 |     show("alice sends ", alice_sends.str() at r)
+    | builtin-fn:show  punctuation:(  string:"alice sends "  punctuation:,  variable:alice_sends  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 32 |     show("bob sends   ", bob_sends.str() at r)
+    | builtin-fn:show  punctuation:(  string:"bob sends   "  punctuation:,  variable:bob_sends  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 34 |     ; Each raises what they got to their own secret: both arrive at the key.
+    | comment:; Each raises what they got to their own secret: both arrive at the key.
+ 35 |     fixed alice_key = powmod(bob_sends, alice_secret, modulus)
+    | keyword:fixed  variable:alice_key  operator:=  task:powmod  punctuation:(  variable:bob_sends  punctuation:,  variable:alice_secret  punctuation:,  variable:modulus  punctuation:)
+ 36 |     fixed bob_key = powmod(alice_sends, bob_secret, modulus)
+    | keyword:fixed  variable:bob_key  operator:=  task:powmod  punctuation:(  variable:alice_sends  punctuation:,  variable:bob_secret  punctuation:,  variable:modulus  punctuation:)
+ 37 |     show("the key     ", alice_key.str() at r)
+    | builtin-fn:show  punctuation:(  string:"the key     "  punctuation:,  variable:alice_key  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 38 |     show("agreed: ", alice_key ~= bob_key)
+    | builtin-fn:show  punctuation:(  string:"agreed: "  punctuation:,  variable:alice_key  operator:~=  variable:bob_key  punctuation:)
+ 39 | fi
+    | keyword:fi

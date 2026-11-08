@@ -20,7 +20,6 @@ pub struct Span {
 }
 
 impl Span {
-    /// A position in the program's first file.
     pub fn new(line: usize, col: usize) -> Self {
         Span { line, col, file: 0 }
     }
@@ -144,9 +143,12 @@ pub struct Applied {
 }
 
 impl Applied {
-    /// The same shape, given `types`.
     pub fn with_types(&self, types: Vec<Type>) -> Applied {
-        Applied { name: self.name.clone(), types, region: self.region.clone() }
+        Applied {
+            name: self.name.clone(),
+            types,
+            region: self.region.clone(),
+        }
     }
 }
 
@@ -192,7 +194,11 @@ impl ClosureType {
     /// The same type with the task's own regions named in the order they
     /// first appear, the kept one as it is (see `TaskType::normalized`).
     pub fn normalized(&self) -> ClosureType {
-        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), mode: self.mode }
+        ClosureType {
+            task: self.task.normalized_beside(Some(&self.region)),
+            region: self.region.clone(),
+            mode: self.mode,
+        }
     }
 
     /// The type with `put` putting types in place of names in each type its
@@ -208,17 +214,34 @@ impl ClosureType {
             .iter()
             .map(|ty| match ty.regions().contains(&kept) {
                 true => put(ty),
-                false => put(ty).map_regions(&mut |region| Some(if region == kept { "_given" } else { region }.to_string())),
+                false => put(ty).map_regions(&mut |region| {
+                    Some(if region == kept { "_given" } else { region }.to_string())
+                }),
             })
             .collect();
-        let task = TaskType { params, taken: self.task.taken.clone(), ret: put(&self.task.ret) };
-        Type::Closure(Box::new(ClosureType { task, region: self.region.clone(), mode: self.mode }.normalized()))
+        let task = TaskType {
+            params,
+            taken: self.task.taken.clone(),
+            ret: put(&self.task.ret),
+        };
+        Type::Closure(Box::new(
+            ClosureType {
+                task,
+                region: self.region.clone(),
+                mode: self.mode,
+            }
+            .normalized(),
+        ))
     }
 
     /// The type with its task's type remade by `f`, as a task type.
     fn with_task(&self, f: impl FnOnce(&Type) -> Type) -> Type {
         match f(&Type::Task(Box::new(self.task.clone()))) {
-            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), mode: self.mode })),
+            Type::Task(task) => Type::Closure(Box::new(ClosureType {
+                task: *task,
+                region: self.region.clone(),
+                mode: self.mode,
+            })),
             other => other,
         }
     }
@@ -270,7 +293,6 @@ const OWN_MARK: &str = "~own";
 const TASK_REGIONS: [&str; 6] = ["r", "s", "t", "u", "v", "w"];
 
 impl TaskType {
-    /// The type of a task taking `params` as values and sending `ret`.
     pub fn new(params: Vec<Type>, ret: Type) -> TaskType {
         let taken = vec![Taken::Value; params.len()];
         TaskType { params, taken, ret }
@@ -311,14 +333,29 @@ impl TaskType {
                 other => other.clone(),
             })
             .collect();
-        TaskType { params: self.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken, ret: self.ret.map_regions(f) }
+        TaskType {
+            params: self
+                .params
+                .iter()
+                .map(|ty| ty.map_regions(&mut *f))
+                .collect(),
+            taken,
+            ret: self.ret.map_regions(f),
+        }
     }
 
     /// The type of a plain task, whose regions are all its own, as the task's
     /// type of a lambda keeping what it uses in `kept` names them (see
     /// `ClosureType`): none of them named `kept`.
     pub fn normalized_avoiding(&self, kept: &str) -> TaskType {
-        self.map_regions(&mut |name| Some(if name == ANY_REGION { name.to_string() } else { format!("{}{}", name, OWN_MARK) })).normalized_beside(Some(kept))
+        self.map_regions(&mut |name| {
+            Some(if name == ANY_REGION {
+                name.to_string()
+            } else {
+                format!("{}{}", name, OWN_MARK)
+            })
+        })
+        .normalized_beside(Some(kept))
     }
 
     /// `normalized`, leaving `kept` as it is: the region a lambda's type keeps
@@ -336,7 +373,10 @@ impl TaskType {
                     names.len() - 1
                 }
             };
-            let named = TASK_REGIONS.iter().map(|name| name.to_string()).chain((TASK_REGIONS.len() + 1..).map(|k| format!("r{}", k)));
+            let named = TASK_REGIONS
+                .iter()
+                .map(|name| name.to_string())
+                .chain((TASK_REGIONS.len() + 1..).map(|k| format!("r{}", k)));
             named.filter(|name| Some(name.as_str()) != kept).nth(at)
         };
         let mut params = Vec::new();
@@ -470,7 +510,14 @@ pub const WHY: &str = "why";
 
 /// The names the builtin kinds bring, which no program may declare: each kind
 /// and its variants, so that a program writes them as it writes any kind's.
-pub const BUILTIN_KIND_NAMES: &[&str] = &[PARSE_ERROR, NOT_A_NUMBER, TOO_LARGE, INPUT_ERROR, ENDED, NO_NUMBER];
+pub const BUILTIN_KIND_NAMES: &[&str] = &[
+    PARSE_ERROR,
+    NOT_A_NUMBER,
+    TOO_LARGE,
+    INPUT_ERROR,
+    ENDED,
+    NO_NUMBER,
+];
 
 /// The kind each builtin variant belongs to, for a message about the name.
 pub fn builtin_kind_of(variant: &str) -> Option<&'static str> {
@@ -509,8 +556,16 @@ pub fn input_error_kind() -> KindDef {
         given: Vec::new(),
         name: INPUT_ERROR.to_string(),
         variants: vec![
-            Variant { tag: ENDED.to_string(), payload: Vec::new(), span },
-            Variant { tag: NO_NUMBER.to_string(), payload: vec![why], span },
+            Variant {
+                tag: ENDED.to_string(),
+                payload: Vec::new(),
+                span,
+            },
+            Variant {
+                tag: NO_NUMBER.to_string(),
+                payload: vec![why],
+                span,
+            },
         ],
         span,
         private: false,
@@ -524,14 +579,22 @@ pub fn input_error_kind() -> KindDef {
 /// message about a name it takes says which kind holds it rather than pointing
 /// at a line (see `check::Checker::define`).
 fn builtin_span() -> Span {
-    Span { line: 0, col: 0, file: usize::MAX }
+    Span {
+        line: 0,
+        col: 0,
+        file: usize::MAX,
+    }
 }
 
 /// `ParseError` as a declaration, which the checker knows without reading it and
 /// the code generator writes the C for (see `check::Checker::check_program`).
 pub fn parse_error_kind() -> KindDef {
     let span = builtin_span();
-    let variant = |tag: &str| Variant { tag: tag.to_string(), payload: Vec::new(), span };
+    let variant = |tag: &str| Variant {
+        tag: tag.to_string(),
+        payload: Vec::new(),
+        span,
+    };
     KindDef {
         types: Vec::new(),
         given: Vec::new(),
@@ -713,7 +776,11 @@ pub const START_VALUES: &str = "wrapper__values";
 
 /// Task `name` as a message names it: `task 'f'`, or `this lambda`.
 pub fn shown_task(name: &str) -> String {
-    if is_lambda(name) { "this lambda".to_string() } else { format!("task '{}'", name) }
+    if is_lambda(name) {
+        "this lambda".to_string()
+    } else {
+        format!("task '{}'", name)
+    }
 }
 
 /// The shape or kind, and the method, in the name of the task a method becomes.
@@ -726,13 +793,39 @@ pub fn method_parts(name: &str) -> Option<(&str, &str)> {
 /// lookup, or arithmetic, which may stop on a mistake or an overflow, does.
 pub fn without_effects(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
+        ExprKind::IntLit(_)
+        | ExprKind::FloatLit(_)
+        | ExprKind::CharLit(_)
+        | ExprKind::BoolLit(_)
+        | ExprKind::TextLit(_)
+        | ExprKind::NoneLit
+        | ExprKind::Macro { .. }
+        | ExprKind::Var(_)
+        | ExprKind::Shared { .. }
+        | ExprKind::TaskValue(_) => true,
         // The value a pipe gives was worked out before its call.
         ExprKind::Piped(_) => true,
-        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
-        ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or, a, b) | ExprKind::Range(a, b) => {
-            without_effects(a) && without_effects(b)
-        }
+        ExprKind::Field(inner, _)
+        | ExprKind::Deref(inner)
+        | ExprKind::Ref(inner)
+        | ExprKind::Wrap(inner)
+        | ExprKind::Widen(inner)
+        | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
+        ExprKind::Binary(
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Similar
+            | BinaryOp::NotSimilar
+            | BinaryOp::Lt
+            | BinaryOp::Gt
+            | BinaryOp::Le
+            | BinaryOp::Ge
+            | BinaryOp::And
+            | BinaryOp::Or,
+            a,
+            b,
+        )
+        | ExprKind::Range(a, b) => without_effects(a) && without_effects(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(without_effects),
         _ => false,
     }
@@ -932,9 +1025,11 @@ impl Type {
 }
 
 impl Type {
-    /// The builtin type called `name`, if there is one.
     pub fn builtin(name: &str) -> Option<Type> {
-        BUILTIN_TYPES.iter().find(|(builtin, _)| *builtin == name).map(|(_, ty)| ty.clone())
+        BUILTIN_TYPES
+            .iter()
+            .find(|(builtin, _)| *builtin == name)
+            .map(|(_, ty)| ty.clone())
     }
 
     pub fn is_numeric(&self) -> bool {
@@ -972,7 +1067,10 @@ impl Type {
     }
 
     pub fn is_unsigned_int(&self) -> bool {
-        matches!(self, Type::Unit | Type::Uint16 | Type::Uint32 | Type::Uint64)
+        matches!(
+            self,
+            Type::Unit | Type::Uint16 | Type::Uint32 | Type::Uint64
+        )
     }
 
     pub fn is_float(&self) -> bool {
@@ -993,12 +1091,21 @@ impl Type {
     pub fn unknown(&self) -> bool {
         match self {
             Type::Unknown => true,
-            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => inner.unknown(),
-            Type::Or(value, error) | Type::Map(value, error, _) => value.unknown() || error.unknown(),
+            Type::Ptr(inner, _)
+            | Type::Slice(inner, _)
+            | Type::Array(inner, _)
+            | Type::Range(inner)
+            | Type::Maybe(inner)
+            | Type::Fail(inner) => inner.unknown(),
+            Type::Or(value, error) | Type::Map(value, error, _) => {
+                value.unknown() || error.unknown()
+            }
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
             Type::Task(task) => task.params.iter().any(Type::unknown) || task.ret.unknown(),
-            Type::Closure(closure) => closure.task.params.iter().any(Type::unknown) || closure.task.ret.unknown(),
+            Type::Closure(closure) => {
+                closure.task.params.iter().any(Type::unknown) || closure.task.ret.unknown()
+            }
             Type::Int
             | Type::Int8
             | Type::Int16
@@ -1040,35 +1147,60 @@ impl Type {
 
     /// The type with each region replaced by what `f` gives for it.
     pub fn map_regions(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
-        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<String>| Box::new(t.map_regions(f));
+        let boxed =
+            |t: &Type, f: &mut dyn FnMut(&str) -> Option<String>| Box::new(t.map_regions(f));
         match self {
-            Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f)),
+            Type::Ptr(inner, region) => {
+                Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f))
+            }
             Type::Named(name, region) => Type::Named(name.clone(), region.as_deref().and_then(f)),
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
-                types: applied.types.iter().map(|ty| ty.map_regions(&mut *f)).collect(),
+                types: applied
+                    .types
+                    .iter()
+                    .map(|ty| ty.map_regions(&mut *f))
+                    .collect(),
                 region: applied.region.as_deref().and_then(&mut *f),
             })),
             Type::Text(region) => Type::Text(region.as_deref().and_then(f)),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
-            Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f)),
-            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.as_deref().and_then(&mut *f)),
+            Type::Slice(inner, region) => {
+                Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f))
+            }
+            Type::Map(key, value, region) => Type::Map(
+                boxed(key, f),
+                boxed(value, f),
+                region.as_deref().and_then(&mut *f),
+            ),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
-            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
+            Type::Results(types) => {
+                Type::Results(types.iter().map(|ty| ty.map_regions(&mut *f)).collect())
+            }
+            Type::Tuple(items) => {
+                Type::Tuple(items.iter().map(|ty| ty.map_regions(&mut *f)).collect())
+            }
             // The types given a group holding a place, whose regions are the
             // caller's (see `GROUP_SENDS`).
-            Type::Task(task) if task.ret == GROUP_SENDS => {
-                Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken: task.taken.clone(), ret: GROUP_SENDS }))
-            }
+            Type::Task(task) if task.ret == GROUP_SENDS => Type::Task(Box::new(TaskType {
+                params: task
+                    .params
+                    .iter()
+                    .map(|ty| ty.map_regions(&mut *f))
+                    .collect(),
+                taken: task.taken.clone(),
+                ret: GROUP_SENDS,
+            })),
             // The region it keeps, wherever its task's type names it too; the
             // task's own regions are its own.
             Type::Closure(closure) => {
                 let kept = closure.region.clone();
-                let Some(region) = f(&kept) else { return self.clone() };
+                let Some(region) = f(&kept) else {
+                    return self.clone();
+                };
                 // A region of its own named as the new one is named otherwise
                 // first, and all are named in order again after.
                 let mut own = |name: &str| {
@@ -1079,7 +1211,14 @@ impl Type {
                     })
                 };
                 let task = closure.task.map_regions(&mut own);
-                Type::Closure(Box::new(ClosureType { task, region, mode: closure.mode }.normalized()))
+                Type::Closure(Box::new(
+                    ClosureType {
+                        task,
+                        region,
+                        mode: closure.mode,
+                    }
+                    .normalized(),
+                ))
             }
             other => other.clone(),
         }
@@ -1095,7 +1234,11 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_names(f)).collect(),
                 region: applied.region.clone(),
             })),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.map_names(f) })),
+            Type::Task(task) => Type::Task(Box::new(TaskType {
+                params: task.params.iter().map(|ty| ty.map_names(f)).collect(),
+                taken: task.taken.clone(),
+                ret: task.ret.map_names(f),
+            })),
             Type::Closure(closure) => closure.with_task(|task| task.map_names(f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
@@ -1130,7 +1273,11 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.replace_names(f)).collect(),
                 region: applied.region.clone(),
             })),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.replace_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.replace_names(f) })),
+            Type::Task(task) => Type::Task(Box::new(TaskType {
+                params: task.params.iter().map(|ty| ty.replace_names(f)).collect(),
+                taken: task.taken.clone(),
+                ret: task.ret.replace_names(f),
+            })),
             Type::Closure(closure) => closure.with_types_put(&mut |ty| ty.replace_names(f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
@@ -1140,7 +1287,9 @@ impl Type {
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.replace_names(f)).collect()),
+            Type::Results(types) => {
+                Type::Results(types.iter().map(|ty| ty.replace_names(f)).collect())
+            }
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.replace_names(f)).collect()),
             other => other.clone(),
         }
@@ -1155,7 +1304,11 @@ impl Type {
             Type::Text(None) => Type::Text(f("")),
             // A field's lambda, kept in the region of the value holding it.
             Type::Closure(closure) if closure.region == THIS_WORD => match f("") {
-                Some(region) => Type::Closure(Box::new(ClosureType { task: closure.task.clone(), region, mode: closure.mode })),
+                Some(region) => Type::Closure(Box::new(ClosureType {
+                    task: closure.task.clone(),
+                    region,
+                    mode: closure.mode,
+                })),
                 None => self.clone(),
             },
             Type::Ptr(inner, None) => {
@@ -1170,33 +1323,69 @@ impl Type {
                     .region
                     .clone()
                     .or_else(|| f(&applied.name))
-                    .or_else(|| applied.types.iter().any(|ty| ty.params().iter().any(|param| !param.starts_with('?'))).then(|| f("")).flatten());
+                    .or_else(|| {
+                        applied
+                            .types
+                            .iter()
+                            .any(|ty| ty.params().iter().any(|param| !param.starts_with('?')))
+                            .then(|| f(""))
+                            .flatten()
+                    });
                 Type::Applied(Box::new(Applied {
                     name: applied.name.clone(),
-                    types: applied.types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect(),
+                    types: applied
+                        .types
+                        .iter()
+                        .map(|ty| ty.map_regions_of_names(&mut *f))
+                        .collect(),
                     region,
                 }))
             }
-            Type::Ptr(inner, region) => Type::Ptr(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Ptr(inner, region) => {
+                Type::Ptr(Box::new(inner.map_regions_of_names(f)), region.clone())
+            }
             Type::Slice(inner, None) => {
                 let region = f("");
                 Type::Slice(Box::new(inner.map_regions_of_names(f)), region)
             }
-            Type::Slice(inner, region) => Type::Slice(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Slice(inner, region) => {
+                Type::Slice(Box::new(inner.map_regions_of_names(f)), region.clone())
+            }
             Type::Map(key, value, None) => {
                 let region = f("");
-                Type::Map(Box::new(key.map_regions_of_names(f)), Box::new(value.map_regions_of_names(f)), region)
+                Type::Map(
+                    Box::new(key.map_regions_of_names(f)),
+                    Box::new(value.map_regions_of_names(f)),
+                    region,
+                )
             }
-            Type::Map(key, value, region) => {
-                Type::Map(Box::new(key.map_regions_of_names(f)), Box::new(value.map_regions_of_names(f)), region.clone())
+            Type::Map(key, value, region) => Type::Map(
+                Box::new(key.map_regions_of_names(f)),
+                Box::new(value.map_regions_of_names(f)),
+                region.clone(),
+            ),
+            Type::Array(inner, count) => {
+                Type::Array(Box::new(inner.map_regions_of_names(f)), *count)
             }
-            Type::Array(inner, count) => Type::Array(Box::new(inner.map_regions_of_names(f)), *count),
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
-            Type::Or(value, error) => Type::Or(Box::new(value.map_regions_of_names(f)), Box::new(error.map_regions_of_names(f))),
+            Type::Or(value, error) => Type::Or(
+                Box::new(value.map_regions_of_names(f)),
+                Box::new(error.map_regions_of_names(f)),
+            ),
             Type::Fail(error) => Type::Fail(Box::new(error.map_regions_of_names(f))),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect()),
-            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect()),
+            Type::Results(types) => Type::Results(
+                types
+                    .iter()
+                    .map(|ty| ty.map_regions_of_names(&mut *f))
+                    .collect(),
+            ),
+            Type::Tuple(items) => Type::Tuple(
+                items
+                    .iter()
+                    .map(|ty| ty.map_regions_of_names(&mut *f))
+                    .collect(),
+            ),
             other => other.clone(),
         }
     }
@@ -1209,12 +1398,27 @@ impl Type {
             Type::Param(name) => f(name).unwrap_or_else(|| self.clone()),
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
-                types: applied.types.iter().map(|ty| ty.map_params(&mut *f)).collect(),
+                types: applied
+                    .types
+                    .iter()
+                    .map(|ty| ty.map_params(&mut *f))
+                    .collect(),
                 region: applied.region.clone(),
             })),
             // A task's type names regions of its own, so a type put in it with
             // a region, `text@this` for `T`, names one of them.
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), taken: task.taken.clone(), ret: task.ret.map_params(f) }.normalized())),
+            Type::Task(task) => Type::Task(Box::new(
+                TaskType {
+                    params: task
+                        .params
+                        .iter()
+                        .map(|ty| ty.map_params(&mut *f))
+                        .collect(),
+                    taken: task.taken.clone(),
+                    ret: task.ret.map_params(f),
+                }
+                .normalized(),
+            )),
             // Beside the region it keeps what it uses in, which is not its own.
             // A type put in a parameter's place in the region it keeps, as
             // `text@this` is in a field's `[@this](T) -> R`, is one of its own:
@@ -1223,13 +1427,19 @@ impl Type {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
-            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.clone()),
+            Type::Map(key, value, region) => {
+                Type::Map(boxed(key, f), boxed(value, f), region.clone())
+            }
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_params(&mut *f)).collect()),
-            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_params(&mut *f)).collect()),
+            Type::Results(types) => {
+                Type::Results(types.iter().map(|ty| ty.map_params(&mut *f)).collect())
+            }
+            Type::Tuple(items) => {
+                Type::Tuple(items.iter().map(|ty| ty.map_params(&mut *f)).collect())
+            }
             other => other.clone(),
         }
     }
@@ -1238,17 +1448,21 @@ impl Type {
     /// `f` knows them: `(P...) -> R` given `int, text` for `P` is
     /// `(int, text) -> R`.
     pub fn map_groups(&self, f: &mut dyn FnMut(&str) -> Option<Vec<Type>>) -> Type {
-        self.map_group_items(&mut |name| f(name).map(|types| {
-            let taken = vec![Taken::Value; types.len()];
-            (types, taken)
-        }))
+        self.map_group_items(&mut |name| {
+            f(name).map(|types| {
+                let taken = vec![Taken::Value; types.len()];
+                (types, taken)
+            })
+        })
     }
 
     /// `map_groups`, where `f` also says how a task takes each type it gives a
     /// group: a group's values may be places, which a task type taking the
     /// group takes as places.
     pub fn map_group_items(&self, f: &mut dyn FnMut(&str) -> Option<GroupItems>) -> Type {
-        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<GroupItems>| Box::new(t.map_group_items(f));
+        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<GroupItems>| {
+            Box::new(t.map_group_items(f))
+        };
         match self {
             Type::Task(task) => {
                 let mut params = Vec::new();
@@ -1257,7 +1471,11 @@ impl Type {
                     match param {
                         Type::Group(name) => match f(name) {
                             Some((types, how)) => {
-                                taken.extend(how.into_iter().chain(std::iter::repeat(Taken::Value)).take(types.len()));
+                                taken.extend(
+                                    how.into_iter()
+                                        .chain(std::iter::repeat(Taken::Value))
+                                        .take(types.len()),
+                                );
                                 params.extend(types);
                             }
                             None => {
@@ -1271,23 +1489,35 @@ impl Type {
                         }
                     }
                 }
-                Type::Task(Box::new(TaskType { params, taken, ret: task.ret.map_group_items(f) }))
+                Type::Task(Box::new(TaskType {
+                    params,
+                    taken,
+                    ret: task.ret.map_group_items(f),
+                }))
             }
             Type::Closure(closure) => closure.with_task(|task| task.map_group_items(f)),
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
-                types: applied.types.iter().map(|ty| ty.map_group_items(&mut *f)).collect(),
+                types: applied
+                    .types
+                    .iter()
+                    .map(|ty| ty.map_group_items(&mut *f))
+                    .collect(),
                 region: applied.region.clone(),
             })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
-            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.clone()),
+            Type::Map(key, value, region) => {
+                Type::Map(boxed(key, f), boxed(value, f), region.clone())
+            }
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_group_items(&mut *f)).collect()),
+            Type::Results(types) => {
+                Type::Results(types.iter().map(|ty| ty.map_group_items(&mut *f)).collect())
+            }
             // The types given a group in a call, kept as a tuple, end with the
             // group of the task the call is in when it gives its values on
             // (`f(1, args...)`), which becomes its types.
@@ -1315,12 +1545,32 @@ impl Type {
         let boxed = |t: &Type| Box::new(t.normalized_tasks());
         match self {
             Type::Task(task) => {
-                let task = TaskType { params: task.params.iter().map(Type::normalized_tasks).collect(), taken: task.taken.clone(), ret: task.ret.normalized_tasks() };
+                let task = TaskType {
+                    params: task.params.iter().map(Type::normalized_tasks).collect(),
+                    taken: task.taken.clone(),
+                    ret: task.ret.normalized_tasks(),
+                };
                 Type::Task(Box::new(task.normalized()))
             }
             Type::Closure(closure) => {
-                let task = TaskType { params: closure.task.params.iter().map(Type::normalized_tasks).collect(), taken: closure.task.taken.clone(), ret: closure.task.ret.normalized_tasks() };
-                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), mode: closure.mode }.normalized()))
+                let task = TaskType {
+                    params: closure
+                        .task
+                        .params
+                        .iter()
+                        .map(Type::normalized_tasks)
+                        .collect(),
+                    taken: closure.task.taken.clone(),
+                    ret: closure.task.ret.normalized_tasks(),
+                };
+                Type::Closure(Box::new(
+                    ClosureType {
+                        task,
+                        region: closure.region.clone(),
+                        mode: closure.mode,
+                    }
+                    .normalized(),
+                ))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
@@ -1335,7 +1585,9 @@ impl Type {
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
-            Type::Results(types) => Type::Results(types.iter().map(Type::normalized_tasks).collect()),
+            Type::Results(types) => {
+                Type::Results(types.iter().map(Type::normalized_tasks).collect())
+            }
             Type::Tuple(items) => Type::Tuple(items.iter().map(Type::normalized_tasks).collect()),
             other => other.clone(),
         }
@@ -1357,12 +1609,19 @@ impl Type {
                 task.ret.collect_params(names);
             }
             Type::Closure(closure) => {
-                closure.task.params.iter().for_each(|ty| ty.collect_params(names));
+                closure
+                    .task
+                    .params
+                    .iter()
+                    .for_each(|ty| ty.collect_params(names));
                 closure.task.ret.collect_params(names);
             }
-            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
-                inner.collect_params(names)
-            }
+            Type::Ptr(inner, _)
+            | Type::Slice(inner, _)
+            | Type::Range(inner)
+            | Type::Maybe(inner)
+            | Type::Fail(inner)
+            | Type::Array(inner, _) => inner.collect_params(names),
             Type::Map(key, value, _) => {
                 key.collect_params(names);
                 value.collect_params(names);
@@ -1371,7 +1630,9 @@ impl Type {
                 value.collect_params(names);
                 error.collect_params(names);
             }
-            Type::Results(types) | Type::Tuple(types) => types.iter().for_each(|ty| ty.collect_params(names)),
+            Type::Results(types) | Type::Tuple(types) => {
+                types.iter().for_each(|ty| ty.collect_params(names))
+            }
             _ => {}
         }
     }
@@ -1397,17 +1658,27 @@ impl Type {
             Type::Named(_, region) | Type::Text(region) => regions.extend(region.as_deref()),
             Type::Applied(applied) => {
                 regions.extend(applied.region.as_deref());
-                applied.types.iter().for_each(|ty| ty.collect_regions(regions));
+                applied
+                    .types
+                    .iter()
+                    .for_each(|ty| ty.collect_regions(regions));
             }
-            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => inner.collect_regions(regions),
+            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
+                inner.collect_regions(regions)
+            }
             Type::Or(value, error) => {
                 value.collect_regions(regions);
                 error.collect_regions(regions);
             }
-            Type::Results(types) | Type::Tuple(types) => types.iter().for_each(|ty| ty.collect_regions(regions)),
+            Type::Results(types) | Type::Tuple(types) => {
+                types.iter().for_each(|ty| ty.collect_regions(regions))
+            }
             // The types given a group holding a place, whose regions are the
             // caller's.
-            Type::Task(task) if task.ret == GROUP_SENDS => task.params.iter().for_each(|ty| ty.collect_regions(regions)),
+            Type::Task(task) if task.ret == GROUP_SENDS => task
+                .params
+                .iter()
+                .for_each(|ty| ty.collect_regions(regions)),
             // The region it keeps its copies in; its task's own are its own.
             Type::Closure(closure) => regions.push(&closure.region),
             _ => {}
@@ -1479,7 +1750,11 @@ pub struct Expr {
 
 impl Expr {
     pub fn new(kind: ExprKind, span: Span) -> Self {
-        Expr { kind, span, ty: None }
+        Expr {
+            kind,
+            span,
+            ty: None,
+        }
     }
 
     /// The type assigned by the checker. An internal error if the expression
@@ -1502,7 +1777,10 @@ pub enum ExprKind {
     NoneLit,
     /// A macro named as a value, `P` or `math.P`, which the checker makes of the
     /// name: the macro's name in the program, and the literal it stands for.
-    Macro { name: String, value: Box<Expr> },
+    Macro {
+        name: String,
+        value: Box<Expr>,
+    },
     Var(String),
     /// `square`: a task named as a value, without `()`, which the checker makes
     /// of a `Var` naming a task and no variable. It holds the task's name in the
@@ -1512,16 +1790,27 @@ pub enum ExprKind {
     /// `pick()(x)`: the task a value holds, called. The parser makes one of a
     /// call after any value but a name, and the checker of a `Call` naming a
     /// variable.
-    Invoke { callee: Box<Expr>, args: Vec<Expr> },
+    Invoke {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
     /// `[@r](x: int) -> int … fi`: a lambda that keeps what it uses from the
     /// code around it in region `region`, with `mode` saying how it treats the
     /// copies it keeps. `lambda` names the task it is (see `ast::lambda_name`),
     /// and the checker gives the shape of what it keeps (see `kept_name`).
-    Closure { lambda: String, region: String, mode: KeptMode, places: Vec<KeptPlace> },
+    Closure {
+        lambda: String,
+        region: String,
+        mode: KeptMode,
+        places: Vec<KeptPlace>,
+    },
     /// A plain task value given where a lambda that keeps what it uses is
     /// expected, `[@r](int) -> int`: it keeps only the task, in `region`, or
     /// for a task named here, `None`, where the program keeps it.
-    Kept { value: Box<Expr>, region: Option<String> },
+    Kept {
+        value: Box<Expr>,
+        region: Option<String>,
+    },
     /// `args...`, the last value of a call: the values of a group parameter
     /// (see `Type::Group`), given on whole, each as a value of its own.
     Spread(Box<Expr>),
@@ -1539,11 +1828,18 @@ pub enum ExprKind {
     /// `[value#count]`: an array of `count` copies of the value, computed
     /// once; in `new [T](…) at r`, a slice of them, whose count may be known
     /// only as the program runs.
-    Repeat { value: Box<Expr>, count: Box<Expr> },
+    Repeat {
+        value: Box<Expr>,
+        count: Box<Expr>,
+    },
     /// `first(xs)`, or `first<text>(xs)` for a task that takes types: `types`
     /// holds what the call gives it, written or worked out from the arguments
     /// and the place the value goes (empty for an ordinary task).
-    Call { name: String, types: Vec<TypeArg>, args: Vec<Expr> },
+    Call {
+        name: String,
+        types: Vec<TypeArg>,
+        args: Vec<Expr>,
+    },
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     /// `new T(value) at r` or `new@r T(value)`; `ty_span` is the position of
@@ -1592,7 +1888,10 @@ pub enum ExprKind {
     /// program), one value for the whole program. The parser reads it as a
     /// field of a name, and the resolver makes it this once it knows the name
     /// is a shape (no variable is named like one).
-    Shared { shape: String, field: String },
+    Shared {
+        shape: String,
+        field: String,
+    },
     /// `v.type` in a task that takes types, where the value's type names one
     /// (`T`, `[T#3]`): its text is known only once the task is made for the
     /// types a use gives, when the checker makes it the `TextLit` it is (see
@@ -1601,7 +1900,11 @@ pub enum ExprKind {
     /// `Point { x: 1 }`, or `Box<int> { value: none }` for a shape that takes
     /// types: `types` holds the ones the literal names, empty when the values it
     /// gives say which they are.
-    StructInit { name: String, types: Vec<TypeArg>, fields: Vec<FieldInit> },
+    StructInit {
+        name: String,
+        types: Vec<TypeArg>,
+        fields: Vec<FieldInit>,
+    },
     /// A variant constructor, `Circle(1.0)` or `Empty`. The parser produces
     /// `Call` or `Var` for these; the checker rewrites them into `Construct`.
     /// One naming the types of a kind that takes them, `Option<int>.None`, is
@@ -1812,7 +2115,6 @@ impl EditOp {
 #[derive(Debug, Clone)]
 pub struct FieldInit {
     pub name: String,
-    /// Position of the field name.
     pub span: Span,
     pub value: Expr,
     /// Whether the checker filled it in with the value the field falls back
@@ -1835,7 +2137,6 @@ impl Stmt {
         Stmt { kind, span }
     }
 
-    /// The finally block of a loop, if any.
     pub fn finally(&self) -> Option<&Block> {
         match &self.kind {
             StmtKind::Loop(_, _, finally) | StmtKind::Each(_, _, _, _, finally) => finally.as_ref(),
@@ -1844,7 +2145,6 @@ impl Stmt {
         }
     }
 
-    /// The finally block of a loop, for rewriting.
     pub fn finally_mut(&mut self) -> Option<&mut Block> {
         match &mut self.kind {
             StmtKind::Loop(_, _, finally) | StmtKind::Each(_, _, _, _, finally) => finally.as_mut(),
@@ -1874,7 +2174,13 @@ pub enum StmtKind {
     /// given its operator's result on itself and the value, which is one for
     /// `++` and `--`. `symbol` is the operator as written, and `at` where. The
     /// checker makes it the assignment it is (see `Checker::check_step`).
-    Step { target: Expr, op: BinaryOp, value: Expr, symbol: &'static str, at: Span },
+    Step {
+        target: Expr,
+        op: BinaryOp,
+        value: Expr,
+        symbol: &'static str,
+        at: Span,
+    },
     /// `when c … else when d … else … fi`: the arms in order, each a condition
     /// and the block it guards, then the `else` block. A chain of `else when`s
     /// is one statement, so every pass goes through its arms in a loop, however
@@ -1915,7 +2221,10 @@ pub enum StmtKind {
     /// `region r default` also makes it the block's default region, which every
     /// allocation in the block that names no region goes into (see
     /// `check::Checker::default_region`). A block declares at most one.
-    Region { name: String, default: bool },
+    Region {
+        name: String,
+        default: bool,
+    },
 }
 
 /// A name a `fixed` or `flex` declares, `q` or `q: int`. `ty` is the
@@ -1925,7 +2234,6 @@ pub enum StmtKind {
 #[derive(Debug, Clone)]
 pub struct Bound {
     pub name: String,
-    /// Position of the name.
     pub span: Span,
     pub ty: Option<Type>,
     pub ty_span: Option<Span>,
@@ -2007,7 +2315,6 @@ pub struct ValueLoop {
 }
 
 impl ValueLoop {
-    /// The loop's body.
     pub fn body(&self) -> Option<&Block> {
         match &self.stmt.kind {
             StmtKind::Loop(_, body, _) | StmtKind::Each(_, _, _, body, _) => Some(body),
@@ -2024,7 +2331,6 @@ impl ValueLoop {
         }
     }
 
-    /// The loop's finally block, if any.
     pub fn finally(&self) -> Option<&Block> {
         self.stmt.finally()
     }
@@ -2048,7 +2354,11 @@ pub struct Condition {
 impl Condition {
     /// A condition of one part.
     pub fn new(value: Expr, pattern: Option<Pattern>) -> Condition {
-        Condition { value, pattern, and: None }
+        Condition {
+            value,
+            pattern,
+            and: None,
+        }
     }
 
     /// This part and the ones joined after it with `and`, in order.
@@ -2104,7 +2414,11 @@ pub enum PatternKind {
     /// order. `kind` is the kind written before the variant, if any: the
     /// value's kind, which the checker makes sure of. (Boxed: patterns are held
     /// by value in frames that nest, and are rarely written with a kind.)
-    Variant { kind: Option<Box<Binding>>, tag: String, binds: Vec<Names> },
+    Variant {
+        kind: Option<Box<Binding>>,
+        tag: String,
+        binds: Vec<Names>,
+    },
     /// `{v}`: the value in a `maybe`, or the success of a `T ~ E`.
     Value(Names),
     /// `none`: an empty `maybe`.
@@ -2118,7 +2432,11 @@ pub enum PatternKind {
     /// `maybe int {x}`, `maybe int x`, or after `t.#k?` the type alone: a test
     /// of the type of a tuple's item read with `.#`, which the compiler knows
     /// (see `Checker::settle_type_tests`). `asks` is the `?` written.
-    Typed { ty: Type, form: TypedForm, asks: bool },
+    Typed {
+        ty: Type,
+        form: TypedForm,
+        asks: bool,
+    },
 }
 
 /// What a type test on a tuple's item names (see `PatternKind::Typed`).
@@ -2150,7 +2468,12 @@ pub struct Names {
 impl Names {
     /// One name, at `span`, which `flex` may make changeable.
     pub fn one(name: String, span: Span, mode: Mode) -> Names {
-        Names { name, span, mode, parts: Vec::new() }
+        Names {
+            name,
+            span,
+            mode,
+            parts: Vec::new(),
+        }
     }
 
     /// Every name it binds, in order, through the tuples it takes apart.
@@ -2181,8 +2504,13 @@ impl Pattern {
     pub fn bindings(&self) -> Vec<&Names> {
         match &self.kind {
             PatternKind::Variant { binds, .. } => binds.iter().flat_map(Names::leaves).collect(),
-            PatternKind::Value(names) | PatternKind::Fail(names) | PatternKind::Tuple(names) => names.leaves(),
-            PatternKind::Typed { form: TypedForm::Named(names) | TypedForm::Value(names), .. } => names.leaves(),
+            PatternKind::Value(names) | PatternKind::Fail(names) | PatternKind::Tuple(names) => {
+                names.leaves()
+            }
+            PatternKind::Typed {
+                form: TypedForm::Named(names) | TypedForm::Value(names),
+                ..
+            } => names.leaves(),
             PatternKind::None | PatternKind::Any | PatternKind::Typed { .. } => Vec::new(),
         }
     }
@@ -2204,9 +2532,21 @@ impl fmt::Display for Pattern {
             PatternKind::Fail(names) => write!(f, "fail {}", names),
             PatternKind::Tuple(names) => write!(f, "{}", names),
             PatternKind::Any => write!(f, "_"),
-            PatternKind::Typed { ty, form: TypedForm::Only, .. } => write!(f, "{}", ty),
-            PatternKind::Typed { ty, form: TypedForm::Named(names), .. } => write!(f, "{} {}", ty, names),
-            PatternKind::Typed { ty, form: TypedForm::Value(names), .. } => write!(f, "{} {{{}}}", ty, names),
+            PatternKind::Typed {
+                ty,
+                form: TypedForm::Only,
+                ..
+            } => write!(f, "{}", ty),
+            PatternKind::Typed {
+                ty,
+                form: TypedForm::Named(names),
+                ..
+            } => write!(f, "{} {}", ty, names),
+            PatternKind::Typed {
+                ty,
+                form: TypedForm::Value(names),
+                ..
+            } => write!(f, "{} {{{}}}", ty, names),
         }
     }
 }
@@ -2236,9 +2576,7 @@ impl fmt::Display for Names {
 pub struct Field {
     pub name: String,
     pub ty: Type,
-    /// Position of the name.
     pub span: Span,
-    /// Position of the type.
     pub ty_span: Span,
     /// `priv`: a shape's field that only its own file reads, writes, or sets
     /// in a literal. Parameters and payloads are never private.
@@ -2298,12 +2636,18 @@ pub enum Passing {
 impl Passing {
     /// Whether the parameter is the caller's place, given as `&a`.
     pub fn is_ref(self) -> bool {
-        matches!(self, Passing::FlexRef | Passing::FixedRef | Passing::BindRef)
+        matches!(
+            self,
+            Passing::FlexRef | Passing::FixedRef | Passing::BindRef
+        )
     }
 
     /// Whether the task may change the parameter.
     pub fn changes(self) -> bool {
-        matches!(self, Passing::Flex | Passing::FlexRef | Passing::Bind | Passing::BindRef)
+        matches!(
+            self,
+            Passing::Flex | Passing::FlexRef | Passing::Bind | Passing::BindRef
+        )
     }
 
     /// The words written before the parameter's name, for messages.
@@ -2414,7 +2758,9 @@ pub struct Part {
 impl Part {
     /// The name this file writes for the part: its alias, or else its own.
     pub fn local_name(&self) -> &str {
-        self.alias.as_ref().map_or(self.name.as_str(), |(alias, _)| alias.as_str())
+        self.alias
+            .as_ref()
+            .map_or(self.name.as_str(), |(alias, _)| alias.as_str())
     }
 
     /// Where the name this file writes for the part is.
@@ -2435,7 +2781,11 @@ impl Include {
         if self.only_parts {
             return None;
         }
-        Some(self.alias.as_ref().map_or(self.file_name(), |(alias, _)| alias.as_str()))
+        Some(
+            self.alias
+                .as_ref()
+                .map_or(self.file_name(), |(alias, _)| alias.as_str()),
+        )
     }
 
     /// Where the name this file names the module by is written.
@@ -2457,12 +2807,14 @@ pub const MODULE_SEPARATOR: char = '.';
 /// The module a name belongs to: `geometry` for `geometry.Point`, and the
 /// empty string for a name of the program's main file.
 pub fn module_of(name: &str) -> &str {
-    name.rsplit_once(MODULE_SEPARATOR).map_or("", |(module, _)| module)
+    name.rsplit_once(MODULE_SEPARATOR)
+        .map_or("", |(module, _)| module)
 }
 
 /// A name without its module: `Point` for `geometry.Point`.
 pub fn unqualified(name: &str) -> &str {
-    name.rsplit_once(MODULE_SEPARATOR).map_or(name, |(_, name)| name)
+    name.rsplit_once(MODULE_SEPARATOR)
+        .map_or(name, |(_, name)| name)
 }
 
 #[derive(Debug, Clone)]
@@ -2504,7 +2856,6 @@ pub struct TaskDef {
     /// One entry per result, in order; empty when the task sends nothing.
     pub results: Vec<ResultDef>,
     pub body: Block,
-    /// Position of the task name.
     pub span: Span,
     /// `priv task`: only its own file can call it.
     pub private: bool,
@@ -2579,11 +2930,14 @@ impl TaskDef {
         if self.owner.as_ref().is_some_and(|owner| owner.shared) {
             return method_parts(&self.name).map(|(owner, _)| owner);
         }
-        self.owner.as_ref().and_then(|_| self.params.first()).and_then(|param| match &param.ty {
-            Type::Named(name, _) => Some(name.as_str()),
-            Type::Applied(applied) => Some(applied.name.as_str()),
-            _ => None,
-        })
+        self.owner
+            .as_ref()
+            .and_then(|_| self.params.first())
+            .and_then(|param| match &param.ty {
+                Type::Named(name, _) => Some(name.as_str()),
+                Type::Applied(applied) => Some(applied.name.as_str()),
+                _ => None,
+            })
     }
 }
 
@@ -2625,7 +2979,10 @@ pub fn type_word(ty: &Type) -> String {
         Type::Named(name, _) => format!("n_{}", flat_name(name)),
         Type::Param(name) => format!("param__{}", name),
         Type::Group(name) => format!("group__{}", name),
-        Type::Applied(applied) => format!("n_{}", flat_name(&instance_name(&applied.name, &applied.types))),
+        Type::Applied(applied) => format!(
+            "n_{}",
+            flat_name(&instance_name(&applied.name, &applied.types))
+        ),
         Type::Ptr(inner, _) => format!("ptr__{}", type_word(inner)),
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
@@ -2637,8 +2994,16 @@ pub fn type_word(ty: &Type) -> String {
         Type::Array(items, count) => format!("array__{}__{}", count, type_word(items)),
         Type::Slice(items, _) => format!("slice__{}", type_word(items)),
         Type::Map(key, value, _) => format!("map__{}__{}", type_word(key), type_word(value)),
-        Type::Results(types) => format!("results__{}__{}", types.len(), types.iter().map(type_word).collect::<Vec<_>>().join("__")),
-        Type::Tuple(items) => format!("tuple__{}__{}", items.len(), items.iter().map(type_word).collect::<Vec<_>>().join("__")),
+        Type::Results(types) => format!(
+            "results__{}__{}",
+            types.len(),
+            types.iter().map(type_word).collect::<Vec<_>>().join("__")
+        ),
+        Type::Tuple(items) => format!(
+            "tuple__{}__{}",
+            items.len(),
+            items.iter().map(type_word).collect::<Vec<_>>().join("__")
+        ),
         Type::Task(task) => {
             // A place is given as a pointer, which C tells apart from a value.
             let params: Vec<String> = task
@@ -2652,10 +3017,18 @@ pub fn type_word(ty: &Type) -> String {
                     _ => type_word(ty),
                 })
                 .collect();
-            format!("task__{}__{}__{}", task.params.len(), params.join("__"), type_word(&task.ret))
+            format!(
+                "task__{}__{}__{}",
+                task.params.len(),
+                params.join("__"),
+                type_word(&task.ret)
+            )
         }
         // `[flex @r]` and `[@r]` are one C type: a call and what it keeps.
-        Type::Closure(closure) => format!("closure__{}", type_word(&Type::Task(Box::new(closure.task.clone())))),
+        Type::Closure(closure) => format!(
+            "closure__{}",
+            type_word(&Type::Task(Box::new(closure.task.clone())))
+        ),
     }
 }
 
@@ -2664,8 +3037,13 @@ pub fn type_word(ty: &Type) -> String {
 /// `__0__`, each `/` of the path `__1__`, and each `..` in it `__2__`
 /// (`shapes/geometry.area` is `shapes__1__geometry__0__area`).
 pub fn flat_name(name: &str) -> String {
-    let Some((module, own)) = name.rsplit_once(MODULE_SEPARATOR) else { return name.to_string() };
-    let path: Vec<&str> = module.split('/').map(|part| if part == ".." { "__2__" } else { part }).collect();
+    let Some((module, own)) = name.rsplit_once(MODULE_SEPARATOR) else {
+        return name.to_string();
+    };
+    let path: Vec<&str> = module
+        .split('/')
+        .map(|part| if part == ".." { "__2__" } else { part })
+        .collect();
     format!("{}__0__{}", path.join("__1__"), own)
 }
 
@@ -2677,7 +3055,6 @@ pub type TypeArg = (Type, Span);
 #[derive(Debug, Clone)]
 pub struct TypeParam {
     pub name: String,
-    /// Position of the name.
     pub span: Span,
     /// What every type given for it must allow, each word with where it is
     /// written: `<T: same & shown>` asks for both. None lets any type fit, and
@@ -2726,7 +3103,11 @@ pub fn followed_types(ty: &Type) -> &[Type] {
 impl Followed {
     /// Pattern `name` given no types, at `span`.
     pub fn plain(name: &str, span: Span) -> Followed {
-        Followed { name: name.to_string(), types: Vec::new(), span }
+        Followed {
+            name: name.to_string(),
+            types: Vec::new(),
+            span,
+        }
     }
 }
 
@@ -2752,7 +3133,13 @@ pub enum Need {
 
 impl Need {
     /// The words, in the order messages list them.
-    pub const ALL: [Need; 5] = [Need::Ordered, Need::Shown, Need::Same, Need::Similar, Need::Frozen];
+    pub const ALL: [Need; 5] = [
+        Need::Ordered,
+        Need::Shown,
+        Need::Same,
+        Need::Similar,
+        Need::Frozen,
+    ];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -2782,24 +3169,29 @@ impl Need {
 pub struct ResultDef {
     /// The name the task sets with `total <- value`, and its position.
     pub name: Option<Binding>,
-    /// Position of the result's type.
     pub ty_span: Span,
 }
 
 impl TaskDef {
     /// Position of the return type, or of the task name when there is none.
     pub fn ret_span(&self) -> Span {
-        self.results.first().map_or(self.span, |result| result.ty_span)
+        self.results
+            .first()
+            .map_or(self.span, |result| result.ty_span)
     }
 
     /// Position of result `i`, or of the return type when it isn't known.
     pub fn result_span(&self, i: usize) -> Span {
-        self.results.get(i).map_or_else(|| self.ret_span(), |result| result.ty_span)
+        self.results
+            .get(i)
+            .map_or_else(|| self.ret_span(), |result| result.ty_span)
     }
 
     /// The names of the results, in order, when they have them.
     pub fn result_names(&self) -> impl Iterator<Item = &Binding> {
-        self.results.iter().filter_map(|result| result.name.as_ref())
+        self.results
+            .iter()
+            .filter_map(|result| result.name.as_ref())
     }
 
     /// Whether the results are named, so that setting them with `<-` is what
@@ -2825,7 +3217,6 @@ pub struct ShapeDef {
     /// `shared f: int = 0`: fields that are one value for the whole program,
     /// never part of a value of the shape, in the order they are written.
     pub shared: Vec<SharedField>,
-    /// Position of the shape name.
     pub span: Span,
     /// `priv shape`: only its own file can name it.
     pub private: bool,
@@ -2872,7 +3263,6 @@ impl SharedField {
 pub struct Variant {
     pub tag: String,
     pub payload: Vec<Field>,
-    /// Position of the variant tag.
     pub span: Span,
 }
 
@@ -2888,7 +3278,6 @@ pub struct KindDef {
     /// takes types; empty otherwise.
     pub given: Vec<Type>,
     pub variants: Vec<Variant>,
-    /// Position of the kind name.
     pub span: Span,
     /// `priv kind`: only its own file can name it or its variants.
     pub private: bool,
@@ -2914,7 +3303,6 @@ pub struct MacroDef {
     pub name: String,
     /// As written; the checker computes it into a literal (see `Checker::macros`).
     pub value: Expr,
-    /// Position of the macro's name.
     pub span: Span,
     /// `priv #P = …`: only its own file can name it.
     pub private: bool,
@@ -2938,7 +3326,6 @@ pub struct PatternDef {
     pub types: Vec<TypeParam>,
     pub fields: Vec<Field>,
     pub methods: Vec<TaskDef>,
-    /// Position of the pattern's name.
     pub span: Span,
     /// `priv pattern`: only its own file can name it.
     pub private: bool,
@@ -2947,7 +3334,12 @@ pub struct PatternDef {
 impl PatternDef {
     /// Its method called `name`.
     pub fn method(&self, name: &str) -> Option<&TaskDef> {
-        self.methods.iter().find(|method| method.owner.as_ref().is_some_and(|owner| owner.name == name))
+        self.methods.iter().find(|method| {
+            method
+                .owner
+                .as_ref()
+                .is_some_and(|owner| owner.name == name)
+        })
     }
 }
 
@@ -2959,9 +3351,7 @@ impl PatternDef {
 pub struct AliasDef {
     pub name: String,
     pub ty: Type,
-    /// Position of the alias's name.
     pub span: Span,
-    /// Position of the type it stands for.
     pub ty_span: Span,
     /// `priv alias …`: only its own file can name it.
     pub private: bool,

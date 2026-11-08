@@ -7,7 +7,10 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, TypedForm, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
+use vela::ast::{
+    Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, Span,
+    Stmt, StmtKind, THIS, Target, Type, TypedForm, method_parts,
+};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -35,17 +38,28 @@ fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
             None => ty.clone(),
         },
         Type::Ptr(inner, region) => Type::Ptr(Box::new(as_written(inner, made)), region.clone()),
-        Type::Slice(inner, region) => Type::Slice(Box::new(as_written(inner, made)), region.clone()),
+        Type::Slice(inner, region) => {
+            Type::Slice(Box::new(as_written(inner, made)), region.clone())
+        }
         Type::Array(inner, count) => Type::Array(Box::new(as_written(inner, made)), *count),
         Type::Range(inner) => Type::Range(Box::new(as_written(inner, made))),
         Type::Maybe(inner) => Type::Maybe(Box::new(as_written(inner, made))),
         Type::Fail(inner) => Type::Fail(Box::new(as_written(inner, made))),
-        Type::Or(value, error) => Type::Or(Box::new(as_written(value, made)), Box::new(as_written(error, made))),
+        Type::Or(value, error) => Type::Or(
+            Box::new(as_written(value, made)),
+            Box::new(as_written(error, made)),
+        ),
         Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| as_written(ty, made)).collect()),
-        Type::Results(types) => Type::Results(types.iter().map(|ty| as_written(ty, made)).collect()),
+        Type::Results(types) => {
+            Type::Results(types.iter().map(|ty| as_written(ty, made)).collect())
+        }
         Type::Applied(applied) => Type::Applied(Box::new(Applied {
             name: as_written_name(&applied.name, made),
-            types: applied.types.iter().map(|ty| as_written(ty, made)).collect(),
+            types: applied
+                .types
+                .iter()
+                .map(|ty| as_written(ty, made))
+                .collect(),
             region: applied.region.clone(),
         })),
         other => other.clone(),
@@ -66,7 +80,6 @@ pub(crate) fn slashed(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-/// What recording types needs to know about the program's declarations.
 struct Declarations<'a> {
     kinds: HashMap<&'a str, &'a KindDef>,
     /// The shapes and kinds that can be given a region: those holding
@@ -134,8 +147,16 @@ impl Checked {
             let _ = modules::load(path, source, &mut discover);
         }
         let spelling = partial.spelling;
-        let mut checked = Checked { errors: partial.errors, warnings: partial.warnings, files: partial.files, missing, ..Checked::default() };
-        let Some(items) = partial.items else { return checked };
+        let mut checked = Checked {
+            errors: partial.errors,
+            warnings: partial.warnings,
+            files: partial.files,
+            missing,
+            ..Checked::default()
+        };
+        let Some(items) = partial.items else {
+            return checked;
+        };
         let kinds: HashMap<&str, &KindDef> = items
             .iter()
             .filter_map(|item| match item {
@@ -143,7 +164,13 @@ impl Checked {
                 _ => None,
             })
             .collect();
-        let declarations = Declarations { kinds, takes_region: regional_types(&items).union(&textual_types(&items)).cloned().collect() };
+        let declarations = Declarations {
+            kinds,
+            takes_region: regional_types(&items)
+                .union(&textual_types(&items))
+                .cloned()
+                .collect(),
+        };
         // Positions are recorded for the analyzed file only. A task made from a
         // generic one holds the positions of the generic task's body with the
         // types of one use in place of its own, so the editor reads the generic
@@ -179,7 +206,11 @@ impl Checked {
             if let Item::Shape(values) = item
                 && values.name == START_VALUES
             {
-                for member in values.shared.iter().filter(|member| member.field.span.file == 0) {
+                for member in values
+                    .shared
+                    .iter()
+                    .filter(|member| member.field.span.file == 0)
+                {
                     if let Some(value) = &member.field.default {
                         checked.expr(value, &declarations);
                     }
@@ -191,7 +222,9 @@ impl Checked {
         let made: HashMap<&str, &[Type]> = items
             .iter()
             .filter_map(|item| match item {
-                Item::Shape(s) if !s.given.is_empty() => Some((s.name.as_str(), s.given.as_slice())),
+                Item::Shape(s) if !s.given.is_empty() => {
+                    Some((s.name.as_str(), s.given.as_slice()))
+                }
                 Item::Kind(k) if !k.given.is_empty() => Some((k.name.as_str(), k.given.as_slice())),
                 _ => None,
             })
@@ -229,7 +262,9 @@ impl Checked {
                 self.expr(target, kinds);
                 self.expr(value, kinds);
             }
-            StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
+            StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
+                values.iter().for_each(|value| self.expr(value, kinds))
+            }
             StmtKind::Region { .. } => {
                 self.declare(stmt.span, Type::Region);
             }
@@ -297,8 +332,12 @@ impl Checked {
                 // value, once the checker knows which.
                 let (item, value) = match (&range.kind, &range.ty) {
                     (ExprKind::Range(..), _) => (Some(Type::Int), None),
-                    (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => (Some((**items).clone()), None),
-                    (_, Some(Type::Map(key, value, _))) => (Some((**key).clone()), Some((**value).clone())),
+                    (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => {
+                        (Some((**items).clone()), None)
+                    }
+                    (_, Some(Type::Map(key, value, _))) => {
+                        (Some((**key).clone()), Some((**value).clone()))
+                    }
                     _ => (None, None),
                 };
                 if let Some(item) = item {
@@ -329,7 +368,11 @@ impl Checked {
         let Some(subject) = subject else { return };
         match (&pattern.kind, subject) {
             (PatternKind::Variant { tag, binds, .. }, Type::Named(name, region)) => {
-                let payload = kinds.kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
+                let payload = kinds
+                    .kinds
+                    .get(name.as_str())
+                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+                    .map(|v| &v.payload);
                 for (names, field) in binds.iter().zip(payload.into_iter().flatten()) {
                     let ty = match region {
                         Some(region) => in_region(&field.ty, region, &kinds.takes_region),
@@ -338,13 +381,29 @@ impl Checked {
                     self.pattern_names(names, &ty);
                 }
             }
-            (PatternKind::Value(names), Type::Maybe(inner) | Type::Or(inner, _)) => self.pattern_names(names, inner),
+            (PatternKind::Value(names), Type::Maybe(inner) | Type::Or(inner, _)) => {
+                self.pattern_names(names, inner)
+            }
             (PatternKind::Fail(names), Type::Or(_, error)) => self.pattern_names(names, error),
             // `(x, y)`: the items of the tuple itself.
             (PatternKind::Tuple(names), _) => self.pattern_names(names, subject),
             // `t.#2 is maybe int x` names the read, and `{x}` the item.
-            (PatternKind::Typed { ty, form: TypedForm::Named(names), .. }, _) => self.pattern_names(names, ty),
-            (PatternKind::Typed { ty: Type::Maybe(inner), form: TypedForm::Value(names), .. }, _) => self.pattern_names(names, inner),
+            (
+                PatternKind::Typed {
+                    ty,
+                    form: TypedForm::Named(names),
+                    ..
+                },
+                _,
+            ) => self.pattern_names(names, ty),
+            (
+                PatternKind::Typed {
+                    ty: Type::Maybe(inner),
+                    form: TypedForm::Value(names),
+                    ..
+                },
+                _,
+            ) => self.pattern_names(names, inner),
             _ => {}
         }
     }
@@ -422,8 +481,18 @@ impl Checked {
             ExprKind::TaskValue(name) if let Some((owner, _)) = method_parts(name) => {
                 self.field_accesses.insert(pos(e.span), owner.to_string());
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) | ExprKind::Closure { .. } => {}
+            ExprKind::IntLit(_)
+            | ExprKind::FloatLit(_)
+            | ExprKind::CharLit(_)
+            | ExprKind::BoolLit(_)
+            | ExprKind::TextLit(_)
+            | ExprKind::NoneLit
+            | ExprKind::Macro { .. }
+            | ExprKind::Var(_)
+            | ExprKind::RegionAfter(_)
+            | ExprKind::TypeOf(_)
+            | ExprKind::TaskValue(_)
+            | ExprKind::Closure { .. } => {}
             ExprKind::Kept { value, .. } => self.expr(value, kinds),
             ExprKind::Invoke { callee, args } => {
                 self.expr(callee, kinds);
@@ -431,8 +500,16 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
-            ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } => self.expr(inner, kinds),
-            ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            ExprKind::Unary(_, inner)
+            | ExprKind::Deref(inner)
+            | ExprKind::Ref(inner)
+            | ExprKind::New { value: inner, .. }
+            | ExprKind::Shortcut { value: inner, .. } => self.expr(inner, kinds),
+            ExprKind::Index(a, b)
+            | ExprKind::Lookup(a, b)
+            | ExprKind::Binary(_, a, b)
+            | ExprKind::Range(a, b)
+            | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }
@@ -459,7 +536,10 @@ impl Checked {
                     self.expr(key, kinds);
                 }
             }
-            ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
+            ExprKind::Call { args, .. }
+            | ExprKind::Construct { args, .. }
+            | ExprKind::Array(args)
+            | ExprKind::Tuple(args) => {
                 for arg in args {
                     self.expr(arg, kinds);
                 }
@@ -469,7 +549,11 @@ impl Checked {
                     self.expr(&field.value, kinds);
                 }
             }
-            ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Widen(inner) | ExprKind::Pipe(inner) | ExprKind::Piped(inner) => self.expr(inner, kinds),
+            ExprKind::Fail(inner)
+            | ExprKind::Wrap(inner)
+            | ExprKind::Widen(inner)
+            | ExprKind::Pipe(inner)
+            | ExprKind::Piped(inner) => self.expr(inner, kinds),
             ExprKind::PlanB { value, error, body } => {
                 self.expr(value, kinds);
                 if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {

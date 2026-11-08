@@ -98,7 +98,6 @@ static inline void vela__rt__show_text(vela__rt__text x) {
     vela__rt__show_line();
 }
 
-/* A char is its byte, written as it is. */
 static inline void vela__rt__write_char(uint8_t c) {
     putchar(c);
 }
@@ -159,7 +158,6 @@ static inline _Noreturn void vela__rt__int_trap(const char* what, const char* at
 #define VELA__RT__OVERFLOW_BUILTINS 0
 #endif
 
-/* Whether `a + b` overflows; otherwise stores it in `*r`. */
 static inline bool vela__rt__add_overflows(int64_t a, int64_t b, int64_t* r) {
 #if VELA__RT__OVERFLOW_BUILTINS
     return __builtin_add_overflow(a, b, r);
@@ -172,7 +170,6 @@ static inline bool vela__rt__add_overflows(int64_t a, int64_t b, int64_t* r) {
 #endif
 }
 
-/* Whether `a - b` overflows; otherwise stores it in `*r`. */
 static inline bool vela__rt__sub_overflows(int64_t a, int64_t b, int64_t* r) {
 #if VELA__RT__OVERFLOW_BUILTINS
     return __builtin_sub_overflow(a, b, r);
@@ -185,7 +182,6 @@ static inline bool vela__rt__sub_overflows(int64_t a, int64_t b, int64_t* r) {
 #endif
 }
 
-/* Whether `a * b` overflows; otherwise stores it in `*r`. */
 static inline bool vela__rt__mul_overflows(int64_t a, int64_t b, int64_t* r) {
 #if VELA__RT__OVERFLOW_BUILTINS
     return __builtin_mul_overflow(a, b, r);
@@ -788,7 +784,6 @@ static inline vela__rt__text vela__rt__text_part(vela__rt__text text, int64_t fr
     return (vela__rt__text){ text.bytes + from, to - from };
 }
 
-/* Room for `len` items of `size` bytes aligned to `align` in region `r`. */
 /* Maps. Each map type's table is generated for its key and value types (see
  * the code generator's `gen_map_helpers`): an array of entries, `{ hash, key,
  * value }`, in the order keys were first added, and an index of 4-byte slots,
@@ -926,7 +921,6 @@ static inline void vela__rt__not_empty_for(int64_t len, const char* what, const 
     }
 }
 
-/* Checks that a slice of `len` items has an item to take out with `del()`. */
 static inline void vela__rt__not_empty(int64_t len, const char* at) {
     if (len == 0) {
         vela__rt__empty_trap(at);
@@ -1091,7 +1085,6 @@ static inline vela__rt__text vela__rt__bool_str(vela__rt__region* r, bool x) {
     return x ? VELA__RT__TEXT("true") : VELA__RT__TEXT("false");
 }
 
-/* Text turned into text is a copy of it in `r`. */
 static inline vela__rt__text vela__rt__text_str(vela__rt__region* r, vela__rt__text x) {
     return vela__rt__text_in(r, x.bytes, (size_t)x.len);
 }
@@ -1194,7 +1187,6 @@ static inline void vela__rt__put_bool(vela__rt__writer* w, bool x) {
     }
 }
 
-/* Text on its own is written as it is. */
 static inline void vela__rt__put_text(vela__rt__writer* w, vela__rt__text x) {
     vela__rt__put(w, x.bytes, x.len < 0 ? 0 : (size_t)x.len);
 }
@@ -1336,7 +1328,6 @@ static inline size_t vela__rt__copy_slot(const void* from, size_t capacity) {
     return (size_t)(hash >> 32) & (capacity - 1);
 }
 
-/* Makes the table twice as large (at least 64 slots). */
 static inline void vela__rt__copy_grow(vela__rt__copy* c) {
     size_t capacity = c->capacity == 0 ? 64 : c->capacity;
     if (c->capacity != 0) {
@@ -1405,7 +1396,6 @@ static inline void* vela__rt__copy_pointer(vela__rt__copy* c, const void* from, 
     return to;
 }
 
-/* Fixes the values still waiting, and frees what copying used. */
 static inline void vela__rt__copy_finish(vela__rt__copy* c) {
     while (c->waiting > 0) {
         vela__rt__pending next = c->pending[--c->waiting];
@@ -1879,7 +1869,6 @@ static inline int64_t vela__rt__files_open(vela__rt__text path, int64_t mode, ve
     return handle;
 }
 
-/* Whether `handle` holds a file open now. */
 static inline bool vela__rt__files_is_open(int64_t handle) {
     return vela__rt__file_of(handle) != NULL;
 }
@@ -2125,10 +2114,7 @@ static inline _Noreturn void vela__rt__missing_send(const char* task) {
     abort();
 }
 
-/* --------------------------------------------------------------------------
- * 512-bit signed integer support (std/int512)
- * Held as 8 64-bit unsigned limbs in two's complement, least significant first.
- * -------------------------------------------------------------------------- */
+/* Held as 8 64-bit unsigned limbs in two's complement, least significant first. */
 
 typedef struct vela__rt__int512 {
     uint64_t limbs[8];

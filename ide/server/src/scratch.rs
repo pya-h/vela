@@ -1,4 +1,4 @@
-//! Temporary folders for built programs, outside the workspace.
+//! Outside the workspace, so a build never touches the user's files.
 
 use std::fs;
 use std::io;
@@ -17,7 +17,11 @@ impl ScratchDir {
     pub fn create() -> io::Result<ScratchDir> {
         let mut last_error = None;
         for _ in 0..16 {
-            let path = std::env::temp_dir().join(format!("vela-studio-{}-{}", std::process::id(), random_hex(8)?));
+            let path = std::env::temp_dir().join(format!(
+                "vela-studio-{}-{}",
+                std::process::id(),
+                random_hex(8)?
+            ));
             // `create_dir` fails on an existing folder, so none is ever reused.
             // Only this user may look inside: it holds built programs, and the
             // browser's launch page.
@@ -26,7 +30,9 @@ impl ScratchDir {
             std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
             match builder.create(&path) {
                 Ok(()) => return Ok(ScratchDir { path }),
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last_error = Some(error),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    last_error = Some(error)
+                }
                 Err(error) => return Err(error),
             }
         }

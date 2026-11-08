@@ -44,7 +44,9 @@ pub enum FsError {
     /// The file isn't UTF-8 text.
     NotText,
     /// The file changed since the editor read it; `hash` is its current hash.
-    Changed { hash: String },
+    Changed {
+        hash: String,
+    },
     /// The file is read-only.
     ReadOnly,
     /// The operating system refused access.
@@ -72,7 +74,6 @@ pub enum EntryKind {
     Folder,
 }
 
-/// An entry in the file tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Entry {
     pub name: String,
@@ -110,9 +111,15 @@ impl Workspace {
     pub fn open(folder: &Path) -> io::Result<Workspace> {
         let root = fs::canonicalize(folder)?;
         if !root.is_dir() {
-            return Err(io::Error::new(io::ErrorKind::NotADirectory, format!("'{}' is not a folder", folder.display())));
+            return Err(io::Error::new(
+                io::ErrorKind::NotADirectory,
+                format!("'{}' is not a folder", folder.display()),
+            ));
         }
-        Ok(Workspace { root, writes: Mutex::new(()) })
+        Ok(Workspace {
+            root,
+            writes: Mutex::new(()),
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -121,12 +128,17 @@ impl Workspace {
 
     /// The workspace folder's name.
     pub fn name(&self) -> String {
-        self.root.file_name().map_or_else(|| self.root.display().to_string(), |name| name.to_string_lossy().into_owned())
+        self.root.file_name().map_or_else(
+            || self.root.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        )
     }
 
     /// An existing entry, following symlinks, which must stay inside.
     pub fn resolve(&self, path: &str) -> Result<PathBuf> {
-        let joined = self.root.join(segments(path)?.join(std::path::MAIN_SEPARATOR_STR));
+        let joined = self
+            .root
+            .join(segments(path)?.join(std::path::MAIN_SEPARATOR_STR));
         let resolved = fs::canonicalize(joined)?;
         if !resolved.starts_with(&self.root) {
             return Err(FsError::Outside);
@@ -161,21 +173,36 @@ impl Workspace {
         Tree { entries, truncated }
     }
 
-    fn list(&self, folder: &Path, prefix: &str, depth: usize, budget: &mut usize, truncated: &mut bool) -> Vec<Entry> {
-        let Ok(read) = fs::read_dir(folder) else { return Vec::new() };
+    fn list(
+        &self,
+        folder: &Path,
+        prefix: &str,
+        depth: usize,
+        budget: &mut usize,
+        truncated: &mut bool,
+    ) -> Vec<Entry> {
+        let Ok(read) = fs::read_dir(folder) else {
+            return Vec::new();
+        };
         let mut found: Vec<(String, PathBuf, EntryKind)> = Vec::new();
         for item in read.flatten() {
-            let Ok(name) = item.file_name().into_string() else { continue };
+            let Ok(name) = item.file_name().into_string() else {
+                continue;
+            };
             if name.starts_with('.') || !valid_segment(&name) {
                 continue;
             }
             let path = item.path();
-            let Ok(metadata) = path.symlink_metadata() else { continue };
+            let Ok(metadata) = path.symlink_metadata() else {
+                continue;
+            };
             let kind = if metadata.file_type().is_symlink() {
                 // Links are shown only if they are files inside the workspace;
                 // linked folders are skipped, which also avoids cycles.
                 match fs::canonicalize(&path) {
-                    Ok(target) if target.starts_with(&self.root) && target.is_file() => EntryKind::File,
+                    Ok(target) if target.starts_with(&self.root) && target.is_file() => {
+                        EntryKind::File
+                    }
                     _ => continue,
                 }
             } else if metadata.is_dir() {
@@ -192,7 +219,11 @@ impl Workspace {
             found.push((name, path, kind));
         }
         found.sort_by(|a, b| {
-            (a.2 == EntryKind::File, a.0.to_lowercase(), &a.0).cmp(&(b.2 == EntryKind::File, b.0.to_lowercase(), &b.0))
+            (a.2 == EntryKind::File, a.0.to_lowercase(), &a.0).cmp(&(
+                b.2 == EntryKind::File,
+                b.0.to_lowercase(),
+                &b.0,
+            ))
         });
 
         let mut entries = Vec::new();
@@ -202,7 +233,11 @@ impl Workspace {
                 break;
             }
             *budget -= 1;
-            let relative = if prefix.is_empty() { name.clone() } else { format!("{}/{}", prefix, name) };
+            let relative = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", prefix, name)
+            };
             let children = (kind == EntryKind::Folder).then(|| {
                 if depth + 1 >= MAX_DEPTH {
                     *truncated = true;
@@ -211,7 +246,12 @@ impl Workspace {
                     self.list(&path, &relative, depth + 1, budget, truncated)
                 }
             });
-            entries.push(Entry { name, path: relative, kind, children });
+            entries.push(Entry {
+                name,
+                path: relative,
+                kind,
+                children,
+            });
         }
         entries
     }
@@ -233,7 +273,10 @@ impl Workspace {
             return Err(FsError::TooLarge);
         }
         let resolved = self.resolve(path)?;
-        let _guard = self.writes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .writes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let metadata = fs::metadata(&resolved)?;
         if !metadata.is_file() {
             return Err(FsError::NotAFile);
@@ -242,7 +285,11 @@ impl Workspace {
         // renames a new file over it, which only needs the folder to be
         // writable, so the file's own permission is checked here.
         let writable = OpenOptions::new().write(true).open(&resolved);
-        if metadata.permissions().readonly() || writable.as_ref().is_err_and(|error| error.kind() == io::ErrorKind::PermissionDenied) {
+        if metadata.permissions().readonly()
+            || writable
+                .as_ref()
+                .is_err_and(|error| error.kind() == io::ErrorKind::PermissionDenied)
+        {
             return Err(FsError::ReadOnly);
         }
         drop(writable);
@@ -250,7 +297,9 @@ impl Workspace {
             // The editor only ever held a file up to the size limit, so a
             // larger file has changed, and isn't read to find out.
             if metadata.len() > MAX_FILE_BYTES as u64 {
-                return Err(FsError::Changed { hash: String::new() });
+                return Err(FsError::Changed {
+                    hash: String::new(),
+                });
             }
             let current = content_hash(&fs::read(&resolved)?);
             if current != base {
@@ -260,13 +309,19 @@ impl Workspace {
         let folder = resolved.parent().ok_or(FsError::NotAFile)?;
         // A short name, so a file whose name is near the length limit still saves.
         let temporary = folder.join(format!(".vela-studio-{}.tmp", random_hex(6)?));
-        let created = OpenOptions::new().write(true).create_new(true).open(&temporary);
+        let created = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary);
         let mut file = match created {
             Ok(file) => file,
             // The folder can't take a new file, but the file itself may be
             // writable: write it in place instead.
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                let mut file = OpenOptions::new().write(true).truncate(true).open(&resolved)?;
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(&resolved)?;
                 file.write_all(content.as_bytes())?;
                 file.sync_all()?;
                 return Ok(content_hash(content.as_bytes()));
@@ -288,13 +343,21 @@ impl Workspace {
 
     /// Creates an empty file or a folder, which must not exist yet.
     pub fn create(&self, path: &str, kind: EntryKind) -> Result<String> {
-        let _guard = self.writes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .writes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (entry, exists) = self.locate(path)?;
         if exists {
             return Err(FsError::AlreadyExists);
         }
         match kind {
-            EntryKind::File => drop(OpenOptions::new().write(true).create_new(true).open(&entry)?),
+            EntryKind::File => drop(
+                OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&entry)?,
+            ),
             EntryKind::Folder => fs::create_dir(&entry)?,
         }
         Ok(path.to_string())
@@ -302,7 +365,10 @@ impl Workspace {
 
     /// Moves a file or folder to a path that doesn't exist yet.
     pub fn rename(&self, from: &str, to: &str) -> Result<String> {
-        let _guard = self.writes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .writes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (source, exists) = self.locate(from)?;
         if !exists {
             return Err(FsError::NotFound);
@@ -312,7 +378,9 @@ impl Workspace {
             return Err(FsError::AlreadyExists);
         }
         if target.starts_with(&source) {
-            return Err(FsError::InvalidPath("a folder can't be moved into itself".to_string()));
+            return Err(FsError::InvalidPath(
+                "a folder can't be moved into itself".to_string(),
+            ));
         }
         fs::rename(&source, &target)?;
         Ok(to.to_string())
@@ -320,13 +388,20 @@ impl Workspace {
 
     /// Deletes a file, a symlink, or a folder with everything in it.
     pub fn delete(&self, path: &str) -> Result<()> {
-        let _guard = self.writes.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = self
+            .writes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (entry, exists) = self.locate(path)?;
         if !exists {
             return Err(FsError::NotFound);
         }
         // `remove_dir_all` never follows symlinks inside the folder.
-        if entry.symlink_metadata()?.is_dir() { fs::remove_dir_all(&entry)? } else { fs::remove_file(&entry)? }
+        if entry.symlink_metadata()?.is_dir() {
+            fs::remove_dir_all(&entry)?
+        } else {
+            fs::remove_file(&entry)?
+        }
         Ok(())
     }
 }
@@ -338,7 +413,10 @@ fn segments(path: &str) -> Result<Vec<&str>> {
     }
     let segments: Vec<&str> = path.split('/').collect();
     match segments.iter().find(|segment| !valid_segment(segment)) {
-        Some(bad) => Err(FsError::InvalidPath(format!("'{}' is not a valid name in a workspace path", bad))),
+        Some(bad) => Err(FsError::InvalidPath(format!(
+            "'{}' is not a valid name in a workspace path",
+            bad
+        ))),
         None => Ok(segments),
     }
 }
@@ -347,7 +425,9 @@ fn valid_segment(segment: &str) -> bool {
     !segment.is_empty()
         && segment != "."
         && segment != ".."
-        && !segment.chars().any(|c| c == '\\' || c == ':' || c.is_control())
+        && !segment
+            .chars()
+            .any(|c| c == '\\' || c == ':' || c.is_control())
 }
 
 /// A file's bytes, refusing folders and files over the size limit.
@@ -363,7 +443,8 @@ fn read_limited(path: &Path) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     // One byte past the limit tells a too-large file apart, even if it grew
     // after its size was read.
-    file.take(MAX_FILE_BYTES as u64 + 1).read_to_end(&mut bytes)?;
+    file.take(MAX_FILE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
     if bytes.len() > MAX_FILE_BYTES {
         return Err(FsError::TooLarge);
     }
@@ -373,21 +454,43 @@ fn read_limited(path: &Path) -> Result<Vec<u8>> {
 /// A hash of file contents for noticing changes (64-bit FNV-1a, as hex). It
 /// is not for security: only the IDE's own edits are compared with it.
 pub fn content_hash(bytes: &[u8]) -> String {
-    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |hash, &b| (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3));
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |hash, &b| {
+        (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
     format!("{:016x}", hash)
 }
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic
+    )]
 
     use super::*;
 
     #[test]
     fn request_paths_are_plain_relative_names() {
         assert_eq!(segments("a/b.vela").unwrap(), ["a", "b.vela"]);
-        for bad in ["", "/etc/passwd", "a//b", "a/", "./a", "a/../b", "..", "a\\b", "C:x", "a\0b"] {
-            assert!(matches!(segments(bad), Err(FsError::InvalidPath(_))), "{:?}", bad);
+        for bad in [
+            "",
+            "/etc/passwd",
+            "a//b",
+            "a/",
+            "./a",
+            "a/../b",
+            "..",
+            "a\\b",
+            "C:x",
+            "a\0b",
+        ] {
+            assert!(
+                matches!(segments(bad), Err(FsError::InvalidPath(_))),
+                "{:?}",
+                bad
+            );
         }
     }
 

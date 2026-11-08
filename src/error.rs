@@ -10,7 +10,6 @@ pub struct Error {
 }
 
 impl Error {
-    /// An error at a specific source position.
     pub fn at(span: Span, message: impl Into<String>) -> Self {
         Error {
             span: Some(span),
@@ -31,7 +30,12 @@ impl Error {
     /// An internal error about the code at `span`. The position is part of
     /// the message, for bug reports, rather than a diagnostic location.
     pub fn internal_at(span: Span, message: impl AsRef<str>) -> Self {
-        Error::internal(format!("{} (at {}:{})", message.as_ref(), span.line, span.col))
+        Error::internal(format!(
+            "{} (at {}:{})",
+            message.as_ref(),
+            span.line,
+            span.col
+        ))
     }
 }
 

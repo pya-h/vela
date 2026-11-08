@@ -332,6 +332,8 @@ finally</pre>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T ~ E</code>, or else what the block gives</td></tr>
         <tr><td><code>a |&gt; f(b)</code>, <code>a |&gt;&gt; f(b)</code></td><td>a pipe: the call <code>f(a, b)</code>, or <code>f(b, a)</code>, each <code>&gt;</code> one argument further; a step that fails stops the chain (see <a href="#pipes">Call pipes</a>)</td></tr>
+        <tr><td><code>xs.map(…)</code>, <code>it.filter(…)</code>, <code>it.collect(r)</code></td><td>a lazy iterator chain off a slice or an iterator, in a file that includes std/collections; nothing is gathered until a consumer asks (see <a href="#iterators">Lazy iterators</a>)</td></tr>
+        <tr><td><code>a + b</code>, <code>-a</code>, <code>a &lt; b</code> on one shape</td><td>the operators a type's pattern names by method name (plus, minus, times, div, rem, neg, cmp), both operands the one type (see <a href="#operators">Operators a pattern names</a>)</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
@@ -4550,7 +4552,8 @@ save(500) {
         used where it is written. <code>each x in it</code> goes through an iterator the same way, one <code>next()</code>
         per pass, so <code>it</code> is <code>flex</code> (or a written expression), and after the loop it is done:
         <code>it.next()</code> gives <code>none</code>. An iterator is a value like any other: kept in a variable, passed to
-        a task, and copied like its shape.
+        a task, and copied like its shape. An each over an iterator is a pass loop: it gives no value and takes no
+        <code>finally</code> (its end is a <code>break</code>); gather what it gives with <code>collect</code>.
       </p>
 
       <h3 id="operators">Operators a pattern names</h3>

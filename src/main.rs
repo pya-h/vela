@@ -9,7 +9,6 @@ use vela::driver;
 const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
-/// What the command line asks for.
 enum Action {
     Help,
     Version,
@@ -37,7 +36,11 @@ fn main() {
     let opts = match parse_args(env::args().skip(1)) {
         Ok(Action::Run(opts)) => opts,
         Ok(action) => {
-            let text = if matches!(action, Action::Version) { VERSION } else { USAGE };
+            let text = if matches!(action, Action::Version) {
+                VERSION
+            } else {
+                USAGE
+            };
             if let Err(msg) = write_stdout(&format!("{}\n", text)) {
                 eprintln!("{}", msg);
                 process::exit(1);
@@ -105,13 +108,24 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     }
     if quick && (emit_c || check) {
         let other = if emit_c { "--emit-c" } else { "--check" };
-        return Err(format!("--quick builds an executable faster, and {} builds none, so they can't be used together", other));
+        return Err(format!(
+            "--quick builds an executable faster, and {} builds none, so they can't be used together",
+            other
+        ));
     }
     if no_notices && check {
         return Err("--no-notices changes the program built, and --check builds none, so they can't be used together".to_string());
     }
     let input = input.ok_or_else(|| "no input file".to_string())?;
-    Ok(Action::Run(Options { input, output, emit_c, check, quick, no_notices, repeat_warnings }))
+    Ok(Action::Run(Options {
+        input,
+        output,
+        emit_c,
+        check,
+        quick,
+        no_notices,
+        repeat_warnings,
+    }))
 }
 
 fn run(opts: &Options) -> Result<(), String> {
@@ -122,7 +136,8 @@ fn run(opts: &Options) -> Result<(), String> {
     if opts.check {
         // Everything a build checks before generating C, so a program that
         // passes can be built.
-        let (items, warnings) = driver::check_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+        let (items, warnings) = driver::check_program(path, &source, &mut driver::read_from_disk)
+            .map_err(|e| e.render(&opts.input))?;
         if !driver::has_main(&items) {
             return Err(driver::BuildError::NoMain.render(&opts.input, &source));
         }
@@ -133,13 +148,27 @@ fn run(opts: &Options) -> Result<(), String> {
     if opts.emit_c {
         return match &opts.output {
             Some(output) => {
-                let (c_code, warnings) = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk, !opts.no_notices)
-                    .map_err(|e| e.render(&opts.input, &source))?;
+                let (c_code, warnings) = driver::generate_c_file(
+                    path,
+                    path,
+                    &source,
+                    Path::new(output),
+                    &mut driver::read_from_disk,
+                    !opts.no_notices,
+                )
+                .map_err(|e| e.render(&opts.input, &source))?;
                 warn(&warnings, &opts.input, opts.repeat_warnings);
-                fs::write(output, c_code).map_err(|e| format!("error: cannot write '{}': {}", output, e))
+                fs::write(output, c_code)
+                    .map_err(|e| format!("error: cannot write '{}': {}", output, e))
             }
             None => {
-                let (c_code, warnings) = driver::generate_c_program(path, &source, &mut driver::read_from_disk, !opts.no_notices).map_err(|e| e.render(&opts.input))?;
+                let (c_code, warnings) = driver::generate_c_program(
+                    path,
+                    &source,
+                    &mut driver::read_from_disk,
+                    !opts.no_notices,
+                )
+                .map_err(|e| e.render(&opts.input))?;
                 warn(&warnings, &opts.input, opts.repeat_warnings);
                 write_stdout(&c_code)
             }
@@ -149,8 +178,19 @@ fn run(opts: &Options) -> Result<(), String> {
     let output = opts.output.as_deref().unwrap_or("a.out");
     let cc = driver::c_compiler_from_env();
     // After every other argument, so it wins over an `-O` in `CC` too.
-    let cc = if opts.quick { format!("{} -O0", cc) } else { cc };
-    let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc, !opts.no_notices).map_err(|e| e.render(&opts.input, &source))?;
+    let cc = if opts.quick {
+        format!("{} -O0", cc)
+    } else {
+        cc
+    };
+    let warnings = driver::build(
+        &source,
+        Path::new(&opts.input),
+        Path::new(output),
+        &cc,
+        !opts.no_notices,
+    )
+    .map_err(|e| e.render(&opts.input, &source))?;
     warn(&warnings, &opts.input, opts.repeat_warnings);
     write_stdout(&format!("compiled: {}\n", output))
 }
@@ -159,7 +199,11 @@ fn run(opts: &Options) -> Result<(), String> {
 /// program builds all the same. With `repeat`, it writes the repeats a rule
 /// that says something once holds back too.
 fn warn(warnings: &driver::Warnings, input: &str, repeat: bool) {
-    let rendered = if repeat { warnings.render_repeating(input) } else { warnings.render(input) };
+    let rendered = if repeat {
+        warnings.render_repeating(input)
+    } else {
+        warnings.render(input)
+    };
     if !rendered.is_empty() {
         eprintln!("{}", rendered);
     }
@@ -169,8 +213,13 @@ fn warn(warnings: &driver::Warnings, input: &str, repeat: bool) {
 /// just ends the output; other failures are errors, not panics.
 fn write_stdout(text: &str) -> Result<(), String> {
     let mut stdout = io::stdout().lock();
-    match stdout.write_all(text.as_bytes()).and_then(|()| stdout.flush()) {
-        Err(e) if e.kind() != io::ErrorKind::BrokenPipe => Err(format!("error: cannot write output: {}", e)),
+    match stdout
+        .write_all(text.as_bytes())
+        .and_then(|()| stdout.flush())
+    {
+        Err(e) if e.kind() != io::ErrorKind::BrokenPipe => {
+            Err(format!("error: cannot write output: {}", e))
+        }
         _ => Ok(()),
     }
 }

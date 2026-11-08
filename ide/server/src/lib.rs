@@ -1,9 +1,3 @@
-//! Vela Studio's server: the parts of the IDE a browser page can't do by
-//! itself. It serves the frontend, reads and writes files in one workspace
-//! folder, builds programs with `vela::driver` (exactly as the `vela` command
-//! does), and runs programs and shells in pseudo-terminals streamed over
-//! WebSockets. Language analysis runs in the page (see `ide/wasm`).
-//!
 //! The server can run code, so it only answers this user's IDE page: it
 //! listens on loopback, requires the per-launch token, and rejects other
 //! hosts and origins (see `security`). Every path is confined to the
@@ -48,12 +42,10 @@ pub struct Config {
     /// How long a session may go without a connected WebSocket before it is
     /// stopped and removed.
     pub idle_timeout: Duration,
-    /// How many terminals may be open at once.
     pub max_terminals: usize,
 }
 
 impl Config {
-    /// The defaults for a launch on `port` in `workspace`.
     pub fn new(workspace: PathBuf, port: u16, token: Token) -> Config {
         Config {
             workspace,
@@ -67,7 +59,6 @@ impl Config {
     }
 }
 
-/// Everything the request handlers share.
 pub struct Studio {
     pub config: Config,
     workspace: workspace::Workspace,
@@ -88,13 +79,18 @@ pub struct LaunchPage {
 const LAUNCH_CODE_LIFETIME: Duration = Duration::from_secs(300);
 
 impl Studio {
-    /// Opens the workspace (which must be an existing folder) and checks the
-    /// C compiler.
+    /// The workspace must be an existing folder.
     pub fn new(config: Config) -> std::io::Result<Arc<Studio>> {
         let workspace = workspace::Workspace::open(&config.workspace)?;
         let cc_available = c_compiler_starts(&config.cc);
         let sessions = Sessions::new(config.idle_timeout, config.max_terminals);
-        Ok(Arc::new(Studio { config, workspace, sessions, cc_available, launch: Mutex::new(None) }))
+        Ok(Arc::new(Studio {
+            config,
+            workspace,
+            sessions,
+            cc_available,
+            launch: Mutex::new(None),
+        }))
     }
 
     /// A new one-time code that the page exchanges for the token
@@ -105,7 +101,10 @@ impl Studio {
     pub fn launch_code(&self) -> std::io::Result<String> {
         let code = Token::generate()?;
         let text = code.as_str().to_string();
-        *self.launch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((code, Instant::now()));
+        *self
+            .launch
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((code, Instant::now()));
         Ok(text)
     }
 
@@ -116,7 +115,11 @@ impl Studio {
     /// when the returned value is dropped.
     pub fn launch_page(&self) -> std::io::Result<LaunchPage> {
         let folder = scratch::ScratchDir::create()?;
-        let url = format!("http://127.0.0.1:{}/#launch={}", self.config.port, self.launch_code()?);
+        let url = format!(
+            "http://127.0.0.1:{}/#launch={}",
+            self.config.port,
+            self.launch_code()?
+        );
         let path = folder.path().join("open-vela-studio.html");
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
@@ -127,13 +130,21 @@ impl Studio {
             url
         );
         std::io::Write::write_all(&mut options.open(&path)?, html.as_bytes())?;
-        Ok(LaunchPage { path, _folder: folder })
+        Ok(LaunchPage {
+            path,
+            _folder: folder,
+        })
     }
 
     /// Takes the launch code if `candidate` is it and it hasn't expired.
     fn redeem_launch_code(&self, candidate: &str) -> bool {
-        let mut launch = self.launch.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let valid = launch.as_ref().is_some_and(|(code, made)| code.matches(candidate) && made.elapsed() < LAUNCH_CODE_LIFETIME);
+        let mut launch = self
+            .launch
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let valid = launch.as_ref().is_some_and(|(code, made)| {
+            code.matches(candidate) && made.elapsed() < LAUNCH_CODE_LIFETIME
+        });
         if valid {
             *launch = None;
         }
@@ -149,7 +160,9 @@ impl Studio {
 /// Whether `cc --version` runs, for the IDE's "C compiler missing" banner.
 fn c_compiler_starts(cc: &str) -> bool {
     let mut words = cc.split_whitespace();
-    let Some(program) = words.next() else { return false };
+    let Some(program) = words.next() else {
+        return false;
+    };
     Command::new(program)
         .args(words)
         .arg("--version")
@@ -160,9 +173,8 @@ fn c_compiler_starts(cc: &str) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-/// The whole application: the JSON API (token required), the session
-/// WebSocket (token sent as its first message), and the frontend, all behind
-/// the host and origin checks.
+/// The session WebSocket takes the token as its first message (see `ws`);
+/// everything else is behind the token check.
 pub fn router(studio: Arc<Studio>) -> Router {
     let api = Router::new()
         .route("/api/info", get(api::info))
@@ -175,13 +187,19 @@ pub fn router(studio: Arc<Studio>) -> Router {
         .route("/api/run", post(api::run))
         .route("/api/terminal", post(api::terminal))
         .route("/api/session/{id}/stop", post(api::stop))
-        .route_layer(middleware::from_fn_with_state(studio.clone(), security::require_token));
+        .route_layer(middleware::from_fn_with_state(
+            studio.clone(),
+            security::require_token,
+        ));
     Router::new()
         .merge(api)
         .route("/api/launch", post(api::launch))
         .route("/api/session/{id}/ws", get(ws::session_socket))
         .fallback(web::serve)
-        .layer(middleware::from_fn_with_state(studio.clone(), security::guard))
+        .layer(middleware::from_fn_with_state(
+            studio.clone(),
+            security::guard,
+        ))
         // A file's JSON may be several times its size (escapes); the file
         // size itself is checked separately.
         .layer(DefaultBodyLimit::max(8 * MAX_FILE_BYTES))

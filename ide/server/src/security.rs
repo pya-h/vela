@@ -50,21 +50,24 @@ impl fmt::Debug for Token {
     }
 }
 
-/// `bytes` random bytes as lowercase hex.
+/// `bytes` is a byte count, not a bit count.
 pub fn random_hex(bytes: usize) -> io::Result<String> {
     let mut buffer = vec![0u8; bytes];
-    getrandom::fill(&mut buffer).map_err(|error| io::Error::other(format!("no random numbers: {}", error)))?;
+    getrandom::fill(&mut buffer)
+        .map_err(|error| io::Error::other(format!("no random numbers: {}", error)))?;
     Ok(buffer.iter().map(|b| format!("{:02x}", b)).collect())
 }
 
-/// Whether a `Host` header names this server.
 pub fn host_allowed(host: &str, port: u16) -> bool {
-    ["127.0.0.1", "localhost"].iter().any(|name| host.eq_ignore_ascii_case(&format!("{}:{}", name, port)))
+    ["127.0.0.1", "localhost"]
+        .iter()
+        .any(|name| host.eq_ignore_ascii_case(&format!("{}:{}", name, port)))
 }
 
-/// Whether an `Origin` header is this server's page.
 pub fn origin_allowed(origin: &str, port: u16) -> bool {
-    ["127.0.0.1", "localhost"].iter().any(|name| origin.eq_ignore_ascii_case(&format!("http://{}:{}", name, port)))
+    ["127.0.0.1", "localhost"]
+        .iter()
+        .any(|name| origin.eq_ignore_ascii_case(&format!("http://{}:{}", name, port)))
 }
 
 /// The `Content-Security-Policy` for the page: only the server's own
@@ -80,39 +83,67 @@ pub fn content_security_policy(port: u16, nonce: &str) -> String {
     )
 }
 
-/// Checks `Host` and `Origin` on every request, and adds the headers every
-/// response carries.
 pub async fn guard(State(studio): State<Arc<Studio>>, request: Request, next: Next) -> Response {
     let port = studio.config.port;
     let headers = request.headers();
-    let host = headers.get(header::HOST).and_then(|value| value.to_str().ok());
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok());
     if !host.is_some_and(|host| host_allowed(host, port)) {
         return ApiError::new(StatusCode::FORBIDDEN, "unexpected Host header").into_response();
     }
     if let Some(origin) = headers.get(header::ORIGIN)
-        && !origin.to_str().is_ok_and(|origin| origin_allowed(origin, port))
+        && !origin
+            .to_str()
+            .is_ok_and(|origin| origin_allowed(origin, port))
     {
-        return ApiError::new(StatusCode::FORBIDDEN, "requests from other origins are not allowed").into_response();
+        return ApiError::new(
+            StatusCode::FORBIDDEN,
+            "requests from other origins are not allowed",
+        )
+        .into_response();
     }
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
-    headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
-    headers.insert("cross-origin-opener-policy", HeaderValue::from_static("same-origin"));
-    headers.insert("cross-origin-resource-policy", HeaderValue::from_static("same-origin"));
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    headers.insert(
+        "cross-origin-opener-policy",
+        HeaderValue::from_static("same-origin"),
+    );
+    headers.insert(
+        "cross-origin-resource-policy",
+        HeaderValue::from_static("same-origin"),
+    );
     response
 }
 
-/// Requires the token on an API request; API responses are never cached.
-pub async fn require_token(State(studio): State<Arc<Studio>>, request: Request, next: Next) -> Response {
+/// API responses are never cached.
+pub async fn require_token(
+    State(studio): State<Arc<Studio>>,
+    request: Request,
+    next: Next,
+) -> Response {
     if !bearer_matches(request.headers(), &studio.config.token) {
-        let mut response = ApiError::new(StatusCode::UNAUTHORIZED, "missing or wrong session token").into_response();
-        response.headers_mut().insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+        let mut response =
+            ApiError::new(StatusCode::UNAUTHORIZED, "missing or wrong session token")
+                .into_response();
+        response
+            .headers_mut()
+            .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         return response;
     }
     let mut response = next.run(request).await;
-    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
@@ -126,7 +157,12 @@ fn bearer_matches(headers: &HeaderMap, token: &Token) -> bool {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic
+    )]
 
     use super::*;
 
@@ -147,11 +183,24 @@ mod tests {
     fn only_this_servers_host_and_origin_are_allowed() {
         assert!(host_allowed("127.0.0.1:4000", 4000));
         assert!(host_allowed("LOCALHOST:4000", 4000));
-        for host in ["127.0.0.1:4001", "127.0.0.1", "evil.example:4000", "localhost.evil.example:4000", "[::1]:4000", "0.0.0.0:4000"] {
+        for host in [
+            "127.0.0.1:4001",
+            "127.0.0.1",
+            "evil.example:4000",
+            "localhost.evil.example:4000",
+            "[::1]:4000",
+            "0.0.0.0:4000",
+        ] {
             assert!(!host_allowed(host, 4000), "{}", host);
         }
         assert!(origin_allowed("http://localhost:4000", 4000));
-        for origin in ["https://127.0.0.1:4000", "http://127.0.0.1:4001", "http://evil.example", "null", "http://127.0.0.1:4000/"] {
+        for origin in [
+            "https://127.0.0.1:4000",
+            "http://127.0.0.1:4001",
+            "http://evil.example",
+            "null",
+            "http://127.0.0.1:4000/",
+        ] {
             assert!(!origin_allowed(origin, 4000), "{}", origin);
         }
     }

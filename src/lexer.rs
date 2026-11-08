@@ -221,7 +221,11 @@ pub enum Piece {
     /// Text as written, its escapes read.
     Text(String),
     /// A value, `{…}`: its tokens, between its `{` and its `}`.
-    Value { open: Box<LexToken>, tokens: Vec<LexToken>, close: Box<LexToken> },
+    Value {
+        open: Box<LexToken>,
+        tokens: Vec<LexToken>,
+        close: Box<LexToken>,
+    },
 }
 
 impl Token {
@@ -324,7 +328,11 @@ impl Token {
 /// A float as Vela writes it: digits with a `.`, never an exponent.
 fn float_text(value: f64) -> String {
     let text = value.to_string();
-    if text.contains('.') || !value.is_finite() { text } else { format!("{}.0", text) }
+    if text.contains('.') || !value.is_finite() {
+        text
+    } else {
+        format!("{}.0", text)
+    }
 }
 
 /// The bases a whole number may be written in besides ten, by the letter after
@@ -339,23 +347,34 @@ fn based(letter: char) -> Option<(u32, &'static str)> {
     }
 }
 
-/// Reads `raw`, a whole number written `0x1F`, `0o17`, or `0b101`, or says
-/// what is wrong with it.
 fn read_based(raw: &str) -> std::result::Result<i64, String> {
     let wrong = |why: String| Err(format!("invalid number '{}': {}", raw, why));
     let mut chars = raw.chars().skip(1);
     let letter = chars.next().unwrap_or('x');
     let lower = letter.to_ascii_lowercase();
-    let Some((base, digit)) = based(lower) else { return wrong("no base".to_string()) };
+    let Some((base, digit)) = based(lower) else {
+        return wrong("no base".to_string());
+    };
     if letter != lower {
-        return wrong(format!("its base is written in lowercase, as in '0{}{}'", lower, &raw[2..]));
+        return wrong(format!(
+            "its base is written in lowercase, as in '0{}{}'",
+            lower,
+            &raw[2..]
+        ));
     }
     let written = &raw[2..];
     if written.is_empty() {
-        return wrong(format!("'0{}' is followed by its digits, as in '{}'", lower, based_example(lower)));
+        return wrong(format!(
+            "'0{}' is followed by its digits, as in '{}'",
+            lower,
+            based_example(lower)
+        ));
     }
     if written.starts_with('_') || written.ends_with('_') || written.contains("__") {
-        return wrong(format!("an underscore goes between two digits, as in '{}'", based_example(lower)));
+        return wrong(format!(
+            "an underscore goes between two digits, as in '{}'",
+            based_example(lower)
+        ));
     }
     if let Some(bad) = written.chars().find(|c| *c != '_' && !c.is_digit(base)) {
         return wrong(format!("'{}' is not {}", bad, digit));
@@ -460,9 +479,11 @@ impl Lexer {
         }
     }
 
-    /// A lexer for file number `file` of a program, whose positions say so.
     pub fn for_file(source: &str, file: usize) -> Self {
-        Lexer { file, ..Lexer::new(source) }
+        Lexer {
+            file,
+            ..Lexer::new(source)
+        }
     }
 
     /// Returns every token (ending with `Eof`) and, in parallel, its position
@@ -527,7 +548,12 @@ impl Lexer {
     }
 
     fn mark(&self) -> Mark {
-        Mark { pos: self.pos, byte: self.byte, line: self.line, col: self.col }
+        Mark {
+            pos: self.pos,
+            byte: self.byte,
+            line: self.line,
+            col: self.col,
+        }
     }
 
     fn reset(&mut self, mark: Mark) {
@@ -552,16 +578,24 @@ impl Lexer {
     }
 
     fn location(&self) -> Span {
-        Span { line: self.line, col: self.col, file: self.file }
+        Span {
+            line: self.line,
+            col: self.col,
+            file: self.file,
+        }
     }
 
-    /// Reads the next token, comment, or invalid text.
     fn next_item(&mut self) -> LexToken {
         self.skip_whitespace();
         let start = self.location();
         let from = self.byte;
         let kind = self.scan(start);
-        LexToken { kind, start, end: self.location(), range: from..self.byte }
+        LexToken {
+            kind,
+            start,
+            end: self.location(),
+            range: from..self.byte,
+        }
     }
 
     fn scan(&mut self, loc: Span) -> LexKind {
@@ -585,7 +619,10 @@ impl Lexer {
 
         if self.lone_cr() {
             self.advance();
-            return invalid(loc, "a line ends with a line feed (LF, as on Linux and macOS) or CR LF (as on Windows), not a carriage return (CR) alone; save the file with LF or CRLF line ends");
+            return invalid(
+                loc,
+                "a line ends with a line feed (LF, as on Linux and macOS) or CR LF (as on Windows), not a carriage return (CR) alone; save the file with LF or CRLF line ends",
+            );
         }
 
         if c.is_ascii_alphabetic() {
@@ -600,7 +637,12 @@ impl Lexer {
             }
             let start = self.pos;
             self.skip_name();
-            let name: String = self.source.get(start..self.pos).unwrap_or_default().iter().collect();
+            let name: String = self
+                .source
+                .get(start..self.pos)
+                .unwrap_or_default()
+                .iter()
+                .collect();
             return invalid(loc, format!("'{}': names must start with a letter", name));
         }
 
@@ -741,9 +783,15 @@ impl Lexer {
                     Token::Pipe(count)
                 } else if self.peek() == c {
                     self.advance();
-                    return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));
+                    return invalid(
+                        loc,
+                        format!("unexpected '{}{}'; Vela writes '{}'", c, c, word),
+                    );
                 } else if c == '|' {
-                    return invalid(loc, format!("unexpected character '{}'; Vela writes '{}'", c, word));
+                    return invalid(
+                        loc,
+                        format!("unexpected character '{}'; Vela writes '{}'", c, word),
+                    );
                 } else {
                     // A single `&` joins the words a generic type must allow; the
                     // parser reports it as 'and' anywhere else.
@@ -804,7 +852,8 @@ impl Lexer {
         }
         // Every keyword is two to eight lowercase letters, so most names are
         // told apart without comparing them to each.
-        let could_be_keyword = (2..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
+        let could_be_keyword =
+            (2..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
         let token = KEYWORDS
             .iter()
             .filter(|_| could_be_keyword)
@@ -831,11 +880,20 @@ impl Lexer {
         };
         // A tuple's item right after a dot, as in `t.1.0`, is a whole number:
         // its own `.` starts the next item. (After `..`, a range's end may be a float.)
-        let before = |back: usize| self.pos.checked_sub(back).and_then(|at| self.source.get(at)).copied();
+        let before = |back: usize| {
+            self.pos
+                .checked_sub(back)
+                .and_then(|at| self.source.get(at))
+                .copied()
+        };
         // So is one after `.#`, as in `t.#1`.
         let safe = before(1) == Some('#') && before(2) == Some('.') && before(3) != Some('.');
         let item = (before(1) == Some('.') && before(2) != Some('.')) || safe;
-        if !item && self.peek() == '0' && self.peek2().is_ascii_alphabetic() && based(self.peek2().to_ascii_lowercase()).is_some() {
+        if !item
+            && self.peek() == '0'
+            && self.peek2().is_ascii_alphabetic()
+            && based(self.peek2().to_ascii_lowercase()).is_some()
+        {
             return self.based_number(loc);
         }
         digits(self, &mut s, &mut raw);
@@ -845,7 +903,13 @@ impl Lexer {
                 let plain = s.trim_start_matches('0');
                 let plain = if plain.is_empty() { "0" } else { plain };
                 let dot = if safe { ".#" } else { "." };
-                return invalid(loc, format!("a tuple's item is written as a plain number, as in '{0}{1}', not '{0}{2}'", dot, plain, raw));
+                return invalid(
+                    loc,
+                    format!(
+                        "a tuple's item is written as a plain number, as in '{0}{1}', not '{0}{2}'",
+                        dot, plain, raw
+                    ),
+                );
             }
             return match s.parse::<i64>() {
                 Ok(val) => LexKind::Token(Token::Int(val)),
@@ -854,7 +918,11 @@ impl Lexer {
         }
         let is_float = self.peek() == '.' && self.peek2().is_ascii_digit();
         // `1.` is not a float (and `1..5` is a range).
-        if self.peek() == '.' && !self.peek2().is_ascii_digit() && self.peek2() != '.' && !self.peek2().is_ascii_alphabetic() {
+        if self.peek() == '.'
+            && !self.peek2().is_ascii_digit()
+            && self.peek2() != '.'
+            && !self.peek2().is_ascii_alphabetic()
+        {
             self.advance();
             return invalid(loc, format!("invalid number '{}.': write '{}.0'", raw, raw));
         }
@@ -902,7 +970,13 @@ impl Lexer {
             while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
                 raw.push(self.advance());
             }
-            return invalid(loc, format!("invalid number '{}': a number written in another base is whole", raw));
+            return invalid(
+                loc,
+                format!(
+                    "invalid number '{}': a number written in another base is whole",
+                    raw
+                ),
+            );
         }
         match read_based(&raw) {
             Ok(value) => LexKind::Token(Token::Int(value)),
@@ -941,7 +1015,10 @@ impl Lexer {
                 }
                 '{' if self.nesting >= MAX_TEXT_NESTING => {
                     self.too_deep = true;
-                    error.get_or_insert(Error::at(self.location(), "text holds values nested too deeply"));
+                    error.get_or_insert(Error::at(
+                        self.location(),
+                        "text holds values nested too deeply",
+                    ));
                     while !self.at_end() && !self.at_line_end() {
                         self.advance();
                     }
@@ -980,7 +1057,10 @@ impl Lexer {
                         Some((_, value)) => s.push(*value),
                         None if error.is_some() => {}
                         None if c == '\n' => {
-                            error = Some(Error::at(escape_loc, "invalid escape: '\\' at the end of a line"));
+                            error = Some(Error::at(
+                                escape_loc,
+                                "invalid escape: '\\' at the end of a line",
+                            ));
                         }
                         None if c.is_control() => {
                             let what = match c {
@@ -988,10 +1068,16 @@ impl Lexer {
                                 '\0' => "a NUL character",
                                 _ => "a control character",
                             };
-                            error = Some(Error::at(escape_loc, format!("invalid escape: '\\' followed by {}", what)));
+                            error = Some(Error::at(
+                                escape_loc,
+                                format!("invalid escape: '\\' followed by {}", what),
+                            ));
                         }
                         None => {
-                            error = Some(Error::at(escape_loc, format!("invalid escape '\\{}'", c.escape_debug())));
+                            error = Some(Error::at(
+                                escape_loc,
+                                format!("invalid escape '\\{}'", c.escape_debug()),
+                            ));
                         }
                     }
                 }
@@ -1012,14 +1098,22 @@ impl Lexer {
     /// quote is reported there, as for text.
     fn char_literal(&mut self, loc: Span) -> LexKind {
         self.advance(); // opening '
-        let unclosed = || invalid(loc, "a char isn't closed on its line; end it with a quote, as in 'a'");
+        let unclosed = || {
+            invalid(
+                loc,
+                "a char isn't closed on its line; end it with a quote, as in 'a'",
+            )
+        };
         if self.at_end() || self.at_line_end() {
             return unclosed();
         }
         let value = match self.peek() {
             '\'' => {
                 self.advance();
-                return invalid(loc, "'' holds no char; write one between the quotes, as in 'a', or '\\'' for a quote");
+                return invalid(
+                    loc,
+                    "'' holds no char; write one between the quotes, as in 'a', or '\\'' for a quote",
+                );
             }
             '\\' => {
                 let escape_loc = self.location();
@@ -1028,11 +1122,19 @@ impl Lexer {
                     return unclosed();
                 }
                 let c = self.advance();
-                match ESCAPES.iter().find(|(escape, _)| *escape == c).map(|(_, value)| *value).or((c == '\'').then_some('\'')) {
+                match ESCAPES
+                    .iter()
+                    .find(|(escape, _)| *escape == c)
+                    .map(|(_, value)| *value)
+                    .or((c == '\'').then_some('\''))
+                {
                     Some(value) => value,
                     None => {
                         self.skip_char_rest();
-                        return invalid(escape_loc, format!("invalid escape '\\{}' in a char", c.escape_debug()));
+                        return invalid(
+                            escape_loc,
+                            format!("invalid escape '\\{}' in a char", c.escape_debug()),
+                        );
                     }
                 }
             }
@@ -1042,7 +1144,12 @@ impl Lexer {
             self.skip_char_rest();
             return invalid(
                 loc,
-                format!("a char is one byte, and '{}' is {} bytes in UTF-8; write it as text, as in \"{}\"", value, value.len_utf8(), value),
+                format!(
+                    "a char is one byte, and '{}' is {} bytes in UTF-8; write it as text, as in \"{}\"",
+                    value,
+                    value.len_utf8(),
+                    value
+                ),
             );
         }
         if self.peek() != '\'' {
@@ -1050,7 +1157,10 @@ impl Lexer {
             if !closed {
                 return unclosed();
             }
-            return invalid(loc, "a char holds one character; for more, write text between double quotes, as in \"ab\"");
+            return invalid(
+                loc,
+                "a char holds one character; for more, write text between double quotes, as in \"ab\"",
+            );
         }
         self.advance(); // closing '
         LexKind::Token(Token::Char(value as u8))
@@ -1093,11 +1203,17 @@ impl Lexer {
             // `"{\"a\"}"`: the `\"` ends the text, so the `}` is missed too;
             // the `\` is the mistake to report.
             if self.peek() == '\\' && error.is_none() {
-                *error = Some(Error::at(self.location(), "a value in text is code, so text inside it is written with plain quotes, as in '{f(\"a\")}', not '\\\"'"));
+                *error = Some(Error::at(
+                    self.location(),
+                    "a value in text is code, so text inside it is written with plain quotes, as in '{f(\"a\")}', not '\\\"'",
+                ));
                 erred_before = true;
             }
             if self.peek() == ';' {
-                error.get_or_insert(Error::at(self.location(), "a value in text can't hold a comment"));
+                error.get_or_insert(Error::at(
+                    self.location(),
+                    "a value in text can't hold a comment",
+                ));
                 self.advance();
                 continue;
             }
@@ -1111,7 +1227,11 @@ impl Lexer {
                             "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'",
                         ));
                     }
-                    return Some(Piece::Value { open: Box::new(open), tokens, close: Box::new(token) });
+                    return Some(Piece::Value {
+                        open: Box::new(open),
+                        tokens,
+                        close: Box::new(token),
+                    });
                 }
                 LexKind::Token(Token::RBrace) => depth -= 1,
                 LexKind::Invalid(invalid) => {
@@ -1130,5 +1250,11 @@ fn invalid(span: Span, message: impl Into<String>) -> LexKind {
 
 /// Names are ASCII so they map directly to portable C identifiers.
 fn non_ascii_name(span: Span, c: char) -> Error {
-    Error::at(span, format!("names must use ASCII letters, digits, and '_', found '{}'", c))
+    Error::at(
+        span,
+        format!(
+            "names must use ASCII letters, digits, and '_', found '{}'",
+            c
+        ),
+    )
 }

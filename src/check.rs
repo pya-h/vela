@@ -16,7 +16,6 @@ struct MacroInfo {
     /// Why its value couldn't be computed, once tried: each macro computed
     /// from it, and each use, gets that again without computing it again.
     failed: Option<Error>,
-    /// Where its name is written.
     span: Span,
 }
 
@@ -56,7 +55,6 @@ impl Constant {
         }
     }
 
-    /// The literal this is, checked, at `span`.
     fn literal(self, span: Span) -> Expr {
         let ty = self.ty();
         let kind = match self {
@@ -77,7 +75,6 @@ impl Constant {
 
 #[derive(Clone)]
 struct VariantInfo {
-    /// The kind the variant belongs to.
     kind: String,
     variant: Variant,
 }
@@ -170,14 +167,12 @@ struct VarInfo {
     /// `Type::Region` for a region.
     ty: Type,
     mode: Mode,
-    /// Where the variable was declared.
     span: Span,
     /// For a region: whether `new` can allocate in it. A region a task only
     /// names in its header's types (`p: ^int@r`) can't be.
     allocates: bool,
     /// Whether this is a named result, which only `<-` sets.
     result: bool,
-    /// Whether the task's header declares it, which no code can change.
     param: bool,
     /// How a parameter is given (see `Passing`); `Copy` for anything else.
     passing: Passing,
@@ -187,7 +182,6 @@ struct VarInfo {
     /// Whether this is a variable of the code around a lambda that keeps what
     /// it uses, `[@r](…)`, which the lambda keeps a copy of if it uses it.
     kept: bool,
-    /// For a name that never changes: where its value came from (see `Own`).
     owners: Vec<Own>,
     /// For a slice made of another, `flex ys = xs` or a part `xs[1..3]`, or
     /// one that one was made of: which slices share items with it, by their
@@ -200,9 +194,7 @@ struct VarInfo {
 /// `Checker::link_slices`).
 #[derive(Default)]
 struct SliceFamily {
-    /// The last `add` on one of them: its name, and where it is.
     added: Option<(String, Span)>,
-    /// The last `del` on one of them.
     deleted: Option<(String, Span)>,
 }
 
@@ -210,7 +202,6 @@ struct SliceFamily {
 struct KeptLambda {
     region: String,
     mode: KeptMode,
-    /// Where it is written.
     span: Span,
     /// The variables and region of the code around it where it is written,
     /// which it may keep: the region it keeps them in, and no other.
@@ -222,7 +213,6 @@ struct KeptLambda {
     uses: Vec<String>,
     /// The variables it keeps as places, `[flex& count, @r]`.
     places: Vec<KeptPlace>,
-    /// What owns each of `outer`, where it is written (see `Checker::owners`).
     owned: HashMap<String, Vec<Own>>,
 }
 
@@ -265,7 +255,6 @@ pub struct Checker {
     /// The program's patterns, by name, their fields' and methods' types read
     /// once the declarations are known (see `declare_patterns`).
     patterns: HashMap<String, PatternDef>,
-    /// Where each task is declared, by its name in the program.
     task_spans: HashMap<String, Span>,
     /// The shapes and kinds that lack what a pattern they follow asks for,
     /// whose copies of its default methods are left unchecked, since they would
@@ -289,11 +278,7 @@ pub struct Checker {
     /// Those of the task being read, whose written types read each in place
     /// of the pattern's name for it (see `resolve_type`).
     stand_ins: Vec<(String, Type)>,
-    /// Every task's type parameters, parameters (names and types), and return
-    /// type.
     tasks: HashMap<String, TaskInfo>,
-    /// The type parameters of the task being checked, with what each requires.
-    /// Empty for an ordinary task.
     type_params: Vec<TypeParam>,
     /// What the task being checked is a method of, when it is one: its own name
     /// and whether it may change the value it is called on.
@@ -317,24 +302,20 @@ pub struct Checker {
     /// kind's module outside the main file (`geometry.Circle`). Tags are unique
     /// across the kinds of a module.
     variants: HashMap<String, VariantInfo>,
-    /// Every macro, by its name in the program.
     macros: HashMap<String, MacroInfo>,
     /// Each module of the program, by name; the main file's is empty.
     modules: HashMap<String, ModuleScope>,
     /// The tasks, shapes, kinds, and variants marked `priv` (a variant through
     /// its kind), by their names in the program.
     private: HashSet<String>,
-    /// The module whose code is being checked.
     current_module: String,
     scopes: Vec<Scope>,
     current_ret: Option<Type>,
-    /// The names of the current task's results, in order, when it names them.
     result_names: Vec<String>,
     /// Those of them not set on the path being checked. Vela has no zero
     /// values, so a result must be set before it is read, before a bare `<-`,
     /// and before the end of the task, on every path.
     unset: HashSet<String>,
-    /// Where the parts of written types are, from the parser.
     type_places: TypePlaces,
     /// At most how many bytes a value of each shape and kind takes, once the
     /// declarations are checked (see `check_sizes`).
@@ -368,8 +349,6 @@ pub struct Checker {
     /// name of the task made for them, the generic task's name, the types, and
     /// where the call that needs it is.
     instances: Vec<(String, String, Vec<Type>, Span)>,
-    /// The names of the tasks in `instances`, and of those taken from it, so
-    /// each set of types is noted once.
     noted_instances: HashSet<String>,
     /// The variants of kinds that take types made in the statement being
     /// checked whose types neither their values nor anything else has told
@@ -387,8 +366,6 @@ pub struct Checker {
     /// that takes types can tell what a value's type gives it (see
     /// `unify_params`).
     made_of: HashMap<String, Applied>,
-    /// The shapes made for one set of types each (see `shape_instance`), to add
-    /// to the program's items.
     made_shapes: Vec<Item>,
     /// How each shape made for a set of types is written in a program
     /// (`lib/util.Box<int>` for `lib/util.Box__of__int`), so an error names it as
@@ -413,19 +390,13 @@ pub struct Checker {
     /// once for each task or file: the repeats it held back, which
     /// `--repeat-warnings` shows (see `warn_once`).
     held_back: Vec<Error>,
-    /// The rules that have warned already, each with the task or file it said
-    /// it once for (see `warn_once`).
     told_once: HashSet<(String, &'static str)>,
-    /// The slices made of one another in the tasks checked, which `VarInfo`
-    /// places each slice in.
     slice_families: Vec<SliceFamily>,
     /// The tasks, shapes, and kinds whose own declaration has a mistake. What
     /// they promise isn't known, so a use of one is checked as far as it can be
     /// and then left alone: reporting the declaration's mistake again at every
     /// use would bury the file's other mistakes (see `Type::Unknown`).
     broken: HashSet<String>,
-    /// The shapes whose defaults are checked, or being checked (see
-    /// `check_defaults_of`).
     defaults_checked: HashSet<String>,
     /// For each task with parameters that fall back on values, the value of
     /// each, checked as its own module reads it (`None` for one without), in
@@ -463,12 +434,8 @@ pub struct Checker {
     /// The task a lambda became, while its body is checked (see
     /// `ast::lambda_name`).
     current_lambda: Option<String>,
-    /// The program's name for the task whose body is checked.
     current_task: String,
-    /// The place of each parameter of that task in its header, by name.
     param_index: HashMap<String, usize>,
-    /// Every value given to what may change it, settled once every task is
-    /// checked (see `settle_owners`).
     handed: Vec<Handed>,
     /// For each task, where what its `<-` sends may come from.
     sends: HashMap<String, Vec<Own>>,
@@ -481,8 +448,6 @@ pub struct Checker {
     /// column), noted while its name is known: a value block's last line may
     /// read a name of its own, which is gone when the block's value is used.
     read_owners: HashMap<(usize, usize, usize), Vec<Own>>,
-    /// For each generic task, the types each copy made of it was given: as
-    /// the program writes them, and by the name each fills in.
     copies: HashMap<String, Vec<GivenTypes>>,
     /// The tuple items a type test has narrowed, `t.#5? is maybe int`, for the
     /// rest of its condition and its block: the tuple's name, the item's place,
@@ -516,8 +481,6 @@ pub struct Checker {
     /// lambdas around it too: no name inside the lambda takes theirs, and no
     /// jump in it reaches them.
     lambda_loops: HashMap<String, Vec<(String, Span)>>,
-    /// For each lambda that keeps what it uses (see `ExprKind::Closure`): what
-    /// it may keep and what it does.
     kept_lambdas: HashMap<String, KeptLambda>,
     /// The order the lambdas that keep what they use were written in, inner
     /// ones after the ones around them.
@@ -527,8 +490,6 @@ pub struct Checker {
     /// The one-line lambdas the checker came to where they are written; one it
     /// never came to is in a statement that failed before it.
     reached_shortcut_lambdas: HashSet<String>,
-    /// The variables of the code around it that the lambda being checked
-    /// uses, which it keeps (see `lookup`).
     kept_used: std::cell::RefCell<Vec<String>>,
     /// Whether the variable being checked is read to be called or given as a
     /// place, the only ways a `[flex @r]` lambda's value is read.
@@ -545,8 +506,6 @@ pub struct Checker {
     /// Each task with wrappers, and its wrappers' calls as written, until
     /// `settle_wrappers` makes its layers' bodies (see `add_wrappers`).
     wrapped: Vec<(String, Vec<Expr>)>,
-    /// Each task whose body calls a wrapper, with how many values the task it
-    /// wraps takes, for `check_start_values`.
     wrapper_layers: HashMap<String, usize>,
     /// Each task with wrappers whose layers are settled, and the tasks that
     /// call its wrappers, in order: the task itself, then `task__layer__1`, …
@@ -566,11 +525,8 @@ pub struct Checker {
 /// A value of a wrapper worked out where the program starts (see
 /// `Checker::start_values`).
 struct StartValue {
-    /// The task whose wrapper takes it.
     task: String,
-    /// The wrapper, as its call is written.
     wrapper: String,
-    /// Its field of `START_VALUES`.
     member: String,
     span: Span,
 }
@@ -613,9 +569,7 @@ const COPY_IGNORES_DEFAULT: &str =
 /// `Checker::check_branching_value`).
 #[derive(Clone, Copy)]
 struct Branches {
-    /// The statement: `match` or `when`.
     of: &'static str,
-    /// One of its parts: a `case`, or a `when`'s branch.
     each: &'static str,
     /// Whether giving a value is optional (for loops with finally).
     optional: bool,
@@ -649,7 +603,6 @@ const OPTIONAL_LOOP_BRANCHES: Branches = Branches {
 const BOTH_LOOP_FORMS_WARNING: &str = "using both map-form loop values and a finally block; finally overrides the loop body return values";
 
 impl Branches {
-    /// What a branch that gives no value is missing.
     fn needs_value(self) -> String {
         format!(
             "a {} of a {} used as a value gives it on its last line, or sends with '<-' on every path",
@@ -689,9 +642,6 @@ impl Checker {
         Self::default()
     }
 
-    /// A checker that points errors about a part of a written type (a region,
-    /// a type name, the error type) at that part, using the parser's
-    /// `Parser::type_places`.
     pub fn with_type_places(type_places: TypePlaces) -> Self {
         Checker {
             type_places,
@@ -699,7 +649,6 @@ impl Checker {
         }
     }
 
-    /// The mistakes found so far, in the order they were found.
     pub fn errors(&self) -> &[Error] {
         &self.errors
     }
@@ -756,7 +705,6 @@ impl Checker {
         }
     }
 
-    /// Records the mistake in `result`, if it found one. `true` when it passed.
     fn keep_going(&mut self, result: Result<()>) -> bool {
         match result {
             Ok(()) => true,
@@ -775,8 +723,8 @@ impl Checker {
         Checker::check_program_warned(program).0
     }
 
-    /// `check_program`, with the warnings too: what the program does that it
-    /// may not mean, in source order. A program with warnings still builds.
+    /// `check_program`, with the warnings too. A program with warnings still
+    /// builds.
     pub fn check_program_warned(program: &mut Program) -> (Vec<Error>, Vec<Error>) {
         let (errors, warnings, _) = Checker::check_program_held(program);
         (errors, warnings)
@@ -879,8 +827,6 @@ impl Checker {
             || BUILTIN_KIND_NAMES.contains(&name)
     }
 
-    /// The program's name for `name` written unqualified in the current module:
-    /// what `include` brings in under it, or else a name of the module itself.
     fn in_module(&self, name: &str) -> String {
         if let Some(full) = self
             .modules
@@ -892,8 +838,6 @@ impl Checker {
         qualify(&self.current_module, name)
     }
 
-    /// The program's name for a task, shape, kind, or variant name written in
-    /// the current module: itself when qualified, and `in_module` otherwise.
     fn full_name(&self, name: &str) -> String {
         if name.contains(MODULE_SEPARATOR) {
             name.to_string()
@@ -902,9 +846,8 @@ impl Checker {
         }
     }
 
-    /// The variant `name`, written unqualified in the current module, stands for.
-    /// A variant of a builtin kind belongs to no module, so it is the same one in
-    /// every file (see `ast::builtin_kinds`).
+    /// A variant of a builtin kind belongs to no module, so it is the same one
+    /// in every file (see `ast::builtin_kinds`).
     fn variant_in_scope(&self, name: &str) -> Option<&VariantInfo> {
         if builtin_kind_of(name).is_some() {
             return self.variants.get(name);
@@ -912,10 +855,8 @@ impl Checker {
         self.variants.get(&self.in_module(name))
     }
 
-    /// A hint for a name written in the current module that names nothing
-    /// here, but that a module it includes declares: `; module 'm' has one: …`.
-    /// Names of the program in it are written as the program names them, and
-    /// the message is spelled for the file later (see `check_program`).
+    /// Names of the program in the message are written as the program names
+    /// them; it is spelled for the file later (see `check_program`).
     fn elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else {
             return String::new();
@@ -983,8 +924,6 @@ impl Checker {
         }
     }
 
-    /// A hint for a variable name that names nothing, but that a module the
-    /// current module includes would be named by, without its alias or braces.
     fn module_elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else {
             return String::new();
@@ -1007,14 +946,11 @@ impl Checker {
         }
     }
 
-    /// Where the current module includes the module it names `name`, if it does.
     fn module_used(&self, name: &str) -> Option<Span> {
         let scope = self.modules.get(&self.current_module)?;
         scope.included(name).map(|include| include.span)
     }
 
-    /// Where `part` (see `TypePlaces`) is in the type written at `span`, or
-    /// `span` itself if it isn't known.
     fn place(&self, span: Span, part: &str) -> Span {
         let parts = self.type_places.get(&span.place_key());
         // A shape or kind of another module may be written without its module,
@@ -1034,9 +970,8 @@ impl Checker {
             .unwrap_or(span)
     }
 
-    /// Checks the items of a program, recording every mistake they have (see
-    /// `errors` and `check_program`). Each declaration and each task body is
-    /// checked whatever the ones before it found.
+    /// Each declaration and each task body is checked whatever the ones before
+    /// it found (see `errors` and `check_program`).
     pub fn check_file(&mut self, items: &mut [Item]) {
         self.collect_declarations(items);
         self.regional = regional_types(items);
@@ -1095,8 +1030,6 @@ impl Checker {
                         continue;
                     }
                 }
-                // A copy of a default method that was told about already, or
-                // of a shape or kind that lacks what the pattern asks for.
                 let copied = t.owner.is_some()
                     && !t.name.contains(DEFAULT_MARK)
                     && copies_at.contains(&t.span.place_key());
@@ -1154,7 +1087,6 @@ impl Checker {
                 }],
                 group: false,
             };
-            // The type following it, then those the pattern takes.
             let types: Vec<TypeParam> = std::iter::once(this.clone())
                 .chain(pattern.types.iter().cloned())
                 .collect();
@@ -1624,8 +1556,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The header pattern method `method` asks a follower called `owner` to
-    /// write, as it would write it.
     fn pattern_header(&self, method: &TaskDef, owner: &str) -> String {
         // In `@this`, as the value the method is called on, where it lives in a region.
         let this = Type::Named(
@@ -1758,7 +1688,6 @@ impl Checker {
             ret: info.ret.map_params(&mut |name| mine_own.get(name).cloned()),
             ..info.clone()
         };
-        // Each region a header takes, named by where it is taken.
         let regions = |names: Vec<&str>| -> HashMap<String, String> {
             names
                 .into_iter()
@@ -2057,9 +1986,8 @@ impl Checker {
         }
     }
 
-    /// Registers every task, shape, kind, and variant. They share one
-    /// namespace: no two may have the same name, and none may use the name of
-    /// a builtin type or task.
+    /// Tasks, shapes, kinds, and variants share one namespace: no two may have
+    /// the same name, and none may use the name of a builtin type or task.
     fn collect_declarations(&mut self, items: &[Item]) {
         let mut names: HashMap<String, Span> = HashMap::new();
         // The mistakes found here, kept aside while `names` is borrowed, and
@@ -2067,7 +1995,6 @@ impl Checker {
         // first declaration, so the checks that follow have one of each name.
         let mut found: Vec<Error> = Vec::new();
         let mut declare = |name: &str, span: Span| -> Result<()> {
-            // No declaration may take the name of a builtin type or task.
             let written = unqualified(name);
             if Type::builtin(written).is_some() {
                 return err(
@@ -2217,9 +2144,6 @@ impl Checker {
         }
     }
 
-    /// Checks the declarations themselves: every written type exists, field
-    /// names are distinct, kinds have variants, and no type contains itself.
-    /// A task's header gets its types with regions settled (see `resolve_type`).
     fn check_declarations(&mut self, items: &mut [Item]) {
         for item in items.iter_mut() {
             let name = item.name().to_string();
@@ -2317,8 +2241,6 @@ impl Checker {
         }
     }
 
-    /// The values `t`'s parameters fall back on, checked (see
-    /// `check_param_defaults`).
     #[inline(never)]
     fn check_defaults_of_task(&mut self, t: &mut TaskDef) -> Result<Vec<Option<Expr>>> {
         // The value a method is called on is told by `not_a_method`, which
@@ -2431,7 +2353,6 @@ impl Checker {
         }
     }
 
-    /// Checks one declaration: a shape's or kind's fields, or a task's header.
     fn check_declaration(&mut self, item: &mut Item) -> Result<()> {
         match item {
             Item::Shape(s) => {
@@ -2505,7 +2426,6 @@ impl Checker {
         Ok(())
     }
 
-    /// `check_declaration` for a task.
     fn check_task_declaration(&mut self, t: &mut TaskDef) -> Result<()> {
         // `Kind.Tag(…)` makes a variant, so a shared method can't take the name
         // of one its kind has from a kind it imitates, as it can't take one of
@@ -2711,8 +2631,6 @@ impl Checker {
         }
     }
 
-    /// Rejects a type written at `span` whose values would take more than
-    /// `MAX_VALUE_BYTES`, such as `[[int#1000000]#1000000]`.
     fn check_size(&self, ty: &Type, span: Span) -> Result<()> {
         if value_bytes(ty, &self.sizes) > MAX_VALUE_BYTES {
             return err(
@@ -2726,9 +2644,8 @@ impl Checker {
         Ok(())
     }
 
-    /// Rejects a private type in what other files see of a public item: a
-    /// task's parameters and results, a shape's public fields, and a kind's
-    /// payloads. Code using the item couldn't name the type.
+    /// A public item can't name a private type in what other files see of it:
+    /// code using the item couldn't name the type.
     fn check_private_types(&self, item: &Item) -> Result<()> {
         let (private, what, name, fields): (bool, &str, &str, Vec<&Field>) = match item {
             // A method is reached only through a value of its shape or kind, so
@@ -2804,7 +2721,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks a shape's fields or a variant's payload.
     /// A shape literal, `Point { x: 1 }` or `Box<int> { value: none }`: every
     /// field given exactly once, and the region of the value they make.
     fn check_struct_init(
@@ -2980,8 +2896,6 @@ impl Checker {
             });
             declared.push(field_def.clone());
         }
-        // The types given in place of the names the shape takes, for a literal
-        // whose types aren't all known yet.
         if let Some(types) = &given_types {
             let given: HashMap<&str, &Type> = shape
                 .types
@@ -2995,7 +2909,6 @@ impl Checker {
                     .map_params(&mut |name| given.get(name).map(|ty| (*ty).clone()));
             }
         }
-        // Filled in last, they stay last however often the literal is checked.
         let written = fields.iter().filter(|field| !field.filled).count();
         let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
         let region =
@@ -3049,8 +2962,6 @@ impl Checker {
                 ),
             );
         }
-        // A shape or a kind that takes types: what it takes, and what it holds,
-        // which the types given may be.
         let Some((word, params, parts)) = self.takes_types(name).filter(|_| self.sees(name)) else {
             return Err(self.unknown_shape(at, name));
         };
@@ -3170,8 +3081,6 @@ impl Checker {
         ))
     }
 
-    /// The shape or kind made for the types `types` give the shape or kind
-    /// `name` (see `shape_instance` and `kind_instance`).
     fn instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
         if self.kinds.contains_key(name) {
             return self.kind_instance(name, types, at);
@@ -3576,8 +3485,6 @@ impl Checker {
             }
             match self.check_expr(&mut field.value) {
                 Ok(ty) => {
-                    // A variant whose types it didn't tell, `Option.None`,
-                    // tells nothing, and another field may.
                     let mut told = HashMap::new();
                     self.match_params(&declared.ty, &ty, &mut told);
                     for (param, ty) in told {
@@ -3616,9 +3523,6 @@ impl Checker {
         Ok(types)
     }
 
-    /// The fields of the shape made for `types`: the shape's own, with those
-    /// types in place of the names it takes, and each shape they give types to
-    /// made in turn.
     fn instance_fields(&mut self, source: &ShapeDef, types: Vec<Type>) -> Result<Vec<Field>> {
         let given: HashMap<String, Type> = source
             .types
@@ -3747,8 +3651,6 @@ impl Checker {
         unify_regions(&self.unmade(named), &self.unmade(value), regions);
     }
 
-    /// Matches as `match_regions` does, and records which type each name the
-    /// declaration takes stands for.
     fn match_params(&self, named: &Type, value: &Type, given: &mut HashMap<String, Type>) {
         unify_params(&self.unmade(named), &self.unmade(value), given);
     }
@@ -3783,9 +3685,7 @@ impl Checker {
                 // the call names: it is kept whatever the shape holds, so a type
                 // a parameter takes, as `(T) -> bool` for `T` given as
                 // `Indexed<T>@this`, is read with it.
-                let region = applied
-                    .region
-                    .filter(|region| holds || region == THIS_WORD);
+                let region = applied.region.filter(|region| holds || region == THIS_WORD);
                 *ty = Type::Named(key, region);
                 Ok(())
             }
@@ -3861,8 +3761,6 @@ impl Checker {
         Ok(())
     }
 
-    /// Whether a value of type `ty` holds a `File` of `std/files`, directly or
-    /// in a shape, kind, or tuple it holds by value.
     fn holds_file(&self, ty: &Type) -> bool {
         self.holds_file_in(ty, &mut Vec::new())
     }
@@ -4004,7 +3902,6 @@ impl Checker {
         }
     }
 
-    /// Checks a task's parameters and result types, and settles their regions.
     /// A region the header names without a `region` parameter is one the task
     /// only reads or links pointers in (it can't allocate there), and each
     /// result's regions must be regions the task is given.
@@ -4019,7 +3916,6 @@ impl Checker {
         checked
     }
 
-    /// `check_header`, with the task's types in scope.
     fn check_header_in_scope(&mut self, t: &mut TaskDef) -> Result<()> {
         // `r: region default` makes the region the task is given its body's
         // default (see `ast::DEFAULT`): only a region can be one, and a task
@@ -4182,7 +4078,6 @@ impl Checker {
                     None if several => format!("result {}", i + 1),
                     None => "the result".to_string(),
                 };
-                // `@this` is the region of the value a method is called on.
                 if region == THIS_WORD && t.owner.as_ref().is_some_and(|owner| owner.shared) {
                     return err(
                         at,
@@ -4262,7 +4157,6 @@ impl Checker {
         self.type_params = types.to_vec();
     }
 
-    /// What the type parameter called `name` requires, if it is one here.
     fn type_param(&self, name: &str) -> Option<&TypeParam> {
         // The type of one item of a group's tuple, `P#0`, asks what its group does.
         let name = name.split(GROUP_ITEM).next().unwrap_or(name);
@@ -4313,10 +4207,8 @@ impl Checker {
         self.resolve_regions(ty, span, place, None)
     }
 
-    /// `resolve_type` for `ty` inside a pointer of region `inside`.
-    /// A task's type written at `span`, its regions resolved as a header's
-    /// are, its own; `kept` is one it may also name, the region a lambda
-    /// keeps what it uses in (see `ClosureType`).
+    /// `kept` is a region the type may also name: the one a lambda keeps what
+    /// it uses in (see `ClosureType`).
     fn resolve_task_type(
         &mut self,
         task: &TaskType,
@@ -4435,7 +4327,6 @@ impl Checker {
         };
         let needs_region = matches!(place, TypePlace::Header | TypePlace::Body);
         match ty {
-            // `Box<int>`: the shape made for those types (see `resolve_applied`).
             Type::Applied(applied) => {
                 let applied = applied.clone();
                 self.resolve_applied(&applied, span, place, inside)
@@ -4739,8 +4630,6 @@ impl Checker {
         }
     }
 
-    /// Checks that `name` is a region visible here; `allocating` also requires
-    /// that `new` can allocate in it.
     fn visible_region(&self, name: &str, span: Span, allocating: bool) -> Result<()> {
         match self.lookup(name) {
             Some(info) if info.ty == Type::Region => {
@@ -5034,8 +4923,6 @@ impl Checker {
     /// `None` when nothing in it can change.
     fn changeable_item(&self, ty: &Type) -> Option<String> {
         match ty {
-            // A shape given types: what its fields hold, with those types in
-            // place of the names it takes.
             Type::Applied(applied) => {
                 let fields = self.applied_parts(applied)?;
                 let found = fields.iter().find_map(|ty| self.changeable_item(ty))?;
@@ -5167,8 +5054,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The types a shape's fields or a kind's payloads contain by value, each
-    /// with the position of the field's type.
     fn contained_types(&self, name: &str) -> Vec<(&str, Span)> {
         let fields: Vec<&Field> = match (self.shapes.get(name), self.kinds.get(name)) {
             (Some(shape), _) => shape.fields.iter().collect(),
@@ -5488,7 +5373,6 @@ impl Checker {
             {
                 task.ret = ret.clone();
             }
-            // What a lambda that keeps what it uses keeps: what it used.
             let used = std::mem::take(&mut *self.kept_used.borrow_mut());
             if let Some(kept) = self.kept_lambdas.get_mut(&task.name) {
                 for place in kept
@@ -5754,7 +5638,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The condition, the body and the step of a loop in three parts, inside it.
     fn check_parted_passes(
         &mut self,
         parted: &mut PartedLoop,
@@ -5934,7 +5817,6 @@ impl Checker {
             );
         }
         result?;
-        // What the last lines give: a value, and what they may fail with.
         let (given, at) = match (value.gives, given) {
             (false, _) => (Type::Nothing, span),
             (true, Some(given)) => given,
@@ -6244,8 +6126,6 @@ impl Checker {
             .unwrap_or(Type::Bool))
     }
 
-    /// The value of a `break` that stops the loop named `name`, or the
-    /// innermost: one that gives a value takes it, as what it fails with.
     fn check_break_value(
         &mut self,
         name: Option<&(String, Span)>,
@@ -6300,9 +6180,6 @@ impl Checker {
         Ok(())
     }
 
-    /// `break` or `continue` (`word`), given the name of the loop it stops or
-    /// goes on with, or none for the innermost: there must be such a loop
-    /// around it, in this task.
     fn check_jump(&mut self, word: &str, name: Option<&(String, Span)>, span: Span) -> Result<()> {
         let (what, verb) = if word == "break" {
             ("stops a loop", "stop")
@@ -6386,8 +6263,6 @@ impl Checker {
         )
     }
 
-    /// Notes the named loops around the lambda `lambda`'s value (see
-    /// `lambda_loops`).
     fn note_lambda_loops(&mut self, lambda: &str) {
         let mut named: Vec<(String, Span)> = self
             .current_lambda
@@ -6399,8 +6274,6 @@ impl Checker {
         self.lambda_loops.insert(lambda.to_string(), named);
     }
 
-    /// The named loop `name` around the lambda being checked, with where it
-    /// is named.
     fn loop_around_lambda(&self, name: &str) -> Option<Span> {
         let lambda = self.current_lambda.as_ref()?;
         self.lambda_loops
@@ -6410,7 +6283,6 @@ impl Checker {
             .map(|(_, at)| *at)
     }
 
-    /// Checks `block` in a new nested scope.
     fn check_scoped_block(&mut self, block: &mut Block) -> Result<()> {
         self.push_scope();
         let result = self.check_block(block);
@@ -6418,8 +6290,6 @@ impl Checker {
         result
     }
 
-    /// Checks `block` in a new nested scope that first declares `bindings`
-    /// (from a pattern), each immutable. `_` declares nothing.
     fn check_block_with(&mut self, bindings: Vec<Declared>, block: &mut Block) -> Result<()> {
         self.push_scope();
         let result = bindings
@@ -6602,8 +6472,6 @@ impl Checker {
         }
     }
 
-    /// Declares a parameter, which the task's header gives it. Only the value a
-    /// method marked `alters` is called on can change.
     fn define_param(
         &mut self,
         name: &str,
@@ -6638,8 +6506,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The first result, in the order the header names them, that isn't set on
-    /// this path.
     fn first_unset(&self) -> Option<&str> {
         self.result_names
             .iter()
@@ -6647,8 +6513,6 @@ impl Checker {
             .map(String::as_str)
     }
 
-    /// Declares a region in the innermost scope; `allocates` tells whether
-    /// `new` can allocate in it.
     fn define_region(&mut self, name: &str, span: Span, allocates: bool) -> Result<()> {
         self.define(name, Type::Region, Mode::Fixed, span)?;
         if let Some(info) = self
@@ -6706,10 +6570,6 @@ impl Checker {
         Ok(())
     }
 
-    /// The region an allocation uses, given the one it writes: that region, or
-    /// the block's default. `needed` is what to say when there is no default,
-    /// which each form words for itself, and a region visible here is named as
-    /// the one to mark.
     /// Settles the region of a call to `what` (`task 'f'`, `method 'M.m'`), whose
     /// written arguments are `args` and whose parameters, a method's without the
     /// value it is called on, are `params`. A region written after the call
@@ -6777,6 +6637,10 @@ impl Checker {
         Ok(())
     }
 
+    /// The region an allocation uses, given the one it writes: that region, or
+    /// the block's default. `needed` is what to say when there is no default,
+    /// which each form words for itself, and a region visible here is named as
+    /// the one to mark.
     fn region_or_default(
         &mut self,
         written: Option<&String>,
@@ -6821,7 +6685,6 @@ impl Checker {
         }
     }
 
-    /// The name of the innermost region this code can allocate in, if any.
     fn innermost_region(&self) -> Option<&str> {
         // A scope's names are in no order, so of its regions the one
         // declared last is taken.
@@ -6838,7 +6701,6 @@ impl Checker {
             .map(|(name, _)| name.as_str())
     }
 
-    /// The variable called `name`, which must not be a region.
     fn lookup_or_err(&self, name: &str, span: Span) -> Result<&VarInfo> {
         if let Some(info) = self.lookup(name)
             && info.ty == Type::Region
@@ -6921,7 +6783,7 @@ impl Checker {
         }
     }
 
-    /// Checks a statement, whose copies must all know their regions when it ends.
+    /// The copies a statement has must all know their regions when it ends.
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let before = self.unsettled_copies.len();
         let types_before = self.unsettled_types.len();
@@ -7544,6 +7406,17 @@ impl Checker {
                 // goes through advances, which the call of `next` says, as any
                 // call of a method that changes the value it is called on.
                 if self.each_iterator.take().is_some() {
+                    // An each over an iterator advances it, so it gives no
+                    // loop value; gathering what it gives says 'collect'. Its
+                    // end is a break out (no item left), and a finally runs
+                    // only when a loop ends by itself, so a finally here would
+                    // never run.
+                    if gives || finally.is_some() {
+                        return err(
+                            span,
+                            "an 'each' over an iterator advances it: it gives no loop value and its end is a break, so a 'finally' never runs; gather what it gives with 'it.collect(r)', or use the iterator's other consumers",
+                        );
+                    }
                     self.loop_name = named;
                     self.loop_gives = gives;
                     let StmtKind::Each(name, _, range, body, finally) =
@@ -7556,7 +7429,10 @@ impl Checker {
                     // next item of the same iterator. A place, as `it` or
                     // `box.it`, is read each pass, and advances where it is.
                     let (head, source) = match range.kind {
-                        ExprKind::Var(_) | ExprKind::Field(..) | ExprKind::Index(..) | ExprKind::Deref(..) => (Vec::new(), range),
+                        ExprKind::Var(_)
+                        | ExprKind::Field(..)
+                        | ExprKind::Index(..)
+                        | ExprKind::Deref(..) => (Vec::new(), range),
                         _ => {
                             let temp = format!("each__{}", self.each_count);
                             self.each_count += 1;
@@ -17598,11 +17474,21 @@ impl Checker {
         let span = expr.span;
         let op = match &expr.kind {
             ExprKind::Unary(op, _) => *op,
-            _ => return Err(Error::internal_at(span, "a unary operation that is not one")),
+            _ => {
+                return Err(Error::internal_at(
+                    span,
+                    "a unary operation that is not one",
+                ));
+            }
         };
         let e = match &mut expr.kind {
             ExprKind::Unary(_, e) => e,
-            _ => return Err(Error::internal_at(span, "a unary operation that is not one")),
+            _ => {
+                return Err(Error::internal_at(
+                    span,
+                    "a unary operation that is not one",
+                ));
+            }
         };
         let ty = self.check_expr(e)?;
         if ty.unknown() {
@@ -17616,7 +17502,10 @@ impl Checker {
                     if self.operator_neg(&ty) {
                         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
                         let ExprKind::Unary(_, operand) = taken else {
-                            return Err(Error::internal_at(span, "a negation that is no longer one"));
+                            return Err(Error::internal_at(
+                                span,
+                                "a negation that is no longer one",
+                            ));
                         };
                         expr.kind = ExprKind::MethodCall {
                             value: operand,
@@ -17678,7 +17567,9 @@ impl Checker {
             return None;
         }
         self.patterns.values().find_map(|pattern| {
-            let has = pattern.method(name).is_some_and(|method| method.params.len() == 2);
+            let has = pattern
+                .method(name)
+                .is_some_and(|method| method.params.len() == 2);
             (has && self.followed_by(ty, &pattern.name).is_some()).then_some(name)
         })
     }
@@ -17688,7 +17579,9 @@ impl Checker {
     fn operator_neg(&self, ty: &Type) -> bool {
         !matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_))
             && self.patterns.values().any(|pattern| {
-                pattern.method("neg").is_some_and(|method| method.params.len() == 1)
+                pattern
+                    .method("neg")
+                    .is_some_and(|method| method.params.len() == 1)
                     && self.followed_by(ty, &pattern.name).is_some()
             })
     }
@@ -17823,7 +17716,10 @@ impl Checker {
         {
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             let ExprKind::Binary(_, l, r) = taken else {
-                return Err(Error::internal_at(span, "an operation that is no longer one"));
+                return Err(Error::internal_at(
+                    span,
+                    "an operation that is no longer one",
+                ));
             };
             let call = Expr::new(
                 ExprKind::MethodCall {
@@ -17957,11 +17853,13 @@ impl Checker {
                     // sides, so the mixed operation names the method.
                     if lt.without_regions() != rt.without_regions()
                         && let Some((at, of, other, method)) = [
-                            (l.span, &lt, &rt, self.operator_method(BinaryOp::Add, &lt)),
-                            (r.span, &rt, &lt, self.operator_method(BinaryOp::Add, &rt)),
+                            (l.span, &lt, &rt, self.operator_method(op, &lt)),
+                            (r.span, &rt, &lt, self.operator_method(op, &rt)),
                         ]
                         .into_iter()
-                        .find_map(|(at, of, other, method)| method.map(|method| (at, of, other, method)))
+                        .find_map(|(at, of, other, method)| {
+                            method.map(|method| (at, of, other, method))
+                        })
                     {
                         return err(
                             at,
@@ -18949,27 +18847,52 @@ impl Checker {
         // (see `std/collections.SliceIter`).
         if matches!(ty, Type::Slice(..)) {
             const CHAIN: &[&str] = &[
-                "map", "filter", "take", "skip", "zip", "enumerate", "collect", "fold", "find",
-                "all", "any",
+                "map",
+                "filter",
+                "take",
+                "skip",
+                "zip",
+                "enumerate",
+                "collect",
+                "fold",
+                "find",
+                "all",
+                "any",
             ];
-            let included = self
-                .modules
-                .get(&self.current_module)
-                .is_some_and(|scope| scope.includes.iter().any(|include| include.id == "std/collections"));
+            let included = self.modules.get(&self.current_module).is_some_and(|scope| {
+                scope
+                    .includes
+                    .iter()
+                    .any(|include| include.id == "std/collections")
+            });
             let members = match included {
-                true => self.patterns.get("std/collections.Iterator").map(|pattern| {
-                    pattern
-                        .methods
-                        .iter()
-                        .filter_map(|method| method.owner.as_ref().map(|owner| owner.name.clone()))
-                        .collect::<Vec<_>>()
-                }),
+                true => self
+                    .patterns
+                    .get("std/collections.Iterator")
+                    .map(|pattern| {
+                        pattern
+                            .methods
+                            .iter()
+                            .filter_map(|method| {
+                                method.owner.as_ref().map(|owner| owner.name.clone())
+                            })
+                            .collect::<Vec<_>>()
+                    }),
                 false => None,
             };
-            if members.as_ref().is_some_and(|members| members.contains(&name)) {
+            if members
+                .as_ref()
+                .is_some_and(|members| members.contains(&name))
+            {
                 let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
-                let ExprKind::MethodCall { value, name, args, .. } = taken else {
-                    return Err(Error::internal_at(span, "a method call that is no longer one"));
+                let ExprKind::MethodCall {
+                    value, name, args, ..
+                } = taken
+                else {
+                    return Err(Error::internal_at(
+                        span,
+                        "a method call that is no longer one",
+                    ));
                 };
                 let at = value.span;
                 let iter = Expr::new(
@@ -20226,7 +20149,8 @@ impl Checker {
                     wanted.unknown()
                         || actual.unknown()
                         || !wanted.params().is_empty()
-                        || self.unmade(wanted).without_regions() == self.unmade(actual).without_regions()
+                        || self.unmade(wanted).without_regions()
+                            == self.unmade(actual).without_regions()
                 });
             if !fits {
                 let list = |types: &[Type]| {

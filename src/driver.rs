@@ -36,7 +36,9 @@ pub fn front_end(source: &str) -> Result<Vec<Item>> {
     match (partial.items, partial.errors.into_iter().next()) {
         (_, Some(error)) => Err(error),
         (Some(items), None) => Ok(items),
-        (None, None) => Err(Error::internal("the front end produced neither a program nor an error")),
+        (None, None) => Err(Error::internal(
+            "the front end produced neither a program nor an error",
+        )),
     }
 }
 
@@ -67,7 +69,6 @@ pub struct Partial {
 }
 
 impl Partial {
-    /// The first mistake, the one a tool that shows only one shows.
     pub fn first_error(&self) -> Option<&Error> {
         self.errors.first()
     }
@@ -85,18 +86,39 @@ pub fn front_end_partial(source: &str) -> Partial {
 pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
     let (files, loaded) = modules::load(path, source, loader);
     match loaded {
-        Err(error) => Partial { items: None, errors: vec![error], warnings: Vec::new(), held_back: Vec::new(), files, spelling: Spelling::default() },
+        Err(error) => Partial {
+            items: None,
+            errors: vec![error],
+            warnings: Vec::new(),
+            held_back: Vec::new(),
+            files,
+            spelling: Spelling::default(),
+        },
         Ok(mut program) => {
             let (errors, warnings, held_back) = Checker::check_program_held(&mut program);
-            let spelling = program.modules.first().map(|main| main.spelling.clone()).unwrap_or_default();
-            Partial { items: Some(program.items), errors, warnings, held_back, files, spelling }
+            let spelling = program
+                .modules
+                .first()
+                .map(|main| main.spelling.clone())
+                .unwrap_or_default();
+            Partial {
+                items: Some(program.items),
+                errors,
+                warnings,
+                held_back,
+                files,
+                spelling,
+            }
         }
     }
 }
 
 /// A loader for a program in one file, which has no other files to read.
 fn no_modules(path: &Path) -> io::Result<String> {
-    Err(io::Error::new(io::ErrorKind::NotFound, format!("'{}' isn't loaded here", path.display())))
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("'{}' isn't loaded here", path.display()),
+    ))
 }
 
 /// Reads a module from the disk: the loader of the `vela` command.
@@ -114,12 +136,13 @@ pub struct ProgramError {
 }
 
 impl ProgramError {
-    /// One mistake, with the program's files.
     pub fn one(error: Error, files: Vec<SourceFile>) -> ProgramError {
-        ProgramError { errors: vec![error], files }
+        ProgramError {
+            errors: vec![error],
+            files,
+        }
     }
 
-    /// The first mistake, the one a tool that shows only one shows.
     pub fn first(&self) -> &Error {
         self.errors.first().unwrap_or(&NO_ERROR)
     }
@@ -129,20 +152,33 @@ impl ProgramError {
     /// `main_path` names the main file, and every other file is named by its
     /// path as loaded.
     pub fn render(&self, main_path: &str) -> String {
-        render_all(main_path, self.errors.iter().map(|error| render_program_error(main_path, &self.files, error)).collect())
+        render_all(
+            main_path,
+            self.errors
+                .iter()
+                .map(|error| render_program_error(main_path, &self.files, error))
+                .collect(),
+        )
     }
 
     /// The path of the file the first error is in, other than the main file, as
     /// loaded (`/`-separated).
     pub fn error_file(&self) -> Option<String> {
-        let file = self.first().span.map(|span| span.file).filter(|&file| file > 0)?;
-        self.files.get(file).map(|found| found.path.to_string_lossy().replace('\\', "/"))
+        let file = self
+            .first()
+            .span
+            .map(|span| span.file)
+            .filter(|&file| file > 0)?;
+        self.files
+            .get(file)
+            .map(|found| found.path.to_string_lossy().replace('\\', "/"))
     }
 }
 
 /// The error a `ProgramError` with no errors would report, which is a compiler
 /// bug: `ProgramError::first` never has to use it.
-static NO_ERROR: LazyLock<Error> = LazyLock::new(|| Error::internal("a program was rejected without saying why"));
+static NO_ERROR: LazyLock<Error> =
+    LazyLock::new(|| Error::internal("a program was rejected without saying why"));
 
 /// The diagnostics as the `vela` command prints them: at most `MAX_SHOWN` of
 /// them, one after another, and a last line counting any it leaves out.
@@ -151,7 +187,10 @@ fn render_all(main_path: &str, rendered: Vec<String>) -> String {
     let mut shown: Vec<String> = rendered.into_iter().take(MAX_SHOWN).collect();
     if more > 0 {
         let mistakes = if more == 1 { "mistake" } else { "mistakes" };
-        shown.push(format!("{}: error: {} more {}, not shown; fix these first and check again", main_path, more, mistakes));
+        shown.push(format!(
+            "{}: error: {} more {}, not shown; fix these first and check again",
+            main_path, more, mistakes
+        ));
     }
     shown.join("\n")
 }
@@ -160,7 +199,9 @@ fn render_all(main_path: &str, rendered: Vec<String>) -> String {
 pub fn render_program_error(main_path: &str, files: &[SourceFile], e: &Error) -> String {
     let file = e.span.map_or(0, |span| span.file);
     match files.get(file) {
-        Some(found) if file > 0 => render_error(&found.path.display().to_string(), &found.source, e),
+        Some(found) if file > 0 => {
+            render_error(&found.path.display().to_string(), &found.source, e)
+        }
         Some(main) => render_error(main_path, &main.source, e),
         None => render_error(main_path, "", e),
     }
@@ -189,8 +230,17 @@ impl Warnings {
     /// `render`, with the repeats those rules held back too (the command's
     /// `--repeat-warnings`), all in source order.
     pub fn render_repeating(&self, main_path: &str) -> String {
-        let mut all: Vec<Error> = self.warnings.iter().chain(&self.held_back).cloned().collect();
-        all.sort_by_key(|warning| warning.span.map_or((1, 0, 0, 0), |span| (0, span.file, span.line, span.col)));
+        let mut all: Vec<Error> = self
+            .warnings
+            .iter()
+            .chain(&self.held_back)
+            .cloned()
+            .collect();
+        all.sort_by_key(|warning| {
+            warning
+                .span
+                .map_or((1, 0, 0, 0), |span| (0, span.file, span.line, span.col))
+        });
         self.render_of(&all, main_path)
     }
 
@@ -200,7 +250,12 @@ impl Warnings {
             .map(|warning| {
                 let file = warning.span.map_or(0, |span| span.file);
                 match self.files.get(file) {
-                    Some(found) if file > 0 => render_diagnostic(&found.path.display().to_string(), &found.source, warning, "warning"),
+                    Some(found) if file > 0 => render_diagnostic(
+                        &found.path.display().to_string(),
+                        &found.source,
+                        warning,
+                        "warning",
+                    ),
                     Some(main) => render_diagnostic(main_path, &main.source, warning, "warning"),
                     None => render_diagnostic(main_path, "", warning, "warning"),
                 }
@@ -212,19 +267,33 @@ impl Warnings {
 
 /// Checks the program whose main file is `source`, at `path`, loading its
 /// modules with `loader`: the checked program, and its warnings.
-pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
+pub fn check_program(
+    path: &Path,
+    source: &str,
+    loader: &mut Loader,
+) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
     checked(front_end_program(path, source, loader))
 }
 
 /// The checked program with its warnings, or every mistake that stopped it.
 fn checked(partial: Partial) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
     match (partial.items, partial.errors) {
-        (Some(items), errors) if errors.is_empty() => Ok((items, Warnings { warnings: partial.warnings, held_back: partial.held_back, files: partial.files })),
+        (Some(items), errors) if errors.is_empty() => Ok((
+            items,
+            Warnings {
+                warnings: partial.warnings,
+                held_back: partial.held_back,
+                files: partial.files,
+            },
+        )),
         (_, errors) if errors.is_empty() => Err(ProgramError::one(
             Error::internal("the front end produced neither a program nor an error"),
             partial.files,
         )),
-        (_, errors) => Err(ProgramError { errors, files: partial.files }),
+        (_, errors) => Err(ProgramError {
+            errors,
+            files: partial.files,
+        }),
     }
 }
 
@@ -239,16 +308,31 @@ pub fn generate_c(source: &str) -> Result<String> {
 /// its modules with `loader`. `notices` is whether the program writes notices
 /// to standard error, as of a startup decorator whose failure it passes over
 /// (`--no-notices` turns them off).
-pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader, notices: bool) -> std::result::Result<(String, Warnings), ProgramError> {
+pub fn generate_c_program(
+    path: &Path,
+    source: &str,
+    loader: &mut Loader,
+    notices: bool,
+) -> std::result::Result<(String, Warnings), ProgramError> {
     let (items, warnings) = check_program(path, source, loader)?;
-    let c_code = Generator::new().with_notices(notices).generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))?;
+    let c_code = Generator::new()
+        .with_notices(notices)
+        .generate(&items)
+        .map_err(|error| ProgramError::one(error, Vec::new()))?;
     Ok((c_code, warnings))
 }
 
 /// `generate_c_program` for C to be written to the file `output`, which must
 /// not be a file of the program: the main file, at `input` on the disk, or a
 /// module it includes.
-pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader, notices: bool) -> std::result::Result<(String, Warnings), BuildError> {
+pub fn generate_c_file(
+    path: &Path,
+    input: &Path,
+    source: &str,
+    output: &Path,
+    loader: &mut Loader,
+    notices: bool,
+) -> std::result::Result<(String, Warnings), BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
     let (items, warnings) = checked(partial)?;
@@ -257,13 +341,21 @@ pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, l
     Ok((c_code, warnings))
 }
 
-/// The paths of the modules a program read, as its loader knows them.
 fn module_paths(partial: &Partial) -> Vec<PathBuf> {
-    partial.files.iter().skip(1).map(|file| file.path.clone()).collect()
+    partial
+        .files
+        .iter()
+        .skip(1)
+        .map(|file| file.path.clone())
+        .collect()
 }
 
 /// Rejects an `output` that names the main file, at `input`, or one of `modules`.
-fn overwrites_source(input: &Path, modules: &[PathBuf], output: &Path) -> std::result::Result<(), BuildError> {
+fn overwrites_source(
+    input: &Path,
+    modules: &[PathBuf],
+    output: &Path,
+) -> std::result::Result<(), BuildError> {
     if same_file(input, output) {
         return Err(BuildError::OutputIsInput(output.to_path_buf()));
     }
@@ -286,12 +378,18 @@ pub enum BuildError {
     /// The output path names a module the program includes.
     OutputIsModule(PathBuf),
     /// Creating the build directory or writing a file into it failed.
-    Io { action: &'static str, error: io::Error },
+    Io {
+        action: &'static str,
+        error: io::Error,
+    },
     /// The C compiler could not be started.
     CompilerNotStarted { cc: String, error: io::Error },
     /// The C compiler rejected the generated C. `messages` is its output, and
     /// the generated C is kept in `build_dir` for inspection.
-    CFailed { messages: String, build_dir: PathBuf },
+    CFailed {
+        messages: String,
+        build_dir: PathBuf,
+    },
 }
 
 impl BuildError {
@@ -299,22 +397,35 @@ impl BuildError {
     /// input file and `source` is its text, for Vela diagnostics.
     pub fn render(&self, path: &str, source: &str) -> String {
         match self {
-            BuildError::Vela(ProgramError { errors, files }) if files.is_empty() => {
-                render_all(path, errors.iter().map(|error| render_error(path, source, error)).collect())
-            }
+            BuildError::Vela(ProgramError { errors, files }) if files.is_empty() => render_all(
+                path,
+                errors
+                    .iter()
+                    .map(|error| render_error(path, source, error))
+                    .collect(),
+            ),
             BuildError::Vela(error) => error.render(path),
             BuildError::NoMain => format!("{}: error: program has no 'main' task", path),
             BuildError::OutputIsInput(output) => {
-                format!("error: output '{}' would overwrite the input file", output.display())
+                format!(
+                    "error: output '{}' would overwrite the input file",
+                    output.display()
+                )
             }
             BuildError::OutputIsModule(output) => {
-                format!("error: output '{}' would overwrite a module the program includes", output.display())
+                format!(
+                    "error: output '{}' would overwrite a module the program includes",
+                    output.display()
+                )
             }
             BuildError::Io { action, error } => format!("error: cannot {}: {}", action, error),
             BuildError::CompilerNotStarted { cc, error } => {
                 format!("error: failed to invoke C compiler '{}': {}", cc, error)
             }
-            BuildError::CFailed { messages, build_dir } => format!(
+            BuildError::CFailed {
+                messages,
+                build_dir,
+            } => format!(
                 "{}error: C compilation failed (generated C kept in {})",
                 messages,
                 build_dir.display()
@@ -338,12 +449,17 @@ impl From<ProgramError> for BuildError {
 /// The C compiler command from `$CC`, like make and cargo: it may include
 /// arguments (`CC="ccache gcc"`). Unset or empty means `cc`.
 pub fn c_compiler_from_env() -> String {
-    env::var("CC").ok().filter(|cc| !cc.trim().is_empty()).unwrap_or_else(|| "cc".to_string())
+    env::var("CC")
+        .ok()
+        .filter(|cc| !cc.trim().is_empty())
+        .unwrap_or_else(|| "cc".to_string())
 }
 
 /// Whether a checked program has a `main` task, which an executable needs.
 pub fn has_main(items: &[Item]) -> bool {
-    items.iter().any(|item| matches!(item, Item::Task(t) if t.name == "main"))
+    items
+        .iter()
+        .any(|item| matches!(item, Item::Task(t) if t.name == "main"))
 }
 
 /// Compiles `source`, the contents of the file at `input`, into an
@@ -351,13 +467,35 @@ pub fn has_main(items: &[Item]) -> bool {
 /// `c_compiler_from_env`). `input` names the generated C file and guards
 /// against overwriting the source. The modules the program includes are read
 /// from the disk, next to `input`.
-pub fn build(source: &str, input: &Path, output: &Path, cc: &str, notices: bool) -> std::result::Result<Warnings, BuildError> {
-    build_program(source, input, input, output, cc, &mut read_from_disk, notices)
+pub fn build(
+    source: &str,
+    input: &Path,
+    output: &Path,
+    cc: &str,
+    notices: bool,
+) -> std::result::Result<Warnings, BuildError> {
+    build_program(
+        source,
+        input,
+        input,
+        output,
+        cc,
+        &mut read_from_disk,
+        notices,
+    )
 }
 
 /// `build`, with the program's main file at `path` as `loader` knows it (for
 /// its modules' paths and for messages) and at `input` on the disk.
-pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader, notices: bool) -> std::result::Result<Warnings, BuildError> {
+pub fn build_program(
+    source: &str,
+    path: &Path,
+    input: &Path,
+    output: &Path,
+    cc: &str,
+    loader: &mut Loader,
+    notices: bool,
+) -> std::result::Result<Warnings, BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
     let (items, warnings) = checked(partial)?;
@@ -374,30 +512,57 @@ pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc:
 /// Rejects an output path the C compiler couldn't write, before compiling, so
 /// the problem isn't reported as a failure of the generated C.
 fn check_output(output: &Path) -> std::result::Result<(), BuildError> {
-    let folder = output.parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let io_error = |error: io::Error| BuildError::Io { action: "write the executable", error };
+    let folder = output
+        .parent()
+        .filter(|folder| !folder.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let io_error = |error: io::Error| BuildError::Io {
+        action: "write the executable",
+        error,
+    };
     if output.is_dir() {
-        return Err(io_error(io::Error::other(format!("'{}' is a folder", output.display()))));
+        return Err(io_error(io::Error::other(format!(
+            "'{}' is a folder",
+            output.display()
+        ))));
     }
     if !folder.is_dir() {
-        return Err(io_error(io::Error::other(format!("the folder '{}' doesn't exist", folder.display()))));
+        return Err(io_error(io::Error::other(format!(
+            "the folder '{}' doesn't exist",
+            folder.display()
+        ))));
     }
     // The C compiler (its linker) replaces the output, which needs a folder it
     // can create files in, or else an existing output it can write.
-    let denied = |error: io::Error| io_error(io::Error::new(error.kind(), format!("'{}': {}", output.display(), error)));
+    let denied = |error: io::Error| {
+        io_error(io::Error::new(
+            error.kind(),
+            format!("'{}': {}", output.display(), error),
+        ))
+    };
     let probe = folder.join(format!(".vela-output-check-{}", process::id()));
-    match fs::OpenOptions::new().write(true).create_new(true).open(&probe) {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
         Ok(_) => {
             let _ = fs::remove_file(&probe);
         }
         Err(error) if output.exists() => {
-            fs::OpenOptions::new().write(true).open(output).map_err(|_| denied(error))?;
+            fs::OpenOptions::new()
+                .write(true)
+                .open(output)
+                .map_err(|_| denied(error))?;
         }
         Err(error) => return Err(denied(error)),
     }
     // An existing output that can't be written, in a folder that can.
     if output.exists() {
-        fs::OpenOptions::new().write(true).open(output).map_err(denied)?;
+        fs::OpenOptions::new()
+            .write(true)
+            .open(output)
+            .map_err(denied)?;
     }
     Ok(())
 }
@@ -413,7 +578,10 @@ pub fn render_diagnostic(path: &str, source: &str, e: &Error, kind: &str) -> Str
     let Some(span) = e.span else {
         return format!("{}: {}: {}", path, kind, e.message);
     };
-    let mut out = format!("{}:{}:{}: {}: {}", path, span.line, span.col, kind, e.message);
+    let mut out = format!(
+        "{}:{}:{}: {}: {}",
+        path, span.line, span.col, kind, e.message
+    );
     if let Some(line) = span.line.checked_sub(1).and_then(|i| source.lines().nth(i)) {
         let gutter = span.line.to_string();
         // Keep tabs so the caret lines up with the source line.
@@ -422,7 +590,14 @@ pub fn render_diagnostic(path: &str, source: &str, e: &Error, kind: &str) -> Str
             .take(span.col.saturating_sub(1))
             .map(|c| if c == '\t' { '\t' } else { ' ' })
             .collect();
-        let _ = write!(out, "\n {} | {}\n {} | {}^", gutter, line, " ".repeat(gutter.len()), indent);
+        let _ = write!(
+            out,
+            "\n {} | {}\n {} | {}^",
+            gutter,
+            line,
+            " ".repeat(gutter.len()),
+            indent
+        );
     }
     out
 }
@@ -435,14 +610,26 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
-fn compile_c(c_code: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<(), BuildError> {
-    let mut build_dir = BuildDir::create()
-        .map_err(|error| BuildError::Io { action: "create build directory", error })?;
+fn compile_c(
+    c_code: &str,
+    input: &Path,
+    output: &Path,
+    cc: &str,
+) -> std::result::Result<(), BuildError> {
+    let mut build_dir = BuildDir::create().map_err(|error| BuildError::Io {
+        action: "create build directory",
+        error,
+    })?;
     let base = input.file_stem().unwrap_or("vela_out".as_ref());
     let c_path = build_dir.path.join(format!("{}.c", base.to_string_lossy()));
-    fs::write(&c_path, c_code).map_err(|error| BuildError::Io { action: "write C file", error })?;
-    fs::write(build_dir.path.join("vela_rt.h"), RUNTIME_H)
-        .map_err(|error| BuildError::Io { action: "write runtime header", error })?;
+    fs::write(&c_path, c_code).map_err(|error| BuildError::Io {
+        action: "write C file",
+        error,
+    })?;
+    fs::write(build_dir.path.join("vela_rt.h"), RUNTIME_H).map_err(|error| BuildError::Io {
+        action: "write runtime header",
+        error,
+    })?;
 
     let mut words = cc.split_whitespace();
     let program = words.next().unwrap_or("cc");
@@ -464,7 +651,10 @@ fn compile_c(c_code: &str, input: &Path, output: &Path, cc: &str) -> std::result
         .arg(&output)
         .arg("-lm") // math library, for vela__rt__fmod
         .output()
-        .map_err(|error| BuildError::CompilerNotStarted { cc: program.to_string(), error })?;
+        .map_err(|error| BuildError::CompilerNotStarted {
+            cc: program.to_string(),
+            error,
+        })?;
 
     // The C compiler's messages are about generated code, so they are shown
     // only when compilation fails; warnings on success would just be noise.
@@ -493,16 +683,22 @@ struct BuildDir {
 impl BuildDir {
     fn create() -> io::Result<BuildDir> {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
         let mut last_error = None;
         for _ in 0..16 {
             let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-            let path = env::temp_dir().join(format!("vela-build-{}-{}-{}", process::id(), nanos, n));
+            let path =
+                env::temp_dir().join(format!("vela-build-{}-{}-{}", process::id(), nanos, n));
             // `create_dir`, unlike `create_dir_all`, fails if the directory
             // already exists, so a stale or planted directory is never reused.
             match fs::create_dir(&path) {
                 Ok(()) => return Ok(BuildDir { path, keep: false }),
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => last_error = Some(error),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    last_error = Some(error)
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -520,7 +716,12 @@ impl Drop for BuildDir {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic
+    )]
 
     use super::*;
 

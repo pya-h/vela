@@ -1,6 +1,5 @@
-//! The frontend: `ide/web/dist`, embedded in release builds (read from disk
-//! in debug builds). Until the frontend is built, the page explains how to
-//! build it.
+//! Embedded in release builds, read from `ide/web/dist` in debug ones;
+//! until the frontend is built, the page explains how.
 
 use std::sync::Arc;
 
@@ -38,20 +37,33 @@ pub async fn serve(State(studio): State<Arc<Studio>>, method: Method, uri: Uri) 
     let (body, content_type, cache) = match Frontend::get(path) {
         Some(file) => {
             // Vite puts content-hashed files in assets/, so they never change.
-            let cache = if path.starts_with("assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
+            let cache = if path.starts_with("assets/") {
+                "public, max-age=31536000, immutable"
+            } else {
+                "no-cache"
+            };
             (file.data.into_owned(), content_type(path), cache)
         }
-        None if path == "index.html" => (NOT_BUILT_PAGE.as_bytes().to_vec(), content_type(path), "no-cache"),
-        None if path == NOT_BUILT_STYLE_PATH => (NOT_BUILT_STYLE.as_bytes().to_vec(), content_type(path), "no-cache"),
+        None if path == "index.html" => (
+            NOT_BUILT_PAGE.as_bytes().to_vec(),
+            content_type(path),
+            "no-cache",
+        ),
+        None if path == NOT_BUILT_STYLE_PATH => (
+            NOT_BUILT_STYLE.as_bytes().to_vec(),
+            content_type(path),
+            "no-cache",
+        ),
         None => return (StatusCode::NOT_FOUND, "not found").into_response(),
     };
     let (body, policy) = if content_type.starts_with("text/html") {
-        // Each page gets its own nonce, in its policy and its meta tag.
         let Ok(nonce) = random_hex(16) else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
         let page = String::from_utf8_lossy(&body).replace(NONCE_PLACEHOLDER, &nonce);
-        let Ok(policy) = HeaderValue::from_str(&content_security_policy(studio.config.port, &nonce)) else {
+        let Ok(policy) =
+            HeaderValue::from_str(&content_security_policy(studio.config.port, &nonce))
+        else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
         (page.into_bytes(), Some(policy))
