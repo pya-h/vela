@@ -1,0 +1,182 @@
+  1 | ; Tests std/web client: parse_url, parse_response, Client shape, error handling, and client socket communication.
+    | comment:; Tests std/web client: parse_url, parse_response, Client shape, error handling, and client socket communication.
+  2 | include std/web { Socket, Request, Response, Client, WebError, parse_url, parse_response, fetch, fetch_post }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:Client  punctuation:,  type:WebError  punctuation:,  task:parse_url  punctuation:,  task:parse_response  punctuation:,  task:fetch  punctuation:,  task:fetch_post  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r default
+    | keyword:region  region:r  keyword:default
+  7 |     ; 1. URL Parsing
+    | comment:; 1. URL Parsing
+  8 |     fixed (h1, p1, path1) = parse_url("http://127.0.0.1:8080/items/42") { failure _
+    | keyword:fixed  punctuation:(  variable:h1  punctuation:,  variable:p1  punctuation:,  variable:path1  punctuation:)  operator:=  task:parse_url  punctuation:(  string:"http://127.0.0.1:8080/items/42"  punctuation:)  punctuation:{  keyword:failure  keyword:_
+  9 |         show("parse_url 1 failed")
+    | builtin-fn:show  punctuation:(  string:"parse_url 1 failed"  punctuation:)
+ 10 |         ("", 0, "")
+    | punctuation:(  string:""  punctuation:,  number:0  punctuation:,  string:""  punctuation:)
+ 11 |     }
+    | punctuation:}
+ 12 |     show("url1: ", h1, ":", p1, path1)
+    | builtin-fn:show  punctuation:(  string:"url1: "  punctuation:,  variable:h1  punctuation:,  string:":"  punctuation:,  variable:p1  punctuation:,  variable:path1  punctuation:)
+ 14 |     fixed (h2, p2, path2) = parse_url("http://localhost/") { failure _
+    | keyword:fixed  punctuation:(  variable:h2  punctuation:,  variable:p2  punctuation:,  variable:path2  punctuation:)  operator:=  task:parse_url  punctuation:(  string:"http://localhost/"  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 15 |         show("parse_url 2 failed")
+    | builtin-fn:show  punctuation:(  string:"parse_url 2 failed"  punctuation:)
+ 16 |         ("", 0, "")
+    | punctuation:(  string:""  punctuation:,  number:0  punctuation:,  string:""  punctuation:)
+ 17 |     }
+    | punctuation:}
+ 18 |     show("url2: ", h2, ":", p2, path2)
+    | builtin-fn:show  punctuation:(  string:"url2: "  punctuation:,  variable:h2  punctuation:,  string:":"  punctuation:,  variable:p2  punctuation:,  variable:path2  punctuation:)
+ 20 |     fixed (h3, p3, path3) = parse_url("http://127.0.0.1:18097") { failure _
+    | keyword:fixed  punctuation:(  variable:h3  punctuation:,  variable:p3  punctuation:,  variable:path3  punctuation:)  operator:=  task:parse_url  punctuation:(  string:"http://127.0.0.1:18097"  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 21 |         show("parse_url 3 failed")
+    | builtin-fn:show  punctuation:(  string:"parse_url 3 failed"  punctuation:)
+ 22 |         ("", 0, "")
+    | punctuation:(  string:""  punctuation:,  number:0  punctuation:,  string:""  punctuation:)
+ 23 |     }
+    | punctuation:}
+ 24 |     show("url3: ", h3, ":", p3, path3)
+    | builtin-fn:show  punctuation:(  string:"url3: "  punctuation:,  variable:h3  punctuation:,  string:":"  punctuation:,  variable:p3  punctuation:,  variable:path3  punctuation:)
+ 26 |     fixed https_res = parse_url("https://secure.api/test") { failure e
+    | keyword:fixed  variable:https_res  operator:=  task:parse_url  punctuation:(  string:"https://secure.api/test"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 27 |         show("https rejected: ", match e
+    | builtin-fn:show  punctuation:(  string:"https rejected: "  punctuation:,  keyword:match  variable:e
+ 28 |             case WebError.BadRequest why = why
+    | keyword:case  type:WebError  punctuation:.  variant:BadRequest  variable:why  operator:=  variable:why
+ 29 |             case _ = "other"
+    | keyword:case  keyword:_  operator:=  string:"other"
+ 30 |         fi)
+    | keyword:fi  punctuation:)
+ 31 |         ("", 0, "")
+    | punctuation:(  string:""  punctuation:,  number:0  punctuation:,  string:""  punctuation:)
+ 32 |     }
+    | punctuation:}
+ 34 |     ; 2. Response Parsing
+    | comment:; 2. Response Parsing
+ 35 |     fixed raw_200 = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n\{\"status\":\"ok\"\}"
+    | keyword:fixed  variable:raw_200  operator:=  string:"HTTP/1.1 200 OK  escape:\r  escape:\n  string:Content-Type: application/json  escape:\r  escape:\n  string:Content-Length: 15  escape:\r  escape:\n  escape:\r  escape:\n  escape:\{  escape:\"  string:status  escape:\"  string::  escape:\"  string:ok  escape:\"  escape:\}  string:"
+ 36 |     fixed resp_200 = parse_response(raw_200, r)
+    | keyword:fixed  variable:resp_200  operator:=  task:parse_response  punctuation:(  variable:raw_200  punctuation:,  region:r  punctuation:)
+ 37 |     show("resp 200 status: ", resp_200.status, " ", resp_200.reason)
+    | builtin-fn:show  punctuation:(  string:"resp 200 status: "  punctuation:,  variable:resp_200  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:resp_200  punctuation:.  field:reason  punctuation:)
+ 38 |     show("resp 200 header: ", resp_200.headers["content-type"])
+    | builtin-fn:show  punctuation:(  string:"resp 200 header: "  punctuation:,  variable:resp_200  punctuation:.  field:headers  punctuation:[  string:"content-type"  punctuation:]  punctuation:)
+ 39 |     show("resp 200 body: ", resp_200.body_data)
+    | builtin-fn:show  punctuation:(  string:"resp 200 body: "  punctuation:,  variable:resp_200  punctuation:.  field:body_data  punctuation:)
+ 41 |     fixed raw_404 = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+    | keyword:fixed  variable:raw_404  operator:=  string:"HTTP/1.1 404 Not Found  escape:\r  escape:\n  string:Content-Length: 0  escape:\r  escape:\n  escape:\r  escape:\n  string:"
+ 42 |     fixed resp_404 = parse_response(raw_404, r)
+    | keyword:fixed  variable:resp_404  operator:=  task:parse_response  punctuation:(  variable:raw_404  punctuation:,  region:r  punctuation:)
+ 43 |     show("resp 404 status: ", resp_404.status, " ", resp_404.reason)
+    | builtin-fn:show  punctuation:(  string:"resp 404 status: "  punctuation:,  variable:resp_404  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:resp_404  punctuation:.  field:reason  punctuation:)
+ 45 |     ; 3. Client Configuration
+    | comment:; 3. Client Configuration
+ 46 |     fixed cli = Client.new(1000).timeout(3000)
+    | keyword:fixed  variable:cli  operator:=  type:Client  punctuation:.  method:new  punctuation:(  number:1000  punctuation:)  punctuation:.  method:timeout  punctuation:(  number:3000  punctuation:)
+ 47 |     show("client timeout: ", cli.timeout_ms)
+    | builtin-fn:show  punctuation:(  string:"client timeout: "  punctuation:,  variable:cli  punctuation:.  field:timeout_ms  punctuation:)
+ 49 |     ; 4. Error handling on unreachable target
+    | comment:; 4. Error handling on unreachable target
+ 50 |     fixed unreach = fetch("http://127.0.0.1:18099/unreachable", r) { failure e
+    | keyword:fixed  variable:unreach  operator:=  task:fetch  punctuation:(  string:"http://127.0.0.1:18099/unreachable"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 51 |         show("unreachable caught: ", match e
+    | builtin-fn:show  punctuation:(  string:"unreachable caught: "  punctuation:,  keyword:match  variable:e
+ 52 |             case WebError.BadRequest why = "BadRequest"
+    | keyword:case  type:WebError  punctuation:.  variant:BadRequest  variable:why  operator:=  string:"BadRequest"
+ 53 |             case _ = "other"
+    | keyword:case  keyword:_  operator:=  string:"other"
+ 54 |         fi)
+    | keyword:fi  punctuation:)
+ 55 |         Response.with_status(500, r)
+    | type:Response  punctuation:.  method:with_status  punctuation:(  number:500  punctuation:,  region:r  punctuation:)
+ 56 |     }
+    | punctuation:}
+ 58 |     ; 5. Client / Server socket exchange
+    | comment:; 5. Client / Server socket exchange
+ 59 |     fixed port = 18097
+    | keyword:fixed  variable:port  operator:=  number:18097
+ 60 |     fixed server_sock = Socket.open(r) { failure _
+    | keyword:fixed  variable:server_sock  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 61 |         <-
+    | keyword:<-
+ 62 |     }
+    | punctuation:}
+ 63 |     server_sock.bind_to("127.0.0.1", port) { failure _
+    | variable:server_sock  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 64 |         <-
+    | keyword:<-
+ 65 |     }
+    | punctuation:}
+ 66 |     server_sock.listen(8) { failure _
+    | variable:server_sock  punctuation:.  method:listen  punctuation:(  number:8  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 67 |         <-
+    | keyword:<-
+ 68 |     }
+    | punctuation:}
+ 70 |     ; Client connects to server
+    | comment:; Client connects to server
+ 71 |     fixed client_sock = Socket.open(r) { failure _
+    | keyword:fixed  variable:client_sock  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 72 |         <-
+    | keyword:<-
+ 73 |     }
+    | punctuation:}
+ 74 |     client_sock.connect("127.0.0.1", port) { failure _
+    | variable:client_sock  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 75 |         <-
+    | keyword:<-
+ 76 |     }
+    | punctuation:}
+ 78 |     ; Server accepts
+    | comment:; Server accepts
+ 79 |     server_sock.poll(1, 1000) { 0 }
+    | variable:server_sock  punctuation:.  method:poll  punctuation:(  number:1  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 80 |     fixed accepted = server_sock.accept(r) { failure _
+    | keyword:fixed  variable:accepted  operator:=  variable:server_sock  punctuation:.  method:accept  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 81 |         <-
+    | keyword:<-
+ 82 |     }
+    | punctuation:}
+ 84 |     ; Client sends GET request
+    | comment:; Client sends GET request
+ 85 |     client_sock.poll(2, 1000) { 0 }
+    | variable:client_sock  punctuation:.  method:poll  punctuation:(  number:2  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 86 |     client_sock.write("GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n") { failure _ 0 }
+    | variable:client_sock  punctuation:.  method:write  punctuation:(  string:"GET /echo HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  keyword:_  number:0  punctuation:}
+ 88 |     ; Server reads request and responds
+    | comment:; Server reads request and responds
+ 89 |     accepted.poll(1, 1000) { 0 }
+    | variable:accepted  punctuation:.  method:poll  punctuation:(  number:1  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 90 |     fixed req_text = accepted.read(1024, r) { "" }
+    | keyword:fixed  variable:req_text  operator:=  variable:accepted  punctuation:.  method:read  punctuation:(  number:1024  punctuation:,  region:r  punctuation:)  punctuation:{  string:""  punctuation:}
+ 91 |     show("server received request: ", req_text.len > 0)
+    | builtin-fn:show  punctuation:(  string:"server received request: "  punctuation:,  variable:req_text  punctuation:.  field:len  operator:>  number:0  punctuation:)
+ 93 |     accepted.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\npong") { failure _ 0 }
+    | variable:accepted  punctuation:.  method:write  punctuation:(  string:"HTTP/1.1 200 OK  escape:\r  escape:\n  string:Content-Type: text/plain  escape:\r  escape:\n  string:Content-Length: 4  escape:\r  escape:\n  escape:\r  escape:\n  string:pong"  punctuation:)  punctuation:{  keyword:failure  keyword:_  number:0  punctuation:}
+ 94 |     flex a_close = accepted
+    | keyword:flex  variable:a_close  operator:=  variable:accepted
+ 95 |     a_close.close() { failure _ }
+    | variable:a_close  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+ 97 |     ; Client reads response and parses
+    | comment:; Client reads response and parses
+ 98 |     client_sock.poll(1, 1000) { 0 }
+    | variable:client_sock  punctuation:.  method:poll  punctuation:(  number:1  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 99 |     fixed client_raw = client_sock.read(1024, r) { "" }
+    | keyword:fixed  variable:client_raw  operator:=  variable:client_sock  punctuation:.  method:read  punctuation:(  number:1024  punctuation:,  region:r  punctuation:)  punctuation:{  string:""  punctuation:}
+100 |     flex c_close = client_sock
+    | keyword:flex  variable:c_close  operator:=  variable:client_sock
+101 |     c_close.close() { failure _ }
+    | variable:c_close  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+103 |     fixed client_parsed = parse_response(client_raw, r)
+    | keyword:fixed  variable:client_parsed  operator:=  task:parse_response  punctuation:(  variable:client_raw  punctuation:,  region:r  punctuation:)
+104 |     show("client received: ", client_parsed.status, " ", client_parsed.body_data)
+    | builtin-fn:show  punctuation:(  string:"client received: "  punctuation:,  variable:client_parsed  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:client_parsed  punctuation:.  field:body_data  punctuation:)
+106 |     flex s_close = server_sock
+    | keyword:flex  variable:s_close  operator:=  variable:server_sock
+107 |     s_close.close() { failure _ }
+    | variable:s_close  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+108 |     show("web client tests complete")
+    | builtin-fn:show  punctuation:(  string:"web client tests complete"  punctuation:)
+109 | fi
+    | keyword:fi

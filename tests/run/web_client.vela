@@ -1,0 +1,110 @@
+; Tests std/web client: parse_url, parse_response, Client shape, error handling, and client socket communication.
+include std/web { Socket, Request, Response, Client, WebError, parse_url, parse_response, fetch, fetch_post }
+
+task main()
+    region r default
+
+    ; 1. URL Parsing
+    fixed (h1, p1, path1) = parse_url("http://127.0.0.1:8080/items/42") { failure _
+        show("parse_url 1 failed")
+        ("", 0, "")
+    }
+    show("url1: ", h1, ":", p1, path1)
+
+    fixed (h2, p2, path2) = parse_url("http://localhost/") { failure _
+        show("parse_url 2 failed")
+        ("", 0, "")
+    }
+    show("url2: ", h2, ":", p2, path2)
+
+    fixed (h3, p3, path3) = parse_url("http://127.0.0.1:18097") { failure _
+        show("parse_url 3 failed")
+        ("", 0, "")
+    }
+    show("url3: ", h3, ":", p3, path3)
+
+    fixed https_res = parse_url("https://secure.api/test") { failure e
+        show("https rejected: ", match e
+            case WebError.BadRequest why = why
+            case _ = "other"
+        fi)
+        ("", 0, "")
+    }
+
+    ; 2. Response Parsing
+    fixed raw_200 = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n\{\"status\":\"ok\"\}"
+    fixed resp_200 = parse_response(raw_200, r)
+    show("resp 200 status: ", resp_200.status, " ", resp_200.reason)
+    show("resp 200 header: ", resp_200.headers["content-type"])
+    show("resp 200 body: ", resp_200.body_data)
+
+    fixed raw_404 = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+    fixed resp_404 = parse_response(raw_404, r)
+    show("resp 404 status: ", resp_404.status, " ", resp_404.reason)
+
+    ; 3. Client Configuration
+    fixed cli = Client.new(1000).timeout(3000)
+    show("client timeout: ", cli.timeout_ms)
+
+    ; 4. Error handling on unreachable target
+    fixed unreach = fetch("http://127.0.0.1:18099/unreachable", r) { failure e
+        show("unreachable caught: ", match e
+            case WebError.BadRequest why = "BadRequest"
+            case _ = "other"
+        fi)
+        Response.with_status(500, r)
+    }
+
+    ; 5. Client / Server socket exchange
+    fixed port = 18097
+    fixed server_sock = Socket.open(r) { failure _
+        <-
+    }
+    server_sock.bind_to("127.0.0.1", port) { failure _
+        <-
+    }
+    server_sock.listen(8) { failure _
+        <-
+    }
+
+    ; Client connects to server
+    fixed client_sock = Socket.open(r) { failure _
+        <-
+    }
+    client_sock.connect("127.0.0.1", port) { failure _
+        <-
+    }
+
+    ; Server accepts
+    server_sock.poll(1, 1000) { 0 }
+    fixed accepted = server_sock.accept(r) { failure _
+        <-
+    }
+
+    ; Client sends GET request
+    client_sock.poll(2, 1000) { 0 }
+    client_sock.write("GET /echo HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n") { failure _ 0 }
+
+    ; Server reads request and responds
+    accepted.poll(1, 1000) { 0 }
+    fixed req_text = accepted.read(1024, r) { "" }
+    show("server received request: ", req_text.len > 0)
+
+    accepted.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\npong") { failure _ 0 }
+    flex a_close = accepted
+    a_close.close() { failure _ }
+
+    ; Client reads response and parses
+    client_sock.poll(1, 1000) { 0 }
+    fixed client_raw = client_sock.read(1024, r) { "" }
+    flex c_close = client_sock
+    c_close.close() { failure _ }
+
+    fixed client_parsed = parse_response(client_raw, r)
+    show("client received: ", client_parsed.status, " ", client_parsed.body_data)
+
+    flex s_close = server_sock
+    s_close.close() { failure _ }
+    show("web client tests complete")
+fi
+

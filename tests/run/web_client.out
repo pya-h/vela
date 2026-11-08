@@ -1,0 +1,13 @@
+url1: 127.0.0.1:8080/items/42
+url2: localhost:80/
+url3: 127.0.0.1:18097/
+https rejected: https is not supported
+resp 200 status: 200 OK
+resp 200 header: application/json
+resp 200 body: {"status":"ok"}
+resp 404 status: 404 Not Found
+client timeout: 3000
+unreachable caught: BadRequest
+server received request: true
+client received: 200 pong
+web client tests complete

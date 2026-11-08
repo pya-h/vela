@@ -275,6 +275,54 @@ shape Server
     fi
 fi
 
+shape Client
+    timeout_ms: int = 5000
+
+    shared new(timeout_ms: int = 5000) -> Client
+        <- Client { timeout_ms: timeout_ms }
+    fi
+
+    timeout(ms: int) -> Client
+        <- Client { timeout_ms: ms }
+    fi
+
+    get(url: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("GET", url, "", "text/plain", .timeout_ms, r)
+    fi
+
+    post(url: text@p, body: text@p, content_type: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("POST", url, body, content_type, .timeout_ms, r)
+    fi
+
+    post_json(url: text@p, body: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("POST", url, body, "application/json", .timeout_ms, r)
+    fi
+
+    shared fetch(url: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("GET", url, "", "text/plain", 5000, r)
+    fi
+
+    shared fetch_post(url: text@p, body: text@p, content_type: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("POST", url, body, content_type, 5000, r)
+    fi
+
+    shared fetch_json(url: text@p, body: text@p, r: region default) -> Response@r ~ WebError@r
+        <- http_client_request("POST", url, body, "application/json", 5000, r)
+    fi
+fi
+
+task fetch(url: text@p, r: region default) -> Response@r ~ WebError@r
+    <- Client.fetch(url, r)
+fi
+
+task fetch_post(url: text@p, body: text@p, content_type: text@p, r: region default) -> Response@r ~ WebError@r
+    <- Client.fetch_post(url, body, content_type, r)
+fi
+
+task fetch_json(url: text@p, body: text@p, r: region default) -> Response@r ~ WebError@r
+    <- Client.fetch_json(url, body, r)
+fi
+
 shape RouteEntry
     method_code: int = 0
     pattern: text = ""
@@ -835,6 +883,138 @@ task parse_addr(addr: text@p) -> (text@p, int)
     fixed host = addr[0..colon]
     fixed port = int(addr[colon + 1..addr.len]) { 80 }
     <- (host, port)
+fi
+
+task parse_url(url: text@p) -> (text@p, int, text@p) ~ WebError
+    flex rest = url
+    when url.len >= 8 and url[0..8] == "https://"
+        <- fail WebError.BadRequest("https is not supported")
+    fi
+    when url.len >= 7 and url[0..7] == "http://"
+        rest = url[7..url.len]
+    fi
+    fixed slash_idx = text_find(rest, "/", 0)
+    fixed host_port = when slash_idx >= 0 rest[0..slash_idx] else rest fi
+    fixed path = when slash_idx >= 0 rest[slash_idx..rest.len] else "/" fi
+    fixed (host, port) = parse_addr(host_port)
+    <- (host, port, path)
+fi
+
+task is_response_complete(buf: text@p) -> bool
+    fixed body_start = text_find(buf, "\r\n\r\n", 0)
+    when body_start < 0
+        <- false
+    fi
+    fixed cl_idx = text_find(buf, "Content-Length:", 0)
+    fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
+    when cl_idx_lower >= 0 and cl_idx_lower < body_start
+        fixed cl_end = text_find(buf, "\r\n", cl_idx_lower)
+        when cl_end < 0
+            <- false
+        fi
+        fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
+        fixed content_len = int(cl_val_str) { 0 }
+        <- buf.len >= body_start + 4 + content_len
+    fi
+    <- false
+fi
+
+task parse_response(raw: text@r, r: region default) -> Response@r
+    fixed line_end = text_find(raw, "\r\n", 0)
+    fixed status_line = when line_end >= 0 raw[0..line_end] else raw fi
+    fixed sp1 = text_find(status_line, " ", 0)
+    fixed sp2 = when sp1 >= 0 text_find(status_line, " ", sp1 + 1) else -1 fi
+    fixed status_code = when sp1 >= 0 and sp2 >= 0 int(status_line[sp1 + 1..sp2]) { 200 } else 200 fi
+    fixed reason = when sp2 >= 0 trim(status_line[sp2 + 1..status_line.len]) else "OK" fi
+
+    flex headers = new [text: text]() at r
+    fixed hdr_end = text_find(raw, "\r\n\r\n", 0)
+    when hdr_end >= 0
+        flex pos = line_end + 2
+        loop pos < hdr_end
+            fixed next_line = text_find(raw, "\r\n", pos)
+            when next_line < 0 or next_line > hdr_end
+                break
+            fi
+            fixed line = raw[pos..next_line]
+            fixed colon = text_find(line, ":", 0)
+            when colon > 0
+                fixed h_name = to_lower(trim(line[0..colon]), r)
+                fixed h_val = trim(line[colon + 1..line.len])
+                headers[h_name] = h_val
+            fi
+            pos = next_line + 2
+        fi
+        fixed body = raw[hdr_end + 4..raw.len]
+        <- Response { status: status_code, reason: reason, headers: headers, body_data: body }
+    fi
+    <- Response { status: status_code, reason: reason, headers: headers, body_data: "" }
+fi
+
+task http_client_request(method_str: text@p, url: text@p, body: text@p, content_type: text@p, timeout_ms: int, r: region default) -> Response@r ~ WebError@r
+    fixed (host, port, path) = parse_url(url) { failure e
+        <- fail e
+    }
+    fixed sock = Socket.open(r) { failure _
+        <- fail WebError.BadRequest("failed opening client socket")
+    }
+    sock.connect(host, port) { failure _
+        flex s = sock
+        s.close() { failure _ }
+        <- fail WebError.BadRequest("failed connecting to server")
+    }
+
+    fixed poll_wr = sock.poll(2, timeout_ms) { 0 }
+    when poll_wr <= 0
+        flex s = sock
+        s.close() { failure _ }
+        <- fail WebError.BadRequest("connection timed out")
+    fi
+
+    flex req_wire: text@r = "{method_str} {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\nUser-Agent: Vela/0.1\r\n" at r
+    when body.len > 0
+        req_wire = "{req_wire}Content-Type: {content_type}\r\nContent-Length: {body.len}\r\n" at r
+    fi
+    req_wire = "{req_wire}\r\n{body}" at r
+
+    sock.write(req_wire) { failure _
+        flex s = sock
+        s.close() { failure _ }
+        <- fail WebError.BadRequest("failed writing request")
+    }
+
+    flex raw_resp: text@r = ""
+    fixed deadline = time_ms() + timeout_ms
+    endless
+        fixed now = time_ms()
+        when now > deadline
+            flex s = sock
+            s.close() { failure _ }
+            <- fail WebError.BadRequest("read timed out")
+        fi
+        fixed remaining = deadline - now
+        fixed wait_time = when remaining > 1000 1000 else remaining fi
+        fixed poll_rd = sock.poll(1, wait_time) { 0 }
+        when poll_rd > 0
+            fixed chunk = sock.read(4096, r) { failure _
+                break
+            }
+            when chunk.len == 0
+                break
+            fi
+            raw_resp = "{raw_resp}{chunk}" at r
+            when is_response_complete(raw_resp)
+                break
+            fi
+        fi
+    fi
+    flex s = sock
+    s.close() { failure _ }
+
+    when raw_resp.len == 0
+        <- fail WebError.BadRequest("empty response from server")
+    fi
+    <- parse_response(raw_resp, r)
 fi
 
 task reason_of(code: int) -> text
