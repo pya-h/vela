@@ -1,0 +1,27 @@
+; An alters method called on a value made where it is written: the value is
+; the method's own, changed and then gone, and what the method sends is kept.
+shape Counter
+    count: int
+
+    alters step() -> int
+        .count = .count + 1
+        <- .count
+    fi
+
+    alters twice() -> Counter
+        .count = .count * 2
+        <- .this
+    fi
+fi
+
+task made(n: int) -> Counter
+    <- Counter { count: n }
+fi
+
+task main()
+    show(made(4).step())
+    show(Counter { count: 9 }.step())
+    show(made(3).twice().twice().step())
+    flex kept = made(1)
+    show(kept.step(), " ", kept.count)
+fi

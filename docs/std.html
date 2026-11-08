@@ -189,12 +189,24 @@
     <section>
       <h2 id="collections">std/collections</h2>
       <p>
-        Tasks over the items of a <a href="vela.html#slices">slice</a>, written to be read in a
-        <a href="vela.html#pipes">pipe</a>. Each takes the slice first, then what it does with an item (a task value, or a
-        <a href="vela.html#shortcut-lambdas">one-line lambda</a>, whose types the slice tells), then, for those that make
-        a new slice, the region it goes in, last, so <code>at r</code> gives it. Brought in with
-        <code>include std/collections (map, filter)</code>, or named <code>collections.map(…)</code> after
-        <code>include std/collections</code>.
+        Lazy <a href="vela.html#iterators">iterators</a> and eager tasks over the items of a
+        <a href="vela.html#slices">slice</a>. The pattern <code>Iterator&lt;T&gt;</code> is one <code>next()</code> after
+        another; a slice has its chain members (<code>map</code>, <code>filter</code>, <code>take</code>,
+        <code>skip</code>, <code>zip</code>, <code>enumerate</code>, and the consumers <code>collect</code>,
+        <code>fold</code>, <code>find</code>, <code>all</code>, <code>any</code>) in a file that includes the module, each
+        step reading the one before it and gathering nothing until a consumer asks. <code>zip</code> gives
+        <code>Pair</code> shapes (<code>.first</code>, <code>.second</code>) and <code>enumerate</code> gives
+        <code>Indexed</code> (<code>.index</code>, <code>.item</code>); either side of <code>zip</code> may be a slice, read
+        as its own iterator. The shapes <code>Iterator</code>, <code>Pair</code>, <code>Indexed</code>, and
+        <code>SliceIter</code> are brought in by name; the chain members need no import, and
+        <code>each x in it</code> goes through any iterator.
+      </p>
+      <p>
+        The eager tasks are written to be read in a <a href="vela.html#pipes">pipe</a>: each takes the slice first, then
+        what it does with an item (a task value, or a <a href="vela.html#shortcut-lambdas">one-line lambda</a>, whose
+        types the slice tells), then, for those that make a new slice, the region it goes in, last, so
+        <code>at r</code> gives it. Brought in with <code>include std/collections (map, filter)</code>, or named
+        <code>collections.map(…)</code> after <code>include std/collections</code>.
       </p>
       <pre><span class="keyword">include</span> std/collections (map, filter, fold, take)
 

@@ -1,4 +1,217 @@
-; std/collections: tasks over a slice's items, written to be read in a pipe,
+; std/collections: lazy iterators over a slice's items and eager tasks over
+; them. A chain of lazy steps, each giving the next item as it is asked, so
+; nothing is gathered until a consumer does; and eager tasks, written to be
+; read in a pipe, that go through all the items and make their slice at once.
+;
+; A slice starts a lazy chain with its chain members, `xs.map(…)`, in a file
+; that includes this module, and an iterator goes on with the same members,
+; `it.filter(…)`. Every step is a value of a shape that follows `Iterator<T>`,
+; holding the iterator it wraps and what it does with each item; `each x in it`
+; and the consumers `collect`, `fold`, `find`, `all`, `any` advance the
+; iterator they are called on, so they are `alters` and ask for a changeable
+; place or a value made where it is written, as in `xs.map(…).collect(r)`.
+;
+; Two values made one: what `zip` gives for each place.
+shape Pair<A, B>
+    first: A
+    second: B
+fi
+
+; An item with its place: what `enumerate` gives, from 0.
+shape Indexed<T>
+    index: int
+    item: T
+fi
+
+; What an iterator is: one `next` after another, each the next item or none.
+pattern Iterator<T>
+    ; The next item, or none once the iterator is done. What every adapter and
+    ; consumer calls; it advances the iterator, so a call asks for a changeable
+    ; place.
+    alters next() -> maybe T
+
+    ; An iterator giving what `f` gives for each item of this one.
+    map<R>(f: (T) -> R) -> MapIter<this, T, R>@this
+        <- MapIter { inner: .this, f: f }
+    fi
+
+    ; An iterator of the items `keep` holds for.
+    filter(keep: (T) -> bool) -> FilterIter<this, T>@this
+        <- FilterIter { inner: .this, keep: keep }
+    fi
+
+    ; An iterator of at most the first `n` items.
+    take(n: int) -> TakeIter<this, T>@this
+        <- TakeIter<this, T> { inner: .this, left: n }
+    fi
+
+    ; An iterator without the first `n` items.
+    skip(n: int) -> SkipIter<this, T>@this
+        <- SkipIter<this, T> { inner: .this, left: n }
+    fi
+
+    ; An iterator of each item with its place, from 0.
+    enumerate() -> EnumerateIter<this, T>@this
+        <- EnumerateIter<this, T> { inner: .this, place: 0 }
+    fi
+
+    ; An iterator of the items of this one and `other` at each place, as long
+    ; as the shorter; a slice given for `other` is read as its own iterator.
+    zip<U: Iterator<V>, V>(other: U) -> ZipIter<this, T, U, V>@this
+        <- ZipIter<this, T, U, V> { first: .this, second: other }
+    fi
+
+    ; Every item left, gathered into a slice in `r`.
+    alters collect(r: region) -> [T]@r
+        flex made = new [T]() at r
+        endless
+            fixed item = .next() { break }
+            made.add(item)
+        fi
+        <- made
+    fi
+
+    ; What `step` gives for `initial` and the first item, then for that and
+    ; the second, and so on: `it.fold(0, (sum, n) -> sum + n)` adds them up.
+    alters fold<A>(initial: A, step: (A, T) -> A) -> A
+        flex done = initial
+        endless
+            fixed item = .next() { break }
+            done = step(done, item)
+        fi
+        <- done
+    fi
+
+    ; The first item `test` holds for, or none.
+    alters find(test: (T) -> bool) -> maybe T
+        endless
+            fixed item = .next() { <- none }
+            when test(item)
+                <- item
+            fi
+        fi
+        <- none
+    fi
+
+    ; Whether `test` holds for every item left; true for none.
+    alters all(test: (T) -> bool) -> bool
+        endless
+            fixed item = .next() { break }
+            when not test(item)
+                <- false
+            fi
+        fi
+        <- true
+    fi
+
+    ; Whether `test` holds for some item left; false for none.
+    alters any(test: (T) -> bool) -> bool
+        endless
+            fixed item = .next() { break }
+            when test(item)
+                <- true
+            fi
+        fi
+        <- false
+    fi
+fi
+
+; What `map` wraps: an iterator and what it does with each item.
+shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
+    inner: I
+    f: (T) -> R
+
+    alters next() -> maybe R
+        fixed item = .inner.next() { <- none }
+        <- .f(item)
+    fi
+fi
+
+; What `filter` wraps: an iterator and what it keeps.
+shape FilterIter<I: Iterator<T>, T>::Iterator<T>
+    inner: I
+    keep: (T) -> bool
+
+    alters next() -> maybe T
+        endless
+            fixed item = .inner.next() { <- none }
+            when .keep(item)
+                <- item
+            fi
+        fi
+    fi
+fi
+
+; What `take` wraps: an iterator and how many items it may still give.
+shape TakeIter<I: Iterator<T>, T>::Iterator<T>
+    inner: I
+    left: int
+
+    alters next() -> maybe T
+        when .left <= 0
+            <- none
+        fi
+        .left--
+        <- .inner.next() { <- none }
+    fi
+fi
+
+; What `skip` wraps: an iterator and how many of its items are passed over.
+shape SkipIter<I: Iterator<T>, T>::Iterator<T>
+    inner: I
+    left: int
+
+    alters next() -> maybe T
+        loop .left > 0
+            .left--
+            fixed _ = .inner.next() { <- none }
+        fi
+        <- .inner.next() { <- none }
+    fi
+fi
+
+; What `enumerate` wraps: an iterator and the place of the next item.
+shape EnumerateIter<I: Iterator<T>, T>::Iterator<Indexed<T>@this>
+    inner: I
+    place: int
+
+    alters next() -> maybe Indexed<T>@this
+        fixed item = .inner.next() { <- none }
+        fixed res = Indexed { index: .place, item: item }
+        .place++
+        <- res
+    fi
+fi
+
+; What `zip` wraps: the two iterators it draws from.
+shape ZipIter<A: Iterator<T>, T, B: Iterator<V>, V>::Iterator<Pair<T, V>@this>
+    first: A
+    second: B
+
+    alters next() -> maybe Pair<T, V>@this
+        fixed a = .first.next() { <- none }
+        fixed b = .second.next() { <- none }
+        <- Pair { first: a, second: b }
+    fi
+fi
+
+; A slice read an item at a time, from `place` on: the iterator a slice's
+; chain members make, `xs.map(…)` as `SliceIter { items: xs, place: 0 }.map(…)`.
+shape SliceIter<T>::Iterator<T>
+    items: [T]
+    place: int
+
+    alters next() -> maybe T
+        when .place >= .items.len
+            <- none
+        fi
+        fixed item = .items[.place]
+        .place++
+        <- item
+    fi
+fi
+
+; Eager tasks over a slice's items, written to be read in a pipe,
 ; `nums |> filter(n -> n > 2) at r |> map(n -> n * 10) at r`. Each takes the
 ; slice first, then what it does with an item, then the region a new slice
 ; goes in, last, so `at r` gives it. A program brings them in with

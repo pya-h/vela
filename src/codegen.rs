@@ -3699,6 +3699,12 @@ impl Generator {
         // can change anything: then its address is an expression, which writes
         // no statement, so the call is no prelude (see `has_prelude`).
         let (first, rest) = match args.split_first() {
+            // A value made here, `xs.map(f).collect(r)`, is kept in a C array
+            // of one, whose name is the address the method changes it at.
+            Some((value, rest)) if self.altering.contains(&called) && made_here(value) => {
+                let made = self.gen_expr(value)?;
+                (Some(format!("({}[1]){{ {} }}", c_type(value.ty()?), made)), rest)
+            }
             Some((value, rest)) if self.altering.contains(&called) => {
                 let quiet = rest.iter().all(|arg| changes_nothing(arg) && !has_prelude(arg));
                 (Some(if quiet { self.gen_address(value)? } else { self.gen_receiver(value)? }), rest)
@@ -4840,6 +4846,13 @@ fn has_prelude(e: &Expr) -> bool {
             has_prelude(value) || args.iter().any(has_prelude) || ordered(&std::iter::once(value.as_ref()).chain(args).collect::<Vec<_>>())
         }
     }
+}
+
+/// Whether `e` is a value made where it is written, which a method that
+/// changes the value it is called on may be called on (see
+/// `check::altered_part`).
+fn made_here(e: &Expr) -> bool {
+    matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::StructInit { .. })
 }
 
 /// Whether `gen_operands` stores some of `operands` in temporaries to read

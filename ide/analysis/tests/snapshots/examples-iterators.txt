@@ -1,0 +1,60 @@
+  1 | ; A weather log read one entry at a time: lazy chains gather nothing until a
+    | comment:; A weather log read one entry at a time: lazy chains gather nothing until a
+  2 | ; consumer asks, so the whole log is never held at once.
+    | comment:; consumer asks, so the whole log is never held at once.
+  3 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  5 | shape Reading
+    | keyword:shape  type:Reading
+  6 |     day: int
+    | field:day  punctuation::  type-builtin:int
+  7 |     rain: float
+    | field:rain  punctuation::  type-builtin:float
+  8 | fi
+    | keyword:fi
+ 10 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 11 |     region r
+    | keyword:region  region:r
+ 12 |     flex log: [Reading]@r = new [Reading]() at r
+    | keyword:flex  variable:log  punctuation::  punctuation:[  type:Reading  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Reading  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 13 |     log.add(Reading { day: 1, rain: 2.5 })
+    | variable:log  punctuation:.  field:add  punctuation:(  type:Reading  punctuation:{  field:day  punctuation::  number:1  punctuation:,  field:rain  punctuation::  number:2.5  punctuation:}  punctuation:)
+ 14 |     log.add(Reading { day: 2, rain: 0.0 })
+    | variable:log  punctuation:.  field:add  punctuation:(  type:Reading  punctuation:{  field:day  punctuation::  number:2  punctuation:,  field:rain  punctuation::  number:0.0  punctuation:}  punctuation:)
+ 15 |     log.add(Reading { day: 3, rain: 4.25 })
+    | variable:log  punctuation:.  field:add  punctuation:(  type:Reading  punctuation:{  field:day  punctuation::  number:3  punctuation:,  field:rain  punctuation::  number:4.25  punctuation:}  punctuation:)
+ 16 |     log.add(Reading { day: 4, rain: 1.0 })
+    | variable:log  punctuation:.  field:add  punctuation:(  type:Reading  punctuation:{  field:day  punctuation::  number:4  punctuation:,  field:rain  punctuation::  number:1.0  punctuation:}  punctuation:)
+ 17 |     log.add(Reading { day: 5, rain: 0.75 })
+    | variable:log  punctuation:.  field:add  punctuation:(  type:Reading  punctuation:{  field:day  punctuation::  number:5  punctuation:,  field:rain  punctuation::  number:0.75  punctuation:}  punctuation:)
+ 19 |     ; The wet days, one item at a time; the text each gives is made here.
+    | comment:; The wet days, one item at a time; the text each gives is made here.
+ 20 |     each x in log.filter(x -> x.rain > 1.0)
+    | keyword:each  variable:x  keyword:in  variable:log  punctuation:.  method:filter  punctuation:(  parameter:x  operator:->  parameter:x  punctuation:.  field:rain  operator:>  number:1.0  punctuation:)
+ 21 |         show("day {x.day}: {x.rain} mm" at r)
+    | builtin-fn:show  punctuation:(  string:"day {  variable:x  punctuation:.  field:day  string:}: {  variable:x  punctuation:.  field:rain  string:} mm"  keyword:at  region:r  punctuation:)
+ 22 |     fi
+    | keyword:fi
+ 24 |     ; Count and total without gathering anything.
+    | comment:; Count and total without gathering anything.
+ 25 |     show("wet days: ", log.filter(x -> x.rain > 1.0).fold(0, (n, _) -> n + 1))
+    | builtin-fn:show  punctuation:(  string:"wet days: "  punctuation:,  variable:log  punctuation:.  method:filter  punctuation:(  parameter:x  operator:->  parameter:x  punctuation:.  field:rain  operator:>  number:1.0  punctuation:)  punctuation:.  field:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:n  punctuation:,  keyword:_  punctuation:)  operator:->  parameter:n  operator:+  number:1  punctuation:)  punctuation:)
+ 26 |     show("total rain: ", log.map(x -> x.rain).fold(0.0, (sum, x) -> sum + x))
+    | builtin-fn:show  punctuation:(  string:"total rain: "  punctuation:,  variable:log  punctuation:.  method:map  punctuation:(  parameter:x  operator:->  parameter:x  punctuation:.  field:rain  punctuation:)  punctuation:.  field:fold  punctuation:(  number:0.0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:x  punctuation:)  operator:->  parameter:sum  operator:+  parameter:x  punctuation:)  punctuation:)
+ 28 |     ; The first day over 4 mm, or none.
+    | comment:; The first day over 4 mm, or none.
+ 29 |     match log.enumerate().find(x -> x.item.rain > 4.0)
+    | keyword:match  variable:log  punctuation:.  method:enumerate  punctuation:(  punctuation:)  punctuation:.  field:find  punctuation:(  parameter:x  operator:->  parameter:x  punctuation:.  field:item  punctuation:.  field:rain  operator:>  number:4.0  punctuation:)
+ 30 |     case {hit}
+    | keyword:case  punctuation:{  variable:hit  punctuation:}
+ 31 |         show("heaviest: day ", hit.index + 1)
+    | builtin-fn:show  punctuation:(  string:"heaviest: day "  punctuation:,  variable:hit  punctuation:.  field:index  operator:+  number:1  punctuation:)
+ 32 |     case none
+    | keyword:case  keyword:none
+ 33 |         show("heaviest: none")
+    | builtin-fn:show  punctuation:(  string:"heaviest: none"  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 | fi
+    | keyword:fi

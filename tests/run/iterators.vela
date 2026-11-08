@@ -1,0 +1,34 @@
+; Lazy iterators from std/collections: chains off a slice, adapters, consumers,
+; zip and enumerate, and each over an iterator.
+include std/collections
+
+task main()
+    region r
+    flex nums: [int]@r = new [int]([1, 2, 3, 4, 5, 6, 7, 8]) at r
+
+    ; Chains off the slice: nothing is gathered until a consumer asks.
+    show(nums.filter(n -> n % 2 == 0).map(n -> n * 10).collect(r))
+    show(nums.map(n -> n + 100).find(n -> n == 104) { 0 })
+    show(nums.take(3).collect(r), " ", nums.skip(5).collect(r))
+    show(nums.map(n -> n * n).fold(0, (sum, n) -> sum + n))
+    show(nums.all(n -> n > 0), " ", nums.any(n -> n > 7))
+    show(nums.enumerate().filter(e -> e.index % 2 == 0).map(e -> e.item).collect(r))
+
+    ; zip of two slices, and of an iterator with a slice: pairs, as long as the shorter.
+    flex tens: [int]@r = new [int]([10, 20, 30]) at r
+    show(nums.zip(tens).map(p -> p.first + p.second).collect(r))
+    flex first_two = nums.take(2)
+    show(first_two.zip(tens).map(p -> p.first * p.second).collect(r))
+
+    ; An iterator is a value: kept, passed, and drained by each.
+    flex it = nums.skip(2).take(3)
+    each n in it
+        show(n * 2)
+    fi
+    show(it.next() { 0 })
+
+    ; A chain written where it is used is read one item at a time.
+    each s in tens.map(n -> n / 10)
+        show("tick {s}" at r)
+    fi
+fi

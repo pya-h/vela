@@ -46,7 +46,8 @@ several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as 
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
 another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. Vela's
 own library comes with the compiler and is included the same way, with a path starting `std`
-(`include std/files {File}`). A
+(`include std/files {File}`). `std/collections` also gives slices and iterators lazy chain members —
+`nums.filter(n -> n % 2 == 0).map(n -> n * 10).collect(r)` gathers nothing until asked. A
 variant can be written through its kind, `Size.Small`. A shape or a kind has methods, written in its block below
 its fields or variants and called on a value (`c.total()`); inside one, `.count` is a field of the value, `.this`
 the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its

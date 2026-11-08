@@ -1,0 +1,18 @@
+; error: 17:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, such as a 'flex' variable, a field or item of one, or what a pointer points to, and not part of a value made here
+; An alters method is called on a part of a value made here, which the change is lost with.
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + 1
+    fi
+fi
+shape Holder
+    inner: Counter
+fi
+task made() -> Holder
+    <- Holder { inner: Counter { count: 0 } }
+fi
+task main()
+    made().inner.step()
+fi

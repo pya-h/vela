@@ -1,0 +1,58 @@
+  1 | ; Lazy iterators from std/collections: chains off a slice, adapters, consumers,
+    | comment:; Lazy iterators from std/collections: chains off a slice, adapters, consumers,
+  2 | ; zip and enumerate, and each over an iterator.
+    | comment:; zip and enumerate, and each over an iterator.
+  3 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r
+    | keyword:region  region:r
+  7 |     flex nums: [int]@r = new [int]([1, 2, 3, 4, 5, 6, 7, 8]) at r
+    | keyword:flex  variable:nums  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:]  punctuation:)  keyword:at  region:r
+  9 |     ; Chains off the slice: nothing is gathered until a consumer asks.
+    | comment:; Chains off the slice: nothing is gathered until a consumer asks.
+ 10 |     show(nums.filter(n -> n % 2 == 0).map(n -> n * 10).collect(r))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:filter  punctuation:(  parameter:n  operator:->  parameter:n  operator:%  number:2  operator:==  number:0  punctuation:)  punctuation:.  field:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  number:10  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:)
+ 11 |     show(nums.map(n -> n + 100).find(n -> n == 104) { 0 })
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:+  number:100  punctuation:)  punctuation:.  field:find  punctuation:(  parameter:n  operator:->  parameter:n  operator:==  number:104  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 12 |     show(nums.take(3).collect(r), " ", nums.skip(5).collect(r))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:take  punctuation:(  number:3  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nums  punctuation:.  method:skip  punctuation:(  number:5  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:)
+ 13 |     show(nums.map(n -> n * n).fold(0, (sum, n) -> sum + n))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:*  parameter:n  punctuation:)  punctuation:.  field:fold  punctuation:(  number:0  punctuation:,  punctuation:(  parameter:sum  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:sum  operator:+  parameter:n  punctuation:)  punctuation:)
+ 14 |     show(nums.all(n -> n > 0), " ", nums.any(n -> n > 7))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:all  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:nums  punctuation:.  method:any  punctuation:(  parameter:n  operator:->  parameter:n  operator:>  number:7  punctuation:)  punctuation:)
+ 15 |     show(nums.enumerate().filter(e -> e.index % 2 == 0).map(e -> e.item).collect(r))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:enumerate  punctuation:(  punctuation:)  punctuation:.  field:filter  punctuation:(  parameter:e  operator:->  parameter:e  punctuation:.  field:index  operator:%  number:2  operator:==  number:0  punctuation:)  punctuation:.  field:map  punctuation:(  parameter:e  operator:->  parameter:e  punctuation:.  field:item  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:)
+ 17 |     ; zip of two slices, and of an iterator with a slice: pairs, as long as the shorter.
+    | comment:; zip of two slices, and of an iterator with a slice: pairs, as long as the shorter.
+ 18 |     flex tens: [int]@r = new [int]([10, 20, 30]) at r
+    | keyword:flex  variable:tens  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]  punctuation:)  keyword:at  region:r
+ 19 |     show(nums.zip(tens).map(p -> p.first + p.second).collect(r))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  method:zip  punctuation:(  variable:tens  punctuation:)  punctuation:.  field:map  punctuation:(  parameter:p  operator:->  parameter:p  punctuation:.  field:first  operator:+  parameter:p  punctuation:.  field:second  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:)
+ 20 |     flex first_two = nums.take(2)
+    | keyword:flex  variable:first_two  operator:=  variable:nums  punctuation:.  method:take  punctuation:(  number:2  punctuation:)
+ 21 |     show(first_two.zip(tens).map(p -> p.first * p.second).collect(r))
+    | builtin-fn:show  punctuation:(  variable:first_two  punctuation:.  field:zip  punctuation:(  variable:tens  punctuation:)  punctuation:.  field:map  punctuation:(  parameter:p  operator:->  parameter:p  punctuation:.  field:first  operator:*  parameter:p  punctuation:.  field:second  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)  punctuation:)
+ 23 |     ; An iterator is a value: kept, passed, and drained by each.
+    | comment:; An iterator is a value: kept, passed, and drained by each.
+ 24 |     flex it = nums.skip(2).take(3)
+    | keyword:flex  variable:it  operator:=  variable:nums  punctuation:.  method:skip  punctuation:(  number:2  punctuation:)  punctuation:.  field:take  punctuation:(  number:3  punctuation:)
+ 25 |     each n in it
+    | keyword:each  variable:n  keyword:in  variable:it
+ 26 |         show(n * 2)
+    | builtin-fn:show  punctuation:(  variable:n  operator:*  number:2  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 |     show(it.next() { 0 })
+    | builtin-fn:show  punctuation:(  variable:it  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 30 |     ; A chain written where it is used is read one item at a time.
+    | comment:; A chain written where it is used is read one item at a time.
+ 31 |     each s in tens.map(n -> n / 10)
+    | keyword:each  variable:s  keyword:in  variable:tens  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:/  number:10  punctuation:)
+ 32 |         show("tick {s}" at r)
+    | builtin-fn:show  punctuation:(  string:"tick {  variable:s  string:}"  keyword:at  region:r  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 | fi
+    | keyword:fi

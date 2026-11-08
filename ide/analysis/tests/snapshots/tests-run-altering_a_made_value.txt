@@ -1,0 +1,46 @@
+  1 | ; An alters method called on a value made where it is written: the value is
+    | comment:; An alters method called on a value made where it is written: the value is
+  2 | ; the method's own, changed and then gone, and what the method sends is kept.
+    | comment:; the method's own, changed and then gone, and what the method sends is kept.
+  3 | shape Counter
+    | keyword:shape  type:Counter
+  4 |     count: int
+    | field:count  punctuation::  type-builtin:int
+  6 |     alters step() -> int
+    | keyword:alters  method:step  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  7 |         .count = .count + 1
+    | punctuation:.  field:count  operator:=  punctuation:.  field:count  operator:+  number:1
+  8 |         <- .count
+    | keyword:<-  punctuation:.  field:count
+  9 |     fi
+    | keyword:fi
+ 11 |     alters twice() -> Counter
+    | keyword:alters  method:twice  punctuation:(  punctuation:)  operator:->  type:Counter
+ 12 |         .count = .count * 2
+    | punctuation:.  field:count  operator:=  punctuation:.  field:count  operator:*  number:2
+ 13 |         <- .this
+    | keyword:<-  punctuation:.  keyword:this
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | task made(n: int) -> Counter
+    | keyword:task  task:made  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Counter
+ 18 |     <- Counter { count: n }
+    | keyword:<-  type:Counter  punctuation:{  field:count  punctuation::  parameter:n  punctuation:}
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     show(made(4).step())
+    | builtin-fn:show  punctuation:(  task:made  punctuation:(  number:4  punctuation:)  punctuation:.  method:step  punctuation:(  punctuation:)  punctuation:)
+ 23 |     show(Counter { count: 9 }.step())
+    | builtin-fn:show  punctuation:(  type:Counter  punctuation:{  field:count  punctuation::  number:9  punctuation:}  punctuation:.  method:step  punctuation:(  punctuation:)  punctuation:)
+ 24 |     show(made(3).twice().twice().step())
+    | builtin-fn:show  punctuation:(  task:made  punctuation:(  number:3  punctuation:)  punctuation:.  method:twice  punctuation:(  punctuation:)  punctuation:.  method:twice  punctuation:(  punctuation:)  punctuation:.  method:step  punctuation:(  punctuation:)  punctuation:)
+ 25 |     flex kept = made(1)
+    | keyword:flex  variable:kept  operator:=  task:made  punctuation:(  number:1  punctuation:)
+ 26 |     show(kept.step(), " ", kept.count)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  method:step  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:.  field:count  punctuation:)
+ 27 | fi
+    | keyword:fi

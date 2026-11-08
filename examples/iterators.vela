@@ -1,0 +1,35 @@
+; A weather log read one entry at a time: lazy chains gather nothing until a
+; consumer asks, so the whole log is never held at once.
+include std/collections
+
+shape Reading
+    day: int
+    rain: float
+fi
+
+task main()
+    region r
+    flex log: [Reading]@r = new [Reading]() at r
+    log.add(Reading { day: 1, rain: 2.5 })
+    log.add(Reading { day: 2, rain: 0.0 })
+    log.add(Reading { day: 3, rain: 4.25 })
+    log.add(Reading { day: 4, rain: 1.0 })
+    log.add(Reading { day: 5, rain: 0.75 })
+
+    ; The wet days, one item at a time; the text each gives is made here.
+    each x in log.filter(x -> x.rain > 1.0)
+        show("day {x.day}: {x.rain} mm" at r)
+    fi
+
+    ; Count and total without gathering anything.
+    show("wet days: ", log.filter(x -> x.rain > 1.0).fold(0, (n, _) -> n + 1))
+    show("total rain: ", log.map(x -> x.rain).fold(0.0, (sum, x) -> sum + x))
+
+    ; The first day over 4 mm, or none.
+    match log.enumerate().find(x -> x.item.rain > 4.0)
+    case {hit}
+        show("heaviest: day ", hit.index + 1)
+    case none
+        show("heaviest: none")
+    fi
+fi

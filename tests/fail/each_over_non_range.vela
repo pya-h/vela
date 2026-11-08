@@ -1,4 +1,4 @@
-; error: 4:15: each goes through a range, such as 0..n, the items of an array or slice, or a map's keys and values, but this value is int
+; error: 4:15: each goes through a range, such as 0..n, the items of an array or slice, a map's keys and values, or an iterator from std/collections, but this value is int
 task main()
     fixed n = 5
     each i in n

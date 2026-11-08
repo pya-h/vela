@@ -4525,7 +4525,36 @@ save(500) {
         that takes a <code>T</code> is an error, and a plan B in that step reads it (<code>… |&gt; find() { 0 } |&gt; g()</code>).
       </p>
 
+      <h3 id="iterators">Lazy iterators</h3>
+      <p>
+        <a href="std.html#collections"><code>std/collections</code></a> also holds <code>Iterator&lt;T&gt;</code>, a pattern
+        for reading one item at a time: an iterator answers <code>next()</code> with the next item or <code>none</code>. In a
+        file that includes the module, a slice has its chain members, and so does every iterator: the makers
+        <code>map</code>, <code>filter</code>, <code>take</code>, <code>skip</code>, <code>zip</code>, and
+        <code>enumerate</code>, and the consumers <code>collect</code>, <code>fold</code>, <code>find</code>,
+        <code>all</code>, and <code>any</code>. Each step reads the one before it: <code>nums.filter(n -&gt; n % 2 == 0).map(n
+        -&gt; n * 10).collect(r)</code> gathers nothing until <code>collect</code> asks, so a large collection is never held
+        whole. Otherwise a slice has no methods; the error says to include the module.
+      </p>
+      <p>
+        The makers give iterators of their own shapes, which follow <code>Iterator</code>; <code>zip</code> gives a
+        <code>Pair</code> (fields <code>.first</code> and <code>.second</code>) for each place of the two, as long as the
+        shorter, and <code>enumerate</code> an <code>Indexed</code> (fields <code>.index</code> and <code>.item</code>) from
+        0. Either side of <code>zip</code> may be a slice, read as its own iterator. <code>collect(r)</code> gathers what is
+        left into a slice in <code>r</code>; <code>fold</code>, <code>find</code>, <code>all</code>, and <code>any</code> read
+        what is left and give one value.
+      </p>
+      <p>
+        Reading an item advances the iterator, so a consumer is <code>alters</code> and asks for a changeable place or a
+        value made where it is written: <code>flex it = nums.take(3)</code>, then <code>it.collect(r)</code>, or a chain
+        used where it is written. <code>each x in it</code> goes through an iterator the same way, one <code>next()</code>
+        per pass, so <code>it</code> is <code>flex</code> (or a written expression), and after the loop it is done:
+        <code>it.next()</code> gives <code>none</code>. An iterator is a value like any other: kept in a variable, passed to
+        a task, and copied like its shape.
+      </p>
+
       <h3 id="type-of">The type of a value</h3>
+
       <p>
         Every value has <code>x.type</code>: its type as code writes it, as text. The compiler knows it, so it costs
         nothing to run, and the value itself is never worked out, as C's <code>sizeof</code> doesn't:

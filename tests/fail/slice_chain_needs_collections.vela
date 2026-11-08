@@ -1,0 +1,6 @@
+; error: 5:15: type [int]@r has no method 'map'; a slice has the chain members of std/collections in a file that includes it — the makers map, filter, take, skip, zip, enumerate and the consumers collect, fold, find, all, any; write 'include std/collections'
+task main()
+    region r
+    flex nums: [int]@r = new [int]([1, 2, 3]) at r
+    show(nums.map(n -> n * 2).collect(r))
+fi

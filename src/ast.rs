@@ -195,6 +195,26 @@ impl ClosureType {
         ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), mode: self.mode }
     }
 
+    /// The type with `put` putting types in place of names in each type its
+    /// task's type names, its regions then named as `normalized` names them.
+    /// A type put in a parameter's place in the region it keeps, as
+    /// `text@this` is in a field's `[@this](T) -> R`, is in one of its own:
+    /// the lambda takes text of any region.
+    fn with_types_put(&self, put: &mut dyn FnMut(&Type) -> Type) -> Type {
+        let kept = self.region.as_str();
+        let params = self
+            .task
+            .params
+            .iter()
+            .map(|ty| match ty.regions().contains(&kept) {
+                true => put(ty),
+                false => put(ty).map_regions(&mut |region| Some(if region == kept { "_given" } else { region }.to_string())),
+            })
+            .collect();
+        let task = TaskType { params, taken: self.task.taken.clone(), ret: put(&self.task.ret) };
+        Type::Closure(Box::new(ClosureType { task, region: self.region.clone(), mode: self.mode }.normalized()))
+    }
+
     /// The type with its task's type remade by `f`, as a task type.
     fn with_task(&self, f: impl FnOnce(&Type) -> Type) -> Type {
         match f(&Type::Task(Box::new(self.task.clone()))) {
@@ -1111,7 +1131,7 @@ impl Type {
                 region: applied.region.clone(),
             })),
             Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.replace_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.replace_names(f) })),
-            Type::Closure(closure) => closure.with_task(|task| task.replace_names(f)),
+            Type::Closure(closure) => closure.with_types_put(&mut |ty| ty.replace_names(f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
@@ -1133,6 +1153,11 @@ impl Type {
     pub fn map_regions_of_names(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
         match self {
             Type::Text(None) => Type::Text(f("")),
+            // A field's lambda, kept in the region of the value holding it.
+            Type::Closure(closure) if closure.region == THIS_WORD => match f("") {
+                Some(region) => Type::Closure(Box::new(ClosureType { task: closure.task.clone(), region, mode: closure.mode })),
+                None => self.clone(),
+            },
             Type::Ptr(inner, None) => {
                 let region = f("");
                 Type::Ptr(Box::new(inner.map_regions_of_names(f)), region)
@@ -1187,8 +1212,14 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_params(&mut *f)).collect(),
                 region: applied.region.clone(),
             })),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), taken: task.taken.clone(), ret: task.ret.map_params(f) })),
-            Type::Closure(closure) => closure.with_task(|task| task.map_params(f)),
+            // A task's type names regions of its own, so a type put in it with
+            // a region, `text@this` for `T`, names one of them.
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), taken: task.taken.clone(), ret: task.ret.map_params(f) }.normalized())),
+            // Beside the region it keeps what it uses in, which is not its own.
+            // A type put in a parameter's place in the region it keeps, as
+            // `text@this` is in a field's `[@this](T) -> R`, is one of its own:
+            // the lambda takes text of any region.
+            Type::Closure(closure) => closure.with_types_put(&mut |ty| ty.map_params(&mut *f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
