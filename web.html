@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela Web Architecture & std/web</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --code-bg: #1e293b;
+      --border: #334155;
+      --card-bg: #1e293b80;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      padding: 4rem 1rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(56,189,248,0.1) 0%, transparent 100%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      color: var(--accent);
+    }
+    .tagline {
+      margin-top: 0.75rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 2.5rem;
+      font-size: 1.75rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 1.75rem;
+      font-size: 1.3rem;
+      color: var(--accent-2);
+    }
+    p, li {
+      color: var(--fg);
+    }
+    ul, ol {
+      padding-left: 1.5rem;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 0.15em 0.35em;
+      border-radius: 4px;
+      color: #f1f5f9;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin: 1.25rem 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 700px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: var(--code-bg);
+      color: var(--accent);
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela <span>Web</span> Architecture</h1>
+    <div class="tagline">Design, concurrency paradigms, and standard library specifications for <code>std/web</code></div>
+  </header>
+
+  <main>
+    <section>
+      <h2>1. Overview & Philosophy</h2>
+      <p>
+        Vela's standard web library, <code>std/web</code>, provides minimal yet complete building blocks for backend
+        services, REST APIs, static file delivery, and HTTP client communications. Inspired by the ergonomics and clarity
+        of Go's <code>net/http</code> and Rust's low-overhead networking, Vela combines straightforward abstractions with
+        its own unique language capabilities:
+      </p>
+      <ul>
+        <li><strong>Scoped Request Regions (<code>@req</code>):</strong> Memory allocated while processing an HTTP request lives in a dedicated per-request region. Once the response completes, the entire region is bulk-reclaimed instantly with zero garbage collection or pointer-chasing frees.</li>
+        <li><strong>Typed Failure Channels (<code>Response ~ WebError</code>):</strong> Route handlers declare their errors explicitly using Vela's failure channel operator <code>~</code>, allowing clean error propagation with the <code>?</code> operator without exceptions.</li>
+        <li><strong>Kind-Based Pattern Matching:</strong> HTTP methods are represented by first-class kind definitions (<code>kind Method = GET | POST | PUT | DELETE | PATCH | HEAD | OPTIONS</code>), allowing exhaustive compile-time checking.</li>
+        <li><strong>Composable Decorator Middleware:</strong> Middleware layers wrap route handlers cleanly using Vela's wrapper syntax (<code>$(logging)</code>, <code>$(authenticate)</code>).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>2. Concurrency Architecture: Single Event Loop vs. Multi-Threaded Pool</h2>
+      <p>
+        Network servers face a fundamental architectural choice when orchestrating concurrent I/O: multiplexing
+        connections onto an asynchronous event loop or distributing connections across an operating system thread pool.
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h3 style="margin-top:0;">Option A: Single Event Loop</h3>
+          <p><strong>Mechanism:</strong> A single coordinator thread multiplexes non-blocking socket descriptors using OS primitives (<code>epoll</code> on Linux, <code>poll</code> portability fallback).</p>
+          <p><strong>Pros:</strong></p>
+          <ul>
+            <li><strong>Zero Data Races:</strong> Handlers execute in a single cooperative execution thread; no locks, mutexes, or synchronization overhead needed for shared server state.</li>
+            <li><strong>Minimal Footprint:</strong> Thousands of idle connections occupy only socket file descriptors and lightweight connection records (~few hundred bytes), unlike thread stacks (typically 1–8 MiB).</li>
+            <li><strong>Region Safety:</strong> Seamlessly aligns with Vela's deterministic region-based memory lifecycle.</li>
+          </ul>
+          <p><strong>Cons:</strong></p>
+          <ul>
+            <li>A CPU-intensive handler computation can delay subsequent requests on the loop unless chunked or offloaded to background native tasks.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0;">Option B: Multi-Threaded Pool</h3>
+          <p><strong>Mechanism:</strong> A pool of worker threads accepts connections or pulls pending requests from a shared queue.</p>
+          <p><strong>Pros:</strong></p>
+          <ul>
+            <li><strong>CPU Isolation:</strong> A long-running synchronous computation on one request does not stall socket readiness processing for other connections.</li>
+            <li><strong>Simpler Sequential Code:</strong> Blocking socket reads can be used directly without connection state machines.</li>
+          </ul>
+          <p><strong>Cons:</strong></p>
+          <ul>
+            <li><strong>Thread Overhead:</strong> High memory consumption and OS context-switching penalties under high concurrency.</li>
+            <li><strong>Race Hazards:</strong> Shared caches or routing structures require synchronization locks and cross-thread memory barriers.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Vela's Decision</h3>
+        <p>
+          Vela adopts <strong>Option A (the Single Event Loop)</strong> as the core engine for <code>std/web</code>.
+          Vela's design emphasizes predictability, deterministic execution, and ultra-low runtime overhead. By combining
+          non-blocking I/O multiplexing with Vela's per-request memory regions, an HTTP server can handle thousands of
+          concurrent connections with deterministic microsecond latency and zero lock contention.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. Connection Lifecycle: HTTP/1.1 Keep-Alive vs. Close-Per-Request</h2>
+      <p>
+        Modern network stacks in industry-standard languages (such as Go's <code>net/http</code>, Node.js, and Rust's
+        <code>hyper</code> / <code>actix</code> / <code>axum</code>) treat HTTP/1.1 <strong>persistent connections (Keep-Alive)</strong>
+        as the standard default:
+      </p>
+      <ul>
+        <li><strong>Handshake Elimination:</strong> Reusing established TCP connections avoids repeated 3-way handshakes (SYN &rarr; SYN-ACK &rarr; ACK) and TLS negotiation roundtrips.</li>
+        <li><strong>TCP Slow-Start Avoidance:</strong> Established sockets maintain optimal congestion window sizes (cwnd), yielding significantly higher throughput and lower latency for bursty API traffic.</li>
+        <li><strong>In-Order Sequential Processing:</strong> While keep-alive keeps the connection open, requests on that connection are processed sequentially in arrival order. HTTP/1.1 pipelining is intentionally disabled due to well-known Head-of-Line blocking and intermediate proxy bugs.</li>
+      </ul>
+
+      <h3>Dual-Mode Configuration in <code>std/web</code></h3>
+      <p>
+        Because supporting both persistent connections and one-shot connections is straightforward in the event loop,
+        <code>std/web</code> supports both paradigms with minimal complexity:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th>Default Behavior</th>
+            <th>Configuration Knob</th>
+            <th>Use Case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Keep-Alive (Default)</strong></td>
+            <td>Maintains persistent socket until idle timeout or connection cap is reached</td>
+            <td><code>server.keep_alive(true)</code> (enabled by default)</td>
+            <td>High-performance APIs, web clients, microservices, SPA backends</td>
+          </tr>
+          <tr>
+            <td><strong>Close-Per-Request</strong></td>
+            <td>Sends <code>Connection: close</code> and terminates socket immediately after response flush</td>
+            <td><code>server.keep_alive(false)</code> or client header <code>Connection: close</code></td>
+            <td>Constrained memory targets, short-lived one-off health checks, legacy proxies</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. API Specification & Decorator-Driven Routing</h2>
+      <p>
+        Vela's two decorator modes work seamlessly with <code>std/web</code> to provide both declarative endpoint
+        registration and composable request middleware with zero wiring boilerplate in <code>main</code>:
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Declarative Endpoint Registration & Middleware</h3>
+        <p>
+          Startup decorators (<code>$get(...)</code>, <code>$post(...)</code>, <code>$router.get(...)</code>) register routes
+          automatically at program startup before <code>main</code> begins. Wrapper decorators (<code>$(auth, logged)</code>)
+          intercept requests at call time as per-endpoint middleware.
+        </p>
+
+        <pre><span class="keyword">include</span> std/web { serve, get, post, text, json, Request, Response, WebError }
+<span class="keyword">include</span> middleware { authenticated, logged }
+
+<span class="comment">; Middleware runs on every request; $get registers route at startup</span>
+$(authenticated, logged)
+$get(<span class="string">"/api/greeting/{name}"</span>)
+<span class="keyword">task</span> handle_greeting(req: Request) -&gt; Response ~ WebError {
+  <span class="keyword">let</span> name = req.param(<span class="string">"name"</span>) <span class="keyword">else</span> <span class="string">"world"</span>
+  <span class="keyword">return</span> text(<span class="string">"Hello, {name}!"</span>)
+}
+
+$post(<span class="string">"/api/echo"</span>)
+<span class="keyword">task</span> handle_echo(req: Request) -&gt; Response ~ WebError {
+  <span class="keyword">return</span> text(req.body())
+}
+
+<span class="keyword">task</span> main() -&gt; int {
+  <span class="comment">; All decorated endpoints are automatically served:</span>
+  serve(<span class="string">"127.0.0.1:8080"</span>)?
+  <span class="keyword">return</span> 0
+}</pre>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Programmatic & Modular Routers</h3>
+        <p>
+          Applications can also instantiate explicit <code>Router</code> instances for modular sub-trees, mounted prefixes,
+          or static asset directories:
+        </p>
+
+        <pre><span class="keyword">include</span> std/web { route, files, serve, Request, Response, WebError, text }
+
+<span class="keyword">task</span> main() -&gt; int {
+  <span class="keyword">let</span> api = route()
+  api.get(<span class="string">"/health"</span>, health_check)
+  api.get(<span class="string">"/static/*"</span>, files(<span class="string">"./public"</span>))
+
+  serve(<span class="string">"127.0.0.1:8080"</span>, api)?
+  <span class="keyword">return</span> 0
+}
+
+<span class="keyword">task</span> health_check(req: Request) -&gt; Response ~ WebError {
+  <span class="keyword">return</span> text(<span class="string">"ok"</span>)
+}</pre>
+      </div>
+    </section>
+
+    <section>
+      <h2>5. Security & Path Confinement</h2>
+      <p>
+        Serving static assets via <code>web.files(folder)</code> applies the same strict path confinement discipline
+        proven in Vela Studio:
+      </p>
+      <ul>
+        <li>Relative path traversal sequences (<code>..</code>) are rejected immediately with <code>WebError.BadRequest</code>.</li>
+        <li>Absolute path escapes are stripped and trapped.</li>
+        <li>Symbolic links resolving outside the root directory are refused, guaranteeing zero path traversal vulnerabilities out of the box.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela Language — Standard Web Library Architecture &copy; 2026</p>
+  </footer>
+</body>
+</html>
+

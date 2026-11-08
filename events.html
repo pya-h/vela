@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — Events</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 30%,
+            rgba(52, 211, 153, 0.12) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(244, 114, 182, 0.12) 0%,
+            transparent 40%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent-3), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin: 1rem auto 0;
+        font-size: 1.25rem;
+        color: var(--muted);
+        max-width: 640px;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      h2 .icon {
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        background: rgba(52, 211, 153, 0.1);
+        font-size: 1.1rem;
+      }
+      h3 {
+        margin-top: 2.5rem;
+        color: var(--accent-2);
+        font-size: 1.35rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+      }
+      .intro {
+        font-size: 1.15rem;
+        color: var(--muted);
+        margin-bottom: 2rem;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .b-user {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+      }
+      .b-sugg {
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
+      .b-open {
+        background: rgba(250, 204, 21, 0.15);
+        color: #fde047;
+      }
+      .b-idea {
+        background: rgba(56, 189, 248, 0.15);
+        color: #7dd3fc;
+      }
+      .note {
+        background: linear-gradient(
+          90deg,
+          rgba(56, 189, 248, 0.1),
+          transparent
+        );
+        border-left: 4px solid var(--accent);
+        padding: 1.25rem 1.5rem;
+        border-radius: 0 0.75rem 0.75rem 0;
+        margin: 1.5rem 0;
+      }
+      .note strong {
+        color: var(--accent);
+      }
+      .suggestion {
+        background: linear-gradient(
+          135deg,
+          rgba(167, 139, 250, 0.12),
+          rgba(56, 189, 248, 0.06)
+        );
+        border: 1px solid var(--accent-2);
+        border-radius: 1rem;
+        padding: 1.25rem 1.5rem;
+        margin: 1.5rem 0;
+      }
+      .suggestion h3,
+      .suggestion h4 {
+        margin: 0 0 0.5rem;
+        color: var(--accent-2);
+      }
+      .open {
+        background: rgba(250, 204, 21, 0.06);
+        border: 1px solid rgba(250, 204, 21, 0.4);
+        border-radius: 1rem;
+        padding: 1.25rem 1.5rem;
+        margin: 1.5rem 0;
+      }
+      .open h4 {
+        margin: 0 0 0.5rem;
+        color: #fde047;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.25rem;
+      }
+      .card h4 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1.5rem 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        color: var(--accent-2);
+        font-weight: 700;
+      }
+      td {
+        color: var(--muted);
+      }
+      td:first-child {
+        color: var(--fg);
+        white-space: nowrap;
+      }
+      .toc {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1rem 1.5rem;
+      }
+      .toc ol {
+        margin: 0.5rem 0;
+        padding-left: 1.25rem;
+      }
+      .toc li {
+        margin: 0.25rem 0;
+      }
+      main a {
+        color: var(--accent);
+      }
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        background: var(--bg-2);
+      }
+      .doc-nav {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 2.5rem;
+        }
+        h2 {
+          font-size: 1.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vela Events</h1>
+      <p class="tagline">
+        Code that runs when something happens rather than when it is called: a
+        field changes, a value is read, a task is called, a value is made or
+        dropped, the program starts or ends.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html" aria-current="page">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <p class="intro">
+        This is a design document for an idea, not a guide to something Vela
+        has. Nothing here is built, and nothing here is final: the rules came
+        from the language's author and may still change, and the syntax is only
+        a first proposal. The page keeps the idea in one place with what was
+        decided, what was suggested, and what is still open.
+      </p>
+
+      <div class="note">
+        <strong>How to read the labels.</strong>
+        <span class="badge b-user">Author</span> marks a rule the author set.
+        <span class="badge b-sugg">Suggestion</span> marks a proposal made while
+        writing this page, which the author has not decided on yet.
+        <span class="badge b-open">Open</span> marks a question nobody has
+        answered yet.
+      </div>
+
+      <nav class="toc" aria-label="Contents">
+        <strong>Contents</strong>
+        <ol>
+          <li><a href="#what">What an event is</a></li>
+          <li><a href="#where">Where an event can be declared</a></li>
+          <li>
+            <a href="#alters">Changing things: the <code>alters</code> rule</a>
+          </li>
+          <li><a href="#triggers">Triggers</a></li>
+          <li><a href="#syntax">A proposed syntax</a></li>
+          <li><a href="#cost">Paying only for events that exist</a></li>
+          <li><a href="#stopping">Pausing and resuming an event</a></li>
+          <li>
+            <a href="#semantics">The hard parts: when exactly an event runs</a>
+          </li>
+          <li><a href="#extras">More ideas</a></li>
+          <li><a href="#compare">Compared with other languages</a></li>
+          <li><a href="#decide">Decisions still to make</a></li>
+        </ol>
+      </nav>
+
+      <section>
+        <h2 id="what">
+          <span class="icon" aria-hidden="true">⚡</span> What an event is
+        </h2>
+        <p>
+          An event is a body of code, much like a task or a method. The
+          difference is that <strong>the program never calls it</strong>.
+          Instead the event is bound to a <em>trigger</em>, and it runs each
+          time the trigger happens. The closest ideas elsewhere are state and
+          signals in React, Svelte and Solid, database triggers, and
+          constructors and destructors. Vela's version is meant to be cheaper
+          than all of them, because the compiler can see every place a trigger
+          can happen.
+        </p>
+        <ul>
+          <li>
+            <span class="badge b-user">Author</span> The program can't call an
+            event by hand.
+          </li>
+          <li>
+            <span class="badge b-user">Author</span> An event takes no
+            parameters, since nothing calls it and so nothing could pass them.
+          </li>
+          <li>
+            <span class="badge b-user">Author</span> An event is bound to a
+            trigger and runs whenever the trigger happens: a field or variable
+            changes, a bound value is read, a task or method is called, or one
+            of the special occasions below comes.
+          </li>
+          <li>
+            <span class="badge b-user">Author</span> Apart from that, events
+            follow the rules of tasks and methods. They can be declared inside a
+            task or inside a shape. In a shape they can be
+            <code>shared</code> (they belong to the shape and reach its shared
+            members) or ordinary members (they happen on each value).
+          </li>
+          <li>
+            <span class="badge b-user">Author</span> Special events
+            (<code>oninit</code>, <code>ondrop</code>, <code>onchange</code>,
+            <code>onstart</code>, <code>onend</code>) cost nothing unless a
+            program uses them. Vela has no default constructor that always runs.
+          </li>
+        </ul>
+        <p>
+          One problem led to this idea.
+          <a href="index.html#shared">Shared fields</a> can count how often
+          <code>X.new(…)</code> is called, but not how many values of
+          <code>X</code> exist. A literal skips <code>new</code>, a copy makes a
+          second value without calling anything, and nothing runs when a value
+          goes away. Events on a shape's own life, <code>oninit</code> and
+          <code>ondrop</code>, answer that problem (<a href="#lifecycle"
+            >below</a
+          >).
+        </p>
+      </section>
+
+      <section>
+        <h2 id="where">
+          <span class="icon" aria-hidden="true">📍</span> Where an event can be
+          declared
+        </h2>
+        <div class="cards">
+          <div class="card">
+            <h4>Inside a task</h4>
+            <p>
+              It can watch the task's own variables, and anything else the task
+              can see. It lives while the task runs, and stops at the end of the
+              block it is declared in, the same way a variable does.
+            </p>
+          </div>
+          <div class="card">
+            <h4>A member of a shape</h4>
+            <p>
+              It happens on each value, and reads that value through
+              <code>.x</code> and <code>.this</code> the same way a method does.
+              It takes <code>alters</code> to change the value's fields.
+            </p>
+          </div>
+          <div class="card">
+            <h4>A shared event of a shape</h4>
+            <p>
+              It belongs to the shape rather than to a value, so it has no
+              <code>.this</code>. It reaches shared fields and shared methods
+              through the shape's name, <code>X.count</code>.
+            </p>
+          </div>
+          <div class="card">
+            <h4>At the top of a file <span class="badge b-open">Open</span></h4>
+            <p>
+              <code>onstart</code> and <code>onend</code> belong to the program
+              rather than to any task or shape, so they may need a place of
+              their own: the top level of a file, next to tasks.
+            </p>
+          </div>
+        </div>
+        <p>
+          <span class="badge b-open">Open</span> A kind has only shared methods
+          and no fields, so it has nothing to watch for changes. Its events
+          could only be <a href="#call-trigger">call triggers</a> on its shared
+          methods. It is not settled whether that is worth allowing.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="alters">
+          <span class="icon" aria-hidden="true">✏️</span> Changing things: the
+          <code>alters</code> rule
+        </h2>
+        <p>
+          This is the central rule of the design, and it is stricter than the
+          rule for tasks on purpose.
+        </p>
+        <div class="note">
+          <strong>The rule.</strong> <span class="badge b-user">Author</span> An
+          event needs <code>alters</code> to change anything that is not its
+          own. What is its own:
+          <ul>
+            <li>its own local variables;</li>
+            <li>
+              for a <code>shared</code> event inside a shape, that shape's
+              <code>shared flex</code> fields.
+            </li>
+          </ul>
+          Everything else needs <code>alters</code>. That includes the fields of
+          the value a member event runs on (as for a method), a variable of the
+          task the event is declared in, a shared field of another shape, and a
+          shared field of the shape when the event is declared outside it.
+        </div>
+        <h3>Why events are stricter than tasks</h3>
+        <p>
+          <span class="badge b-user">Author</span> A task runs only where the
+          program calls it, so its author knows a call can change things there.
+          An event can run where nobody expects it, in the middle of an
+          unrelated assignment. Writing <code>alters</code> is the author's way
+          of saying "this runs by surprise <em>and</em> changes things", and it
+          tells a reader to be careful around it. Tasks may need the same
+          strictness once Vela has concurrency, when a task can also run at an
+          unexpected time.
+        </p>
+        <h3>Examples of the rule</h3>
+        <pre><code>shape Counter
+    shared flex made: int = 0
+    shared event counted on init        ; no alters: made is this shape's own shared field
+        Counter.made = Counter.made + 1
+    fi
+fi
+
+shape Audit
+    shared flex seen: int = 0
+    shared alters event noted on init   ; alters: seen is its own, but Counter.made is another shape's
+        Audit.seen = Audit.seen + 1
+        Counter.made = Counter.made + 1
+    fi
+fi
+
+task main()
+    flex changes = 0
+    flex total = 0
+    alters event tally on total         ; alters: changes belongs to main, not to the event
+        changes = changes + 1
+    fi
+    total = 5                           ; tally runs here, and changes becomes 1
+fi</code></pre>
+
+        <div class="suggestion">
+          <h4>Suggestion: the rule matches methods</h4>
+          <p>
+            <span class="badge b-sugg">Suggestion</span> For events declared in
+            a shape, the rule turns out to be the same as the rule for methods.
+            A method takes <code>alters</code> to change <code>.this</code>, and
+            needs no <code>alters</code> to change its shape's
+            <code>shared flex</code> fields. So "an event follows the method
+            rule for the place it is declared in, and needs
+            <code>alters</code> for anything outside that place" is one sentence
+            a reader can keep in mind. It is worth saying in the guide exactly
+            like that.
+          </p>
+        </div>
+
+        <div class="suggestion">
+          <h4>Suggestion: <code>alters</code> could name what it changes</h4>
+          <p>
+            <span class="badge b-sugg">Suggestion</span> An event that runs by
+            surprise is easier to trust when it says exactly what it touches:
+          </p>
+          <pre><code>alters(changes) event tally on total
+    changes = changes + 1
+fi</code></pre>
+          <p>
+            The compiler would refuse a change to anything not in the list. That
+            lets a reader see an event's whole effect in its header. It also
+            gives the compiler what it needs to find
+            <a href="#cycles">cycles</a>: event A changes <code>x</code>, which
+            triggers B, which changes <code>y</code>, which triggers A. It could
+            be optional: a bare <code>alters</code> still means "may change
+            anything outside".
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="triggers">
+          <span class="icon" aria-hidden="true">🎯</span> Triggers
+        </h2>
+        <p>
+          These are the kinds of trigger the author named. The words used for
+          each are in the <a href="#syntax">next section</a>.
+        </p>
+
+        <h3 id="change-trigger">1. A field or variable changes</h3>
+        <p>
+          <span class="badge b-user">Author</span> The event runs whenever a
+          particular field, or one of a set of fields, changes. This is the
+          "state" of React, but with the compiler knowing every place that can
+          change the field, so nothing has to be tracked while the program runs.
+        </p>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> It can watch more than
+          one field at a time, <code>on .x, .y</code>. It could also have a
+          condition, <code>on .hp when .hp &lt; 10</code>, which is checked
+          where the change happens, so the event runs only when the condition
+          holds.
+        </p>
+
+        <h3 id="read-trigger">2. A value is read</h3>
+        <p>
+          <span class="badge b-user">Author</span> A separate trigger runs when
+          a bound value is <em>read</em> rather than changed. A word or modifier
+          marks it, so it can't be mistaken for a change event.
+        </p>
+        <p>
+          <span class="badge b-open">Open</span> Is a read done by the event
+          itself a trigger? It must not be, or the event triggers itself. And
+          may a read event change the value being read? If it may, it becomes a
+          lazy or computed field, which is the
+          <a href="future.html#methods-property"><code>property</code></a> idea
+          from another angle. That is powerful, but it hides work behind what
+          looks like a plain read, and the <code>property</code> idea already
+          had to guard against exactly that.
+        </p>
+
+        <h3 id="call-trigger">3. A task or method is called</h3>
+        <p>
+          <span class="badge b-user">Author</span> The event runs whenever a
+          task or method is called. It can run <em>before</em> the task starts,
+          or <em>after</em> it finishes. An "after" event may even read what the
+          task sent back.
+        </p>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> A call event could read
+          the call's arguments by name, read-only, the same way a method reads
+          <code>.this</code>. It takes no parameters, but it can see what was
+          passed. A "before" event should not be able to cancel the call or
+          change its arguments: that would make calls unpredictable, and a
+          program that wants that has a wrapper task for it.
+        </p>
+        <p>
+          <span class="badge b-open">Open</span> Can a program watch a task from
+          another module, or from <code>std</code>? Can it watch a
+          <code>priv</code> task from outside its file? It should not. And does
+          an "after" event run when the task sends a failure
+          (<code>fail</code>)? If it does, it needs a way to tell a result from
+          a failure.
+        </p>
+
+        <h3 id="lifecycle">4. The special events of a shape</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Runs when</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>oninit</code></td>
+                <td>a value of the shape is made</td>
+                <td>
+                  <span class="badge b-user">Author</span> It runs however the
+                  value was made: with a literal <code>X { … }</code>, with
+                  <code>new X(…) at r</code>, or inside a shared
+                  <code>X.new(…)</code>. That makes counting exact.
+                </td>
+              </tr>
+              <tr>
+                <td><code>ondrop</code></td>
+                <td>a value of the shape goes away</td>
+                <td>
+                  <span class="badge b-user">Author</span> Used, for example, to
+                  lower a count. See
+                  <a href="#drop">when a value goes away</a> for the hard part.
+                </td>
+              </tr>
+              <tr>
+                <td><code>onchange</code></td>
+                <td>any field of a value changes</td>
+                <td>
+                  <span class="badge b-user">Author</span> It differs from a
+                  <a href="#change-trigger">change trigger</a>, which names
+                  particular fields. This one runs for any field.
+                </td>
+              </tr>
+              <tr>
+                <td><code>shared onchange</code></td>
+                <td>any <code>shared flex</code> field of the shape changes</td>
+                <td>
+                  <span class="badge b-user">Author</span> The shared version of
+                  <code>onchange</code>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          This is how counting looks with them, the case that led to the idea:
+        </p>
+        <pre><code>shape Player
+    name: text
+    shared read alive: int = 0
+
+    shared event born on init
+        Player.alive = Player.alive + 1
+    fi
+    shared event gone on drop
+        Player.alive = Player.alive - 1
+    fi
+fi</code></pre>
+
+        <h3 id="program-events">5. The program's own events</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Runs when</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>onstart</code></td>
+                <td>before <code>main</code> starts</td>
+                <td>
+                  <span class="badge b-open">Open</span> If several modules each
+                  have one, which runs first? The order modules are included in
+                  is one answer, and it matches how people read a program.
+                </td>
+              </tr>
+              <tr>
+                <td><code>onend</code></td>
+                <td>when <code>main</code> finishes</td>
+                <td>
+                  <span class="badge b-open">Open</span> Does it also run when
+                  the program stops on an error, such as an overflow, a bad
+                  index or a plan B that stops the program? A last chance to
+                  write a log is useful, but code that runs after a failure has
+                  to be very careful, since the state it sees may be
+                  half-changed.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="syntax">
+          <span class="icon" aria-hidden="true">✍️</span> A proposed syntax
+          <span class="badge b-sugg">Suggestion</span>
+        </h2>
+        <p>
+          The author has not chosen a syntax. What follows is one proposal,
+          built from words and shapes Vela already uses. It needs one new word,
+          <code>event</code>. The word <code>on</code> introduces the trigger.
+          It is only a keyword in that position, so it could stay usable as a
+          name elsewhere.
+        </p>
+        <pre><code>[priv] [shared] [alters] event &lt;name&gt; on &lt;trigger&gt; [when &lt;condition&gt;]
+    …
+fi</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Trigger</th>
+                <th>Written</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>a field or variable changes</td>
+                <td>
+                  <code>on total</code>, <code>on .hp</code>,
+                  <code>on .x, .y</code>, <code>on Player.alive</code>
+                </td>
+              </tr>
+              <tr>
+                <td>a value is read</td>
+                <td><code>on read .hp</code></td>
+              </tr>
+              <tr>
+                <td>a task or method is called</td>
+                <td>
+                  <code>on call save</code> (before),
+                  <code>on call save after</code>, <code>on call .grow</code>
+                </td>
+              </tr>
+              <tr>
+                <td>the shape's own life</td>
+                <td>
+                  <code>on init</code>, <code>on drop</code>,
+                  <code>on change</code>
+                </td>
+              </tr>
+              <tr>
+                <td>the program</td>
+                <td><code>on start</code>, <code>on end</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Spelling the special events as <code>on init</code> rather than
+          <code>oninit</code> keeps them to one pattern: every event is
+          <code>event name on something</code>. Only <code>event</code> becomes
+          a reserved word, and <code>init</code>, <code>drop</code>,
+          <code>change</code>, <code>start</code> and <code>end</code> stay free
+          for programs to use as names. The author's words (<code>oninit</code>,
+          <code>ondrop</code>, and so on) work just as well as reserved words,
+          and are shorter to search for. It is a matter of taste.
+        </p>
+        <p>
+          Every event has a name. The name is needed to
+          <a href="#stopping">pause it</a>, to name it in an error ("event
+          <code>tally</code> changes <code>changes</code> without
+          <code>alters</code>"), and for Studio to show it where it runs.
+        </p>
+        <p>A larger example, in a task:</p>
+        <pre><code>task main()
+    flex score = 0
+    flex best = 0
+    alters(best) event record on score when score &gt; best
+        best = score
+    fi
+    score = 3        ; record runs: best is 3
+    score = 1        ; the condition is false: record does not run
+    score = 7        ; record runs: best is 7
+    show(best)       ; 7
+fi</code></pre>
+      </section>
+
+      <section>
+        <h2 id="cost">
+          <span class="icon" aria-hidden="true">🏎️</span> Paying only for events
+          that exist
+        </h2>
+        <p>
+          <span class="badge b-user">Author</span> No special event runs by
+          default, the way a default constructor would. A trigger starts being
+          watched only once an event for it is registered, in the program or in
+          the shape. When every event for it is stopped, it stops being watched.
+        </p>
+        <div class="suggestion">
+          <h4>Suggestion: registration is mostly known when compiling</h4>
+          <p>
+            <span class="badge b-sugg">Suggestion</span> Vela can do better than
+            a list of listeners kept while the program runs, because an event is
+            a <em>declaration</em>. The compiler sees every event in the program
+            and every place that can trigger one: every assignment to
+            <code>Player.alive</code>, every literal of <code>Player</code>,
+            every call of <code>save</code>. So it adds the event's call at
+            exactly those places and nowhere else:
+          </p>
+          <ul>
+            <li>
+              A trigger that no event watches costs <strong>nothing</strong>: no
+              flag, no table, no check. A program without events compiles to
+              exactly the C it compiles to today.
+            </li>
+            <li>
+              A watched trigger costs one direct call at each place it can
+              happen. That call is to a plain C function, which the C compiler
+              can inline. It is not a callback through a pointer.
+            </li>
+            <li>
+              Only events that can be <a href="#stopping">paused</a> add a check
+              at each such place: one <code>if</code> on a flag that almost
+              never changes, so the processor predicts it almost every time.
+            </li>
+            <li>
+              An event declared in a task only watches while that task's block
+              is running. For the task's own locals, the places are all inside
+              that block, so the compiler adds the calls only there, with no
+              flag at all. For something the rest of the program can change as
+              well (a shared field), the event sets a flag when its block starts
+              and clears it at <code>fi</code>, the same way a region is closed
+              at <code>fi</code>.
+            </li>
+          </ul>
+          <p>
+            This is what Svelte does for web pages ("reactivity compiled away"),
+            done for a systems language. The dependency graph that React and
+            Solid build while the program runs is known here before the program
+            runs.
+          </p>
+        </div>
+        <p>
+          A sketch of the C this could produce for the
+          <code>record</code> example above:
+        </p>
+        <pre><code>int64_t score = 0, best = 0;
+score = 3;
+if (score &gt; best) { best = score; }   /* record, inlined where score changes */
+score = 1;
+if (score &gt; best) { best = score; }</code></pre>
+      </section>
+
+      <section>
+        <h2 id="stopping">
+          <span class="icon" aria-hidden="true">⏸️</span> Pausing and resuming
+          an event
+        </h2>
+        <p>
+          <span class="badge b-user">Author</span> A program needs a way to stop
+          an event at some point, and perhaps to start it again. When every
+          event on a trigger is stopped, the trigger stops being watched.
+        </p>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> Treat an event's name
+          like a value with a few built-in members, the same way a slice has
+          <code>.len</code> and <code>.add</code>:
+        </p>
+        <pre><code>record.pause()      ; stop running it
+record.resume()     ; run it again
+record.paused       ; true or false</code></pre>
+        <p>
+          That needs no new keyword. (<code>stop</code> is already one, for
+          loops, and reusing it for events would read oddly inside a loop.) An
+          event nobody ever pauses doesn't need the flag, as
+          <a href="#cost">above</a>. Only a program that pauses an event pays
+          for it.
+        </p>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> A <code>once</code> event
+          pauses itself after running the first time:
+          <code>event first on score once</code>. This is common with web events
+          and is cheap here.
+        </p>
+        <p>
+          <span class="badge b-open">Open</span> Who may pause an event? Only
+          the code that declared it (its task, or its shape's methods), or any
+          code that can see it? A <code>priv</code> event is clear. For a public
+          event of a shape, another file pausing the shape's
+          <code>ondrop</code> could break the count the shape is keeping. It is
+          safer to let only the shape's own code pause a shape's events.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="semantics">
+          <span class="icon" aria-hidden="true">🧩</span> The hard parts: when
+          exactly an event runs
+        </h2>
+        <p>
+          These are the questions that decide whether events feel predictable.
+          Each has a suggested answer, and each still needs the author's
+          decision.
+        </p>
+
+        <h3 id="batching">
+          When does a change event run: after each change, or once for several?
+        </h3>
+        <p>
+          An <code>alters</code> method that sets three fields would run
+          <code>onchange</code> three times, and the first two times the value
+          is half-updated. <span class="badge b-sugg">Suggestion</span> Changes
+          made inside the shape's own <code>alters</code> methods are gathered,
+          and the events run once when the method returns, the way React gathers
+          updates. An event then only sees a value its methods left in a whole
+          state. Outside the shape, an event runs after the statement that made
+          the change.
+        </p>
+
+        <h3 id="cycles">Events that trigger themselves, or each other</h3>
+        <p>
+          An event that changes what it watches would run forever.
+          <span class="badge b-sugg">Suggestion</span> Refuse this when
+          compiling. Since the compiler knows what triggers each event and what
+          each event changes (and knows it exactly with the
+          <a href="#alters"><code>alters(…)</code> list</a>), it can build the
+          graph of events and refuse any cycle in it, with an error that names
+          the whole loop: "record changes best, which runs cap, which changes
+          score, which runs record". A runtime guard ("an event running already
+          does not run again") is the fallback for cycles the compiler can't
+          see. It is cheaper to explain, but it hides the bug instead of
+          reporting it.
+        </p>
+
+        <h3 id="order">Several events on one trigger</h3>
+        <p>
+          <span class="badge b-open">Open</span> In what order do they run?
+          Within a file, declaration order is natural. Across files there is no
+          obvious order, and a program that depends on one is fragile. One
+          answer is that events on the same trigger may not depend on each
+          other's changes, which the <code>alters</code> lists would let the
+          compiler check.
+        </p>
+
+        <h3 id="hidden-changes">
+          Changes the compiler can't see at the place they happen
+        </h3>
+        <p>
+          A watched local can be changed in ways that don't look like an
+          assignment to it: given to a task as
+          <code>&amp;total</code> for a <code>flex&amp;</code> parameter,
+          changed through a <code>flex&amp; ref = &amp;total</code> reference,
+          or changed by an <code>alters</code> method called on it. The task
+          changing it doesn't know an event is watching.
+          <span class="badge b-sugg">Suggestion</span> Treat the call, or the
+          statement that uses the reference, as the change: the event runs once,
+          after it. That keeps every change site in the watching code, and costs
+          nothing in the task that was called. The other choice, refusing
+          <code>&amp;total</code> while something watches <code>total</code>, is
+          simpler but more restrictive.
+        </p>
+
+        <h3 id="drop">When does a value go away?</h3>
+        <p>
+          This is the hardest question in the design, because Vela copies values
+          instead of moving them.
+          <span class="badge b-open">Open</span>
+        </p>
+        <ul>
+          <li>
+            <strong>A variable</strong> goes away at the <code>fi</code> of its
+            block. The compiler knows the place, just as it knows where a region
+            closes.
+          </li>
+          <li>
+            <strong>A value in a region</strong> goes away when the region
+            closes. The region then has to walk through the values that have an
+            <code>ondrop</code>. That costs something, but only for shapes that
+            have one. It is what already happens to a
+            <a href="std.html#files"><code>File</code></a
+            >, which closes when its region ends. The existing mechanism for
+            closing files could become the way <code>ondrop</code> is built.
+          </li>
+          <li>
+            <strong>An item in a slice</strong> goes away at
+            <code>xs.del(…)</code>, or when the slice's region closes.
+          </li>
+          <li>
+            <strong>A value a task sends back</strong> leaves the task without
+            going away. The copy in the task doesn't drop, and the caller now
+            has the value.
+          </li>
+          <li>
+            <strong>A copy</strong> (<code>fixed b = a</code>) is a second
+            value. If it drops, but nothing ran for it when it was made, then a
+            count kept with <code>on init</code> and <code>on drop</code> ends
+            up lower than the true number.
+            <span class="badge b-sugg">Suggestion</span> A copy also runs
+            <code>on init</code>, or has an event of its own,
+            <code>on copy</code>. Otherwise the count is never exact, and exact
+            counting was the reason for these events.
+          </li>
+        </ul>
+
+        <h3 id="failures">Can an event fail?</h3>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> No. Nothing called the
+          event, so there is nowhere to send a failure. An event sends nothing,
+          so <code>fail</code> and <code>&lt;-</code> with a value are refused
+          in it. Something that would stop the program inside an event (an
+          overflow, a bad index) still stops it, and the message says which
+          event it was in.
+        </p>
+
+        <h3 id="regions">Memory inside an event</h3>
+        <p>
+          <span class="badge b-sugg">Suggestion</span> Each run of an event is
+          its own block, so it gets a
+          <a href="index.html#default-region">default region</a> that is freed
+          at its <code>fi</code>, like any
+          <a href="index.html#blocks"><code>block</code></a
+          >. An event can't keep anything it allocates unless it stores it in
+          something that lives longer (a shared field in a static region, if
+          Vela ever has <a href="future.html#static-region">one</a>).
+        </p>
+      </section>
+
+      <section>
+        <h2 id="extras">
+          <span class="icon" aria-hidden="true">💡</span> More ideas
+          <span class="badge b-idea">Idea</span>
+        </h2>
+        <div class="cards">
+          <div class="card">
+            <h4><code>was</code>: the value before the change</h4>
+            <p>
+              Inside a change event, <code>was</code> could name the value the
+              watched field had just before it changed:
+              <code>when score &lt; was</code>. The compiler only keeps the old
+              value when the event mentions <code>was</code>, so it costs
+              nothing otherwise.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Studio shows where events run</h4>
+            <p>
+              The worry behind the <code>alters</code> rule is surprise. So
+              Studio could put a small mark on every line that runs an event
+              (for example "⚡ record") and list them when hovering. Nothing
+              hidden stays hidden. The compiler knows every such place already.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Events that run later</h4>
+            <p>
+              <code>event redraw on .x, .y later</code> would run once, at the
+              end of the current task or <code>alters</code> method, however
+              many of the fields changed. That is the batching that interfaces
+              need, stated in the header rather than assumed.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Kept values that update themselves</h4>
+            <p>
+              A <code>read</code> field kept up to date by a change event on the
+              fields it depends on is a
+              <a href="future.html#methods-derived"
+                >member that doesn't recompute</a
+              >. Nothing new is needed for it.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Events only in debug builds</h4>
+            <p>
+              <code>debug event trace on call save</code> could exist in a debug
+              build and disappear entirely from a release build. That gives
+              logging and profiling hooks that cost nothing when shipped.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Events in tests</h4>
+            <p>
+              With <a href="future.html">built-in testing</a>, a test could
+              watch a call to check that it happened ("save was called twice")
+              without changing the code under test.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="compare">
+          <span class="icon" aria-hidden="true">🔍</span> Compared with other
+          languages
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Idea elsewhere</th>
+                <th>What Vela's events share with it</th>
+                <th>What differs</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>React state, Solid and Preact signals</td>
+                <td>code that runs when a value changes</td>
+                <td>
+                  They track dependencies while the program runs. Vela knows
+                  every change site when compiling, so it keeps no graph,
+                  subscriptions or allocations.
+                </td>
+              </tr>
+              <tr>
+                <td>Svelte</td>
+                <td>reactivity worked out by the compiler</td>
+                <td>
+                  Svelte does it for components in a web page. Vela would do it
+                  for any field or variable, in C.
+                </td>
+              </tr>
+              <tr>
+                <td>C# events, observers</td>
+                <td>handlers that run when something happens</td>
+                <td>
+                  There, handlers are added and removed while the program runs,
+                  through delegates. In Vela an event is a declaration, and the
+                  compiler writes its calls in.
+                </td>
+              </tr>
+              <tr>
+                <td>SQL triggers</td>
+                <td>before and after, on a change or a call</td>
+                <td>
+                  This is the closest match for
+                  <a href="#call-trigger">call triggers</a>, including reading
+                  what was returned.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  C++ constructors and destructors, Rust <code>Drop</code>
+                </td>
+                <td><code>on init</code> and <code>on drop</code></td>
+                <td>
+                  Nothing runs by default, and they are declared as events
+                  rather than special methods.
+                </td>
+              </tr>
+              <tr>
+                <td>Python <code>__setattr__</code>, JavaScript proxies</td>
+                <td>catching reads and writes of fields</td>
+                <td>
+                  Those cost something on every access, watched or not. Vela
+                  only pays where an event watches.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="decide">
+          <span class="icon" aria-hidden="true">🤔</span> Decisions still to
+          make
+        </h2>
+        <div class="open">
+          <h4>For the author</h4>
+          <ol>
+            <li>
+              The syntax: <code>event name on trigger</code> as proposed, the
+              author's <code>oninit</code> words, or something else.
+            </li>
+            <li>
+              Whether every event must have a name, and how it is paused:
+              <code>name.pause()</code> or a keyword.
+            </li>
+            <li>
+              Whether <code>alters</code> may name what it changes,
+              <code>alters(best)</code>, and whether that is required, optional,
+              or not allowed.
+            </li>
+            <li>
+              Whether a copy counts as making a value (<code>on init</code>),
+              has an event of its own (<code>on copy</code>), or doesn't count.
+              Exact counting depends on this.
+            </li>
+            <li>
+              When <code>on drop</code> runs for values in regions, items taken
+              out of slices, and values a task sends back.
+            </li>
+            <li>
+              Whether change events run after every change, or once when the
+              shape's <code>alters</code> method returns.
+            </li>
+            <li>
+              Whether cycles between events are refused when compiling, or
+              stopped by a guard while running.
+            </li>
+            <li>
+              The order of several events on one trigger, within a file and
+              across files.
+            </li>
+            <li>
+              How changes made through <code>&amp;x</code>,
+              <code>flex&amp;</code> references and <code>alters</code> methods
+              reach a change event.
+            </li>
+            <li>
+              Whether read events may change the value read (lazy fields), and
+              whether their own reads trigger them.
+            </li>
+            <li>
+              Call events: whether they read the arguments, whether "after" runs
+              on a failure, and whether a task from another module or from
+              <code>std</code> can be watched.
+            </li>
+            <li>
+              Where <code>on start</code> and <code>on end</code> are declared,
+              their order across modules, and whether <code>on end</code> runs
+              when the program stops on an error.
+            </li>
+            <li>
+              Whether kinds have events (only call events on their shared
+              methods), and what member and shared events mean in a shape that
+              takes types.
+            </li>
+            <li>Who may pause a shape's events.</li>
+            <li>
+              An event declared inside a loop: is it declared again every round,
+              or does it watch from its first round to the loop's end?
+            </li>
+            <li>
+              Visibility: can another file watch a <code>priv</code> field (it
+              should not), and can it watch a <code>read</code> one (reading its
+              changes seems fine)?
+            </li>
+            <li>
+              Concurrency, once Vela has it: which thread runs an event, and
+              whether <code>alters</code> becomes required for tasks too, as the
+              author expects it may.
+            </li>
+          </ol>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>Vela — designed small, with room to grow.</p>
+    </footer>
+  </body>
+</html>

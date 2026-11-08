@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — Tricks</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --accent-5: #fbbf24;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 30%,
+            rgba(167, 139, 250, 0.1) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(167, 139, 250, 0.12) 0%,
+            transparent 40%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent-5), var(--accent-2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin-top: 1rem;
+        font-size: 1.25rem;
+        color: var(--muted);
+        max-width: 650px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 2rem;
+        color: var(--fg);
+      }
+      h3 {
+        margin: 0 0 0.75rem;
+        color: var(--fg);
+        font-size: 1.25rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      .keyword {
+        color: var(--accent-2);
+      }
+      .string {
+        color: var(--accent-3);
+      }
+      .comment {
+        color: var(--muted);
+      }
+      .intro {
+        font-size: 1.15rem;
+        color: var(--muted);
+        margin-bottom: 2rem;
+      }
+      .entry {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin: 1.25rem 0;
+      }
+      .entry dl {
+        margin: 0.75rem 0 0;
+      }
+      .entry dt {
+        color: var(--accent-2);
+        font-weight: 700;
+        margin-top: 0.75rem;
+      }
+      .entry dd {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .b-watch {
+        background: rgba(56, 189, 248, 0.15);
+        color: #7dd3fc;
+      }
+      .b-merge {
+        background: rgba(250, 204, 21, 0.15);
+        color: #fde047;
+      }
+      .b-drop {
+        background: rgba(248, 113, 113, 0.15);
+        color: #fca5a5;
+      }
+      .b-idea {
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
+      .b-built {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+      }
+      .b-open {
+        background: rgba(251, 191, 36, 0.15);
+        color: #fde68a;
+      }
+      .note {
+        background: linear-gradient(
+          90deg,
+          rgba(56, 189, 248, 0.1),
+          transparent
+        );
+        border-left: 4px solid var(--accent);
+        padding: 1.25rem 1.5rem;
+        border-radius: 0 0.75rem 0.75rem 0;
+        margin: 1.5rem 0;
+      }
+      .note strong {
+        color: var(--accent);
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1.5rem 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        color: var(--accent-2);
+        font-weight: 700;
+      }
+      td {
+        color: var(--muted);
+      }
+      main a {
+        color: var(--accent);
+      }
+      ul {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.6rem 0;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        background: var(--bg-2);
+      }
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.75rem 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 2.5rem;
+        }
+        h2 {
+          font-size: 1.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Tricks</h1>
+      <p class="tagline">
+        Small ideas that work by what a word filters out, not by what it adds.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html" aria-current="page">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <p class="intro">
+        This page is a notebook of ideas, not a guide to something Vela has. A
+        trick here adds no new kind of value and no new type: it gives a word
+        that already exists a second job, to say which of the values that would
+        fit a place are the ones the author wants there. Nothing here is built,
+        nothing is final, and the author's words decide every rule and every
+        spelling.
+      </p>
+
+      <div class="note">
+        <strong>How to read the marks.</strong>
+        <span class="badge b-idea">idea</span> is written down and not built;
+        <span class="badge b-built">built</span> is what the compiler does
+        today, tested; <span class="badge b-open">open</span> is a question the
+        author has not answered.
+      </div>
+
+      <section>
+        <h2 id="mark-filter">
+          A mark before a task type's parameter filters the tasks it takes
+          <span class="badge b-idea">idea</span>
+        </h2>
+        <p>
+          <code>(fixed T) -&gt; Y</code> against <code>(T) -&gt; Y</code>, and
+          <code>(bind T) -&gt; Y</code> against <code>(T) -&gt; Y</code>.
+        </p>
+
+        <h3>The idea</h3>
+        <p>
+          A task's type says how each parameter is given (see
+          <a href="index.html#task-values">Tasks as values</a>). The trick is
+          that a mark before the type of a parameter, <code>fixed</code> or
+          <code>bind</code>, does not make another type of value:
+          <code>(int) -&gt; int</code> and
+          <code>(fixed int) -&gt; int</code> are the same type, as
+          <code>bind x: int</code> and <code>fixed x: int</code> are of one
+          type, and differ only in what may be done with the name. The mark
+          filters. Where a place wants a <code>(fixed int) -&gt; int</code>, a
+          task that changes its parameter is refused, and every task that
+          doesn't is taken. Where the place wants a plain
+          <code>(int) -&gt; int</code>, every task is taken, the ones the mark
+          would refuse too. So the plain type accepts all that the marked one
+          accepts and more, and the mark is a way to narrow the input range on
+          purpose: a tricky filter, not a new kind of thing.
+        </p>
+        <p>
+          The marks are ordered by how much of the parameter a task may change,
+          and each accepts what the ones after it do:
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>A task whose parameter is written</th>
+                <th>what it does</th>
+                <th><code>(T) -&gt; Y</code></th>
+                <th><code>(bind T) -&gt; Y</code></th>
+                <th><code>(fixed T) -&gt; Y</code></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>x: T</code> or <code>fixed x: T</code></td>
+                <td>never changes it</td>
+                <td>taken</td>
+                <td>taken</td>
+                <td>taken</td>
+              </tr>
+              <tr>
+                <td><code>bind x: T</code></td>
+                <td>changes its contents, never assigns it whole</td>
+                <td>taken</td>
+                <td>taken</td>
+                <td>refused</td>
+              </tr>
+              <tr>
+                <td><code>flex x: T</code></td>
+                <td>changes it any way, assigns it whole</td>
+                <td>taken</td>
+                <td>refused</td>
+                <td>refused</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Reading it by rows or by columns says the same thing twice.
+          <code>(fixed T)</code> is the narrowest input range, the tasks that
+          leave their parameter alone; <code>(bind T)</code> widens it by the
+          tasks that change only its contents; the plain type takes every task.
+          The two differences the idea asks for are the first and the second
+          column against the first: <code>(fixed T) -&gt; Y</code> against
+          <code>(T) -&gt; Y</code>, and <code>(bind T) -&gt; Y</code> against
+          <code>(T) -&gt; Y</code>. The two marked types also differ from each
+          other, by the <code>bind x: T</code> row.
+        </p>
+
+        <h3>On a whole value</h3>
+        <p>
+          A whole value is copied, so what a task does to its own copy is
+          invisible to the caller, and the plain type needs no filter for the
+          caller's sake. The mark is for whoever writes the type: it says that
+          the tasks given here never change what they are handed, even their own
+          copy, which a reader of the type sees without opening them.
+        </p>
+        <pre><code><span class="keyword">task</span> reads(n: <span class="keyword">int</span>) -&gt; <span class="keyword">int</span>
+    &lt;- n + 1
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> counts_down(<span class="keyword">flex</span> n: <span class="keyword">int</span>) -&gt; <span class="keyword">int</span>      <span class="comment">; changes its own copy of n</span>
+    <span class="keyword">flex</span> steps = 0
+    <span class="keyword">loop</span> n &gt; 0
+        n = n - 1
+        steps = steps + 1
+    <span class="keyword">fi</span>
+    &lt;- steps
+<span class="keyword">fi</span>
+
+<span class="keyword">fixed</span> a: (<span class="keyword">int</span>) -&gt; <span class="keyword">int</span> = reads              <span class="comment">; taken</span>
+<span class="keyword">fixed</span> b: (<span class="keyword">int</span>) -&gt; <span class="keyword">int</span> = counts_down        <span class="comment">; taken: a plain type takes every task</span>
+<span class="keyword">fixed</span> c: (<span class="keyword">fixed</span> <span class="keyword">int</span>) -&gt; <span class="keyword">int</span> = reads        <span class="comment">; taken</span>
+<span class="keyword">fixed</span> d: (<span class="keyword">fixed</span> <span class="keyword">int</span>) -&gt; <span class="keyword">int</span> = counts_down  <span class="comment">; the idea: refused, counts_down changes n</span></code></pre>
+        <p>
+          On a type with no contents, a number say, <code>bind</code> acts as
+          <code>fixed</code> everywhere in Vela, so
+          <code>(bind int) -&gt; int</code> and
+          <code>(fixed int) -&gt; int</code> would filter alike. The two marks
+          part ways on a value that has contents, a shape or an array, whose
+          fields a <code>bind</code> task may change in its own copy:
+        </p>
+        <pre><code><span class="keyword">shape</span> Point
+    x: <span class="keyword">int</span>
+    y: <span class="keyword">int</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> shifts(<span class="keyword">bind</span> p: Point) -&gt; <span class="keyword">int</span>     <span class="comment">; changes a field of its copy</span>
+    p.x = p.x + 1
+    &lt;- p.x
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> moves(<span class="keyword">flex</span> p: Point) -&gt; <span class="keyword">int</span>      <span class="comment">; assigns its copy whole</span>
+    p = Point { x: p.x + 1, y: p.y }
+    &lt;- p.x
+<span class="keyword">fi</span>
+
+<span class="keyword">fixed</span> e: (Point) -&gt; <span class="keyword">int</span> = moves               <span class="comment">; taken</span>
+<span class="keyword">fixed</span> f: (<span class="keyword">bind</span> Point) -&gt; <span class="keyword">int</span> = shifts       <span class="comment">; taken</span>
+<span class="keyword">fixed</span> g: (<span class="keyword">bind</span> Point) -&gt; <span class="keyword">int</span> = moves        <span class="comment">; the idea: refused, moves assigns p whole</span>
+<span class="keyword">fixed</span> h: (<span class="keyword">fixed</span> Point) -&gt; <span class="keyword">int</span> = shifts      <span class="comment">; the idea: refused, shifts changes a field</span></code></pre>
+
+        <h3>On a twofold value</h3>
+        <p>
+          Here the filter matters to the caller too. A slice, a map and a
+          pointer are
+          <a href="index.html#whole-twofold-place">twofold</a>: a task's copy of
+          one names the caller's items, so a task that changes them changes what
+          the caller sees. Narrowing the input range is then a promise about the
+          caller's data:
+        </p>
+        <pre><code><span class="keyword">task</span> total(xs: [<span class="keyword">int</span>]@r) -&gt; <span class="keyword">int</span>            <span class="comment">; reads the items</span>
+    <span class="keyword">flex</span> sum = 0
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        sum += x
+    <span class="keyword">fi</span>
+    &lt;- sum
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> zeroes(<span class="keyword">bind</span> xs: [<span class="keyword">int</span>]@r) -&gt; <span class="keyword">int</span>    <span class="comment">; writes items, keeps the length</span>
+    <span class="keyword">each</span> i <span class="keyword">in</span> 0..xs.len
+        xs[i] = 0
+    <span class="keyword">fi</span>
+    &lt;- xs.len
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> drain(<span class="keyword">flex</span> xs: [<span class="keyword">int</span>]@r) -&gt; <span class="keyword">int</span>     <span class="comment">; takes items out</span>
+    <span class="keyword">flex</span> sum = 0
+    <span class="keyword">loop</span> xs.len &gt; 0
+        sum += xs.del()
+    <span class="keyword">fi</span>
+    &lt;- sum
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> report(look: (<span class="keyword">fixed</span> [<span class="keyword">int</span>]@r) -&gt; <span class="keyword">int</span>, xs: [<span class="keyword">int</span>]@r)
+    show(look(xs))
+<span class="keyword">fi</span>
+
+report(total, scores)        <span class="comment">; taken</span>
+report(zeroes, scores)       <span class="comment">; the idea: refused, zeroes changes the items it is given</span>
+report(drain, scores)        <span class="comment">; the idea: refused, drain changes them too</span></code></pre>
+
+        <h3>What it is for</h3>
+        <ul>
+          <li>
+            <strong>A promise a reader sees in the type.</strong> A task taking
+            a callback marked <code>fixed</code> tells whoever calls it that the
+            callback leaves what it is given alone, without opening the
+            callback, and tells whoever writes the callback what it may not do.
+          </li>
+          <li>
+            <strong>Handing out read-only data safely.</strong> A call through a
+            <code>(fixed T) -&gt; Y</code> cannot change what it is given, so
+            such a call may be given what a <code>fixed</code> name owns (see
+            <a href="index.html#fixed-owns">What a fixed name owns</a>), which a
+            call through a type that may change it never is. The mark is what
+            buys that, as the plain type may not.
+          </li>
+          <li>
+            <strong>Checkers, validators and observers.</strong> A task that
+            looks at data to decide or log something has no business changing
+            it; the mark makes the type say so.
+          </li>
+          <li>
+            <strong>Middle ground.</strong> <code>(bind T)</code> allows a
+            callback that fixes up items in place, zeroing them or sorting them,
+            and still refuses one that grows the slice, takes items out, or
+            replaces a value whole, so the caller's length and place stay as
+            they were.
+          </li>
+          <li>
+            <strong>A plain type for everything else.</strong> A place that
+            takes a callback it will call on its own copies, and doesn't care
+            what the callback does to them, writes the plain type and takes
+            every task.
+          </li>
+        </ul>
+
+        <h3>How one limits the input range</h3>
+        <p>
+          The author of a type chooses the range by the mark written, from the
+          widest to the narrowest:
+        </p>
+        <ol>
+          <li><code>(T) -&gt; Y</code>: every task with that parameter.</li>
+          <li>
+            <code>(bind T) -&gt; Y</code>: no task that assigns the parameter
+            whole, or, on a twofold value, adds or takes out items of its copy.
+          </li>
+          <li>
+            <code>(fixed T) -&gt; Y</code>: only tasks that change nothing of
+            the parameter, not its contents either.
+          </li>
+        </ol>
+        <p>
+          A range is only ever narrowed, never widened: a value of the narrower
+          type goes where the wider is expected, as a
+          <code>(fixed T) -&gt; Y</code> task goes where
+          <code>(T) -&gt; Y</code> is, and never the other way. A task is held
+          by the type it was given, so one stored in a
+          <code>(T) -&gt; Y</code> variable, which may hold a task that changes,
+          is refused where a <code>(fixed T) -&gt; Y</code> is wanted.
+        </p>
+
+        <h3>Where it stands today <span class="badge b-built">built</span></h3>
+        <p>
+          Tested on commit <code>f44da22</code>, with the release compiler. The
+          idea is <strong>not built as described</strong>, in either of its two
+          differences:
+        </p>
+        <ul>
+          <li>
+            <strong>On a whole value, no filter at all.</strong>
+            <code>fixed</code>, <code>bind</code> and <code>flex</code> before
+            the type of a value copied whole read as nothing:
+            <code>(fixed int) -&gt; int</code>,
+            <code>(bind int) -&gt; int</code>,
+            <code>(flex int) -&gt; int</code> and
+            <code>(int) -&gt; int</code> are one type, and each takes
+            <code>reads</code> and <code>counts_down</code> alike. The marks are
+            allowed, and filter nothing (see
+            <a href="index.html#task-types-flex"
+              >A value the task changes through</a
+            >).
+          </li>
+          <li>
+            <strong
+              >On a twofold value, the filter exists with the plain type as its
+              narrowest end.</strong
+            >
+            <code>(fixed [int]@r) -&gt; int</code> is the same as
+            <code>([int]@r) -&gt; int</code>, and both take only a task that
+            reads. <code>(bind [int]@r) -&gt; int</code> takes tasks that read
+            or are written <code>bind</code>, and
+            <code>(flex [int]@r) -&gt; int</code> takes every task. So the order
+            is the idea's turned about: today the plain type is the strictest
+            and <code>flex</code> the widest, where the idea has the plain type
+            the widest.
+          </li>
+        </ul>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>A task of a twofold parameter that</th>
+                <th>
+                  <code>([int]@r) -&gt; int</code> and
+                  <code>(fixed [int]@r) -&gt; int</code>
+                </th>
+                <th><code>(bind [int]@r) -&gt; int</code></th>
+                <th><code>(flex [int]@r) -&gt; int</code></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>reads (<code>xs: [int]@r</code>)</td>
+                <td>taken</td>
+                <td>taken</td>
+                <td>taken</td>
+              </tr>
+              <tr>
+                <td>changes items (<code>bind xs</code>)</td>
+                <td>refused</td>
+                <td>taken</td>
+                <td>taken</td>
+              </tr>
+              <tr>
+                <td>adds or takes out (<code>flex xs</code>)</td>
+                <td>refused</td>
+                <td>refused</td>
+                <td>taken</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          That is the rule
+          <a href="safety.html#slice-copies">the safety page</a> and the
+          language reference describe, and the owner rule depends on it: a call
+          through a type that may change what it is given is never given what a
+          <code>fixed</code> name owns.
+        </p>
+
+        <h3>What building it would take</h3>
+        <ul>
+          <li>
+            The fit of one task type to another (<code>task_fits</code>,
+            <code>taken_for</code> and <code>fits_regions</code> in
+            <code>src/check.rs</code>) would order the three marks, as
+            <code>KeptMode</code> orders a lambda's, and keep the mark on a
+            whole value instead of reading it as nothing. The value stays of one
+            type, as the author says; what travels with it is how much of its
+            parameter the task may change, so a narrower one goes where a wider
+            is expected and not back.
+          </li>
+          <li>
+            A call through a type is checked as a call of a task with that
+            parameter, as today, so the owner rule would have the plain type
+            behave as <code>flex</code> does now (nothing a fixed name owns is
+            given to it) and the <code>fixed</code> mark behave as the plain
+            type does now.
+          </li>
+          <li>
+            Messages, hover and completion in Vela Studio, the run tests and
+            fail fixtures for each cell of the tables, and an example, as for
+            any feature.
+          </li>
+        </ul>
+
+        <h3>Questions for the author <span class="badge b-open">open</span></h3>
+        <ol>
+          <li>
+            <strong>The twofold order.</strong> The idea makes the plain type
+            the widest. Today the plain type is the strictest on a twofold
+            value, and <code>flex</code> is the widest mark. Is the plain type
+            to become the widest, so a task that changes a slice's items now
+            needs <code>(flex [int]@r)</code> and would then be taken by
+            <code>([int]@r)</code> (breaking, as every program that writes a
+            plain type for a reading callback would take changing ones too)? Or
+            does the filter apply only on a whole value, and the twofold rule
+            stay as it is?
+          </li>
+          <li>
+            <strong>The fate of <code>flex</code> in a task's type.</strong> If
+            the plain type becomes the widest, <code>(flex T)</code> would say
+            what <code>(T)</code> says. Is it dropped, kept as a synonym, or
+            kept to mean a task that changes?
+          </li>
+          <li>
+            <strong>Same type, shown the same.</strong> Is the mark part of how
+            a type is written, so <code>.type</code> and messages show
+            <code>(fixed int) -&gt; int</code> for one, or does a value show the
+            plain type, and may a <code>(fixed int) -&gt; int</code> value be
+            compared with <code>==</code> with a
+            <code>(int) -&gt; int</code> one?
+          </li>
+          <li>
+            <strong>Other places that take a task.</strong> The same filter on a
+            lambda's type, a wrapper's <code>next</code>, and a type group's
+            task, <code>(fixed P...) -&gt; R</code>?
+          </li>
+          <li>
+            <strong>A generic parameter.</strong>
+            <code>(fixed T) -&gt; Y</code> in a task that takes types, where
+            <code>T</code> may be a whole value or a twofold one: the same rule
+            for the type each copy is given?
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 id="how">Adding to this page</h2>
+        <p>
+          An entry names the trick, says what it filters or limits, shows it on
+          a small program, says what it is for, and says where it stands in the
+          compiler today, tested. When a trick is built, its entry says so, and
+          links to where the guide explains it.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Vela — small words, with more than one job.</p>
+    </footer>
+  </body>
+</html>

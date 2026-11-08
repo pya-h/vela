@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela Library</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --code-bg: #1e293b;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      header {
+        padding: 4rem 1rem 3rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(56, 189, 248, 0.1) 0%,
+          transparent 100%
+        );
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      h1 span {
+        color: var(--accent);
+      }
+      .tagline {
+        margin-top: 0.75rem;
+        font-size: 1.25rem;
+        color: var(--muted);
+      }
+      main {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 3rem;
+        font-size: 1.75rem;
+        color: var(--accent-2);
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h3 {
+        margin-top: 2rem;
+        color: var(--accent);
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code,
+      pre {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        font-size: 0.95rem;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        color: var(--accent);
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.5;
+      }
+      .keyword {
+        color: #c084fc;
+      }
+      .type {
+        color: #38bdf8;
+      }
+      .string {
+        color: #86efac;
+      }
+      .comment {
+        color: #8b9ab0;
+        font-style: italic;
+      }
+      .number {
+        color: #fbbf24;
+      }
+      ul {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+      }
+      th,
+      td {
+        padding: 0.45rem 0.6rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vela<span>.</span> Library</h1>
+      <p class="tagline">
+        The modules that come with the compiler, under <code>std</code>.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html" aria-current="page">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <section>
+        <h2 id="using">Using the library</h2>
+        <p>
+          Vela's library is a set of modules written in Vela that come with the
+          compiler. A program brings one in the way it brings in a
+          <a href="index.html#modules">module of its own</a>, with
+          <code>include</code> and a path that starts with <code>std</code>:
+        </p>
+        <pre><span class="keyword">include</span> std/files {File}          <span class="comment">; File, by its own name</span>
+<span class="keyword">include</span> std/files                 <span class="comment">; or through the module: files.File</span>
+<span class="keyword">include</span> std/files =&gt; disk         <span class="comment">; or under a name of the file's choosing: disk.File</span></pre>
+        <p>
+          Nothing is read from the disk to find it: the library is part of the
+          compiler, so the command, Vela Studio, and the web editor all have the
+          same library, and a program needs nothing installed beside the
+          compiler. Everything the
+          <a href="index.html#modules">module rules</a> say holds for it too:
+          <code>priv</code> keeps what a module keeps to itself, names brought
+          in may be renamed with <code>=&gt;</code>, and a file includes each
+          module once.
+        </p>
+        <ul>
+          <li>
+            <strong><code>std</code> is not a word.</strong> It is only the
+            first part of a path on an <code>include</code> line, the way
+            <code>std::</code> starts a name in C++. A variable, a task, or a
+            field may still be called <code>std</code>.
+          </li>
+          <li>
+            <strong>A module is named.</strong> <code>include std</code> alone
+            is refused:
+            <em
+              >'std' is Vela's library, not one of its modules; include a module
+              of it, as in 'include std/files'</em
+            >. So is a module the library doesn't have, and the message lists
+            the ones it does.
+          </li>
+          <li>
+            <strong
+              >A program's folder can't be called <code>std</code>.</strong
+            >
+            A module in a folder named <code>std</code> beside the main file
+            would have a name that reads as the library's, so it is refused:
+            <em
+              >'../std/helpers' is in a folder named 'std' beside the main file,
+              which would read as Vela's library; give the folder another
+              name</em
+            >.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="collections">std/collections</h2>
+        <p>
+          Lazy <a href="index.html#iterators">iterators</a> and eager tasks over
+          the items of a <a href="index.html#slices">slice</a>. The pattern
+          <code>Iterator&lt;T&gt;</code> is one <code>next()</code> after
+          another; a slice has its chain members (<code>map</code>,
+          <code>filter</code>, <code>take</code>, <code>skip</code>,
+          <code>zip</code>, <code>enumerate</code>, and the consumers
+          <code>collect</code>, <code>fold</code>, <code>find</code>,
+          <code>all</code>, <code>any</code>) in a file that includes the
+          module, each step reading the one before it and gathering nothing
+          until a consumer asks. <code>zip</code> gives <code>Pair</code> shapes
+          (<code>.first</code>, <code>.second</code>) and
+          <code>enumerate</code> gives
+          <code>Indexed</code> (<code>.index</code>, <code>.item</code>); either
+          side of <code>zip</code> may be a slice, read as its own iterator. The
+          shapes <code>Iterator</code>, <code>Pair</code>, <code>Indexed</code>,
+          and <code>SliceIter</code> are brought in by name; the chain members
+          need no import, and <code>each x in it</code> goes through any
+          iterator.
+        </p>
+        <p>
+          The eager tasks are written to be read in a
+          <a href="index.html#pipes">pipe</a>: each takes the slice first, then
+          what it does with an item (a task value, or a
+          <a href="index.html#shortcut-lambdas">one-line lambda</a>, whose types
+          the slice tells), then, for those that make a new slice, the region it
+          goes in, last, so <code>at r</code> gives it. Brought in with
+          <code>include std/collections (map, filter)</code>, or named
+          <code>collections.map(…)</code> after
+          <code>include std/collections</code>.
+        </p>
+        <pre><span class="keyword">include</span> std/collections (map, filter, fold, take)
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> nums = <span class="keyword">new</span> [<span class="type">int</span>]([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]) <span class="keyword">at</span> r
+    show(nums |&gt; filter(n -&gt; n &gt; <span class="number">2</span>) <span class="keyword">at</span> r |&gt; map(n -&gt; n * <span class="number">10</span>) <span class="keyword">at</span> r)   <span class="comment">; [30, 40, 50]</span>
+    show(nums |&gt; fold(<span class="number">0</span>, (sum, n) -&gt; sum + n))                   <span class="comment">; 15</span>
+    show(nums |&gt; take(<span class="number">2</span>))                                          <span class="comment">; [1, 2], a view of nums</span>
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Task</th>
+            <th>What it gives</th>
+          </tr>
+          <tr>
+            <td><code>map(xs, f, r) -&gt; [R]@r</code></td>
+            <td>
+              a new slice in <code>r</code> of what <code>f</code> gives for
+              each item, in order
+            </td>
+          </tr>
+          <tr>
+            <td><code>filter(xs, keep, r) -&gt; [T]@r</code></td>
+            <td>
+              a new slice in <code>r</code> of the items <code>keep</code> holds
+              for, in order
+            </td>
+          </tr>
+          <tr>
+            <td><code>fold(xs, initial, step) -&gt; A</code></td>
+            <td>
+              <code>initial</code>, then <code>step</code> of it and each item
+              in turn: <code>fold(xs, 0, (sum, n) -&gt; sum + n)</code> adds
+              them up; makes no memory
+            </td>
+          </tr>
+          <tr>
+            <td><code>zip(xs, ys, r) -&gt; [(A, B)]@r</code></td>
+            <td>
+              a new slice in <code>r</code> of pairs of the items at the same
+              place, as long as the shorter slice
+            </td>
+          </tr>
+          <tr>
+            <td><code>enumerate(xs, r) -&gt; [(int, T)]@r</code></td>
+            <td>
+              a new slice in <code>r</code> of each item with its place, from 0
+            </td>
+          </tr>
+          <tr>
+            <td><code>take(xs, n) -&gt; [T]@a</code></td>
+            <td>
+              the first <code>n</code> items, a view of the same slice; all of
+              them when it has fewer, none when <code>n</code> is below 1
+            </td>
+          </tr>
+          <tr>
+            <td><code>skip(xs, n) -&gt; [T]@a</code></td>
+            <td>
+              the items after the first <code>n</code>, a view of the same
+              slice; none when it has <code>n</code> or fewer
+            </td>
+          </tr>
+          <tr>
+            <td><code>find(xs, test) -&gt; maybe T</code></td>
+            <td>
+              the first item <code>test</code> holds for, or <code>none</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>all(xs, test) -&gt; bool</code></td>
+            <td>
+              whether <code>test</code> holds for every item; true for none
+            </td>
+          </tr>
+          <tr>
+            <td><code>any(xs, test) -&gt; bool</code></td>
+            <td>
+              whether <code>test</code> holds for some item; false for none
+            </td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <strong>Eager.</strong> Each task goes through all the items when it
+            is called, and <code>map</code>, <code>filter</code>,
+            <code>zip</code> and <code>enumerate</code> make their slice at
+            once, so a pipe of two of them makes one slice in between. Lazy
+            chains that make nothing until collected are planned (see
+            <a href="future-2.html#iterator-improvements"
+              >Iterators &amp; Collection Pipelines</a
+            >).
+          </li>
+          <li>
+            <strong>Slices only.</strong> An array never becomes a slice, so
+            <code>[1, 2, 3] |&gt; map(…)</code> is refused with a message saying
+            so: write the values as a slice, <code>[1, 2, 3] at r</code>, or
+            copy them into one.
+          </li>
+          <li>
+            <strong
+              ><code>zip</code> and <code>enumerate</code> make tuples,</strong
+            >
+            whose items never change, so their items are
+            <code>frozen</code> types: numbers, bools, text, and tuples and
+            shapes of those, not slices or pointers.
+          </li>
+          <li>
+            <strong>A lambda takes nothing from the code around it</strong>, so
+            a one-line lambda given here reads only its item and what the file
+            declares, and makes no memory in a region of the caller; one that
+            keeps what it uses (<code>[@r]</code>) goes only where the task's
+            type says <code>[@r]</code>, which these don't.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="files">std/files</h2>
+        <p>
+          Files on the disk. A <code>File</code> is made from its path, and
+          making one opens nothing: it is a value that names a file, which its
+          methods ask about, open, read, write, rename, and delete. A file is
+          opened in a <a href="regions.html">region</a>, which closes it when
+          its block ends, as it frees its memory (a
+          <a href="index.html#blocks"><code>block … fi</code></a> makes a block
+          anywhere, for just that); <code>close()</code> closes it sooner.
+          Everything that touches the disk can fail, with a
+          <a href="#file-error"><code>FileError</code></a> that a
+          <a href="index.html#maybe">plan B</a> handles.
+        </p>
+        <pre><span class="keyword">include</span> std/files {File, FileMode}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> notes = File { path: "notes.txt" }
+    notes.open(FileMode.Write) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+    notes.write("first line\n") { <span class="keyword">failure</span> e
+        show("could not write")
+    }
+    notes.close() { <span class="keyword">failure</span> e
+        show("could not close")
+    }
+    notes.open(FileMode.Read) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+    <span class="keyword">loop</span> notes.line() <span class="keyword">at</span> r { <span class="keyword">none</span> } <span class="keyword">is</span> {line}
+        show(line)                  <span class="comment">; first line</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>                              <span class="comment">; r's block ends, and closes the file</span></pre>
+
+        <h3 id="file">File</h3>
+        <p>
+          Its fields are
+          <a href="index.html#read-fields"><code>read</code></a> fields: any
+          code reads them, and only File's own <code>alters</code> methods
+          change them. <code>path</code> is given when a File is made; the
+          others start at their own values, which no literal gives.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>What it is</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>path: text</code></td>
+              <td>The path the File names.</td>
+            </tr>
+            <tr>
+              <td><code>state: FileState</code></td>
+              <td>
+                What its methods left it: <code>Idle</code> until opened, then
+                <code>Open</code>, <code>Closed</code>, or
+                <code>Gone</code> once deleted.
+              </td>
+            </tr>
+            <tr>
+              <td><code>mode: maybe FileMode</code></td>
+              <td>How it was opened last; <code>none</code> before then.</td>
+            </tr>
+            <tr>
+              <td><code>alters open(mode) at r</code></td>
+              <td>
+                Opens the file as <code>mode</code> says, until
+                <code>close()</code> or the end of <code>r</code>'s block. Fails
+                with <code>AlreadyOpen</code> on a file open already, and
+                <code>NotFound</code> or <code>NotAllowed</code> when the system
+                says so.
+              </td>
+            </tr>
+            <tr>
+              <td><code>alters close()</code></td>
+              <td>
+                Closes the file. On one that isn't open, fails with
+                <code>NotOpen</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>read() at r -&gt; text@r</code></td>
+              <td>The rest of the file, from where reading is.</td>
+            </tr>
+            <tr>
+              <td><code>line() at r -&gt; maybe text@r</code></td>
+              <td>
+                The next line without its line break (a Windows
+                <code>\r\n</code> as well); <code>none</code> at the end. A last
+                line without a line break is still a line.
+              </td>
+            </tr>
+            <tr>
+              <td><code>lines() at r -&gt; [text@r]@r</code></td>
+              <td>The rest of the file, line by line.</td>
+            </tr>
+            <tr>
+              <td><code>write(t)</code></td>
+              <td>Writes <code>t</code>, of any region, where writing is.</td>
+            </tr>
+            <tr>
+              <td><code>ended() -&gt; bool</code></td>
+              <td>
+                Whether nothing more can be read: at the end, or not open for
+                reading.
+              </td>
+            </tr>
+            <tr>
+              <td><code>size() -&gt; int</code></td>
+              <td>
+                How many bytes the file has; an open one with what was written
+                so far.
+              </td>
+            </tr>
+            <tr>
+              <td><code>exists() -&gt; bool</code></td>
+              <td>
+                Whether a file that can be read is at the path. A folder, or a
+                file the program may not read, is not one, and neither is a path
+                holding a zero byte.
+              </td>
+            </tr>
+            <tr>
+              <td><code>alters rename(to)</code></td>
+              <td>
+                Gives the file another path, on the disk and in
+                <code>path</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>alters delete()</code></td>
+              <td>
+                Deletes the file, closing it first when it is open; its state is
+                then <code>Gone</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>str() at r -&gt; text@r</code></td>
+              <td>The path and the state: <code>notes.txt (open)</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          Each of <code>read</code>, <code>line</code>, <code>lines</code>,
+          <code>write</code>, <code>size</code>, <code>rename</code>, and
+          <code>delete</code> can fail, and their results are
+          <code>~ FileError</code>. The methods marked
+          <code>alters</code> change the File, so they are called on a
+          <code>flex</code> variable (or through a pointer). The ones that take
+          a region take it last, so it is written after the call:
+          <code>notes.read() at r</code>, as
+          <a href="index.html#region-after-call">any such call</a> may.
+        </p>
+
+        <h3 id="file-mode">FileMode</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Opens the file to</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Read</code></td>
+              <td>read it from its start; it must be there.</td>
+            </tr>
+            <tr>
+              <td><code>Write</code></td>
+              <td>
+                write it from its start, emptied first, and made when it isn't
+                there.
+              </td>
+            </tr>
+            <tr>
+              <td><code>Append</code></td>
+              <td>write at its end, and made when it isn't there.</td>
+            </tr>
+            <tr>
+              <td><code>ReadWrite</code></td>
+              <td>
+                read and write it; it must be there. Reading and writing go on
+                from the same place.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3 id="file-error">FileError</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>When</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>NotFound</code></td>
+              <td>There is no file at the path, or none that can be read.</td>
+            </tr>
+            <tr>
+              <td><code>NotAllowed</code></td>
+              <td>The system doesn't let the program open it so.</td>
+            </tr>
+            <tr>
+              <td><code>AlreadyOpen</code></td>
+              <td>Opened again before it was closed.</td>
+            </tr>
+            <tr>
+              <td><code>NotOpen</code></td>
+              <td>
+                Not open: never opened, closed, deleted, or closed by its region
+                or by a copy.
+              </td>
+            </tr>
+            <tr>
+              <td><code>WrongMode</code></td>
+              <td>
+                Read when opened only to write, or written when opened only to
+                read.
+              </td>
+            </tr>
+            <tr>
+              <td><code>Failed</code></td>
+              <td>Anything else the system reports.</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          <code>NotFound</code> and <code>NotAllowed</code> are told apart where
+          the system's C library says which; where it doesn't, a failure to open
+          is <code>Failed</code>.
+        </p>
+
+        <h3 id="file-regions">Regions and copies</h3>
+        <p>
+          The region a file is opened in owns it: when the region's block ends,
+          the file is closed, even when a File naming it lives on outside the
+          block. A File is a value, and a copy of it names the same open file,
+          so closing either closes it for both. Neither can tell the File they
+          didn't close, so its
+          <code>state</code> still says <code>Open</code> until one of its own
+          methods finds out: every method then finds the file closed, and fails
+          with <code>NotOpen</code>, never reaching a file opened since (a
+          <code>close()</code> that finds it so sets <code>state</code> to
+          <code>Closed</code>). The state is what the File's methods left it,
+          and what the file is, its methods tell.
+        </p>
+        <pre><span class="keyword">region</span> r
+<span class="keyword">flex</span> kept = File { path: "notes.txt" }
+<span class="keyword">each</span> pass <span class="keyword">in</span> 0..1
+    <span class="keyword">region</span> round
+    kept.open(FileMode.Read) <span class="keyword">at</span> round { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+<span class="keyword">fi</span>                                  <span class="comment">; round's block ends, and closes the file</span>
+show(kept.str() <span class="keyword">at</span> r)                <span class="comment">; notes.txt (open): what open left it</span>
+show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+    "closed"                        <span class="comment">; NotOpen, so the plan B runs</span>
+})                                  <span class="comment">; { "closed" }: line() gives a maybe text, none at the end</span></pre>
+        <p>
+          <code>examples/files.vela</code> is a whole program: a list written to
+          a file, added to, read back line by line, and deleted.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="int512">std/int512</h2>
+        <p>
+          512-bit signed integers in two's complement, <code>Int512</code>.
+          Brought in with
+          <code>include std/int512 {Int512, int512, zero512}</code>. A value is
+          held across eight 64-bit unsigned limbs, lowest limb first. Every
+          arithmetic operation strictly follows Vela's checked-arithmetic
+          safety: any overflow past 512 bits or division by zero immediately
+          stops the program with an informative runtime trap.
+          <code>Int512</code> follows the module's
+          <code>Numeric&lt;T&gt;</code> pattern, so it also answers the
+          <a href="index.html#operators">operators the pattern names</a>:
+          <code>a + b</code>, <code>a * b</code>, <code>-a</code>, and
+          <code>a &lt; b</code> read as the methods plus, times, neg, and cmp,
+          both operands <code>Int512</code>.
+        </p>
+        <pre><span class="keyword">include</span> std/int512 {Int512, int512, int512_parse}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> a = int512(<span class="number">1000</span>)
+    <span class="keyword">fixed</span> b = int512_parse(<span class="string">"98765432101234567890"</span>) { Int512.zero() }
+    <span class="keyword">fixed</span> c = a.times(b)
+    show(c.str(r))                          <span class="comment">; 98765432101234567890000</span>
+    show(<span class="string">"{a} / 3 = {a.div(int512(3))}"</span> <span class="keyword">at</span> r)
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Operation / Member</th>
+            <th>What it does</th>
+          </tr>
+          <tr>
+            <td>
+              <code>plus(other)</code>, <code>minus(other)</code>,
+              <code>times(other)</code>
+            </td>
+            <td>
+              addition, subtraction, and multiplication; traps on signed
+              overflow
+            </td>
+          </tr>
+          <tr>
+            <td><code>div(other)</code>, <code>rem(other)</code></td>
+            <td>
+              quotient (truncated toward zero) and remainder; traps on division
+              by zero or <code>MIN / -1</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>neg()</code>, <code>abs()</code></td>
+            <td>negation and absolute value; traps on <code>MIN</code></td>
+          </tr>
+          <tr>
+            <td><code>cmp(other)</code>, <code>less(other)</code></td>
+            <td>
+              compares values: <code>cmp</code> gives -1, 0, or 1;
+              <code>less</code> gives <code>bool</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>to_int64()</code>, <code>to_uint64()</code></td>
+            <td>
+              converts to primitive 64-bit integer; traps if the value does not
+              fit
+            </td>
+          </tr>
+          <tr>
+            <td><code>str(r: region)</code></td>
+            <td>
+              formats the integer as decimal text into region <code>r</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Int512.zero()</code>, <code>Int512.one()</code></td>
+            <td>shared constants for 0 and 1</td>
+          </tr>
+          <tr>
+            <td>
+              <code>Int512.min_value()</code>, <code>Int512.max_value()</code>
+            </td>
+            <td>
+              the smallest (&minus;2<sup>511</sup>) and largest (2<sup>511</sup>
+              &minus; 1) 512-bit signed integers
+            </td>
+          </tr>
+          <tr>
+            <td><code>Int512.from_int(n)</code>, <code>int512(n)</code></td>
+            <td>creates an <code>Int512</code> from an <code>int64</code></td>
+          </tr>
+          <tr>
+            <td><code>int512_from_uint64(n)</code></td>
+            <td>creates an <code>Int512</code> from a <code>uint64</code></td>
+          </tr>
+          <tr>
+            <td><code>int512_parse(s)</code>, <code>Int512.parse(s)</code></td>
+            <td>
+              parses text (decimal, or base prefix <code>0x</code>,
+              <code>0o</code>, <code>0b</code>); gives
+              <code>Int512 ~ ParseError</code>
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2 id="loops">std/loops</h2>
+        <p>
+          What a
+          <a href="index.html#loop-values">loop that gives a value</a> fails
+          with, <code>LoopResult&lt;B, M&gt;</code>: a kind that takes types,
+          written in Vela. A loop gives a value in any file, with or without
+          this module; a file that writes <code>LoopResult</code> itself, in a
+          type or a variant, brings it in by name (<em
+            >unknown type 'LoopResult'; it is in Vela's library, and 'include
+            std/loops {LoopResult}' brings it in</em
+          >). A <code>case Broke b</code> on a loop's failure names no kind, and
+          needs no include.
+        </p>
+        <pre><span class="keyword">include</span> std/loops {LoopResult}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> last = <span class="number">0</span>
+    <span class="keyword">fixed</span> found: int ~ LoopResult = <span class="keyword">each</span> x <span class="keyword">in</span> [<span class="number">2</span>, <span class="number">7</span>, <span class="number">4</span>]
+        <span class="keyword">when</span> x &gt; <span class="number">5</span>
+            <span class="keyword">break</span> = x
+        <span class="keyword">fi</span>
+        last = x
+    <span class="keyword">finally</span>
+        <span class="keyword">when</span> last == <span class="number">4</span> <span class="keyword">fail</span> LoopResult.Manual(<span class="string">"four"</span>) <span class="keyword">else</span> last <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(found { <span class="number">0</span> })                  <span class="comment">; 0: a break stopped it at 7</span>
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Variant</th>
+            <th>Why the loop has no value</th>
+          </tr>
+          <tr>
+            <td><code>Skipped</code></td>
+            <td>
+              its body never ran: the condition failed at once, or there was
+              nothing to go through
+            </td>
+          </tr>
+          <tr>
+            <td><code>Broke(value: maybe B)</code></td>
+            <td>
+              a <code>break</code> stopped it, with what
+              <code>break = v</code> gave, or <code>none</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>EndedByContinue</code></td>
+            <td>
+              its final pass ended with <code>continue</code>, before the last
+              line
+            </td>
+          </tr>
+          <tr>
+            <td><code>Manual(value: M)</code></td>
+            <td>
+              the last line of its final pass failed with
+              <code>fail LoopResult.Manual(m)</code>
+            </td>
+          </tr>
+        </table>
+        <p>
+          <code>B</code> is what the loop's <code>break</code>s give and
+          <code>M</code> what its last lines fail with, each taken from the
+          place the value goes where the loop gives none, and
+          <code>bool</code> where no place names it either. On a loop's own
+          variable, a bare <code>LoopResult</code> takes the loop's types, as
+          <code>found</code> does above; anywhere else they are written,
+          <code>LoopResult&lt;int, text&gt;</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="math">std/math</h2>
+        <p>
+          Numbers beyond arithmetic: the <a href="index.html#macros">macros</a>
+          <code>P</code> (pi) and <code>e</code>, and tasks for powers,
+          trigonometry, exponentials, and logarithms. Every task takes and gives
+          <code>float</code>s, so an int is written as a float
+          (<code>math.sin(1.0)</code>) or turned into one
+          (<code>math.sin(float(n))</code>). Angles are in radians.
+        </p>
+        <pre><span class="keyword">include</span> std/math (P, e, sin)
+
+<span class="keyword">task</span> main()
+    show(sin(P / 2.0))              <span class="comment">; 1</span>
+    show(math.cos(P))               <span class="comment">; -1</span>
+    show(e ** 2.0)                  <span class="comment">; 7.38906, computed as math.exp(2.0)</span>
+    show(math.log(1000.0))          <span class="comment">; 3, base 10 when none is given</span>
+    show(math.log(8.0, 2.0))        <span class="comment">; 3</span>
+    show(math.log(e, e))            <span class="comment">; 1, the natural logarithm</span>
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Name</th>
+            <th>What it is</th>
+          </tr>
+          <tr>
+            <td><code>P</code></td>
+            <td>pi, 3.141592653589793, a macro</td>
+          </tr>
+          <tr>
+            <td><code>e</code></td>
+            <td>
+              Euler's number, 2.718281828459045, a macro;
+              <code>math.e ** x</code> is computed as <code>math.exp(x)</code>,
+              which C works out more closely than a power
+            </td>
+          </tr>
+          <tr>
+            <td><code>pow(x, y)</code></td>
+            <td>
+              <code>x</code> raised to the power <code>y</code>, as
+              <a href="index.html#powers"><code>x ** y</code></a> is for floats
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>sin(x)</code>, <code>cos(x)</code>, <code>tan(x)</code>
+            </td>
+            <td>the sine, cosine, and tangent of an angle</td>
+          </tr>
+          <tr>
+            <td>
+              <code>asin(x)</code>, <code>acos(x)</code>, <code>atan(x)</code>
+            </td>
+            <td>the angle whose sine, cosine, or tangent is <code>x</code></td>
+          </tr>
+          <tr>
+            <td>
+              <code>sinh(x)</code>, <code>cosh(x)</code>, <code>tanh(x)</code>
+            </td>
+            <td>the hyperbolic sine, cosine, and tangent</td>
+          </tr>
+          <tr>
+            <td><code>exp(x)</code></td>
+            <td><code>e</code> raised to the power <code>x</code></td>
+          </tr>
+          <tr>
+            <td><code>log(x, base = 10.0)</code></td>
+            <td>
+              the power <code>base</code> is raised to for <code>x</code>, base
+              10 when the call leaves it out (see
+              <a href="index.html#optional-arguments">optional arguments</a>);
+              with <code>e</code> it is the natural logarithm. Bases 2, 10, and
+              <code>e</code> are C's own <code>log2</code>, <code>log10</code>,
+              and <code>log</code>, which are exact where a quotient of
+              logarithms may not be.
+            </td>
+          </tr>
+        </table>
+        <p>
+          A value outside what a task takes gives what C's gives, as float
+          arithmetic does: <code>math.log(-1.0)</code> and
+          <code>math.asin(2.0)</code> are nan, and <code>math.log(0.0)</code> is
+          -inf. Nothing stops the program. <code>math.P</code> and
+          <code>math.e</code> are macros, so nothing can change them (<em
+            >'P' is a macro, a value that never changes, not a variable</em
+          >), and a file that brings in <code>e</code> by name can't name a
+          variable <code>e</code>; one that writes <code>math.e</code> can.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="web">std/web</h2>
+        <p>
+          Non-blocking networking, HTTP/1.1 request/response shapes,
+          pattern-matching routers, decorator-based route registration, and
+          composable call-time middleware. Brought in with
+          <code
+            >include std/web {Socket, Request, Response, Method, WebError, get,
+            post, serve}</code
+          >
+          or <code>include std/web =&gt; web</code>. See also the architectural
+          guide in <a href="web.html">docs/web.html</a>.
+        </p>
+        <pre><span class="keyword">include</span> std/web {Socket, Request, Response, WebError, get, post, serve}
+
+<span class="keyword">task</span> auth(next: (Request@r, @r) -&gt; Response@r ~ WebError@r, req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">when</span> req.header(<span class="string">"authorization"</span>) <span class="keyword">is</span> {token}
+        <span class="keyword">when</span> token == <span class="string">"Bearer secret"</span>
+            &lt;- next(req, r)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    &lt;- <span class="keyword">fail</span> WebError.Unauthorized(<span class="string">"invalid token"</span>)
+<span class="keyword">fi</span>
+
+$get(<span class="string">"/greeting/\{name\}"</span>)
+<span class="keyword">task</span> greet(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">fixed</span> name = req.param(<span class="string">"name"</span>) { <span class="string">"friend"</span> }
+    &lt;- Response.text(<span class="string">"Hello, {name}!\n"</span> <span class="keyword">at</span> r, r)
+<span class="keyword">fi</span>
+
+$get(<span class="string">"/secret"</span>)
+$(auth)
+<span class="keyword">task</span> secret_panel(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    &lt;- Response.text(<span class="string">"Confidential data\n"</span>, r)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    serve(<span class="string">"127.0.0.1:8080"</span>) { <span class="keyword">failure</span> err
+        show(<span class="string">"server stopped: "</span>, err)
+    }
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+          </tr>
+          <tr>
+            <td><code>Socket</code></td>
+            <td>
+              Non-blocking TCP socket handle (<code>open</code>,
+              <code>bind_to</code>, <code>listen</code>, <code>accept</code>,
+              <code>connect</code>, <code>read</code>, <code>write</code>,
+              <code>close</code>, <code>poll</code>)
+            </td>
+          </tr>
+          <tr>
+            <td><code>Request@r</code></td>
+            <td>
+              HTTP request: <code>.method</code>, <code>.path</code>,
+              <code>.raw_query</code>, <code>.headers</code>,
+              <code>.body_data</code>, <code>.header(name)</code>,
+              <code>.query(name)</code>, <code>.param(name)</code>,
+              <code>.body()</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Response@r</code></td>
+            <td>
+              HTTP response: <code>Response.text(body, r)</code>,
+              <code>Response.html(body, r)</code>,
+              <code>Response.with_status(code, r)</code>,
+              <code>Response.redirect(to, r)</code>, <code>.header(k, v)</code>,
+              <code>.set_body(v)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>WebError</code></td>
+            <td>
+              Failure kind: <code>ListenFailed</code>,
+              <code>BadRequest(why)</code>, <code>PayloadTooLarge</code>,
+              <code>RouteNotFound(where)</code>,
+              <code>MethodNotAllowed(method, path)</code>,
+              <code>Unauthorized(why)</code>, <code>ServerFailed(why)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>$get, $post, $put, $patch, $delete, $route</code></td>
+            <td>
+              Startup decorators that register handlers to the default router
+              before <code>main</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Router</code></td>
+            <td>
+              Programmatic router shape: <code>Router.new()</code>,
+              <code>.get(pattern, h)</code>, <code>.post(pattern, h)</code>,
+              <code>.enroll(method_code, pattern, h)</code>,
+              <code>.route(req, r)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>serve(addr, handler)</code></td>
+            <td>
+              Listens on TCP address and handles incoming HTTP requests
+              sequentially (or with event loop)
+            </td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <strong>Path parameters and wildcards.</strong> Patterns like
+            <code>/users/\{id\}</code> capture dynamic path segments accessible
+            via <code>req.param("id")</code>. Wildcards like
+            <code>/assets/*</code> capture remaining path text via
+            <code>req.param("*")</code>.
+          </li>
+          <li>
+            <strong>Method-aware routing.</strong> If a route's path matches but
+            the request method does not, the router automatically fails with
+            <code>WebError.MethodNotAllowed</code>, yielding HTTP 405. If no
+            route matches, it fails with <code>WebError.RouteNotFound</code>,
+            yielding HTTP 404.
+          </li>
+          <li>
+            <strong>Composable middleware.</strong> Decorators like
+            <code>$(auth, logged)</code> wrap handlers at call time,
+            intercepting requests and short-circuiting on failure with typed
+            errors such as <code>WebError.Unauthorized</code>.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="native">How the library is made</h2>
+        <p>
+          The library is Vela source in the repository's
+          <code>std/</code> folder, which the compiler holds as it is built.
+          Most of it is Vela like any program's. What Vela itself can't do, such
+          as asking the system about a file, is a <em>native</em> task: its
+          header is Vela, and its body is a function of the runtime that the
+          generated C includes.
+        </p>
+        <pre><span class="comment">; std/files.vela</span>
+<span class="keyword">priv native task</span> path_exists(path: text@p) -&gt; bool</pre>
+        <p>
+          A native task has no body and no <code>fi</code>, and the compiler
+          writes its body as a call of the runtime function
+          <code>src/library.rs</code> names for it. Only the library has them:
+          in a program, <code>native task</code> is refused (<em
+            >'native' marks a task whose body the compiler writes in C, which
+            only Vela's library has</em
+          >), so the library is not a way to call any C a program likes. Like
+          <code>read</code>, <code>native</code> is a word only there, so a
+          program may still name anything <code>native</code>. The runtime's
+          functions use standard C11 alone, so a program that uses the library
+          builds wherever any other does. <code>std/math</code>'s tasks are
+          native ones whose bodies are C's own functions of <code>math.h</code>,
+          and its <code>P</code> and <code>e</code> are macros like any
+          program's.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Vela — a minimal systems language experiment.</p>
+    </footer>
+  </body>
+</html>

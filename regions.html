@@ -1,0 +1,3697 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela Regions</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --bg-2: #111827;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --good: #34d399;
+        --bad: #f472b6;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      header {
+        padding: 4rem 1rem 3rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(45, 212, 191, 0.1) 0%,
+          transparent 100%
+        );
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.25rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      h1 span {
+        color: #2dd4bf;
+      }
+      .tagline {
+        margin: 0.75rem auto 0;
+        max-width: 640px;
+        font-size: 1.2rem;
+        color: var(--muted);
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 3.5rem;
+        font-size: 1.75rem;
+        color: var(--accent-2);
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h3 {
+        margin-top: 2.25rem;
+        color: var(--accent);
+      }
+      h4 {
+        margin: 1.75rem 0 0.5rem;
+        color: var(--fg);
+        font-size: 1.05rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code,
+      pre {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        font-size: 0.93rem;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        color: var(--accent);
+        overflow-wrap: anywhere;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.1rem 1.25rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.5;
+      }
+      pre.output {
+        margin-top: -0.5rem;
+        background: var(--bg-2);
+        border-style: dashed;
+        color: var(--muted);
+      }
+      pre.output::before {
+        content: "Output";
+        display: block;
+        font-family: system-ui, sans-serif;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 0.25rem;
+      }
+      .keyword {
+        color: #c084fc;
+      }
+      .string {
+        color: #86efac;
+      }
+      .comment {
+        color: #8b9ab0;
+        font-style: italic;
+      }
+      .number {
+        color: #fbbf24;
+      }
+      main a {
+        color: var(--accent);
+      }
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .note.warn {
+        background: rgba(250, 204, 21, 0.07);
+        border-left-color: #facc15;
+      }
+      .note > :first-child {
+        margin-top: 0;
+      }
+      .note > :last-child {
+        margin-bottom: 0;
+      }
+      .toc {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem 1.5rem;
+      }
+      .toc ol {
+        margin: 0.25rem 0;
+      }
+      .toc li {
+        margin: 0.2rem 0;
+      }
+      .pros-cons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        margin: 1.25rem 0;
+      }
+      .pros,
+      .cons {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+      }
+      .pros h3,
+      .cons h3 {
+        margin: 0;
+      }
+      .pros h3 {
+        color: var(--good);
+      }
+      .cons h3 {
+        color: var(--bad);
+      }
+      .idea {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 0.25rem 1.25rem 1rem;
+        margin: 1.25rem 0;
+      }
+      .idea h4 {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+      .limit {
+        border-left: 3px solid var(--border);
+        padding-left: 1rem;
+        margin: 2rem 0;
+      }
+      .limit h3 {
+        margin-top: 0;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+      .b-rec {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+      }
+      .b-maybe {
+        background: rgba(56, 189, 248, 0.15);
+        color: #7dd3fc;
+      }
+      .b-later {
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
+      .b-no {
+        background: rgba(248, 113, 113, 0.15);
+        color: #fca5a5;
+      }
+      .b-now {
+        background: rgba(148, 163, 184, 0.15);
+        color: #cbd5e1;
+      }
+      .b-done {
+        background: rgba(148, 163, 184, 0.15);
+        color: #cbd5e1;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1rem 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.93rem;
+      }
+      th,
+      td {
+        padding: 0.45rem 0.6rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .doc-nav {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vela Regions<span>.</span></h1>
+      <p class="tagline">
+        Memory without a garbage collector, a borrow checker, or
+        <code>free</code>: what regions are, why Vela has them, and how to use
+        them well.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html" aria-current="page">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <p>
+        This page is the long guide to Vela's memory model. The language
+        reference has the short version in
+        <a href="index.html#regions">Memory and Regions</a>; this page explains
+        the idea behind it, answers
+        <a href="#needs">which types need a region and which don't</a>, walks
+        through using it step by step, lists what it can't do yet (with a
+        workaround for each), and collects ideas for where it could go. Every
+        complete program on this page compiles and prints the output shown below
+        it; the shorter pieces marked with an error are rejected with that
+        message; and the code under <a href="#ideas">Ideas</a> is proposed
+        syntax that doesn't exist yet.
+      </p>
+
+      <nav class="toc" aria-label="On this page">
+        <strong>On this page</strong>
+        <ol>
+          <li><a href="#idea">The idea</a></li>
+          <li><a href="#why">Why Vela has regions</a></li>
+          <li><a href="#guarantees">What regions guarantee</a></li>
+          <li><a href="#pros-cons">Pros and cons</a></li>
+          <li><a href="#needs">When a type needs a region</a></li>
+          <li><a href="#tutorial">Tutorial</a></li>
+          <li><a href="#runtime">How it runs</a></li>
+          <li><a href="#limits">Limitations and workarounds</a></li>
+          <li><a href="#ideas">Ideas for regions</a></li>
+        </ol>
+      </nav>
+
+      <section>
+        <h2 id="idea">1. The idea</h2>
+        <p>
+          A <em>region</em> is a named place to put memory. You declare one with
+          <code>region r</code>, and <code>new T(value) at r</code> copies a
+          value into it and gives you a pointer to the copy. Nothing in a region
+          is freed on its own. Instead, the whole region is freed at once, when
+          the block that declared it ends.
+        </p>
+        <p>
+          Think of a whiteboard in a meeting room: during the meeting anyone can
+          write on it, and when the meeting ends it is wiped clean in one go.
+          Nobody erases single words, and nobody can read the board after it was
+          wiped, because the meeting (the block) is over.
+        </p>
+        <p>
+          What makes Vela's regions safe is that the region's name is part of
+          every pointer's type. A
+          <code>^Node@nodes</code> is "a pointer to a <code>Node</code> in
+          region <code>nodes</code>". A type can only name a region that exists
+          where the type is written, so a pointer can never be kept anywhere
+          that lives longer than its region. The compiler checks this with a few
+          simple rules, and nothing is checked at run time.
+        </p>
+        <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> scratch                     <span class="comment">; a new, empty region</span>
+    <span class="keyword">fixed</span> n = <span class="keyword">new</span> int(<span class="number">42</span>) <span class="keyword">at</span> scratch    <span class="comment">; n has type ^int@scratch</span>
+    show(n^)                           <span class="comment">; 42</span>
+<span class="keyword">fi</span>                                     <span class="comment">; scratch, and everything in it, is freed here</span></pre>
+        <div class="note">
+          <p><strong>The whole model in five rules</strong></p>
+          <ol>
+            <li>
+              <code>region r</code> declares a region;
+              <code>new T(v) at r</code>, or <code>new@r T(v)</code>, allocates
+              in it. <code>region r default</code> makes <code>r</code> the
+              block's <a href="#default-region">default</a>, and then what
+              allocates there names no region.
+            </li>
+            <li>
+              A pointer into <code>r</code> has type <code>^T@r</code>, and a
+              type can only name regions visible where it is written.
+            </li>
+            <li>
+              When the block declaring <code>r</code> ends, however it ends,
+              everything in <code>r</code> is freed.
+            </li>
+            <li>
+              A task allocates only in a region it takes as a parameter (<code
+                >r: region</code
+              >); it can read and link pointers in any region its parameters'
+              types name.
+            </li>
+            <li>
+              A pointer is never stored in a different region than the one its
+              type names.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="why">2. Why Vela has regions</h2>
+        <p>
+          Most Vela values don't need any of this. Numbers, <code>bool</code>s,
+          shapes, and kinds are copied when they are assigned or passed, and
+          live in the block that declares them (<a href="#needs"
+            >When a type needs a region</a
+          >
+          is the full answer to which values do). But some data can't work that
+          way:
+        </p>
+        <ul>
+          <li>
+            <strong>Linked data</strong>, such as lists, trees, and graphs,
+            where one value points to another.
+          </li>
+          <li>
+            <strong>Shared data</strong>, where several places must see and
+            change the same value.
+          </li>
+          <li>
+            <strong>Data that outlives a call</strong>, built by one task and
+            used by its caller.
+          </li>
+        </ul>
+        <p>
+          These need pointers to memory allocated somewhere else. Before
+          regions, Vela did this the way C does:
+          <code>new</code> allocated a value, and <code>free(p)</code> gave it
+          back. That is simple, and it is where the classic memory bugs come
+          from:
+        </p>
+        <pre><span class="comment">; Vela before regions: this no longer compiles.</span>
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> p = <span class="keyword">new</span> int(<span class="number">1</span>)
+    free(p)
+    show(p^)          <span class="comment">; use after free: reads memory that may belong to something else</span>
+    free(p)           <span class="comment">; double free: corrupts the allocator</span>
+    <span class="keyword">fixed</span> q = <span class="keyword">new</span> int(<span class="number">2</span>)
+<span class="keyword">fi</span>                    <span class="comment">; q is never freed: a leak</span></pre>
+        <p>
+          Nothing in the language stopped any of these. Languages solve this in
+          a few ways, and each has a price:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>Approach</th>
+              <th>Used by</th>
+              <th>What it costs</th>
+            </tr>
+            <tr>
+              <td>Garbage collection</td>
+              <td>Go, Java, C#</td>
+              <td>
+                A runtime that pauses or slows the program, and memory freed
+                "later" rather than at a known point
+              </td>
+            </tr>
+            <tr>
+              <td>Reference counting</td>
+              <td>Swift, Python</td>
+              <td>
+                A counter update on every copy, and cycles that leak unless
+                broken by hand
+              </td>
+            </tr>
+            <tr>
+              <td>Borrow checker</td>
+              <td>Rust</td>
+              <td>
+                Lifetimes and borrowing rules to learn, and a large, complex
+                checker
+              </td>
+            </tr>
+            <tr>
+              <td>Move-only ownership</td>
+              <td>Linear type systems</td>
+              <td>
+                Values can't be freely shared or copied, which makes ordinary
+                code awkward
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Regions</strong></td>
+              <td>Vela, Cyclone, arenas in Zig and C</td>
+              <td>Memory is freed a region at a time, not a value at a time</td>
+            </tr>
+          </table>
+        </div>
+        <p>
+          Vela chose regions (the full comparison is in
+          <a href="future.html#memory">Future Directions</a>), because they fit
+          what Vela wants to be:
+        </p>
+        <ul>
+          <li>
+            <strong>Minimal.</strong> One statement (<code>region</code>), one
+            type annotation (<code>@r</code>), one parameter type
+            (<code>region</code>). There are no lifetimes to infer and no
+            borrowing rules.
+          </li>
+          <li>
+            <strong>Explicit.</strong> You can see where memory lives (the
+            region's name) and when it goes away (the end of the region's
+            block).
+          </li>
+          <li>
+            <strong>Fast.</strong> Allocating is a pointer bump, and freeing a
+            region frees all its values at once.
+          </li>
+          <li>
+            <strong>Checkable.</strong> Safety follows from a handful of local
+            type rules, all checked at compile time.
+          </li>
+          <li>
+            <strong>Plain C.</strong> The generated C is an ordinary local
+            variable and a function call at each block exit.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="guarantees">3. What regions guarantee</h2>
+        <p>If a Vela program compiles:</p>
+        <ul>
+          <li>
+            <strong>No use after free.</strong> No variable, field, or result
+            can hold a pointer after its region is freed, because its type would
+            have to name a region that no longer exists.
+          </li>
+          <li>
+            <strong>No double free.</strong> Only the compiler frees memory,
+            once per region, and there is no <code>free</code>.
+          </li>
+          <li>
+            <strong>No leaks past a block.</strong> Every way out of a block
+            frees its regions: its <code>fi</code>, the end of a plan B block,
+            and a <code>&lt;-</code> from anywhere inside it.
+          </li>
+          <li>
+            <strong>No null pointers.</strong> A <code>^T@r</code> always points
+            to something; one that may be missing is a <code>maybe ^T@r</code>,
+            which must be checked before use (see
+            <a href="index.html#maybe">Maybe and Errors</a>).
+          </li>
+          <li>
+            <strong>No hidden costs.</strong> No garbage collector, no reference
+            counts, and no run-time checks when a pointer is used.
+          </li>
+        </ul>
+        <p>What they don't promise:</p>
+        <ul>
+          <li>
+            <strong>Bounded memory.</strong> A long-lived region keeps growing
+            while you allocate in it, even if old values are no longer used.
+            Choosing regions well (see <a href="#choosing">Choosing regions</a>)
+            is how you keep memory flat.
+          </li>
+          <li>
+            <strong>Surviving out of memory.</strong> If the system has no
+            memory left, the program prints <code>vela: out of memory</code> and
+            stops.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="pros-cons">4. Pros and cons</h2>
+        <div class="pros-cons">
+          <div class="pros">
+            <h3>Pros</h3>
+            <ul>
+              <li>
+                Memory safety checked entirely at compile time, with nothing to
+                pay at run time
+              </li>
+              <li>
+                Very fast allocation (a pointer bump) and freeing (one call per
+                chunk of memory, not per value)
+              </li>
+              <li>
+                Good cache locality: values allocated together sit next to each
+                other
+              </li>
+              <li>
+                Lifetimes are blocks you can see, named in types you can read
+              </li>
+              <li>
+                Few rules to learn; no lifetime annotations beyond a region's
+                name
+              </li>
+              <li>
+                Tasks that only read are generic over regions for free (no extra
+                argument), as they are over the types they take (<a
+                  href="index.html#generics"
+                  >Types a declaration takes</a
+                >)
+              </li>
+              <li>
+                A natural fit for work that happens in phases: a request, a
+                frame, a loop pass, a compiler pass
+              </li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h3>Cons</h3>
+            <ul>
+              <li>
+                One value can't be freed early; memory goes a whole region at a
+                time
+              </li>
+              <li>
+                Data that changes over a long run needs care, or its region
+                keeps growing
+              </li>
+              <li>
+                A value holds pointers into one region only, and a pointer can't
+                be copied into another region
+              </li>
+              <li>
+                Region names appear in signatures, and tasks that allocate take
+                an extra argument (though a block can name a
+                <a href="#default-region">default region</a>, so the lines
+                inside it needn't repeat it)
+              </li>
+              <li>
+                Some safe programs are rejected (see
+                <a href="#limits">Limitations</a>)
+              </li>
+              <li>
+                Regions aren't values: a program can't choose a region at run
+                time or keep a list of regions
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="needs">5. When a type needs a region</h2>
+        <p>
+          The question that comes up first, and keeps coming up, is:
+          <em>does this type name a region or not?</em> The short answer is the
+          one you would guess — memory that would be on the heap in C goes in a
+          region — but it is worth seeing why, because the rule then answers
+          every case, including the one type that goes both ways.
+        </p>
+
+        <h3 id="needs-where">Where a value's bytes are</h3>
+        <p>
+          Every byte in a running Vela program is in one of three places, and
+          each has its own answer to "when is it freed?":
+        </p>
+        <ol>
+          <li>
+            <strong>In the value itself.</strong> A number, a <code>bool</code>,
+            an array of a known size, a shape of such fields: the bytes sit in
+            the variable, the field, or the parameter that holds them, and are
+            copied when the value is. Their size is known as the program is
+            compiled. <em>Freed</em> when the variable's block ends,
+            automatically, with nothing to say about it. In C: a local variable
+            or a field.
+          </li>
+          <li>
+            <strong>In the program.</strong> The bytes of a text literal are in
+            the compiled program, put there before <code>main</code> starts.
+            <em>Never freed.</em> In C: a string literal in static storage.
+          </li>
+          <li>
+            <strong>In a region.</strong> Bytes the program asked for while it
+            was running, because their size or their number wasn't known before:
+            what a pointer points at, a slice's items, text built out of other
+            text. <em>Freed</em> when the region's block ends. In C: the heap,
+            taken from a region's chunks.
+          </li>
+        </ol>
+        <p>
+          Only the third kind needs a name, and that is the whole reason regions
+          are in types. For the first two, the compiler already knows the answer
+          to "when do these bytes go away?" — with the block, or never. For the
+          third, the answer is "when <em>that</em> region ends", and a pointer
+          can be stored anywhere; without the region's name in the type, there
+          would be nothing to compare when the pointer is stored somewhere
+          longer-lived. So:
+        </p>
+        <div class="note">
+          <p>
+            <strong
+              >A type names a region exactly when a value of it can reach bytes
+              the program made while it was running.</strong
+            >
+            Three types do: a pointer <code>^T@r</code>, a slice
+            <code>[T]@r</code>, and text made rather than written,
+            <code>text@r</code>. Every other type names a region only because it
+            holds one of those.
+          </p>
+        </div>
+        <p>
+          Note what this is <em>not</em> about. It isn't about how big the value
+          is: a <code>[int#1000]</code> is eight thousand bytes and needs no
+          region, because they are part of the value. It isn't about being
+          changed: a <code>flex</code> variable of any plain type changes in
+          place. And it isn't about being passed around: plain values are copied
+          into a task and copied back out, which needs no shared memory at all.
+        </p>
+
+        <h3 id="needs-table">Which types name a region</h3>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>The type</th>
+              <th>Names a region?</th>
+              <th>Where its bytes are</th>
+            </tr>
+            <tr>
+              <td><code>int</code>, <code>float</code>, <code>bool</code></td>
+              <td>No</td>
+              <td>In the value; a size known as the program is compiled</td>
+            </tr>
+            <tr>
+              <td><code>[int#4]</code>, an array</td>
+              <td>No</td>
+              <td>In the value: four <code>int</code>s side by side</td>
+            </tr>
+            <tr>
+              <td><code>Point</code>, a shape of plain fields</td>
+              <td>No</td>
+              <td>In the value; <code>Point@r</code> is an error</td>
+            </tr>
+            <tr>
+              <td><code>Shade</code>, a kind whose variants hold nothing</td>
+              <td>No</td>
+              <td>In the value: which variant it is</td>
+            </tr>
+            <tr>
+              <td><code>text</code></td>
+              <td>No</td>
+              <td>
+                In the program: a literal, or a part of one, that lasts as long
+                as the program
+              </td>
+            </tr>
+            <tr>
+              <td><code>maybe int</code>, <code>int ~ ParseError</code></td>
+              <td>No</td>
+              <td>
+                In the value: the <code>int</code>, and which of the two it is
+              </td>
+            </tr>
+            <tr>
+              <td><code>^int@r</code>, a pointer</td>
+              <td><strong>Yes</strong></td>
+              <td>
+                The <code>int</code> is in <code>r</code>; the pointer to it is
+                in the value
+              </td>
+            </tr>
+            <tr>
+              <td><code>[int]@r</code>, a slice</td>
+              <td><strong>Yes</strong></td>
+              <td>
+                The items are in <code>r</code>; the pointer and the count are
+                in the value
+              </td>
+            </tr>
+            <tr>
+              <td><code>text@r</code></td>
+              <td><strong>Yes</strong></td>
+              <td>Bytes made while the program ran, in <code>r</code></td>
+            </tr>
+            <tr>
+              <td>
+                <code>Node@r</code>, a shape or kind holding a pointer or a
+                slice
+              </td>
+              <td><strong>Yes</strong>, always</td>
+              <td>
+                What it points at is in <code>r</code>, and all of it in the one
+                region
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>Person</code> or <code>Person@r</code>, holding text and
+                no pointers
+              </td>
+              <td>Either</td>
+              <td>
+                Whichever its text is: <code>Person</code> holds text that
+                lasts, <code>Person@r</code> text in <code>r</code>
+              </td>
+            </tr>
+            <tr>
+              <td><code>maybe ^Node@r</code>, <code>^Node@r ~ text</code></td>
+              <td><strong>Yes</strong></td>
+              <td>
+                <code>maybe</code> and <code>~</code> wrap a type without
+                changing where it lives
+              </td>
+            </tr>
+            <tr>
+              <td><code>(int, text@r)</code>, a tuple</td>
+              <td>If an item does</td>
+              <td>
+                Each item keeps its own; a tuple holds no pointers or slices,
+                since its items never change
+              </td>
+            </tr>
+            <tr>
+              <td>a field, <code>next: maybe ^Node</code></td>
+              <td>Never written</td>
+              <td>
+                The region of the value that holds it, so a field never names
+                one
+              </td>
+            </tr>
+            <tr>
+              <td><code>r: region</code></td>
+              <td>It <em>is</em> one</td>
+              <td>
+                A region isn't a value: it can't be stored, sent, or chosen
+                while running
+              </td>
+            </tr>
+          </table>
+        </div>
+        <p>
+          Nothing in this program is in a region, so no region is declared and
+          no type names one:
+        </p>
+        <pre
+          class="program"
+          data-file="n_plain.vela"
+        ><span class="comment">; Every value here lives where it is written, and its text is part of the program.</span>
+<span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> moved(p: Point, by: int) -&gt; Point
+    <span class="keyword">&lt;-</span> Point { x: p.x + by, y: p.y + by }
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> count = <span class="number">41</span>                    <span class="comment">; int: in the variable</span>
+    <span class="keyword">fixed</span> ratio = <span class="number">0.5</span>                   <span class="comment">; float: in the variable</span>
+    <span class="keyword">fixed</span> grid: [int#<span class="number">3</span>] = [count#<span class="number">3</span>]   <span class="comment">; an array: three ints, in the variable</span>
+    <span class="keyword">fixed</span> here = Point { x: <span class="number">1</span>, y: <span class="number">2</span> }    <span class="comment">; a shape of plain fields: in the variable</span>
+    <span class="keyword">fixed</span> label = <span class="string">"point"</span>               <span class="comment">; text: in the program, and never freed</span>
+    <span class="keyword">fixed</span> pair = (count, label)         <span class="comment">; a tuple: each item where it belongs</span>
+    show(label, <span class="string">" "</span>, moved(here, <span class="number">1</span>).x, <span class="string">" "</span>, grid[<span class="number">0</span>] + count, <span class="string">" "</span>, ratio, <span class="string">" "</span>, pair.<span class="number">0</span>)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">point 2 82 0.5 41</pre>
+        <p>
+          Everything in this one is made while the program runs, so every type
+          says where: a pointer, text built from other text, a slice, and a
+          shape that holds them.
+        </p>
+        <pre
+          class="program"
+          data-file="n_region.vela"
+        ><span class="keyword">shape</span> Note
+    title: text                <span class="comment">; in the region of the Note that holds it</span>
+    next: <span class="keyword">maybe</span> ^Note            <span class="comment">; a field never names a region</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> notes
+    <span class="keyword">fixed</span> count = <span class="keyword">new</span> int(<span class="number">7</span>) <span class="keyword">at</span> notes          <span class="comment">; ^int@notes: the int is in notes</span>
+    <span class="keyword">fixed</span> number = count^.str() <span class="keyword">at</span> notes       <span class="comment">; text@notes: new bytes, made here</span>
+    <span class="keyword">fixed</span> title = <span class="string">"note "</span> + number <span class="keyword">at</span> notes     <span class="comment">; text@notes: a join makes new text</span>
+    <span class="keyword">fixed</span> first = <span class="keyword">new</span> Note(Note { title: title, next: <span class="keyword">none</span> }) <span class="keyword">at</span> notes
+    <span class="keyword">fixed</span> second = <span class="keyword">new</span> Note(Note { title: <span class="string">"second"</span>, next: first }) <span class="keyword">at</span> notes
+    <span class="keyword">flex</span> titles = <span class="keyword">new</span> [text]() <span class="keyword">at</span> notes        <span class="comment">; [text]@notes: the items are in notes</span>
+    titles.add(second^.title)
+    titles.add(first^.title)
+    show(titles.len, <span class="string">" "</span>, titles[<span class="number">0</span>], <span class="string">" "</span>, titles[<span class="number">1</span>], <span class="string">" "</span>, count^)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">2 second note 7 7</pre>
+
+        <h3 id="needs-text">Text, the one that goes both ways</h3>
+        <p>
+          Text is the one type the answer isn't settled for: the same
+          <code>text</code> is sometimes in a region and sometimes not, and a
+          shape or kind holding text follows its text. That is why it causes
+          most of the questions, and the reason is simple: a
+          <code>text</code> is a pointer and a length, and the bytes it points
+          at are either <em>in the program</em> (a literal, written in the
+          source, there before the program starts) or <em>in a region</em> (made
+          while running, out of other text or out of a number). So the test is
+          not what the text says but where its bytes came from:
+          <strong
+            >text you wrote needs no region; text the program made needs
+            one.</strong
+          >
+        </p>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>What you write</th>
+              <th>What you get</th>
+              <th>A region?</th>
+            </tr>
+            <tr>
+              <td><code>"hello"</code></td>
+              <td><code>text</code></td>
+              <td>No: the bytes are in the program</td>
+            </tr>
+            <tr>
+              <td><code>t[a..b]</code></td>
+              <td>A view: the same bytes, not copied</td>
+              <td>
+                Whatever <code>t</code> is: none for a literal,
+                <code>@r</code> for a <code>text@r</code>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>t.len</code>, <code>t == u</code>, <code>t &lt; u</code>
+              </td>
+              <td><code>int</code>, <code>bool</code></td>
+              <td>No: nothing new is made</td>
+            </tr>
+            <tr>
+              <td><code>a + b</code></td>
+              <td>New text, the two joined</td>
+              <td><strong>Yes</strong></td>
+            </tr>
+            <tr>
+              <td><code>"{name} is {age}"</code></td>
+              <td>New text, the values written into it</td>
+              <td><strong>Yes</strong></td>
+            </tr>
+            <tr>
+              <td><code>x.str()</code>, <code>text(x)</code></td>
+              <td>New text: a value written out</td>
+              <td><strong>Yes</strong></td>
+            </tr>
+            <tr>
+              <td><code>scan(prompt)</code></td>
+              <td><code>maybe text</code>: a line read, or none</td>
+              <td><strong>Yes</strong></td>
+            </tr>
+            <tr>
+              <td><code>scan(prompt, int)</code></td>
+              <td><code>int ~ InputError</code></td>
+              <td>No: a number is no memory</td>
+            </tr>
+            <tr>
+              <td><code>int(t)</code>, <code>float(t)</code></td>
+              <td>
+                <code>int ~ ParseError</code>, <code>float ~ ParseError</code>
+              </td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td><code>show(a, b, c)</code></td>
+              <td>Printed, nothing given back</td>
+              <td>
+                No: the line gets a region of its own, freed as soon as it is
+                printed
+              </td>
+            </tr>
+            <tr>
+              <td><code>t.copy()</code></td>
+              <td>New text, its own bytes</td>
+              <td><strong>Yes</strong>, the region the copy goes into</td>
+            </tr>
+          </table>
+        </div>
+        <pre
+          class="program"
+          data-file="n_text.vela"
+        ><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> greeting = <span class="string">"Hello, world"</span>              <span class="comment">; text: written, so it lasts</span>
+    <span class="keyword">fixed</span> hello = greeting[<span class="number">0</span>..<span class="number">5</span>]                 <span class="comment">; text: the same bytes, so still no region</span>
+    <span class="keyword">fixed</span> name = <span class="string">"Ada"</span>
+    <span class="keyword">fixed</span> line = greeting + <span class="string">" and "</span> + name <span class="keyword">at</span> r   <span class="comment">; text@r: new bytes</span>
+    <span class="keyword">fixed</span> age = <span class="number">42</span>.str() <span class="keyword">at</span> r                    <span class="comment">; text@r: a number written out</span>
+    <span class="keyword">fixed</span> both = <span class="string">"{hello}, {name}"</span> <span class="keyword">at</span> r           <span class="comment">; text@r: values written into text</span>
+    show(line)
+    show(both, <span class="string">" "</span>, age, <span class="string">" "</span>, greeting.len, <span class="string">" "</span>, hello == <span class="string">"Hello"</span>)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+Hello, world and Ada
+Hello, Ada 42 12 true</pre
+        >
+        <p>
+          The two never mix in the wrong direction. Text that lasts fits
+          anywhere text of a region is expected, since it outlives every region;
+          text of a region can't be kept in a <code>text</code>, which would
+          outlive it (<a href="#limit-text">that limitation</a>, and
+          <code>.copy()</code> is the way across). And a task that reads text of
+          a region names the region in its header, <code>title: text@r</code>,
+          exactly as it would for a pointer.
+        </p>
+
+        <h3 id="needs-holding">What a value holds decides for it</h3>
+        <p>
+          A shape or a kind is in a region when anything it holds is — a
+          pointer, a slice, text made while running, or another shape or kind
+          that is. Its fields never name a region: they are all in the one
+          region of the value that holds them, which is what
+          <code>Node@r</code> says. That is also why one value can't hold
+          pointers into two regions (<a href="#limit-one-region"
+            >this limitation</a
+          >): <code>@r</code> is one name for all of it.
+        </p>
+        <p>
+          A shape holding only text is the case where both exist, and the same
+          declaration serves both:
+          <code>Person</code> is a person whose name is a literal,
+          <code>Person@r</code> one whose name was read or built in
+          <code>r</code>. A kind is the same, variant by variant:
+          <code>Status.Todo</code> holds nothing and fits any region,
+          <code>Status.Blocked(reason)</code> holds text, so it is in the region
+          that text is in.
+        </p>
+        <p>
+          Tuples work the other way around, because their items never change: a
+          tuple holds no pointer and no slice at all, and each item keeps its
+          own type, so <code>(text@a, text@b)</code> — text of two different
+          regions in one value — is fine, where a shape with two such fields is
+          not. <code>maybe</code> and <code>~</code> only wrap: whether
+          <code>maybe ^Node@r</code> is in a region is decided by the
+          <code>^Node@r</code> inside it.
+        </p>
+        <p>
+          One case looks like a region and isn't: a value built with no pointers
+          in it yet, such as
+          <code>Leaf(1)</code> or <code>Node { value: 1, next: none }</code>. It
+          fits into any region, so nothing in it fixes one; that is why such a
+          value needs its region written where it is bound (<code
+            >flex head: Node@nodes = …</code
+          >), and why the compiler writes <code>@_</code> for "no region" when
+          it talks about one (<a href="#limit-pattern">this limitation</a>).
+        </p>
+
+        <h3 id="needs-argument">
+          When a region is an argument, and when a name is enough
+        </h3>
+        <p>
+          The second half of the question is about headers. A task can always
+          <em>read</em> data in a region it merely names in a type; it can only
+          <em>allocate</em> in a region it was given as a parameter or declared
+          itself. So the test is not whether a task touches memory in a region,
+          but whether it makes any:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>What the task does with memory</th>
+              <th>What its header writes</th>
+              <th>What the call costs</th>
+            </tr>
+            <tr>
+              <td>Nothing: plain values in, plain values out</td>
+              <td>
+                No region at all: <code>task twice(n: int) -&gt; int</code>
+              </td>
+              <td>Nothing</td>
+            </tr>
+            <tr>
+              <td>Reads, walks, or links data the caller made</td>
+              <td>
+                Names the region in a type: <code>list: maybe ^Node@r</code>
+              </td>
+              <td>
+                Nothing: no argument is passed, and one task serves every region
+              </td>
+            </tr>
+            <tr>
+              <td>Makes data the caller keeps</td>
+              <td>
+                Takes the region: <code>r: region</code>, or
+                <code>r: region default</code>
+              </td>
+              <td>One pointer argument</td>
+            </tr>
+            <tr>
+              <td>Makes data only it uses</td>
+              <td>
+                Declares its own: <code>region work</code> inside the body
+              </td>
+              <td>Nothing; the region is freed before the task returns</td>
+            </tr>
+            <tr>
+              <td>Sends a value of a region without making anything</td>
+              <td>
+                Still needs a parameter naming that region (<a
+                  href="#limit-result"
+                  >why</a
+                >)
+              </td>
+              <td>
+                Nothing, or one pointer for a <code>region</code> parameter it
+                never allocates in
+              </td>
+            </tr>
+            <tr>
+              <td>A method reading what its value holds</td>
+              <td><code>@this</code>, the region its value lives in</td>
+              <td>Nothing: each call works it out from the value</td>
+            </tr>
+            <tr>
+              <td>A method that makes something</td>
+              <td>
+                A region parameter as well: <code>made(r: region, …)</code>
+              </td>
+              <td>One pointer argument</td>
+            </tr>
+          </table>
+        </div>
+        <pre
+          class="program"
+          data-file="n_headers.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="comment">; Makes data for its caller, so the caller's region is an argument.</span>
+<span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="comment">; Only reads what the caller made: it names the region and is given nothing.</span>
+<span class="keyword">task</span> total(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + total(node^.next)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="comment">; Adds what the list holds to a slice of the caller, in the region it takes.</span>
+<span class="keyword">task</span> gather(list: <span class="keyword">maybe</span> ^Node@r, <span class="keyword">flex&amp;</span> seen: [int]@w, w: <span class="keyword">region</span>)
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        seen.add(node^.value)
+        gather(node^.next, &amp;seen, w)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="comment">; Allocates only for itself: a region of its own, and a result holding nothing.</span>
+<span class="keyword">task</span> largest(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">region</span> work
+    <span class="keyword">flex</span> seen = <span class="keyword">new</span> [int]() <span class="keyword">at</span> work
+    gather(list, &amp;seen, work)
+    <span class="keyword">flex</span> most = <span class="number">0</span>
+    <span class="keyword">each</span> v <span class="keyword">in</span> seen
+        <span class="keyword">when</span> v &gt; most
+            most = v
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> most
+<span class="keyword">fi</span>
+
+<span class="comment">; Plain values only: no region anywhere in the header.</span>
+<span class="keyword">task</span> twice(n: int) -&gt; int
+    <span class="keyword">&lt;-</span> n * <span class="number">2</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> nodes
+    <span class="keyword">flex</span> list: <span class="keyword">maybe</span> ^Node@nodes = <span class="keyword">none</span>
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">4</span>
+        list = push(nodes, list, i)
+    <span class="keyword">fi</span>
+    show(total(list), <span class="string">" "</span>, largest(list), <span class="string">" "</span>, twice(total(list)))
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">6 3 12</pre>
+        <p>
+          <code>largest</code> is the one to notice: it allocates a slice on
+          every call, and its header says nothing about regions, because that
+          memory is nobody else's business — it is freed at the task's
+          <code>fi</code>. Taking <code>r: region</code> there would be wrong
+          twice over: the caller would pay for it, and the scratch items would
+          stay in the caller's region until <em>its</em> block ended.
+        </p>
+        <p>
+          Three rules follow from the same place, and each has its own message
+          when it is broken:
+        </p>
+        <ul>
+          <li>
+            <strong>A named region can't be allocated in.</strong>
+            <code>@r</code> in a type is a name for whatever region the caller's
+            value was in; there is no region to allocate with, which is exactly
+            what makes the task free to call. Writing
+            <code>new … at r</code> there says
+            <em
+              >this task can't allocate in 'r', which it only names in its
+              types; take it as a parameter, 'r: region'</em
+            >. The same goes for making text and for <code>add</code> on a
+            slice, which may need more room.
+          </li>
+          <li>
+            <strong>A result's region must be a parameter's.</strong> A region
+            the task declares is freed when it returns, so nothing it sends can
+            point into it; a region only the result names isn't accepted either
+            (<a href="#limit-result">why, and the workaround</a>).
+          </li>
+          <li>
+            <strong>The same name means the same region.</strong> Two parameters
+            written <code>@r</code> must be in one region, and two written
+            <code>@x</code> and <code>@y</code> may differ, which is what lets a
+            task link two lists safely or refuse to (<a href="#lesson-tasks"
+              >Lesson 5</a
+            >).
+          </li>
+        </ul>
+        <p>
+          Where a region <em>is</em> an argument, it is passed by name at the
+          call, <code>push(nodes, list, i)</code>, even inside a block with a
+          <a href="#default-region">default region</a>: a default settles where
+          an allocation goes, not which region a task is handed. And
+          <code>.copy()</code> takes its region from the place the copy goes, so
+          a copy needs one written only where nothing else names it.
+        </p>
+
+        <h3 id="needs-order">Deciding, in order</h3>
+        <ol>
+          <li>
+            <strong
+              >Does the value hold a pointer, a slice, or text the program
+              made?</strong
+            >
+            If not, there is no region to write, and nothing to pass: use it as
+            a plain value.
+          </li>
+          <li>
+            <strong>If it does, when should its memory go away?</strong> Declare
+            the region in the block that ends then: the top of
+            <code>main</code> for data the whole program uses, inside the loop
+            for data of one pass.
+          </li>
+          <li>
+            <strong>Who makes it?</strong> The task that allocates needs the
+            region — as a parameter when the caller keeps the result, as its own
+            <code>region</code> when the memory is scratch.
+          </li>
+          <li>
+            <strong>Who else touches it?</strong> Everything that only reads,
+            walks, or links it names the region in its types and takes nothing.
+          </li>
+          <li>
+            <strong
+              >Does one region do nearly all the work in the block?</strong
+            >
+            Then name it the block's <a href="#default-region">default</a> and
+            let the lines that go elsewhere be the ones that say so.
+          </li>
+        </ol>
+
+        <h3 id="needs-questions">Questions that come up</h3>
+        <ul>
+          <li>
+            <strong>Does a big array need a region?</strong> No.
+            <code>[int#1000]</code> is part of its value however large it is; it
+            makes the value large. A number of items known only while running is
+            a slice, which does need one.
+          </li>
+          <li>
+            <strong
+              >My task allocates, but gives back an <code>int</code>.</strong
+            >
+            Then it needs no region in its header: declare one in its body (<a
+              href="#limit-free"
+              >the first limitation</a
+            >
+            shows the shape of it).
+          </li>
+          <li>
+            <strong>Does printing a shape of mine need a region?</strong> No.
+            <code>show</code> writes the text of each value into a region it
+            makes for the line and frees straight after, so printing needs no
+            region of yours; one you declare is for text you keep, pass on, or
+            send back.
+          </li>
+          <li>
+            <strong>Two regions in one value?</strong> Not in a shape or a kind
+            — all of one value is in one region. A tuple of text can hold two, a
+            task can send several results in different regions (<code
+              >-&gt; ^int@a, ^int@b</code
+            >), and <code>.copy()</code> moves data across.
+          </li>
+          <li>
+            <strong>Can the program pick a region while it runs?</strong> No: a
+            region is not a value (<a href="#limit-values">why</a>). Call the
+            task in both branches of a <code>when</code> instead.
+          </li>
+          <li>
+            <strong>What should a task that takes text write?</strong>
+            <code>name: text@r</code>, nearly always: it takes text of any
+            region <em>and</em> literals, since text that lasts fits everywhere.
+            <code>name: text</code> takes only text that lasts, which is right
+            for a task that keeps what it is given beyond any region.
+          </li>
+          <li>
+            <strong>How do I check where a value really went?</strong> Hover it
+            in <a href="ide.html">Vela Studio</a>: it shows the type Vela worked
+            out, <code>fixed p: ^int@kept</code>. That is the quickest way to
+            confirm an allocation landed where you meant — including one that
+            named no region because the block has a default.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="tutorial">6. Tutorial</h2>
+        <p>
+          The lessons build on each other. Each program is complete: save it as
+          a <code>.vela</code> file and run it with
+          <code>vela file.vela -o file &amp;&amp; ./file</code>, or open it in
+          <a href="ide.html">Vela Studio</a> and press <kbd>F5</kbd>.
+        </p>
+
+        <h3 id="lesson-first">Lesson 1: A first region</h3>
+        <pre
+          class="program"
+          data-file="01_first.vela"
+        ><span class="keyword">task</span> main()
+    <span class="keyword">region</span> scratch
+    <span class="keyword">flex</span> count = <span class="keyword">new</span> int(<span class="number">41</span>) <span class="keyword">at</span> scratch
+    count^ = count^ + <span class="number">1</span>
+    show(count^)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">42</pre>
+        <p>
+          <code>region scratch</code> is a statement: from here to the end of
+          the block (the task), <code>scratch</code> is a region you can
+          allocate in. <code>new int(41) at scratch</code> copies
+          <code>41</code> into it and gives back a pointer, so
+          <code>count</code> has type <code>^int@scratch</code>.
+          <code>count^</code> is the value it points to, which you can read and
+          write, since <code>count</code> is a <code>flex</code>: through a
+          <code>fixed</code>, nothing changes, not even the value it points to.
+          At the task's <code>fi</code>, the region is freed.
+        </p>
+
+        <h3 id="lesson-types">Lesson 2: Pointer types name their region</h3>
+        <pre
+          class="program"
+          data-file="02_types.vela"
+        ><span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> points
+    <span class="keyword">flex</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> points
+    <span class="keyword">flex</span> q = <span class="keyword">new</span>@points Point(Point { x: <span class="number">3</span>, y: <span class="number">4</span> })
+    p^.x = p^.x + q^.x
+    show(p^.x)
+
+    <span class="keyword">flex</span> spare: <span class="keyword">maybe</span> ^Point@points = <span class="keyword">none</span>
+    <span class="keyword">when</span> spare <span class="keyword">is</span> {s}
+        show(s^.y)
+    <span class="keyword">else</span>
+        show(<span class="string">"no spare yet"</span>)
+    <span class="keyword">fi</span>
+    spare = q
+    show(spare { p }^.y)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+4
+no spare yet
+4</pre
+        >
+        <ul>
+          <li>
+            <code>new Point(v) at points</code> and
+            <code>new@points Point(v)</code> mean the same thing; use whichever
+            reads better.
+          </li>
+          <li>
+            A pointer's type is <code>^T@r</code>. You can write it out (<code
+              >p: ^Point@points</code
+            >) or let Vela infer it (<code>q</code>).
+          </li>
+          <li>
+            The type after <code>new</code> names no region (<code
+              >new Point(…)</code
+            >, not <code>new Point@points(…)</code>): what it makes lives in the
+            region it allocates in.
+          </li>
+          <li>
+            A pointer to a shape has no fields; go through <code>^</code>:
+            <code>p^.x</code>.
+          </li>
+          <li>
+            A pointer is never <code>none</code>. A pointer that may be missing
+            is a <code>maybe ^Point@points</code>, read with <code>is</code>,
+            <code>match</code>, or a plan B (<code>spare { p }</code> is
+            <code>spare</code>'s pointer, or <code>p</code> when there is none).
+          </li>
+        </ul>
+
+        <h3 id="lesson-blocks">Lesson 3: When memory is freed</h3>
+        <pre
+          class="program"
+          data-file="03_blocks.vela"
+        ><span class="keyword">task</span> first_square_over(limit: int) -&gt; int
+    <span class="keyword">region</span> work
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">100</span>
+        <span class="keyword">fixed</span> square = <span class="keyword">new</span> int(i * i) <span class="keyword">at</span> work
+        <span class="keyword">when</span> square^ &gt; limit
+            <span class="keyword">&lt;-</span> square^
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> -<span class="number">1</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> outer
+    <span class="keyword">flex</span> total = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> outer
+    <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
+        <span class="keyword">region</span> pass
+        <span class="keyword">fixed</span> step = <span class="keyword">new</span> int(round * <span class="number">10</span>) <span class="keyword">at</span> pass
+        total^ = total^ + step^
+    <span class="keyword">fi</span>
+    show(total^)
+    show(first_square_over(<span class="number">50</span>))
+
+    <span class="keyword">fixed</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
+    <span class="keyword">fixed</span> rescued = missing {
+        <span class="keyword">region</span> rescue
+        <span class="keyword">fixed</span> spare = <span class="keyword">new</span> int(<span class="number">7</span>) <span class="keyword">at</span> rescue
+        spare^ * <span class="number">6</span>
+    }
+    show(rescued)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+30
+64
+42</pre
+        >
+        <p>
+          A region is freed when the block that declares it ends, whichever way
+          it ends:
+        </p>
+        <ul>
+          <li>
+            <strong>At its <code>fi</code>.</strong> A region declared in a
+            loop's body is a new region on every pass and is freed at the end of
+            each pass, so <code>pass</code> never holds more than one value.
+            This is how a loop allocates without growing.
+          </li>
+          <li>
+            <strong>At a <code>&lt;-</code>.</strong> In
+            <code>first_square_over</code>, the send frees
+            <code>work</code> (after computing <code>square^</code>, the value
+            it sends), even though it happens deep inside a loop.
+          </li>
+          <li>
+            <strong>At the end of a plan B's block,</strong> after its last line
+            has given its value.
+          </li>
+          <li>
+            <strong
+              >At the <code>fi</code> of a
+              <a href="index.html#blocks"><code>block</code></a
+              >,</strong
+            >
+            a block of its own, written anywhere a statement is, for a region
+            (and the files opened in it) that should end before the task does,
+            with no loop or condition around it.
+          </li>
+        </ul>
+        <p>
+          Notice that <code>total</code> lives in <code>outer</code>, declared
+          before the loop: values that must survive every pass go in a region
+          outside the loop, and values for one pass go in a region inside it.
+        </p>
+
+        <h3 id="lesson-list">Lesson 4: Linked data</h3>
+        <pre
+          class="program"
+          data-file="04_list.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> nodes
+    <span class="keyword">flex</span> list: <span class="keyword">maybe</span> ^Node@nodes = <span class="keyword">none</span>
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">6</span>
+        list = push(nodes, list, i)
+    <span class="keyword">fi</span>
+    show(sum(list))
+    show(sum(<span class="keyword">none</span>))
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+15
+0</pre
+        >
+        <ul>
+          <li>
+            In the <code>shape</code>, the field
+            <code>next: maybe ^Node</code> names no region. A field's pointers
+            are in the region of the value that holds them.
+          </li>
+          <li>
+            <code>push</code> allocates, so it takes the region to allocate in
+            as a parameter, <code>r: region</code>, and its result is a pointer
+            into it, <code>^Node@r</code>. The caller decides where the list
+            lives: <code>push(nodes, list, i)</code>.
+          </li>
+          <li>
+            <code>sum</code> only reads, so it just names a region in its
+            parameter's type, <code>@r</code>, without taking it. It works on a
+            list in any region, and costs nothing extra at run time.
+            <code>sum(none)</code> works too. It calls itself for the rest of
+            the list rather than moving a <code>flex</code> cursor along it,
+            since its parameter is a fixed name and no <code>flex</code> name
+            may be given what one owns (see
+            <a href="index.html#fixed-owns">What a fixed name owns</a>).
+          </li>
+        </ul>
+
+        <h3 id="lesson-tasks">Lesson 5: Tasks and regions</h3>
+        <p>How a task mentions a region decides what it can do with it:</p>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>In the header</th>
+              <th>Meaning</th>
+              <th>The task can</th>
+            </tr>
+            <tr>
+              <td><code>r: region</code></td>
+              <td>A region the caller passes by name</td>
+              <td>
+                Allocate in <code>r</code>, read and link pointers in it, send
+                pointers into it
+              </td>
+            </tr>
+            <tr>
+              <td><code>list: maybe ^Node@r</code> only</td>
+              <td>Whatever region the caller's argument is in</td>
+              <td>
+                Read and link pointers in <code>r</code>, send pointers into it;
+                not allocate
+              </td>
+            </tr>
+            <tr>
+              <td><code>-&gt; ^Node@r</code></td>
+              <td>The result is in <code>r</code></td>
+              <td>Only if a parameter names <code>r</code></td>
+            </tr>
+            <tr>
+              <td><code>flex&amp; list: maybe ^Node@r</code></td>
+              <td>The caller's own place, given as <code>&amp;list</code></td>
+              <td>
+                Change it, putting in it only pointers into <code>r</code>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <pre
+          class="program"
+          data-file="05_generic.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> length(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> <span class="number">1</span> + length(node^.next)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="comment">; Two regions, which may be different.</span>
+<span class="keyword">task</span> longer(a: <span class="keyword">maybe</span> ^Node@x, b: <span class="keyword">maybe</span> ^Node@y) -&gt; int
+    <span class="keyword">when</span> length(a) &gt; length(b)
+        <span class="keyword">&lt;-</span> length(a)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> length(b)
+<span class="keyword">fi</span>
+
+<span class="comment">; One name twice: both lists must be in the same region.</span>
+<span class="keyword">task</span> join(<span class="keyword">flex</span> last: ^Node@r, <span class="keyword">flex</span> rest: <span class="keyword">maybe</span> ^Node@r)
+    last^.next = rest
+<span class="keyword">fi</span>
+
+<span class="comment">; A region passed on under another name.</span>
+<span class="keyword">task</span> pair(into: <span class="keyword">region</span>, value: int) -&gt; ^Node@into
+    <span class="keyword">&lt;-</span> push(into, push(into, <span class="keyword">none</span>, value), value * <span class="number">2</span>)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> small
+    <span class="keyword">region</span> big
+    <span class="keyword">flex</span> a = push(small, <span class="keyword">none</span>, <span class="number">1</span>)
+    <span class="keyword">fixed</span> b = push(big, push(big, <span class="keyword">none</span>, <span class="number">2</span>), <span class="number">3</span>)
+    show(longer(a, b))
+    join(a, pair(small, <span class="number">10</span>))
+    show(length(a))
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+2
+3</pre
+        >
+        <ul>
+          <li>
+            <strong>Different names can be different regions.</strong>
+            <code>longer</code> takes lists in <code>x</code> and
+            <code>y</code>; the caller passes one in <code>small</code> and one
+            in <code>big</code>. (Inside the task, <code>x</code> and
+            <code>y</code> are treated as different, so it can't link one list
+            to the other.)
+          </li>
+          <li>
+            <strong>The same name is the same region.</strong>
+            <code>join</code> links <code>rest</code> after <code>last</code>,
+            which is only safe when both are in one region, so both are
+            <code>@r</code>, and the call is rejected if they aren't.
+          </li>
+          <li>
+            <strong>A region can be passed on</strong> under another name:
+            <code>pair</code> takes <code>into</code> and passes it to
+            <code>push</code>.
+          </li>
+          <li>
+            <strong>A task can have scratch regions of its own:</strong> a
+            <code>region</code> declared in a task is freed before the task
+            returns, so the result can't point into it. A result can only be in
+            a region the header's parameters name.
+          </li>
+        </ul>
+
+        <p>
+          A parameter that changes the caller's value is written
+          <code>flex&amp;</code>, and the call gives the place with
+          <code>&amp;</code> (see
+          <a href="index.html#parameters">Parameters that change</a>). Its type
+          names a region like any other, so what the task puts there stays in
+          that region: <code>prepend</code> links a new node into the caller's
+          list, and <code>grow</code> adds to the caller's slice, both in
+          <code>r</code>. A place of another region is refused, since the task
+          would leave a pointer to <code>r</code> in it: given a list of a
+          region <code>s</code>, <code>prepend(&amp;other, r, 3)</code> is
+          <em>expected region 's', got 'r'</em>.
+        </p>
+        <pre
+          class="program"
+          data-file="05_hold_ref.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> prepend(<span class="keyword">flex&amp;</span> list: <span class="keyword">maybe</span> ^Node@r, r: <span class="keyword">region</span>, value: int)
+    list = <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> grow(<span class="keyword">flex&amp;</span> xs: [int]@r, r: <span class="keyword">region</span>)
+    xs.add(xs.len)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> list: <span class="keyword">maybe</span> ^Node@r = <span class="keyword">none</span>
+    prepend(&amp;list, r, <span class="number">1</span>)
+    prepend(&amp;list, r, <span class="number">2</span>)
+    <span class="keyword">when</span> list <span class="keyword">is</span> {first}
+        show(first^.value)
+    <span class="keyword">fi</span>
+    <span class="keyword">flex</span> xs = <span class="keyword">new</span> [int]() <span class="keyword">at</span> r
+    grow(&amp;xs, r)
+    grow(&amp;xs, r)
+    show(xs)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+2
+[0, 1]</pre
+        >
+
+        <p>
+          A task that takes its region <em>last</em> can be given it after the
+          call instead, as <code>new</code> is:
+          <code>copy(tree) at kept</code> or <code>copy(tree)@kept</code> is
+          <code>copy(tree, kept)</code>. After a <code>+</code> chain of text,
+          <code>at r</code> is the whole chain's, and a part names its own with
+          <code>@</code> (see
+          <a href="index.html#region-after-call">The region after a call</a>);
+          with a block's <a href="#default-region">default region</a>, a call
+          that names none uses it.
+        </p>
+
+        <h3 id="lesson-shapes">
+          Lesson 6: Shapes and kinds that hold pointers
+        </h3>
+        <pre
+          class="program"
+          data-file="06_shapes.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> build(r: <span class="keyword">region</span>, depth: int) -&gt; Tree@r
+    <span class="keyword">when</span> depth == <span class="number">0</span>
+        <span class="keyword">&lt;-</span> Leaf(<span class="number">1</span>)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> Branch(<span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">at</span> r, <span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">at</span> r)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> leaves(t: Tree@r) -&gt; int
+    <span class="keyword">match</span> t
+    <span class="keyword">case</span> Leaf value
+        <span class="keyword">&lt;-</span> value
+    <span class="keyword">case</span> Branch left right
+        <span class="keyword">&lt;-</span> leaves(left^) + leaves(right^)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> trees
+    show(leaves(build(trees, <span class="number">4</span>)))
+    show(leaves(Leaf(<span class="number">5</span>)))
+
+    <span class="keyword">flex</span> head: Node@trees = Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }
+    head.next = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> trees
+    <span class="keyword">when</span> head.next <span class="keyword">is</span> {second}
+        show(head.value + second^.value)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+16
+5
+3</pre
+        >
+        <p>
+          A shape or kind that holds pointers (in its fields, or in shapes and
+          kinds it holds by value) lives in a region, written after its name:
+          <code>Tree@r</code>, <code>Node@trees</code>. Everything one value
+          holds is in that one region, so reading <code>head.next</code> of a
+          <code>Node@trees</code> gives a <code>maybe ^Node@trees</code>. A
+          shape without pointers, like <code>Point</code>, lives in no region,
+          and <code>Point@r</code> is an error.
+        </p>
+        <p>
+          A value built without any pointers, like <code>Leaf(5)</code> or
+          <code>Node { value: 1, next: none }</code>, can go in any region: it
+          takes the region of the place it goes. <code>build</code> can send
+          <code>Leaf(1)</code> as a <code>Tree@r</code>, and
+          <code>leaves(Leaf(5))</code> works. A binding without a written type
+          can't tell which region such a value is meant for, so
+          <code>head</code> is written <code>head: Node@trees</code>.
+        </p>
+        <p>
+          <strong>Text in a region.</strong> Text has a lifetime as well:
+          <code>text</code> lasts as long as the program, as a literal does, and
+          <code>text@r</code> is in region <code>r</code>. Text a value in a
+          region holds is in that region, whatever it was made from, so the
+          title of an <code>Item@items</code> is a <code>text@items</code>:
+        </p>
+        <pre
+          class="program"
+          data-file="06_text.vela"
+        ><span class="comment">; A to-do item in a region holds its text there, whatever the text was made from.</span>
+<span class="keyword">kind</span> Status
+    Todo
+    Blocked(reason: text)
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Item
+    title: text
+    status: Status
+    next: <span class="keyword">maybe</span> ^Item
+<span class="keyword">fi</span>
+
+<span class="comment">; Names the region, so it takes a status of any region, and sends text of it.</span>
+<span class="keyword">task</span> describe(s: Status@r) -&gt; text@r
+    <span class="keyword">match</span> s
+    <span class="keyword">case</span> Todo
+        <span class="keyword">&lt;-</span> <span class="string">"todo"</span>
+    <span class="keyword">case</span> Blocked reason
+        <span class="keyword">&lt;-</span> reason
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> items
+    <span class="keyword">fixed</span> first = <span class="keyword">new</span> Item(Item { title: <span class="string">"write"</span>, status: Status.Todo, next: <span class="keyword">none</span> }) <span class="keyword">at</span> items
+    <span class="keyword">fixed</span> second = <span class="keyword">new</span> Item(Item { title: <span class="string">"test"</span>, status: Status.Blocked(<span class="string">"no compiler"</span>), next: first }) <span class="keyword">at</span> items
+    show(describe(second^.status))
+    <span class="keyword">fixed</span> title = first^.title
+    show(title)
+    <span class="keyword">flex</span> chosen = <span class="string">"nothing"</span>
+    show(chosen == title)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+no compiler
+write
+false</pre
+        >
+        <p>
+          Text that lasts fits wherever text of a region is expected (the
+          literals above go into items), and text of a region never goes where
+          it could outlive the region: <code>chosen = title</code> would be an
+          error, since <code>chosen</code> is a <code>text</code>. A task that
+          reads text of a region names one, as it would for a pointer:
+          <code>describe</code> takes a <code>Status@r</code> and sends a
+          <code>text@r</code>, and still takes <code>Status.Todo</code>, whose
+          text lasts. Text read with <code>scan("…") at r</code> is new text, so
+          it is in the region <code>scan</code> names, and so is text joined
+          with <code>a + b at r</code>, made from a value with
+          <code>n.str() at r</code> or <code>text(n) at r</code>, or holding
+          values, <code>"{name} is {age}" at r</code>; a part of text,
+          <code>t[a..b]</code>, is the same bytes, so it stays in the region the
+          text is in. A number read from input, <code>scan("Age: ", int)</code>,
+          is no memory at all, so that form of <code>scan</code> names no
+          region. A shape or kind holding text but no pointers may name a region
+          or not: <code>Person</code> holds text that lasts,
+          <code>Person@r</code> text in <code>r</code>.
+          <a href="#needs-text">Text, the one that goes both ways</a> lists
+          every form that makes new text and every one that doesn't.
+        </p>
+        <p>
+          One region is made without being written:
+          <a href="index.html#show"><code>show(card)</code></a> writes a shape
+          or kind with its own <code>str</code>, and that text goes in a region
+          the line gets for itself, freed as soon as the line ends. It is the
+          region a program would have declared around the <code>show</code> and
+          thrown away after it, so printing a value of your own needs no region
+          of yours; a region you declare is still the place for text you keep,
+          pass on, or send back.
+        </p>
+        <p>
+          A <a href="index.html#methods">method</a> of such a shape or kind is
+          called on a value in some region, which its header and body name
+          <code>@this</code>. It can send what the value holds there, and take
+          pointers into it, and each call works out which region that is from
+          the value. It isn't given the region itself, so it can't allocate
+          there; to make something, it takes a region, as a task does:
+        </p>
+        <pre
+          class="program"
+          data-file="06_methods.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Named
+    name: text
+    node: ^Node
+
+    nameOf() -&gt; text<span class="keyword">@</span>this
+        <span class="keyword">&lt;-</span> .name
+    <span class="keyword">fi</span>
+
+    <span class="keyword">alters</span> point(<span class="keyword">flex</span> to: ^Node<span class="keyword">@</span>this)
+        .node = to
+    <span class="keyword">fi</span>
+
+    made(r: <span class="keyword">region</span>, value: int) -&gt; ^Node<span class="keyword">@</span>r
+        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value + .node^.value }) <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> people
+    <span class="keyword">flex</span> ada: Named<span class="keyword">@</span>people = Named { name: <span class="string">"Ada"</span>.copy() <span class="keyword">at</span> people, node: <span class="keyword">new</span> Node(Node { value: <span class="number">1</span> }) <span class="keyword">at</span> people }
+    show(ada.nameOf())
+    ada.point(<span class="keyword">new</span> Node(Node { value: <span class="number">5</span> }) <span class="keyword">at</span> people)
+    <span class="keyword">region</span> scratch
+    <span class="keyword">fixed</span> sum = ada.made(scratch, <span class="number">10</span>)
+    show(sum^.value)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+Ada
+15</pre
+        >
+        <p>
+          <code>ada.point(…)</code> with a node of <code>scratch</code> is an
+          error: <code>point</code> takes its node in <code>@this</code>, which
+          for <code>ada</code> is <code>people</code>. A method that should grow
+          its value, such as adding to a slice the value holds, can't yet (see
+          <a href="#limit-method">below</a>).
+        </p>
+
+        <h3 id="lesson-errors">
+          Lesson 7: Regions with errors and maybe values
+        </h3>
+        <pre
+          class="program"
+          data-file="07_errors.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> parse_node(r: <span class="keyword">region</span>, digit: int) -&gt; ^Node@r ~ text
+    <span class="keyword">when</span> digit &lt; <span class="number">0</span> <span class="keyword">or</span> digit &gt; <span class="number">9</span>
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"not a digit"</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: digit, next: <span class="keyword">none</span> }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> nodes
+    <span class="keyword">fixed</span> good = parse_node(nodes, <span class="number">7</span>) { <span class="keyword">&lt;-</span> }
+    show(good^.value)
+    <span class="keyword">fixed</span> fallback = parse_node(nodes, <span class="number">42</span>) {
+        <span class="keyword">failure</span> reason
+        show(reason)
+        good
+    }
+    show(fallback^.value)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+7
+not a digit
+7</pre
+        >
+        <p>
+          Regions combine with <code>maybe</code> and <code>T ~ E</code> as
+          you'd expect: <code>^Node@r ~ text</code> is a pointer into
+          <code>r</code> or a text error. The <code>@r</code> belongs to the
+          pointer, so it comes before <code>~</code>. A plan B's fallback must
+          be in the same region as the value it replaces: <code>good</code> is
+          also in <code>nodes</code>.
+        </p>
+
+        <h3 id="lesson-copy">
+          Lesson 8: Scratch work, and keeping what survives
+        </h3>
+        <p>
+          A common shape for a program is: do some work that creates a lot of
+          temporary data, keep a small result, and throw the rest away. With
+          regions, the temporary data goes in a region inside the work's block,
+          and the result is copied into a region outside it:
+        </p>
+        <pre
+          class="program"
+          data-file="08_copy.vela"
+        ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
+    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
+        <span class="keyword">&lt;-</span> node^.value + sum(node^.next)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="number">0</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">flex</span> best: <span class="keyword">maybe</span> ^Node@kept = <span class="keyword">none</span>
+    <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
+        <span class="keyword">region</span> work
+        <span class="keyword">flex</span> draft: <span class="keyword">maybe</span> ^Node@work = <span class="keyword">none</span>
+        <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..round + <span class="number">2</span>
+            draft = push(work, draft, i)
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> sum(draft) &gt; sum(best)
+            best = draft.copy()                    <span class="comment">; every node, into kept</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(sum(best))
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">6</pre>
+        <p>
+          A pointer into <code>work</code> can't be stored in <code>best</code>,
+          which lives in <code>kept</code> (that would leave
+          <code>best</code> pointing at freed memory after the pass). So
+          <code>draft.copy()</code> copies the list into <code>kept</code>, the
+          region <code>best</code> names: every node, following the pointers.
+          Each pass's draft is freed at the end of the pass, so only the lists
+          that were copied stay allocated. A copy keeps a node two pointers
+          share as one node, and copies a cycle as a cycle; where nothing names
+          the region to copy into, write it:
+          <code>draft.copy() at kept</code> (or <code>draft.copy()@kept</code>).
+          See <a href="index.html#copy">Copying into another region</a> for what
+          a copy covers.
+        </p>
+
+        <h3 id="lesson-slices">Lesson 9: Slices in a region</h3>
+        <p>
+          An array in a variable, <code>[int#4]</code>, is a value like any
+          other and needs no region. When the number of items is known only as
+          the program runs, they go in a region, as a slice:
+          <code>[int]@r</code> is a pointer to the first and a count, and
+          follows every rule a pointer does.
+          <code>new [int](…) at r</code> makes one, copying the items in;
+          <code>xs[a..b]</code> views part of it without copying:
+        </p>
+        <pre
+          class="program"
+          data-file="09_slices.vela"
+        ><span class="comment">; The first n Fibonacci numbers, in the caller&#x27;s region.</span>
+<span class="keyword">task</span> fibs(r: <span class="keyword">region</span>, n: int) -&gt; [int]@r
+    <span class="keyword">flex</span> out = <span class="keyword">new</span> [int]([<span class="number">1</span>#n]) <span class="keyword">at</span> r
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">2</span>..n
+        out[i] = out[i - <span class="number">1</span>] + out[i - <span class="number">2</span>]
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> out
+<span class="keyword">fi</span>
+
+<span class="comment">; Only reads, so it names the region without taking it.</span>
+<span class="keyword">task</span> sum(xs: [int]@r) -&gt; int
+    <span class="keyword">flex</span> total = <span class="number">0</span>
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        total = total + x
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> total
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">fixed</span> numbers = fibs(kept, <span class="number">10</span>)
+    show(numbers[<span class="number">9</span>])
+    <span class="keyword">fixed</span> tail = numbers[<span class="number">5</span>..numbers.len]
+    show(sum(tail))
+    <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>
+        <span class="keyword">region</span> work
+        <span class="keyword">flex</span> scratch = <span class="keyword">new</span> [int](tail) <span class="keyword">at</span> work
+        scratch[<span class="number">0</span>] = <span class="number">0</span>
+        show(sum(scratch))
+    <span class="keyword">fi</span>
+    show(tail[<span class="number">0</span>])
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+55
+131
+123
+123
+8</pre
+        >
+        <p>
+          <code>tail</code> is a view of <code>numbers</code>' last five items,
+          in <code>kept</code>. Each pass copies it into <code>work</code>,
+          changes the copy, and frees it at the end of the pass, so
+          <code>tail</code> is unchanged. Storing <code>scratch</code> in a
+          variable of type <code>[int]@kept</code> would be the same error as
+          for a pointer into <code>work</code>. An array in a variable can't be
+          sliced, since it isn't in a region: copy it with
+          <code>new [int](xs) at r</code>, or allocate it there,
+          <code>new [int#4](xs) at r</code>, and slice what the pointer points
+          to (<code>p^[0..2]</code>).
+        </p>
+        <p>
+          A slice can also grow and shrink: <code>xs.add(v)</code> puts a value
+          last, <code>xs.add(i, v)</code> before item <code>i</code>, and
+          <code>xs.del(i)</code> and <code>xs.del()</code> take an item out and
+          give it. <code>new [int]() at r</code> starts with no items. Adding
+          may need more memory, which comes from the slice's own region, so a
+          task that adds needs that region, as one that calls
+          <code>new</code> does:
+        </p>
+        <pre
+          class="program"
+          data-file="09_growing.vela"
+        ><span class="comment">; The primes below n, added as they are found, in the caller&#x27;s region.</span>
+<span class="keyword">task</span> primes(r: <span class="keyword">region</span>, n: int) -&gt; [int]@r
+    <span class="keyword">flex</span> found = <span class="keyword">new</span> [int]() <span class="keyword">at</span> r
+    <span class="keyword">each</span> candidate <span class="keyword">in</span> 2..n
+        <span class="keyword">flex</span> prime = <span class="keyword">true</span>
+        <span class="keyword">each</span> p <span class="keyword">in</span> found
+            <span class="keyword">when</span> candidate % p == <span class="number">0</span>
+                prime = <span class="keyword">false</span>
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> prime
+            found.add(candidate)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> found
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">flex</span> numbers = primes(kept, <span class="number">30</span>)
+    show(numbers.len)
+    show(numbers.del())
+    numbers.add(<span class="number">0</span>, <span class="number">1</span>)
+    show(numbers[<span class="number">0</span>] + numbers[<span class="number">1</span>])
+    <span class="keyword">each</span> round <span class="keyword">in</span> 0..<span class="number">2</span>
+        <span class="keyword">region</span> work
+        <span class="keyword">flex</span> stack = <span class="keyword">new</span> [int](numbers) <span class="keyword">at</span> work
+        <span class="keyword">loop</span> stack.len &gt; <span class="number">1</span>
+            stack.add(stack.del() + stack.del())
+        <span class="keyword">fi</span>
+        show(stack[<span class="number">0</span>])
+    <span class="keyword">fi</span>
+    show(numbers.len)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+10
+29
+3
+101
+101
+10</pre
+        >
+        <p>
+          <code>found</code> gets its items in <code>kept</code>, the region
+          <code>primes</code> is given. Its first <code>add</code> makes a block
+          with room for more, and later ones fill that room; a full block is
+          replaced by one twice as large, whose items are copied in, and the old
+          one stays in the region until the region is freed (or grows in place,
+          when nothing was allocated after it). Each pass builds
+          <code>stack</code> in <code>work</code>, so its blocks are freed with
+          the pass, and <code>numbers</code> is unchanged: a copy into another
+          region never shares items. A <code>fixed</code> slice, a plain or
+          <code>fixed</code> parameter, or a part <code>xs[a..b]</code> can't
+          change its length. A <code>flex</code> parameter changes the task's
+          own copy; a task changes its caller's slice through a
+          <code>flex&amp;</code> parameter, as <code>grow</code> does in
+          <a href="#lesson-tasks">Lesson 5</a>, or through a pointer to what
+          holds it, as in <code>bag^.items.add(v)</code>.
+        </p>
+
+        <h3 id="default-region">Lesson 10: A default region</h3>
+        <p>
+          Writing <code>at r</code> on every line that allocates says where
+          memory goes, and in a block where nearly everything goes to one region
+          it says it over and over. A block may name one of its regions its
+          <strong>default</strong>: what allocates there needs no
+          <code>at r</code>, and only the lines that go somewhere else name a
+          region.
+        </p>
+        <pre
+          class="program"
+          data-file="10_default.vela"
+        ><span class="keyword">task</span> collect(r: <span class="keyword">region</span> <span class="keyword">default</span>, upto: int) -&gt; [text]@r
+    <span class="keyword">flex</span> lines = <span class="keyword">new</span> [text]()             <span class="comment">; in r, the region this task was given</span>
+    <span class="keyword">each</span> n <span class="keyword">in</span> 1..upto
+        lines.add(<span class="string">"line "</span> + n.str())      <span class="comment">; the join and the number, both in r</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> lines
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept <span class="keyword">default</span>
+    <span class="keyword">fixed</span> lines = collect(kept, 4)
+    <span class="keyword">each</span> line <span class="keyword">in</span> lines
+        show(line)
+    <span class="keyword">fi</span>
+    <span class="keyword">each</span> round <span class="keyword">in</span> 0..2
+        <span class="keyword">region</span> pass <span class="keyword">default</span>              <span class="comment">; the inner block's own default</span>
+        <span class="keyword">fixed</span> note = <span class="string">"pass "</span> + round.str()  <span class="comment">; text@pass: freed at the end of the pass</span>
+        show(note)
+    <span class="keyword">fi</span>
+    <span class="keyword">fixed</span> after = <span class="keyword">new</span> int(1)             <span class="comment">; ^int@kept: the outer default again</span>
+    show(after^)
+<span class="keyword">fi</span></pre>
+        <pre class="output" aria-label="Output">
+line 1
+line 2
+line 3
+pass 0
+pass 1
+1</pre
+        >
+        <p>
+          The rules are few, and the types don't change: a value allocated in
+          the default still has the region in its type (<code>^int@kept</code>),
+          which is what keeps it from outliving its memory, and what hover in
+          <a href="ide.html">Vela Studio</a> shows.
+        </p>
+        <ul>
+          <li>
+            <strong>One per block.</strong> A second <code>default</code> in one
+            block is an error: two lines that look alike would allocate in
+            regions with different lifetimes. An inner block may name its own,
+            and after it the enclosing default is in force again.
+          </li>
+          <li>
+            <strong>A region a task is given can be one</strong> (<code
+              >r: region default</code
+            >), which is where <code>at r</code> repeats most. A region the
+            header only names can't: nothing can allocate there.
+          </li>
+          <li>
+            <strong>Everything that makes memory takes it:</strong>
+            <code>new</code>, <code>new [T](…)</code>, joining text, text
+            holding values, <code>x.str()</code> and <code>text(x)</code>,
+            <code>scan(prompt)</code>, and a call of a task or method that takes
+            its region last and leaves it out (<a
+              href="index.html#region-after-call"
+              ><code>label(n)</code></a
+            >). A region a task takes anywhere else is still passed by name:
+            <code>collect(kept, 4)</code>.
+          </li>
+          <li>
+            <strong>A copy is the exception.</strong> <code>x.copy()</code> goes
+            where the value it becomes goes, which says more than a default
+            could, so a copy that nothing gives a region still asks for one.
+          </li>
+          <li>
+            <strong>It is opt-in.</strong> A block that names no default is
+            exactly as it was: every allocation there names its region.
+          </li>
+        </ul>
+        <p>
+          When to reach for it: a task or a block where one region does nearly
+          all the work. When not to: a block that allocates into two regions in
+          turn, where the names are the point — as in Lesson 8, where scratch
+          work and what survives sit side by side.
+        </p>
+
+        <h3 id="choosing">Lesson 11: Choosing regions</h3>
+        <p>
+          Rules of thumb, once <a href="#needs">which types need a region</a> is
+          settled:
+        </p>
+        <ul>
+          <li>
+            <strong>Match regions to lifetimes.</strong> Declare a region in the
+            block whose end is when the data stops being needed. Data for the
+            whole program: a region at the top of <code>main</code>. Data for
+            one request, frame, or loop pass: a region inside that block.
+          </li>
+          <li>
+            <strong>Let callers choose.</strong> A task that builds data for its
+            caller takes <code>r: region</code>. A task that only reads names
+            the region in its types. A task's own temporary data goes in a
+            region it declares.
+          </li>
+          <li>
+            <strong
+              >Don't replace values in a long-lived region inside a long
+              loop.</strong
+            >
+            Each <code>new</code> adds memory that stays until the region is
+            freed. To change a value, write through the pointer (<code
+              >p^ = v</code
+            >); for temporary values, use a region inside the loop.
+          </li>
+          <li>
+            <strong>Prefer plain values when you can.</strong> A
+            <code>Point</code> or a small shape passed by value needs no region
+            at all. Reach for pointers when data is linked, shared, or must be
+            changed by another task.
+          </li>
+          <li>
+            <strong>Copy out to keep a little of a lot.</strong> Build in a
+            scratch region, copy the result into a longer-lived one with
+            <code>.copy()</code> (Lesson 8).
+          </li>
+          <li>
+            <strong>Name a default where one region does the work.</strong> In a
+            block or a task where nearly everything goes to one region,
+            <code>region r default</code> (Lesson 10) leaves the region written
+            on the lines that go somewhere else, which are the ones worth
+            noticing. Where two regions share a block, as in Lesson 8, write
+            both.
+          </li>
+        </ul>
+
+        <h3 id="messages">Lesson 12: Reading the compiler's messages</h3>
+        <p>
+          A run reports every mistake it finds in a file, in the order the lines
+          come, each with the line quoted and the place marked; past twenty it
+          prints the first twenty and
+          <code
+            >3 more mistakes, not shown; fix these first and check again</code
+          >. Region mistakes come in groups — one wrong region name can make
+          several lines complain — so it is worth reading the first of a group
+          before changing anything. These are the ones that come up most:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>Message (shortened)</th>
+              <th>What it means, and the fix</th>
+            </tr>
+            <tr>
+              <td><code>'new' needs a region to allocate in</code></td>
+              <td>
+                Add <code>at r</code> (or write <code>new@r</code>), or make a
+                region the block's <a href="#default-region">default</a>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >this block already has a default region, 'first', named at
+                  3:12</code
+                >
+              </td>
+              <td>
+                A block names one default at most. Write <code>at r</code> on
+                the lines that go elsewhere, or declare that region in an inner
+                block.
+              </td>
+            </tr>
+            <tr>
+              <td><code>only a region can be a task's default region</code></td>
+              <td>
+                <code>default</code> marks a <code>region</code> parameter, as
+                in <code>r: region default</code>; nothing else takes it.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>a pointer lives in a region, so its type names one</code>
+              </td>
+              <td>
+                Write the region: <code>^int@r</code>, not <code>^int</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>a slice lives in a region, so its type names one</code>
+              </td>
+              <td>
+                Write the region: <code>[int]@r</code>, not <code>[int]</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >a slice points into a region, but this array isn't in
+                  one</code
+                >
+              </td>
+              <td>
+                The array is in a variable. Copy it into a slice with
+                <code>new [int](xs) at r</code>, or allocate the array in a
+                region and slice <code>p^[a..b]</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >a tuple's items never change, so it can't hold a pointer
+                  (^int@a), whose value can change</code
+                >
+              </td>
+              <td>
+                A tuple holds no pointer and no slice. Keep them in a shape,
+                whose fields can change, or hold the values themselves. Text of
+                a region is fine in a tuple.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >expected type text, got text@r; this text is in region 'r',
+                  and text here must last as long as the program</code
+                >
+              </td>
+              <td>
+                Text of a region is going somewhere that outlives the region.
+                Keep it in a <code>text@r</code> (or a <code>Person@r</code>),
+                or, for a task's parameter or result, name the region in the
+                header.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >adding to a slice may need more room in its region 'r', which
+                  this task only names in its types</code
+                >
+              </td>
+              <td>
+                The task adds to a slice in a region it wasn't given. Take the
+                region as a parameter, <code>r: region</code>, and pass it from
+                the caller.
+              </td>
+            </tr>
+            <tr>
+              <td><code>'add' changes 'xs', which is immutable</code></td>
+              <td>
+                A <code>fixed</code> slice can't change its length; keep it in a
+                <code>flex</code> variable. A parameter gets its own message:
+                write it <code>flex xs</code> to change the task's own copy, or
+                <code>flex&amp; xs</code>, given <code>&amp;xs</code>, to change
+                the caller's.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>'Node' holds pointers, so it lives in a region</code>
+              </td>
+              <td>Write <code>Node@r</code> where the shape is used.</td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >'Point' holds no pointers or text, so it lives in no
+                  region</code
+                >
+              </td>
+              <td>Remove <code>@r</code>: plain values need none.</td>
+            </tr>
+            <tr>
+              <td>
+                <code>a field lives in the region of the value holding it</code>
+              </td>
+              <td>
+                In a <code>shape</code> or <code>kind</code>, write
+                <code>^Node</code>, not <code>^Node@r</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>unknown region 'r'; declare it with 'region r'</code>
+              </td>
+              <td>
+                The region isn't visible here: it is declared in another block,
+                later, or not at all.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >expected type ^int@outer, got ^int@inner; a value can't move
+                  to another region</code
+                >
+              </td>
+              <td>
+                A pointer would be stored where it could outlive its region, or
+                in a different region. Allocate in the right region, or store a
+                copy: <code>p.copy()</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>can't tell which region to copy into</code></td>
+              <td>
+                Nothing the copy goes into names a region (a
+                <code>fixed</code> without a type, a comparison). Name it:
+                <code>x.copy() at r</code>. A block's
+                <a href="#default-region">default region</a> doesn't settle a
+                copy, since where the value goes says more.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >'copy' copies what a value holds in a region, but this value
+                  is int</code
+                >
+              </td>
+              <td>
+                The value holds no text, slice, or pointer, so it needs no copy:
+                use it as it is.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >this task can't allocate in 'r', which it only names in its
+                  types</code
+                >
+              </td>
+              <td>Take the region as a parameter: <code>r: region</code>.</td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >the result lives in region 'r', which the task isn't
+                  given</code
+                >
+              </td>
+              <td>
+                A result can't point into the task's own region; take
+                <code>r: region</code> from the caller.
+              </td>
+            </tr>
+            <tr>
+              <td><code>cannot tell which region 'x' lives in</code></td>
+              <td>
+                The value holds no pointers yet; write the binding's type,
+                <code>x: Node@r</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>'r' is a region, not a value</code></td>
+              <td>
+                Regions can only be passed to a <code>region</code> parameter or
+                used after <code>at</code>/<code>@</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>expected type maybe ^Node@_, got ^Node@a</code></td>
+              <td>
+                <code>@_</code> means "no region": the value was made without
+                any pointer into one, so it can't be given a pointer (see
+                <a href="#limit-pattern">this limitation</a>).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >method 'Named.point' takes 'to' in '@this', the region the
+                  value it is called on lives in</code
+                >
+              </td>
+              <td>
+                A method's parameter is in the value's own region. Allocate the
+                argument where the value lives.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >'@this' is the region the value this method is called on
+                  lives in, which a method isn't given, so it can't allocate
+                  there</code
+                >
+              </td>
+              <td>
+                Grow the value where it is kept, outside the method (see
+                <a href="#limit-method">this limitation</a>).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code
+                  >this value is in region 'r', which is freed when the case
+                  ends, so it can't be the match's value</code
+                >
+              </td>
+              <td>
+                A <code>match</code> or a <code>when</code>
+                <a href="index.html#choices">used as a value</a> gives it from a
+                region declared inside a branch. Declare the region outside, or
+                copy the value into one that lasts:
+                <code>x.copy() at kept</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><code>Vela has no 'free'</code></td>
+              <td>
+                Memory is freed when the region's block ends; use a smaller
+                region to free sooner.
+              </td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="runtime">7. How it runs</h2>
+        <p>
+          A region is a list of chunks of memory. <code>new</code> takes the
+          next free bytes of the newest chunk, aligned for the type, and copies
+          the value in: a few instructions. When the chunk is full, a new one is
+          added, twice as large as the last, starting at 4&nbsp;KB and growing
+          up to 1&nbsp;MB. An allocation too large for that gets a chunk of
+          exactly its size, placed behind the newest chunk, which keeps serving
+          small allocations. Freeing a region frees its chunks, however many
+          values they hold. A region that never allocates costs nothing.
+        </p>
+        <p>
+          The generated C for Lesson 1's <code>main</code> (<code
+            >vela 01_first.vela --emit-c</code
+          >):
+        </p>
+        <pre>
+void vela_main(void) {
+    vela__rt__region scratch[1] = { VELA__RT__REGION_EMPTY };
+    int64_t* count = ((int64_t*)vela__rt__new(scratch, (int64_t[1]){ 41 }, sizeof(int64_t), _Alignof(int64_t)));
+    (*(count)) = (vela__rt__add((*(count)), 1, "4:21 in task 'main'"));
+    vela__rt__show_int((*(count)));
+    vela__rt__region_free(scratch);
+    return;
+}</pre
+        >
+        <p>
+          A region parameter is a plain <code>vela__rt__region*</code>; region
+          names in types disappear, since C doesn't need them. A copy
+          (<code>value.copy()</code>) is a generated function per type that
+          copies the value's bytes, then its text, its slices' items, and what
+          its pointers point to; each pointed-to value is copied once,
+          remembered in a table, and waits in a list rather than in a C call, so
+          a long list copies without deep recursion. The allocator is about a
+          hundred lines in <code>runtime/vela_rt.h</code>, and the test suite
+          runs the region programs in <code>tests/run</code> and
+          <code>examples</code> under AddressSanitizer and
+          UndefinedBehaviorSanitizer, with leak detection.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="limits">8. Limitations and workarounds</h2>
+        <p>
+          Regions trade some flexibility for simplicity. Some of these limits
+          are part of the model; others reject programs that would be safe,
+          because the rules that would accept them would be more complicated.
+          <a href="#ideas">Ideas for regions</a> discusses how each could be
+          lifted.
+        </p>
+
+        <div class="limit">
+          <h3 id="limit-free">One value can't be freed early</h3>
+          <p>
+            Memory is returned a whole region at a time; <code>free(p)</code> is
+            an error. A big temporary value stays allocated until its region's
+            block ends.
+          </p>
+          <p>
+            <strong>Workaround:</strong> give short-lived data a region of its
+            own, in the smallest block that holds its use, such as a helper task
+            or a loop body. Return plain values, or copy what must survive.
+          </p>
+          <pre
+            class="program"
+            data-file="w_nested.vela"
+          ><span class="keyword">shape</span> Report
+    lines: int
+    total: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> summarize(count: int) -&gt; Report
+    <span class="keyword">region</span> work                          <span class="comment">; only this call's scratch data</span>
+    <span class="keyword">flex</span> sum = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> work
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..count
+        sum^ = sum^ + i
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> Report { lines: count, total: sum^ }
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> report = summarize(<span class="number">5</span>)
+    show(report.total)
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">10</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-growth">
+            Replacing a value in a long-lived region keeps the old one's memory
+          </h3>
+          <pre><span class="keyword">region</span> long
+<span class="keyword">flex</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
+<span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">1000000</span>
+    latest = <span class="keyword">new</span> int(i) <span class="keyword">at</span> long        <span class="comment">; a million ints stay allocated until long is freed</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            <strong>Workaround:</strong> change the value in place through its
+            pointer, or allocate per-pass values in a region inside the loop and
+            copy out only what survives with <code>.copy()</code> (Lesson 8).
+          </p>
+          <pre
+            class="program"
+            data-file="w_replace.vela"
+          ><span class="keyword">task</span> main()
+    <span class="keyword">region</span> long
+    <span class="keyword">flex</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">1000</span>
+        latest^ = i                      <span class="comment">; reuse the memory: no new allocation</span>
+    <span class="keyword">fi</span>
+    show(latest^)
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">999</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-one-region">
+            A value holds pointers into one region only
+          </h3>
+          <pre><span class="keyword">shape</span> Pair
+    first: ^int
+    second: ^int
+<span class="keyword">fi</span>
+
+<span class="keyword">region</span> a
+<span class="keyword">region</span> b
+<span class="keyword">fixed</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">at</span> a, second: <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">at</span> b }
+<span class="comment">; error: expected type ^int@a, got ^int@b; a value can't move to another region</span></pre>
+          <p>
+            <strong>Workaround:</strong> allocate everything a value points to
+            in the same region (usually the longer-lived one), or copy the value
+            from the other region. A task's <em>results</em> are separate
+            values, so each may be in a region of its own:
+            <code>task both(a: region, b: region) -&gt; ^int@a, ^int@b</code> is
+            fine, and <code>fixed x, y = both(first, second)</code> receives
+            them (see <a href="index.html#results">Several Results</a>). It is
+            one value holding both that can't.
+          </p>
+          <pre
+            class="program"
+            data-file="w_pair.vela"
+          ><span class="keyword">shape</span> Pair
+    first: ^int
+    second: ^int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> a
+    <span class="keyword">region</span> b
+    <span class="keyword">fixed</span> short = <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">at</span> b
+    <span class="comment">; Copy the value into a, the region the pair lives in.</span>
+    <span class="keyword">fixed</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">at</span> a, second: <span class="keyword">new</span> int(short^) <span class="keyword">at</span> a }
+    show(p.first^ + p.second^)
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">3</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-text">Text of a region can't become text that lasts</h3>
+          <pre><span class="keyword">flex</span> chosen = <span class="string">"nothing"</span>
+chosen = item^.title
+<span class="comment">; error: expected type text, got text@items; this text is in region 'items', and text here must last as long as the program</span></pre>
+          <p>
+            <strong>Workaround:</strong> keep the text where its region is
+            known: a <code>text@items</code> variable, a shape named with the
+            region (<code>Person@items</code>), or a slice in it. A task that
+            reads it names the region in its header (<code>title: text@r</code
+            >). To keep it longer, copy it into a region that lives longer:
+            <code>kept_title = item^.title.copy()</code>, where
+            <code>kept_title</code> is a <code>text@kept</code>.
+          </p>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-younger">Younger data can't point at older data</h3>
+          <p>
+            A node in an inner region pointing at a node in an outer region
+            would be safe, since the outer region lives longer. But a value's
+            pointers are all in its own region, so this is rejected:
+          </p>
+          <pre><span class="keyword">region</span> outer
+<span class="keyword">fixed</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> outer
+<span class="keyword">when</span> root^.value &gt; <span class="number">0</span>
+    <span class="keyword">region</span> inner
+    <span class="keyword">fixed</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: root }) <span class="keyword">at</span> inner
+    <span class="comment">; error: expected type Node@inner, got Node@outer; a value can't move to another region</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            <strong>Workaround:</strong> copy the older value into the younger
+            region (<code>root.copy() at inner</code>, as below), or allocate
+            the younger data in the older region.
+          </p>
+          <pre
+            class="program"
+            data-file="w_younger.vela"
+          ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> outer
+    <span class="keyword">fixed</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> outer
+    <span class="keyword">when</span> root^.value &gt; <span class="number">0</span>
+        <span class="keyword">region</span> inner
+        <span class="comment">; Copy the older value into the younger region.</span>
+        <span class="keyword">fixed</span> older = root.copy() <span class="keyword">at</span> inner
+        <span class="keyword">fixed</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: older }) <span class="keyword">at</span> inner
+        show(leaf^.value + older^.value)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">3</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-generic">
+            A task that only names a region can't allocate in it
+          </h3>
+          <pre><span class="keyword">task</span> grow(list: <span class="keyword">maybe</span> ^Node@r) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: list }) <span class="keyword">at</span> r
+    <span class="comment">; error: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            A named region has no run-time handle to allocate with; that is what
+            makes such tasks free to call.
+            <strong>Workaround:</strong> take the region as a parameter,
+            <code>task grow(r: region, list: maybe ^Node@r)</code>.
+          </p>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-method">
+            A method can't allocate in its value's region
+          </h3>
+          <pre><span class="keyword">shape</span> Bag
+    items: [int]
+
+    <span class="keyword">alters</span> put(value: int)
+        .items.add(value)
+        <span class="comment">; error: adding to a slice may need more room in its region, and '@this' is the region the value</span>
+        <span class="comment">;   this method is called on lives in, which a method isn't given, so it can't allocate there, and a</span>
+        <span class="comment">;   region it takes is another one, which the value can't point into; add to it where the value is</span>
+        <span class="comment">;   kept, outside the method</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            A method is given the value it is called on, and
+            <code>@this</code> only names that value's region in its types, as a
+            task's named region does (<a href="#limit-generic">above</a>). A
+            region parameter is another region, which the value can't point
+            into. <strong>Workaround:</strong> grow the value where it is kept,
+            <code>bag.items.add(v)</code>, or
+            <code>bag^.items.add(v)</code> behind a pointer. Giving an
+            <code>alters</code> method its value's region is
+            <a href="future.html#methods-in-this">an idea for later</a>.
+          </p>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-values">Regions aren't values</h3>
+          <p>
+            A region can't be stored in a variable or field, sent from a task,
+            or chosen at run time, and a task can't make a region for its
+            caller: <code>task fresh() -&gt; ^int@r</code> with a
+            <code>region r</code> inside is an error, because <code>r</code> is
+            freed when <code>fresh</code> returns.
+          </p>
+          <p>
+            <strong>Workaround:</strong> declare the region in the caller and
+            pass it down; to pick between two regions, call the task in both
+            branches of a <code>when</code>.
+          </p>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-result">
+            A task can't send a pointer-free value in a region none of its
+            parameters names
+          </h3>
+          <pre><span class="keyword">task</span> leaf() -&gt; Tree@r
+    <span class="keyword">&lt;-</span> Leaf(<span class="number">1</span>)
+    <span class="comment">; error: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            <code>Leaf(1)</code> holds no pointer and could go in any region,
+            but a result's region must be one a parameter names. (<code
+              >task leaf(t: Tree@r) -&gt; Tree@r</code
+            >
+            may send <code>Leaf(1)</code>, since <code>t</code> names
+            <code>r</code>.) <strong>Workaround:</strong> add a parameter that
+            names the region; a <code>region</code> parameter works even if the
+            task never allocates in it.
+          </p>
+          <pre
+            class="program"
+            data-file="w_leaf.vela"
+          ><span class="keyword">kind</span> Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> leaf(r: <span class="keyword">region</span>, value: int) -&gt; Tree@r
+    <span class="keyword">&lt;-</span> Leaf(value)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> trees
+    <span class="keyword">fixed</span> t: Tree@trees = leaf(trees, <span class="number">3</span>)
+    <span class="keyword">match</span> t
+    <span class="keyword">case</span> Leaf value
+        show(value)
+    <span class="keyword">case</span> Branch _ _
+        show(<span class="string">"branch"</span>)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">3</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-pattern">
+            A name bound from a pointer-free value can't be given a pointer
+          </h3>
+          <pre><span class="keyword">region</span> a
+<span class="keyword">fixed</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+<span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n}
+    n^.next = q
+    <span class="comment">; error: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), ...</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            <code>first(none)</code> is given nothing from any region, so its
+            result is in no region (<code>@_</code>), and so is <code>n</code>.
+            Storing <code>q</code> in it would put a pointer where Vela can't
+            tell how long it may live. (Here <code>n</code> can never exist,
+            since <code>first(none)</code> is always <code>none</code>, but the
+            rule doesn't look at values.) <strong>Workaround:</strong> give the
+            call a value whose type names the region.
+          </p>
+          <pre
+            class="program"
+            data-file="w_pattern.vela"
+          ><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> first(list: <span class="keyword">maybe</span> ^Node@r) -&gt; <span class="keyword">maybe</span> ^Node@r
+    <span class="keyword">&lt;-</span> list
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> a
+    <span class="keyword">flex</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+    <span class="keyword">flex</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+    <span class="keyword">when</span> first(start) <span class="keyword">is</span> {<span class="keyword">flex</span> n}
+        n^.next = q
+        show(n^.value + q^.value)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <pre class="output" aria-label="Output">3</pre>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-binding">
+            A binding without a type can't hold a pointer-free regional value
+          </h3>
+          <p>
+            <code>flex head = Node { value: 1, next: none }</code> is an error,
+            because nothing says which region <code>head</code> is for.
+            <strong>Workaround:</strong> write its type:
+            <code>flex head: Node@nodes = …</code>.
+          </p>
+        </div>
+
+        <div class="limit">
+          <h3 id="limit-memory">
+            Regions have no size limit, and running out of memory stops the
+            program
+          </h3>
+          <p>
+            There is no way to cap a region or to handle a failed allocation.
+            <strong>Workaround:</strong> none inside Vela yet; keep regions
+            short-lived so memory use stays predictable.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="ideas">9. Ideas for regions</h2>
+        <div class="note warn">
+          These are proposals, each with what it would cost and how it fits the
+          rest of the language; the ones built since are marked
+          <strong>Done</strong>, and the rest are not implemented. Badges:
+          <span class="badge b-rec">Recommended</span>
+          <span class="badge b-maybe">Worth trying</span>
+          <span class="badge b-later">Later</span>
+          <span class="badge b-no">Not recommended</span>.
+        </div>
+
+        <h3 id="ideas-passing">Easier region passing</h3>
+        <p>
+          Every call to a task that allocates passes a region:
+          <code>push(nodes, list, 1)</code>. In a program that allocates a lot,
+          that region argument repeats everywhere, and it is easy to confuse
+          with the real arguments. Several spellings could make it lighter:
+        </p>
+        <p>
+          <span class="badge b-done">Done in part</span> A task that takes its
+          region <em>last</em> is now given it after the call, as
+          <code>new</code> is: <code>push(list, 1) at nodes</code> or
+          <code>push(list, 1)@nodes</code>, and a call that leaves it out takes
+          the block's <a href="#default-region">default region</a> (see
+          <a href="index.html#region-after-call">The region after a call</a>).
+          What follows is still open for a region taken anywhere but last, and
+          for working the region out from the arguments.
+        </p>
+
+        <div class="idea">
+          <h4>
+            <code>nodes.push(list, 1)</code>: the region before a dot
+            <span class="badge b-later">Later</span>
+          </h4>
+          <pre><span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+list = nodes.push(list, <span class="number">1</span>)       <span class="comment">; the same call as push(nodes, list, 1)</span></pre>
+          <ul>
+            <li>
+              <strong>Grammar:</strong> no conflict today. The parser would
+              accept a call after <code>name.</code>, and since regions share
+              the variables' names and have no fields, the checker tells
+              <code>nodes.push(…)</code> from a field access by looking
+              <code>nodes</code> up.
+            </li>
+            <li>
+              <strong>Conflict with methods:</strong> this is the real cost.
+              Vela now has <a href="index.html#methods">methods</a>, where
+              <code>p.shift(2, 2)</code> finds <code>shift</code> in
+              <code>p</code>'s shape. <code>nodes.push(…)</code> would give
+              <code>.name(…)</code> a second lookup rule ("a task whose first
+              parameter is a region"), decided by whether the left side is a
+              region; a region has no methods, so the two never meet, but a
+              reader has to know which the left side is.
+            </li>
+            <li>
+              <strong>Reads as:</strong> "push is something a region does",
+              which isn't quite the model.
+            </li>
+            <li>
+              <strong>Verdict:</strong> if Vela adopts uniform call syntax
+              (<code>x.f(a)</code> means <code>f(x, a)</code> for any
+              <code>x</code>), region calls come with it and need no rule of
+              their own. Vela's methods chose the other way (a method belongs to
+              its type, and a task is never called after a dot), so this would
+              be the one place a task is.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>nodes-&gt;push(list, 1)</code>: an arrow from the region
+            <span class="badge b-no">Not recommended</span>
+          </h4>
+          <ul>
+            <li>
+              <strong>Grammar:</strong> no conflict. <code>-&gt;</code> only
+              appears after a task header's <code>)</code>, and after a value it
+              is a syntax error today, so a parser can accept it.
+            </li>
+            <li>
+              <strong>Meaning:</strong> Vela gives each symbol one idea, and
+              <code>-&gt;</code> already means "what a task sends back", paired
+              with <code>&lt;-</code>. Here it would mean "in this region". C
+              and C++ programmers would read it as a member access through a
+              pointer, which suggests a region is an object with a
+              <code>push</code> member.
+            </li>
+            <li>
+              <strong>Verdict:</strong> implementable, but it muddies one of
+              Vela's few symbols.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>push-&gt;nodes(list, 1)</code>: an arrow to the region
+            <span class="badge b-no">Not recommended</span>
+          </h4>
+          <ul>
+            <li>
+              The same symbol problem as above, and it reads backwards:
+              <code>nodes</code> sits where the called name usually is, so
+              <code>push-&gt;nodes(copy-&gt;kept(list), 1)</code> is hard to
+              scan.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>task push[r: region](…)</code> and
+            <code>push[nodes](list, 1)</code>: regions in brackets
+            <span class="badge b-rec">Recommended</span>
+          </h4>
+          <pre><span class="keyword">task</span> push[r: <span class="keyword">region</span>](list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> sum[r](list: <span class="keyword">maybe</span> ^Node@r) -&gt; int      <span class="comment">; a region the task only names</span>
+    ...
+<span class="keyword">fi</span>
+
+list = push[nodes](list, <span class="number">1</span>)</pre>
+          <ul>
+            <li>
+              <strong>The declaration matches the call:</strong> regions go in
+              brackets in both, and ordinary values in parentheses. The region
+              stops looking like a value argument.
+            </li>
+            <li>
+              <strong>Grammar:</strong> <code>[</code> after a name indexes an
+              array or slice (<code>a[i]</code>), but tasks aren't values, so
+              <code>name[…](…)</code> is a region list when <code>name</code> is
+              a task and an index when it is a variable. Go resolves its generic
+              calls (<code>f[int](x)</code>) the same way.
+            </li>
+            <li>
+              <strong>Room to grow:</strong> a task or a shape takes types in
+              angle brackets today (<code>task first&lt;T&gt;(…)</code>,
+              <code>shape Box&lt;T&gt;</code>, see
+              <a href="index.html#generics">Types a declaration takes</a>), and
+              a type it takes names no region of its own; a shape given types
+              names the one its values live in, <code>Box&lt;text&gt;@r</code>.
+              Regions are compile-time parameters too, so a task that wrote both
+              would have two lists, <code>task find&lt;T&gt;[r](…)</code>, or
+              one that holds types and regions together. Shapes could take
+              several regions the same way (see below).
+            </li>
+            <li>
+              <strong>Safer headers:</strong>
+              <code>task sum[r](…)</code> declares the regions a task only
+              names. Today a misspelled <code>@rr</code> silently becomes a
+              second region, and the mistake only shows where the two meet.
+            </li>
+            <li>
+              <strong>Cost:</strong> parser (brackets in headers and calls),
+              checker (region parameters apart from parameters), codegen (region
+              arguments first in C), Vela Studio, and changing every existing
+              region task. On its own it isn't shorter, but it makes the next
+              idea unambiguous.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>push(list, 1)</code>: inferred region arguments
+            <span class="badge b-rec">Recommended, with brackets</span>
+          </h4>
+          <pre><span class="keyword">region</span> nodes
+<span class="keyword">flex</span> list: <span class="keyword">maybe</span> ^Node@nodes = <span class="keyword">none</span>
+list = push(list, <span class="number">1</span>)             <span class="comment">; r is nodes: list's type says so</span>
+<span class="keyword">fixed</span> other = push[nodes](<span class="keyword">none</span>, <span class="number">2</span>) <span class="comment">; nothing names a region, so it is written</span></pre>
+          <ul>
+            <li>
+              <strong>Rule:</strong> the brackets may be left out when the
+              arguments' types, or the type the result must fit, name every
+              region parameter. Otherwise the call is an error that asks for
+              them:
+              <em
+                >cannot tell which region 'push' allocates in; write
+                push[r](…)</em
+              >.
+            </li>
+            <li>
+              <strong>Sound:</strong> the inferred region must be one the caller
+              can allocate in; a region the caller only names is still an error
+              that suggests taking <code>r: region</code>.
+            </li>
+            <li>
+              <strong>Implementable:</strong> calls already infer a task's
+              regions from its arguments (<code>unify_regions</code> in the
+              checker); a missing region argument would use the same result,
+              plus the expected type that <code>coerce</code> already has for
+              bindings, assignments, arguments, and sends.
+            </li>
+            <li>
+              <strong>Needs brackets:</strong> with today's positional region
+              parameters, "one argument fewer" can't be told apart from a
+              forgotten argument, and a task with two region parameters would be
+              ambiguous.
+            </li>
+            <li>
+              <strong>Cost to readers:</strong> the call no longer shows where
+              memory goes. Vela Studio can show the inferred
+              <code>[nodes]</code> as an inline hint.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>fixed p: ^int@scratch = new int(1)</code>:
+            <code>new</code> takes its region from the type
+            <span class="badge b-maybe">Worth trying</span>
+          </h4>
+          <ul>
+            <li>
+              When the place a <code>new</code> goes already names a region (a
+              typed binding, an assignment, a field, an argument, or a send in a
+              task whose result names it), <code>at r</code> could be left out.
+            </li>
+            <li>
+              Small: the checker would fill in <code>new</code>'s region from
+              the expected type, with the same error as today when nothing names
+              one.
+            </li>
+            <li>
+              Best limited to places where the region is written on the same
+              line, such as typed bindings, so the source still says where
+              memory goes.
+            </li>
+          </ul>
+        </div>
+
+        <div class="idea">
+          <h4>
+            <code>region r default</code>: a default region for a block
+            <span class="badge b-done">Done</span>
+          </h4>
+          <ul>
+            <li>
+              Built on 2026-09-24, and written up as
+              <a href="#default-region">Lesson 10</a>: a block, or a task
+              through <code>r: region default</code>, names one region, and
+              everything in it that allocates without naming a region goes
+              there.
+            </li>
+            <li>
+              This was <em>Not recommended</em> here, for hiding where memory
+              goes behind something declared lines away. What changed the
+              verdict was measuring it: of the lines that allocate and name a
+              region in <code>examples/</code> and <code>tests/run/</code>, only
+              about one in nine also writes that region in a type on the same
+              line, so the narrower idea below (<code>new</code> takes its
+              region from the type) reaches few of them, while a default reaches
+              nearly all — a cut of about two thirds in the region names those
+              lines carry.
+            </li>
+            <li>
+              What answers the objection: it is opt-in, a block names one
+              default at most (so two lines in a block never differ in where
+              they allocate), the region is still in every value's type, and a
+              copy keeps taking its region from the place it goes. Region
+              arguments at calls are untouched; that is the idea above.
+            </li>
+          </ul>
+        </div>
+
+        <h3 id="ideas-free">Freeing one value early</h3>
+        <div class="idea">
+          <h4>
+            Smaller regions <span class="badge b-now">Available now</span>
+          </h4>
+          <p>
+            The model's own answer: a value that should go early belongs in a
+            region that ends early. It covers most cases, but not long-lived
+            data where individual values come and go, like a cache or a game's
+            entities.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Owned pointers with <code>drop</code>
+            <span class="badge b-rec">Recommended, long term</span>
+          </h4>
+          <pre><span class="keyword">region</span> cache
+<span class="keyword">fixed</span> big = <span class="keyword">new</span> own Buffer(Buffer { size: <span class="number">1024</span> }) <span class="keyword">at</span> cache
+read(big^)
+drop big                         <span class="comment">; its memory goes back to the region now</span>
+show(big^.size)                  <span class="comment">; error: 'big' was dropped</span></pre>
+          <ul>
+            <li>
+              An <code>own ^T@r</code> is move-only (the
+              <em>linear ownership</em> option in
+              <a href="future.html#memory">Future Directions</a>): assigning or
+              passing it moves it, and the old name can't be used again. Since
+              there is only ever one, <code>drop</code> can free it safely.
+            </li>
+            <li>
+              The region keeps dropped memory in free lists by size and reuses
+              it for later allocations of that size.
+            </li>
+            <li>
+              Cost: a move checker (which variables have been moved from, on
+              every path), and an <code>own</code> pointer can't be copied into
+              shapes freely. Plain <code>^T@r</code> pointers keep working as
+              today.
+            </li>
+          </ul>
+        </div>
+        <div class="idea">
+          <h4>
+            Pools with checked handles
+            <span class="badge b-maybe">Worth trying</span>
+          </h4>
+          <pre>pool entities of Entity <span class="keyword">at</span> world
+<span class="keyword">fixed</span> player = entities.add(Entity { health: <span class="number">100</span> })  <span class="comment">; a handle, not a pointer</span>
+entities.remove(player)
+<span class="keyword">when</span> entities.get(player) <span class="keyword">is</span> {e}                     <span class="comment">; none: removed</span>
+    show(e^.health)
+<span class="keyword">fi</span></pre>
+          <ul>
+            <li>
+              A pool hands out handles (a slot index and a generation number).
+              Removing a value frees its slot; a stale handle is detected at run
+              time because its generation no longer matches, so
+              <code>get</code> gives a <code>maybe</code>.
+            </li>
+            <li>
+              Safe without a move checker, and a good fit for long-lived,
+              changing collections (games, caches, graphs being edited). The
+              cost is a small run-time check on every access, and handles
+              instead of pointers.
+            </li>
+          </ul>
+        </div>
+        <div class="idea">
+          <h4>
+            Recycling memory by type
+            <span class="badge b-no">Not recommended</span>
+          </h4>
+          <p>
+            <code>recycle p</code> could return <code>p</code>'s memory for the
+            next <code>new</code> of the same type in the region, without
+            checking that <code>p</code> is the only pointer. The memory stays a
+            valid <code>T</code>, so it can't crash, but an old pointer would
+            silently see a different value: a use-after-free bug without the
+            undefined behavior. That trades a crash for a wrong answer, which is
+            worse.
+          </p>
+        </div>
+
+        <h3 id="ideas-limits">Lifting today's limitations</h3>
+        <div class="idea">
+          <h4>
+            Result-only regions are free
+            <span class="badge b-rec">Recommended, small</span>
+          </h4>
+          <p>
+            Fixes <a href="#limit-result">this limitation</a>. A region that
+            only the result names (no parameter names it, and it isn't a
+            <code>region</code> parameter) can only ever hold values without
+            pointers: the task has no pointer into it and no way to allocate
+            there, and its body can't declare a region with that name. So
+            <code>task leaf() -&gt; Tree@r</code>
+            is sound, and each call's result can be in no region
+            (<code>@_</code>) and take the region of the place it goes, as
+            <code>Leaf(1)</code> does. The change is removing one error from the
+            header check.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Typed case forms and region inference for bindings
+            <span class="badge b-rec">Recommended</span>
+          </h4>
+          <pre><span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {<span class="keyword">flex</span> n: ^Node@a} <span class="comment">; the case form names the region</span>
+    n^.next = q
+<span class="keyword">fi</span>
+
+<span class="keyword">flex</span> head = Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }
+head.next = push(nodes, <span class="keyword">none</span>, <span class="number">2</span>)      <span class="comment">; head's region is inferred from this line</span></pre>
+          <ul>
+            <li>
+              Fixes <a href="#limit-pattern">this limitation</a> and
+              <a href="#limit-binding">this one</a>.
+            </li>
+            <li>
+              <strong>Typed case forms</strong> are small: a case form's name
+              may have a type, which the value must fit (an
+              <code>@_</code> value fits any region).
+            </li>
+            <li>
+              <strong>Inference</strong> is larger: a binding of a value in no
+              region gets a region variable that the first use with a real
+              region settles, checked across the whole task. A variable nothing
+              settles never holds a pointer, so any region is correct for it.
+            </li>
+          </ul>
+        </div>
+        <div class="idea">
+          <h4>
+            Shapes with several regions
+            <span class="badge b-maybe">Worth trying</span>
+          </h4>
+          <pre><span class="keyword">shape</span> Edge[from, to]
+    source: ^Node@from
+    target: ^Node@to
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> connect(a: ^Node@x, b: ^Node@y) -&gt; Edge[x, y]
+    <span class="keyword">&lt;-</span> Edge { source: a, target: b }
+<span class="keyword">fi</span></pre>
+          <p>
+            Fixes <a href="#limit-one-region">this limitation</a> for data that
+            really spans regions. <code>Node@r</code> would stay the shorthand
+            for a shape with one region. It fits the bracket syntax above. The
+            cost is in the checker: a shape's regions are substituted like a
+            task's, and every field access maps them.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Younger data pointing at older data
+            <span class="badge b-later">Later, with borrowing</span>
+          </h4>
+          <p>
+            Fixes <a href="#limit-younger">this limitation</a>, but it needs
+            care. An enclosing region always outlives the regions of the blocks
+            inside it, so storing a pointer into <code>outer</code> in a value
+            in <code>inner</code> is safe. Simply letting
+            <code>^Node@outer</code> pass as a <code>^Node@inner</code> is
+            <strong>not</strong> safe, though: through that pointer, a program
+            could write a pointer into <code>inner</code> into a node that lives
+            in <code>outer</code>, and it would dangle when
+            <code>inner</code> is freed. It is only sound for pointers that
+            can't be written through: read-only views, which is the borrowing
+            idea (<code>&amp;T</code>) in
+            <a href="future.html#memory">Future Directions</a>. With several
+            regions per shape (above), <code>shape Leaf[own, parent]</code> is
+            another way to say it.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            A generated copy: <code>value.copy()</code>
+            <span class="badge b-done">Done</span>
+          </h4>
+          <p>
+            Done (2026-09-17): <code>value.copy()</code> copies into the region
+            the place it goes names, as in
+            <code>node^.title = line.copy()</code>, or into <code>r</code> with
+            <code>value.copy() at r</code> (or <code>value.copy()@r</code>)
+            where nothing names one; see
+            <a href="index.html#copy">Copying into another region</a>. It copies
+            text, slices' items, and what pointers point to, all the way down,
+            and lifted the limit that a value holding pointers couldn't be
+            copied to another region whole. The compiler generates a copy for
+            each type the program copies; linked data can share nodes or form
+            cycles, so a copy keeps a table of what it has already copied (freed
+            when it ends) to keep shared nodes shared and to stop at cycles.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Moving a whole region into another
+            <span class="badge b-maybe">Worth trying</span>
+          </h4>
+          <pre><span class="keyword">region</span> kept
+<span class="keyword">each</span> line <span class="keyword">in</span> lines
+    <span class="keyword">region</span> work
+    <span class="keyword">fixed</span> parsed = parse(work, line)
+    <span class="keyword">when</span> parsed.ok
+        move work into kept          <span class="comment">; everything in work is in kept now; work can't be used again</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <p>
+            A cheaper alternative to copying, in some cases. A value can't be
+            moved out of a region on its own: a region hands out memory in
+            chunks and frees only whole chunks, and other pointers may still
+            reach the value, so freeing it early would leave them dangling. A
+            whole region can move, though. Its chunks would be linked into the
+            longer-lived region's list without copying a byte, and every value
+            of the moved region would count as the other region's from then on.
+            <strong>Rules it needs:</strong> the target must outlive the moved
+            region (it is declared in an enclosing block, or is a region
+            parameter); after the move, no name of the moved region can be used,
+            which is a flow check like the one for named results; and the values
+            that stay in variables are retyped to the target's region.
+            <strong>Cost:</strong> constant time, and no memory is copied, but
+            nothing is freed either: the moved region's scratch data comes
+            along. It suits building a value in a scratch region and keeping it
+            only when the work succeeds, where <code>.copy()</code>
+            would copy what is kept and free the rest.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Text fields of their own region, and tasks that take text of any
+            region <span class="badge b-maybe">Worth trying</span>
+          </h4>
+          <p>
+            Today a shape's text is in the one region of the value holding it,
+            and a task that reads text of a region names that region in its
+            header (<code>name: text@r</code>), as it does for pointers. Two
+            ideas would ease that. <strong>Per-field regions</strong> would let
+            a shape hold text of two regions, or text that lasts inside a value
+            in a region, as part of <em>Shapes with several regions</em> above.
+            <strong>Header elision</strong> would read a
+            <code>text</code> parameter, and a <code>Person</code> holding text,
+            as text of a region the header doesn't name, shared by the header's
+            other unnamed ones, so a task that only reads text needs no
+            <code>@r</code>; its results would need the same rule, as Rust's
+            lifetime elision has. Both were weighed when text got regions
+            (2026-09-17), and the plain rule came first: a region is written
+            where it matters.
+          </p>
+        </div>
+        <div class="idea">
+          <h4>
+            Handing a region to the next loop pass
+            <span class="badge b-later">Later, research</span>
+          </h4>
+          <p>
+            A long-running loop that keeps a changing state (a simulation, an
+            editor's document) would ideally copy the live state into a fresh
+            region each pass and free the old one, like a copying garbage
+            collector run by hand. Today a region can't outlive its pass. A
+            construct to "continue with this region as the next pass's region"
+            needs every variable that names the old region to be replaced at the
+            same time, which is a flow analysis of its own.
+          </p>
+        </div>
+
+        <h3 id="ideas-safety">Safety and diagnostics</h3>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>Idea</th>
+              <th>What it gives</th>
+              <th>Cost</th>
+              <th></th>
+            </tr>
+            <tr>
+              <td>A lint for growth in loops</td>
+              <td>
+                Warn when a loop allocates in a region declared outside it and
+                replaces the pointer (<a href="#limit-growth"
+                  >the growth pattern</a
+                >), suggesting <code>p^ = v</code> or a region inside the loop
+              </td>
+              <td>Small</td>
+              <td><span class="badge b-rec">Recommended</span></td>
+            </tr>
+            <tr>
+              <td>Explicit named regions: <code>task sum[r](…)</code></td>
+              <td>A misspelled region is an error at once</td>
+              <td>Small, with brackets</td>
+              <td><span class="badge b-rec">Recommended</span></td>
+            </tr>
+            <tr>
+              <td>Debug builds that poison freed memory</td>
+              <td>
+                Freed chunks are filled with a pattern (or unmapped), catching
+                bugs in C code that Vela calls, or in the compiler
+              </td>
+              <td>Small, runtime only</td>
+              <td><span class="badge b-maybe">Worth trying</span></td>
+            </tr>
+            <tr>
+              <td>Region statistics</td>
+              <td>
+                <code>VELA_REGION_STATS=1</code> prints each region's peak size
+                at exit, to find regions that grow
+              </td>
+              <td>Small, runtime only</td>
+              <td><span class="badge b-maybe">Worth trying</span></td>
+            </tr>
+            <tr>
+              <td>Limited regions</td>
+              <td>
+                <code>region cache max 64_000_000</code>, where
+                <code>new</code> gives <code>^T@r ~ OutOfMemory</code> instead
+                of stopping the program
+              </td>
+              <td>Medium</td>
+              <td><span class="badge b-maybe">Worth trying</span></td>
+            </tr>
+            <tr>
+              <td>Pointers from C</td>
+              <td>
+                Pointers C gives to Vela arrive in a region Vela never frees, as
+                <code>maybe ^T@extern</code>
+              </td>
+              <td>Medium, with C calls</td>
+              <td><span class="badge b-later">Later</span></td>
+            </tr>
+            <tr>
+              <td>Regions and threads</td>
+              <td>
+                A region belongs to the thread that declared it; handing a whole
+                region to another thread is safe, since every pointer into it
+                names it
+              </td>
+              <td>Large, with concurrency</td>
+              <td><span class="badge b-later">Later</span></td>
+            </tr>
+          </table>
+        </div>
+
+        <h3 id="ideas-performance">Performance</h3>
+        <div class="table-wrap">
+          <table>
+            <tr>
+              <th>Idea</th>
+              <th>What it gives</th>
+              <th>Cost</th>
+              <th></th>
+            </tr>
+            <tr>
+              <td>A chunk cache</td>
+              <td>
+                Freed chunks are kept (up to a limit) for the next region, so a
+                region per loop pass no longer calls <code>malloc</code> and
+                <code>free</code> on every pass
+              </td>
+              <td>Small, runtime only</td>
+              <td><span class="badge b-rec">Recommended</span></td>
+            </tr>
+            <tr>
+              <td>A first chunk on the stack</td>
+              <td>
+                A small buffer (say 256 bytes) inside the region's C variable,
+                so small regions never call <code>malloc</code>
+              </td>
+              <td>Small; bounded by stack size in deep recursion</td>
+              <td><span class="badge b-rec">Recommended</span></td>
+            </tr>
+            <tr>
+              <td>Size hints</td>
+              <td>
+                <code>region frame(64_000)</code> starts with one chunk of that
+                size
+              </td>
+              <td>Small</td>
+              <td><span class="badge b-maybe">Worth trying</span></td>
+            </tr>
+            <tr>
+              <td>Stack allocation</td>
+              <td>
+                A region whose allocations are few and of known size becomes
+                plain stack storage, with no allocator at all
+              </td>
+              <td>Medium (escape analysis)</td>
+              <td><span class="badge b-later">Later</span></td>
+            </tr>
+            <tr>
+              <td>Freeing nothing at exit</td>
+              <td>
+                <code>main</code>'s regions could skip their frees when the
+                program ends, since the system reclaims everything (behind a
+                flag, so leak checkers stay useful)
+              </td>
+              <td>Small</td>
+              <td><span class="badge b-maybe">Worth trying</span></td>
+            </tr>
+          </table>
+        </div>
+
+        <h3 id="ideas-models">Growing with the other memory models</h3>
+        <p>
+          Regions were chosen over the other options in
+          <a href="future.html#memory">Future Directions</a>, but those options
+          aren't discarded. Several combine well with regions:
+        </p>
+        <ul>
+          <li>
+            <strong>Borrowed, read-only references</strong> (from Rust's model):
+            a task could take a view into any region that lives at least as long
+            as the call, and younger data could point at older data (above).
+          </li>
+          <li>
+            <strong>Move-only ownership:</strong> <code>own</code> pointers that
+            can be dropped early (above), and that can move between threads.
+          </li>
+          <li>
+            <strong>Capabilities</strong> (<code>own</code>, <code>read</code>,
+            <code>write</code>, from the
+            <a href="future-2.html">second notebook</a>): a
+            <code>read ^Node@r</code> parameter would document and enforce that
+            a task doesn't change the list.
+          </li>
+          <li>
+            <strong>Reference counting</strong> for the few values shared across
+            a whole program, in a region kind of their own, without making every
+            pointer pay for it.
+          </li>
+        </ul>
+
+        <div class="note">
+          <p><strong>A suggested order.</strong></p>
+          <ol>
+            <li>
+              Small and safe: result-only regions, typed case forms, the growth
+              lint, the chunk cache, and a first chunk on the stack.
+            </li>
+            <li>
+              Region brackets with inferred region arguments, and
+              <code>new</code> taking its region from the type.
+            </li>
+            <li>Generated copies and shapes with several regions.</li>
+            <li>
+              Owned pointers with <code>drop</code>, or pools, once real
+              programs show which fits better.
+            </li>
+          </ol>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Vela — memory you can see, freed when its block ends.</p>
+    </footer>
+  </body>
+</html>

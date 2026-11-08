@@ -1,0 +1,1698 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — A Review</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --accent-5: #fbbf24;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 30%,
+            rgba(248, 113, 113, 0.1) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(167, 139, 250, 0.12) 0%,
+            transparent 40%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent-4), var(--accent-2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin-top: 1rem;
+        font-size: 1.25rem;
+        color: var(--muted);
+        max-width: 680px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 2rem;
+        color: var(--fg);
+      }
+      h3 {
+        margin: 0 0 0.75rem;
+        color: var(--fg);
+        font-size: 1.25rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      .keyword {
+        color: var(--accent-2);
+      }
+      .string {
+        color: var(--accent-3);
+      }
+      .comment {
+        color: var(--muted);
+      }
+      .intro {
+        font-size: 1.15rem;
+        color: var(--muted);
+        margin-bottom: 2rem;
+      }
+      .entry {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin: 1.25rem 0;
+      }
+      .entry dl {
+        margin: 0.75rem 0 0;
+      }
+      .entry dt {
+        color: var(--accent-2);
+        font-weight: 700;
+        margin-top: 0.75rem;
+      }
+      .entry dd {
+        margin: 0.25rem 0 0;
+        color: var(--muted);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .b-strong {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+      }
+      .b-warn {
+        background: rgba(250, 204, 21, 0.15);
+        color: #fde047;
+      }
+      .b-idea {
+        background: rgba(56, 189, 248, 0.15);
+        color: #7dd3fc;
+      }
+      .b-small {
+        background: rgba(52, 211, 153, 0.15);
+        color: #6ee7b7;
+      }
+      .b-medium {
+        background: rgba(251, 146, 60, 0.15);
+        color: #fdba74;
+      }
+      .b-big {
+        background: rgba(248, 113, 113, 0.15);
+        color: #fca5a5;
+      }
+      .b-on-table {
+        background: rgba(167, 139, 250, 0.15);
+        color: #c4b5fd;
+      }
+      .note {
+        background: linear-gradient(
+          90deg,
+          rgba(56, 189, 248, 0.1),
+          transparent
+        );
+        border-left: 4px solid var(--accent);
+        padding: 1.25rem 1.5rem;
+        border-radius: 0 0.75rem 0.75rem 0;
+        margin: 1.5rem 0;
+      }
+      .note strong {
+        color: var(--accent);
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1.5rem 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        color: var(--accent-2);
+        font-weight: 700;
+      }
+      td {
+        color: var(--muted);
+      }
+      main a {
+        color: var(--accent);
+      }
+      ul {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.6rem 0;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+        background: var(--bg-2);
+      }
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.75rem 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      @media (max-width: 600px) {
+        h1 {
+          font-size: 2.5rem;
+        }
+        h2 {
+          font-size: 1.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>A Review</h1>
+      <p class="tagline">
+        GLM and Kimi read the whole project together: what is strong, what could
+        be better, what to try, and what to leave alone.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html" aria-current="page">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <p class="intro">
+        This page is two readers' read of Vela: the language, the compiler, the
+        runtime, the library, the tests, the docs, and Vela Studio. GLM wrote
+        the first pass; Kimi revised it and added a second one. The first half
+        is GLM's voice, kept mostly as it was. The second half is Kimi's.
+        Nothing here changes the language; like
+        <a href="future-2.html">the second notebook</a>, these are voices to
+        agree with or argue against.
+      </p>
+
+      <div class="note">
+        <strong>How we read it.</strong>
+        We built the compiler (<code>cargo build</code>), ran the whole suite
+        (<code>cargo test</code>, about a minute and a half on this machine;
+        every group passed), ran
+        <code>cargo clippy --all-targets</code> (clean), built and ran example
+        programs, and read the C the compiler writes (<code>--emit-c</code>). We
+        did not build Vela Studio, which needs Node and the
+        <code>wasm32</code> target; we read its crates instead. Marks below:
+        <span class="badge b-strong">strong</span> is where the project leads;
+        <span class="badge b-warn">watch</span> is a cost to keep an eye on;
+        <span class="badge b-idea">idea</span> is ours;
+        <span class="badge b-on-table">on the table</span> is already in a
+        future doc, and we say where.
+      </div>
+
+      <section>
+        <h2>What this project is</h2>
+        <p>
+          Vela is a small, statically typed systems language that compiles to
+          portable C11. The compiler is written in Rust and has no Cargo
+          dependencies; the workspace also holds Vela Studio, which does. It has
+          one kind of function (<code>task</code>), one record
+          (<code>shape</code>), one sum type (<code>kind</code>), exhaustive
+          <code>match</code>, <code>maybe</code> and <code>T ~ E</code> for what
+          may be missing or fail, and memory in named regions: a pointer's type
+          names the region it points into (<code>^T@r</code>), and a region
+          frees everything in it when its block closes. Mutation is marked at
+          both ends: an <code>alters</code> method, a
+          <code>flex&amp;</code> parameter, and the call's own
+          <code>&amp;a</code>. The library is written in Vela and held inside
+          the compiler; the runtime is one C header. There is an editor, Vela
+          Studio, sharing the compiler as a library.
+        </p>
+        <p>
+          The scope is unusual: most new languages chase size (bigger std,
+          bigger type system, bigger ecosystem). Vela chases auditability. Every
+          part is small enough to read in an evening, and the parts that can't
+          be small are documented as not small:
+          <a href="safety.html">Safety</a> lists every concern the checker
+          leaves open, and <a href="maywaste.html">May Waste</a> lists features
+          that may not earn their place. A language that keeps a list of its own
+          possible mistakes is rare, and it is the strongest sign of the whole
+          design.
+        </p>
+      </section>
+
+      <section>
+        <h2>What we verified</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>What</th>
+                <th>What we found</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>cargo build</code></td>
+                <td>Clean, fast; the compiler crate has no dependencies.</td>
+              </tr>
+              <tr>
+                <td><code>cargo test</code></td>
+                <td>
+                  All groups pass in about 90 seconds: 35 CLI tests, the driver,
+                  the lexer, internal errors, the runtime's C tests, and every
+                  program in <code>tests/run</code>, <code>tests/fail</code>,
+                  <code>tests/trap</code>, and <code>examples/</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><code>cargo clippy --all-targets</code></td>
+                <td>
+                  Clean. The <code>Cargo.toml</code> lints deny
+                  <code>unwrap</code>, <code>expect</code>, <code>panic!</code>,
+                  and unchecked indexing, so a crash in the compiler is a build
+                  failure, not a user's surprise.
+                </td>
+              </tr>
+              <tr>
+                <td>Generated C</td>
+                <td>
+                  Readable: shapes as structs, kinds as tagged unions, one
+                  function per task, names kept close to Vela's. The suite also
+                  compiles it as strict ISO C11 (<code
+                    >-pedantic-errors -Wall -Wextra -Werror</code
+                  >) and runs it under AddressSanitizer and
+                  UndefinedBehaviorSanitizer with leak checks.
+                </td>
+              </tr>
+              <tr>
+                <td>Constant folding</td>
+                <td>
+                  <code>show(2 + 2)</code> becomes
+                  <code>(INT64_C(2) + INT64_C(2))</code>; only values worked out
+                  at run time go through the checked calls, and a constant that
+                  would overflow is refused while compiling.
+                </td>
+              </tr>
+              <tr>
+                <td>Examples</td>
+                <td>
+                  Every one we built ran and printed its <code>.out</code>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The test suite deserves its own line: the programs in
+          <code>tests/fail/</code> don't just fail to compile, each names the
+          exact message the compiler must give, which makes them a specification
+          of the compiler's words, not only of its rules. And the programs in
+          <a href="regions.html">the regions guide</a> run against the output
+          the page shows, so the tutorial can't quietly rot. Docs tested as code
+          is something most large languages still haven't managed.
+        </p>
+      </section>
+
+      <section>
+        <h2>What is strong</h2>
+
+        <div class="entry">
+          <h3>
+            One word for one idea, and the words say what they mean
+            <span class="badge b-strong">strong</span>
+          </h3>
+          <p>
+            <code>fixed</code> never changes and <code>flex</code> may;
+            <code>-&gt;</code> names what a task gives and
+            <code>&lt;-</code> gives it; <code>maybe T</code> and
+            <code>T ~ E</code> make absence and failure types a caller must
+            face; <code>fi</code> closes every block so nesting is visible; a
+            plan B (<code>x { fallback }</code>) reads as what it is. The
+            reserve is the real achievement: there is no
+            <code>else if</code> beside <code>else when</code>, no
+            <code>struct</code> beside <code>shape</code>, no second way to
+            write anything except where
+            <a href="maywaste.html">May Waste</a> has already opened the
+            question. Even the operators are audited: <code>==</code> compares
+            by where a value is when that is the honest answer, and
+            <code>~=</code> says item by item when that is what's meant.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Regions: lifetimes you can see
+            <span class="badge b-strong">strong</span>
+          </h3>
+          <p>
+            A region is declared inside a block; the block's end frees it. There
+            are no hidden lifetimes &mdash; the only annotation is
+            <code>@r</code>, and a block can name one region default so
+            <code>@r</code> can be left off. What it buys: no null pointers, no
+            dangling pointers, no use-after-free, no memory leaks past a block,
+            allocation that costs a bump, and freeing that costs a
+            <code>free</code> of a few chunks. What it costs is honestly listed
+            in <a href="regions.html#limits">the guide</a>: one region per
+            value, no younger data pointing at older data, and region parameters
+            threading through call chains. On the evidence of the examples, the
+            model fits the language's intended work (compilers, batch tools,
+            request-shaped programs) exactly as the guide claims.
+          </p>
+          <p>
+            The runtime is a pleasure to read: chunks double from 4&nbsp;KB to
+            1&nbsp;MB; an allocation too big to fit half a chunk gets a chunk of
+            its own placed <em>behind</em> the newest so small allocations keep
+            their room; text grows at the chunk's tip so a join can grow in
+            place; files opened in a region are tracked by it and close when it
+            closes. Someone thought about each case.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Mutation marked at both ends
+            <span class="badge b-strong">strong</span>
+          </h3>
+          <p>
+            <code>alters grow(...)</code> at the definition and
+            <code>c.grow()</code> on a <code>fixed</code> refused at the call;
+            <code>flex&amp; n</code> in a header and <code>f(&amp;n)</code> at
+            the call site; a call that gives one place twice where it changes
+            it, refused. Reading a call tells you what may change, without
+            looking at the callee. C++<code>const</code> and Rust
+            <code>&amp;mut</code> both put the burden on one end or the other;
+            Vela's two-sided marks are the cleanest version of this idea I've
+            seen in a small language.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>Errors that teach <span class="badge b-strong">strong</span></h3>
+          <p>
+            The messages say what is wrong, where, and what to write instead:
+            <code
+              >'&lt;-' sends a value and must start a line; to compare with a
+              negative number, write '&lt; -'</code
+            >;
+            <code
+              >'each i, x' names a key and its value, which only a map gives;
+              this gives one item at a time, so name one</code
+            >. The line, the caret, and the suggestion make the compiler a
+            teacher rather than a gate. Keeping those messages as
+            <code>tests/fail/</code> programs pins them forever, which is why
+            they stay good.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            The library is the language
+            <span class="badge b-strong">strong</span>
+          </h3>
+          <p>
+            <code>std/files</code> and <code>std/math</code> are Vela source
+            compiled into the compiler; only what Vela can't say (<em
+              >ask the system about this file</em
+            >) is a <code>native</code> task with its body in the runtime
+            header, and a program may not write one. So the library works in the
+            command, in Studio, and in the web editor with nothing installed,
+            and a program can't use it as a hatch into arbitrary C. That is a
+            principled FFI story in miniature.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Generic words instead of traits
+            <span class="badge b-strong">strong</span>
+          </h3>
+          <p>
+            <code>&lt;T: ordered&gt;</code>, <code>shown</code>,
+            <code>same</code>, <code>similar</code>, <code>frozen</code>: small
+            structural promises instead of declared interfaces. A type has them
+            by what it is, no impl blocks, no coherence rules, no orphan
+            instances to argue about. For a language this size it is the right
+            trade, and
+            <a href="maywaste.html"
+              >the project is already auditing the words</a
+            >
+            in case <code>same</code> is too cheap to have to say.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>What could be better</h2>
+        <p>
+          Nothing below is a defect: the build is clean, the suite passes, and
+          every design cost we found is already written down by the project
+          itself. These are the places where we think the next effort pays best.
+        </p>
+
+        <div class="entry">
+          <h3>
+            The checker and the C writer have grown past one file
+            <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            <code>src/check.rs</code> is about eleven thousand lines and
+            <code>src/codegen.rs</code> about five thousand; the parser is near
+            four thousand, and the lexer and AST near one and two thousand,
+            which reads well. The pipeline (lexer &rarr; parser &rarr; checker
+            &rarr; C) is the right shape; the passes themselves could now be
+            split the way the checker already splits its <em>work</em> (headers,
+            statements, expressions, regions, generics, monomorphization), as
+            private modules behind the same public functions. Nothing about the
+            language changes; it's a filing task, and it would keep the "read a
+            pass in an evening" property the project values as the checker keeps
+            growing.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            The language's own names live in several places
+            <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            The reserved words are in
+            <code>lexer.rs</code> (<code>KEYWORDS</code>), the builtin types and
+            tasks in <code>ast.rs</code> (<code>BUILTIN_TYPES</code>,
+            <code>BUILTIN_TASKS</code>, <code>BUILTIN_KIND_NAMES</code>), the
+            natives in <code>library.rs</code>, Studio's scanning in
+            <code>ide/analysis/src/scan.rs</code>, and the tables in the docs.
+            Each is right where a reader wants it, which is the point, but
+            nothing asserts they agree. One test that walks every list and
+            checks each entry against a single <code>builtins.rs</code> (or just
+            against each other) would turn a quiet drift into a red build. The
+            pieces to build it from already exist, since Studio imports the
+            compiler's lists.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Every checked op carries its place as a string
+            <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            In the generated C, each checked operation passes where it is as a
+            literal:
+            <code>vela__rt__add(a, 2, "3:16 in task 'main'")</code>. The checks
+            are already cheap (the overflow builtins fold to a jumped
+            <code>jo</code>, and constant arithmetic is folded at compile time),
+            but a program with many operations embeds one string per site and
+            pushes a pointer for each. An interned table &mdash; a
+            <code>static</code> array of the place strings, each site passing a
+            small index &mdash; would make binaries smaller and the instruction
+            stream shorter, with the same messages. It is a contained change in
+            the C writer and the runtime's trappers alone.
+          </p>
+          <pre><span class="comment">; today</span>
+vela__rt__add(a, <span class="number">2</span>, <span class="string">"3:16 in task 'main'"</span>)
+<span class="comment">; with an interned table</span>
+vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>)   <span class="comment">; site 17 is "3:16 in task 'main'"</span></pre>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Floats print with six digits <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            <code>show</code> and <code>str</code> print floats with
+            <code>%g</code>: six significant digits, and <code>1e+06</code> for
+            large numbers. A shortest-round-trip printer (Ryu or Grisu) would
+            let <code>x.str() at r</code> read back equal to
+            <code>x</code> every time &mdash; the property a program that writes
+            and reads its own data wants &mdash; while <code>show</code> could
+            keep today's shape. The runtime already has exact integer-to-text
+            conversion for its overflow messages; a float shortest-round-trip
+            printer would sit naturally beside it.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            The docs' code blocks are colored by hand
+            <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            Every example in every page is highlighted as
+            <code>&lt;span class="keyword"&gt;</code> by hand, and the programs
+            in <a href="regions.html">the regions guide</a> already run against
+            their shown output. The compiler already offers the tool:
+            <code>vela::lexer::highlight</code> splits source into tokens
+            without stopping at errors. A small checker that takes each
+            <code>&lt;pre&gt;</code> block marked as a program, re-renders it
+            with the lexer, and reports a difference would keep ten pages of
+            hand-work honest for the price of one script &mdash; the same trick
+            the <code>tests/fail/</code> suite uses on the compiler's own words.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            The README opens with a wall <span class="badge b-warn">watch</span>
+          </h3>
+          <p>
+            The guide pages are a model of short declarative prose, and the
+            README's first section is one enormous paragraph covering the whole
+            language. It is a statement of intent &mdash; everything is there
+            &mdash; but it is the one page a new reader meets first, and the
+            only one that works against scanning. Three or four short sections
+            (<em>what it is</em>, <em>what memory does</em>,
+            <em>what failure is</em>, with the rest staying as it is) would keep
+            the voice and lose the wall.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>What GLM would try</h2>
+        <p>
+          Each idea below says what it adds, what it costs, and how it fits the
+          rules the language already has. Two are already on the table in
+          another doc; those say so and take a position. None needs a borrow
+          checker, a trait system, or a second way to write something that
+          already has one.
+        </p>
+
+        <div class="entry">
+          <h3>
+            A guard build: <code>vela --guard</code>
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-medium">medium</span>
+          </h3>
+          <p>
+            <a href="safety.html">Safety</a> lists, for every open concern, the
+            check a running program could do; they are written as separate "ways
+            it could go". One flag could turn them all on at once:
+          </p>
+          <ul>
+            <li>
+              a call-depth counter, catching the runaway recursion that today is
+              a bare segmentation fault;
+            </li>
+            <li>
+              where a call gives a place behind a pointer beside another pointer
+              that may reach it, a check at the call that the two addresses
+              differ, trapping when they don't;
+            </li>
+            <li>
+              a generation number on each slice, raised by <code>add</code> and
+              <code>del</code>, and a view (<code>xs[a..b]</code>, a loop's own
+              copy) that reports when it outlives one.
+            </li>
+          </ul>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              The open concerns stop being reading material and become a mode a
+              program can run in while hunting a bug, the way the project's own
+              suite already runs everything under the sanitizers. Nothing
+              changes in the language; a trap in a guard build is a message
+              saying where, like every other stop.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              A second runtime path to keep honest, and slower programs &mdash;
+              the same trade <code>--quick</code> already asks about, in the
+              other direction. The checker is untouched, so the guard build is a
+              runtime and C-writer matter alone.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            A bigger library, written the way the library is written
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            Today a program can't read its own command line or environment (we
+            checked: nothing in the language or
+            <code>std/</code> names them), the examples hand-write a sort, and
+            the guide's own Current Limits list text search, trimming, and case
+            changes as missing. All of it is Vela-shaped work:
+          </p>
+          <pre><span class="keyword">include</span> std/sys {args}
+<span class="keyword">include</span> std/slices {sort}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">each</span> a <span class="keyword">in</span> args
+        show(a)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+          <ul>
+            <li>
+              <strong><code>std/sys</code></strong
+              >: <code>args</code> (the command line as a slice of text),
+              <code>env(name) at r</code>, <code>exit(n)</code>. Small native
+              tasks, like the files'.
+            </li>
+            <li>
+              <strong><code>std/slices</code></strong
+              >: <code>sort</code>, <code>find</code>, <code>sum</code>,
+              <code>min</code>, <code>max</code>, over
+              <code>&lt;T: ordered&gt;</code> and
+              <code>&lt;T: same&gt;</code> &mdash; the generic words already say
+              all of it.
+            </li>
+            <li>
+              <strong><code>std/text</code></strong
+              >: <code>find</code>, <code>split</code>, <code>trim</code>,
+              <code>upper</code>, <code>lower</code>, each returning text of the
+              region it's given, as the guide's own limits page sketches.
+            </li>
+            <li>
+              <strong><code>std/random</code></strong
+              >: a seeded generator with <code>next(r) -&gt; int</code> and
+              <code>below(n)</code>, so tests can be made repeatable.
+            </li>
+          </ul>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              The parts every program outside the examples actually reaches for,
+              without one new language rule. And since the library is held by
+              the compiler, every tool gets it at once.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              Pages in the docs and tests in the suite, and a decision the
+              project has already learned to make (see
+              <a href="std.html">how <code>std/files</code> was cut</a>): which
+              parts belong in Vela and which are natives.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Bitwise work as methods
+            <span class="badge b-on-table">on the table</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            A systems language with no way to and, or, xor, or shift a bit (we
+            looked; there is none) leaves a gap between what it means to be
+            &mdash; bytes, units, chars &mdash; and what it lets a program say.
+            New symbols would fight the ones already earning their place (<code
+              >&amp;</code
+            >
+            marks a place, <code>~</code> is the error side,
+            <code>^</code> points).
+            <a href="future.html#bitwise">Future Directions</a> has already
+            chosen C's symbols, <code>&amp;</code>, <code>|</code>,
+            <code>&lt;&lt;</code> and <code>&gt;&gt;</code> (2026-09-23), for
+            reading as C does, and lists what they must settle (the
+            <code>&gt;&gt;</code> that closes nested types, the
+            <code>|</code> error message); this is the case for the other way.
+            Methods fit the language's own rule, that a member of a value is
+            written after a dot:
+          </p>
+          <pre><span class="keyword">fixed</span> flags = <span class="number">0b1010</span>
+flags = flags.bor(<span class="number">0b0110</span>)          <span class="comment">; 0b1110</span>
+show(flags.band(<span class="number">0b0010</span>), flags.shl(<span class="number">2</span>))
+flex c: unit = <span class="number">0xff</span>
+show(c.shr(<span class="number">4</span>), c.bnot())            <span class="comment">; 15 0</span></pre>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              Flags, hashes, packings, and masks, on <code>int</code>,
+              <code>unit</code>, and <code>char</code> alike. A shift past the
+              value's bits stops the program with a message, as arithmetic does;
+              a result that can't fit (an <code>int</code> shifted left past 63)
+              stops it too.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              Six methods on three types, in the builtin list the compiler
+              already keeps, and the choice of a result type per operation
+              &mdash; the same choice <code>+</code> already makes between
+              <code>int</code> and <code>float</code>. No grammar changes at
+              all.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            An index beside the item: <code>each i, v in xs</code>
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            A map's loop gives a key and its value together; a slice's gives one
+            item and points at the refuse a program gets today (<em
+              >'each i, x' names a key and its value, which only a map gives</em
+            >). The examples pay the tax everywhere, walking
+            <code>0..len</code> just to count:
+          </p>
+          <pre><span class="comment">; today</span>
+each i in 0..xs.len
+    when xs[i] &gt; <span class="number">0</span>
+        seen++
+    fi
+fi
+<span class="comment">; the idea</span>
+each i, x in xs
+    when x &gt; <span class="number">0</span>
+        seen++
+    fi
+fi</pre>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              The index beside the item, checked once at the loop's start, the
+              way a map's loop already works. The error message the compiler
+              gives today is practically asking for it.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              One more form of <code>each</code>, and the rule that
+              <code>each v in &amp;xs</code> (as it is at each pass) gives the
+              index too, which it would.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Ranges in case forms: <code>when c is 'a'..'z'</code>
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            <code>match</code> stays on kinds, and the guide refuses a plain
+            number in a <code>case</code>; but <code>is</code> already opens a
+            <code>maybe</code> or a variant in a condition, and ranges already
+            live in slices and loops. Letting a range stand in <code>is</code>,
+            and in a <code>case</code> of a kind whose payload is an
+            <code>int</code> or a <code>char</code>, would compress the chains
+            that grade and classify:
+          </p>
+          <pre>when c is <span class="string">'a'</span>..<span class="string">'z'</span>
+    letters++
+fi</pre>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              One condition where today a program writes an
+              <code>else when</code> chain, and one case where it writes
+              several. The bounds would be constants, as an array's count is.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              A case form that isn't a single value, which the checker's code
+              for case forms must carry, and the rule that a range's ends are
+              constants so the compiler can order them. Exhaustiveness is
+              untouched: a range never covers a kind's variants by itself, so
+              the anything case still does its work.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            A formatter: <code>vela fmt</code>
+            <span class="badge b-on-table">on the table</span>
+            <span class="badge b-medium">medium</span>
+          </h3>
+          <p>
+            <a href="future.html">Future Directions</a> lists a formatter among
+            its tools; this is how it could go. The language is nearly canonical
+            already: one statement a line, blocks closed with <code>fi</code>,
+            four-space steps, expressions on one line. Every example, test, and
+            doc page agrees on one layout &mdash; by hand. A formatter would
+            mostly be a checker: it can't break a line the grammar won't, so its
+            decisions are few (where the <code>=&gt;</code> of an include goes,
+            how a long shape literal or a long header wraps, whether to keep
+            <code>else</code> on the <code>when</code>'s line, as the docs do).
+          </p>
+          <dl>
+            <dt>What it adds</dt>
+            <dd>
+              Ends the layout question for every program, forever, and keeps
+              examples, tests, and the docs' hand-highlighted blocks in step.
+              Written against the parser the compiler already has, it is the one
+              tool that gets <em>cheaper</em> as the language stays small.
+            </dd>
+            <dt>What it costs</dt>
+            <dd>
+              A decision for each form, taken once, and a rule for the few forms
+              the grammar leaves open today (a long header, a long literal)
+              &mdash; which wants the multi-line forms decided at the same time,
+              a small piece of future work the guide already points at.
+            </dd>
+          </dl>
+        </div>
+
+        <div class="entry">
+          <h3>
+            A fuzzer for the invariant that matters
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            The project states its own deepest rule: an internal compiler error
+            is a report, not a crash, and the lints already deny the panics. The
+            corpus to break it with already exists: a thousand refused programs
+            in <code>tests/fail/</code>, each pinned to its exact message. A
+            coverage-guided fuzzer over <code>front_end_partial</code> and
+            <code>check_program</code> &mdash; whatever bytes go in, a rendered
+            error or a checked program comes out &mdash; would take the
+            invariant from "the tests say so" to "nothing found a counterexample
+            today". A nightly job that files each new finding as the next
+            <code>tests/fail/</code> program would make the corpus grow itself.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Debug builds with the map back to Vela
+            <span class="badge b-on-table">on the table</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            <a href="future-2.html">The second notebook</a> already proposes
+            <code>#line</code> directives so C compiler errors and debuggers
+            point at Vela source. I would take that position and add the other
+            half: a <code>vela --debug</code> that passes <code>-g</code> to the
+            C compiler and keeps the generated C in the build dir, so
+            <code>gdb</code> steps a program and lists the
+            <code>.vela</code> file it came from. The readable-C design makes
+            this a short walk: the names in the C are already the names in the
+            program, and every trap already knows where it is. This is the piece
+            that turns "readable C" from a comfort into a tool.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Testing in the language: <code>vela test</code>
+            <span class="badge b-on-table">on the table</span>
+            <span class="badge b-medium">medium</span>
+          </h3>
+          <p>
+            <a href="future.html">Future Directions</a> already lists built-in
+            testing as an idea, and the shape of it is sitting in this
+            repository: <code>tests/run/</code> programs are named, they print
+            their output, and the harness compares it. The language half is
+            small from there &mdash; a task whose name starts <code>test</code>,
+            run by <code>vela test</code> beside <code>main</code>, with a
+            failure rendered the way every other stop is (file, line, caret, and
+            what was expected). My addition to the existing idea is only this:
+            the runner should reuse the whole existing harness, because it
+            already knows how to run programs, feed them input, and diff their
+            output, and a test runner is mostly that.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            A lint for the recursion that looks like a loop
+            <span class="badge b-idea">idea</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            The examples walk lists and recurse, as idiomatic Vela does; the
+            guide says plainly that a deep call chain stops the program with the
+            system's own crash and no message. C compilers often turn a
+            self-recursive tail into a jump, but never promise to, and the
+            checked calls between caller and callee can block the optimization.
+            A lint that names a task whose every path ends in a send that only
+            calls the task itself &mdash; a tail that reads as a loop but isn't
+            promised to be one &mdash; would point writers at the loop that is
+            guaranteed, and at
+            <a href="safety.html">the guide's own open concern</a>, without
+            adding one rule to the language.
+          </p>
+        </div>
+
+        <div class="entry">
+          <h3>
+            Type macros, the smallest step toward compile time
+            <span class="badge b-on-table">on the table</span>
+            <span class="badge b-small">small</span>
+          </h3>
+          <p>
+            <a href="future-2.html">The second notebook</a> reaches for full
+            <code>comptime</code>; before that there is a smaller stone to step
+            on. Today a macro names a value the compiler works out (<code
+              >#PI = 3.14159</code
+            >). Letting one name a <em>type</em> &mdash;
+            <code>#Vec2 = (float, float)</code>,
+            <code>#Grid = [int#64]</code> &mdash; would give tuples and arrays
+            the short names they now lack, with no new grammar: the
+            <code>#</code> line is already there, and a use site already says
+            <code>fixed</code> of what type it wants. The one honest cost is
+            that a name could then be a value or a type, which today it never
+            is; the rule "a macro is what its declaration says" answers it.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>What GLM would leave alone</h2>
+        <p>
+          The future docs together hold a shelf of ideas: borrowing on top of
+          regions, algebraic effects, typestate, SIMD, comptime, pipelines,
+          events, channels and actors, an LLVM backend, self-hosting. My read of
+          the project says the discipline is the product. In particular:
+        </p>
+        <ul>
+          <li>
+            <strong>No borrow checker, not even a small one.</strong> The region
+            rules are the one thing a reader can hold in their head whole; every
+            exception buys safety the <code>--guard</code> build could give at
+            run time instead, for the cost of one flag.
+          </li>
+          <li>
+            <strong>No traits or interfaces.</strong> The generic words are
+            structural, and the audit of them is already running (<a
+              href="maywaste.html"
+              >May Waste</a
+            >). Declared interfaces would add a second system that does the
+            first one's job.
+          </li>
+          <li>
+            <strong>No concurrency before the guard build exists.</strong>
+            <a href="safety.html">Safety</a> says it exactly: every shared place
+            becomes memory two threads may change together. When concurrency
+            comes, the guard build is the harness it will need on day one, and
+            building it first means the answer is already instrumented.
+          </li>
+          <li>
+            <strong>Keep the C backend.</strong> The strict-C11,
+            sanitizer-washed pipeline is why the generated code is trustworthy
+            anywhere, and readable C is the project's interop story. If size
+            pressure ever demands LLVM, the honest moment is after the formatter
+            and the fuzzer, when the language's own tests can hold the new
+            backend to the old one's word.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>GLM's order</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>What</th>
+                <th>Why here</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>
+                  Split <code>check.rs</code> and <code>codegen.rs</code> into
+                  private modules
+                </td>
+                <td>
+                  Health of the one codebase every other change lands in;
+                  nothing moves but the files.
+                </td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>A test that the builtin lists agree everywhere</td>
+                <td>
+                  One evening's work, and every future change stops having a
+                  second place to forget.
+                </td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>Intern the site strings in the generated C</td>
+                <td>
+                  Small, measurable, and it touches only the C writer and the
+                  trappers.
+                </td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td><code>std/sys</code> and <code>std/slices</code></td>
+                <td>
+                  Real programs need their own arguments and a sort; both are
+                  pure Vela plus two natives.
+                </td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>
+                  <code>each i, v</code>, range case forms, bitwise methods
+                </td>
+                <td>
+                  Three small language answers to costs the examples pay on
+                  every page.
+                </td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td><code>vela fmt</code></td>
+                <td>
+                  Locks the layout the project already agrees on, and keeps ten
+                  docs pages honest with it.
+                </td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td><code>vela --guard</code></td>
+                <td>
+                  The safety page becomes a mode; also the groundwork for
+                  whatever concurrency comes.
+                </td>
+              </tr>
+              <tr>
+                <td>8</td>
+                <td>
+                  The fuzzer, and <code>--debug</code> with the
+                  <code>#line</code> map
+                </td>
+                <td>
+                  Protects everything else, then makes it inspectable &mdash; in
+                  that order.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          If only one of these is taken, take the guard build. Everything else
+          makes the language or the compiler better; that one makes the
+          project's own honesty &mdash; the safety page that says where it can't
+          check &mdash; into something a program can ask for at run time. It is
+          the idea most in this project's spirit, because it adds no syntax at
+          all.
+        </p>
+      </section>
+
+      <section>
+        <h2>What Kimi adds</h2>
+        <p class="intro">
+          GLM read the project for its mechanics: the files, the tests, the
+          generated C, the places where the code has grown thick. I read it
+          again for what it could become &mdash; the product, the voice, the
+          bridge from a compiler to an ecosystem. The notes below are mine;
+          where they overlap with GLM's, I try to push further.
+        </p>
+
+        <div class="note">
+          <strong>Kimi's lens.</strong>
+          I care about whether a language is <em>adoptable</em> as well as
+          correct: the first hour, the first bug, the first shared library.
+          Vela's correctness is already unusual; the question that remains is
+          how many people will find it before they need something bigger.
+        </div>
+
+        <h3>The voice is a feature</h3>
+        <p>
+          GLM is right that the prose style is distinctive, but I would go
+          further: it is a competitive advantage. The docs read as if one
+          careful person is speaking, and that voice creates trust the way a
+          polished website never does. Most languages sound like committees;
+          Vela sounds like a person who has made up their mind. I would
+          formalize it:
+        </p>
+        <ul>
+          <li>
+            A short <strong>style guide for Vela's own docs</strong>: one idea a
+            sentence, active voice, no abbreviations, symbols only where they
+            read as pictures.
+          </li>
+          <li>
+            A <strong>lint for new docs pages</strong> that flags weasel words,
+            passive constructions, and sentences over thirty words &mdash; the
+            same way the compiler lints the code.
+          </li>
+        </ul>
+        <p>
+          The result is not vanity. When a reader hits a hard idea like regions,
+          the clarity of the surrounding prose is what carries them through. The
+          project has already done the hard part; writing it down as a rule
+          keeps it.
+        </p>
+
+        <h3>The test harness is a product</h3>
+        <p>
+          GLM praises the <code>tests/fail/</code> suite, and it is the right
+          thing to praise. I would expose it to the user. Today the harness is
+          internal; a <code>vela test</code> command could treat every program
+          the same way the project's own suite does:
+        </p>
+        <ul>
+          <li>
+            Run <code>tests/run/*.vela</code> against their
+            <code>.out</code> files.
+          </li>
+          <li>
+            Run <code>tests/fail/*.vela</code> and check the first line of each
+            for the error message.
+          </li>
+          <li>
+            Run <code>tests/trap/*.vela</code> and check the runtime stop.
+          </li>
+          <li>
+            A <code>--bless</code> flag that updates the golden files when the
+            compiler's wording deliberately changes.
+          </li>
+        </ul>
+        <p>
+          This is not a new idea &mdash;
+          <a href="future.html">Future Directions</a> already lists built-in
+          testing &mdash; but the shape is already finished in
+          <code>tests/programs.rs</code>. The work is mostly plumbing: read a
+          <code>tests/</code> folder beside the user's program and call the same
+          functions the compiler's own tests call. A user who writes twenty
+          <code>tests/fail/</code> cases has a specification of their library's
+          error contract, not just a test suite.
+        </p>
+
+        <h3>Literate programs: <code>.vela.md</code></h3>
+        <p>
+          The project already tests the programs inside
+          <a href="regions.html">the regions guide</a>. The next step is to make
+          that relationship general: a file ending in <code>.vela.md</code> is
+          Markdown whose fenced <code>```vela</code> blocks are the program, and
+          the prose between them is the documentation. Running
+          <code>vela run tutorial.vela.md</code> extracts the blocks in order
+          and compiles them.
+        </p>
+        <pre>```vela
+<span class="keyword">task</span> main()
+    show(<span class="string">"Hello from the guide"</span>)
+<span class="keyword">fi</span>
+```</pre>
+        <p>
+          What it adds: tutorials, papers, and notebooks become first-class Vela
+          artifacts. What it costs: a small extractor and the rule that prose
+          blocks are comments. It fits the project's obsession with
+          docs-as-code, and it gives Vela a format no mainstream systems
+          language has.
+        </p>
+
+        <h3>Error theater and region-colored editing</h3>
+        <p>
+          Vela Studio already has diagnostics, completion, and hover. The
+          obvious next step is to make the hard errors visual:
+        </p>
+        <ul>
+          <li>
+            <strong>Region timelines.</strong> When the compiler rejects a
+            pointer that outlives its region, Studio draws the two blocks: the
+            region that owns the value and the block that tries to keep it.
+          </li>
+          <li>
+            <strong>Aliasing arrows.</strong> For the
+            <code>flex&amp;</code> place-given-twice error, Studio shows the two
+            expressions that name the same place, with a line between them.
+          </li>
+          <li>
+            <strong>Region-colored types.</strong> Tint <code>^T@r</code>,
+            <code>text@r</code>, and <code>[T]@r</code> with a faint color per
+            region name in the editor, so a reader sees lifetime boundaries
+            without reading types.
+          </li>
+        </ul>
+        <p>
+          These are not gimmicks. They are the teaching tools the error messages
+          already are, extended to the one place a learner actually needs them:
+          the editor, at the moment of the mistake.
+        </p>
+
+        <h3>LSP and a web playground</h3>
+        <p>
+          The analysis crate (<code>ide/analysis</code>) already implements
+          highlighting, completion, hover, diagnostics, and outline. Wrapping it
+          in the Language Server Protocol would give VS Code, Neovim, and every
+          other editor the same support Vela Studio has, without asking users to
+          switch editors. The work is a thin adapter: the analysis crate is the
+          real engine.
+        </p>
+        <p>
+          The same crate is compiled to WebAssembly for the Studio web client. A
+          standalone <strong>Vela Playground</strong>
+          &mdash; paste code, see errors, run it in the browser &mdash; is a
+          natural sibling. It is the fastest way for a curious programmer to
+          spend their first hour with the language, and the wasm target is
+          already built.
+        </p>
+
+        <h3>Doc comments and <code>vela doc</code></h3>
+        <p>
+          Today comments start with <code>;</code> and no comment is a doc
+          comment. A second form &mdash; I would use <code>;;</code> &mdash;
+          marks text that belongs to the declaration below it:
+        </p>
+        <pre><span class="comment">;; Count how many items equal wanted.</span>
+<span class="keyword">task</span> countOf&lt;T: same&gt;(xs: [T]@r, wanted: T) -&gt; int
+    <span class="keyword">flex</span> seen = <span class="number">0</span>
+    <span class="keyword">each</span> v <span class="keyword">in</span> xs
+        <span class="keyword">when</span> v == wanted
+            seen++
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> seen
+<span class="keyword">fi</span></pre>
+        <p>
+          A <code>vela doc</code> command would collect these, the task headers,
+          the shape fields, and the kind variants, and emit the same dark HTML
+          the project already writes by hand. The docs' existing style becomes
+          the generated style. This is a small tool with a large effect: it
+          makes the library self-documenting the moment <code>std/</code> grows
+          past two modules.
+        </p>
+
+        <h3>Kinds that take types, and closures that capture</h3>
+        <p>
+          These are both already on the table (<a href="future.html"
+            >Future Directions</a
+          >), and I would put them near the front of the queue. They are not
+          eye-catching in isolation, but they unlock the idioms a reader
+          expects:
+        </p>
+        <pre><span class="keyword">kind</span> Result&lt;T, E&gt;
+    Ok(value: T)
+    Err(error: E)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> firstOk&lt;T, E&gt;(xs: [Result&lt;T, E&gt;]@r) -&gt; maybe T
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        <span class="keyword">when</span> x <span class="keyword">is</span> Ok {value}
+            <span class="keyword">&lt;-</span> value
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> none
+<span class="keyword">fi</span></pre>
+        <p>
+          And a lambda that captures a value by copying it into its own region,
+          as the second notebook sketches, would turn the current "lambda with
+          no context" into the closures the examples already want (counters,
+          callbacks, comparators with state). Both fit the existing machinery:
+          generic kinds are monomorphized the same way generic tasks are, and a
+          captured closure is a shape with a function pointer and fields.
+        </p>
+
+        <h3>Named and default arguments</h3>
+        <p>
+          Also already on the table, and the syntax practically designs itself:
+          Vela already writes every parameter as
+          <code>name: T</code>, so a default is <code>name: T = value</code> and
+          a call can name an argument when it wants to skip earlier ones:
+        </p>
+        <pre><span class="keyword">task</span> open(path: text, mode: FileMode = FileMode.Read)
+    ...
+<span class="keyword">fi</span>
+
+file.open(mode: FileMode.Write) <span class="keyword">at</span> r</pre>
+        <p>
+          This is the single most requested feature in almost every young
+          language, and Vela's parameter syntax is already halfway there. It
+          would also make the growing library more pleasant:
+          <code>math.log(x, base: 10.0)</code>
+          reads better than remembering the order.
+        </p>
+
+        <h3>Match on numbers and characters</h3>
+        <p>
+          GLM proposed range case forms in <code>is</code> and in cases of a
+          kind holding an <code>int</code>. I would go one step further and let
+          <code>match</code> itself work on <code>int</code> and
+          <code>char</code>, with ranges and a required anything case:
+        </p>
+        <pre><span class="keyword">match</span> grade
+<span class="keyword">case</span> <span class="number">90</span>..<span class="number">100</span> = <span class="string">"A"</span>
+<span class="keyword">case</span> <span class="number">80</span>..<span class="number">89</span>  = <span class="string">"B"</span>
+<span class="keyword">case</span> <span class="number">0</span>..<span class="number">79</span>   = <span class="string">"C"</span>
+<span class="keyword">case</span> _        = <span class="string">"?"</span>
+<span class="keyword">fi</span></pre>
+        <p>
+          The checker already knows how to insist on a complete
+          <code>match</code>; ranges just become a compact way to cover
+          contiguous values, with the same constant-bound rule arrays have. It
+          is a bigger change than GLM's range case forms, but it is the one that
+          makes <code>match</code> feel universal rather than kind-specific.
+        </p>
+
+        <h3>Format strings inside interpolation</h3>
+        <p>
+          Text interpolation is already one of Vela's nicest features. A small
+          extension to the braces would cover the cases where
+          <code>.str()</code> is not quite right:
+        </p>
+        <pre>show(<span class="string">"{n:04} {x:.2f}"</span> <span class="keyword">at</span> r)   <span class="comment">; 0042 3.14</span></pre>
+        <p>
+          The cost is a tiny parser inside the string parser and a few runtime
+          helpers. The benefit is that most everyday formatting needs never
+          leave the string. For a language that values readable syntax, keeping
+          the format close to the text is the right place.
+        </p>
+
+        <h3>Shape layout control</h3>
+        <p>
+          <a href="future-2.html">The second notebook</a> proposes controlled
+          shape layout, and I would add it early because it is small and
+          C-shaped:
+        </p>
+        <pre><span class="keyword">shape</span> Header
+    packed
+    magic: unit
+    version: unit
+    length: int
+<span class="keyword">fi</span></pre>
+        <p>
+          A <code>packed</code> keyword (or <code>align N</code>) tells the
+          compiler to generate a struct with no padding, which is exactly what
+          file formats and network protocols need. Since Vela already compiles
+          to C, this is mostly a matter of emitting
+          <code>__attribute__((packed))</code> or
+          <code>_Alignas</code> directives. It would make Vela credible for the
+          lowest-level parsing work without adding a type system feature.
+        </p>
+
+        <h3>Package manager as plain files</h3>
+        <p>
+          <a href="future.html">Future Directions</a> knows Vela needs packages.
+          I would avoid a central registry for as long as possible and use git
+          URLs:
+        </p>
+        <pre><span class="comment">; vela.toml</span>
+name = "mytool"
+version = "0.1.0"
+
+[dependencies]
+cli = { git = "https://github.com/example/vela-cli", tag = "v1.2.0" }</pre>
+        <p>
+          <code>vela init</code> creates the file;
+          <code>vela add cli</code> appends a dependency;
+          <code>vela build</code>
+          clones missing dependencies into a local cache and treats them as
+          modules. No registry, no semver solver, no ecosystem politics &mdash;
+          just files and tags, which matches the rest of the project's
+          minimalism. A central registry can come later, once the community
+          actually needs it.
+        </p>
+
+        <h3>Codegen: deduplicate and evaluate early</h3>
+        <p>
+          GLM's interned site table is a good small win. I would add two more,
+          both visible in the compiler today:
+        </p>
+        <ul>
+          <li>
+            <strong>Deduplicate generic instantiations.</strong> A generic task
+            monomorphized in two files for the same types currently becomes two
+            task definitions in the generated C. A global table of instantiated
+            bodies, keyed by the generic name and the concrete types, would emit
+            one copy and call it from both places. This is a standard compiler
+            optimization, but in Vela it also makes the generated C smaller and
+            faster to compile with the system's C compiler.
+          </li>
+          <li>
+            <strong>Fold pure task calls at compile time.</strong> A task that
+            only works on constants and has no side effects (no
+            <code>show</code>, no <code>new</code>, no <code>flex&amp;</code>)
+            could be evaluated while checking, the way macros are today. This is
+            the narrow end of the <code>comptime</code> idea in the second
+            notebook, and it would let macros grow into real functions without
+            losing their compile-time power.
+          </li>
+        </ul>
+
+        <h3>What Kimi would do first</h3>
+        <p>
+          GLM's priority list is sound, but my order differs where adoption is
+          the goal:
+        </p>
+        <ol>
+          <li>
+            <strong>Kinds that take types and closures that capture.</strong>
+            These unlock the patterns a new user expects; without them, Vela
+            feels artificially small.
+          </li>
+          <li>
+            <strong><code>vela doc</code> with doc comments.</strong> The docs
+            are already the project's crown; making them generatable keeps that
+            crown polished as the library grows.
+          </li>
+          <li>
+            <strong>LSP adapter and a web playground.</strong> The analysis
+            crate and the wasm build are already there; the gap is packaging.
+            This is the fastest way to put Vela in front of people who will not
+            install Studio.
+          </li>
+          <li>
+            <strong
+              ><code>std/sys</code>, <code>std/slices</code>,
+              <code>std/text</code>.</strong
+            >
+            GLM has these right; they make real programs possible.
+          </li>
+          <li>
+            <strong>Named/default arguments and match on numbers.</strong> Both
+            remove friction the examples already show.
+          </li>
+          <li>
+            <strong>The guard build.</strong> GLM puts this first, and it is the
+            most principled idea; I put it sixth only because I would rather
+            make the language worth guarding first. Both orders are defensible.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Together: a final list</h2>
+        <p>
+          GLM and I agree on the diagnosis: Vela is unusually coherent, and its
+          biggest risk is that it stays too small to be reached for. We differ
+          in emphasis &mdash; GLM favors compiler health and runtime honesty
+          first; I favor expressiveness and adoption first &mdash; but the union
+          of our lists is a reasonable roadmap. If the project wanted one
+          ordered pile, I would stack it like this:
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>What</th>
+                <th>Voice</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>
+                  Split <code>check.rs</code> and <code>codegen.rs</code> into
+                  private modules
+                </td>
+                <td>GLM</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td>Kinds that take types; closures that capture by copy</td>
+                <td>Kimi</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td>
+                  <code>std/sys</code>, <code>std/slices</code>,
+                  <code>std/text</code>
+                </td>
+                <td>GLM</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td>Doc comments and <code>vela doc</code></td>
+                <td>Kimi</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td>Named/default arguments</td>
+                <td>Kimi</td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td>
+                  Bitwise methods, <code>each i, v</code>, range case forms in
+                  <code>is</code>
+                </td>
+                <td>GLM</td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td>LSP adapter and Vela Playground</td>
+                <td>Kimi</td>
+              </tr>
+              <tr>
+                <td>8</td>
+                <td><code>vela fmt</code></td>
+                <td>GLM</td>
+              </tr>
+              <tr>
+                <td>9</td>
+                <td><code>vela --guard</code></td>
+                <td>GLM</td>
+              </tr>
+              <tr>
+                <td>10</td>
+                <td>Package manager as git URLs</td>
+                <td>Kimi</td>
+              </tr>
+              <tr>
+                <td>11</td>
+                <td>
+                  Interned site strings and deduplicated monomorphizations
+                </td>
+                <td>both</td>
+              </tr>
+              <tr>
+                <td>12</td>
+                <td>Fuzzer for the no-crash invariant</td>
+                <td>GLM</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The project does not need all of these. But any one of the first five
+          would make Vela feel less like an experiment and more like a tool you
+          can pick up. That, more than any single feature, is what makes a
+          language catch the eye.
+        </p>
+      </section>
+
+      <section>
+        <h2>The short version</h2>
+        <p>
+          Vela is a rare thing: a language where the design, the compiler, the
+          runtime, the tests, and the documentation all clearly came from one
+          hand with one idea &mdash;
+          <em>small enough to read, and honest about the rest</em>. The region
+          model is the best plain-English lifetime story in any language we
+          know; the error messages teach; the test suite treats the compiler's
+          own words as a specification; the safety page audits the language
+          against itself. Where it will be tested is growth: the library is thin
+          for real programs, the checker's one file is at the edge of its
+          evening, and the ergonomic cost of threading regions will decide
+          whether the audience stays the author. The project already knows each
+          of these &mdash; it wrote them down itself &mdash; and a project that
+          keeps its own list of open questions is a project that answers them.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Vela — read whole, from the lexer to the last badge, by two voices, and
+        admired.
+      </p>
+    </footer>
+  </body>
+</html>

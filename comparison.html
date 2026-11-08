@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela vs. Other Languages</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --code-bg: #1e293b;
+        --border: #334155;
+        --row-alt: #1e293b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      header {
+        padding: 4rem 1rem 3rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(167, 139, 250, 0.1) 0%,
+          transparent 100%
+        );
+      }
+      h1 {
+        margin: 0;
+        font-size: 3rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      h1 span {
+        color: var(--accent-2);
+      }
+      .tagline {
+        margin-top: 0.75rem;
+        font-size: 1.2rem;
+        color: var(--muted);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 3rem;
+        font-size: 1.75rem;
+        color: var(--accent);
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h3 {
+        margin-top: 2rem;
+        color: var(--accent-2);
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        margin: 1.5rem 0;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        min-width: 900px;
+      }
+      th,
+      td {
+        padding: 0.85rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        background: rgba(56, 189, 248, 0.08);
+        color: var(--accent);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+      }
+      tr:nth-child(even) td {
+        background: var(--row-alt);
+      }
+      tr:hover td {
+        background: rgba(56, 189, 248, 0.06);
+      }
+      .lang {
+        font-weight: 700;
+        color: var(--accent-2);
+        white-space: nowrap;
+      }
+      .vela {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .legend-item {
+        background: var(--code-bg);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border);
+      }
+      .legend-item strong {
+        color: var(--accent);
+      }
+      ul {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+      }
+      .badge-fast {
+        background: rgba(34, 197, 94, 0.15);
+        color: #86efac;
+      }
+      .badge-mid {
+        background: rgba(250, 204, 21, 0.15);
+        color: #facc15;
+      }
+      .badge-slow {
+        background: rgba(248, 113, 113, 0.15);
+        color: #fca5a5;
+      }
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        row-gap: 0.5rem;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vela <span>vs.</span> The Landscape</h1>
+      <p class="tagline">
+        A practical comparison across the programming-language spectrum.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html" aria-current="page">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <section>
+        <h2>At a Glance</h2>
+        <p>
+          Vela sits in the systems-language zone: it is compiled and statically
+          typed, and it manages memory with regions that the compiler checks,
+          with no garbage collector. This page compares it with representatives
+          from every level of abstraction, from bare-metal C to dynamic
+          high-level languages like Python and JavaScript.
+        </p>
+        <div class="legend">
+          <div class="legend-item">
+            <strong>Performance</strong>
+            <p>Raw execution speed and predictable machine-code output.</p>
+          </div>
+          <div class="legend-item">
+            <strong>Memory</strong>
+            <p>
+              Manual, regions, GC, reference counting, or ownership-based memory
+              management.
+            </p>
+          </div>
+          <div class="legend-item">
+            <strong>Build</strong>
+            <p>
+              Compile-time speed, dependency complexity, and distribution size.
+            </p>
+          </div>
+          <div class="legend-item">
+            <strong>Safety</strong>
+            <p>Type/memory safety guarantees and runtime crash prevention.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Comparison Table</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Language</th>
+                <th>Level</th>
+                <th>Performance</th>
+                <th>Memory Model</th>
+                <th>Build Speed</th>
+                <th>Safety</th>
+                <th>Best For</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="lang">C</td>
+                <td>Low</td>
+                <td><span class="badge badge-fast">Excellent</span></td>
+                <td>Manual</td>
+                <td><span class="badge badge-fast">Very Fast</span></td>
+                <td>Unsafe by default</td>
+                <td>OS kernels, embedded, drivers</td>
+              </tr>
+              <tr>
+                <td class="lang">Rust</td>
+                <td>Low–Mid</td>
+                <td><span class="badge badge-fast">Excellent</span></td>
+                <td>Ownership + borrow checker</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td><span class="badge badge-fast">Very Safe</span></td>
+                <td>Systems, WebAssembly, infrastructure</td>
+              </tr>
+              <tr>
+                <td class="lang">Zig</td>
+                <td>Low–Mid</td>
+                <td><span class="badge badge-fast">Excellent</span></td>
+                <td>Manual, explicit allocators</td>
+                <td><span class="badge badge-fast">Fast</span></td>
+                <td>Safer C, runtime checks in debug builds</td>
+                <td>Systems, cross-compilation, games</td>
+              </tr>
+              <tr>
+                <td class="lang vela">Vela</td>
+                <td>Low–Mid</td>
+                <td><span class="badge badge-fast">Excellent</span></td>
+                <td>Regions (arenas)</td>
+                <td><span class="badge badge-fast">Fast</span></td>
+                <td>Type-safe, region-checked pointers, no borrow checker</td>
+                <td>Learning, small systems tools</td>
+              </tr>
+              <tr>
+                <td class="lang">C++</td>
+                <td>Mid</td>
+                <td><span class="badge badge-fast">Excellent</span></td>
+                <td>Manual + RAII + smart pointers</td>
+                <td><span class="badge badge-slow">Slow</span></td>
+                <td>Unsafe by default, opt-in safety</td>
+                <td>Games, engines, high-performance apps</td>
+              </tr>
+              <tr>
+                <td class="lang">Go</td>
+                <td>Mid</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>Garbage collected</td>
+                <td><span class="badge badge-fast">Very Fast</span></td>
+                <td>Memory-safe, type-safe</td>
+                <td>Cloud services, networking, tooling</td>
+              </tr>
+              <tr>
+                <td class="lang">Swift</td>
+                <td>Mid</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>ARC + ownership</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td><span class="badge badge-fast">Very Safe</span></td>
+                <td>Apple platforms, server-side</td>
+              </tr>
+              <tr>
+                <td class="lang">Java</td>
+                <td>Mid–High</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>Garbage collected (JVM)</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td>Memory-safe, type-safe</td>
+                <td>Enterprise backends, Android</td>
+              </tr>
+              <tr>
+                <td class="lang">C#</td>
+                <td>Mid–High</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>Garbage collected (.NET)</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td>Memory-safe, type-safe</td>
+                <td>Enterprise, games (Unity), desktop</td>
+              </tr>
+              <tr>
+                <td class="lang">Haskell</td>
+                <td>High</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>Garbage collected + lazy</td>
+                <td><span class="badge badge-slow">Slow</span></td>
+                <td><span class="badge badge-fast">Very Safe</span></td>
+                <td>Compilers, research, finance</td>
+              </tr>
+              <tr>
+                <td class="lang">OCaml</td>
+                <td>High</td>
+                <td><span class="badge badge-mid">Good</span></td>
+                <td>Garbage collected</td>
+                <td><span class="badge badge-fast">Fast</span></td>
+                <td><span class="badge badge-fast">Very Safe</span></td>
+                <td>Compilers, theorem provers, Jane Street</td>
+              </tr>
+              <tr>
+                <td class="lang">JavaScript</td>
+                <td>High</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td>Garbage collected</td>
+                <td><span class="badge badge-fast">Instant</span></td>
+                <td>Dynamic, runtime errors common</td>
+                <td>Web frontends, Node.js services</td>
+              </tr>
+              <tr>
+                <td class="lang">Python</td>
+                <td>High</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td>Reference counting + cycle collector</td>
+                <td><span class="badge badge-fast">Instant</span></td>
+                <td>Dynamic, runtime errors common</td>
+                <td>Scripting, data science, ML, web</td>
+              </tr>
+              <tr>
+                <td class="lang">Ruby</td>
+                <td>High</td>
+                <td><span class="badge badge-mid">Moderate</span></td>
+                <td>Garbage collected</td>
+                <td><span class="badge badge-fast">Instant</span></td>
+                <td>Dynamic, runtime errors common</td>
+                <td>Web backends, scripting, DevOps</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Performance</h2>
+        <p>
+          Vela generates plain C, so its theoretical performance ceiling is
+          essentially the same as C, C++, Zig, and Rust. There is no interpreter
+          and no garbage collector adding overhead; the runtime is a small C
+          header of helpers (printing, the region allocator, and the integer,
+          index, and slice checks).
+        </p>
+        <p>
+          Rust and C can still edge ahead in some micro-benchmarks because they
+          offer finer control over aliasing and layout, but for typical programs
+          the difference is negligible. Go, Java, and C# are fast but carry GC
+          pauses and runtime weight. CPython and Ruby are often one or two
+          orders of magnitude slower for CPU-bound work because they interpret
+          dynamically typed code; JavaScript's JIT compilers narrow that gap to
+          a small multiple of C for many workloads.
+        </p>
+      </section>
+
+      <section>
+        <h2>Memory</h2>
+        <p>
+          Vela manages memory with <strong>regions</strong>:
+          <code>region r</code> declares an arena,
+          <code>new int(42) at r</code> allocates in it, and everything in
+          <code>r</code> is freed at once when the block declaring it closes.
+          There is no <code>free</code>. A pointer's type names its region
+          (<code>^int@r</code>), as text's does (<code>text@r</code>, where
+          plain <code>text</code> lasts as long as the program, much like Rust's
+          <code>&amp;'static str</code>), and the checker keeps pointers and
+          text from being stored anywhere that outlives their region, so
+          use-after-free and double free can't happen, with no garbage
+          collector, reference counts, or borrow checker. To keep a value longer
+          than its region, a program copies it into a longer-lived one with
+          <code>value.copy()</code>, which follows pointers and keeps shared
+          values shared, much like a deep clone. The costs: memory is freed a
+          whole region at a time, and one value's pointers all live in one
+          region (see <a href="index.html#regions">Memory and Regions</a>, and
+          <a href="regions.html">Vela Regions</a> for the full guide, its
+          limitations, and their workarounds).
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Language</th>
+                <th>Memory is freed</th>
+                <th>Use after free</th>
+                <th>Double free</th>
+                <th>Leaks</th>
+                <th>Cost at run time</th>
+                <th>What you write</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="lang">C</td>
+                <td>By hand, with <code>free</code></td>
+                <td>Possible</td>
+                <td>Possible</td>
+                <td>Possible</td>
+                <td>None</td>
+                <td>Every <code>malloc</code> and <code>free</code></td>
+              </tr>
+              <tr>
+                <td class="lang">C++</td>
+                <td>By destructors and smart pointers</td>
+                <td>Possible (raw pointers, references)</td>
+                <td>Possible with raw pointers</td>
+                <td>Rare; <code>shared_ptr</code> cycles leak</td>
+                <td>Counts for shared pointers</td>
+                <td>Ownership types</td>
+              </tr>
+              <tr>
+                <td class="lang">Zig</td>
+                <td>By hand, through explicit allocators (often arenas)</td>
+                <td>Possible; often caught by the debug allocator</td>
+                <td>Caught by the debug allocator</td>
+                <td>Reported by the debug allocator</td>
+                <td>None in fast release builds</td>
+                <td>Allocator parameters, <code>defer</code></td>
+              </tr>
+              <tr>
+                <td class="lang vela">Vela</td>
+                <td>A whole region, when its block ends</td>
+                <td>Ruled out at compile time</td>
+                <td>Impossible: no <code>free</code></td>
+                <td>
+                  Not past the region's block; a long-lived region can grow
+                </td>
+                <td>None</td>
+                <td>Region names in pointer types, region parameters</td>
+              </tr>
+              <tr>
+                <td class="lang">Rust</td>
+                <td>When the owner goes out of scope</td>
+                <td>Ruled out at compile time (safe Rust)</td>
+                <td>Ruled out</td>
+                <td>Rare (reference cycles, <code>mem::forget</code>)</td>
+                <td>None (counts only for <code>Rc</code>/<code>Arc</code>)</td>
+                <td>Ownership, borrows, lifetimes (mostly inferred)</td>
+              </tr>
+              <tr>
+                <td class="lang">Swift</td>
+                <td>When a reference count reaches zero</td>
+                <td>Ruled out</td>
+                <td>Ruled out</td>
+                <td>Cycles, unless broken with <code>weak</code></td>
+                <td>Count updates</td>
+                <td><code>weak</code>/<code>unowned</code> for cycles</td>
+              </tr>
+              <tr>
+                <td class="lang">Go, Java, C#</td>
+                <td>By a garbage collector, later</td>
+                <td>Ruled out</td>
+                <td>Ruled out</td>
+                <td>Only through data kept reachable</td>
+                <td>Collector time and memory</td>
+                <td>Nothing</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>
+            <strong>Rust</strong> is the safest here: its borrow checker
+            prevents data races and use-after-free at compile time.
+          </li>
+          <li>
+            <strong>Zig</strong> makes allocators explicit and checks bounds,
+            overflow, and more at run time in debug and safe release builds
+            (checks that fast release builds drop), sitting between C and Rust.
+          </li>
+          <li>
+            <strong>Go, Java, C#, Python, JS, Ruby</strong> use garbage
+            collectors, trading memory overhead and latency for convenience.
+          </li>
+          <li>
+            <strong>C++</strong> offers RAII and smart pointers, but safety is
+            opt-in and easy to bypass.
+          </li>
+          <li>
+            <strong>Vela's region names</strong> are a lightweight cousin of
+            Rust's lifetimes: always one name the programmer writes, tied to a
+            block, and never inferred across tasks. That keeps the rules few, at
+            the price of rejecting some safe programs that Rust accepts, such as
+            a value pointing into two regions.
+          </li>
+        </ul>
+        <div class="note">
+          Regions are the closest match to how Zig programs use arena
+          allocators, and to the region systems of languages such as Cyclone,
+          with the checking kept to a few rules. Allocation is a pointer bump,
+          and freeing a region costs one call per chunk.
+          <a href="future.html#memory">Future Directions</a> keeps the other
+          options, such as move-only pointers and borrowed references, as ways
+          to grow the model.
+        </div>
+      </section>
+
+      <section>
+        <h2>Build Speed</h2>
+        <p>
+          Vela's compiler is tiny and emits C quickly. The total build time is
+          dominated by the C compiler, which is still very fast for small
+          programs. This makes Vela competitive with C, Zig, and Go for
+          iterative development.
+        </p>
+        <ul>
+          <li>
+            <strong>Fast:</strong> C, Go, Zig, OCaml, Vela, Python/JS/Ruby (no
+            compile step).
+          </li>
+          <li><strong>Moderate:</strong> Rust, Java, C#, Swift.</li>
+          <li>
+            <strong>Slow:</strong> C++ and Haskell, due to templates, headers,
+            or aggressive optimization.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Safety</h2>
+        <p>
+          Vela provides static type safety and exhaustive pattern matching on
+          kinds, which catches many bugs at compile time: there are no implicit
+          conversions (an <code>int</code> and a <code>float</code> don't mix in
+          arithmetic until one is turned into the other, and only a plain value
+          becomes a <code>maybe</code> where one is expected), every
+          value-returning task must produce a value on every path (a
+          <code>&lt;- value</code>, or named results that are set), a missing
+          value is a <code>maybe T</code> that must be checked before use
+          (pointers can't be null), and a failure is a <code>T ~ E</code> whose
+          error a call statement can't ignore by accident. Memory is freed
+          through regions, whose pointers the checker keeps from outliving them,
+          so freed memory can't be used or freed again. Integer overflow and
+          division by zero stop the program with a message instead of being
+          undefined, as they are in C, and so does an index out of range of an
+          array or slice. It is much safer than C, but its guarantees are
+          narrower than Rust's (which also rules out data races) or those of
+          GC'd languages; <a href="safety.html">Safety</a> lists what the
+          compiler checks and where it can't yet.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Language</th>
+                <th>Type Safety</th>
+                <th>Memory Safety</th>
+                <th>Null Safety</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="lang">C</td>
+                <td>Weak</td>
+                <td>Unsafe</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td class="lang">C++</td>
+                <td>Moderate</td>
+                <td>Unsafe by default</td>
+                <td>No</td>
+              </tr>
+              <tr>
+                <td class="lang vela">Vela</td>
+                <td>Strong</td>
+                <td>Regions, compile-time checked</td>
+                <td><code>maybe T</code>; no null pointers</td>
+              </tr>
+              <tr>
+                <td class="lang">Zig</td>
+                <td>Strong</td>
+                <td>Manual + checks</td>
+                <td>Optional</td>
+              </tr>
+              <tr>
+                <td class="lang">Go</td>
+                <td>Strong</td>
+                <td>GC-safe</td>
+                <td>Nil exists</td>
+              </tr>
+              <tr>
+                <td class="lang">Rust</td>
+                <td>Strong</td>
+                <td>Compile-time proven</td>
+                <td>Option&lt;T&gt;</td>
+              </tr>
+              <tr>
+                <td class="lang">Swift</td>
+                <td>Strong</td>
+                <td>ARC + compile-time</td>
+                <td>Optional</td>
+              </tr>
+              <tr>
+                <td class="lang">Java / C#</td>
+                <td>Strong</td>
+                <td>GC-safe</td>
+                <td>Null exists</td>
+              </tr>
+              <tr>
+                <td class="lang">Haskell / OCaml</td>
+                <td>Very Strong</td>
+                <td>GC-safe</td>
+                <td>Option types</td>
+              </tr>
+              <tr>
+                <td class="lang">Python / JS / Ruby</td>
+                <td>Dynamic</td>
+                <td>GC-safe</td>
+                <td>Null/None common</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Syntax & Complexity</h2>
+        <p>
+          Vela aims for Go-like minimalism: one way to define functions, one way
+          to define records, one way to define unions. It avoids the dualities
+          that plague other languages (structs vs classes, interfaces vs
+          traits). It does have both references and pointers, but they don't
+          overlap: a reference (<code>flex&amp;</code>, <code>fixed&amp;</code>)
+          is another name for a place, never stored and never null, and a
+          pointer (<code>^T</code>) is a value kept in a region.
+        </p>
+        <ul>
+          <li><strong>Minimal:</strong> Go, Vela.</li>
+          <li><strong>Moderate:</strong> C, Python, Ruby, JavaScript.</li>
+          <li>
+            <strong>Complex:</strong> C++ (templates, headers), Rust (lifetimes,
+            traits), Haskell (type classes, laziness).
+          </li>
+        </ul>
+        <p>
+          Regions add the most to Vela's syntax of any feature: a
+          <code>region</code> statement, <code>@r</code> in pointer types, and
+          <code>r: region</code> parameters. That is still far less than
+          lifetimes and borrowing, and code that doesn't use pointers never sees
+          it.
+        </p>
+        <p>
+          Like Go, a Vela task can send several values —
+          <code>task divmod(a: int, b: int) -&gt; int, int</code>, then
+          <code>fixed q, r = divmod(17, 5)</code> — so a pair of results needs
+          no record and no output parameter, as it does in C. Those values are
+          not a tuple: they can only be received by a list of names. Vela has
+          tuples too, as a separate type (<code>-&gt; (int, int)</code> sends
+          one), like Rust's and Swift's but with items that never change:
+          <code>t.0 = 1</code> is an error even in a <code>flex</code> tuple,
+          which can only take a whole new one.
+        </p>
+        <p>
+          A Vela task or shape can take types as well as values —
+          <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code>,
+          <code>shape Box&lt;T&gt;</code> — and one task or shape is made for
+          each set of types used, as C++ templates and Rust generics are. What a
+          type must allow is said with one of five words rather than a system of
+          its own: <code>frozen</code>, <code>same</code>, <code>similar</code>,
+          <code>shown</code>, and <code>ordered</code>, where Rust has traits
+          and <code>impl</code> blocks, C++ concepts (or nothing, and errors
+          deep inside a template), and Go interfaces used as constraints. That
+          makes generic code readable and its errors short. A type that has a
+          method is asked for by a <a href="index.html#patterns">pattern</a>,
+          <code>&lt;T: Shaped&gt;</code>, which a shape or kind says it follows
+          (<code>shape Circle::Shaped</code>), much as a Rust type implements a
+          trait, but written in the type's own block, so no other module adds
+          one to it, and with no pattern as the type of a value, where Rust has
+          <code>dyn</code> and Go's interfaces are just that. A pattern may give
+          a method a default body, as a trait does, and ask for fields, which a
+          trait can't and a Swift or Kotlin protocol can. There is still no way
+          to ask for a type that can be added: a task that adds its values takes
+          numbers. A kind takes types too (<code>kind Option&lt;T&gt;</code>),
+          as Rust's <code>enum</code> does. Go's generics arrived late and
+          Vela's are small on purpose; C++ and Rust go much further, with the
+          compile times and the error messages that come with it.
+        </p>
+        <p>
+          A kind can <a href="index.html#kind-imitation">imitate</a> another,
+          having all its variants before its own (<code
+            >kind AppError::ParseErr</code
+          >), and a value of the kind imitated goes where the imitating one is
+          expected, so a task can send on another task's failure as its own.
+          Rust gets there by wrapping one <code>enum</code> in a variant of
+          another and writing a <code>From</code> conversion for <code>?</code>,
+          TypeScript by joining union types (<code
+            >type AppError = ParseErr | Io</code
+          >), and OCaml with polymorphic variants; Go and C have nothing like
+          it, and Java and C# reach for a class hierarchy, whose open set of
+          subclasses no <code>switch</code> can check for every case.
+        </p>
+        <p>
+          A <a href="index.html#pipes">pipe</a>,
+          <code>line |&gt; quantity() |&gt; reserve(5)</code>, reads calls in
+          the order they run, as F#, OCaml, and Elixir's <code>|&gt;</code> do;
+          <code>|&gt;&gt;</code> gives the value to the second argument, where
+          Elixir always gives the first and Hack writes a placeholder. A step
+          that fails stops the chain, which then fails with that failure, much
+          as Rust's <code>?</code> leaves a function, but the chain stays a
+          value the task reads, with a plan B or a <code>match</code>, rather
+          than an early return.
+        </p>
+        <p>
+          Vela's methods are written inside the shape or kind they belong to, as
+          in a C++, Swift, or Kotlin class, but with no inheritance, no
+          constructors, and no hidden receiver: every member of the value is
+          written after a dot (<code>.count</code>, <code>.cap()</code>), so
+          nothing comes into scope unseen, where C++ and Java let a bare
+          <code>count</code> mean a field. A method that changes its value says
+          <code>alters</code>, as Rust writes <code>&amp;mut self</code> and C++
+          leaves off <code>const</code>, and only a value that can change may
+          call it. Go puts methods anywhere in the package and Rust in
+          <code>impl</code> blocks, possibly several; Vela keeps them in the
+          type's own block, so one place shows everything a type does, and no
+          other module can add to it.
+        </p>
+        <p>
+          A parameter says how it is given, where C++ has <code>T</code>,
+          <code>const T&amp;</code>, and <code>T&amp;</code>, C# has
+          <code>in</code> and <code>ref</code>, and Swift <code>inout</code>:
+          <code>x: T</code> is read and never changed, <code>flex x: T</code> is
+          the task's own copy to change, <code>flex&amp; x: T</code> changes the
+          caller's place, and <code>fixed&amp; x: T</code> reads it where it is.
+          The call marks a place it gives with <code>&amp;</code>, as C#'s
+          <code>ref</code> and Swift's <code>&amp;</code> do, so a change is
+          visible where the call is written. Rust's borrow checker makes sure
+          two names never change one value; Vela checks one call at a time,
+          refusing a place given twice where the call changes it, and lists what
+          it doesn't check yet on <a href="safety.html">Safety</a>. A plain
+          parameter larger than 64 bytes is passed by address when nothing can
+          change it during the call, which C++ programmers write by hand as
+          <code>const T&amp;</code>.
+        </p>
+        <p>
+          <code>==</code> is cheap for every type, so an array, a shape, or a
+          tuple is compared by where it is, as Java, C#, and Python's
+          <code>is</code> compare objects; <code>~=</code> compares item by
+          item, as Rust's derived <code>PartialEq</code>, Java's
+          <code>equals</code>, and Python's <code>==</code> do, and its cost is
+          in the symbol. Every value can be shown without a line of code (<code
+            >show(p)</code
+          >
+          writes <code>Point { x: 1, y: 2 }</code>), as Rust's
+          <code>#[derive(Debug)]</code> and Python's <code>repr</code> give, and
+          a shape's own <code>str</code> method replaces it. A shape can have
+          <code>shared</code> fields and methods, one for the whole program, as
+          <code>static</code> members are in C++, Java, C#, and Swift, named
+          through the shape (<code>Tally.count</code>) and never through a
+          value.
+        </p>
+        <p>
+          Results can also be named, as in Go: <code>-&gt; total: int</code>,
+          set with <code>total &lt;- value</code>
+          and sent by reaching the end of the task. Go gives a named result its
+          zero value, so forgetting to set it is silent; Vela has no zero
+          values, so the compiler rejects a path that reads one, or ends,
+          without setting it. Every line that changes what a task sends starts
+          with a result's name and an arrow, which Go's plain
+          <code>=</code> doesn't show.
+        </p>
+        <p>
+          Modules work much like Go's packages, but a module is one file:
+          <code>include shapes/geometry</code> reads
+          <code>shapes/geometry.vela</code>, whose names are written
+          <code>geometry.area</code>, and
+          <code>include shapes/geometry (area)</code> also brings
+          <code>area</code> in, as Python's <code>from … import</code> does. The
+          word is C's, but unlike <code>#include</code> it doesn't paste the
+          file's text in: the file keeps its own names, and is read once however
+          many files include it. Braces bring in only the names listed, like
+          JavaScript's <code>import {…} from</code>, and
+          <code>=&gt;</code> renames a module or a name, as <code>as</code> does
+          in Rust, Python, and JavaScript; unlike them, the old name then names
+          nothing in that file. A variant keeps its name but can be written
+          through its kind, <code>Size.Small</code>, as in Rust and Swift. Where
+          Go exports a name by capitalizing it and Rust by marking it
+          <code>pub</code>, everything in a Vela file is public unless marked
+          <code>priv</code>, fields included, so a name's spelling never decides
+          who can use it. There is no package manager yet.
+        </p>
+        <p>
+          Arrays are written <code>[int#4]</code>, the count after a
+          <code>#</code> as in item #4 (Rust writes <code>[i32; 4]</code>), and
+          are values copied whole, as C's arrays are inside a struct. A slice,
+          <code>[int]@r</code>, is Go's slice or Rust's <code>&amp;[T]</code> as
+          a pointer and a length, but like every Vela pointer it points into a
+          region, so it can't outlive its memory. It grows and shrinks, as Go's
+          with <code>append</code> or Rust's <code>Vec</code> do, with
+          <code>xs.add(v)</code> and <code>xs.del(i)</code>; like Go's, it grows
+          by copying into a bigger block, but the old block stays in the region
+          until the region is freed. Adding to a copy of a slice doesn't write
+          over items another copy counts, which Go's <code>append</code> can,
+          unless that copy took its last items out with <code>del</code> first.
+          Every index is checked, as in Go, Rust, and Zig's safe builds, and the
+          length is <code>xs.len</code>, as in Zig.
+        </p>
+      </section>
+
+      <section>
+        <h2>Where Vela Fits</h2>
+        <p>
+          Vela is best understood as an
+          <strong>experimental, teaching-friendly systems language</strong>. It
+          is not trying to dethrone Rust or C. Instead, it demonstrates that you
+          can have a small, fast, compiled language with modern features —
+          pattern matching, sum types, <code>maybe</code> values instead of
+          null, errors as types, memory in checked regions, and clean syntax —
+          while staying close to the metal.
+        </p>
+        <div class="note">
+          <strong>When to choose Vela:</strong> learning about compilers and
+          language design, experiments, and small demos where you want C
+          performance without C syntax. (Vela reads input a line or a number at
+          a time, and files through its <a href="std.html">library</a>; see
+          <a href="index.html#limits">Current Limits</a>.) <br /><br />
+          <strong>When to avoid Vela:</strong> production systems, large teams,
+          programs that need sets, rich standard libraries, or concurrency
+          support, and long-running programs whose data changes piece by piece,
+          since regions free memory in bulk (see
+          <a href="regions.html#limits">the workarounds</a>).
+        </div>
+      </section>
+
+      <section>
+        <h2>Summary</h2>
+        <p>
+          Vela borrows the best ideas from the systems world — C's simplicity
+          and speed, Rust's static safety mindset, Go's minimalism, Zig's
+          explicit memory philosophy, and Cyclone's checked regions — while
+          keeping the implementation small enough to understand in one sitting.
+          It trades absolute safety for simplicity, and rich ecosystems for a
+          clean slate. For what it is, that is exactly the point.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Vela — a minimal systems language experiment.</p>
+    </footer>
+  </body>
+</html>

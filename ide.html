@@ -1,0 +1,1358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela Studio — The Editor for Vela</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --code-bg: #1e293b;
+        --card-bg: #131c30;
+        --border: #334155;
+        --warn: #fbbf24;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.6;
+      }
+      header {
+        padding: 4rem 1rem 3rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(167, 139, 250, 0.1) 0%,
+          transparent 100%
+        );
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+      h1 span {
+        color: var(--accent);
+      }
+      .tagline {
+        margin-top: 0.75rem;
+        font-size: 1.25rem;
+        color: var(--muted);
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 2rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 3rem;
+        font-size: 1.75rem;
+        color: var(--accent-2);
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h3 {
+        margin-top: 2rem;
+        color: var(--accent);
+      }
+      p {
+        margin: 1rem 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      code,
+      pre,
+      kbd {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        font-size: 0.92rem;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 0.15rem 0.4rem;
+        border-radius: 0.25rem;
+        color: var(--accent);
+      }
+      kbd {
+        display: inline-block;
+        padding: 0.05rem 0.4rem;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 0.3rem;
+        background: var(--code-bg);
+        color: var(--fg);
+        font-size: 0.85rem;
+        white-space: nowrap;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.5;
+      }
+      pre.layout {
+        line-height: 1.25;
+        font-size: 0.8rem;
+      }
+      .comment {
+        color: #64748b;
+        font-style: italic;
+      }
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .note.warning {
+        background: rgba(251, 191, 36, 0.08);
+        border-left-color: var(--warn);
+      }
+      .note.warning strong {
+        color: var(--warn);
+      }
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .doc-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent);
+      }
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.25rem;
+        margin: 1.5rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .toc li {
+        margin: 0;
+      }
+      .toc a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .toc a:hover {
+        color: var(--accent);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem 1.25rem;
+      }
+      .card h4 {
+        margin: 0 0 0.35rem;
+        font-size: 1.05rem;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+      }
+      th,
+      td {
+        padding: 0.45rem 0.6rem;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+      td.group {
+        padding-top: 1.25rem;
+        color: var(--accent-2);
+        font-weight: 600;
+      }
+      footer {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vela Studio<span>.</span></h1>
+      <p class="tagline">
+        The editor for Vela: write, check, and run programs, with a terminal
+        beside them.
+      </p>
+      <nav class="doc-nav" aria-label="Vela documentation">
+        <a href="index.html">Language</a>
+        <a href="regions.html">Regions</a>
+        <a href="std.html">Library</a>
+        <a href="ide.html" aria-current="page">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="future-2.html">Future (Kimi)</a>
+        <a href="safety.html">Safety</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="events.html">Events</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="review.html">Review</a>
+      </nav>
+    </header>
+
+    <main>
+      <section>
+        <h2>What is Vela Studio?</h2>
+        <p>
+          Vela Studio is a small editor made for <a href="index.html">Vela</a>.
+          You start it on a folder, and it opens in your browser: files on the
+          left, the editor in the middle, and a panel below with problems, your
+          program's output, and a terminal. <kbd>F5</kbd> saves the file,
+          compiles it, and runs it.
+        </p>
+        <p>
+          It understands Vela because it <em>is</em> Vela: the compiler's own
+          lexer, parser, and checker are compiled to WebAssembly and run inside
+          the page on every keystroke, and programs are built by the same code
+          as the <code>vela</code> command. Highlighting, errors, completion,
+          and the compiler can't disagree about the language. A file is analyzed
+          once for each change: hovering, completing, and going to a definition
+          ask the analysis it keeps, and the files it includes are sent to it,
+          and scanned, only when they change.
+        </p>
+        <ul class="toc" aria-label="On this page">
+          <li><a href="#install">Install</a></li>
+          <li><a href="#launch">Launch</a></li>
+          <li><a href="#tour">A tour</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#shortcuts">Shortcuts</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+          <li><a href="#developing">Working on Vela Studio</a></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="install">Install</h2>
+        <h3>Requirements</h3>
+        <ul>
+          <li>
+            <strong>Rust</strong>, a recent stable release (tested with 1.97),
+            with the WebAssembly target:
+            <code>rustup target add wasm32-unknown-unknown</code>.
+          </li>
+          <li>
+            <strong>Node.js</strong> 22.12 or later, with npm, to build the page
+            and run its tests.
+          </li>
+          <li>
+            <strong>A C compiler</strong> to run programs: <code>cc</code>, or
+            the one named by <code>CC</code>, exactly as for the
+            <code>vela</code> command. Editing works without one.
+          </li>
+          <li>
+            <strong>A browser.</strong> Vela Studio is tested in Chromium;
+            current Firefox and Safari are expected to work.
+          </li>
+        </ul>
+        <p>
+          Linux is the tested platform. macOS and Windows are supported by the
+          libraries Vela Studio uses (including Windows' ConPTY for terminals),
+          but aren't tested yet.
+        </p>
+
+        <h3>Build</h3>
+        <p>From the root of the Vela repository:</p>
+        <pre>npm --prefix ide/web install
+npm --prefix ide/web run build          <span class="comment"># the WebAssembly module and the page</span>
+cargo build -p vela-studio --release    <span class="comment"># the server, with the page inside it</span></pre>
+        <p>
+          The order matters: a release build embeds <code>ide/web/dist</code>,
+          so build the page first, and rebuild the server after changing it. The
+          result is a single program, <code>target/release/vela-studio</code>,
+          that needs nothing else from the repository. Copy it anywhere on your
+          <code>PATH</code>:
+        </p>
+        <pre>cp target/release/vela-studio ~/.local/bin/</pre>
+      </section>
+
+      <section>
+        <h2 id="launch">Launch</h2>
+        <pre>vela-studio [WORKSPACE] [--port N] [--no-open]</pre>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Argument</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>WORKSPACE</code></td>
+                <td>The folder to open. Defaults to the current folder.</td>
+              </tr>
+              <tr>
+                <td><code>--port N</code></td>
+                <td>
+                  Listen on port <code>N</code>. Without it, a free port is
+                  chosen.
+                </td>
+              </tr>
+              <tr>
+                <td><code>--no-open</code></td>
+                <td>Print the address without opening a browser.</td>
+              </tr>
+              <tr>
+                <td><code>--help</code></td>
+                <td>Print the usage.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          It prints the address, which carries a secret token, and opens it:
+        </p>
+        <pre>
+$ vela-studio examples
+Vela Studio is running for /home/you/vela/examples
+  http://127.0.0.1:41377/#token=5f0c…
+Press Ctrl+C to stop.</pre
+        >
+        <p>
+          Keep that terminal open while you work. <kbd>Ctrl</kbd>+<kbd>C</kbd>
+          stops Vela Studio, along with any program or shell it started. To work
+          on another folder at the same time, start another
+          <code>vela-studio</code>; each gets its own port and token.
+        </p>
+        <p>
+          Reloading the page keeps working. A new browser tab needs the full
+          printed address, since the token is kept per tab. The exit status is 2
+          for wrong arguments and 1 when Vela Studio can't start (for example,
+          the folder doesn't exist or the port is taken).
+        </p>
+      </section>
+
+      <section>
+        <h2 id="tour">A Tour</h2>
+        <pre
+          class="layout"
+          role="img"
+          aria-label="The Vela Studio window: the title bar, the explorer and outline on the left, tabs and the editor in the middle, the panel below, and the status bar"
+        >
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ≡  ◆ Vela Studio   examples              [Build]  [▶ Run]   [Open]  [Theme]  │ title bar
+├─────────────┬────────────────────────────────────────────────────────────────┤
+│ EXPLORER    │  fib.vela ●   kinds.vela   hello.vela                          │ tabs
+│  demo.vela  │ ────────────────────────────────────────────────────────────── │
+│  fib.vela   │  1  task fib(n: int) -&gt; int                                    │
+│  hello.vela │  2      when n &lt; 2                                             │ editor
+│  kinds.vela │  3          &lt;- n                                               │
+│             │  4      fi                                                     │
+│ OUTLINE     │  5      &lt;- fib(n - 1) + fib(n - 2)                             │
+│  ƒ fib      ├────────────────────────────────────────────────────────────────┤
+│  ƒ main     │  PROBLEMS   OUTPUT   TERMINAL                                  │ panel
+│             │  ▶ fib.vela                                                    │
+│             │  0                                                             │
+│             │  1                                                             │
+│             │  …                                                             │
+│             │  ── exited with code 0 · 3 ms ──                               │
+├─────────────┴────────────────────────────────────────────────────────────────┤
+│ No problems    fib.vela exited with code 0 · 3 ms        Ln 3, Col 13   Vela │ status bar
+└──────────────────────────────────────────────────────────────────────────────┘</pre
+        >
+        <ul>
+          <li>
+            <strong>Title bar:</strong> toggle the sidebar, the folder's name,
+            Build (hammer), Run (which turns into a spinner while building and
+            Stop while the program runs), open a file by name, and the
+            light/dark theme. A <em>No C compiler</em> warning appears here when
+            <code>cc</code> or <code>$CC</code> can't be started.
+          </li>
+          <li>
+            <strong>Sidebar:</strong> the Explorer (the folder's files) and the
+            Outline (the open file's tasks, shapes, kinds, patterns, type
+            aliases, and macros, with a shape's fields, a kind's variants, a
+            pattern's fields and methods, the methods of shapes and kinds, and
+            the types a task or shape takes under it; the one under the cursor
+            is highlighted). Drag its edge to resize it; double-click the edge
+            to reset.
+          </li>
+          <li>
+            <strong>Tabs and editor:</strong> one tab per open file; a dot marks
+            unsaved changes. With no file open, a welcome screen lists the
+            folder's programs and the main shortcuts, with
+            <em>New File…</em> and <em>Open File…</em> buttons.
+          </li>
+          <li>
+            <strong>Panel:</strong> <em>Problems</em> (errors in your files),
+            <em>Output</em> (the program you ran), and <em>Terminal</em> (a
+            shell in the folder). Drag its top edge to resize it; the button at
+            its right hides it, and Output has a button that clears it.
+          </li>
+          <li>
+            <strong>Status bar:</strong> the problem count and the last run's
+            result (click either to open its tab), the cursor position (with how
+            many characters are selected, when some are), and the file's
+            language.
+          </li>
+        </ul>
+        <p>
+          Sizes, open tabs, expanded folders, the panel's tab, and the theme are
+          remembered for next time.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="features">Features</h2>
+
+        <h3>Writing Vela</h3>
+        <div class="cards">
+          <div class="card">
+            <h4>Highlighting that knows names</h4>
+            <p>
+              Tasks, shapes and kinds, variants, parameters, variables, fields,
+              regions, and modules each get their own color, even in a
+              half-typed line. The types a task, shape or kind takes (<code
+                >&lt;T: ordered&gt;</code
+              >) are colored as types wherever they are written, as are the ones
+              a use gives (<code>Box&lt;int&gt;</code>), and the word asked of
+              one as a word of the language. A method is colored as a task where
+              it is declared and wherever it is called (<code>c.step(2)</code>,
+              <code>.cap()</code>), even a kind's, whose members are written as
+              its variants are; <code>alters</code> and the <code>this</code> of
+              <code>.this</code> are words of the language,
+              <code>@this</code> is a region, and a method's parameters are
+              parameters. In text holding values,
+              <code>"{name} is {age}" at r</code>, the values are code: colored,
+              hovered, and followed to their declarations like any, with names
+              completed inside the braces, while the text around them stays
+              text.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Programs in several files</h4>
+            <p>
+              A file's <code>include</code> lines are followed into the files
+              they name, as you type: <code>geometry.area</code> is colored as a
+              task, hovers with its signature and module, and jumps into
+              <code>geometry.vela</code> with <kbd>F12</kbd>; completion after
+              <code>geometry.</code> and inside <code>include … (</code> or
+              <code>{</code> offers what the module declares, without its
+              <code>priv</code> names (on the <code>include</code> line, each by
+              its name alone); aliases (<code>=&gt;</code>) are followed, so a
+              renamed name hovers, completes, and jumps under its new name, and
+              after <code>Size.</code> completion offers the kind's variants;
+              and an error in a module, even one not saved yet, is shown at the
+              <code>include</code> that leads to it, with the module's file and
+              line. An open file counts as edited; any other is read from the
+              workspace. <a href="std.html">Vela's library</a> needs no file at
+              all: <code>include std/files</code> is read from the compiler,
+              completion right after <code>include</code> (or
+              <code>include std/</code>) offers its modules, and its names hover
+              and complete as a module's do, though <kbd>F12</kbd> stays put,
+              since the library is no file to open.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Errors as you type</h4>
+            <p>
+              The compiler's error is underlined in place, marked in the gutter,
+              explained on hover, and listed under Problems. <kbd>F8</kbd> jumps
+              to it. A <a href="index.html#warnings">warning</a>, something the
+              program may not mean though it builds, is marked the same way in
+              the warning color.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Completion</h4>
+            <p>
+              Only what fits: types after <code>:</code>, <code>-&gt;</code>,
+              <code>^</code>, <code>maybe</code>, <code>new</code>, a type's
+              <code>[</code> and <code>~</code>, each item of a tuple type
+              (<code>(int, text)</code>), each comma of a header's results
+              (<code>-&gt; int, int</code>), and each type a use gives a
+              declaration that takes them (<code>first&lt;int&gt;(xs)</code>,
+              <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code>),
+              and nothing for an array type's count; the types a task, shape or
+              kind takes are offered as types inside it (<code>T</code>), and
+              after a type's <code>:</code> or <code>&amp;</code> the words it
+              can be asked to allow (<code>frozen</code>, <code>same</code>,
+              <code>shown</code>, <code>ordered</code>); variables declared
+              above the cursor; the types after a kind's name before one of its
+              variants (<code>Option&lt;int&gt;.None</code>), colored as types,
+              and the variant after them; <code>endless</code> among the
+              statements and after a loop's name (<code>outer =&gt;</code>),
+              with a snippet for it and one for a loop in three parts, and the
+              names a loop's start declares (<code
+                >loop flex i = 0, j = 9 || …</code
+              >, but not the values given them) inside that loop only, typed
+              even in a file that doesn't parse; <code>break</code> and
+              <code>continue</code> inside a loop, but not inside a lambda in
+              it, and after either the names of the loops around it (<code
+                >outer =&gt; each …</code
+              >, which hover as loops and are offered nowhere else, and the
+              variable a loop that gives a value gives,
+              <code>fixed r = each …</code> or
+              <code>fixed r: int ~ LoopResult = each …</code>, which hovers as
+              <code>r = loop</code>); fields and methods after <code>.</code> (a
+              method with its parameters to fill in, and a pointer's through
+              <code>^.</code>), and inside a method, after a
+              <code>.</code> starting a value, <code>this</code> and the fields
+              and methods of the value it is called on; a tuple's items by
+              position after its <code>.</code> (<code>0</code>, <code>1</code>,
+              each with its type), and <code>len</code> after an array's,
+              slice's, or text's (and <code>add</code> and
+              <code>del</code> after a slice's), <code>str</code> after a
+              number's, a bool's, text's, an array's, a slice's, a tuple's, a
+              pointer's, or a <code>maybe</code>'s, which fills in
+              <code>str() at r</code>, and <code>copy</code> after a value
+              holding text, a slice, or a pointer, and <code>type</code> after
+              every value's (which hovers with what
+              <a href="index.html#type-of"><code>x.type</code></a> reads);
+              <code>int</code> and <code>float</code> after a
+              <code>scan</code>'s prompt, the two numbers that form reads; the
+              cases still missing after <code>case</code> and
+              <code>case Kind.</code>, including <code>{value}</code>,
+              <code>none</code>, and <code>failure e</code> (the variants of
+              <a href="index.html#reading-numbers"><code>ParseError</code></a>
+              and
+              <a href="index.html#reading-input"><code>InputError</code></a>
+              among them, which no file declares); the case forms that fit after
+              <code>is</code> (a tuple's names among them); the regions visible
+              after <code>@</code>, and the ones <code>new</code>,
+              <code>scan</code>, or <code>copy</code> can allocate in after
+              <code>new@</code>, <code>scan(…)@</code>, <code>copy()@</code>,
+              and a <code>new</code>'s, <code>scan</code>'s, or
+              <code>copy</code>'s <code>at</code>, or as the argument for a
+              task's <code>region</code> parameter; and <code>region</code> as a
+              statement or a parameter's type; <code>when</code> after an
+              <code>else</code>, the one word that may follow it, which chains
+              the condition; and, where a value goes, <code>match</code> and
+              <code>when</code> with a skeleton for each, since either can be
+              the value. A call's result shows the caller's regions (<code
+                >push(nodes, list)</code
+              >
+              gives a <code>^Node@nodes</code>), even while the file has an
+              error. After a finished value, only the words that can continue
+              it: <code>is</code>, <code>in</code>, <code>at</code> (after a
+              <code>new</code>'s, <code>copy()</code>'s, or a line-reading
+              <code>scan</code>'s value, never after
+              <code>scan(prompt, int)</code>, which names no region),
+              <code>and</code>, <code>or</code>, and, after a written type, the
+              <code>~</code> that gives it an error side. A task's call fills in
+              only the values it must give: <code>pad(${t})</code> for
+              <code>task pad(t: text, width: int = 8)</code>, whose header,
+              values and all, its hover shows, and a parameter hovers with its
+              type alone, even in a file that doesn't parse. A
+              <code>new</code> written without <code>( )</code>,
+              <code>new [text]</code> or <code>new Point</code>, is a finished
+              value, so <code>at</code> follows it rather than <code>~</code>,
+              and it hovers with what it makes even in a file that doesn't
+              parse, maps among them. Nothing is offered where a name is being
+              declared: the names after the commas of
+              <code>fixed q, r = …</code> and inside the parentheses of
+              <code>fixed a, (b, c) = …</code>, which each hover with the type
+              of the value in their place (a tuple's item, for a name that takes
+              one apart), and the names in the <code>&lt; &gt;</code> of
+              <code>task first&lt;T&gt;</code> and
+              <code>shape Box&lt;T&gt;</code>. After a <code>:</code> or an
+              <code>&amp;</code> inside those <code>&lt; &gt;</code>, only the
+              five words a type can be asked to allow are offered, and inside
+              the <code>&lt; &gt;</code> of a call or of a shape given types,
+              the types are. A task's named results (<code
+                >-&gt; total: int</code
+              >) are offered at the start of a line as
+              <code>total &lt;- </code>, and hover as
+              <code>result total: int</code>. After <code>match</code>, only
+              <code>case</code>; <code>new</code> only where a region can be
+              allocated in; <code>include</code> only above a file's tasks,
+              shapes, and kinds; <code>priv</code> before those and a shape's
+              fields, with <code>task</code>, <code>shape</code>, and
+              <code>kind</code> after it; and <code>priv</code>,
+              <code>alters</code>, and <code>shared</code> at the start of a
+              shape's or a kind's member, with <code>alters</code> after its
+              <code>priv</code>; a shape's also offers <code>read</code>, with
+              <code>flex</code>, <code>read</code>, and <code>new</code> after
+              <code>shared</code> (a kind's, only <code>new</code>). After a
+              shape's name and a dot, <code>Point.</code>, its
+              <a href="index.html#shared">shared fields</a> and
+              <a href="index.html#shared-methods">shared methods</a> are
+              offered, and after a value's name its fields and methods, with the
+              default methods it has from the
+              <a href="index.html#patterns">patterns</a> it follows; after a
+              type's <code>:</code> in <code>&lt; &gt;</code>, the five words
+              and the patterns; after a kind's name its variants (with those it
+              has from the kinds it
+              <a href="index.html#kind-imitation">imitates</a>) and shared
+              methods, never after a value's name or in a literal; a shared
+              field hovers as <code>shared flex made: int</code>, saying who may
+              change it, and a shared method as
+              <code>shared new(x: int) -&gt; Point</code>, colored as a method
+              where it is declared and called. In a task's or a method's
+              parameters, where a name goes, <code>flex</code> and
+              <code>flex&amp;</code>, which make the parameter the task's own
+              copy to change, or the caller's place, <code>bind</code> and
+              <code>bind&amp;</code>, a copy or the caller's place whose
+              contents change but which is never assigned as a whole, and
+              <code>fixed</code> and <code>fixed&amp;</code>, a copy or the
+              caller's place, only read; such a parameter hovers as
+              <code>flex n: int</code>, <code>bind n: int</code> or
+              <code>flex&amp; n: int</code>, and after the <code>&amp;</code> of
+              a call, where a place goes, the variables are offered. A
+              reference, <code>flex&amp; y = &amp;x</code> or
+              <code>fixed&amp; y = &amp;x</code>, hovers as
+              <code>flex&amp; y: int</code> or <code>fixed&amp; y: int</code>,
+              saying whether it changes its place. A method's body completes as
+              a task's does. <code>bind</code> is a variable word like
+              <code>flex</code> and <code>fixed</code>: it is colored, offered
+              where one goes, and hovered. <code>hold</code> is a reserved word
+              with no use yet: it is colored as a keyword and never offered, and
+              one written shows the compiler's error, which names
+              <code>flex</code> where a variable's word goes.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Snippets</h4>
+            <p>
+              <code>task</code>, <code>shape</code>, <code>kind</code>,
+              <code>when</code>, <code>loop</code>, <code>each</code>,
+              <code>when … is</code>, <code>loop … is</code>,
+              <code>new … at</code>, <code>scan(…) at</code>, and
+              <code>match</code>, which expands to one <code>case</code> per
+              variant (or <code>{value}</code> and <code>none</code> for a
+              maybe), with its bindings. <kbd>Tab</kbd> moves between the
+              fields.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Hover and go to definition</h4>
+            <p>
+              Hover a name to see its type or signature (a region says whether
+              the task can allocate in it, and a type with
+              <code>@_</code> explains it), a type a task, shape or kind takes
+              (<code>T</code>), which says what the word after its
+              <code>:</code> allows, a tuple's item (<code>t.1</code>) to see
+              its type, or <code>maybe</code>, <code>is</code>,
+              <code>fail</code>, <code>none</code>, <code>_</code>,
+              <code>region</code>, <code>new</code>, and <code>in</code> for a
+              reminder of what they do. A kind that imitates others shows the
+              variants it has from them first, each saying which kind it is
+              from; a pattern shows its fields and methods, its defaults marked,
+              and a shape or kind following one shows the default methods it has
+              from it. A method shows its header, which shape or kind it belongs
+              to, and whether it changes the value it is called on;
+              <code>.this</code> shows that value's type, and
+              <code>alters</code> and <code>@this</code> what they mean.
+              <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it is
+              declared (a variant named alone in a <code>case</code> is the
+              matched value's kind's, even another module's);
+              <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration
+              by name.
+            </p>
+          </div>
+          <div class="card">
+            <h4>Blocks that indent themselves</h4>
+            <p>
+              Enter indents after a block's first line (a method's header among
+              them), and after a line ending with a plan B's <code>{</code> (or
+              <code>{ failure e</code>); typing <code>fi</code>,
+              <code>else</code>, <code>case</code>, or <code>}</code> lines it
+              up with its block. An <code>else when</code> lines up as its
+              <code>else</code> does and indents its own block, since one
+              <code>fi</code> closes the whole chain. A <code>match</code> or a
+              <code>when</code>
+              <a href="index.html#choices">used as a value</a> opens its block
+              wherever it is written, so <code>fixed area = match s</code> takes
+              its cases at the <code>fixed</code>'s own level. A line that
+              closes every block it opens, as a one-line plan B does, opens none
+              of them. Blocks, a method's among them, fold from the gutter.
+            </p>
+          </div>
+        </div>
+        <p>
+          The editor also has the usual tools: find and replace, multiple
+          cursors, bracket matching and closing, comment toggling, and line
+          moves (see <a href="#shortcuts">Shortcuts</a>). Other files open as
+          plain text.
+        </p>
+
+        <p>
+          A shape given types reads as the program writes it: hover shows
+          <code>Box&lt;int&gt;</code> and <code>Box&lt;text&gt;@r</code>, never
+          the name the compiler makes for the shape it generates for those
+          types.
+        </p>
+
+        <h3>Files</h3>
+        <ul>
+          <li>
+            <strong>Explorer:</strong> create files and folders (a name like
+            <code>lib/util.vela</code> creates the folder too), rename (a name
+            with folders moves the entry), and delete, from the buttons, the
+            right-click menu, or the keyboard. Hidden files and folders,
+            <code>target/</code>, <code>node_modules/</code>, links to folders,
+            and names holding <code>:</code> or <code>\</code> aren't listed.
+            <em>Refresh</em> reads the folder again, and
+            <em>Collapse folders</em> closes them all. The list stops at 10,000
+            entries and 16 folders deep, and then says
+            <em>Some files aren't shown</em>.
+          </li>
+          <li>
+            <strong>Saving:</strong> <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the
+            file, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves all.
+            Closing a tab or leaving the page with unsaved changes asks first.
+          </li>
+          <li>
+            <strong>Changes made elsewhere</strong> are noticed when you come
+            back to the page: a file without unsaved changes reloads, keeping
+            your cursor; a file with unsaved changes is marked, and saving it
+            asks whether to overwrite the other version or reload it. A deleted
+            file can be saved again.
+          </li>
+          <li>Files up to 1 MiB of UTF-8 text can be opened.</li>
+        </ul>
+
+        <h3>Running</h3>
+        <ul>
+          <li>
+            <kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) saves every file
+            with changes (a program may use any of them as a module), builds the
+            current <code>.vela</code> file, and runs it in the
+            <strong>Output</strong> tab. Output is a real terminal: colors work,
+            and what you type goes to the program, so <code>scan</code> reads it
+            a line at a time (<kbd>Ctrl</kbd>+<kbd>D</kbd> ends the input).
+          </li>
+          <li>
+            The run ends with a summary line,
+            <code>── exited with code 0 · 3 ms ──</code>, and the status bar
+            keeps the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button
+            ends a program; running again replaces the one that is running, even
+            when the new build fails.
+          </li>
+          <li>
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without
+            running, and says so when the build has no errors. Running or
+            building with no <code>.vela</code> file open says to open one.
+          </li>
+          <li>
+            <strong>When a build fails,</strong> a Vela error (or a missing
+            <code>task main()</code>) opens <strong>Problems</strong>, where
+            clicking it selects the spot (an error in a module is listed under
+            the module's file); a failure of the C compiler opens Output with
+            its message. A build error stays listed until that file builds
+            again. A program's modules are read from the workspace only, so an
+            <code>include</code> can't read a file outside it.
+          </li>
+          <li>
+            Builds happen in a temporary folder that is removed afterwards.
+            Running never writes into your folder.
+          </li>
+        </ul>
+
+        <h3>Terminal</h3>
+        <ul>
+          <li>
+            The <strong>Terminal</strong> tab starts your default shell in the
+            workspace folder the first time you open it
+            (<kbd>Ctrl</kbd>+<kbd>`</kbd>). Use it for the
+            <code>vela</code> command, <code>git</code>, or anything else.
+          </li>
+          <li>
+            Its buttons restart the shell, stop it, and clear the screen. After
+            the shell exits, any key starts a new one. Links in Output and the
+            terminal open with <kbd>Ctrl</kbd>+click (<kbd>⌘</kbd>+click on a
+            Mac).
+          </li>
+        </ul>
+
+        <h3>Look and feel</h3>
+        <ul>
+          <li>
+            Dark and light themes (the dark one in these docs' colors); the
+            first follows your system, until you choose one.
+          </li>
+          <li>
+            Short animations for panels, tabs, completion, the Run button, and
+            toasts, turned off when your system asks for reduced motion.
+          </li>
+          <li>
+            Everything is keyboard-reachable: the explorer, tabs, panel tabs,
+            and resize handles all work with arrow keys.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 id="shortcuts">Keyboard Shortcuts</h2>
+        <p>
+          On a Mac, <kbd>⌘</kbd> replaces <kbd>Ctrl</kbd> except where the table
+          says otherwise; completion stays <kbd>⌃</kbd>+<kbd>Space</kbd> (or
+          <kbd>⌥</kbd><kbd>`</kbd>) and the terminal <kbd>⌃</kbd>+<kbd>`</kbd>.
+          The running and panel shortcuts (run, build, show or hide the panel,
+          show Problems) answer to either <kbd>Ctrl</kbd> or <kbd>⌘</kbd> on
+          every system, so on a Mac <kbd>⌃</kbd><kbd>J</kbd> toggles the panel
+          too rather than reaching the terminal. Browser shortcuts such as
+          <kbd>Ctrl</kbd>+<kbd>W</kbd> still belong to the browser. In the
+          Terminal and Output tabs, keys go to the program, except saving,
+          opening a file, going to a declaration, and the running and panel
+          shortcuts; so <kbd>Ctrl</kbd>+<kbd>B</kbd>, for example, reaches the
+          shell.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Linux and Windows</th>
+                <th>macOS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="group" colspan="3">Workbench</td>
+              </tr>
+              <tr>
+                <td>Open a file by name</td>
+                <td><kbd>Ctrl</kbd>+<kbd>P</kbd></td>
+                <td><kbd>⌘</kbd><kbd>P</kbd></td>
+              </tr>
+              <tr>
+                <td>Go to a declaration in the file</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd></td>
+              </tr>
+              <tr>
+                <td>Save</td>
+                <td><kbd>Ctrl</kbd>+<kbd>S</kbd></td>
+                <td><kbd>⌘</kbd><kbd>S</kbd></td>
+              </tr>
+              <tr>
+                <td>Save all</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></td>
+              </tr>
+              <tr>
+                <td>Show or hide the sidebar</td>
+                <td><kbd>Ctrl</kbd>+<kbd>B</kbd></td>
+                <td><kbd>⌘</kbd><kbd>B</kbd></td>
+              </tr>
+              <tr>
+                <td>Show or hide the panel</td>
+                <td><kbd>Ctrl</kbd>+<kbd>J</kbd></td>
+                <td><kbd>⌘</kbd><kbd>J</kbd></td>
+              </tr>
+              <tr>
+                <td>Show Problems</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>M</kbd></td>
+              </tr>
+              <tr>
+                <td>Terminal (hides it when it has focus)</td>
+                <td><kbd>Ctrl</kbd>+<kbd>`</kbd></td>
+                <td><kbd>⌃</kbd><kbd>`</kbd></td>
+              </tr>
+
+              <tr>
+                <td class="group" colspan="3">Running</td>
+              </tr>
+              <tr>
+                <td>Save and run the file</td>
+                <td><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
+                <td><kbd>F5</kbd> or <kbd>⌘</kbd><kbd>↩</kbd></td>
+              </tr>
+              <tr>
+                <td>Stop the program</td>
+                <td><kbd>Shift</kbd>+<kbd>F5</kbd></td>
+                <td><kbd>⇧</kbd><kbd>F5</kbd></td>
+              </tr>
+              <tr>
+                <td>Save and build the file</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>B</kbd></td>
+              </tr>
+
+              <tr>
+                <td class="group" colspan="3">Vela</td>
+              </tr>
+              <tr>
+                <td>Complete (also opens while typing)</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td>
+                <td><kbd>⌃</kbd><kbd>Space</kbd></td>
+              </tr>
+              <tr>
+                <td>Go to definition</td>
+                <td><kbd>F12</kbd> or <kbd>Ctrl</kbd>+click</td>
+                <td><kbd>F12</kbd> or <kbd>⌘</kbd>+click</td>
+              </tr>
+              <tr>
+                <td>Next error</td>
+                <td><kbd>F8</kbd></td>
+                <td><kbd>F8</kbd></td>
+              </tr>
+              <tr>
+                <td>Toggle comment</td>
+                <td><kbd>Ctrl</kbd>+<kbd>/</kbd></td>
+                <td><kbd>⌘</kbd><kbd>/</kbd></td>
+              </tr>
+
+              <tr>
+                <td class="group" colspan="3">Editing</td>
+              </tr>
+              <tr>
+                <td>Find / replace</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Ctrl</kbd>+<kbd>H</kbd>
+                </td>
+                <td>
+                  <kbd>⌘</kbd><kbd>F</kbd> / <kbd>⌘</kbd><kbd>⌥</kbd
+                  ><kbd>F</kbd>
+                </td>
+              </tr>
+              <tr>
+                <td>Next / previous match</td>
+                <td>
+                  <kbd>F3</kbd> / <kbd>Shift</kbd>+<kbd>F3</kbd>, or
+                  <kbd>Ctrl</kbd>+<kbd>G</kbd> /
+                  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>
+                </td>
+                <td>
+                  <kbd>⌘</kbd><kbd>G</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd
+                  ><kbd>G</kbd>
+                </td>
+              </tr>
+              <tr>
+                <td>Go to line</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>G</kbd></td>
+              </tr>
+              <tr>
+                <td>Select the next occurrence / all occurrences</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>D</kbd> /
+                  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>
+                </td>
+                <td>
+                  <kbd>⌘</kbd><kbd>D</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd
+                  ><kbd>L</kbd>
+                </td>
+              </tr>
+              <tr>
+                <td>Add a cursor above / below</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd>
+                </td>
+                <td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td>
+              </tr>
+              <tr>
+                <td>Move the line up / down</td>
+                <td><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td>
+                <td><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td>
+              </tr>
+              <tr>
+                <td>Copy the line up / down</td>
+                <td>
+                  <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd>
+                </td>
+                <td><kbd>⇧</kbd><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td>
+              </tr>
+              <tr>
+                <td>Delete the line</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>K</kbd></td>
+              </tr>
+              <tr>
+                <td>Indent / outdent</td>
+                <td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td>
+                <td><kbd>Tab</kbd> / <kbd>⇧</kbd><kbd>Tab</kbd></td>
+              </tr>
+              <tr>
+                <td>Fold / unfold the block</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd>
+                </td>
+                <td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td>
+              </tr>
+              <tr>
+                <td>Fold / unfold everything</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>[</kbd> / <kbd>]</kbd>
+                </td>
+                <td><kbd>⌃</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td>
+              </tr>
+              <tr>
+                <td>Undo / redo</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd>
+                </td>
+                <td>
+                  <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd
+                  ><kbd>Z</kbd>
+                </td>
+              </tr>
+              <tr>
+                <td>Indent / outdent the line</td>
+                <td><kbd>Ctrl</kbd>+<kbd>]</kbd> / <kbd>[</kbd></td>
+                <td><kbd>⌘</kbd><kbd>]</kbd> / <kbd>[</kbd></td>
+              </tr>
+              <tr>
+                <td>Indent the selection again</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>\</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>\</kbd></td>
+              </tr>
+              <tr>
+                <td>Select the enclosing part</td>
+                <td><kbd>Ctrl</kbd>+<kbd>I</kbd></td>
+                <td><kbd>⌘</kbd><kbd>I</kbd></td>
+              </tr>
+              <tr>
+                <td>Go to the matching bracket</td>
+                <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>\</kbd></td>
+                <td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>\</kbd></td>
+              </tr>
+              <tr>
+                <td>Undo / redo a selection change</td>
+                <td>
+                  <kbd>Ctrl</kbd>+<kbd>U</kbd> / <kbd>Alt</kbd>+<kbd>U</kbd>
+                </td>
+                <td>
+                  <kbd>⌘</kbd><kbd>U</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd
+                  ><kbd>U</kbd>
+                </td>
+              </tr>
+              <tr>
+                <td>Let <kbd>Tab</kbd> move focus out of the editor</td>
+                <td><kbd>Ctrl</kbd>+<kbd>M</kbd></td>
+                <td><kbd>⇧</kbd><kbd>⌥</kbd><kbd>M</kbd></td>
+              </tr>
+
+              <tr>
+                <td class="group" colspan="3">Explorer, tabs, and panels</td>
+              </tr>
+              <tr>
+                <td>Move in the explorer; open or close folders</td>
+                <td colspan="2">
+                  <kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd>;
+                  <kbd>→</kbd> opens a folder, <kbd>←</kbd> closes it or goes to
+                  its parent
+                </td>
+              </tr>
+              <tr>
+                <td>Open, rename, delete in the explorer</td>
+                <td colspan="2">
+                  <kbd>Enter</kbd>, <kbd>F2</kbd>,
+                  <kbd>Delete</kbd> (<kbd>fn</kbd>+<kbd>Delete</kbd> on a Mac
+                  laptop; or right-click for the menu)
+                </td>
+              </tr>
+              <tr>
+                <td>Move between tabs; open or close one</td>
+                <td colspan="2">
+                  <kbd>←</kbd> <kbd>→</kbd> on the tabs, then
+                  <kbd>Enter</kbd> to open; <kbd>Delete</kbd> or a middle-click
+                  to close
+                </td>
+              </tr>
+              <tr>
+                <td>Resize the sidebar or panel</td>
+                <td colspan="2">
+                  Arrow keys on its edge; double-click the edge to reset
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="security">Security</h2>
+        <p>
+          Vela Studio can read and write your files, run programs, and open a
+          shell, so it is as powerful as a terminal. It is built so that only
+          the page it opened for you can use it.
+        </p>
+        <ul>
+          <li>
+            <strong>Only this computer.</strong> It listens on
+            <code>127.0.0.1</code>, never on a network address, and has no
+            option to change that.
+          </li>
+          <li>
+            <strong>A new secret for every launch.</strong> The address carries
+            a random 256-bit token after <code>#</code>, a part that browsers
+            never send to a server. The page moves it into the tab's session
+            storage and removes it from the address bar. Every request needs it;
+            when Vela Studio stops, the token stops working.
+          </li>
+          <li>
+            <strong>Nothing secret on the browser's command line.</strong> Other
+            users of a computer can read the command lines of your programs, so
+            Vela Studio doesn't pass the token, or even a launch link, to the
+            browser. It writes a small page that only you can read (in a private
+            temporary folder) and opens that file; the page sends the browser to
+            Vela Studio with a one-time launch code, which it exchanges for the
+            token. A code works once, for five minutes, and the file is removed
+            when Vela Studio stops.
+          </li>
+          <li>
+            <strong>Other websites can't use it.</strong> A site open in another
+            tab doesn't have the token; besides, requests from another origin,
+            or addressed to any host but <code>127.0.0.1</code> or
+            <code>localhost</code> on its port (which stops DNS rebinding), are
+            refused, and no cross-origin headers are ever sent.
+          </li>
+          <li>
+            <strong>File operations stay in the folder.</strong> The editor's
+            reads, writes, renames, and deletes are confined to the workspace:
+            <code>..</code>, absolute paths, and symbolic links that lead
+            outside are refused.
+          </li>
+          <li>
+            <strong>A locked-down page.</strong> A strict Content Security
+            Policy allows only the page's own scripts and styles, and the page
+            can't be framed. Fonts and the WebAssembly module are served by Vela
+            Studio itself: nothing is loaded from the internet, and nothing is
+            sent anywhere.
+          </li>
+          <li>
+            <strong>Nothing left running.</strong> A program or shell whose page
+            has been closed for 30 seconds is stopped along with the processes
+            in its group, and stopping Vela Studio stops them all. When a
+            terminal's shell exits, the background jobs it left get a hangup, as
+            when a terminal window closes. (A job that ignores hangups can
+            outlive it; the background-job hangup is on Linux only, and on
+            Windows only the program itself is stopped.)
+          </li>
+        </ul>
+        <div class="note warning">
+          <p><strong>What it can't protect you from</strong></p>
+          <ul>
+            <li>
+              <strong>Programs run as you.</strong> The folder limit applies to
+              the editor, not to programs you run or to the terminal, which have
+              all of your account's permissions. Run code you trust, as you
+              would in any terminal.
+            </li>
+            <li>
+              <strong>The address is a key.</strong> Anyone with the full
+              address can use Vela Studio until it stops. Don't paste it into
+              chats or show it on a shared screen, and stop Vela Studio when
+              you're done.
+            </li>
+            <li>
+              <strong>It isn't meant for remote use.</strong> Forwarding its
+              port to another machine hands a shell to whoever gets the address.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <h2 id="troubleshooting">Troubleshooting</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>You see</th>
+                <th>What to do</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>“The frontend hasn't been built yet”</td>
+                <td>
+                  Build the page (<code>npm --prefix ide/web run build</code>),
+                  then rebuild and restart <code>vela-studio</code>.
+                </td>
+              </tr>
+              <tr>
+                <td>“Open Vela Studio from its link”</td>
+                <td>
+                  The page was opened without its token. Use the full address
+                  that <code>vela-studio</code> printed, including
+                  <code>#token=…</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><em>No C compiler</em> in the title bar</td>
+                <td>
+                  Install gcc or clang, or start <code>vela-studio</code> with
+                  <code>CC</code> naming your compiler, as in
+                  <code>CC=clang vela-studio</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><code>error: cannot listen on 127.0.0.1:N</code></td>
+                <td>
+                  Another program uses that port. Pick another, or leave out
+                  <code class="nowrap">--port</code>.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  “Couldn't open a browser”, or the browser shows an error for a
+                  local file
+                </td>
+                <td>
+                  Open the printed address yourself. (Some sandboxed browsers,
+                  such as snap packages, can't open the private page Vela Studio
+                  writes for them.)
+                </td>
+              </tr>
+              <tr>
+                <td>A file won't open</td>
+                <td>
+                  Only UTF-8 text files up to 1 MiB can be edited. Pipes and
+                  devices aren't listed at all.
+                </td>
+              </tr>
+              <tr>
+                <td>“the file is read-only” when saving</td>
+                <td>
+                  Vela Studio doesn't change read-only files; make the file
+                  writable (<code>chmod u+w</code>) and save again.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  “This link no longer works” (“this link has already been used
+                  or has expired”)
+                </td>
+                <td>
+                  The browser's launch link works once. Open the address
+                  <code>vela-studio</code> printed instead.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  A file changed by another program still shows the old text
+                </td>
+                <td>
+                  Changes are checked when the page regains focus: switch away
+                  and back.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Vela Studio marks every mistake the compiler finds in a file, each
+          under the word it is about, and lists them all in Problems (see
+          <a href="index.html#limits">Current Limits</a>). The line a mistake is
+          on is the only one left without types, so hover, completion, and Go to
+          Definition keep working around it. Ideas for what comes next are in
+          <a href="future.html">Future Directions</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2 id="developing">Working on Vela Studio</h2>
+        <p>
+          Vela Studio lives in <code>ide/</code>, separate from the compiler, as
+          members of the repository's Cargo workspace:
+        </p>
+        <ul>
+          <li>
+            <code>ide/analysis</code> (<code>vela-analysis</code>): highlighting
+            classes, diagnostics, outline, definitions, completion, and hover,
+            built on the compiler's library. Pure Rust, no I/O: the page gives
+            it the text of the modules a file uses, and it says which it still
+            needs.
+          </li>
+          <li>
+            <code>ide/wasm</code> (<code>vela-analysis-wasm</code>): that engine
+            compiled to WebAssembly for the page, behind a small JSON interface.
+          </li>
+          <li>
+            <code>ide/server</code> (<code>vela-studio</code>): the local server
+            for files, builds, runs, and terminals (pseudo-terminals over
+            WebSockets), which also serves the page.
+          </li>
+          <li>
+            <code>ide/web</code>: the page, in TypeScript with CodeMirror 6 and
+            xterm.js, built by Vite.
+          </li>
+        </ul>
+        <p>
+          The compiler has no dependencies and doesn't depend on any of these:
+          plain <code>cargo build</code> and <code>cargo test</code> at the root
+          still cover only the compiler.
+        </p>
+        <p>
+          A debug server reads <code>ide/web/dist</code> from disk, so after
+          <code>npm run build</code> a reload shows the new page. For hot
+          reloading, run the server on a fixed port and Vite's dev server beside
+          it, then open <code>http://localhost:5173/#token=…</code> with the
+          token the server printed:
+        </p>
+        <pre>
+cargo run -p vela-studio -- examples --port 4000 --no-open
+VELA_STUDIO_PORT=4000 npm --prefix ide/web run dev</pre
+        >
+        <p>Tests:</p>
+        <pre>cargo test --workspace                 <span class="comment"># compiler, analysis, and server</span>
+cargo clippy --workspace --all-targets
+npm --prefix ide/web test              <span class="comment"># unit tests</span>
+npm --prefix ide/web run typecheck
+npm --prefix ide/web run e2e           <span class="comment"># Chromium against a real server; set CHROMIUM if it isn't /usr/bin/chromium</span></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Vela Studio — a small editor for a small language, built on its
+        compiler.
+      </p>
+    </footer>
+  </body>
+</html>
