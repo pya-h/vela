@@ -426,6 +426,36 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     </section>
 
     <section>
+      <h2 id="json">std/json</h2>
+      <p>
+        JSON parsing, serialization, and tree manipulation. Brought in with
+        <code>include std/json {Json, JsonError, parse, stringify}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/json {Json, parse, stringify}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> raw = <span class="string">"\{&quot;name&quot;: &quot;Vela&quot;, &quot;stars&quot;: 100, &quot;active&quot;: true\}"</span>
+    <span class="keyword">fixed</span> doc = parse(raw, r) { Json.Null }
+    <span class="keyword">fixed</span> name = doc.get(<span class="string">"name"</span>) { Json.Null }.as_text() { <span class="string">""</span> }
+    <span class="keyword">fixed</span> stars = doc.get(<span class="string">"stars"</span>) { Json.Null }.as_int() { 0 }
+    show(name, <span class="string">" has "</span>, stars, <span class="string">" stars"</span>)
+    show(<span class="string">"json: "</span>, doc.str(r))
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>Json</code></td><td>Kind representing JSON values: <code>Null</code>, <code>Bool(b)</code>, <code>Int(n)</code>, <code>Float(f)</code>, <code>Str(s)</code>, <code>Array(items)</code>, <code>Object(props)</code></td></tr>
+        <tr><td><code>Json.is_null()</code></td><td>Returns <code>true</code> if the value is <code>Null</code></td></tr>
+        <tr><td><code>Json.as_bool()</code>, <code>as_int()</code>, <code>as_float()</code>, <code>as_text()</code></td><td>Unwraps primitive values into <code>maybe T</code></td></tr>
+        <tr><td><code>Json.get(key)</code></td><td>Looks up a property in an object, returning <code>maybe Json@this</code></td></tr>
+        <tr><td><code>Json.item(idx)</code></td><td>Retrieves an element from an array by index, returning <code>maybe Json@this</code></td></tr>
+        <tr><td><code>Json.str(r)</code></td><td>Serializes the JSON tree to text in region <code>r</code></td></tr>
+        <tr><td><code>parse(raw, r)</code></td><td>Parses a JSON string into <code>Json@r ~ JsonError@r</code></td></tr>
+        <tr><td><code>stringify(val, r)</code></td><td>Serializes a <code>Json@p</code> value into JSON formatted text</td></tr>
+      </table>
+    </section>
+
+    <section>
       <h2 id="loops">std/loops</h2>
       <p>
         What a <a href="vela.html#loop-values">loop that gives a value</a> fails with, <code>LoopResult&lt;B, M&gt;</code>:

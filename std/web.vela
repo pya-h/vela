@@ -170,6 +170,12 @@ shape Response
         <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
     fi
 
+    shared json(body: text@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = "application/json; charset=utf-8"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
+    fi
+
     shared with_status(code: int, r: region default, custom_reason: text@r = "") -> Response@r
         fixed r_name = when custom_reason != "" custom_reason else reason_of(code) fi
         <- Response { status: code, reason: r_name, headers: new [text: text]() at r, body_data: "" }
@@ -198,6 +204,14 @@ fi
 
 task html_response(body: text@r, r: region default) -> Response@r
     <- Response.html(body, r)
+fi
+
+task json_response(body: text@r, r: region default) -> Response@r
+    <- Response.json(body, r)
+fi
+
+task json(body: text@r, r: region default) -> Response@r
+    <- Response.json(body, r)
 fi
 
 task status_response(code: int, r: region default, custom_reason: text@r = "") -> Response@r

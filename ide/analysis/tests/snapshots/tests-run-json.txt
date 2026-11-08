@@ -1,0 +1,150 @@
+  1 | ; Tests std/json: parsing, stringify, accessors, error handling, and web integration.
+    | comment:; Tests std/json: parsing, stringify, accessors, error handling, and web integration.
+  2 | include std/json { Json, JsonError, parse, stringify }
+    | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:,  type:JsonError  punctuation:,  task:parse  punctuation:,  task:stringify  punctuation:}
+  3 | include std/web { Response, json }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Response  punctuation:,  task:json  punctuation:}
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r default
+    | keyword:region  region:r  keyword:default
+  8 |     ; 1. Primitives
+    | comment:; 1. Primitives
+  9 |     fixed p_null = parse("null", r) { Json.Null }
+    | keyword:fixed  variable:p_null  operator:=  task:parse  punctuation:(  string:"null"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 10 |     show("null: ", p_null.is_null())
+    | builtin-fn:show  punctuation:(  string:"null: "  punctuation:,  variable:p_null  punctuation:.  method:is_null  punctuation:(  punctuation:)  punctuation:)
+ 12 |     fixed p_true = parse("true", r) { Json.Null }
+    | keyword:fixed  variable:p_true  operator:=  task:parse  punctuation:(  string:"true"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 13 |     show("true: ", p_true.as_bool() { false })
+    | builtin-fn:show  punctuation:(  string:"true: "  punctuation:,  variable:p_true  punctuation:.  method:as_bool  punctuation:(  punctuation:)  punctuation:{  keyword:false  punctuation:}  punctuation:)
+ 15 |     fixed p_false = parse("false", r) { Json.Null }
+    | keyword:fixed  variable:p_false  operator:=  task:parse  punctuation:(  string:"false"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 16 |     show("false: ", p_false.as_bool() { true })
+    | builtin-fn:show  punctuation:(  string:"false: "  punctuation:,  variable:p_false  punctuation:.  method:as_bool  punctuation:(  punctuation:)  punctuation:{  keyword:true  punctuation:}  punctuation:)
+ 18 |     fixed p_int = parse("-42", r) { Json.Null }
+    | keyword:fixed  variable:p_int  operator:=  task:parse  punctuation:(  string:"-42"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 19 |     show("int: ", p_int.as_int() { 0 })
+    | builtin-fn:show  punctuation:(  string:"int: "  punctuation:,  variable:p_int  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 21 |     fixed p_float = parse("123.45", r) { Json.Null }
+    | keyword:fixed  variable:p_float  operator:=  task:parse  punctuation:(  string:"123.45"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 22 |     show("float: ", p_float.as_float() { 0.0 })
+    | builtin-fn:show  punctuation:(  string:"float: "  punctuation:,  variable:p_float  punctuation:.  method:as_float  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+ 24 |     fixed p_str = parse("\"hello \\\"world\\\" \\n \\t\\\\\"", r) { Json.Null }
+    | keyword:fixed  variable:p_str  operator:=  task:parse  punctuation:(  string:"  escape:\"  string:hello   escape:\\  escape:\"  string:world  escape:\\  escape:\"  string:   escape:\\  string:n   escape:\\  string:t  escape:\\  escape:\\  escape:\"  string:"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 25 |     show("str len: ", (p_str.as_text() { "" }).len > 0)
+    | builtin-fn:show  punctuation:(  string:"str len: "  punctuation:,  punctuation:(  variable:p_str  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)  punctuation:.  field:len  operator:>  number:0  punctuation:)
+ 27 |     ; 2. Arrays
+    | comment:; 2. Arrays
+ 28 |     fixed p_empty_arr = parse("[]", r) { Json.Null }
+    | keyword:fixed  variable:p_empty_arr  operator:=  task:parse  punctuation:(  string:"[]"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 29 |     show("empty arr str: ", p_empty_arr.str(r))
+    | builtin-fn:show  punctuation:(  string:"empty arr str: "  punctuation:,  variable:p_empty_arr  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 31 |     fixed p_arr = parse("[1, 2, \"three\", true, null]", r) { Json.Null }
+    | keyword:fixed  variable:p_arr  operator:=  task:parse  punctuation:(  string:"[1, 2,   escape:\"  string:three  escape:\"  string:, true, null]"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 32 |     show("arr item 0: ", p_arr.item(0) { Json.Null }.as_int() { 0 })
+    | builtin-fn:show  punctuation:(  string:"arr item 0: "  punctuation:,  variable:p_arr  punctuation:.  method:item  punctuation:(  number:0  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 33 |     show("arr item 2: ", p_arr.item(2) { Json.Null }.as_text() { "" })
+    | builtin-fn:show  punctuation:(  string:"arr item 2: "  punctuation:,  variable:p_arr  punctuation:.  method:item  punctuation:(  number:2  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+ 34 |     show("arr item 4 is null: ", p_arr.item(4) { Json.Bool(false) }.is_null())
+    | builtin-fn:show  punctuation:(  string:"arr item 4 is null: "  punctuation:,  variable:p_arr  punctuation:.  method:item  punctuation:(  number:4  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Bool  punctuation:(  keyword:false  punctuation:)  punctuation:}  punctuation:.  method:is_null  punctuation:(  punctuation:)  punctuation:)
+ 35 |     show("arr item oob: ", p_arr.item(99) == none)
+    | builtin-fn:show  punctuation:(  string:"arr item oob: "  punctuation:,  variable:p_arr  punctuation:.  method:item  punctuation:(  number:99  punctuation:)  operator:==  keyword:none  punctuation:)
+ 37 |     ; 3. Objects & Nested Structures
+    | comment:; 3. Objects & Nested Structures
+ 38 |     fixed p_empty_obj = parse("\{   \}", r) { Json.Null }
+    | keyword:fixed  variable:p_empty_obj  operator:=  task:parse  punctuation:(  string:"  escape:\{  string:     escape:\}  string:"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 39 |     show("empty obj str: ", p_empty_obj.str(r))
+    | builtin-fn:show  punctuation:(  string:"empty obj str: "  punctuation:,  variable:p_empty_obj  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 41 |     fixed complex_src = "\{\"user\":\{\"id\":101,\"name\":\"Alice\"\},\"tags\":[\"dev\",\"admin\"],\"active\":true\}"
+    | keyword:fixed  variable:complex_src  operator:=  string:"  escape:\{  escape:\"  string:user  escape:\"  string::  escape:\{  escape:\"  string:id  escape:\"  string::101,  escape:\"  string:name  escape:\"  string::  escape:\"  string:Alice  escape:\"  escape:\}  string:,  escape:\"  string:tags  escape:\"  string::[  escape:\"  string:dev  escape:\"  string:,  escape:\"  string:admin  escape:\"  string:],  escape:\"  string:active  escape:\"  string::true  escape:\}  string:"
+ 42 |     fixed doc = parse(complex_src, r) { Json.Null }
+    | keyword:fixed  variable:doc  operator:=  task:parse  punctuation:(  variable:complex_src  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 43 |     when doc.get("user") is {u}
+    | keyword:when  variable:doc  punctuation:.  method:get  punctuation:(  string:"user"  punctuation:)  keyword:is  punctuation:{  variable:u  punctuation:}
+ 44 |         show("user.id: ", u.get("id") { Json.Null }.as_int() { 0 })
+    | builtin-fn:show  punctuation:(  string:"user.id: "  punctuation:,  variable:u  punctuation:.  method:get  punctuation:(  string:"id"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 45 |         show("user.name: ", u.get("name") { Json.Null }.as_text() { "" })
+    | builtin-fn:show  punctuation:(  string:"user.name: "  punctuation:,  variable:u  punctuation:.  method:get  punctuation:(  string:"name"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+ 46 |     fi
+    | keyword:fi
+ 47 |     when doc.get("tags") is {tags}
+    | keyword:when  variable:doc  punctuation:.  method:get  punctuation:(  string:"tags"  punctuation:)  keyword:is  punctuation:{  variable:tags  punctuation:}
+ 48 |         show("tags[0]: ", tags.item(0) { Json.Null }.as_text() { "" })
+    | builtin-fn:show  punctuation:(  string:"tags[0]: "  punctuation:,  variable:tags  punctuation:.  method:item  punctuation:(  number:0  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+ 49 |         show("tags[1]: ", tags.item(1) { Json.Null }.as_text() { "" })
+    | builtin-fn:show  punctuation:(  string:"tags[1]: "  punctuation:,  variable:tags  punctuation:.  method:item  punctuation:(  number:1  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+ 50 |     fi
+    | keyword:fi
+ 51 |     show("active: ", doc.get("active") { Json.Null }.as_bool() { false })
+    | builtin-fn:show  punctuation:(  string:"active: "  punctuation:,  variable:doc  punctuation:.  method:get  punctuation:(  string:"active"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_bool  punctuation:(  punctuation:)  punctuation:{  keyword:false  punctuation:}  punctuation:)
+ 52 |     show("missing: ", doc.get("not_there") == none)
+    | builtin-fn:show  punctuation:(  string:"missing: "  punctuation:,  variable:doc  punctuation:.  method:get  punctuation:(  string:"not_there"  punctuation:)  operator:==  keyword:none  punctuation:)
+ 54 |     ; 4. Manual Construction & Serialization
+    | comment:; 4. Manual Construction & Serialization
+ 55 |     flex constructed: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:constructed  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 56 |     constructed["title"] = Json.Str("Release 1.0")
+    | variable:constructed  punctuation:[  string:"title"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"Release 1.0"  punctuation:)
+ 57 |     constructed["count"] = Json.Int(7)
+    | variable:constructed  punctuation:[  string:"count"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  number:7  punctuation:)
+ 58 |     fixed j_obj: Json@r = Json.Object(constructed)
+    | keyword:fixed  variable:j_obj  punctuation::  type:Json  operator:@  region:r  operator:=  type:Json  punctuation:.  variant:Object  punctuation:(  variable:constructed  punctuation:)
+ 59 |     fixed serialized = j_obj.str(r)
+    | keyword:fixed  variable:serialized  operator:=  variable:j_obj  punctuation:.  method:str  punctuation:(  region:r  punctuation:)
+ 60 |     show("serialized has title: ", serialized.len > 0)
+    | builtin-fn:show  punctuation:(  string:"serialized has title: "  punctuation:,  variable:serialized  punctuation:.  field:len  operator:>  number:0  punctuation:)
+ 62 |     ; Roundtrip check
+    | comment:; Roundtrip check
+ 63 |     fixed reparsed = parse(serialized, r) { Json.Null }
+    | keyword:fixed  variable:reparsed  operator:=  task:parse  punctuation:(  variable:serialized  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 64 |     show("roundtrip title: ", reparsed.get("title") { Json.Null }.as_text() { "" })
+    | builtin-fn:show  punctuation:(  string:"roundtrip title: "  punctuation:,  variable:reparsed  punctuation:.  method:get  punctuation:(  string:"title"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}  punctuation:)
+ 65 |     show("roundtrip count: ", reparsed.get("count") { Json.Null }.as_int() { 0 })
+    | builtin-fn:show  punctuation:(  string:"roundtrip count: "  punctuation:,  variable:reparsed  punctuation:.  method:get  punctuation:(  string:"count"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 67 |     ; 5. Error Handling
+    | comment:; 5. Error Handling
+ 68 |     fixed err1 = parse("\{\"bad\": \}", r) { failure e
+    | keyword:fixed  variable:err1  operator:=  task:parse  punctuation:(  string:"  escape:\{  escape:\"  string:bad  escape:\"  string::   escape:\}  string:"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 69 |         show("err unquoted: unexpected token")
+    | builtin-fn:show  punctuation:(  string:"err unquoted: unexpected token"  punctuation:)
+ 70 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+ 71 |     }
+    | punctuation:}
+ 73 |     fixed err2 = parse("[1, 2] trailing", r) { failure e
+    | keyword:fixed  variable:err2  operator:=  task:parse  punctuation:(  string:"[1, 2] trailing"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 74 |         show("err trailing: unexpected token")
+    | builtin-fn:show  punctuation:(  string:"err trailing: unexpected token"  punctuation:)
+ 75 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+ 76 |     }
+    | punctuation:}
+ 78 |     fixed err3 = parse("\"unterminated", r) { failure e
+    | keyword:fixed  variable:err3  operator:=  task:parse  punctuation:(  string:"  escape:\"  string:unterminated"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 79 |         show("err unterminated: unexpected end")
+    | builtin-fn:show  punctuation:(  string:"err unterminated: unexpected end"  punctuation:)
+ 80 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+ 81 |     }
+    | punctuation:}
+ 83 |     fixed err4 = parse("--99", r) { failure e
+    | keyword:fixed  variable:err4  operator:=  task:parse  punctuation:(  string:"--99"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 84 |         show("err invalid number")
+    | builtin-fn:show  punctuation:(  string:"err invalid number"  punctuation:)
+ 85 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+ 86 |     }
+    | punctuation:}
+ 88 |     ; 6. Web Response Integration
+    | comment:; 6. Web Response Integration
+ 89 |     fixed resp = json(doc.str(r), r)
+    | keyword:fixed  variable:resp  operator:=  task:json  punctuation:(  variable:doc  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+ 90 |     show("resp status: ", resp.status)
+    | builtin-fn:show  punctuation:(  string:"resp status: "  punctuation:,  variable:resp  punctuation:.  field:status  punctuation:)
+ 91 |     show("resp content-type: ", resp.headers[#"content-type"] { "" })
+    | builtin-fn:show  punctuation:(  string:"resp content-type: "  punctuation:,  variable:resp  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"content-type"  punctuation:]  punctuation:{  string:""  punctuation:}  punctuation:)
+ 92 |     show("json tests complete")
+    | builtin-fn:show  punctuation:(  string:"json tests complete"  punctuation:)
+ 93 | fi
+    | keyword:fi

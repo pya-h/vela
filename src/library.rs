@@ -6,6 +6,7 @@ pub const MODULES: &[(&str, &str)] = &[
     ("collections", include_str!("../std/collections.vela")),
     ("files", include_str!("../std/files.vela")),
     ("int512", include_str!("../std/int512.vela")),
+    ("json", include_str!("../std/json.vela")),
     ("loops", include_str!("../std/loops.vela")),
     ("math", include_str!("../std/math.vela")),
     ("web", include_str!("../std/web.vela")),

@@ -1,0 +1,28 @@
+null: true
+true: true
+false: false
+int: -42
+float: 123.45
+str len: true
+empty arr str: []
+arr item 0: 1
+arr item 2: three
+arr item 4 is null: true
+arr item oob: true
+empty obj str: {}
+user.id: 101
+user.name: Alice
+tags[0]: dev
+tags[1]: admin
+active: true
+missing: true
+serialized has title: true
+roundtrip title: Release 1.0
+roundtrip count: 7
+err unquoted: unexpected token
+err trailing: unexpected token
+err unterminated: unexpected end
+err invalid number
+resp status: 200
+resp content-type: application/json; charset=utf-8
+json tests complete

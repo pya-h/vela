@@ -1,0 +1,93 @@
+; Tests std/json: parsing, stringify, accessors, error handling, and web integration.
+include std/json { Json, JsonError, parse, stringify }
+include std/web { Response, json }
+
+task main()
+    region r default
+
+    ; 1. Primitives
+    fixed p_null = parse("null", r) { Json.Null }
+    show("null: ", p_null.is_null())
+
+    fixed p_true = parse("true", r) { Json.Null }
+    show("true: ", p_true.as_bool() { false })
+
+    fixed p_false = parse("false", r) { Json.Null }
+    show("false: ", p_false.as_bool() { true })
+
+    fixed p_int = parse("-42", r) { Json.Null }
+    show("int: ", p_int.as_int() { 0 })
+
+    fixed p_float = parse("123.45", r) { Json.Null }
+    show("float: ", p_float.as_float() { 0.0 })
+
+    fixed p_str = parse("\"hello \\\"world\\\" \\n \\t\\\\\"", r) { Json.Null }
+    show("str len: ", (p_str.as_text() { "" }).len > 0)
+
+    ; 2. Arrays
+    fixed p_empty_arr = parse("[]", r) { Json.Null }
+    show("empty arr str: ", p_empty_arr.str(r))
+
+    fixed p_arr = parse("[1, 2, \"three\", true, null]", r) { Json.Null }
+    show("arr item 0: ", p_arr.item(0) { Json.Null }.as_int() { 0 })
+    show("arr item 2: ", p_arr.item(2) { Json.Null }.as_text() { "" })
+    show("arr item 4 is null: ", p_arr.item(4) { Json.Bool(false) }.is_null())
+    show("arr item oob: ", p_arr.item(99) == none)
+
+    ; 3. Objects & Nested Structures
+    fixed p_empty_obj = parse("\{   \}", r) { Json.Null }
+    show("empty obj str: ", p_empty_obj.str(r))
+
+    fixed complex_src = "\{\"user\":\{\"id\":101,\"name\":\"Alice\"\},\"tags\":[\"dev\",\"admin\"],\"active\":true\}"
+    fixed doc = parse(complex_src, r) { Json.Null }
+    when doc.get("user") is {u}
+        show("user.id: ", u.get("id") { Json.Null }.as_int() { 0 })
+        show("user.name: ", u.get("name") { Json.Null }.as_text() { "" })
+    fi
+    when doc.get("tags") is {tags}
+        show("tags[0]: ", tags.item(0) { Json.Null }.as_text() { "" })
+        show("tags[1]: ", tags.item(1) { Json.Null }.as_text() { "" })
+    fi
+    show("active: ", doc.get("active") { Json.Null }.as_bool() { false })
+    show("missing: ", doc.get("not_there") == none)
+
+    ; 4. Manual Construction & Serialization
+    flex constructed: [text: Json]@r = new [text: Json]() at r
+    constructed["title"] = Json.Str("Release 1.0")
+    constructed["count"] = Json.Int(7)
+    fixed j_obj: Json@r = Json.Object(constructed)
+    fixed serialized = j_obj.str(r)
+    show("serialized has title: ", serialized.len > 0)
+
+    ; Roundtrip check
+    fixed reparsed = parse(serialized, r) { Json.Null }
+    show("roundtrip title: ", reparsed.get("title") { Json.Null }.as_text() { "" })
+    show("roundtrip count: ", reparsed.get("count") { Json.Null }.as_int() { 0 })
+
+    ; 5. Error Handling
+    fixed err1 = parse("\{\"bad\": \}", r) { failure e
+        show("err unquoted: unexpected token")
+        Json.Null
+    }
+
+    fixed err2 = parse("[1, 2] trailing", r) { failure e
+        show("err trailing: unexpected token")
+        Json.Null
+    }
+
+    fixed err3 = parse("\"unterminated", r) { failure e
+        show("err unterminated: unexpected end")
+        Json.Null
+    }
+
+    fixed err4 = parse("--99", r) { failure e
+        show("err invalid number")
+        Json.Null
+    }
+
+    ; 6. Web Response Integration
+    fixed resp = json(doc.str(r), r)
+    show("resp status: ", resp.status)
+    show("resp content-type: ", resp.headers[#"content-type"] { "" })
+    show("json tests complete")
+fi

@@ -1,0 +1,381 @@
+; std/json: JSON parser, serializer, and value representations.
+
+kind JsonError
+    UnexpectedEnd(pos: int)
+    UnexpectedToken(tok: text, pos: int)
+    InvalidNumber(pos: int)
+    InvalidEscape(pos: int)
+
+    str(r: region default) -> text@r
+        <- match .this
+        case UnexpectedEnd pos = "unexpected end of input at position {pos}" at r
+        case UnexpectedToken tok pos = "unexpected token '{tok}' at position {pos}" at r
+        case InvalidNumber pos = "invalid number at position {pos}" at r
+        case InvalidEscape pos = "invalid escape sequence at position {pos}" at r
+        fi
+    fi
+fi
+
+kind Json
+    Null
+    Bool(value: bool)
+    Int(value: int)
+    Float(value: float)
+    Str(value: text)
+    Array(items: [Json])
+    Object(props: [text: Json])
+
+    is_null() -> bool
+        <- match .this
+        case Null = true
+        case _ = false
+        fi
+    fi
+
+    as_bool() -> maybe bool
+        <- match .this
+        case Bool b = b
+        case _ = none
+        fi
+    fi
+
+    as_int() -> maybe int
+        <- match .this
+        case Int n = n
+        case _ = none
+        fi
+    fi
+
+    as_float() -> maybe float
+        <- match .this
+        case Float f = f
+        case Int n = float(n)
+        case _ = none
+        fi
+    fi
+
+    as_text() -> maybe text@this
+        <- match .this
+        case Str s = s
+        case _ = none
+        fi
+    fi
+
+    get(key: text@p) -> maybe Json@this
+        <- match .this
+        case Object props = props[#key]
+        case _ = none
+        fi
+    fi
+
+    item(idx: int) -> maybe Json@this
+        <- match .this
+        case Array items
+            when idx >= 0 and idx < items.len
+                <- items[idx]
+            fi
+            <- none
+        case _ = none
+        fi
+    fi
+
+    str(r: region default) -> text@r
+        <- stringify(.this, r)
+    fi
+fi
+
+task skip_whitespace(raw: text@r, flex& pos: int)
+    loop pos < raw.len
+        fixed c = raw[pos]
+        when c == ' ' or c == '\t' or c == '\n' or c == '\r'
+            pos++
+        else
+            break
+        fi
+    fi
+fi
+
+task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ JsonError@r
+    when pos >= raw.len or raw[pos] != '"'
+        <- fail JsonError.UnexpectedToken(when pos < raw.len raw[pos..pos+1] else "EOF" fi, pos)
+    fi
+    pos++
+    flex out: text@r = ""
+    loop pos < raw.len
+        fixed c = raw[pos]
+        when c == '"'
+            pos++
+            <- out
+        else when c == '\\'
+            pos++
+            when pos >= raw.len
+                <- fail JsonError.UnexpectedEnd(pos)
+            fi
+            fixed esc = raw[pos]
+            pos++
+            when esc == '"'
+                out = "{out}\"" at r
+            else when esc == '\\'
+                out = "{out}\\" at r
+            else when esc == '/'
+                out = "{out}/" at r
+            else when esc == 'n'
+                out = "{out}\n" at r
+            else when esc == 'r'
+                out = "{out}\r" at r
+            else when esc == 't'
+                out = "{out}\t" at r
+            else when esc == 'b'
+                out = "{out}{text(char(8)) at r}" at r
+            else when esc == 'f'
+                out = "{out}{text(char(12)) at r}" at r
+            else
+                out = "{out}{esc}" at r
+            fi
+        else
+            out = "{out}{raw[pos..pos+1]}" at r
+            pos++
+        fi
+    fi
+    <- fail JsonError.UnexpectedEnd(pos)
+fi
+
+task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonError@r
+    fixed start = pos
+    flex is_float = false
+    when pos < raw.len and raw[pos] == '-'
+        pos++
+    fi
+    loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
+        pos++
+    fi
+    when pos < raw.len and raw[pos] == '.'
+        is_float = true
+        pos++
+        loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
+            pos++
+        fi
+    fi
+    when pos < raw.len and (raw[pos] == 'e' or raw[pos] == 'E')
+        is_float = true
+        pos++
+        when pos < raw.len and (raw[pos] == '+' or raw[pos] == '-')
+            pos++
+        fi
+        loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
+            pos++
+        fi
+    fi
+    fixed end = pos
+    when end == start or (end == start + 1 and raw[start] == '-')
+        <- fail JsonError.InvalidNumber(start)
+    fi
+    fixed num_str = raw[start..end]
+    when is_float
+        fixed f = float(num_str) { failure _
+            <- fail JsonError.InvalidNumber(start)
+        }
+        <- Float(f)
+    else
+        fixed n = int(num_str) { failure _
+            <- fail JsonError.InvalidNumber(start)
+        }
+        <- Int(n)
+    fi
+fi
+
+task parse_array(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonError@r
+    pos++
+    skip_whitespace(raw, &pos)
+    when pos < raw.len and raw[pos] == ']'
+        pos++
+        flex empty: [Json]@r = new [Json]() at r
+        <- Array(empty)
+    fi
+    flex items: [Json]@r = new [Json]() at r
+    endless
+        skip_whitespace(raw, &pos)
+        when pos >= raw.len
+            <- fail JsonError.UnexpectedEnd(pos)
+        fi
+        fixed val = parse_val(raw, &pos, r) { failure e
+            <- fail e
+        }
+        items.add(val.copy() at r)
+        skip_whitespace(raw, &pos)
+        when pos >= raw.len
+            <- fail JsonError.UnexpectedEnd(pos)
+        fi
+        fixed c = raw[pos]
+        when c == ']'
+            pos++
+            break
+        else when c == ','
+            pos++
+        else
+            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        fi
+    fi
+    <- Array(items)
+fi
+
+task parse_object(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonError@r
+    pos++
+    skip_whitespace(raw, &pos)
+    when pos < raw.len and raw[pos] == '}'
+        pos++
+        flex empty: [text: Json]@r = new [text: Json]() at r
+        <- Object(empty)
+    fi
+    flex props: [text: Json]@r = new [text: Json]() at r
+    endless
+        skip_whitespace(raw, &pos)
+        when pos >= raw.len
+            <- fail JsonError.UnexpectedEnd(pos)
+        fi
+        when raw[pos] != '"'
+            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        fi
+        fixed key = parse_string(raw, &pos, r) { failure e
+            <- fail e
+        }
+        skip_whitespace(raw, &pos)
+        when pos >= raw.len or raw[pos] != ':'
+            <- fail JsonError.UnexpectedToken(when pos < raw.len raw[pos..pos+1] else "EOF" fi, pos)
+        fi
+        pos++
+        skip_whitespace(raw, &pos)
+        fixed val = parse_val(raw, &pos, r) { failure e
+            <- fail e
+        }
+        props[key] = val.copy() at r
+        skip_whitespace(raw, &pos)
+        when pos >= raw.len
+            <- fail JsonError.UnexpectedEnd(pos)
+        fi
+        fixed c = raw[pos]
+        when c == '}'
+            pos++
+            break
+        else when c == ','
+            pos++
+        else
+            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        fi
+    fi
+    <- Object(props)
+fi
+
+task parse_val(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonError@r
+    skip_whitespace(raw, &pos)
+    when pos >= raw.len
+        <- fail JsonError.UnexpectedEnd(pos)
+    fi
+    fixed c = raw[pos]
+    when c == 'n'
+        when pos + 4 <= raw.len and raw[pos..pos+4] == "null"
+            pos = pos + 4
+            <- Null
+        fi
+        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+    else when c == 't'
+        when pos + 4 <= raw.len and raw[pos..pos+4] == "true"
+            pos = pos + 4
+            <- Bool(true)
+        fi
+        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+    else when c == 'f'
+        when pos + 5 <= raw.len and raw[pos..pos+5] == "false"
+            pos = pos + 5
+            <- Bool(false)
+        fi
+        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+    else when c == '"'
+        fixed s = parse_string(raw, &pos, r) { failure e
+            <- fail e
+        }
+        <- Str(s)
+    else when c == '['
+        <- parse_array(raw, &pos, r)
+    else when c == '{'
+        <- parse_object(raw, &pos, r)
+    else when c == '-' or (c >= '0' and c <= '9')
+        <- parse_number(raw, &pos, r)
+    else
+        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+    fi
+fi
+
+task parse(raw: text@r, r: region default) -> Json@r ~ JsonError@r
+    flex pos = 0
+    fixed val = parse_val(raw, &pos, r) { failure e
+        <- fail e
+    }
+    skip_whitespace(raw, &pos)
+    when pos < raw.len
+        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+    fi
+    <- val
+fi
+
+task escape_json_string(s: text@p, r: region default) -> text@r
+    flex out: text@r = "\""
+    flex i = 0
+    loop i < s.len
+        fixed c = s[i]
+        when c == '"'
+            out = "{out}\\\"" at r
+        else when c == '\\'
+            out = "{out}\\\\" at r
+        else when c == '\n'
+            out = "{out}\\n" at r
+        else when c == '\r'
+            out = "{out}\\r" at r
+        else when c == '\t'
+            out = "{out}\\t" at r
+        else
+            out = "{out}{s[i..i+1]}" at r
+        fi
+        i++
+    fi
+    <- "{out}\"" at r
+fi
+
+task stringify_array(items: [Json]@p, r: region default) -> text@r
+    flex out: text@r = "["
+    flex first = true
+    each item in items
+        when not first
+            out = "{out}," at r
+        fi
+        first = false
+        out = "{out}{stringify(item, r)}" at r
+    fi
+    <- "{out}]" at r
+fi
+
+task stringify_object(props: [text: Json]@p, r: region default) -> text@r
+    flex out: text@r = "\{"
+    flex first = true
+    each k, v in props
+        when not first
+            out = "{out}," at r
+        fi
+        first = false
+        fixed escaped_key = escape_json_string(k, r)
+        out = "{out}{escaped_key}:{stringify(v, r)}" at r
+    fi
+    <- "{out}\}" at r
+fi
+
+task stringify(val: Json@p, r: region default) -> text@r
+    <- match val
+    case Null = "null"
+    case Bool b = when b "true" else "false" fi
+    case Int n = "{n}" at r
+    case Float f = "{f}" at r
+    case Str s = escape_json_string(s, r)
+    case Array items = stringify_array(items, r)
+    case Object props = stringify_object(props, r)
+    fi
+fi
