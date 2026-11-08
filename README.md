@@ -1,187 +1,243 @@
 # Vela
 
-Vela is a small, statically typed systems language that compiles to portable C11. It has one kind of
-function (`task`), one kind of record (`shape`), one kind of sum type (`kind`), exhaustive `match`,
-immutable-by-default bindings, and memory in regions: `new T(v) at r` allocates in a region that is freed
-when its block closes, and pointer types (`^T@r`) keep every pointer from outliving it or being null. A block
-may name one of its regions its default, `region r default` (or `r: region default` for one a task is given),
-and then what allocates there needs no `at r`. Text
-lasts as long as the program (`text`, as a literal does) or is in a region (`text@r`), and a shape holding
-text may name one (`Person@r`). A value that may
-be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read with `match`, `is`, or a
-plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain. A
-`match` or a `when` can be the value itself, with every branch giving one (`fixed area = match s case Circle r
-= 3.14 * r * r … fi`), on a case's own line with `=` or on the last line of a block.
-Blocks close with `fi`, a comment starts with `;` (`fixed x = 1 ; the first`), and a task sends its results with `<-`: one value, or
-several (`-> int, int` … `<- a / b, a % b`), received with `fixed q, r = divmod(17, 5)`. Results can be named
-(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. The last
-parameters may name a value a call that leaves them out is given (`task pad(t: text, width: int = 8)`, then
-`pad("a")`). An `int`
-never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int#4]`)
-are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0#n]) at r`
-(or empty, `new [int] at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`, or copied with
-one change, `xs.added(v) at r` and `xs.without(i) at r` (maps too: `m.added(k, v)`, `m.without(k)`);
-every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
-are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
-writes a value as text: every value has one (`Point { x: 1, y: 2 }`), and a shape or kind may give its own with a method `str`. `float(n)` and `int(x)` turn a value into a
-number the same way, by the name of the type: a float becomes its whole part toward zero, a bool 1 or 0. Text
-read as a number may not be one, so `int(line)` sends `int ~ ParseError`, a builtin kind whose variants are
-`NotANumber` and `TooLarge`. Text holds values written inside
-it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
-one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); any value is one it writes, `show(card)`,
-with a shape's or kind's own `str` in a region it makes for the line and frees after it.
-`scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and
-`scan("Age: ", int)` reads a number from that line instead, needing no region and sending `int ~ InputError`,
-whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
-items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
-values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
-(`fixed name, age = pair`, or `when found is {(name, age)}` in a case form). A task or a shape can take types as well as
-values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word saying what may be done with them
-(`frozen`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
-from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
-task or shape is made for each set of types used. The types a shape is given name no region, as its fields
-don't: `Box<text>@r` holds its text in `r`. `alias SampleTask => (int) -> int` gives a type another name,
-which is that type wherever it is written, so `[SampleTask#4]` reads as an array of four tasks. A program can span
-several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
-with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
-another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. Vela's
-own library comes with the compiler and is included the same way, with a path starting `std`
-(`include std/files {File}`). `std/collections` also gives slices and iterators lazy chain members —
-`nums.filter(n -> n % 2 == 0).map(n -> n * 10).collect(r)` gathers nothing until asked. A
-variant can be written through its kind, `Size.Small`. A shape or a kind has methods, written in its block below
-its fields or variants and called on a value (`c.total()`); inside one, `.count` is a field of the value, `.this`
-the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its
-name, so only a place that can change may call it. A shape may have `shared` fields and methods, one for the whole
-program, named through it (`Tally.count`, `Point.new(…)`), fields that fall back on a value (`n: int = 0`), and
-`read` fields only its methods change. A `pattern Shaped … fi` lists methods, some with default bodies, and fields
-that a shape or kind following it has (`shape Circle::Shaped`), and a task asks for any type that follows it,
-`task total<T: Shaped>(xs: [T]@r)`, calling its methods with no cost when the program runs.
+**A minimal, safe systems programming language that compiles to portable C11.**
 
-A name is `fixed` (nothing changes through it, at any depth), `bind` (bound to one value: its items, fields and what
-its pointers point to change, but it is never assigned as a whole) or `flex` (changes in every way); what a fixed
-name owns is never given to a name that may change it, so a program copies it first.
-A parameter is read and never changed (`x: T`), or says how it is given: `flex x: T` is the task's own copy to
-change, `bind x: T` one whose contents it changes, `flex& x: T` and `bind& x: T` change the caller's place, which the
-call marks, `f(&a)`, `fixed x: T` is always a copy, and `fixed& x: T` reads the caller's place where it is. A call
-never gives one place twice where it changes it, and a plain parameter larger than 64 bytes is read where the caller
-keeps it when nothing can change it meanwhile, with a warning where that choice shows. `flex& y = &x`,
-`bind& y = &x` and `fixed& y = &x` name a place in a block too. `==` compares an
-array, a shape, or a tuple by where it is, and `~=` (and `<>`, its opposite) item by item; a `maybe` is compared
-with `==` only with `none`, and with `~=` with a plain value too, which an empty one never matches. `&x` shows or
-compares where a place is, `x.type` is its type as text, and whole numbers may be written in hex, octal, or
-binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `maybe`, and a condition may join an
-`is` with `and`, as in `when found is {v} and v > 0`. `each v in xs` goes through a slice as it was when the loop
-started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
-pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. A loop may come in
-three parts, `loop flex i = 0, j = 9 || i < j || i++, j--`, and one that never ends by itself is written
-`endless`; the compiler warns about a loop that never ends without saying so. A loop can be a value: one,
-`each x in xs … finally total fi`, the last line of a `finally` block run after its final pass, or, without
-`finally`, the values its passes end with gathered into an array or a slice (`fixed doubled = each x in xs` with
-`x * 2` as its last line). Its failure says why it has none (`LoopResult` of `std/loops`: it never ran,
-`break = v` stopped it, its final pass ended with `continue` before `finally`, or a last line failed). Numbers
-have sizes too, `int8` to `int64`, `uint8` to `uint64`, `float32` and `float64`, which never wrap around and mix
-only through a conversion such as `int32(n)`. Kinds take types as
-shapes do, `kind Option<T>`, and a variant's types come from its values, the place it goes, or are written,
-`Option<int>.None`. A kind can imitate others, `kind OrderError::ReadError & files.FileError`: it has all their
-variants before its own, named through it (`OrderError.Empty`), and a value of one of them goes where an
-`OrderError` is expected, as a failure a task sends on does. A pipe reads calls in the order they run,
-`line |> quantity() |>> price(250)` being `price(250, quantity(line))`: each `>` gives the value one argument
-further, a line starting with `|>` goes on with the chain, and a step that fails stops it, so the chain fails
-with that failure, which one plan B at the end reads. A lambda is a task with no name written where its value
-goes, `(x: int) -> int <- x * 2 fi`, or in one line where that place says its types, `apply(x -> x * 2, 21)`;
-`[@r]` before it keeps what it uses of the code around it in region `r`. The library's `std/collections` has
-`map`, `filter`, `fold`, `zip`, `find` and more, written for pipes: `nums |> filter(n -> n > 2) at r |> map(n -> n * 10) at r`. `block … fi` runs
-statements in a block of their own.
+[Online Documentation](https://pya-h.github.io/vela/) · [Language Reference](https://pya-h.github.io/vela/) · [Regions Guide](https://pya-h.github.io/vela/regions.html) · [Standard Library](https://pya-h.github.io/vela/std.html) · [Web Architecture](https://pya-h.github.io/vela/web.html) · [Vela Studio](https://pya-h.github.io/vela/ide.html)
 
+---
+
+## Overview
+
+Vela is a statically typed systems programming language designed for clarity, deterministic resource control, and developer ergonomics. The compiler is written in dependency-free Rust and translates Vela code into clean, standard ISO C11 that compiles with any C compiler (`gcc`, `clang`, MSVC).
+
+Vela avoids the overhead of garbage collection runtimes, reference-counting cycles, and complex lifetime annotations by organizing dynamic memory into lexical **regions**. Memory allocated in a region is reclaimed all at once when its scope exits. Pointers cannot outlive their enclosing region and cannot be null.
+
+### Key Pillars
+
+- **Zero-GC Region Memory:** Allocate dynamically with `new T at r` or inside a `region r default` block. Bulk deallocation on block exit eliminates leaks and frees without pointer-chasing garbage collector pauses.
+- **Deep Immutability & Predictable Places:** Names are `fixed` (deeply immutable by default), `bind` (immutable container with mutable contents), or `flex` (reassignable). Parameters pass by value or by explicit caller place (`flex& x: T` / `&x`) with compile-time aliasing protection preventing simultaneous mutable aliasing.
+- **Explicit Failure Channels:** No runtime exceptions. Fallible tasks declare typed failure channels `-> T ~ E`, propagated cleanly with `?` or caught with plan-B expressions (`val { fallback }`).
+- **Two-Mode Decorators:** Declarative startup decorators (`$get("/path")`, `$enroll`) execute before `main` to register routes and services; wrapper decorators (`$(auth)`, `$(logged)`) compose reusable middleware around tasks at call time.
+- **Batteries-Included Standard Library:** Embedded in the compiler under `std/`: file system operations (`std/files`), math (`std/math`), pipes and lazy iterator chains (`std/collections`), loop control (`std/loops`), and a non-blocking web server with routing and an event loop (`std/web`).
+- **Vela Studio IDE:** A self-contained WebAssembly-powered web IDE (`ide/`) with live diagnostics, syntax highlighting, completions, and integrated terminal sessions.
+
+---
+
+## A Taste of Vela
+
+### REST API with Routing and Middleware (`std/web`)
+
+```vela
+include std/web { get, post, serve, Request, Response, WebError, method_name }
+
+; Middleware: logs incoming requests before passing control to the route handler.
+task logged(next: (Request@r, @r) -> Response@r ~ WebError@r, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    show("[", method_name(req.method), "] ", req.path)
+    <- next(req, r)
+fi
+
+; Startup decorator registers this endpoint to the default router before main.
+$get("/users/\{id\}")
+$(logged)
+task get_user(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed id = req.param("id") { "anonymous" }
+    <- Response.text("User profile: {id}\n" at r, r)
+fi
+
+task main()
+    show("Listening on http://127.0.0.1:8080 ...")
+    serve("127.0.0.1:8080") { failure err
+        show("server stopped: ", err)
+    }
+fi
 ```
-task fib(n: int) -> int
-    when n < 2
-        <- n
-    else
-        <- fib(n - 1) + fib(n - 2)
+
+### Region-Based Data Structures
+
+```vela
+kind Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+fi
+
+task build_tree(depth: int, seed: int, r: region) -> Tree@r
+    when depth == 0
+        <- Leaf(seed % 10)
+    fi
+    fixed left = new Tree(build_tree(depth - 1, seed * 3 + 1) at r) at r
+    fixed right = new Tree(build_tree(depth - 1, seed * 7 + 2) at r) at r
+    <- Branch(left, right)
+fi
+
+task sum_tree(t: Tree@r) -> int
+    <- match t
+    case Leaf value = value
+    case Branch left right = sum_tree(left^) + sum_tree(right^)
     fi
 fi
 
 task main()
-    each i in 0..10
-        show(fib(i))
-    fi
+    region scratch default
+    fixed tree = build_tree(4, 42, scratch)
+    show("Tree sum: ", sum_tree(tree))
 fi
 ```
 
-The compiler is written in Rust and has no dependencies. **Vela Studio**, an editor for Vela with live
-errors, completion, one-key run, and a terminal, lives in `ide/`.
+---
 
-## Requirements
+## Language Highlights
 
-- Rust 1.88 or later
-- A C compiler: `cc`, or the one named by `$CC` (which may include arguments, as in `CC="ccache gcc"`)
-- For Vela Studio only: the `wasm32-unknown-unknown` Rust target and Node.js 22.12 or later
+### 1. Region-Based Memory Management
+Dynamic allocations live in named or default regions:
+```vela
+region work default
+fixed ptr = new Point { x: 10, y: 20 }
+show(ptr^.x)
+; The entire region 'work' is reclaimed cleanly here when the block exits.
+```
+Pointers (`^T@r`) track their owning region at compile time, guaranteeing that pointers never outlive their memory and cannot be null.
 
-## Build and run
+### 2. Mutability and Places
+- `fixed x = 1`: Deeply immutable. Nothing changes through it.
+- `bind p = Point { x: 1, y: 2 }`: Bound to one identity. Fields can mutate, but the binding itself cannot be reassigned.
+- `flex count = 0`: Fully mutable place.
+- `flex& total: int`: Takes the caller's place by reference (passed as `&total`). The compiler enforces that no place is passed twice where it may change, preventing data races and aliasing bugs.
 
-```sh
-cargo build
-./target/debug/vela examples/hello.vela -o examples/hello
-./examples/hello
+### 3. Explicit Failure Channels and Plan-B
+Tasks return values or explicit failures using the `~` operator:
+```vela
+task parse_port(text_val: text@p) -> int ~ WebError
+    fixed n = int(text_val) { failure _
+        <- fail WebError.BadRequest("invalid port number")
+    }
+    <- n
+fi
+
+; Fallback with plan B:
+fixed port = parse_port("8080") { 8080 }
 ```
 
-`vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]`: `-o` names the executable (`a.out` by default),
-`--quick` builds it without optimizing the C (`-O0`, faster to build, slower to run), `--no-notices` builds a program that writes
-no notices to standard error (as of a startup decorator `$d?` whose failure it lets pass), `--repeat-warnings` shows every place a
-warning said once for each task or file applies, not only the first,
-`--emit-c` prints the generated C (or writes it to the `-o` file; neither may overwrite the program's files), `--check` only checks the program
-(including that it has a `main`), a file name starting with `-` goes after `--`, and `-h`/`--help` and `--version` print the usage and the version. The exit status is 0 on success, 1
-when the program can't be read or doesn't compile, and 2 for wrong arguments.
-
-## Tests
-
-```sh
-cargo test                              # the compiler
-CC=clang cargo test                     # with another C compiler
-cargo test --workspace                  # the compiler and Vela Studio's crates
-cargo clippy --workspace --all-targets
+### 4. Method-Aware Routing and Startup Decorators
+Decorators beginning with `$` run at startup to enroll routes into the default router:
+```vela
+$get("/items/\{id\}")
+$post("/items")
+$delete("/items/\{id\}")
 ```
+Patterns capture dynamic segments with `{param}` or wildcards with `*`. Unmatched paths yield HTTP 404 (`RouteNotFound`), while method mismatches yield HTTP 405 (`MethodNotAllowed`).
 
-Programs in `tests/run/` must print their `.out` files (reading `NAME.in` as their input, when there is one), programs in `tests/fail/` must be rejected with
-the error in their first line (a program with several mistakes lists one `; error:` line for each, and then
-those must be exactly the mistakes reported), programs in `tests/trap/` must print their `.out` files and then
-stop with the runtime error in their first line, and every file in `examples/` is checked against
-`tests/examples/`.
-
-## Vela Studio
-
-```sh
-rustup target add wasm32-unknown-unknown
-npm --prefix ide/web install
-npm --prefix ide/web run build
-cargo run -p vela-studio --release -- examples
-```
-
-See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
-
-## Layout
-
-| Path | What |
-|---|---|
-| `src/` | The compiler: lexer, parser, checker, C generator, and the build driver |
-| `runtime/vela_rt.h` | The small C runtime the generated code includes, with the bodies of the library's native tasks |
-| `std/` | Vela's library, in Vela, which the compiler holds as it is built (`include std/files`) |
-| `examples/` | Example programs |
-| `tests/` | Program tests (`run/`, `fail/`, `trap/`, `examples/`), C runtime tests (`runtime/`), and Rust tests |
-| `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, the safety and may-waste lists, and the Vela Studio guide |
-| `ide/` | Vela Studio: `analysis` (language support), `wasm` (it, for the browser), `server` (`vela-studio`), `web` (the page) |
+---
 
 ## Documentation
 
-- [The language](docs/vela.html)
-- [Regions: memory in Vela](docs/regions.html), a guide and tutorial
-- [Vela's library](docs/std.html), the modules that come with the compiler
-- [Vela Studio](docs/ide.html)
-- [Vela and other languages](docs/comparison.html)
-- [Future directions](docs/future.html), and a [second design notebook](docs/future-2.html)
-- [Safety](docs/safety.html): what the compiler checks, what stops a running program, and what isn't checked yet
-- [A review](docs/review.html): a read of the whole project, with what is strong, what could be better, and ideas worth trying
-- [Events](docs/events.html): an idea for running work at once, not built
-- [Tricks](docs/tricks.html): small ideas that work by what a word filters out, not built
-- [May waste](docs/maywaste.html): features to keep an eye on, and to merge or drop if they never earn a use
+Full guides, tutorials, and architectural specifications are available online at **[https://pya-h.github.io/vela/](https://pya-h.github.io/vela/)** (deployed from the `docs` branch):
+
+- **[Language Reference](https://pya-h.github.io/vela/)** (`index.html`): Complete guide to grammar, tasks, shapes, kinds, expressions, loops, and generics.
+- **[Regions & Memory](https://pya-h.github.io/vela/regions.html)**: Scoped region memory, pointer safety (`^T@r`), default regions, and zero-GC lifecycle.
+- **[Standard Library](https://pya-h.github.io/vela/std.html)**: Reference for `std/web`, `std/files`, `std/collections`, `std/math`, and `std/loops`.
+- **[Web Architecture](https://pya-h.github.io/vela/web.html)**: Single event loop, non-blocking descriptor polling (`Poll`), persistent keep-alive, read/idle timeouts, and middleware design.
+- **[Vela Studio IDE](https://pya-h.github.io/vela/ide.html)**: Browser-based WebAssembly development environment with live diagnostics and terminal.
+- **[Language Comparison](https://pya-h.github.io/vela/comparison.html)**: Architectural and philosophical comparison of Vela with Rust, Go, C, Zig, and Python.
+- **[Safety & Invariants](https://pya-h.github.io/vela/safety.html)**: Static verification, bounds checking, overflow protection, and runtime traps.
+- **[Project Review](https://pya-h.github.io/vela/review.html)**: Design critique, strengths, and evolution.
+- **[Future Notebook](https://pya-h.github.io/vela/future.html)** and **[Notebook 2](https://pya-h.github.io/vela/future-2.html)**: Explored language extensions and design experiments.
+- **[Events](https://pya-h.github.io/vela/events.html)**, **[Tricks](https://pya-h.github.io/vela/tricks.html)**, and **[May Waste](https://pya-h.github.io/vela/maywaste.html)**.
+
+Offline documentation sources are also kept directly in the [`docs/`](docs/) directory of this repository.
+
+---
+
+## Requirements
+
+- **Rust 1.88 or later**
+- **A standard C compiler:** `cc`, `gcc`, `clang`, or specified via `$CC` (e.g. `CC="gcc -O3"`)
+- **For Vela Studio only:** The `wasm32-unknown-unknown` Rust target and **Node.js 22.12+**
+
+---
+
+## Build and Run
+
+### Building the Compiler
+
+```sh
+cargo build --release
+```
+
+### Compiling and Running a Program
+
+```sh
+# Compile and run an example
+./target/release/vela examples/hello.vela -o hello
+./hello
+
+# Inspect generated C11 code
+./target/release/vela examples/hello.vela --emit-c
+```
+
+### Compiler CLI Flags
+
+```
+vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]
+```
+
+- `-o <path>`: Names the generated executable (`a.out` by default).
+- `--emit-c`: Outputs the generated ISO C11 code to stdout or to `-o`.
+- `--check`: Verifies syntax and type correctness without generating C or invoking the C compiler.
+- `--quick`: Builds with `-O0` for faster compilation times during development.
+- `--no-notices`: Suppresses runtime informational notices on stderr.
+- `--repeat-warnings`: Shows every repeated warning occurrence across tasks and files.
+
+---
+
+## Running Tests
+
+```sh
+# Run compiler unit and integration tests
+cargo test --workspace --release --no-fail-fast
+
+# Strict ISO C11 runtime tests under AddressSanitizer and UndefinedBehaviorSanitizer
+gcc -std=c11 -pedantic-errors -Wall -Wextra -Werror -fsanitize=address,undefined -I runtime tests/runtime/sockets.c -o /tmp/sockets_test && /tmp/sockets_test
+
+# Linter checks
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+---
+
+## Vela Studio (IDE)
+
+Vela Studio provides a browser-based IDE powered by the compiler's analysis engine compiled to WebAssembly:
+
+```sh
+# Install WebAssembly target
+rustup target add wasm32-unknown-unknown
+
+# Build web client
+npm --prefix ide/web install
+npm --prefix ide/web run build
+
+# Start Vela Studio workspace server
+cargo run -p vela-studio --release -- examples
+```
+
+See [docs/ide.html](https://pya-h.github.io/vela/ide.html) for shortcuts, live diagnostic features, and security settings.
+
+---
+
+## Repository Structure
+
+| Directory | Purpose |
+|---|---|
+| `src/` | Vela compiler in Rust: lexer, parser, type checker, C11 emitter, and CLI driver |
+| `runtime/vela_rt.h` | Minimal runtime header included by generated C, containing native socket and I/O implementations |
+| `std/` | Vela standard library written in Vela and embedded into the compiler binary (`std/web`, `std/files`, etc.) |
+| `examples/` | Example Vela programs demonstrating features and paradigms |
+| `tests/` | Comprehensive test suite: `tests/run/` (execution tests), `tests/fail/` (typecheck rejections), and `tests/runtime/` (C11 sanitizers) |
+| `docs/` | Documentation source files, reference guides, and design specifications |
+| `ide/` | Vela Studio crates: `analysis` (LSP engine), `wasm` (browser bridge), `server` (backend daemon), and `web` (frontend) |
+
+---
+
+## License
+
+Vela is developed by pya-h. See [COPYRIGHT.md](COPYRIGHT.md) for copyright and attribution information.
