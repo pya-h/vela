@@ -1,0 +1,7 @@
+; error: 6:10: a Int512 and int don't mix in arithmetic: a Int512 answers the operator with 'plus', which takes its own type on both sides; call the method, as in 'x.plus(y)', turning the other value into a Int512 first
+; Int512 names the method instead.
+include std/int512 {Int512, int512}
+task main()
+    fixed a = int512(7)
+    show(a + 1)
+fi

@@ -394,6 +394,10 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <code>include std/int512 {Int512, int512, zero512}</code>. A value is held across eight 64-bit unsigned limbs,
         lowest limb first. Every arithmetic operation strictly follows Vela's checked-arithmetic safety: any overflow
         past 512 bits or division by zero immediately stops the program with an informative runtime trap.
+        <code>Int512</code> follows the module's <code>Numeric&lt;T&gt;</code> pattern, so it also answers the
+        <a href="vela.html#operators">operators the pattern names</a>: <code>a + b</code>, <code>a * b</code>,
+        <code>-a</code>, and <code>a &lt; b</code> read as the methods plus, times, neg, and cmp, both operands
+        <code>Int512</code>.
       </p>
       <pre><span class="keyword">include</span> std/int512 {Int512, int512, int512_parse}
 

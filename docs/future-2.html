@@ -945,6 +945,8 @@ fixed is_less = a &lt; b          ; Rewritten or dispatched to a.cmp(b) &lt; 0</
         </p>
         <div class="note">
           <strong>Why it's cool:</strong> it brings mathematical clarity to complex numeric types like <code>Int512</code>, vectors, matrices, and fixed-point math without sacrificing type safety or runtime speed.
+          <p><strong>Built 2026-11-08, in the pattern-named form</strong> (see <a href="vela.html#operators">the language reference</a>): a type following a pattern whose methods are named <code>plus</code>, <code>minus</code>, <code>times</code>, <code>div</code>, <code>rem</code>, <code>neg</code>, or <code>cmp</code> answers the matching operator (<code>a + b</code> as <code>a.plus(b)</code>; comparisons via <code>cmp</code> beside 0), with both operands of the one type. <code>std/int512</code> declares <code>pattern Numeric&lt;T&gt;</code> and <code>Int512</code> follows it.</p>
+          <p><em>Deferred, each for a later decision:</em> mixed-type operands (<code>Int512 + int</code>); overloading <code>==</code>/<code>!=</code> by value; <code>**</code>; the bitwise operators. Each needs rules of its own (conversions for mixing, equality semantics for shapes, method names for powers and bit work).</p>
         </div>
       </div>
 

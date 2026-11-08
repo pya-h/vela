@@ -13846,7 +13846,7 @@ impl Checker {
             ExprKind::Call { name, types, args } => {
                 self.check_task_call(span, on_a_value, name, types, args)
             }
-            ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
+            ExprKind::Unary(..) => self.check_unary(expr),
             ExprKind::Construct { kind, args, .. } if self.broken.contains(kind.as_str()) => {
                 // A kind whose own variants have a mistake holds nothing known
                 // (see `broken`).
@@ -17594,7 +17594,16 @@ impl Checker {
         Ok(None)
     }
 
-    fn check_unary(&mut self, op: UnaryOp, e: &mut Expr, span: Span) -> Result<Type> {
+    fn check_unary(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let op = match &expr.kind {
+            ExprKind::Unary(op, _) => *op,
+            _ => return Err(Error::internal_at(span, "a unary operation that is not one")),
+        };
+        let e = match &mut expr.kind {
+            ExprKind::Unary(_, e) => e,
+            _ => return Err(Error::internal_at(span, "a unary operation that is not one")),
+        };
         let ty = self.check_expr(e)?;
         if ty.unknown() {
             return Ok(Type::Unknown);
@@ -17602,6 +17611,21 @@ impl Checker {
         match op {
             UnaryOp::Neg => {
                 if !ty.is_numeric() {
+                    // A shape whose pattern answers `-` with a `neg` method
+                    // (see `operator_method`): the negation is that call.
+                    if self.operator_neg(&ty) {
+                        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+                        let ExprKind::Unary(_, operand) = taken else {
+                            return Err(Error::internal_at(span, "a negation that is no longer one"));
+                        };
+                        expr.kind = ExprKind::MethodCall {
+                            value: operand,
+                            name: "neg".to_string(),
+                            args: Vec::new(),
+                            dotted: None,
+                        };
+                        return self.infer_expr(expr);
+                    }
                     return err(
                         span,
                         format!(
@@ -17632,6 +17656,41 @@ impl Checker {
                 Ok(Type::Bool)
             }
         }
+    }
+
+    /// The method a type's pattern answers an operator with, when it does: a
+    /// type following a pattern that asks for `plus` answers `+` with it, one
+    /// whose pattern asks for `cmp` answers `<`, `<=`, `>`, and `>=` with it
+    /// (see `std/int512`'s Numeric). The pattern's header says what the method
+    /// takes and gives, and following checks the type has it, so the call is
+    /// read as any method call.
+    fn operator_method(&self, op: BinaryOp, ty: &Type) -> Option<&'static str> {
+        let name = match op {
+            BinaryOp::Add => "plus",
+            BinaryOp::Sub => "minus",
+            BinaryOp::Mul => "times",
+            BinaryOp::Div => "div",
+            BinaryOp::Mod => "rem",
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => "cmp",
+            _ => return None,
+        };
+        if matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_)) {
+            return None;
+        }
+        self.patterns.values().find_map(|pattern| {
+            let has = pattern.method(name).is_some_and(|method| method.params.len() == 2);
+            (has && self.followed_by(ty, &pattern.name).is_some()).then_some(name)
+        })
+    }
+
+    /// Whether a type's pattern answers unary `-` with a `neg` method (see
+    /// `operator_method`).
+    fn operator_neg(&self, ty: &Type) -> bool {
+        !matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_))
+            && self.patterns.values().any(|pattern| {
+                pattern.method("neg").is_some_and(|method| method.params.len() == 1)
+                    && self.followed_by(ty, &pattern.name).is_some()
+            })
     }
 
     /// Checks a binary operation, and returns its type. `a + b` on text is a
@@ -17743,6 +17802,49 @@ impl Checker {
             let region = self.region_or_default(None, span, || JOIN_NEEDS_REGION.to_string())?;
             return self.join_into(expr, region, span);
         }
+        // `a + b`, `a < b`: one shape following a pattern that answers the
+        // operator with a method of its own (see `operator_method`). The
+        // operation is the method call it names; a comparison reads the
+        // method's int as one beside 0. Both sides are the one type.
+        if matches!(
+            op,
+            BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge
+        ) && (!lt.is_numeric() || !rt.is_numeric())
+            && lt.without_regions() == rt.without_regions()
+            && let Some(method) = self.operator_method(op, &lt)
+        {
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::Binary(_, l, r) = taken else {
+                return Err(Error::internal_at(span, "an operation that is no longer one"));
+            };
+            let call = Expr::new(
+                ExprKind::MethodCall {
+                    value: l,
+                    name: method.to_string(),
+                    args: vec![*r],
+                    dotted: None,
+                },
+                span,
+            );
+            if method == "cmp" {
+                expr.kind = ExprKind::Binary(
+                    op,
+                    Box::new(call),
+                    Box::new(Expr::new(ExprKind::IntLit(0), span)),
+                );
+                return self.check_binary_expr(expr);
+            }
+            expr.kind = call.kind;
+            return self.infer_expr(expr);
+        }
         self.check_binary(op, l, r, span, &lt, &rt)
     }
 
@@ -17847,6 +17949,30 @@ impl Checker {
                             format!(
                                 "arithmetic requires numeric operands; '{}' is a type this task takes, and no word asks a type for arithmetic, so a task that does it takes numbers ('int' or 'float') rather than a type it is given",
                                 name
+                            ),
+                        );
+                    }
+                    // A shape whose pattern answers operators, beside a value
+                    // of another type: the operator takes its own type on both
+                    // sides, so the mixed operation names the method.
+                    if lt.without_regions() != rt.without_regions()
+                        && let Some((at, of, other, method)) = [
+                            (l.span, &lt, &rt, self.operator_method(BinaryOp::Add, &lt)),
+                            (r.span, &rt, &lt, self.operator_method(BinaryOp::Add, &rt)),
+                        ]
+                        .into_iter()
+                        .find_map(|(at, of, other, method)| method.map(|method| (at, of, other, method)))
+                    {
+                        return err(
+                            at,
+                            format!(
+                                "{} and {} don't mix in arithmetic: {} answers the operator with '{}', which takes its own type on both sides; call the method, as in 'x.{}(y)', turning the other value into {} first",
+                                a_type(of),
+                                other,
+                                a_type(of),
+                                method,
+                                method,
+                                a_type(of)
                             ),
                         );
                     }

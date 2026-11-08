@@ -6,7 +6,21 @@
 ; Every arithmetic operation adheres strictly to Vela's checked-arithmetic rules:
 ; overflow past 512 bits or division by zero immediately stops the program.
 
-shape Int512
+; A shape whose pattern asks for these methods by name answers the operator
+; each names: + calls plus, - calls minus, * calls times, / calls div, % calls
+; rem, a comparison calls cmp and reads its int beside 0, and a negation in
+; front calls neg (see docs/vela.html#operators).
+pattern Numeric<T>
+    plus(other: T) -> T
+    minus(other: T) -> T
+    times(other: T) -> T
+    div(other: T) -> T
+    rem(other: T) -> T
+    neg() -> T
+    cmp(other: T) -> int
+fi
+
+shape Int512::Numeric<Int512>
     limbs: [uint64#8]
 
     ; Adds another 512-bit integer to this one. Stops the program on signed overflow.
