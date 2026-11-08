@@ -67,6 +67,22 @@ int main(void) {
     check(recvd.len == 0, "accepted read EOF on close");
     check(vela__rt__web_socket_status() == VELA__RT__SOCK_CLOSED, "accepted status is CLOSED");
 
+    /* Verify time and poll table primitives. */
+    int64_t t1 = vela__rt__web_time_ms();
+    check(t1 > 0, "web_time_ms positive");
+    vela__rt__web_sleep_ms(1);
+    int64_t t2 = vela__rt__web_time_ms();
+    check(t2 >= t1, "web_time_ms monotonic");
+
+    vela__rt__web_poll_clear();
+    vela__rt__web_poll_add(server, 1);
+    check(!vela__rt__web_poll_is_readable(server), "poll is not readable before wait");
+    check(!vela__rt__web_poll_is_writable(server), "poll is not writable before wait");
+    int64_t poll_res = vela__rt__web_poll_wait(1);
+    check(poll_res == 0, "web_poll_wait timeout on idle server");
+    check(vela__rt__web_poll_revents(server) == 0, "revents empty on timeout");
+    vela__rt__web_poll_remove(server);
+
     vela__rt__web_socket_close(accepted);
     vela__rt__web_socket_close(server);
 

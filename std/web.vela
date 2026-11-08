@@ -96,6 +96,10 @@ shape Socket
         <- r
     fi
 
+    raw_handle() -> int
+        <- .handle
+    fi
+
     alters close() -> nothing ~ SocketError
         when .handle < 0
             <- fail SocketError.Closed
@@ -208,18 +212,52 @@ task redirect(to: text@r, r: region default, code: int = 302) -> Response@r
     <- Response.redirect(to, r, code)
 fi
 
+shape ServerState
+    shared flex should_stop: bool = false
+
+    shared stop()
+        ServerState.should_stop = true
+    fi
+
+    shared reset()
+        ServerState.should_stop = false
+    fi
+fi
+
+task stop_server()
+    ServerState.stop()
+fi
+
 shape Server
     addr: text
     max_body_size: int = 1048576
     keep_alive_enabled: bool = true
+    read_timeout_ms: int = 5000
+    idle_timeout_ms: int = 15000
     running: bool = true
 
+    shared new(addr: text@p = "127.0.0.1:8080") -> Server@p
+        <- Server { addr: addr, max_body_size: 1048576, keep_alive_enabled: true, read_timeout_ms: 5000, idle_timeout_ms: 15000, running: true }
+    fi
+
+    shared stop()
+        ServerState.stop()
+    fi
+
     body_limit(limit: int) -> Server@this
-        <- Server { addr: .addr, max_body_size: limit, keep_alive_enabled: .keep_alive_enabled, running: .running }
+        <- Server { addr: .addr, max_body_size: limit, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running }
     fi
 
     keep_alive(enabled: bool) -> Server@this
-        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: enabled, running: .running }
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running }
+    fi
+
+    timeouts(read_ms: int, idle_ms: int) -> Server@this
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: read_ms, idle_timeout_ms: idle_ms, running: .running }
+    fi
+
+    serve(handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
+        <- run_event_loop(.this, handler)
     fi
 fi
 
@@ -428,9 +466,187 @@ task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: 
     <- pat_pos >= pattern.len and path_pos >= norm_path.len
 fi
 
-task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
+shape ActiveConn
+    sock: Socket
+    active: bool = false
+    last_active: int = 0
+    reading: bool = false
+    buf: text = ""
+fi
+
+task is_request_complete(buf: text@p) -> bool
+    fixed body_start = text_find(buf, "\r\n\r\n", 0)
+    when body_start < 0
+        <- false
+    fi
+    fixed cl_idx = text_find(buf, "Content-Length:", 0)
+    fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
+    when cl_idx_lower >= 0 and cl_idx_lower < body_start
+        fixed cl_end = text_find(buf, "\r\n", cl_idx_lower)
+        when cl_end < 0
+            <- false
+        fi
+        fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
+        fixed content_len = int(cl_val_str) { 0 }
+        <- buf.len >= body_start + 4 + content_len
+    fi
+    <- true
+fi
+
+task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, r: region default) -> bool
+    fixed req = parse_request(raw, r) { failure e
+        send_error_response(client, 400, "Bad Request", "Malformed request headers\n", r)
+        <- false
+    }
+    when req.body_data.len > max_body
+        send_error_response(client, 413, "Payload Too Large", "413 Payload Too Large\n", r)
+        <- false
+    fi
+
+    flex will_keep = keep_alive_enabled
+    when req.header("connection") is {c}
+        when text_eq_ignore_case(c, "close")
+            will_keep = false
+        fi
+    fi
+
+    fixed resp = handler(req, r) { failure err
+        fixed err_resp = match err
+        case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
+        case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
+        case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
+        case WebError.MethodNotAllowed method path = status(405, r, "Method Not Allowed").header("content-type", "text/plain").set_body("405 Method Not Allowed: {method} {path}\n")
+        case WebError.Unauthorized why = status(401, r, "Unauthorized").header("content-type", "text/plain").set_body("401 Unauthorized: {why}\n")
+        case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
+        fi
+        send_response(client, err_resp, false, r)
+        <- false
+    }
+
+    when resp.headers[#"connection"] is {c}
+        when text_eq_ignore_case(c, "close")
+            will_keep = false
+        fi
+    fi
+
+    send_response(client, resp, will_keep, r)
+    <- will_keep
+fi
+
+task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [ActiveConn@r#64], handler: (Request@r, @r) -> Response@r ~ WebError@r, timeout_ms: int, r: region default)
+    fixed now = time_ms()
+
+    flex c_idx = 0
+    loop c_idx < 64
+        fixed conn = conns[c_idx]
+        when conn.active
+            fixed elapsed = now - conn.last_active
+            when conn.reading and elapsed > server.read_timeout_ms
+                send_error_response(conn.sock, 408, "Request Timeout", "408 Request Timeout\n", r)
+                Poll.unwatch(conn.sock)
+                flex s = conn.sock
+                s.close() { failure _ }
+                conns[c_idx] = ActiveConn { sock: server_sock, active: false }
+            else when not conn.reading and elapsed > server.idle_timeout_ms
+                Poll.unwatch(conn.sock)
+                flex s = conn.sock
+                s.close() { failure _ }
+                conns[c_idx] = ActiveConn { sock: server_sock, active: false }
+            fi
+        fi
+        c_idx++
+    fi
+
+    when ServerState.should_stop
+        <-
+    fi
+
+    Poll.wait(timeout_ms)
+
+    when Poll.is_readable(server_sock)
+        endless
+            fixed client_sock = server_sock.accept(r) { failure _
+                break
+            }
+            flex slot_idx = 0
+            flex placed = false
+            loop slot_idx < 64
+                when not conns[slot_idx].active
+                    conns[slot_idx] = ActiveConn { sock: client_sock, active: true, last_active: now, reading: false, buf: "" }
+                    Poll.watch(client_sock, 1)
+                    placed = true
+                    break
+                fi
+                slot_idx++
+            fi
+            when not placed
+                send_error_response(client_sock, 503, "Service Unavailable", "503 Server Busy\n", r)
+                flex cs = client_sock
+                cs.close() { failure _ }
+            fi
+        fi
+    fi
+
+    flex i = 0
+    loop i < 64
+        fixed conn = conns[i]
+        when conn.active and Poll.is_readable(conn.sock)
+            region req_r default
+            fixed chunk = conn.sock.read(4096, req_r) { failure _
+                Poll.unwatch(conn.sock)
+                flex cs = conn.sock
+                cs.close() { failure _ }
+                conns[i] = ActiveConn { sock: server_sock, active: false }
+                i++
+                continue
+            }
+            when chunk.len == 0
+                Poll.unwatch(conn.sock)
+                flex cs = conn.sock
+                cs.close() { failure _ }
+                conns[i] = ActiveConn { sock: server_sock, active: false }
+            else
+                fixed is_complete = when conn.buf.len == 0 is_request_complete(chunk) else is_request_complete("{conn.buf}{chunk}" at req_r) fi
+                when is_complete
+                    fixed full_req = when conn.buf.len == 0 chunk else "{conn.buf}{chunk}" at req_r fi
+                    fixed keep_conn = process_connection_request(conn.sock, full_req, handler, server.max_body_size, server.keep_alive_enabled, req_r)
+                    when keep_conn
+                        conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: false, buf: "" }
+                    else
+                        Poll.unwatch(conn.sock)
+                        flex cs = conn.sock
+                        cs.close() { failure _ }
+                        conns[i] = ActiveConn { sock: server_sock, active: false }
+                    fi
+                else
+                    fixed partial_buf = when conn.buf.len == 0 "{chunk}" at r else "{conn.buf}{chunk}" at r fi
+                    conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: true, buf: partial_buf }
+                fi
+            fi
+        fi
+        i++
+    fi
+fi
+
+task cleanup_event_loop(server_sock: Socket, flex& conns: [ActiveConn@r#64])
+    flex j = 0
+    loop j < 64
+        when conns[j].active
+            Poll.unwatch(conns[j].sock)
+            flex cs = conns[j].sock
+            cs.close() { failure _ }
+        fi
+        j++
+    fi
+    flex s_close = server_sock
+    s_close.close() { failure _ }
+    Poll.clear()
+fi
+
+task run_event_loop(server: Server@p, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> nothing ~ WebError
     region srv_r default
-    fixed (host, port) = parse_addr(addr)
+    ServerState.reset()
+    fixed (host, port) = parse_addr(server.addr)
     fixed server_sock = Socket.open(srv_r) { failure e
         <- fail WebError.ListenFailed
     }
@@ -441,13 +657,20 @@ task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = d
         <- fail WebError.ListenFailed
     }
 
-    endless
-        region req_r default
-        fixed client_sock = server_sock.accept(req_r) { failure e
-            continue
-        }
-        handle_connection(client_sock, handler, 1048576, req_r)
+    flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
+    Poll.clear()
+    Poll.watch(server_sock, 1)
+
+    loop not ServerState.should_stop
+        event_loop_tick(server, server_sock, &conns, handler, 50, srv_r)
     fi
+
+    cleanup_event_loop(server_sock, &conns)
+fi
+
+task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
+    fixed s = Server.new(addr)
+    <- s.serve(handler)
 fi
 
 task serve_one(server_sock: Socket, handler: (Request@r, @r) -> Response@r ~ WebError@r, r: region default) -> nothing ~ WebError
@@ -463,47 +686,23 @@ task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response
         client.close() { failure _ }
         <-
     }
-
-    fixed req = parse_request(raw, r) { failure e
-        send_error_response(client, 400, "Bad Request", "Malformed request headers\n", r)
-        client.close() { failure _ }
-        <-
-    }
-
-    fixed resp = handler(req, r) { failure err
-        fixed err_resp = match err
-        case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
-        case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
-        case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
-        case WebError.MethodNotAllowed method path = status(405, r, "Method Not Allowed").header("content-type", "text/plain").set_body("405 Method Not Allowed: {method} {path}\n")
-        case WebError.Unauthorized why = status(401, r, "Unauthorized").header("content-type", "text/plain").set_body("401 Unauthorized: {why}\n")
-        case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
-        fi
-        send_response(client, err_resp, r)
-        client.close() { failure _ }
-        <-
-    }
-
-    send_response(client, resp, r)
-    when req.header("connection") is {conn}
-        when text_eq_ignore_case(conn, "close")
-            client.close() { failure _ }
-        fi
-    fi
+    process_connection_request(client, raw, handler, max_body, false, r)
+    client.close() { failure _ }
 fi
 
 task send_error_response(client: Socket, code: int, reason: text@r, body: text@r, r: region default) -> nothing
     fixed resp = status(code, r, reason).header("content-type", "text/plain").set_body(body)
-    send_response(client, resp, r)
+    send_response(client, resp, false, r)
 fi
 
-task send_response(client: Socket, resp: Response@r, r: region default) -> nothing
+task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
     flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
     when not resp.headers.has("content-length")
         wire = "{wire}Content-Length: {resp.body_data.len}\r\n"
     fi
     when not resp.headers.has("connection")
-        wire = "{wire}Connection: close\r\n"
+        fixed conn_val = when keep_alive "keep-alive" else "close" fi
+        wire = "{wire}Connection: {conn_val}\r\n"
     fi
     each k, v in resp.headers
         wire = "{wire}{k}: {v}\r\n"
@@ -758,6 +957,44 @@ priv task error_of(code: int) -> SocketError
     <- SocketError.Failed
 fi
 
+task time_ms() -> int
+    <- native_time_ms()
+fi
+
+task sleep_ms(ms: int)
+    native_sleep_ms(ms)
+fi
+
+shape Poll
+    shared clear()
+        native_poll_clear()
+    fi
+
+    shared watch(sock: Socket, events: int = 1) -> int
+        <- native_poll_add(sock.raw_handle(), events)
+    fi
+
+    shared unwatch(sock: Socket) -> int
+        <- native_poll_remove(sock.raw_handle())
+    fi
+
+    shared wait(timeout_ms: int) -> int
+        <- native_poll_wait(timeout_ms)
+    fi
+
+    shared revents(sock: Socket) -> int
+        <- native_poll_revents(sock.raw_handle())
+    fi
+
+    shared is_readable(sock: Socket) -> bool
+        <- native_poll_is_readable(sock.raw_handle())
+    fi
+
+    shared is_writable(sock: Socket) -> bool
+        <- native_poll_is_writable(sock.raw_handle())
+    fi
+fi
+
 priv native task native_socket_open(within: region) -> int
 priv native task native_socket_bind(handle: int, host: text@p, port: int) -> int
 priv native task native_socket_listen(handle: int, backlog: int) -> int
@@ -772,3 +1009,12 @@ priv native task native_text_find(haystack: text@p, needle: text@q, from: int) -
 priv native task native_text_lower(s: text@p, into: region) -> text@into
 priv native task native_text_trim(s: text@p) -> text@p
 priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool
+priv native task native_time_ms() -> int
+priv native task native_sleep_ms(ms: int) -> int
+priv native task native_poll_clear()
+priv native task native_poll_add(handle: int, events: int) -> int
+priv native task native_poll_remove(handle: int) -> int
+priv native task native_poll_wait(timeout_ms: int) -> int
+priv native task native_poll_revents(handle: int) -> int
+priv native task native_poll_is_readable(handle: int) -> bool
+priv native task native_poll_is_writable(handle: int) -> bool

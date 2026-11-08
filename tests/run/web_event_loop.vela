@@ -1,0 +1,143 @@
+; Tests event loop: multi-client concurrency, HTTP/1.1 keep-alive, connection close, read timeout, and idle sweep.
+include std/web { Socket, SocketError, Request, Response, Server, WebError, ActiveConn, Poll, event_loop_tick, cleanup_event_loop, text_find, trim, sleep_ms }
+
+task app_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.path == "/c1"
+        <- Response.text("Client 1 response\n", r)
+    else when req.path == "/c2"
+        <- Response.text("Client 2 response\n", r)
+    else when req.path == "/c1-second"
+        <- Response.text("Client 1 second response\n", r)
+    else when req.path == "/close-me"
+        flex resp = Response.text("Closing connection\n", r)
+        resp.header("connection", "close")
+        <- resp
+    fi
+    <- Response.text("OK\n", r)
+fi
+
+task show_response(sock: Socket, label: text, r: region default)
+    sock.poll(1, 1000) { 0 }
+    fixed raw = sock.read(1024, r) { failure e
+        show(label, ": read failed with: ", match e case SocketError.WouldBlock = "WouldBlock" case SocketError.Closed = "Closed" case SocketError.ConnectionReset = "ConnectionReset" case SocketError.Timeout = "Timeout" case _ = "other" fi)
+        <-
+    }
+    when raw.len >= 12
+        fixed line_end = text_find(raw, "\r\n", 0)
+        fixed status_line = when line_end >= 0 raw[0..line_end] else raw[0..12] fi
+        fixed body_start = text_find(raw, "\r\n\r\n", 0)
+        fixed body = when body_start >= 0 raw[body_start + 4..raw.len] else "" fi
+        show(label, " status: ", status_line)
+        show(label, " body: ", trim(body))
+    else
+        show(label, ": empty response")
+    fi
+fi
+
+task client_send(flex sock: Socket, msg: text@p)
+    sock.poll(2, 1000) { 0 }
+    sock.write(msg) { failure _
+        0
+    }
+fi
+
+task main()
+    region srv_r default
+    fixed port = 18094
+    fixed server_sock = Socket.open(srv_r) { failure _
+        <-
+    }
+    server_sock.bind_to("127.0.0.1", port) { failure _
+        <-
+    }
+    server_sock.listen(16) { failure _
+        <-
+    }
+
+    flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
+    Poll.clear()
+    Poll.watch(server_sock, 1)
+
+    fixed srv = Server.new("127.0.0.1:18094").timeouts(100, 200).keep_alive(true)
+
+    ; 1. Connect two clients simultaneously.
+    flex c1 = Socket.open(srv_r) { failure _
+        <-
+    }
+    c1.connect("127.0.0.1", port) { failure _
+        <-
+    }
+
+    flex c2 = Socket.open(srv_r) { failure _
+        <-
+    }
+    c2.connect("127.0.0.1", port) { failure _
+        <-
+    }
+
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+
+    ; 2. Both clients write requests concurrently.
+    client_send(c1, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    client_send(c2, "GET /c2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+
+    ; 3. Read responses from both clients.
+    show_response(c1, "c1", srv_r)
+    show_response(c2, "c2", srv_r)
+
+    ; 4. Keep-alive reuse on same connection: c1 sends a second request.
+    client_send(c1, "GET /c1-second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    show_response(c1, "c1 second", srv_r)
+
+    ; 5. Explicit Connection: close termination on c2.
+    client_send(c2, "GET /close-me HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    show_response(c2, "c2 close", srv_r)
+
+    fixed c2_eof = c2.read(64, srv_r) { "" }
+    show("c2 closed: ", c2_eof.len == 0)
+
+    ; 6. Read timeout: c3 sends incomplete request and stalls.
+    flex c3 = Socket.open(srv_r) { failure _
+        <-
+    }
+    c3.connect("127.0.0.1", port) { failure _
+        <-
+    }
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+
+    client_send(c3, "GET /stalled")
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+
+    sleep_ms(120)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    show_response(c3, "c3 timeout", srv_r)
+
+    ; 7. Idle sweep: c4 completes a request and remains idle past 200ms.
+    flex c4 = Socket.open(srv_r) { failure _
+        <-
+    }
+    c4.connect("127.0.0.1", port) { failure _
+        <-
+    }
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    client_send(c4, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    show_response(c4, "c4 initial", srv_r)
+
+    sleep_ms(220)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+
+    fixed c4_eof = c4.read(64, srv_r) { "" }
+    show("c4 idle swept: ", c4_eof.len == 0)
+
+    c1.close() { failure _ }
+    c2.close() { failure _ }
+    c3.close() { failure _ }
+    c4.close() { failure _ }
+    cleanup_event_loop(server_sock, &conns)
+    show("event loop clean finish")
+fi

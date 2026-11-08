@@ -72,6 +72,15 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/web.native_text_lower", "vela__rt__web_text_lower"),
     ("std/web.native_text_trim", "vela__rt__web_text_trim"),
     ("std/web.native_text_eq_ignore_case", "vela__rt__web_text_eq_ignore_case"),
+    ("std/web.native_time_ms", "vela__rt__web_time_ms"),
+    ("std/web.native_sleep_ms", "vela__rt__web_sleep_ms"),
+    ("std/web.native_poll_clear", "vela__rt__web_poll_clear"),
+    ("std/web.native_poll_add", "vela__rt__web_poll_add"),
+    ("std/web.native_poll_remove", "vela__rt__web_poll_remove"),
+    ("std/web.native_poll_wait", "vela__rt__web_poll_wait"),
+    ("std/web.native_poll_revents", "vela__rt__web_poll_revents"),
+    ("std/web.native_poll_is_readable", "vela__rt__web_poll_is_readable"),
+    ("std/web.native_poll_is_writable", "vela__rt__web_poll_is_writable"),
 ];
 
 pub fn module(name: &str) -> Option<&'static str> {

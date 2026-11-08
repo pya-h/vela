@@ -1,0 +1,15 @@
+c1 status: HTTP/1.1 200 OK
+c1 body: Client 1 response
+c2 status: HTTP/1.1 200 OK
+c2 body: Client 2 response
+c1 second status: HTTP/1.1 200 OK
+c1 second body: Client 1 second response
+c2 close status: HTTP/1.1 200 OK
+c2 close body: Closing connection
+c2 closed: true
+c3 timeout status: HTTP/1.1 408 Request Timeout
+c3 timeout body: 408 Request Timeout
+c4 initial status: HTTP/1.1 200 OK
+c4 initial body: Client 1 response
+c4 idle swept: true
+event loop clean finish

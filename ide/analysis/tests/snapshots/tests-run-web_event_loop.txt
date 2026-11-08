@@ -1,0 +1,242 @@
+  1 | ; Tests event loop: multi-client concurrency, HTTP/1.1 keep-alive, connection close, read timeout, and idle sweep.
+    | comment:; Tests event loop: multi-client concurrency, HTTP/1.1 keep-alive, connection close, read timeout, and idle sweep.
+  2 | include std/web { Socket, SocketError, Request, Response, Server, WebError, ActiveConn, Poll, event_loop_tick, cleanup_event_loop, text_find, trim, sleep_ms }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:SocketError  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:Server  punctuation:,  type:WebError  punctuation:,  type:ActiveConn  punctuation:,  type:Poll  punctuation:,  task:event_loop_tick  punctuation:,  task:cleanup_event_loop  punctuation:,  task:text_find  punctuation:,  task:trim  punctuation:,  task:sleep_ms  punctuation:}
+  4 | task app_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:app_handler  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+  5 |     when req.path == "/c1"
+    | keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/c1"
+  6 |         <- Response.text("Client 1 response\n", r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Client 1 response  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+  7 |     else when req.path == "/c2"
+    | keyword:else  keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/c2"
+  8 |         <- Response.text("Client 2 response\n", r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Client 2 response  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+  9 |     else when req.path == "/c1-second"
+    | keyword:else  keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/c1-second"
+ 10 |         <- Response.text("Client 1 second response\n", r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"Client 1 second response  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+ 11 |     else when req.path == "/close-me"
+    | keyword:else  keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/close-me"
+ 12 |         flex resp = Response.text("Closing connection\n", r)
+    | keyword:flex  variable:resp  operator:=  type:Response  punctuation:.  method:text  punctuation:(  string:"Closing connection  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+ 13 |         resp.header("connection", "close")
+    | variable:resp  punctuation:.  method:header  punctuation:(  string:"connection"  punctuation:,  string:"close"  punctuation:)
+ 14 |         <- resp
+    | keyword:<-  variable:resp
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- Response.text("OK\n", r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"OK  escape:\n  string:"  punctuation:,  region:r  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task show_response(sock: Socket, label: text, r: region default)
+    | keyword:task  task:show_response  punctuation:(  parameter:sock  punctuation::  type:Socket  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+ 20 |     sock.poll(1, 1000) { 0 }
+    | parameter:sock  punctuation:.  method:poll  punctuation:(  number:1  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 21 |     fixed raw = sock.read(1024, r) { failure e
+    | keyword:fixed  variable:raw  operator:=  parameter:sock  punctuation:.  method:read  punctuation:(  number:1024  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 22 |         show(label, ": read failed with: ", match e case SocketError.WouldBlock = "WouldBlock" case SocketError.Closed = "Closed" case SocketError.ConnectionReset = "ConnectionReset" case SocketError.Timeout = "Timeout" case _ = "other" fi)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": read failed with: "  punctuation:,  keyword:match  variable:e  keyword:case  type:SocketError  punctuation:.  variant:WouldBlock  operator:=  string:"WouldBlock"  keyword:case  type:SocketError  punctuation:.  variant:Closed  operator:=  string:"Closed"  keyword:case  type:SocketError  punctuation:.  variant:ConnectionReset  operator:=  string:"ConnectionReset"  keyword:case  type:SocketError  punctuation:.  variant:Timeout  operator:=  string:"Timeout"  keyword:case  keyword:_  operator:=  string:"other"  keyword:fi  punctuation:)
+ 23 |         <-
+    | keyword:<-
+ 24 |     }
+    | punctuation:}
+ 25 |     when raw.len >= 12
+    | keyword:when  variable:raw  punctuation:.  field:len  operator:>=  number:12
+ 26 |         fixed line_end = text_find(raw, "\r\n", 0)
+    | keyword:fixed  variable:line_end  operator:=  task:text_find  punctuation:(  variable:raw  punctuation:,  string:"  escape:\r  escape:\n  string:"  punctuation:,  number:0  punctuation:)
+ 27 |         fixed status_line = when line_end >= 0 raw[0..line_end] else raw[0..12] fi
+    | keyword:fixed  variable:status_line  operator:=  keyword:when  variable:line_end  operator:>=  number:0  variable:raw  punctuation:[  number:0  operator:..  variable:line_end  punctuation:]  keyword:else  variable:raw  punctuation:[  number:0  operator:..  number:12  punctuation:]  keyword:fi
+ 28 |         fixed body_start = text_find(raw, "\r\n\r\n", 0)
+    | keyword:fixed  variable:body_start  operator:=  task:text_find  punctuation:(  variable:raw  punctuation:,  string:"  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  number:0  punctuation:)
+ 29 |         fixed body = when body_start >= 0 raw[body_start + 4..raw.len] else "" fi
+    | keyword:fixed  variable:body  operator:=  keyword:when  variable:body_start  operator:>=  number:0  variable:raw  punctuation:[  variable:body_start  operator:+  number:4  operator:..  variable:raw  punctuation:.  field:len  punctuation:]  keyword:else  string:""  keyword:fi
+ 30 |         show(label, " status: ", status_line)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:" status: "  punctuation:,  variable:status_line  punctuation:)
+ 31 |         show(label, " body: ", trim(body))
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:" body: "  punctuation:,  task:trim  punctuation:(  variable:body  punctuation:)  punctuation:)
+ 32 |     else
+    | keyword:else
+ 33 |         show(label, ": empty response")
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": empty response"  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 | fi
+    | keyword:fi
+ 37 | task client_send(flex sock: Socket, msg: text@p)
+    | keyword:task  task:client_send  punctuation:(  keyword:flex  parameter:sock  punctuation::  type:Socket  punctuation:,  parameter:msg  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)
+ 38 |     sock.poll(2, 1000) { 0 }
+    | parameter:sock  punctuation:.  method:poll  punctuation:(  number:2  punctuation:,  number:1000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 39 |     sock.write(msg) { failure _
+    | parameter:sock  punctuation:.  method:write  punctuation:(  parameter:msg  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 40 |         0
+    | number:0
+ 41 |     }
+    | punctuation:}
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 45 |     region srv_r default
+    | keyword:region  region:srv_r  keyword:default
+ 46 |     fixed port = 18094
+    | keyword:fixed  variable:port  operator:=  number:18094
+ 47 |     fixed server_sock = Socket.open(srv_r) { failure _
+    | keyword:fixed  variable:server_sock  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:srv_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 48 |         <-
+    | keyword:<-
+ 49 |     }
+    | punctuation:}
+ 50 |     server_sock.bind_to("127.0.0.1", port) { failure _
+    | variable:server_sock  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 51 |         <-
+    | keyword:<-
+ 52 |     }
+    | punctuation:}
+ 53 |     server_sock.listen(16) { failure _
+    | variable:server_sock  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 54 |         <-
+    | keyword:<-
+ 55 |     }
+    | punctuation:}
+ 57 |     flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
+    | keyword:flex  variable:conns  punctuation::  punctuation:[  type:ActiveConn  operator:@  region:srv_r  punctuation:#  number:64  punctuation:]  operator:=  punctuation:[  type:ActiveConn  punctuation:{  field:sock  punctuation::  variable:server_sock  punctuation:}  punctuation:#  number:64  punctuation:]
+ 58 |     Poll.clear()
+    | type:Poll  punctuation:.  method:clear  punctuation:(  punctuation:)
+ 59 |     Poll.watch(server_sock, 1)
+    | type:Poll  punctuation:.  method:watch  punctuation:(  variable:server_sock  punctuation:,  number:1  punctuation:)
+ 61 |     fixed srv = Server.new("127.0.0.1:18094").timeouts(100, 200).keep_alive(true)
+    | keyword:fixed  variable:srv  operator:=  type:Server  punctuation:.  method:new  punctuation:(  string:"127.0.0.1:18094"  punctuation:)  punctuation:.  method:timeouts  punctuation:(  number:100  punctuation:,  number:200  punctuation:)  punctuation:.  method:keep_alive  punctuation:(  keyword:true  punctuation:)
+ 63 |     ; 1. Connect two clients simultaneously.
+    | comment:; 1. Connect two clients simultaneously.
+ 64 |     flex c1 = Socket.open(srv_r) { failure _
+    | keyword:flex  variable:c1  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:srv_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 65 |         <-
+    | keyword:<-
+ 66 |     }
+    | punctuation:}
+ 67 |     c1.connect("127.0.0.1", port) { failure _
+    | variable:c1  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 68 |         <-
+    | keyword:<-
+ 69 |     }
+    | punctuation:}
+ 71 |     flex c2 = Socket.open(srv_r) { failure _
+    | keyword:flex  variable:c2  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:srv_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 72 |         <-
+    | keyword:<-
+ 73 |     }
+    | punctuation:}
+ 74 |     c2.connect("127.0.0.1", port) { failure _
+    | variable:c2  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 75 |         <-
+    | keyword:<-
+ 76 |     }
+    | punctuation:}
+ 78 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 80 |     ; 2. Both clients write requests concurrently.
+    | comment:; 2. Both clients write requests concurrently.
+ 81 |     client_send(c1, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    | task:client_send  punctuation:(  variable:c1  punctuation:,  string:"GET /c1 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
+ 82 |     client_send(c2, "GET /c2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    | task:client_send  punctuation:(  variable:c2  punctuation:,  string:"GET /c2 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
+ 84 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 86 |     ; 3. Read responses from both clients.
+    | comment:; 3. Read responses from both clients.
+ 87 |     show_response(c1, "c1", srv_r)
+    | task:show_response  punctuation:(  variable:c1  punctuation:,  string:"c1"  punctuation:,  region:srv_r  punctuation:)
+ 88 |     show_response(c2, "c2", srv_r)
+    | task:show_response  punctuation:(  variable:c2  punctuation:,  string:"c2"  punctuation:,  region:srv_r  punctuation:)
+ 90 |     ; 4. Keep-alive reuse on same connection: c1 sends a second request.
+    | comment:; 4. Keep-alive reuse on same connection: c1 sends a second request.
+ 91 |     client_send(c1, "GET /c1-second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    | task:client_send  punctuation:(  variable:c1  punctuation:,  string:"GET /c1-second HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
+ 92 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 93 |     show_response(c1, "c1 second", srv_r)
+    | task:show_response  punctuation:(  variable:c1  punctuation:,  string:"c1 second"  punctuation:,  region:srv_r  punctuation:)
+ 95 |     ; 5. Explicit Connection: close termination on c2.
+    | comment:; 5. Explicit Connection: close termination on c2.
+ 96 |     client_send(c2, "GET /close-me HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+    | task:client_send  punctuation:(  variable:c2  punctuation:,  string:"GET /close-me HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
+ 97 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 98 |     show_response(c2, "c2 close", srv_r)
+    | task:show_response  punctuation:(  variable:c2  punctuation:,  string:"c2 close"  punctuation:,  region:srv_r  punctuation:)
+100 |     fixed c2_eof = c2.read(64, srv_r) { "" }
+    | keyword:fixed  variable:c2_eof  operator:=  variable:c2  punctuation:.  method:read  punctuation:(  number:64  punctuation:,  region:srv_r  punctuation:)  punctuation:{  string:""  punctuation:}
+101 |     show("c2 closed: ", c2_eof.len == 0)
+    | builtin-fn:show  punctuation:(  string:"c2 closed: "  punctuation:,  variable:c2_eof  punctuation:.  field:len  operator:==  number:0  punctuation:)
+103 |     ; 6. Read timeout: c3 sends incomplete request and stalls.
+    | comment:; 6. Read timeout: c3 sends incomplete request and stalls.
+104 |     flex c3 = Socket.open(srv_r) { failure _
+    | keyword:flex  variable:c3  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:srv_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+105 |         <-
+    | keyword:<-
+106 |     }
+    | punctuation:}
+107 |     c3.connect("127.0.0.1", port) { failure _
+    | variable:c3  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+108 |         <-
+    | keyword:<-
+109 |     }
+    | punctuation:}
+110 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+112 |     client_send(c3, "GET /stalled")
+    | task:client_send  punctuation:(  variable:c3  punctuation:,  string:"GET /stalled"  punctuation:)
+113 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+115 |     sleep_ms(120)
+    | task:sleep_ms  punctuation:(  number:120  punctuation:)
+116 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+117 |     show_response(c3, "c3 timeout", srv_r)
+    | task:show_response  punctuation:(  variable:c3  punctuation:,  string:"c3 timeout"  punctuation:,  region:srv_r  punctuation:)
+119 |     ; 7. Idle sweep: c4 completes a request and remains idle past 200ms.
+    | comment:; 7. Idle sweep: c4 completes a request and remains idle past 200ms.
+120 |     flex c4 = Socket.open(srv_r) { failure _
+    | keyword:flex  variable:c4  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:srv_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+121 |         <-
+    | keyword:<-
+122 |     }
+    | punctuation:}
+123 |     c4.connect("127.0.0.1", port) { failure _
+    | variable:c4  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+124 |         <-
+    | keyword:<-
+125 |     }
+    | punctuation:}
+126 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+127 |     client_send(c4, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    | task:client_send  punctuation:(  variable:c4  punctuation:,  string:"GET /c1 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
+128 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+129 |     show_response(c4, "c4 initial", srv_r)
+    | task:show_response  punctuation:(  variable:c4  punctuation:,  string:"c4 initial"  punctuation:,  region:srv_r  punctuation:)
+131 |     sleep_ms(220)
+    | task:sleep_ms  punctuation:(  number:220  punctuation:)
+132 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+134 |     fixed c4_eof = c4.read(64, srv_r) { "" }
+    | keyword:fixed  variable:c4_eof  operator:=  variable:c4  punctuation:.  method:read  punctuation:(  number:64  punctuation:,  region:srv_r  punctuation:)  punctuation:{  string:""  punctuation:}
+135 |     show("c4 idle swept: ", c4_eof.len == 0)
+    | builtin-fn:show  punctuation:(  string:"c4 idle swept: "  punctuation:,  variable:c4_eof  punctuation:.  field:len  operator:==  number:0  punctuation:)
+137 |     c1.close() { failure _ }
+    | variable:c1  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+138 |     c2.close() { failure _ }
+    | variable:c2  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+139 |     c3.close() { failure _ }
+    | variable:c3  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+140 |     c4.close() { failure _ }
+    | variable:c4  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+141 |     cleanup_event_loop(server_sock, &conns)
+    | task:cleanup_event_loop  punctuation:(  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:)
+142 |     show("event loop clean finish")
+    | builtin-fn:show  punctuation:(  string:"event loop clean finish"  punctuation:)
+143 | fi
+    | keyword:fi

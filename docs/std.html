@@ -546,12 +546,15 @@ $(auth)
         <tr><td><code>WebError</code></td><td>Failure kind: <code>ListenFailed</code>, <code>BadRequest(why)</code>, <code>PayloadTooLarge</code>, <code>RouteNotFound(where)</code>, <code>MethodNotAllowed(method, path)</code>, <code>Unauthorized(why)</code>, <code>ServerFailed(why)</code></td></tr>
         <tr><td><code>$get, $post, $put, $patch, $delete, $route</code></td><td>Startup decorators that register handlers to the default router before <code>main</code></td></tr>
         <tr><td><code>Router</code></td><td>Programmatic router shape: <code>Router.new()</code>, <code>.get(pattern, h)</code>, <code>.post(pattern, h)</code>, <code>.enroll(method_code, pattern, h)</code>, <code>.route(req, r)</code></td></tr>
-        <tr><td><code>serve(addr, handler)</code></td><td>Listens on TCP address and handles incoming HTTP requests sequentially (or with event loop)</td></tr>
+        <tr><td><code>Server</code></td><td>Configurable server shape: <code>Server.new(addr)</code>, <code>.timeouts(read_ms, idle_ms)</code>, <code>.body_limit(bytes)</code>, <code>.keep_alive(bool)</code>, <code>.serve(handler)</code>, <code>Server.stop()</code></td></tr>
+        <tr><td><code>Poll</code></td><td>Descriptor readiness table: <code>Poll.clear()</code>, <code>Poll.watch(sock, events)</code>, <code>Poll.unwatch(sock)</code>, <code>Poll.wait(timeout_ms)</code>, <code>Poll.is_readable(sock)</code>, <code>Poll.is_writable(sock)</code></td></tr>
+        <tr><td><code>serve(addr, handler)</code></td><td>Listens on TCP address and drives the non-blocking event loop dispatching incoming requests</td></tr>
       </table>
       <ul>
         <li><strong>Path parameters and wildcards.</strong> Patterns like <code>/users/\{id\}</code> capture dynamic path segments accessible via <code>req.param("id")</code>. Wildcards like <code>/assets/*</code> capture remaining path text via <code>req.param("*")</code>.</li>
         <li><strong>Method-aware routing.</strong> If a route's path matches but the request method does not, the router automatically fails with <code>WebError.MethodNotAllowed</code>, yielding HTTP 405. If no route matches, it fails with <code>WebError.RouteNotFound</code>, yielding HTTP 404.</li>
         <li><strong>Composable middleware.</strong> Decorators like <code>$(auth, logged)</code> wrap handlers at call time, intercepting requests and short-circuiting on failure with typed errors such as <code>WebError.Unauthorized</code>.</li>
+        <li><strong>Event loop, keep-alive, and timeouts.</strong> The single-threaded event loop multiplexes connections using non-blocking I/O. HTTP/1.1 connections remain persistent by default; idle sockets past <code>idle_timeout_ms</code> are swept, stalled partial reads past <code>read_timeout_ms</code> are closed with 408 Request Timeout, and <code>Server.stop()</code> shuts down gracefully.</li>
       </ul>
     </section>
 

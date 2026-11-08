@@ -2808,6 +2808,150 @@ static inline int64_t vela__rt__web_socket_poll(int64_t handle, int64_t events, 
     return ready;
 }
 
+static inline int64_t vela__rt__web_time_ms(void) {
+    struct timespec ts;
+#if defined(CLOCK_MONOTONIC)
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
+    }
+#endif
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
+}
+
+static inline int64_t vela__rt__web_sleep_ms(int64_t ms) {
+    if (ms > 0) {
+        poll(NULL, 0, (int)ms);
+    }
+    return 0;
+}
+
+typedef struct vela__rt__poll_entry {
+    int64_t handle;
+    int16_t events;
+    int16_t revents;
+} vela__rt__poll_entry;
+
+typedef struct vela__rt__poll_table {
+    vela__rt__poll_entry entries[256];
+    size_t count;
+} vela__rt__poll_table;
+
+static inline vela__rt__poll_table* vela__rt__poll_table_get(void) {
+    static vela__rt__poll_table table = { {{0, 0, 0}}, 0 };
+    return &table;
+}
+
+static inline void vela__rt__web_poll_clear(void) {
+    vela__rt__poll_table_get()->count = 0;
+}
+
+static inline int64_t vela__rt__web_poll_add(int64_t handle, int64_t events) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    for (size_t i = 0; i < table->count; i++) {
+        if (table->entries[i].handle == handle) {
+            table->entries[i].events = (int16_t)events;
+            table->entries[i].revents = 0;
+            return 0;
+        }
+    }
+    if (table->count >= 256) {
+        return -1;
+    }
+    table->entries[table->count].handle = handle;
+    table->entries[table->count].events = (int16_t)events;
+    table->entries[table->count].revents = 0;
+    table->count++;
+    return 0;
+}
+
+static inline int64_t vela__rt__web_poll_remove(int64_t handle) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    for (size_t i = 0; i < table->count; i++) {
+        if (table->entries[i].handle == handle) {
+            table->entries[i] = table->entries[table->count - 1];
+            table->count--;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static inline int64_t vela__rt__web_poll_wait(int64_t timeout_ms) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    if (table->count == 0) {
+        if (timeout_ms > 0) {
+            poll(NULL, 0, (int)timeout_ms);
+        }
+        return 0;
+    }
+    struct pollfd pfds[256];
+    size_t valid = 0;
+    size_t map[256];
+    for (size_t i = 0; i < table->count; i++) {
+        table->entries[i].revents = 0;
+        vela__rt__socket_slot* slot = vela__rt__socket_of(table->entries[i].handle);
+        if (slot != NULL && slot->fd >= 0) {
+            pfds[valid].fd = slot->fd;
+            pfds[valid].events = 0;
+            if (table->entries[i].events & 1) pfds[valid].events |= POLLIN;
+            if (table->entries[i].events & 2) pfds[valid].events |= POLLOUT;
+            pfds[valid].revents = 0;
+            map[valid] = i;
+            valid++;
+        }
+    }
+    if (valid == 0) {
+        if (timeout_ms > 0) {
+            poll(NULL, 0, (int)timeout_ms);
+        }
+        return 0;
+    }
+    int res = poll(pfds, (nfds_t)valid, (int)timeout_ms);
+    if (res <= 0) {
+        return res < 0 && errno != EINTR ? -1 : 0;
+    }
+    int64_t ready_count = 0;
+    for (size_t j = 0; j < valid; j++) {
+        int64_t rev = 0;
+        if (pfds[j].revents & (POLLIN | POLLHUP | POLLERR)) rev |= 1;
+        if (pfds[j].revents & POLLOUT) rev |= 2;
+        table->entries[map[j]].revents = (int16_t)rev;
+        if (rev != 0) ready_count++;
+    }
+    return ready_count;
+}
+
+static inline int64_t vela__rt__web_poll_revents(int64_t handle) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    for (size_t i = 0; i < table->count; i++) {
+        if (table->entries[i].handle == handle) {
+            return (int64_t)table->entries[i].revents;
+        }
+    }
+    return 0;
+}
+
+static inline bool vela__rt__web_poll_is_readable(int64_t handle) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    for (size_t i = 0; i < table->count; i++) {
+        if (table->entries[i].handle == handle) {
+            return (table->entries[i].revents & 1) != 0;
+        }
+    }
+    return false;
+}
+
+static inline bool vela__rt__web_poll_is_writable(int64_t handle) {
+    vela__rt__poll_table* table = vela__rt__poll_table_get();
+    for (size_t i = 0; i < table->count; i++) {
+        if (table->entries[i].handle == handle) {
+            return (table->entries[i].revents & 2) != 0;
+        }
+    }
+    return false;
+}
+
 static inline int64_t vela__rt__web_text_find(vela__rt__text haystack, vela__rt__text needle, int64_t from) {
     if (from < 0 || from > haystack.len || needle.len < 0) {
         return -1;
