@@ -1,0 +1,90 @@
+; Tests custom server and router error handlers: $on_error decorator,
+; Router.on_error, Server.on_error, and default fallbacks.
+include std/web { Request, Response, WebError, Method, Router, Server, DefaultRouter, status, json, text_response, get, on_error, router }
+
+$get("/api/greet")
+task greet(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- text_response("hello", r)
+fi
+
+$get("/api/secret")
+task secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- fail WebError.Unauthorized("token required")
+fi
+
+$on_error
+task handle_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
+    match err
+    case WebError.RouteNotFound where_
+        <- json("\{\"error\":\"not_found\",\"path\":\"{where_}\"\}" at r, r).status_code(404)
+    case WebError.Unauthorized why
+        <- json("\{\"error\":\"unauthorized\",\"detail\":\"{why}\"\}" at r, r).status_code(401)
+    case WebError.MethodNotAllowed m p
+        <- json("\{\"error\":\"method_not_allowed\",\"method\":\"{m}\",\"path\":\"{p}\"\}" at r, r).status_code(405)
+    case _
+        <- json("\{\"error\":\"internal\"\}", r).status_code(500)
+    fi
+fi
+
+task custom_app_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
+    match err
+    case WebError.RouteNotFound where_
+        <- status(404, r, "Not Found").header("x-custom-router", "true").set_body("custom: not found {where_}\n")
+    case _
+        <- status(500, r, "Error").set_body("custom error\n")
+    fi
+fi
+
+task main()
+    region r default
+
+    ; 1. Successful route
+    fixed req_ok = Request { method: Method.Get, path: "/api/greet", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_ok = DefaultRouter.route(req_ok, r) { failure _
+        <-
+    }
+    show("ok: ", resp_ok.status, " ", resp_ok.body_data)
+
+    ; 2. Unauthorized error caught by $on_error
+    fixed req_unauth = Request { method: Method.Get, path: "/api/secret", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_unauth = DefaultRouter.route(req_unauth, r) { failure _
+        <-
+    }
+    show("unauth: ", resp_unauth.status, " ", resp_unauth.body_data)
+
+    ; 3. Route not found caught by $on_error
+    fixed req_missing = Request { method: Method.Get, path: "/api/missing", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_missing = DefaultRouter.route(req_missing, r) { failure _
+        <-
+    }
+    show("missing: ", resp_missing.status, " ", resp_missing.body_data)
+
+    ; 4. Method not allowed caught by $on_error
+    fixed req_post = Request { method: Method.Post, path: "/api/greet", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_post = DefaultRouter.route(req_post, r) { failure _
+        <-
+    }
+    show("method not allowed: ", resp_post.status, " ", resp_post.body_data)
+
+    ; 5. Programmatic Router.on_error
+    flex app = router()
+    app.on_error(custom_app_error)
+    fixed req_router = Request { method: Method.Get, path: "/unknown", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_router = app.route(req_router, r) { failure _
+        <-
+    }
+    show("custom router: ", resp_router.status, " ", resp_router.headers["x-custom-router"])
+
+    ; 6. Programmatic Server.on_error chaining
+    fixed srv = Server.new("127.0.0.1:8080").on_error(handle_error).body_limit(2048)
+    show("server body limit: ", srv.max_body_size)
+
+    ; 7. Fallback when error handler is cleared
+    DefaultRouter.clear()
+    fixed req_fallback = Request { method: Method.Get, path: "/cleared", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_fallback = DefaultRouter.route(req_fallback, r) { failure err
+        show("fallback caught: ", match err case WebError.RouteNotFound w = "not found {w}" case _ = "other" fi)
+        <-
+    }
+    show("should not reach here")
+fi

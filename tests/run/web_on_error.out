@@ -1,0 +1,8 @@
+ok: 200 hello
+unauth: 401 {"error":"unauthorized","detail":"token required"}
+missing: 404 {"error":"not_found","path":"/api/missing"}
+method not allowed: 405 {"error":"method_not_allowed","method":"POST","path":"/api/greet"}
+custom router: 404 true
+server body limit: 2048
+fallback caught: not found /cleared
+

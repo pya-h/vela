@@ -12,4 +12,3 @@ mime html: text/html; charset=utf-8
 mime css: text/css; charset=utf-8
 mime json: application/json; charset=utf-8
 mime wasm: application/wasm
-

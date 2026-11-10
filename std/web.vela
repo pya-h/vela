@@ -234,6 +234,12 @@ shape Response
         <- .this
     fi
 
+    alters status_code(code: int, custom_reason: text@this = "") -> Response@this
+        .status = code
+        .reason = when custom_reason != "" custom_reason else reason_of(code) fi
+        <- .this
+    fi
+
     alters set_body(content: text@this) -> Response@this
         .body_data = content
         <- .this
@@ -331,9 +337,10 @@ shape Server
     read_timeout_ms: int = 5000
     idle_timeout_ms: int = 15000
     running: bool = true
+    error_handler: maybe (WebError@r, Request@r, @r) -> Response@r = none
 
     shared new(addr: text@p = "127.0.0.1:8080") -> Server@p
-        <- Server { addr: addr, max_body_size: 1048576, keep_alive_enabled: true, read_timeout_ms: 5000, idle_timeout_ms: 15000, running: true }
+        <- Server { addr: addr, max_body_size: 1048576, keep_alive_enabled: true, read_timeout_ms: 5000, idle_timeout_ms: 15000, running: true, error_handler: none }
     fi
 
     shared stop()
@@ -341,15 +348,19 @@ shape Server
     fi
 
     body_limit(limit: int) -> Server@this
-        <- Server { addr: .addr, max_body_size: limit, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running }
+        <- Server { addr: .addr, max_body_size: limit, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running, error_handler: .error_handler }
     fi
 
     keep_alive(enabled: bool) -> Server@this
-        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running }
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running, error_handler: .error_handler }
     fi
 
     timeouts(read_ms: int, idle_ms: int) -> Server@this
-        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: read_ms, idle_timeout_ms: idle_ms, running: .running }
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: read_ms, idle_timeout_ms: idle_ms, running: .running, error_handler: .error_handler }
+    fi
+
+    on_error(handler: (WebError@r, Request@r, @r) -> Response@r) -> Server@this
+        <- Server { addr: .addr, max_body_size: .max_body_size, keep_alive_enabled: .keep_alive_enabled, read_timeout_ms: .read_timeout_ms, idle_timeout_ms: .idle_timeout_ms, running: .running, error_handler: handler }
     fi
 
     serve(handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
@@ -416,9 +427,15 @@ fi
 shape Router
     count: int = 0
     routes: [RouteEntry#128] = [RouteEntry {}#128]
+    error_handler: maybe (WebError@r, Request@r, @r) -> Response@r = none
 
     shared new() -> Router
         <- Router {}
+    fi
+
+    alters on_error(handler: (WebError@r, Request@r, @r) -> Response@r) -> Router@this
+        .error_handler = handler
+        <- .this
     fi
 
     alters enroll(m: int, pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r) -> Router@this
@@ -470,14 +487,26 @@ shape Router
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
                     else when entry.handler is {h}
                         fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
-                        <- h(routed_req, r)
+                        fixed resp = h(routed_req, r) { failure err
+                            when .error_handler is {eh}
+                                <- eh(err, routed_req, r)
+                            fi
+                            <- fail err
+                        }
+                        <- resp
                     fi
                 fi
             fi
             idx++
         fi
         when path_matched
+            when .error_handler is {eh}
+                <- eh(WebError.MethodNotAllowed(method_name(req.method), req.path), req, r)
+            fi
             <- fail WebError.MethodNotAllowed(method_name(req.method), req.path)
+        fi
+        when .error_handler is {eh}
+            <- eh(WebError.RouteNotFound(req.path), req, r)
         fi
         <- fail WebError.RouteNotFound(req.path)
     fi
@@ -486,6 +515,11 @@ fi
 shape DefaultRouter
     shared flex count: int = 0
     shared flex routes: [RouteEntry#128] = [RouteEntry {}#128]
+    shared flex error_handler: maybe (WebError@r, Request@r, @r) -> Response@r = none
+
+    shared on_error(handler: (WebError@r, Request@r, @r) -> Response@r)
+        DefaultRouter.error_handler = handler
+    fi
 
     shared enroll(m: int, pattern: text, handler: (Request@r, @r) -> Response@r ~ WebError@r)
         when DefaultRouter.count < 128
@@ -507,6 +541,7 @@ shape DefaultRouter
 
     shared clear()
         DefaultRouter.count = 0
+        DefaultRouter.error_handler = none
     fi
 
     shared route(req: Request@r, r: region default) -> Response@r ~ WebError@r
@@ -522,14 +557,26 @@ shape DefaultRouter
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
                     else when entry.handler is {h}
                         fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
-                        <- h(routed_req, r)
+                        fixed resp = h(routed_req, r) { failure err
+                            when DefaultRouter.error_handler is {eh}
+                                <- eh(err, routed_req, r)
+                            fi
+                            <- fail err
+                        }
+                        <- resp
                     fi
                 fi
             fi
             idx++
         fi
         when path_matched
+            when DefaultRouter.error_handler is {eh}
+                <- eh(WebError.MethodNotAllowed(method_name(req.method), req.path), req, r)
+            fi
             <- fail WebError.MethodNotAllowed(method_name(req.method), req.path)
+        fi
+        when DefaultRouter.error_handler is {eh}
+            <- eh(WebError.RouteNotFound(req.path), req, r)
         fi
         <- fail WebError.RouteNotFound(req.path)
     fi
@@ -557,6 +604,10 @@ fi
 
 task default_route(req: Request@r, r: region default) -> Response@r ~ WebError@r
     <- DefaultRouter.route(req, r)
+fi
+
+task on_error(handler: (WebError@r, Request@r, @r) -> Response@r)
+    DefaultRouter.on_error(handler)
 fi
 
 task get(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
@@ -716,12 +767,21 @@ task is_request_complete(buf: text@p) -> bool
     <- true
 fi
 
-task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, r: region default) -> bool
+task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
     fixed req = parse_request(raw, r) { failure e
         send_error_response(client, 400, "Bad Request", "Malformed request headers\n", r)
         <- false
     }
     when req.body_data.len > max_body
+        when err_handler is {eh}
+            fixed err_resp = eh(WebError.PayloadTooLarge, req, r)
+            send_response(client, err_resp, false, r)
+            <- false
+        else when DefaultRouter.error_handler is {deh}
+            fixed err_resp = deh(WebError.PayloadTooLarge, req, r)
+            send_response(client, err_resp, false, r)
+            <- false
+        fi
         send_error_response(client, 413, "Payload Too Large", "413 Payload Too Large\n", r)
         <- false
     fi
@@ -734,13 +794,19 @@ task process_connection_request(flex client: Socket, raw: text@r, handler: (Requ
     fi
 
     fixed resp = handler(req, r) { failure err
-        fixed err_resp = match err
-        case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
-        case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
-        case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
-        case WebError.MethodNotAllowed method path = status(405, r, "Method Not Allowed").header("content-type", "text/plain").set_body("405 Method Not Allowed: {method} {path}\n")
-        case WebError.Unauthorized why = status(401, r, "Unauthorized").header("content-type", "text/plain").set_body("401 Unauthorized: {why}\n")
-        case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
+        fixed err_resp = when err_handler is {eh}
+            eh(err, req, r)
+        else when DefaultRouter.error_handler is {deh}
+            deh(err, req, r)
+        else
+            match err
+            case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
+            case WebError.BadRequest why = status(400, r, "Bad Request").header("content-type", "text/plain").set_body("400 Bad Request: {why}\n")
+            case WebError.PayloadTooLarge = status(413, r, "Payload Too Large").header("content-type", "text/plain").set_body("413 Payload Too Large\n")
+            case WebError.MethodNotAllowed method path = status(405, r, "Method Not Allowed").header("content-type", "text/plain").set_body("405 Method Not Allowed: {method} {path}\n")
+            case WebError.Unauthorized why = status(401, r, "Unauthorized").header("content-type", "text/plain").set_body("401 Unauthorized: {why}\n")
+            case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
+            fi
         fi
         send_response(client, err_resp, false, r)
         <- false
@@ -832,7 +898,7 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
                 fixed is_complete = when conn.buf.len == 0 is_request_complete(chunk) else is_request_complete("{conn.buf}{chunk}" at req_r) fi
                 when is_complete
                     fixed full_req = when conn.buf.len == 0 chunk else "{conn.buf}{chunk}" at req_r fi
-                    fixed keep_conn = process_connection_request(conn.sock, full_req, handler, server.max_body_size, server.keep_alive_enabled, req_r)
+                    fixed keep_conn = process_connection_request(conn.sock, full_req, handler, server.max_body_size, server.keep_alive_enabled, server.error_handler, req_r)
                     when keep_conn
                         conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: false, buf: "" }
                     else
@@ -909,7 +975,7 @@ task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response
         client.close() { failure _ }
         <-
     }
-    process_connection_request(client, raw, handler, max_body, false, r)
+    process_connection_request(client, raw, handler, max_body, false, none, r)
     client.close() { failure _ }
 fi
 
