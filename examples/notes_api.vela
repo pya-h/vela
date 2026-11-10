@@ -1,0 +1,153 @@
+; A JSON notes REST API: routes with startup decorators, JSON parsing and
+; serialization, call-time middleware for token authorization, and plan-B
+; fallbacks for query and path parameters.
+include std/web { Request, Response, WebError, Method, DefaultRouter, status, json, text_response, get, post, delete }
+include std/json { Json, parse, stringify }
+
+shape Note
+    id: int
+    title: text
+    content: text
+fi
+
+task note_to_json(id: int, title: text@r, content: text@r, r: region default) -> text@r
+    flex doc: [text: Json]@r = new [text: Json]() at r
+    doc["id"] = Json.Int(id)
+    doc["title"] = Json.Str(title)
+    doc["content"] = Json.Str(content)
+    <- stringify(Json.Object(doc), r)
+fi
+
+task find_note(id: int) -> maybe Note
+    when id == 1
+        <- Note { id: 1, title: "Shopping", content: "Milk, bread, eggs" }
+    else when id == 2
+        <- Note { id: 2, title: "Todo", content: "Write Vela docs" }
+    fi
+    <- none
+fi
+
+; Middleware checking bearer token authorization before protected endpoints.
+task auth(next: (Request@r, @r) -> Response@r ~ WebError@r, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.header("authorization") is {token}
+        when token == "Bearer secret-token"
+            <- next(req, r)
+        fi
+        <- fail WebError.Unauthorized("invalid authorization token")
+    fi
+    <- fail WebError.Unauthorized("missing authorization header")
+fi
+
+$get("/notes")
+task list_notes(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex items: [Json]@r = new [Json]() at r
+    flex item1: [text: Json]@r = new [text: Json]() at r
+    item1["id"] = Json.Int(1)
+    item1["title"] = Json.Str("Shopping")
+    item1["content"] = Json.Str("Milk, bread, eggs")
+    items.add(Json.Object(item1))
+
+    flex item2: [text: Json]@r = new [text: Json]() at r
+    item2["id"] = Json.Int(2)
+    item2["title"] = Json.Str("Todo")
+    item2["content"] = Json.Str("Write Vela docs")
+    items.add(Json.Object(item2))
+    <- json(stringify(Json.Array(items), r), r)
+fi
+
+$get("/notes/\{id\}")
+task get_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed raw_id = req.param("id") {
+        <- fail WebError.BadRequest("missing id parameter")
+    }
+    fixed id = int(raw_id) {
+        <- fail WebError.BadRequest("id must be an integer")
+    }
+    fixed note = find_note(id) {
+        <- fail WebError.RouteNotFound(req.path)
+    }
+    <- json(note_to_json(note.id, note.title, note.content, r), r)
+fi
+
+$post("/notes")
+$(auth)
+task create_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed doc = parse(req.body(), r) { failure _
+        <- fail WebError.BadRequest("malformed JSON body")
+    }
+    fixed title_node = doc.get("title") {
+        <- fail WebError.BadRequest("missing title field")
+    }
+    fixed title = title_node.as_text() {
+        <- fail WebError.BadRequest("title must be a string")
+    }
+    fixed content_node = doc.get("content") {
+        <- fail WebError.BadRequest("missing content field")
+    }
+    fixed content = content_node.as_text() {
+        <- fail WebError.BadRequest("content must be a string")
+    }
+    flex resp = json(note_to_json(3, title, content, r), r)
+    resp.status = 201
+    resp.reason = "Created"
+    <- resp
+fi
+
+$delete("/notes/\{id\}")
+$(auth)
+task delete_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed raw_id = req.param("id") {
+        <- fail WebError.BadRequest("missing id parameter")
+    }
+    fixed id = int(raw_id) {
+        <- fail WebError.BadRequest("id must be an integer")
+    }
+    fixed note = find_note(id) {
+        <- fail WebError.RouteNotFound(req.path)
+    }
+    flex out: [text: Json]@r = new [text: Json]() at r
+    out["deleted"] = Json.Bool(true)
+    out["id"] = Json.Int(note.id)
+    <- json(stringify(Json.Object(out), r), r)
+fi
+
+task dispatch(m: Method, path: text@r, body: text@r, auth_hdr: text@r, r: region default)
+    flex hdrs = new [text: text]() at r
+    when auth_hdr.len > 0
+        hdrs["authorization"] = auth_hdr
+    fi
+    fixed req = Request { method: m, path: path, raw_query: "", headers: hdrs, body_data: body, params: new [text: text]() at r }
+    fixed resp = DefaultRouter.route(req, r) { failure err
+        fixed (code, msg) = match err
+        case WebError.Unauthorized why = (401, why)
+        case WebError.RouteNotFound where_ = (404, where_)
+        case WebError.BadRequest why = (400, why)
+        case _ = (500, "error")
+        fi
+        show(code, " ", msg)
+        <-
+    }
+    show(resp.status, " ", resp.body_data)
+fi
+
+task main()
+    region r default
+
+    ; 1. Unauthenticated creation fails with 401
+    dispatch(Method.Post, "/notes", "\{\"title\":\"Secret\",\"content\":\"Data\"\}", "", r)
+
+    ; 2. Authenticated creation succeeds with 201
+    dispatch(Method.Post, "/notes", "\{\"title\":\"Release\",\"content\":\"Ship Vela 1.0\"\}", "Bearer secret-token", r)
+
+    ; 3. List all notes
+    dispatch(Method.Get, "/notes", "", "", r)
+
+    ; 4. Fetch specific note by ID
+    dispatch(Method.Get, "/notes/2", "", "", r)
+
+    ; 5. Authenticated delete succeeds
+    dispatch(Method.Delete, "/notes/1", "", "Bearer secret-token", r)
+
+    ; 6. Fetching missing note yields 404
+    dispatch(Method.Get, "/notes/99", "", "", r)
+fi

@@ -1,0 +1,272 @@
+  1 | ; A JSON notes REST API: routes with startup decorators, JSON parsing and
+    | comment:; A JSON notes REST API: routes with startup decorators, JSON parsing and
+  2 | ; serialization, call-time middleware for token authorization, and plan-B
+    | comment:; serialization, call-time middleware for token authorization, and plan-B
+  3 | ; fallbacks for query and path parameters.
+    | comment:; fallbacks for query and path parameters.
+  4 | include std/web { Request, Response, WebError, Method, DefaultRouter, status, json, text_response, get, post, delete }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:DefaultRouter  punctuation:,  task:status  punctuation:,  task:json  punctuation:,  task:text_response  punctuation:,  task:get  punctuation:,  task:post  punctuation:,  task:delete  punctuation:}
+  5 | include std/json { Json, parse, stringify }
+    | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:,  task:parse  punctuation:,  task:stringify  punctuation:}
+  7 | shape Note
+    | keyword:shape  type:Note
+  8 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  9 |     title: text
+    | field:title  punctuation::  type-builtin:text
+ 10 |     content: text
+    | field:content  punctuation::  type-builtin:text
+ 11 | fi
+    | keyword:fi
+ 13 | task note_to_json(id: int, title: text@r, content: text@r, r: region default) -> text@r
+    | keyword:task  task:note_to_json  punctuation:(  parameter:id  punctuation::  type-builtin:int  punctuation:,  parameter:title  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:content  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 14 |     flex doc: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:doc  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 15 |     doc["id"] = Json.Int(id)
+    | variable:doc  punctuation:[  string:"id"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  parameter:id  punctuation:)
+ 16 |     doc["title"] = Json.Str(title)
+    | variable:doc  punctuation:[  string:"title"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  parameter:title  punctuation:)
+ 17 |     doc["content"] = Json.Str(content)
+    | variable:doc  punctuation:[  string:"content"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  parameter:content  punctuation:)
+ 18 |     <- stringify(Json.Object(doc), r)
+    | keyword:<-  task:stringify  punctuation:(  type:Json  punctuation:.  variant:Object  punctuation:(  variable:doc  punctuation:)  punctuation:,  region:r  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task find_note(id: int) -> maybe Note
+    | keyword:task  task:find_note  punctuation:(  parameter:id  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type:Note
+ 22 |     when id == 1
+    | keyword:when  parameter:id  operator:==  number:1
+ 23 |         <- Note { id: 1, title: "Shopping", content: "Milk, bread, eggs" }
+    | keyword:<-  type:Note  punctuation:{  field:id  punctuation::  number:1  punctuation:,  field:title  punctuation::  string:"Shopping"  punctuation:,  field:content  punctuation::  string:"Milk, bread, eggs"  punctuation:}
+ 24 |     else when id == 2
+    | keyword:else  keyword:when  parameter:id  operator:==  number:2
+ 25 |         <- Note { id: 2, title: "Todo", content: "Write Vela docs" }
+    | keyword:<-  type:Note  punctuation:{  field:id  punctuation::  number:2  punctuation:,  field:title  punctuation::  string:"Todo"  punctuation:,  field:content  punctuation::  string:"Write Vela docs"  punctuation:}
+ 26 |     fi
+    | keyword:fi
+ 27 |     <- none
+    | keyword:<-  keyword:none
+ 28 | fi
+    | keyword:fi
+ 30 | ; Middleware checking bearer token authorization before protected endpoints.
+    | comment:; Middleware checking bearer token authorization before protected endpoints.
+ 31 | task auth(next: (Request@r, @r) -> Response@r ~ WebError@r, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:auth  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Request  operator:@  region:r  punctuation:,  operator:@  region:r  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r  punctuation:,  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 32 |     when req.header("authorization") is {token}
+    | keyword:when  parameter:req  punctuation:.  method:header  punctuation:(  string:"authorization"  punctuation:)  keyword:is  punctuation:{  variable:token  punctuation:}
+ 33 |         when token == "Bearer secret-token"
+    | keyword:when  variable:token  operator:==  string:"Bearer secret-token"
+ 34 |             <- next(req, r)
+    | keyword:<-  parameter:next  punctuation:(  parameter:req  punctuation:,  region:r  punctuation:)
+ 35 |         fi
+    | keyword:fi
+ 36 |         <- fail WebError.Unauthorized("invalid authorization token")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:Unauthorized  punctuation:(  string:"invalid authorization token"  punctuation:)
+ 37 |     fi
+    | keyword:fi
+ 38 |     <- fail WebError.Unauthorized("missing authorization header")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:Unauthorized  punctuation:(  string:"missing authorization header"  punctuation:)
+ 39 | fi
+    | keyword:fi
+ 41 | $get("/notes")
+    | keyword:$  task:get  punctuation:(  string:"/notes"  punctuation:)
+ 42 | task list_notes(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:list_notes  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 43 |     flex items: [Json]@r = new [Json]() at r
+    | keyword:flex  variable:items  punctuation::  punctuation:[  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 44 |     flex item1: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:item1  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 45 |     item1["id"] = Json.Int(1)
+    | variable:item1  punctuation:[  string:"id"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  number:1  punctuation:)
+ 46 |     item1["title"] = Json.Str("Shopping")
+    | variable:item1  punctuation:[  string:"title"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"Shopping"  punctuation:)
+ 47 |     item1["content"] = Json.Str("Milk, bread, eggs")
+    | variable:item1  punctuation:[  string:"content"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"Milk, bread, eggs"  punctuation:)
+ 48 |     items.add(Json.Object(item1))
+    | variable:items  punctuation:.  field:add  punctuation:(  type:Json  punctuation:.  variant:Object  punctuation:(  variable:item1  punctuation:)  punctuation:)
+ 50 |     flex item2: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:item2  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 51 |     item2["id"] = Json.Int(2)
+    | variable:item2  punctuation:[  string:"id"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  number:2  punctuation:)
+ 52 |     item2["title"] = Json.Str("Todo")
+    | variable:item2  punctuation:[  string:"title"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"Todo"  punctuation:)
+ 53 |     item2["content"] = Json.Str("Write Vela docs")
+    | variable:item2  punctuation:[  string:"content"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"Write Vela docs"  punctuation:)
+ 54 |     items.add(Json.Object(item2))
+    | variable:items  punctuation:.  field:add  punctuation:(  type:Json  punctuation:.  variant:Object  punctuation:(  variable:item2  punctuation:)  punctuation:)
+ 55 |     <- json(stringify(Json.Array(items), r), r)
+    | keyword:<-  task:json  punctuation:(  task:stringify  punctuation:(  type:Json  punctuation:.  variant:Array  punctuation:(  variable:items  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+ 56 | fi
+    | keyword:fi
+ 58 | $get("/notes/\{id\}")
+    | keyword:$  task:get  punctuation:(  string:"/notes/  escape:\{  string:id  escape:\}  string:"  punctuation:)
+ 59 | task get_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:get_note  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 60 |     fixed raw_id = req.param("id") {
+    | keyword:fixed  variable:raw_id  operator:=  parameter:req  punctuation:.  method:param  punctuation:(  string:"id"  punctuation:)  punctuation:{
+ 61 |         <- fail WebError.BadRequest("missing id parameter")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"missing id parameter"  punctuation:)
+ 62 |     }
+    | punctuation:}
+ 63 |     fixed id = int(raw_id) {
+    | keyword:fixed  variable:id  operator:=  type-builtin:int  punctuation:(  variable:raw_id  punctuation:)  punctuation:{
+ 64 |         <- fail WebError.BadRequest("id must be an integer")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"id must be an integer"  punctuation:)
+ 65 |     }
+    | punctuation:}
+ 66 |     fixed note = find_note(id) {
+    | keyword:fixed  variable:note  operator:=  task:find_note  punctuation:(  variable:id  punctuation:)  punctuation:{
+ 67 |         <- fail WebError.RouteNotFound(req.path)
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:RouteNotFound  punctuation:(  parameter:req  punctuation:.  field:path  punctuation:)
+ 68 |     }
+    | punctuation:}
+ 69 |     <- json(note_to_json(note.id, note.title, note.content, r), r)
+    | keyword:<-  task:json  punctuation:(  task:note_to_json  punctuation:(  variable:note  punctuation:.  field:id  punctuation:,  variable:note  punctuation:.  field:title  punctuation:,  variable:note  punctuation:.  field:content  punctuation:,  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+ 70 | fi
+    | keyword:fi
+ 72 | $post("/notes")
+    | keyword:$  task:post  punctuation:(  string:"/notes"  punctuation:)
+ 73 | $(auth)
+    | keyword:$  punctuation:(  task:auth  punctuation:)
+ 74 | task create_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:create_note  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 75 |     fixed doc = parse(req.body(), r) { failure _
+    | keyword:fixed  variable:doc  operator:=  task:parse  punctuation:(  parameter:req  punctuation:.  method:body  punctuation:(  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 76 |         <- fail WebError.BadRequest("malformed JSON body")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"malformed JSON body"  punctuation:)
+ 77 |     }
+    | punctuation:}
+ 78 |     fixed title_node = doc.get("title") {
+    | keyword:fixed  variable:title_node  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"title"  punctuation:)  punctuation:{
+ 79 |         <- fail WebError.BadRequest("missing title field")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"missing title field"  punctuation:)
+ 80 |     }
+    | punctuation:}
+ 81 |     fixed title = title_node.as_text() {
+    | keyword:fixed  variable:title  operator:=  variable:title_node  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{
+ 82 |         <- fail WebError.BadRequest("title must be a string")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"title must be a string"  punctuation:)
+ 83 |     }
+    | punctuation:}
+ 84 |     fixed content_node = doc.get("content") {
+    | keyword:fixed  variable:content_node  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"content"  punctuation:)  punctuation:{
+ 85 |         <- fail WebError.BadRequest("missing content field")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"missing content field"  punctuation:)
+ 86 |     }
+    | punctuation:}
+ 87 |     fixed content = content_node.as_text() {
+    | keyword:fixed  variable:content  operator:=  variable:content_node  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{
+ 88 |         <- fail WebError.BadRequest("content must be a string")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"content must be a string"  punctuation:)
+ 89 |     }
+    | punctuation:}
+ 90 |     flex resp = json(note_to_json(3, title, content, r), r)
+    | keyword:flex  variable:resp  operator:=  task:json  punctuation:(  task:note_to_json  punctuation:(  number:3  punctuation:,  variable:title  punctuation:,  variable:content  punctuation:,  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+ 91 |     resp.status = 201
+    | variable:resp  punctuation:.  field:status  operator:=  number:201
+ 92 |     resp.reason = "Created"
+    | variable:resp  punctuation:.  field:reason  operator:=  string:"Created"
+ 93 |     <- resp
+    | keyword:<-  variable:resp
+ 94 | fi
+    | keyword:fi
+ 96 | $delete("/notes/\{id\}")
+    | keyword:$  task:delete  punctuation:(  string:"/notes/  escape:\{  string:id  escape:\}  string:"  punctuation:)
+ 97 | $(auth)
+    | keyword:$  punctuation:(  task:auth  punctuation:)
+ 98 | task delete_note(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:delete_note  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 99 |     fixed raw_id = req.param("id") {
+    | keyword:fixed  variable:raw_id  operator:=  parameter:req  punctuation:.  method:param  punctuation:(  string:"id"  punctuation:)  punctuation:{
+100 |         <- fail WebError.BadRequest("missing id parameter")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"missing id parameter"  punctuation:)
+101 |     }
+    | punctuation:}
+102 |     fixed id = int(raw_id) {
+    | keyword:fixed  variable:id  operator:=  type-builtin:int  punctuation:(  variable:raw_id  punctuation:)  punctuation:{
+103 |         <- fail WebError.BadRequest("id must be an integer")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:BadRequest  punctuation:(  string:"id must be an integer"  punctuation:)
+104 |     }
+    | punctuation:}
+105 |     fixed note = find_note(id) {
+    | keyword:fixed  variable:note  operator:=  task:find_note  punctuation:(  variable:id  punctuation:)  punctuation:{
+106 |         <- fail WebError.RouteNotFound(req.path)
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:RouteNotFound  punctuation:(  parameter:req  punctuation:.  field:path  punctuation:)
+107 |     }
+    | punctuation:}
+108 |     flex out: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:out  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+109 |     out["deleted"] = Json.Bool(true)
+    | variable:out  punctuation:[  string:"deleted"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Bool  punctuation:(  keyword:true  punctuation:)
+110 |     out["id"] = Json.Int(note.id)
+    | variable:out  punctuation:[  string:"id"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  variable:note  punctuation:.  field:id  punctuation:)
+111 |     <- json(stringify(Json.Object(out), r), r)
+    | keyword:<-  task:json  punctuation:(  task:stringify  punctuation:(  type:Json  punctuation:.  variant:Object  punctuation:(  variable:out  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+112 | fi
+    | keyword:fi
+114 | task dispatch(m: Method, path: text@r, body: text@r, auth_hdr: text@r, r: region default)
+    | keyword:task  task:dispatch  punctuation:(  parameter:m  punctuation::  type:Method  punctuation:,  parameter:path  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:body  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:auth_hdr  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+115 |     flex hdrs = new [text: text]() at r
+    | keyword:flex  variable:hdrs  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+116 |     when auth_hdr.len > 0
+    | keyword:when  parameter:auth_hdr  punctuation:.  field:len  operator:>  number:0
+117 |         hdrs["authorization"] = auth_hdr
+    | variable:hdrs  punctuation:[  string:"authorization"  punctuation:]  operator:=  parameter:auth_hdr
+118 |     fi
+    | keyword:fi
+119 |     fixed req = Request { method: m, path: path, raw_query: "", headers: hdrs, body_data: body, params: new [text: text]() at r }
+    | keyword:fixed  variable:req  operator:=  type:Request  punctuation:{  field:method  punctuation::  parameter:m  punctuation:,  field:path  punctuation::  parameter:path  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  variable:hdrs  punctuation:,  field:body_data  punctuation::  parameter:body  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+120 |     fixed resp = DefaultRouter.route(req, r) { failure err
+    | keyword:fixed  variable:resp  operator:=  type:DefaultRouter  punctuation:.  method:route  punctuation:(  variable:req  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:err
+121 |         fixed (code, msg) = match err
+    | keyword:fixed  punctuation:(  variable:code  punctuation:,  variable:msg  punctuation:)  operator:=  keyword:match  variable:err
+122 |         case WebError.Unauthorized why = (401, why)
+    | keyword:case  type:WebError  punctuation:.  variant:Unauthorized  variable:why  operator:=  punctuation:(  number:401  punctuation:,  variable:why  punctuation:)
+123 |         case WebError.RouteNotFound where_ = (404, where_)
+    | keyword:case  type:WebError  punctuation:.  variant:RouteNotFound  variable:where_  operator:=  punctuation:(  number:404  punctuation:,  variable:where_  punctuation:)
+124 |         case WebError.BadRequest why = (400, why)
+    | keyword:case  type:WebError  punctuation:.  variant:BadRequest  variable:why  operator:=  punctuation:(  number:400  punctuation:,  variable:why  punctuation:)
+125 |         case _ = (500, "error")
+    | keyword:case  keyword:_  operator:=  punctuation:(  number:500  punctuation:,  string:"error"  punctuation:)
+126 |         fi
+    | keyword:fi
+127 |         show(code, " ", msg)
+    | builtin-fn:show  punctuation:(  variable:code  punctuation:,  string:" "  punctuation:,  variable:msg  punctuation:)
+128 |         <-
+    | keyword:<-
+129 |     }
+    | punctuation:}
+130 |     show(resp.status, " ", resp.body_data)
+    | builtin-fn:show  punctuation:(  variable:resp  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:resp  punctuation:.  field:body_data  punctuation:)
+131 | fi
+    | keyword:fi
+133 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+134 |     region r default
+    | keyword:region  region:r  keyword:default
+136 |     ; 1. Unauthenticated creation fails with 401
+    | comment:; 1. Unauthenticated creation fails with 401
+137 |     dispatch(Method.Post, "/notes", "\{\"title\":\"Secret\",\"content\":\"Data\"\}", "", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Post  punctuation:,  string:"/notes"  punctuation:,  string:"  escape:\{  escape:\"  string:title  escape:\"  string::  escape:\"  string:Secret  escape:\"  string:,  escape:\"  string:content  escape:\"  string::  escape:\"  string:Data  escape:\"  escape:\}  string:"  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
+139 |     ; 2. Authenticated creation succeeds with 201
+    | comment:; 2. Authenticated creation succeeds with 201
+140 |     dispatch(Method.Post, "/notes", "\{\"title\":\"Release\",\"content\":\"Ship Vela 1.0\"\}", "Bearer secret-token", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Post  punctuation:,  string:"/notes"  punctuation:,  string:"  escape:\{  escape:\"  string:title  escape:\"  string::  escape:\"  string:Release  escape:\"  string:,  escape:\"  string:content  escape:\"  string::  escape:\"  string:Ship Vela 1.0  escape:\"  escape:\}  string:"  punctuation:,  string:"Bearer secret-token"  punctuation:,  region:r  punctuation:)
+142 |     ; 3. List all notes
+    | comment:; 3. List all notes
+143 |     dispatch(Method.Get, "/notes", "", "", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Get  punctuation:,  string:"/notes"  punctuation:,  string:""  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
+145 |     ; 4. Fetch specific note by ID
+    | comment:; 4. Fetch specific note by ID
+146 |     dispatch(Method.Get, "/notes/2", "", "", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Get  punctuation:,  string:"/notes/2"  punctuation:,  string:""  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
+148 |     ; 5. Authenticated delete succeeds
+    | comment:; 5. Authenticated delete succeeds
+149 |     dispatch(Method.Delete, "/notes/1", "", "Bearer secret-token", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Delete  punctuation:,  string:"/notes/1"  punctuation:,  string:""  punctuation:,  string:"Bearer secret-token"  punctuation:,  region:r  punctuation:)
+151 |     ; 6. Fetching missing note yields 404
+    | comment:; 6. Fetching missing note yields 404
+152 |     dispatch(Method.Get, "/notes/99", "", "", r)
+    | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Get  punctuation:,  string:"/notes/99"  punctuation:,  string:""  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
+153 | fi
+    | keyword:fi

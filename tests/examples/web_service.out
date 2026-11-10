@@ -1,0 +1,15 @@
+stream status: 200
+stream transfer-encoding: chunked
+stream chunks: 3
+  chunk 1: starting processing
+  chunk 2: progress 50%
+  chunk 3: completed
+sse content-type: text/event-stream; charset=utf-8
+sse count: 3
+greet body: Hello, Vela!
+url host: api.example.com port: 8080 path: /v1/metrics?raw=true
+mime html: text/html; charset=utf-8
+mime css: text/css; charset=utf-8
+mime json: application/json; charset=utf-8
+mime wasm: application/wasm
+

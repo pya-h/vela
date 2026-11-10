@@ -333,6 +333,10 @@ task escape_json_string(s: text@p, r: region default) -> text@r
             out = "{out}\\r" at r
         else when c == '\t'
             out = "{out}\\t" at r
+        else when c == char(8)
+            out = "{out}\\b" at r
+        else when c == char(12)
+            out = "{out}\\f" at r
         else
             out = "{out}{s[i..i+1]}" at r
         fi

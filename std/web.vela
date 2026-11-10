@@ -699,14 +699,14 @@ task is_request_complete(buf: text@p) -> bool
     when te_idx_upper >= 0 and te_idx_upper < body_start
         fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
         when is_chunked
-            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 5 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
         fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
     fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
     when cl_idx_lower >= 0 and cl_idx_lower < body_start
         fixed cl_end = text_find(buf, "\r\n", cl_idx_lower)
-        when cl_end < 0
+        when cl_end <= cl_idx_lower + 15
             <- false
         fi
         fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
@@ -1100,19 +1100,26 @@ task is_response_complete(buf: text@p) -> bool
     when te_idx_upper >= 0 and te_idx_upper < body_start
         fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
         when is_chunked
-            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 5 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
         fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
     fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
     when cl_idx_lower >= 0 and cl_idx_lower < body_start
         fixed cl_end = text_find(buf, "\r\n", cl_idx_lower)
-        when cl_end < 0
+        when cl_end <= cl_idx_lower + 15
             <- false
         fi
         fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
         fixed content_len = int(cl_val_str) { 0 }
         <- buf.len >= body_start + 4 + content_len
+    fi
+    fixed sp1 = text_find(buf, " ", 0)
+    when sp1 >= 0 and sp1 + 4 <= body_start
+        fixed code_str = buf[sp1 + 1..sp1 + 4]
+        when code_str == "204" or code_str == "304"
+            <- true
+        fi
     fi
     <- false
 fi
@@ -1122,8 +1129,17 @@ task parse_response(raw: text@r, r: region default) -> Response@r
     fixed status_line = when line_end >= 0 raw[0..line_end] else raw fi
     fixed sp1 = text_find(status_line, " ", 0)
     fixed sp2 = when sp1 >= 0 text_find(status_line, " ", sp1 + 1) else -1 fi
-    fixed status_code = when sp1 >= 0 and sp2 >= 0 int(status_line[sp1 + 1..sp2]) { 200 } else 200 fi
-    fixed reason = when sp2 >= 0 trim(status_line[sp2 + 1..status_line.len]) else "OK" fi
+    fixed status_code = when sp1 >= 0
+        fixed code_end = when sp2 >= 0 sp2 else status_line.len fi
+        int(status_line[sp1 + 1..code_end]) { 200 }
+    else
+        200
+    fi
+    fixed reason = when sp2 >= 0
+        trim(status_line[sp2 + 1..status_line.len])
+    else
+        reason_of(status_code)
+    fi
 
     flex headers = new [text: text]() at r
     fixed hdr_end = text_find(raw, "\r\n\r\n", 0)

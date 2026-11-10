@@ -1,0 +1,7 @@
+401 missing authorization header
+201 {"id":3,"title":"Release","content":"Ship Vela 1.0"}
+200 [{"id":1,"title":"Shopping","content":"Milk, bread, eggs"},{"id":2,"title":"Todo","content":"Write Vela docs"}]
+200 {"id":2,"title":"Todo","content":"Write Vela docs"}
+200 {"deleted":true,"id":1}
+404 /notes/99
+

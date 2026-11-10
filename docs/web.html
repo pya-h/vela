@@ -264,22 +264,22 @@
 
 <span class="comment">; Middleware runs on every request; $get registers route at startup</span>
 $(authenticated, logged)
-$get(<span class="string">"/api/greeting/{name}"</span>)
-<span class="keyword">task</span> handle_greeting(req: Request) -&gt; Response ~ WebError {
-  <span class="keyword">let</span> name = req.param(<span class="string">"name"</span>) <span class="keyword">else</span> <span class="string">"world"</span>
-  <span class="keyword">return</span> text(<span class="string">"Hello, {name}!"</span>)
-}
+$get(<span class="string">"/api/greeting/\{name\}"</span>)
+$(auth)
+<span class="keyword">task</span> handle_greeting(req: Request@r, r: region default) -&gt; Response@r ~ WebError@r
+  <span class="keyword">fixed</span> name = req.param(<span class="string">"name"</span>) { <span class="string">"world"</span> }
+  &lt;- text_response(<span class="string">"Hello, {name}!"</span> at r, r)
+fi
 
 $post(<span class="string">"/api/echo"</span>)
-<span class="keyword">task</span> handle_echo(req: Request) -&gt; Response ~ WebError {
-  <span class="keyword">return</span> text(req.body())
-}
+<span class="keyword">task</span> handle_echo(req: Request@r, r: region default) -&gt; Response@r ~ WebError@r
+  &lt;- text_response(req.body(), r)
+fi
 
-<span class="keyword">task</span> main() -&gt; int {
+<span class="keyword">task</span> main()
   <span class="comment">; All decorated endpoints are automatically served:</span>
-  serve(<span class="string">"127.0.0.1:8080"</span>)?
-  <span class="keyword">return</span> 0
-}</pre>
+  serve(<span class="string">"127.0.0.1:8080"</span>) { failure _ }
+fi</pre>
       </div>
 
       <div class="card">
@@ -289,20 +289,19 @@ $post(<span class="string">"/api/echo"</span>)
           or static asset directories:
         </p>
 
-        <pre><span class="keyword">include</span> std/web { route, files, serve, Request, Response, WebError, text }
+        <pre><span class="keyword">include</span> std/web { router, Request, Response, WebError, text_response, serve }
 
-<span class="keyword">task</span> main() -&gt; int {
-  <span class="keyword">let</span> api = route()
-  api.get(<span class="string">"/health"</span>, health_check)
-  api.get(<span class="string">"/static/*"</span>, files(<span class="string">"./public"</span>))
+<span class="keyword">task</span> health_check(req: Request@r, r: region default) -&gt; Response@r ~ WebError@r
+  &lt;- text_response(<span class="string">"ok"</span>, r)
+fi
 
-  serve(<span class="string">"127.0.0.1:8080"</span>, api)?
-  <span class="keyword">return</span> 0
-}
+<span class="keyword">task</span> main()
+  <span class="keyword">flex</span> app = router()
+  app.get(<span class="string">"/health"</span>, health_check)
+  app.files(<span class="string">"/static/*"</span>, <span class="string">"public"</span>)
 
-<span class="keyword">task</span> health_check(req: Request) -&gt; Response ~ WebError {
-  <span class="keyword">return</span> text(<span class="string">"ok"</span>)
-}</pre>
+  serve(<span class="string">"127.0.0.1:8080"</span>, app.route) { failure _ }
+fi</pre>
       </div>
     </section>
 

@@ -1,0 +1,140 @@
+  1 | ; A web service demonstrating programmatic routing, chunked streaming,
+    | comment:; A web service demonstrating programmatic routing, chunked streaming,
+  2 | ; Server-Sent Events (SSE), URL parsing, and file MIME resolution.
+    | comment:; Server-Sent Events (SSE), URL parsing, and file MIME resolution.
+  3 | include std/web { Router, Request, Response, WebError, Method, text_response, stream, sse, sse_msg, sse_data, mime_type, parse_url, trim }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Router  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  task:text_response  punctuation:,  task:stream  punctuation:,  task:sse  punctuation:,  task:sse_msg  punctuation:,  task:sse_data  punctuation:,  task:mime_type  punctuation:,  task:parse_url  punctuation:,  task:trim  punctuation:}
+  5 | task handle_stream(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_stream  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+  6 |     flex chunks = new [text]() at r
+    | keyword:flex  variable:chunks  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+  7 |     chunks.add("chunk 1: starting processing\n")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"chunk 1: starting processing  escape:\n  string:"  punctuation:)
+  8 |     chunks.add("chunk 2: progress 50%\n")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"chunk 2: progress 50%  escape:\n  string:"  punctuation:)
+  9 |     chunks.add("chunk 3: completed\n")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"chunk 3: completed  escape:\n  string:"  punctuation:)
+ 10 |     <- stream(chunks, r)
+    | keyword:<-  task:stream  punctuation:(  variable:chunks  punctuation:,  region:r  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | task handle_events(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_events  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 14 |     flex events = new [text]() at r
+    | keyword:flex  variable:events  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 15 |     events.add(sse_msg("status", "connected", r))
+    | variable:events  punctuation:.  field:add  punctuation:(  task:sse_msg  punctuation:(  string:"status"  punctuation:,  string:"connected"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 16 |     events.add(sse_data("sensor: 23.5 C", r))
+    | variable:events  punctuation:.  field:add  punctuation:(  task:sse_data  punctuation:(  string:"sensor: 23.5 C"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 17 |     events.add(sse_msg("status", "closing", r))
+    | variable:events  punctuation:.  field:add  punctuation:(  task:sse_msg  punctuation:(  string:"status"  punctuation:,  string:"closing"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 18 |     <- sse(events, r)
+    | keyword:<-  task:sse  punctuation:(  variable:events  punctuation:,  region:r  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task handle_greet(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_greet  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 22 |     fixed name = req.param("name") { "guest" }
+    | keyword:fixed  variable:name  operator:=  parameter:req  punctuation:.  method:param  punctuation:(  string:"name"  punctuation:)  punctuation:{  string:"guest"  punctuation:}
+ 23 |     <- text_response("Hello, {name}!" at r, r)
+    | keyword:<-  task:text_response  punctuation:(  string:"Hello, {  variable:name  string:}!"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     region r default
+    | keyword:region  region:r  keyword:default
+ 29 |     ; 1. Programmatic router configuration
+    | comment:; 1. Programmatic router configuration
+ 30 |     flex app = Router.new()
+    | keyword:flex  variable:app  operator:=  type:Router  punctuation:.  method:new  punctuation:(  punctuation:)
+ 31 |     app.get("/stream", handle_stream)
+    | variable:app  punctuation:.  method:get  punctuation:(  string:"/stream"  punctuation:,  task:handle_stream  punctuation:)
+ 32 |     app.get("/events", handle_events)
+    | variable:app  punctuation:.  method:get  punctuation:(  string:"/events"  punctuation:,  task:handle_events  punctuation:)
+ 33 |     app.get("/greet/\{name\}", handle_greet)
+    | variable:app  punctuation:.  method:get  punctuation:(  string:"/greet/  escape:\{  string:name  escape:\}  string:"  punctuation:,  task:handle_greet  punctuation:)
+ 35 |     ; 2. Dispatch streaming endpoint
+    | comment:; 2. Dispatch streaming endpoint
+ 36 |     fixed req_stream = Request { method: Method.Get, path: "/stream", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_stream  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/stream"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 37 |     fixed resp_stream = app.route(req_stream, r) { failure _
+    | keyword:fixed  variable:resp_stream  operator:=  variable:app  punctuation:.  method:route  punctuation:(  variable:req_stream  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 38 |         show("stream failed")
+    | builtin-fn:show  punctuation:(  string:"stream failed"  punctuation:)
+ 39 |         Response.text("", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:""  punctuation:,  region:r  punctuation:)
+ 40 |     }
+    | punctuation:}
+ 41 |     show("stream status: ", resp_stream.status)
+    | builtin-fn:show  punctuation:(  string:"stream status: "  punctuation:,  variable:resp_stream  punctuation:.  field:status  punctuation:)
+ 42 |     show("stream transfer-encoding: ", resp_stream.headers[#"transfer-encoding"] { "" })
+    | builtin-fn:show  punctuation:(  string:"stream transfer-encoding: "  punctuation:,  variable:resp_stream  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"transfer-encoding"  punctuation:]  punctuation:{  string:""  punctuation:}  punctuation:)
+ 43 |     when resp_stream.chunks is {chunks}
+    | keyword:when  variable:resp_stream  punctuation:.  field:chunks  keyword:is  punctuation:{  variable:chunks  punctuation:}
+ 44 |         show("stream chunks: ", chunks.len)
+    | builtin-fn:show  punctuation:(  string:"stream chunks: "  punctuation:,  variable:chunks  punctuation:.  field:len  punctuation:)
+ 45 |         each chunk in chunks
+    | keyword:each  variable:chunk  keyword:in  variable:chunks
+ 46 |             show("  ", trim(chunk))
+    | builtin-fn:show  punctuation:(  string:"  "  punctuation:,  task:trim  punctuation:(  variable:chunk  punctuation:)  punctuation:)
+ 47 |         fi
+    | keyword:fi
+ 48 |     fi
+    | keyword:fi
+ 50 |     ; 3. Dispatch Server-Sent Events endpoint
+    | comment:; 3. Dispatch Server-Sent Events endpoint
+ 51 |     fixed req_events = Request { method: Method.Get, path: "/events", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_events  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/events"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 52 |     fixed resp_events = app.route(req_events, r) { failure _
+    | keyword:fixed  variable:resp_events  operator:=  variable:app  punctuation:.  method:route  punctuation:(  variable:req_events  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 53 |         show("events failed")
+    | builtin-fn:show  punctuation:(  string:"events failed"  punctuation:)
+ 54 |         Response.text("", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:""  punctuation:,  region:r  punctuation:)
+ 55 |     }
+    | punctuation:}
+ 56 |     show("sse content-type: ", resp_events.headers[#"content-type"] { "" })
+    | builtin-fn:show  punctuation:(  string:"sse content-type: "  punctuation:,  variable:resp_events  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"content-type"  punctuation:]  punctuation:{  string:""  punctuation:}  punctuation:)
+ 57 |     when resp_events.chunks is {events}
+    | keyword:when  variable:resp_events  punctuation:.  field:chunks  keyword:is  punctuation:{  variable:events  punctuation:}
+ 58 |         show("sse count: ", events.len)
+    | builtin-fn:show  punctuation:(  string:"sse count: "  punctuation:,  variable:events  punctuation:.  field:len  punctuation:)
+ 59 |     fi
+    | keyword:fi
+ 61 |     ; 4. Dynamic parameterized route
+    | comment:; 4. Dynamic parameterized route
+ 62 |     fixed req_greet = Request { method: Method.Get, path: "/greet/Vela", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_greet  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/greet/Vela"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 63 |     fixed resp_greet = app.route(req_greet, r) { failure _
+    | keyword:fixed  variable:resp_greet  operator:=  variable:app  punctuation:.  method:route  punctuation:(  variable:req_greet  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 64 |         show("greet failed")
+    | builtin-fn:show  punctuation:(  string:"greet failed"  punctuation:)
+ 65 |         Response.text("", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:""  punctuation:,  region:r  punctuation:)
+ 66 |     }
+    | punctuation:}
+ 67 |     show("greet body: ", resp_greet.body_data)
+    | builtin-fn:show  punctuation:(  string:"greet body: "  punctuation:,  variable:resp_greet  punctuation:.  field:body_data  punctuation:)
+ 69 |     ; 5. URL parser
+    | comment:; 5. URL parser
+ 70 |     fixed (host, port, path) = parse_url("http://api.example.com:8080/v1/metrics?raw=true") {
+    | keyword:fixed  punctuation:(  variable:host  punctuation:,  variable:port  punctuation:,  variable:path  punctuation:)  operator:=  task:parse_url  punctuation:(  string:"http://api.example.com:8080/v1/metrics?raw=true"  punctuation:)  punctuation:{
+ 71 |         ("failed", 0, "")
+    | punctuation:(  string:"failed"  punctuation:,  number:0  punctuation:,  string:""  punctuation:)
+ 72 |     }
+    | punctuation:}
+ 73 |     show("url host: ", host, " port: ", port, " path: ", path)
+    | builtin-fn:show  punctuation:(  string:"url host: "  punctuation:,  variable:host  punctuation:,  string:" port: "  punctuation:,  variable:port  punctuation:,  string:" path: "  punctuation:,  variable:path  punctuation:)
+ 75 |     ; 6. MIME resolution
+    | comment:; 6. MIME resolution
+ 76 |     show("mime html: ", mime_type("index.html", r))
+    | builtin-fn:show  punctuation:(  string:"mime html: "  punctuation:,  task:mime_type  punctuation:(  string:"index.html"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 77 |     show("mime css: ", mime_type("styles/main.css", r))
+    | builtin-fn:show  punctuation:(  string:"mime css: "  punctuation:,  task:mime_type  punctuation:(  string:"styles/main.css"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 78 |     show("mime json: ", mime_type("data/feed.json", r))
+    | builtin-fn:show  punctuation:(  string:"mime json: "  punctuation:,  task:mime_type  punctuation:(  string:"data/feed.json"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 79 |     show("mime wasm: ", mime_type("bin/module.wasm", r))
+    | builtin-fn:show  punctuation:(  string:"mime wasm: "  punctuation:,  task:mime_type  punctuation:(  string:"bin/module.wasm"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 80 | fi
+    | keyword:fi

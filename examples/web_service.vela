@@ -1,0 +1,80 @@
+; A web service demonstrating programmatic routing, chunked streaming,
+; Server-Sent Events (SSE), URL parsing, and file MIME resolution.
+include std/web { Router, Request, Response, WebError, Method, text_response, stream, sse, sse_msg, sse_data, mime_type, parse_url, trim }
+
+task handle_stream(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex chunks = new [text]() at r
+    chunks.add("chunk 1: starting processing\n")
+    chunks.add("chunk 2: progress 50%\n")
+    chunks.add("chunk 3: completed\n")
+    <- stream(chunks, r)
+fi
+
+task handle_events(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex events = new [text]() at r
+    events.add(sse_msg("status", "connected", r))
+    events.add(sse_data("sensor: 23.5 C", r))
+    events.add(sse_msg("status", "closing", r))
+    <- sse(events, r)
+fi
+
+task handle_greet(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed name = req.param("name") { "guest" }
+    <- text_response("Hello, {name}!" at r, r)
+fi
+
+task main()
+    region r default
+
+    ; 1. Programmatic router configuration
+    flex app = Router.new()
+    app.get("/stream", handle_stream)
+    app.get("/events", handle_events)
+    app.get("/greet/\{name\}", handle_greet)
+
+    ; 2. Dispatch streaming endpoint
+    fixed req_stream = Request { method: Method.Get, path: "/stream", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_stream = app.route(req_stream, r) { failure _
+        show("stream failed")
+        Response.text("", r)
+    }
+    show("stream status: ", resp_stream.status)
+    show("stream transfer-encoding: ", resp_stream.headers[#"transfer-encoding"] { "" })
+    when resp_stream.chunks is {chunks}
+        show("stream chunks: ", chunks.len)
+        each chunk in chunks
+            show("  ", trim(chunk))
+        fi
+    fi
+
+    ; 3. Dispatch Server-Sent Events endpoint
+    fixed req_events = Request { method: Method.Get, path: "/events", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_events = app.route(req_events, r) { failure _
+        show("events failed")
+        Response.text("", r)
+    }
+    show("sse content-type: ", resp_events.headers[#"content-type"] { "" })
+    when resp_events.chunks is {events}
+        show("sse count: ", events.len)
+    fi
+
+    ; 4. Dynamic parameterized route
+    fixed req_greet = Request { method: Method.Get, path: "/greet/Vela", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp_greet = app.route(req_greet, r) { failure _
+        show("greet failed")
+        Response.text("", r)
+    }
+    show("greet body: ", resp_greet.body_data)
+
+    ; 5. URL parser
+    fixed (host, port, path) = parse_url("http://api.example.com:8080/v1/metrics?raw=true") {
+        ("failed", 0, "")
+    }
+    show("url host: ", host, " port: ", port, " path: ", path)
+
+    ; 6. MIME resolution
+    show("mime html: ", mime_type("index.html", r))
+    show("mime css: ", mime_type("styles/main.css", r))
+    show("mime json: ", mime_type("data/feed.json", r))
+    show("mime wasm: ", mime_type("bin/module.wasm", r))
+fi
