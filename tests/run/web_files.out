@@ -1,0 +1,51 @@
+validate index.html: true
+validate traversal dotdot: false
+validate traversal nested: false
+validate backslash: false
+validate colon: false
+validate empty seg: false
+mime html: text/html; charset=utf-8
+mime css: text/css; charset=utf-8
+mime js: application/javascript; charset=utf-8
+mime json: application/json; charset=utf-8
+mime txt: text/plain; charset=utf-8
+mime bin: application/octet-stream
+direct file_response: 200 <h1>Vela Web</h1>
+status: HTTP/1.1 200 OK
+type: text/html; charset=utf-8
+body: <h1>Vela Web</h1>
+status: HTTP/1.1 200 OK
+type: text/css; charset=utf-8
+body: body { color: blue; }
+status: HTTP/1.1 200 OK
+type: application/javascript; charset=utf-8
+body: console.log("vela");
+status: HTTP/1.1 200 OK
+type: application/json; charset=utf-8
+body: {"status": "ready"}
+status: HTTP/1.1 200 OK
+type: text/html; charset=utf-8
+body: <h1>Vela Web</h1>
+status: HTTP/1.1 400 Bad Request
+type: text/plain
+body: 400 Bad Request: invalid path: traversal or illegal character rejected
+status: HTTP/1.1 400 Bad Request
+type: text/plain
+body: 400 Bad Request: invalid path: traversal or illegal character rejected
+status: HTTP/1.1 404 Not Found
+type: text/plain
+body: 404 Not Found: /static/missing.txt
+status: HTTP/1.1 200 OK
+type: text/plain; charset=utf-8
+body: hello streamed world!
+status: HTTP/1.1 200 OK
+type: text/event-stream; charset=utf-8
+body: event: tick
+data: one
+
+event: tick
+data: two
+status: HTTP/1.1 200 OK
+type: text/plain; charset=utf-8
+body: lines: 3
+web static files and streaming tests complete

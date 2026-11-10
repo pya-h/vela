@@ -582,6 +582,12 @@ $(auth)
         <tr><td><code>Client</code></td><td>Configurable HTTP client: <code>Client.new(timeout_ms)</code>, <code>.timeout(ms)</code>, <code>.get(url, r)</code>, <code>.post(url, body, ct, r)</code>, <code>.post_json(url, body, r)</code></td></tr>
         <tr><td><code>fetch(url, r)</code></td><td>Performs an HTTP GET request and parses response into <code>Response@r ~ WebError@r</code></td></tr>
         <tr><td><code>fetch_post(url, body, ct, r)</code>, <code>fetch_json(url, body, r)</code></td><td>Performs an HTTP POST request and parses response into <code>Response@r ~ WebError@r</code></td></tr>
+        <tr><td><code>FileServer</code></td><td>Configurable static file server shape: <code>FileServer.new(folder, prefix)</code>, <code>.serve(req, r)</code></td></tr>
+        <tr><td><code>serve_files(pattern, folder, prefix)</code>, <code>files(folder, req, prefix, r)</code></td><td>Serves static files with path confinement discipline (rejecting <code>..</code>, backslashes, colons, control chars, and empty segments) and MIME mapping</td></tr>
+        <tr><td><code>file_response(path, r)</code></td><td>Reads a single file into <code>Response@r</code> with automatic MIME detection</td></tr>
+        <tr><td><code>Response.stream(chunks, r)</code>, <code>Response.sse(chunks, r)</code></td><td>Constructs HTTP/1.1 chunked transfer responses or Server-Sent Events (SSE)</td></tr>
+        <tr><td><code>sse_event(data, event, id, r)</code>, <code>sse_msg(event, data, r)</code></td><td>Formats compliant SSE stream messages (<code>event: ...\ndata: ...\n\n</code>)</td></tr>
+        <tr><td><code>req.body_lines(r)</code></td><td>Parses request body line-by-line into a region-scoped slice <code>[text]@r</code></td></tr>
       </table>
       <ul>
         <li><strong>Path parameters and wildcards.</strong> Patterns like <code>/users/\{id\}</code> capture dynamic path segments accessible via <code>req.param("id")</code>. Wildcards like <code>/assets/*</code> capture remaining path text via <code>req.param("*")</code>.</li>
@@ -589,6 +595,9 @@ $(auth)
         <li><strong>Composable middleware.</strong> Decorators like <code>$(auth, logged)</code> wrap handlers at call time, intercepting requests and short-circuiting on failure with typed errors such as <code>WebError.Unauthorized</code>.</li>
         <li><strong>Event loop, keep-alive, and timeouts.</strong> The single-threaded event loop multiplexes connections using non-blocking I/O. HTTP/1.1 connections remain persistent by default; idle sockets past <code>idle_timeout_ms</code> are swept, stalled partial reads past <code>read_timeout_ms</code> are closed with 408 Request Timeout, and <code>Server.stop()</code> shuts down gracefully.</li>
         <li><strong>HTTP client and URL parsing.</strong> <code>fetch(url)</code> and <code>Client</code> parse URLs (<code>http://host:port/path</code>), establish non-blocking TCP connections, issue compliant HTTP/1.1 requests, and parse response headers and bodies into <code>Response@r</code>.</li>
+        <li><strong>Static files and path confinement.</strong> <code>serve_files(pattern, folder, prefix)</code> and <code>FileServer</code> serve directory contents with automatic MIME type mapping (<code>.html</code>, <code>.css</code>, <code>.js</code>, <code>.json</code>, <code>.txt</code>, <code>.png</code>, <code>.svg</code>, etc.). Traversal attacks (<code>..</code>, <code>a/../../b</code>), backslashes, colons, and null bytes are rejected upfront with 400 Bad Request, confining file reads strictly within the target folder.</li>
+        <li><strong>Chunked streaming and Server-Sent Events.</strong> <code>Response.stream(chunks)</code> streams response chunks via HTTP/1.1 <code>Transfer-Encoding: chunked</code>. <code>Response.sse(events)</code> formats Server-Sent Events with <code>Content-Type: text/event-stream</code>. <code>parse_response</code> and <code>Client</code> automatically decode chunked streams.</li>
+        <li><strong>Request body lines.</strong> <code>req.body_lines(r)</code> parses request payload lines into a slice without manual line-splitting logic.</li>
       </ul>
     </section>
 

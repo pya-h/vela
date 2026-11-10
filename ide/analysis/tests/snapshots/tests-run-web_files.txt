@@ -1,0 +1,222 @@
+  1 | ; Tests static file serving, path confinement, streaming responses, SSE, and body_lines.
+    | comment:; Tests static file serving, path confinement, streaming responses, SSE, and body_lines.
+  2 | include std/web { Socket, Request, Response, WebError, get, post, serve_files, file_response, validate_file_path, mime_type, sse_msg, serve_one, text_find, trim, default_route, parse_response, is_response_complete }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  task:get  punctuation:,  task:post  punctuation:,  task:serve_files  punctuation:,  task:file_response  punctuation:,  task:validate_file_path  punctuation:,  task:mime_type  punctuation:,  task:sse_msg  punctuation:,  task:serve_one  punctuation:,  task:text_find  punctuation:,  task:trim  punctuation:,  task:default_route  punctuation:,  task:parse_response  punctuation:,  task:is_response_complete  punctuation:}
+  3 | include std/files { File }
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:}
+  5 | $get("/stream")
+    | keyword:$  task:get  punctuation:(  string:"/stream"  punctuation:)
+  6 | task handle_stream(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_stream  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+  7 |     flex chunks = new [text]() at r
+    | keyword:flex  variable:chunks  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+  8 |     chunks.add("hello ")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"hello "  punctuation:)
+  9 |     chunks.add("streamed ")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"streamed "  punctuation:)
+ 10 |     chunks.add("world!\n")
+    | variable:chunks  punctuation:.  field:add  punctuation:(  string:"world!  escape:\n  string:"  punctuation:)
+ 11 |     <- Response.stream(chunks, r)
+    | keyword:<-  type:Response  punctuation:.  method:stream  punctuation:(  variable:chunks  punctuation:,  region:r  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | $get("/sse")
+    | keyword:$  task:get  punctuation:(  string:"/sse"  punctuation:)
+ 15 | task handle_sse(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_sse  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 16 |     flex events = new [text]() at r
+    | keyword:flex  variable:events  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 17 |     events.add(sse_msg("tick", "one", r))
+    | variable:events  punctuation:.  field:add  punctuation:(  task:sse_msg  punctuation:(  string:"tick"  punctuation:,  string:"one"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 18 |     events.add(sse_msg("tick", "two", r))
+    | variable:events  punctuation:.  field:add  punctuation:(  task:sse_msg  punctuation:(  string:"tick"  punctuation:,  string:"two"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 19 |     <- Response.sse(events, r)
+    | keyword:<-  type:Response  punctuation:.  method:sse  punctuation:(  variable:events  punctuation:,  region:r  punctuation:)
+ 20 | fi
+    | keyword:fi
+ 22 | $post("/lines")
+    | keyword:$  task:post  punctuation:(  string:"/lines"  punctuation:)
+ 23 | task handle_lines(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:handle_lines  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 24 |     fixed lines = req.body_lines(r)
+    | keyword:fixed  variable:lines  operator:=  parameter:req  punctuation:.  method:body_lines  punctuation:(  region:r  punctuation:)
+ 25 |     <- Response.text("lines: {lines.len}\n" at r, r)
+    | keyword:<-  type:Response  punctuation:.  method:text  punctuation:(  string:"lines: {  variable:lines  punctuation:.  field:len  string:}  escape:\n  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)
+ 26 | fi
+    | keyword:fi
+ 28 | task send_and_receive(server: Socket, raw_req: text@p, port: int, r: region default)
+    | keyword:task  task:send_and_receive  punctuation:(  parameter:server  punctuation::  type:Socket  punctuation:,  parameter:raw_req  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+ 29 |     flex client = Socket.open(r) { failure _
+    | keyword:flex  variable:client  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 30 |         <-
+    | keyword:<-
+ 31 |     }
+    | punctuation:}
+ 32 |     client.connect("127.0.0.1", port) { failure _
+    | variable:client  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  parameter:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 33 |         <-
+    | keyword:<-
+ 34 |     }
+    | punctuation:}
+ 35 |     client.write(raw_req) { failure _
+    | variable:client  punctuation:.  method:write  punctuation:(  parameter:raw_req  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 36 |         <-
+    | keyword:<-
+ 37 |     }
+    | punctuation:}
+ 38 |     serve_one(server, default_route, r) { failure _
+    | task:serve_one  punctuation:(  parameter:server  punctuation:,  task:default_route  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 39 |         <-
+    | keyword:<-
+ 40 |     }
+    | punctuation:}
+ 41 |     flex full_resp: text@r = ""
+    | keyword:flex  variable:full_resp  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:""
+ 42 |     endless
+    | keyword:endless
+ 43 |         fixed chunk = client.read(4096, r) { failure _
+    | keyword:fixed  variable:chunk  operator:=  variable:client  punctuation:.  method:read  punctuation:(  number:4096  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 44 |             break
+    | keyword:break
+ 45 |         }
+    | punctuation:}
+ 46 |         when chunk.len == 0
+    | keyword:when  variable:chunk  punctuation:.  field:len  operator:==  number:0
+ 47 |             break
+    | keyword:break
+ 48 |         fi
+    | keyword:fi
+ 49 |         full_resp = "{full_resp}{chunk}" at r
+    | variable:full_resp  operator:=  string:"{  variable:full_resp  string:}{  variable:chunk  string:}"  keyword:at  region:r
+ 50 |         when is_response_complete(full_resp)
+    | keyword:when  task:is_response_complete  punctuation:(  variable:full_resp  punctuation:)
+ 51 |             break
+    | keyword:break
+ 52 |         fi
+    | keyword:fi
+ 53 |     fi
+    | keyword:fi
+ 54 |     client.close() { failure _ }
+    | variable:client  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+ 55 |     when full_resp.len >= 15
+    | keyword:when  variable:full_resp  punctuation:.  field:len  operator:>=  number:15
+ 56 |         fixed resp = parse_response(full_resp, r)
+    | keyword:fixed  variable:resp  operator:=  task:parse_response  punctuation:(  variable:full_resp  punctuation:,  region:r  punctuation:)
+ 57 |         show("status: HTTP/1.1 ", resp.status, " ", resp.reason)
+    | builtin-fn:show  punctuation:(  string:"status: HTTP/1.1 "  punctuation:,  variable:resp  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:resp  punctuation:.  field:reason  punctuation:)
+ 58 |         when resp.headers[#"content-type"] is {ct}
+    | keyword:when  variable:resp  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"content-type"  punctuation:]  keyword:is  punctuation:{  variable:ct  punctuation:}
+ 59 |             show("type: ", ct)
+    | builtin-fn:show  punctuation:(  string:"type: "  punctuation:,  variable:ct  punctuation:)
+ 60 |         fi
+    | keyword:fi
+ 61 |         show("body: ", trim(resp.body_data))
+    | builtin-fn:show  punctuation:(  string:"body: "  punctuation:,  task:trim  punctuation:(  variable:resp  punctuation:.  field:body_data  punctuation:)  punctuation:)
+ 62 |     fi
+    | keyword:fi
+ 63 | fi
+    | keyword:fi
+ 65 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 66 |     region r default
+    | keyword:region  region:r  keyword:default
+ 68 |     ; 1. Unit tests: path confinement validation
+    | comment:; 1. Unit tests: path confinement validation
+ 69 |     show("validate index.html: ", validate_file_path("index.html"))
+    | builtin-fn:show  punctuation:(  string:"validate index.html: "  punctuation:,  task:validate_file_path  punctuation:(  string:"index.html"  punctuation:)  punctuation:)
+ 70 |     show("validate traversal dotdot: ", validate_file_path("../secret.txt"))
+    | builtin-fn:show  punctuation:(  string:"validate traversal dotdot: "  punctuation:,  task:validate_file_path  punctuation:(  string:"../secret.txt"  punctuation:)  punctuation:)
+ 71 |     show("validate traversal nested: ", validate_file_path("a/../../secret.txt"))
+    | builtin-fn:show  punctuation:(  string:"validate traversal nested: "  punctuation:,  task:validate_file_path  punctuation:(  string:"a/../../secret.txt"  punctuation:)  punctuation:)
+ 72 |     show("validate backslash: ", validate_file_path("a\\b"))
+    | builtin-fn:show  punctuation:(  string:"validate backslash: "  punctuation:,  task:validate_file_path  punctuation:(  string:"a  escape:\\  string:b"  punctuation:)  punctuation:)
+ 73 |     show("validate colon: ", validate_file_path("C:secret"))
+    | builtin-fn:show  punctuation:(  string:"validate colon: "  punctuation:,  task:validate_file_path  punctuation:(  string:"C:secret"  punctuation:)  punctuation:)
+ 74 |     show("validate empty seg: ", validate_file_path("a//b"))
+    | builtin-fn:show  punctuation:(  string:"validate empty seg: "  punctuation:,  task:validate_file_path  punctuation:(  string:"a//b"  punctuation:)  punctuation:)
+ 76 |     ; 2. Unit tests: MIME type mapping
+    | comment:; 2. Unit tests: MIME type mapping
+ 77 |     show("mime html: ", mime_type("test.html", r))
+    | builtin-fn:show  punctuation:(  string:"mime html: "  punctuation:,  task:mime_type  punctuation:(  string:"test.html"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 78 |     show("mime css: ", mime_type("style.css", r))
+    | builtin-fn:show  punctuation:(  string:"mime css: "  punctuation:,  task:mime_type  punctuation:(  string:"style.css"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 79 |     show("mime js: ", mime_type("app.js", r))
+    | builtin-fn:show  punctuation:(  string:"mime js: "  punctuation:,  task:mime_type  punctuation:(  string:"app.js"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 80 |     show("mime json: ", mime_type("data.json", r))
+    | builtin-fn:show  punctuation:(  string:"mime json: "  punctuation:,  task:mime_type  punctuation:(  string:"data.json"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 81 |     show("mime txt: ", mime_type("notes.txt", r))
+    | builtin-fn:show  punctuation:(  string:"mime txt: "  punctuation:,  task:mime_type  punctuation:(  string:"notes.txt"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 82 |     show("mime bin: ", mime_type("archive.unknown", r))
+    | builtin-fn:show  punctuation:(  string:"mime bin: "  punctuation:,  task:mime_type  punctuation:(  string:"archive.unknown"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 84 |     ; 3. Unit tests: direct file_response
+    | comment:; 3. Unit tests: direct file_response
+ 85 |     fixed folder = when File { path: "public/index.html" }.exists() "public" else "tests/run/web_files/public" fi
+    | keyword:fixed  variable:folder  operator:=  keyword:when  type:File  punctuation:{  field:path  punctuation::  string:"public/index.html"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  string:"public"  keyword:else  string:"tests/run/web_files/public"  keyword:fi
+ 86 |     fixed index_path = when File { path: "public/index.html" }.exists() "public/index.html" else "tests/run/web_files/public/index.html" fi
+    | keyword:fixed  variable:index_path  operator:=  keyword:when  type:File  punctuation:{  field:path  punctuation::  string:"public/index.html"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  string:"public/index.html"  keyword:else  string:"tests/run/web_files/public/index.html"  keyword:fi
+ 87 |     fixed direct_resp = file_response(index_path, r) { failure _
+    | keyword:fixed  variable:direct_resp  operator:=  task:file_response  punctuation:(  variable:index_path  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 88 |         Response.with_status(500, r)
+    | type:Response  punctuation:.  method:with_status  punctuation:(  number:500  punctuation:,  region:r  punctuation:)
+ 89 |     }
+    | punctuation:}
+ 90 |     show("direct file_response: ", direct_resp.status, " ", trim(direct_resp.body_data))
+    | builtin-fn:show  punctuation:(  string:"direct file_response: "  punctuation:,  variable:direct_resp  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  task:trim  punctuation:(  variable:direct_resp  punctuation:.  field:body_data  punctuation:)  punctuation:)
+ 92 |     ; 4. Integration test: serve_files through router over socket
+    | comment:; 4. Integration test: serve_files through router over socket
+ 93 |     serve_files("/static/*", folder, "/static")
+    | task:serve_files  punctuation:(  string:"/static/*"  punctuation:,  variable:folder  punctuation:,  string:"/static"  punctuation:)
+ 95 |     fixed port = 18095
+    | keyword:fixed  variable:port  operator:=  number:18095
+ 96 |     fixed server = Socket.open(r) { failure _
+    | keyword:fixed  variable:server  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 97 |         <-
+    | keyword:<-
+ 98 |     }
+    | punctuation:}
+ 99 |     server.bind_to("127.0.0.1", port) { failure _
+    | variable:server  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  variable:port  punctuation:)  punctuation:{  keyword:failure  keyword:_
+100 |         <-
+    | keyword:<-
+101 |     }
+    | punctuation:}
+102 |     server.listen(16) { failure _
+    | variable:server  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  keyword:_
+103 |         <-
+    | keyword:<-
+104 |     }
+    | punctuation:}
+106 |     send_and_receive(server, "GET /static/index.html HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/index.html HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+107 |     send_and_receive(server, "GET /static/style.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/style.css HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+108 |     send_and_receive(server, "GET /static/app.js HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/app.js HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+109 |     send_and_receive(server, "GET /static/data.json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/data.json HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+110 |     send_and_receive(server, "GET /static/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/ HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+111 |     send_and_receive(server, "GET /static/../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/../secret.txt HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+112 |     send_and_receive(server, "GET /static/a/../../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/a/../../secret.txt HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+113 |     send_and_receive(server, "GET /static/missing.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /static/missing.txt HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+115 |     ; 5. Streaming and SSE
+    | comment:; 5. Streaming and SSE
+116 |     send_and_receive(server, "GET /stream HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /stream HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+117 |     send_and_receive(server, "GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"GET /sse HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+119 |     ; 6. Body lines
+    | comment:; 6. Body lines
+120 |     send_and_receive(server, "POST /lines HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 21\r\nConnection: close\r\n\r\nfirst\r\nsecond\r\nthird\r\n", port, r)
+    | task:send_and_receive  punctuation:(  variable:server  punctuation:,  string:"POST /lines HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Content-Length: 21  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:first  escape:\r  escape:\n  string:second  escape:\r  escape:\n  string:third  escape:\r  escape:\n  string:"  punctuation:,  variable:port  punctuation:,  region:r  punctuation:)
+122 |     flex s_close = server
+    | keyword:flex  variable:s_close  operator:=  variable:server
+123 |     s_close.close() { failure _ }
+    | variable:s_close  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+124 |     show("web static files and streaming tests complete")
+    | builtin-fn:show  punctuation:(  string:"web static files and streaming tests complete"  punctuation:)
+125 | fi
+    | keyword:fi

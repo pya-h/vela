@@ -1,0 +1,125 @@
+; Tests static file serving, path confinement, streaming responses, SSE, and body_lines.
+include std/web { Socket, Request, Response, WebError, get, post, serve_files, file_response, validate_file_path, mime_type, sse_msg, serve_one, text_find, trim, default_route, parse_response, is_response_complete }
+include std/files { File }
+
+$get("/stream")
+task handle_stream(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex chunks = new [text]() at r
+    chunks.add("hello ")
+    chunks.add("streamed ")
+    chunks.add("world!\n")
+    <- Response.stream(chunks, r)
+fi
+
+$get("/sse")
+task handle_sse(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex events = new [text]() at r
+    events.add(sse_msg("tick", "one", r))
+    events.add(sse_msg("tick", "two", r))
+    <- Response.sse(events, r)
+fi
+
+$post("/lines")
+task handle_lines(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    fixed lines = req.body_lines(r)
+    <- Response.text("lines: {lines.len}\n" at r, r)
+fi
+
+task send_and_receive(server: Socket, raw_req: text@p, port: int, r: region default)
+    flex client = Socket.open(r) { failure _
+        <-
+    }
+    client.connect("127.0.0.1", port) { failure _
+        <-
+    }
+    client.write(raw_req) { failure _
+        <-
+    }
+    serve_one(server, default_route, r) { failure _
+        <-
+    }
+    flex full_resp: text@r = ""
+    endless
+        fixed chunk = client.read(4096, r) { failure _
+            break
+        }
+        when chunk.len == 0
+            break
+        fi
+        full_resp = "{full_resp}{chunk}" at r
+        when is_response_complete(full_resp)
+            break
+        fi
+    fi
+    client.close() { failure _ }
+    when full_resp.len >= 15
+        fixed resp = parse_response(full_resp, r)
+        show("status: HTTP/1.1 ", resp.status, " ", resp.reason)
+        when resp.headers[#"content-type"] is {ct}
+            show("type: ", ct)
+        fi
+        show("body: ", trim(resp.body_data))
+    fi
+fi
+
+task main()
+    region r default
+
+    ; 1. Unit tests: path confinement validation
+    show("validate index.html: ", validate_file_path("index.html"))
+    show("validate traversal dotdot: ", validate_file_path("../secret.txt"))
+    show("validate traversal nested: ", validate_file_path("a/../../secret.txt"))
+    show("validate backslash: ", validate_file_path("a\\b"))
+    show("validate colon: ", validate_file_path("C:secret"))
+    show("validate empty seg: ", validate_file_path("a//b"))
+
+    ; 2. Unit tests: MIME type mapping
+    show("mime html: ", mime_type("test.html", r))
+    show("mime css: ", mime_type("style.css", r))
+    show("mime js: ", mime_type("app.js", r))
+    show("mime json: ", mime_type("data.json", r))
+    show("mime txt: ", mime_type("notes.txt", r))
+    show("mime bin: ", mime_type("archive.unknown", r))
+
+    ; 3. Unit tests: direct file_response
+    fixed folder = when File { path: "public/index.html" }.exists() "public" else "tests/run/web_files/public" fi
+    fixed index_path = when File { path: "public/index.html" }.exists() "public/index.html" else "tests/run/web_files/public/index.html" fi
+    fixed direct_resp = file_response(index_path, r) { failure _
+        Response.with_status(500, r)
+    }
+    show("direct file_response: ", direct_resp.status, " ", trim(direct_resp.body_data))
+
+    ; 4. Integration test: serve_files through router over socket
+    serve_files("/static/*", folder, "/static")
+
+    fixed port = 18095
+    fixed server = Socket.open(r) { failure _
+        <-
+    }
+    server.bind_to("127.0.0.1", port) { failure _
+        <-
+    }
+    server.listen(16) { failure _
+        <-
+    }
+
+    send_and_receive(server, "GET /static/index.html HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/style.css HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/app.js HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/data.json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/a/../../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/missing.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+
+    ; 5. Streaming and SSE
+    send_and_receive(server, "GET /stream HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /sse HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+
+    ; 6. Body lines
+    send_and_receive(server, "POST /lines HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 21\r\nConnection: close\r\n\r\nfirst\r\nsecond\r\nthird\r\n", port, r)
+
+    flex s_close = server
+    s_close.close() { failure _ }
+    show("web static files and streaming tests complete")
+fi

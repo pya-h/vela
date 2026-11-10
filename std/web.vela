@@ -1,5 +1,7 @@
 ; std/web: networking, HTTP server, client, routing, and web primitives.
 
+include std/files {File, FileMode, FileError}
+
 kind SocketError
     WouldBlock
     Closed
@@ -150,6 +152,22 @@ shape Request
     query(key: text@p) -> maybe text@this
         <- query_param(.raw_query, key)
     fi
+
+    body_lines(r: region default) -> [text]@r
+        flex lines = new [text]() at r
+        flex pos = 0
+        loop pos < .body_data.len
+            fixed next_nl = text_find(.body_data, "\n", pos)
+            when next_nl < 0
+                lines.add("{.body_data[pos.. .body_data.len]}" at r)
+                break
+            fi
+            fixed line_end = when next_nl > pos and .body_data[next_nl - 1..next_nl] == "\r" next_nl - 1 else next_nl fi
+            lines.add("{.body_data[pos..line_end]}" at r)
+            pos = next_nl + 1
+        fi
+        <- lines
+    fi
 fi
 
 shape Response
@@ -157,6 +175,8 @@ shape Response
     reason: text = "OK"
     headers: [text: text]
     body_data: text = ""
+    is_stream: bool = false
+    chunks: maybe [text] = none
 
     shared text(body: text@r, r: region default) -> Response@r
         flex hdrs = new [text: text]() at r
@@ -174,6 +194,28 @@ shape Response
         flex hdrs = new [text: text]() at r
         hdrs["content-type"] = "application/json; charset=utf-8"
         <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
+    fi
+
+    shared stream(chunks: [text]@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = "text/plain; charset=utf-8"
+        hdrs["transfer-encoding"] = "chunked"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: "", is_stream: true, chunks: chunks }
+    fi
+
+    shared stream_with_type(chunks: [text]@r, content_type: text@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = content_type
+        hdrs["transfer-encoding"] = "chunked"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: "", is_stream: true, chunks: chunks }
+    fi
+
+    shared sse(chunks: [text]@r, r: region default) -> Response@r
+        flex hdrs = new [text: text]() at r
+        hdrs["content-type"] = "text/event-stream; charset=utf-8"
+        hdrs["cache-control"] = "no-cache"
+        hdrs["transfer-encoding"] = "chunked"
+        <- Response { status: 200, reason: "OK", headers: hdrs, body_data: "", is_stream: true, chunks: chunks }
     fi
 
     shared with_status(code: int, r: region default, custom_reason: text@r = "") -> Response@r
@@ -212,6 +254,46 @@ fi
 
 task json(body: text@r, r: region default) -> Response@r
     <- Response.json(body, r)
+fi
+
+task stream_response(chunks: [text]@r, r: region default) -> Response@r
+    <- Response.stream(chunks, r)
+fi
+
+task stream(chunks: [text]@r, r: region default) -> Response@r
+    <- Response.stream(chunks, r)
+fi
+
+task stream_with_type(chunks: [text]@r, content_type: text@r, r: region default) -> Response@r
+    <- Response.stream_with_type(chunks, content_type, r)
+fi
+
+task sse_response(chunks: [text]@r, r: region default) -> Response@r
+    <- Response.sse(chunks, r)
+fi
+
+task sse(chunks: [text]@r, r: region default) -> Response@r
+    <- Response.sse(chunks, r)
+fi
+
+task sse_event(data: text@p, event: text@p, id: text@p, r: region default) -> text@r
+    flex res: text@r = ""
+    when event.len > 0
+        res = "event: {event}\n" at r
+    fi
+    when id.len > 0
+        res = "{res}id: {id}\n" at r
+    fi
+    res = "{res}data: {data}\n\n" at r
+    <- res
+fi
+
+task sse_msg(event: text@p, data: text@p, r: region default) -> text@r
+    <- sse_event(data, event, "", r)
+fi
+
+task sse_data(data: text@p, r: region default) -> text@r
+    <- sse_event(data, "", "", r)
 fi
 
 task status_response(code: int, r: region default, custom_reason: text@r = "") -> Response@r
@@ -327,6 +409,8 @@ shape RouteEntry
     method_code: int = 0
     pattern: text = ""
     handler: maybe (Request@r, @r) -> Response@r ~ WebError@r = none
+    folder: text = ""
+    prefix: text = ""
 fi
 
 shape Router
@@ -365,6 +449,14 @@ shape Router
         <- .enroll(5, pattern, handler)
     fi
 
+    alters files(pattern: text, folder: text, prefix: text = "") -> Router@this
+        when .count < 128
+            .routes[.count] = RouteEntry { method_code: 1, pattern: pattern, folder: folder, prefix: prefix }
+            .count++
+        fi
+        <- .this
+    fi
+
     route(req: Request@r, r: region default) -> Response@r ~ WebError@r
         flex idx = 0
         flex path_matched = false
@@ -374,7 +466,9 @@ shape Router
             when match_route(entry.pattern, req.path, params, r)
                 path_matched = true
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
-                    when entry.handler is {h}
+                    when entry.folder != ""
+                        <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.handler is {h}
                         fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
                         <- h(routed_req, r)
                     fi
@@ -400,6 +494,17 @@ shape DefaultRouter
         fi
     fi
 
+    shared files(pattern: text, folder: text, prefix: text = "")
+        DefaultRouter.enroll_files(pattern, folder, prefix)
+    fi
+
+    shared enroll_files(pattern: text, folder: text, prefix: text = "")
+        when DefaultRouter.count < 128
+            DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: 1, pattern: pattern, folder: folder, prefix: prefix }
+            DefaultRouter.count++
+        fi
+    fi
+
     shared clear()
         DefaultRouter.count = 0
     fi
@@ -413,7 +518,9 @@ shape DefaultRouter
             when match_route(entry.pattern, req.path, params, r)
                 path_matched = true
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
-                    when entry.handler is {h}
+                    when entry.folder != ""
+                        <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.handler is {h}
                         fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
                         <- h(routed_req, r)
                     fi
@@ -480,6 +587,52 @@ task router() -> Router
     <- Router.new()
 fi
 
+shape FileServer
+    folder: text
+    prefix: text = ""
+
+    shared new(folder: text@p, prefix: text@p = "") -> FileServer@p
+        <- FileServer { folder: folder, prefix: prefix }
+    fi
+
+    serve(req: Request@r, r: region default) -> Response@r ~ WebError@r
+        <- serve_file_request(.folder, .prefix, req, r)
+    fi
+fi
+
+task files(folder: text@p, req: Request@r, prefix: text@p, r: region default) -> Response@r ~ WebError@r
+    <- serve_file_request(folder, prefix, req, r)
+fi
+
+task static_files(folder: text@p, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    <- serve_file_request(folder, "", req, r)
+fi
+
+task serve_files(pattern: text, folder: text, prefix: text = "")
+    DefaultRouter.files(pattern, folder, prefix)
+fi
+
+task file_response(path: text@p, r: region default) -> Response@r ~ WebError@r
+    when not validate_file_path(path)
+        <- fail WebError.BadRequest("invalid file path")
+    fi
+    flex f = File { path: path }
+    when not f.exists()
+        <- fail WebError.RouteNotFound("{path}" at r)
+    fi
+    f.open(FileMode.Read, r) { failure _
+        <- fail WebError.RouteNotFound("{path}" at r)
+    }
+    fixed content = f.read(r) { failure _
+        f.close() { failure _ }
+        <- fail WebError.ServerFailed("failed reading file")
+    }
+    f.close() { failure _ }
+    flex hdrs = new [text: text]() at r
+    hdrs["content-type"] = mime_type(path, r)
+    <- Response { status: 200, reason: "OK", headers: hdrs, body_data: content }
+fi
+
 task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: region default) -> bool
     fixed norm_path: text@r = when path.len > 1 and path[path.len - 1..path.len] == "/" path[0..path.len - 1] else path fi
     when pattern == norm_path
@@ -540,6 +693,14 @@ task is_request_complete(buf: text@p) -> bool
     fixed body_start = text_find(buf, "\r\n\r\n", 0)
     when body_start < 0
         <- false
+    fi
+    fixed te_idx = text_find(buf, "transfer-encoding:", 0)
+    fixed te_idx_upper = when te_idx >= 0 te_idx else text_find(buf, "Transfer-Encoding:", 0) fi
+    when te_idx_upper >= 0 and te_idx_upper < body_start
+        fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
+        when is_chunked
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 5 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+        fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
     fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
@@ -758,6 +919,29 @@ task send_error_response(client: Socket, code: int, reason: text@r, body: text@r
 fi
 
 task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
+    when resp.is_stream and resp.chunks is {chunk_list}
+        flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
+        when not resp.headers.has("transfer-encoding")
+            wire = "{wire}Transfer-Encoding: chunked\r\n"
+        fi
+        when not resp.headers.has("connection")
+            fixed conn_val = when keep_alive "keep-alive" else "close" fi
+            wire = "{wire}Connection: {conn_val}\r\n"
+        fi
+        each k, v in resp.headers
+            wire = "{wire}{k}: {v}\r\n"
+        fi
+        wire = "{wire}\r\n"
+        client.write(wire) { 0 }
+        each chunk in chunk_list
+            when chunk.len > 0
+                fixed hex_len = int_to_hex(chunk.len, r)
+                client.write("{hex_len}\r\n{chunk}\r\n") { 0 }
+            fi
+        fi
+        client.write("0\r\n\r\n") { 0 }
+        <-
+    fi
     flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
     when not resp.headers.has("content-length")
         wire = "{wire}Content-Length: {resp.body_data.len}\r\n"
@@ -867,7 +1051,13 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
         fi
     fi
 
-    fixed body = raw[hdr_end + 4..raw.len]
+    fixed raw_body = raw[hdr_end + 4..raw.len]
+    fixed is_chunked = when headers[#"transfer-encoding"] is {te}
+        text_find(te, "chunked", 0) >= 0
+    else
+        false
+    fi
+    fixed body = when is_chunked decode_chunked_body(raw_body, r) else raw_body fi
     <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body, params: new [text: text]() at r }
 fi
 
@@ -904,6 +1094,14 @@ task is_response_complete(buf: text@p) -> bool
     fixed body_start = text_find(buf, "\r\n\r\n", 0)
     when body_start < 0
         <- false
+    fi
+    fixed te_idx = text_find(buf, "transfer-encoding:", 0)
+    fixed te_idx_upper = when te_idx >= 0 te_idx else text_find(buf, "Transfer-Encoding:", 0) fi
+    when te_idx_upper >= 0 and te_idx_upper < body_start
+        fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
+        when is_chunked
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 5 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+        fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
     fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(buf, "content-length:", 0) fi
@@ -945,7 +1143,13 @@ task parse_response(raw: text@r, r: region default) -> Response@r
             fi
             pos = next_line + 2
         fi
-        fixed body = raw[hdr_end + 4..raw.len]
+        fixed body_raw = raw[hdr_end + 4..raw.len]
+        fixed is_chunked = when headers[#"transfer-encoding"] is {te}
+            text_find(te, "chunked", 0) >= 0
+        else
+            false
+        fi
+        fixed body = when is_chunked decode_chunked_body(body_raw, r) else body_raw fi
         <- Response { status: status_code, reason: reason, headers: headers, body_data: body }
     fi
     <- Response { status: status_code, reason: reason, headers: headers, body_data: "" }
@@ -1187,6 +1391,204 @@ shape Poll
     shared is_writable(sock: Socket) -> bool
         <- native_poll_is_writable(sock.raw_handle())
     fi
+fi
+
+task int_to_hex(n: int, r: region default) -> text@r
+    when n <= 0
+        <- "0"
+    fi
+    fixed digits = "0123456789abcdef"
+    flex val = n
+    flex res: text@r = ""
+    loop val > 0
+        fixed rem = val % 16
+        res = "{digits[rem..rem + 1]}{res}" at r
+        val = val / 16
+    fi
+    <- res
+fi
+
+task hex_to_int(s: text@p) -> int
+    flex val = 0
+    flex i = 0
+    loop i < s.len
+        fixed ch = s[i..i + 1]
+        fixed d = when ch >= "0" and ch <= "9"
+            int(ch) { 0 }
+        else when ch == "a" or ch == "A"
+            10
+        else when ch == "b" or ch == "B"
+            11
+        else when ch == "c" or ch == "C"
+            12
+        else when ch == "d" or ch == "D"
+            13
+        else when ch == "e" or ch == "E"
+            14
+        else when ch == "f" or ch == "F"
+            15
+        else
+            -1
+        fi
+        when d < 0
+            break
+        fi
+        val = val * 16 + d
+        i++
+    fi
+    <- val
+fi
+
+task decode_chunked_body(raw_body: text@r, r: region default) -> text@r
+    flex result: text@r = ""
+    flex cursor = 0
+    loop cursor < raw_body.len
+        fixed crlf = text_find(raw_body, "\r\n", cursor)
+        when crlf < 0
+            break
+        fi
+        fixed hex_str = trim(raw_body[cursor..crlf])
+        cursor = crlf + 2
+        fixed chunk_len = hex_to_int(hex_str)
+        when chunk_len <= 0
+            break
+        fi
+        when cursor + chunk_len > raw_body.len
+            break
+        fi
+        fixed chunk = raw_body[cursor..cursor + chunk_len]
+        result = "{result}{chunk}" at r
+        cursor = cursor + chunk_len + 2
+    fi
+    <- result
+fi
+
+task text_rfind(haystack: text@p, needle: text@q) -> int
+    flex last = -1
+    flex pos = 0
+    loop pos < haystack.len
+        fixed found = text_find(haystack, needle, pos)
+        when found < 0
+            break
+        fi
+        last = found
+        pos = found + 1
+    fi
+    <- last
+fi
+
+task mime_type(path: text@p, r: region default) -> text
+    fixed last_slash = text_rfind(path, "/")
+    fixed filename_start = when last_slash >= 0 last_slash + 1 else 0 fi
+    fixed filename = path[filename_start..path.len]
+    fixed dot_idx = text_rfind(filename, ".")
+    when dot_idx < 0
+        <- "application/octet-stream"
+    fi
+    fixed ext = to_lower(filename[dot_idx + 1..filename.len], r)
+    when ext == "html" or ext == "htm"
+        <- "text/html; charset=utf-8"
+    else when ext == "css"
+        <- "text/css; charset=utf-8"
+    else when ext == "js" or ext == "mjs"
+        <- "application/javascript; charset=utf-8"
+    else when ext == "json"
+        <- "application/json; charset=utf-8"
+    else when ext == "txt" or ext == "log" or ext == "md"
+        <- "text/plain; charset=utf-8"
+    else when ext == "png"
+        <- "image/png"
+    else when ext == "jpg" or ext == "jpeg"
+        <- "image/jpeg"
+    else when ext == "gif"
+        <- "image/gif"
+    else when ext == "svg"
+        <- "image/svg+xml"
+    else when ext == "ico"
+        <- "image/x-icon"
+    else when ext == "wasm"
+        <- "application/wasm"
+    fi
+    <- "application/octet-stream"
+fi
+
+task validate_file_path(path: text@p) -> bool
+    when path.len == 0
+        <- false
+    fi
+    flex i = 0
+    loop i < path.len
+        fixed c = path[i]
+        when c < ' ' or c == char(127) or c == '\\' or c == ':'
+            <- false
+        fi
+        i++
+    fi
+    flex pos = 0
+    loop pos < path.len
+        fixed next_slash = text_find(path, "/", pos)
+        fixed seg_end = when next_slash >= 0 next_slash else path.len fi
+        fixed seg = path[pos..seg_end]
+        when seg == ".."
+            <- false
+        fi
+        when seg.len == 0 and pos > 0 and seg_end < path.len
+            <- false
+        fi
+        when next_slash < 0
+            break
+        fi
+        pos = next_slash + 1
+    fi
+    <- true
+fi
+
+task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: region default) -> Response@r ~ WebError@r
+    flex sub_path: text@r = ""
+    when req.param("*") is {matched_wildcard}
+        sub_path = matched_wildcard
+    else when prefix.len > 0
+        when req.path.len < prefix.len or req.path[0..prefix.len] != prefix
+            <- fail WebError.RouteNotFound(req.path)
+        fi
+        sub_path = "{req.path[prefix.len..req.path.len]}" at r
+    else
+        sub_path = req.path
+    fi
+    loop sub_path.len > 0 and sub_path[0..1] == "/"
+        sub_path = "{sub_path[1..sub_path.len]}" at r
+    fi
+    when sub_path.len == 0 or sub_path == "."
+        sub_path = "index.html"
+    fi
+    when sub_path.len > 0 and sub_path[sub_path.len - 1..sub_path.len] == "/"
+        sub_path = "{sub_path}index.html" at r
+    fi
+    when not validate_file_path(sub_path)
+        <- fail WebError.BadRequest("invalid path: traversal or illegal character rejected")
+    fi
+    fixed disk_path: text@r = when folder.len == 0
+        sub_path
+    else when folder[folder.len - 1..folder.len] == "/"
+        "{folder}{sub_path}" at r
+    else
+        "{folder}/{sub_path}" at r
+    fi
+    flex f = File { path: disk_path }
+    when not f.exists()
+        <- fail WebError.RouteNotFound(req.path)
+    fi
+    f.open(FileMode.Read, r) { failure _
+        <- fail WebError.RouteNotFound(req.path)
+    }
+    fixed content = f.read(r) { failure _
+        f.close() { failure _ }
+        <- fail WebError.ServerFailed("failed reading static file")
+    }
+    f.close() { failure _ }
+    flex hdrs = new [text: text]() at r
+    hdrs["content-type"] = mime_type(disk_path, r)
+    <- Response { status: 200, reason: "OK", headers: hdrs, body_data: content }
 fi
 
 priv native task native_socket_open(within: region) -> int
