@@ -1,0 +1,6 @@
+a + b = (4, 6)
+a - b = (2, 2)
+a * b = (3, 8)
+-a = (-3, -4)
+vector a is longer than vector b
+c = (1, 8)

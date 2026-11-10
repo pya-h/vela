@@ -1,0 +1,10 @@
+add: 4, 6
+sub: 2, 2
+mul: 3, 8
+inv: -3, -4
+v2 < v1: true
+v1 < v2: false
+v1 <= v1: true
+v1 > v2: true
+v2 >= v1: false
+nested: 1, 8

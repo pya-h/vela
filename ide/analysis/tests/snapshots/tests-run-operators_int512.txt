@@ -1,0 +1,78 @@
+  1 | ; Natural infix arithmetic and comparisons for Int512
+    | comment:; Natural infix arithmetic and comparisons for Int512
+  2 | include std/int512 {Int512, int512, int512_parse}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:,  task:int512_parse  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r default
+    | keyword:region  region:r  keyword:default
+  6 |     fixed a = int512(100)
+    | keyword:fixed  variable:a  operator:=  task:int512  punctuation:(  number:100  punctuation:)
+  7 |     fixed b = int512(25)
+    | keyword:fixed  variable:b  operator:=  task:int512  punctuation:(  number:25  punctuation:)
+  8 |     fixed c = int512(3)
+    | keyword:fixed  variable:c  operator:=  task:int512  punctuation:(  number:3  punctuation:)
+ 10 |     ; 1. Infix arithmetic operators
+    | comment:; 1. Infix arithmetic operators
+ 11 |     fixed sum = a + b
+    | keyword:fixed  variable:sum  operator:=  variable:a  operator:+  variable:b
+ 12 |     fixed diff = a - b
+    | keyword:fixed  variable:diff  operator:=  variable:a  operator:-  variable:b
+ 13 |     fixed prod = a * b
+    | keyword:fixed  variable:prod  operator:=  variable:a  operator:*  variable:b
+ 14 |     fixed quot = a / b
+    | keyword:fixed  variable:quot  operator:=  variable:a  operator:/  variable:b
+ 15 |     fixed rem = a % c
+    | keyword:fixed  variable:rem  operator:=  variable:a  operator:%  variable:c
+ 16 |     fixed neg = -c
+    | keyword:fixed  variable:neg  operator:=  operator:-  variable:c
+ 18 |     show("sum: ", sum.str(r))
+    | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:sum  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 19 |     show("diff: ", diff.str(r))
+    | builtin-fn:show  punctuation:(  string:"diff: "  punctuation:,  variable:diff  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 20 |     show("prod: ", prod.str(r))
+    | builtin-fn:show  punctuation:(  string:"prod: "  punctuation:,  variable:prod  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 21 |     show("quot: ", quot.str(r))
+    | builtin-fn:show  punctuation:(  string:"quot: "  punctuation:,  variable:quot  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 22 |     show("rem: ", rem.str(r))
+    | builtin-fn:show  punctuation:(  string:"rem: "  punctuation:,  variable:rem  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 23 |     show("neg: ", neg.str(r))
+    | builtin-fn:show  punctuation:(  string:"neg: "  punctuation:,  variable:neg  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 25 |     ; 2. Infix comparisons
+    | comment:; 2. Infix comparisons
+ 26 |     show("a < b: ", a < b)
+    | builtin-fn:show  punctuation:(  string:"a < b: "  punctuation:,  variable:a  operator:<  variable:b  punctuation:)
+ 27 |     show("a <= b: ", a <= b)
+    | builtin-fn:show  punctuation:(  string:"a <= b: "  punctuation:,  variable:a  operator:<=  variable:b  punctuation:)
+ 28 |     show("a > b: ", a > b)
+    | builtin-fn:show  punctuation:(  string:"a > b: "  punctuation:,  variable:a  operator:>  variable:b  punctuation:)
+ 29 |     show("a >= b: ", a >= b)
+    | builtin-fn:show  punctuation:(  string:"a >= b: "  punctuation:,  variable:a  operator:>=  variable:b  punctuation:)
+ 30 |     show("b <= b: ", b <= b)
+    | builtin-fn:show  punctuation:(  string:"b <= b: "  punctuation:,  variable:b  operator:<=  variable:b  punctuation:)
+ 31 |     show("b >= b: ", b >= b)
+    | builtin-fn:show  punctuation:(  string:"b >= b: "  punctuation:,  variable:b  operator:>=  variable:b  punctuation:)
+ 33 |     ; 3. Nested infix expression
+    | comment:; 3. Nested infix expression
+ 34 |     fixed expr_val = (a + b) * c - a / b
+    | keyword:fixed  variable:expr_val  operator:=  punctuation:(  variable:a  operator:+  variable:b  punctuation:)  operator:*  variable:c  operator:-  variable:a  operator:/  variable:b
+ 35 |     show("nested: ", expr_val.str(r))
+    | builtin-fn:show  punctuation:(  string:"nested: "  punctuation:,  variable:expr_val  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 37 |     ; 4. BigInt arithmetic with 512-bit values
+    | comment:; 4. BigInt arithmetic with 512-bit values
+ 38 |     fixed big1 = int512_parse("1000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:big1  operator:=  task:int512_parse  punctuation:(  string:"1000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 39 |     fixed big2 = int512_parse("2000000000000000000000000000000") { Int512.zero() }
+    | keyword:fixed  variable:big2  operator:=  task:int512_parse  punctuation:(  string:"2000000000000000000000000000000"  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 40 |     fixed big_sum = big1 + big2
+    | keyword:fixed  variable:big_sum  operator:=  variable:big1  operator:+  variable:big2
+ 41 |     fixed big_diff = big2 - big1
+    | keyword:fixed  variable:big_diff  operator:=  variable:big2  operator:-  variable:big1
+ 42 |     show("big sum: ", big_sum.str(r))
+    | builtin-fn:show  punctuation:(  string:"big sum: "  punctuation:,  variable:big_sum  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 43 |     show("big diff: ", big_diff.str(r))
+    | builtin-fn:show  punctuation:(  string:"big diff: "  punctuation:,  variable:big_diff  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 44 |     show("big cmp: ", big1 < big2, " ", big2 > big1)
+    | builtin-fn:show  punctuation:(  string:"big cmp: "  punctuation:,  variable:big1  operator:<  variable:big2  punctuation:,  string:" "  punctuation:,  variable:big2  operator:>  variable:big1  punctuation:)
+ 45 | fi
+    | keyword:fi

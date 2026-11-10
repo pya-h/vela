@@ -1,0 +1,50 @@
+; A REST API demonstrating structured error handling with custom error handlers:
+; routes can fail with WebError, and a custom error handler converts errors into
+; consistent JSON error payloads instead of plain text responses.
+include std/web { Request, Response, WebError, Method, Router, json, router }
+
+task handle_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
+    match err
+    case WebError.RouteNotFound where_
+        <- json("\{\"error\":\"not_found\",\"path\":\"{where_}\"\}" at r, r).status_code(404)
+    case WebError.Unauthorized why
+        <- json("\{\"error\":\"unauthorized\",\"detail\":\"{why}\"\}" at r, r).status_code(401)
+    case WebError.BadRequest why
+        <- json("\{\"error\":\"bad_request\",\"detail\":\"{why}\"\}" at r, r).status_code(400)
+    case _
+        <- json("\{\"error\":\"internal\"\}", r).status_code(500)
+    fi
+fi
+
+task get_secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.header("authorization") is {token}
+        when token == "Bearer secret"
+            <- json("\{\"secret\":\"vela-2026\"\}", r)
+        fi
+    fi
+    <- fail WebError.Unauthorized("token invalid or missing")
+fi
+
+task main()
+    region r default
+
+    flex app = router()
+    app.on_error(handle_error)
+    app.get("/api/secret", get_secret)
+
+    ; Test an unauthorized request: custom error handler produces JSON error
+    fixed req_unauth = Request { method: Method.Get, path: "/api/secret", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp1 = app.route(req_unauth, r) { failure _
+        Response.text("error fallback", r)
+    }
+    show("unauthorized status: ", resp1.status)
+    show("unauthorized body: ", resp1.body_data)
+
+    ; Test a route that does not exist: custom error handler produces 404 JSON
+    fixed req_missing = Request { method: Method.Get, path: "/api/nonexistent", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    fixed resp2 = app.route(req_missing, r) { failure _
+        Response.text("error fallback", r)
+    }
+    show("missing status: ", resp2.status)
+    show("missing body: ", resp2.body_data)
+fi

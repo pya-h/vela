@@ -1,0 +1,4 @@
+unauthorized status: 401
+unauthorized body: {"error":"unauthorized","detail":"token invalid or missing"}
+missing status: 404
+missing body: {"error":"not_found","path":"/api/nonexistent"}

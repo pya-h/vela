@@ -1,0 +1,78 @@
+  1 | ; Custom shape with direct operator methods (plus, minus, times, neg, cmp)
+    | comment:; Custom shape with direct operator methods (plus, minus, times, neg, cmp)
+  3 | shape Vector2
+    | keyword:shape  type:Vector2
+  4 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  5 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  7 |     plus(other: Vector2) -> Vector2
+    | method:plus  punctuation:(  parameter:other  punctuation::  type:Vector2  punctuation:)  operator:->  type:Vector2
+  8 |         <- Vector2 { x: .x + other.x, y: .y + other.y }
+    | keyword:<-  type:Vector2  punctuation:{  field:x  punctuation::  punctuation:.  field:x  operator:+  parameter:other  punctuation:.  field:x  punctuation:,  field:y  punctuation::  punctuation:.  field:y  operator:+  parameter:other  punctuation:.  field:y  punctuation:}
+  9 |     fi
+    | keyword:fi
+ 11 |     minus(other: Vector2) -> Vector2
+    | method:minus  punctuation:(  parameter:other  punctuation::  type:Vector2  punctuation:)  operator:->  type:Vector2
+ 12 |         <- Vector2 { x: .x - other.x, y: .y - other.y }
+    | keyword:<-  type:Vector2  punctuation:{  field:x  punctuation::  punctuation:.  field:x  operator:-  parameter:other  punctuation:.  field:x  punctuation:,  field:y  punctuation::  punctuation:.  field:y  operator:-  parameter:other  punctuation:.  field:y  punctuation:}
+ 13 |     fi
+    | keyword:fi
+ 15 |     times(other: Vector2) -> Vector2
+    | method:times  punctuation:(  parameter:other  punctuation::  type:Vector2  punctuation:)  operator:->  type:Vector2
+ 16 |         <- Vector2 { x: .x * other.x, y: .y * other.y }
+    | keyword:<-  type:Vector2  punctuation:{  field:x  punctuation::  punctuation:.  field:x  operator:*  parameter:other  punctuation:.  field:x  punctuation:,  field:y  punctuation::  punctuation:.  field:y  operator:*  parameter:other  punctuation:.  field:y  punctuation:}
+ 17 |     fi
+    | keyword:fi
+ 19 |     neg() -> Vector2
+    | method:neg  punctuation:(  punctuation:)  operator:->  type:Vector2
+ 20 |         <- Vector2 { x: -.x, y: -.y }
+    | keyword:<-  type:Vector2  punctuation:{  field:x  punctuation::  operator:-  punctuation:.  field:x  punctuation:,  field:y  punctuation::  operator:-  punctuation:.  field:y  punctuation:}
+ 21 |     fi
+    | keyword:fi
+ 23 |     cmp(other: Vector2) -> int
+    | method:cmp  punctuation:(  parameter:other  punctuation::  type:Vector2  punctuation:)  operator:->  type-builtin:int
+ 24 |         <- (.x * .x + .y * .y) - (other.x * other.x + other.y * other.y)
+    | keyword:<-  punctuation:(  punctuation:.  field:x  operator:*  punctuation:.  field:x  operator:+  punctuation:.  field:y  operator:*  punctuation:.  field:y  punctuation:)  operator:-  punctuation:(  parameter:other  punctuation:.  field:x  operator:*  parameter:other  punctuation:.  field:x  operator:+  parameter:other  punctuation:.  field:y  operator:*  parameter:other  punctuation:.  field:y  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 | fi
+    | keyword:fi
+ 28 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 29 |     fixed v1 = Vector2 { x: 3, y: 4 }
+    | keyword:fixed  variable:v1  operator:=  type:Vector2  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}
+ 30 |     fixed v2 = Vector2 { x: 1, y: 2 }
+    | keyword:fixed  variable:v2  operator:=  type:Vector2  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 32 |     fixed add = v1 + v2
+    | keyword:fixed  variable:add  operator:=  variable:v1  operator:+  variable:v2
+ 33 |     fixed sub = v1 - v2
+    | keyword:fixed  variable:sub  operator:=  variable:v1  operator:-  variable:v2
+ 34 |     fixed mul = v1 * v2
+    | keyword:fixed  variable:mul  operator:=  variable:v1  operator:*  variable:v2
+ 35 |     fixed inv = -v1
+    | keyword:fixed  variable:inv  operator:=  operator:-  variable:v1
+ 37 |     show("add: ", add.x, ", ", add.y)
+    | builtin-fn:show  punctuation:(  string:"add: "  punctuation:,  variable:add  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:add  punctuation:.  field:y  punctuation:)
+ 38 |     show("sub: ", sub.x, ", ", sub.y)
+    | builtin-fn:show  punctuation:(  string:"sub: "  punctuation:,  variable:sub  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:sub  punctuation:.  field:y  punctuation:)
+ 39 |     show("mul: ", mul.x, ", ", mul.y)
+    | builtin-fn:show  punctuation:(  string:"mul: "  punctuation:,  variable:mul  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:mul  punctuation:.  field:y  punctuation:)
+ 40 |     show("inv: ", inv.x, ", ", inv.y)
+    | builtin-fn:show  punctuation:(  string:"inv: "  punctuation:,  variable:inv  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:inv  punctuation:.  field:y  punctuation:)
+ 42 |     show("v2 < v1: ", v2 < v1)
+    | builtin-fn:show  punctuation:(  string:"v2 < v1: "  punctuation:,  variable:v2  operator:<  variable:v1  punctuation:)
+ 43 |     show("v1 < v2: ", v1 < v2)
+    | builtin-fn:show  punctuation:(  string:"v1 < v2: "  punctuation:,  variable:v1  operator:<  variable:v2  punctuation:)
+ 44 |     show("v1 <= v1: ", v1 <= v1)
+    | builtin-fn:show  punctuation:(  string:"v1 <= v1: "  punctuation:,  variable:v1  operator:<=  variable:v1  punctuation:)
+ 45 |     show("v1 > v2: ", v1 > v2)
+    | builtin-fn:show  punctuation:(  string:"v1 > v2: "  punctuation:,  variable:v1  operator:>  variable:v2  punctuation:)
+ 46 |     show("v2 >= v1: ", v2 >= v1)
+    | builtin-fn:show  punctuation:(  string:"v2 >= v1: "  punctuation:,  variable:v2  operator:>=  variable:v1  punctuation:)
+ 48 |     fixed nested = (v1 + v2) * v2 - v1
+    | keyword:fixed  variable:nested  operator:=  punctuation:(  variable:v1  operator:+  variable:v2  punctuation:)  operator:*  variable:v2  operator:-  variable:v1
+ 49 |     show("nested: ", nested.x, ", ", nested.y)
+    | builtin-fn:show  punctuation:(  string:"nested: "  punctuation:,  variable:nested  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:nested  punctuation:.  field:y  punctuation:)
+ 50 | fi
+    | keyword:fi

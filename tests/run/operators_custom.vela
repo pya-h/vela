@@ -1,0 +1,50 @@
+; Custom shape with direct operator methods (plus, minus, times, neg, cmp)
+
+shape Vector2
+    x: int
+    y: int
+
+    plus(other: Vector2) -> Vector2
+        <- Vector2 { x: .x + other.x, y: .y + other.y }
+    fi
+
+    minus(other: Vector2) -> Vector2
+        <- Vector2 { x: .x - other.x, y: .y - other.y }
+    fi
+
+    times(other: Vector2) -> Vector2
+        <- Vector2 { x: .x * other.x, y: .y * other.y }
+    fi
+
+    neg() -> Vector2
+        <- Vector2 { x: -.x, y: -.y }
+    fi
+
+    cmp(other: Vector2) -> int
+        <- (.x * .x + .y * .y) - (other.x * other.x + other.y * other.y)
+    fi
+fi
+
+task main()
+    fixed v1 = Vector2 { x: 3, y: 4 }
+    fixed v2 = Vector2 { x: 1, y: 2 }
+
+    fixed add = v1 + v2
+    fixed sub = v1 - v2
+    fixed mul = v1 * v2
+    fixed inv = -v1
+
+    show("add: ", add.x, ", ", add.y)
+    show("sub: ", sub.x, ", ", sub.y)
+    show("mul: ", mul.x, ", ", mul.y)
+    show("inv: ", inv.x, ", ", inv.y)
+
+    show("v2 < v1: ", v2 < v1)
+    show("v1 < v2: ", v1 < v2)
+    show("v1 <= v1: ", v1 <= v1)
+    show("v1 > v2: ", v1 > v2)
+    show("v2 >= v1: ", v2 >= v1)
+
+    fixed nested = (v1 + v2) * v2 - v1
+    show("nested: ", nested.x, ", ", nested.y)
+fi

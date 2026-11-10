@@ -1,0 +1,88 @@
+  1 | ; A REST API demonstrating structured error handling with custom error handlers:
+    | comment:; A REST API demonstrating structured error handling with custom error handlers:
+  2 | ; routes can fail with WebError, and a custom error handler converts errors into
+    | comment:; routes can fail with WebError, and a custom error handler converts errors into
+  3 | ; consistent JSON error payloads instead of plain text responses.
+    | comment:; consistent JSON error payloads instead of plain text responses.
+  4 | include std/web { Request, Response, WebError, Method, Router, json, router }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:Router  punctuation:,  task:json  punctuation:,  task:router  punctuation:}
+  6 | task handle_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
+    | keyword:task  task:handle_error  punctuation:(  parameter:err  punctuation::  type:WebError  operator:@  region:r  punctuation:,  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r
+  7 |     match err
+    | keyword:match  parameter:err
+  8 |     case WebError.RouteNotFound where_
+    | keyword:case  type:WebError  punctuation:.  variant:RouteNotFound  variable:where_
+  9 |         <- json("\{\"error\":\"not_found\",\"path\":\"{where_}\"\}" at r, r).status_code(404)
+    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:not_found  escape:\"  string:,  escape:\"  string:path  escape:\"  string::  escape:\"  string:{  variable:where_  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:404  punctuation:)
+ 10 |     case WebError.Unauthorized why
+    | keyword:case  type:WebError  punctuation:.  variant:Unauthorized  variable:why
+ 11 |         <- json("\{\"error\":\"unauthorized\",\"detail\":\"{why}\"\}" at r, r).status_code(401)
+    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:unauthorized  escape:\"  string:,  escape:\"  string:detail  escape:\"  string::  escape:\"  string:{  variable:why  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:401  punctuation:)
+ 12 |     case WebError.BadRequest why
+    | keyword:case  type:WebError  punctuation:.  variant:BadRequest  variable:why
+ 13 |         <- json("\{\"error\":\"bad_request\",\"detail\":\"{why}\"\}" at r, r).status_code(400)
+    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:bad_request  escape:\"  string:,  escape:\"  string:detail  escape:\"  string::  escape:\"  string:{  variable:why  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:400  punctuation:)
+ 14 |     case _
+    | keyword:case  keyword:_
+ 15 |         <- json("\{\"error\":\"internal\"\}", r).status_code(500)
+    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:internal  escape:\"  escape:\}  string:"  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:500  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 | fi
+    | keyword:fi
+ 19 | task get_secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:get_secret  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+ 20 |     when req.header("authorization") is {token}
+    | keyword:when  parameter:req  punctuation:.  method:header  punctuation:(  string:"authorization"  punctuation:)  keyword:is  punctuation:{  variable:token  punctuation:}
+ 21 |         when token == "Bearer secret"
+    | keyword:when  variable:token  operator:==  string:"Bearer secret"
+ 22 |             <- json("\{\"secret\":\"vela-2026\"\}", r)
+    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:secret  escape:\"  string::  escape:\"  string:vela-2026  escape:\"  escape:\}  string:"  punctuation:,  region:r  punctuation:)
+ 23 |         fi
+    | keyword:fi
+ 24 |     fi
+    | keyword:fi
+ 25 |     <- fail WebError.Unauthorized("token invalid or missing")
+    | keyword:<-  keyword:fail  type:WebError  punctuation:.  variant:Unauthorized  punctuation:(  string:"token invalid or missing"  punctuation:)
+ 26 | fi
+    | keyword:fi
+ 28 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 29 |     region r default
+    | keyword:region  region:r  keyword:default
+ 31 |     flex app = router()
+    | keyword:flex  variable:app  operator:=  task:router  punctuation:(  punctuation:)
+ 32 |     app.on_error(handle_error)
+    | variable:app  punctuation:.  method:on_error  punctuation:(  task:handle_error  punctuation:)
+ 33 |     app.get("/api/secret", get_secret)
+    | variable:app  punctuation:.  method:get  punctuation:(  string:"/api/secret"  punctuation:,  task:get_secret  punctuation:)
+ 35 |     ; Test an unauthorized request: custom error handler produces JSON error
+    | comment:; Test an unauthorized request: custom error handler produces JSON error
+ 36 |     fixed req_unauth = Request { method: Method.Get, path: "/api/secret", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_unauth  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/api/secret"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 37 |     fixed resp1 = app.route(req_unauth, r) { failure _
+    | keyword:fixed  variable:resp1  operator:=  variable:app  punctuation:.  method:route  punctuation:(  variable:req_unauth  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 38 |         Response.text("error fallback", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:"error fallback"  punctuation:,  region:r  punctuation:)
+ 39 |     }
+    | punctuation:}
+ 40 |     show("unauthorized status: ", resp1.status)
+    | builtin-fn:show  punctuation:(  string:"unauthorized status: "  punctuation:,  variable:resp1  punctuation:.  field:status  punctuation:)
+ 41 |     show("unauthorized body: ", resp1.body_data)
+    | builtin-fn:show  punctuation:(  string:"unauthorized body: "  punctuation:,  variable:resp1  punctuation:.  field:body_data  punctuation:)
+ 43 |     ; Test a route that does not exist: custom error handler produces 404 JSON
+    | comment:; Test a route that does not exist: custom error handler produces 404 JSON
+ 44 |     fixed req_missing = Request { method: Method.Get, path: "/api/nonexistent", raw_query: "", headers: new [text: text]() at r, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:req_missing  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/api/nonexistent"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 45 |     fixed resp2 = app.route(req_missing, r) { failure _
+    | keyword:fixed  variable:resp2  operator:=  variable:app  punctuation:.  method:route  punctuation:(  variable:req_missing  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 46 |         Response.text("error fallback", r)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:"error fallback"  punctuation:,  region:r  punctuation:)
+ 47 |     }
+    | punctuation:}
+ 48 |     show("missing status: ", resp2.status)
+    | builtin-fn:show  punctuation:(  string:"missing status: "  punctuation:,  variable:resp2  punctuation:.  field:status  punctuation:)
+ 49 |     show("missing body: ", resp2.body_data)
+    | builtin-fn:show  punctuation:(  string:"missing body: "  punctuation:,  variable:resp2  punctuation:.  field:body_data  punctuation:)
+ 50 | fi
+    | keyword:fi

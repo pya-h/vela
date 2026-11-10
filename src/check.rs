@@ -6049,6 +6049,32 @@ impl Checker {
                     ),
                 );
             }
+            Type::Slice(_item, region) if op == BinaryOp::Add => {
+                let Some(region) = region.clone() else {
+                    return err(
+                        at,
+                        "'+=' joins into the region the slice is in, and this slice has no region; keep it in a region, as in 'flex s: [int]@r = …'",
+                    );
+                };
+                let parts = vec![place, value];
+                Expr::new(
+                    ExprKind::Join {
+                        parts,
+                        region,
+                        region_span: at,
+                    },
+                    at,
+                )
+            }
+            Type::Slice(..) => {
+                return err(
+                    at,
+                    format!(
+                        "'{}' works on numbers; slices are only joined, with '+='",
+                        symbol
+                    ),
+                );
+            }
             _ => Expr::new(ExprKind::Binary(op, Box::new(place), Box::new(value)), at),
         };
         let target = std::mem::replace(target, Expr::new(ExprKind::NoneLit, at));
@@ -14962,6 +14988,71 @@ impl Checker {
             }
             return Err(error);
         }
+        if parts.iter().all(|p| matches!(p.ty, Some(Type::Array(..)))) {
+            return err(
+                region_span,
+                "arrays are kept on the stack without a region, so 'at ...' is not used with '+'; write 'a + b'",
+            );
+        }
+        let has_slice = parts.iter().any(|p| matches!(p.ty, Some(Type::Slice(..))));
+        if has_slice {
+            let mut slice_item: Option<Type> = None;
+            for part in parts.iter() {
+                if let Some(Type::Slice(item, _)) = &part.ty {
+                    if let Some(existing) = &slice_item {
+                        if existing.without_regions() != item.without_regions() {
+                            return err(
+                                part.span,
+                                format!(
+                                    "'+' joins slices of {}, but this slice holds {}",
+                                    existing, item
+                                ),
+                            );
+                        }
+                    } else {
+                        slice_item = Some((**item).clone());
+                    }
+                }
+            }
+            let Some(item_ty) = slice_item else {
+                return err(region_span, "no slice parts in join");
+            };
+            for part in parts.iter_mut() {
+                let Some(ty) = part.ty.as_ref() else {
+                    continue;
+                };
+                if let Type::Slice(it, _) = ty {
+                    if it.without_regions() != item_ty.without_regions() {
+                        return err(
+                            part.span,
+                            format!(
+                                "'+' joins slices of {}, but this slice holds {}",
+                                item_ty, it
+                            ),
+                        );
+                    }
+                } else if matches!(ty, Type::Array(..)) {
+                    return err(
+                        part.span,
+                        "expected a slice or item, got an array; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [T](xs) at r'",
+                    );
+                } else {
+                    if self.widens(ty, &item_ty) {
+                        self.coerce(part, &item_ty)?;
+                    } else if ty.without_regions() != item_ty.without_regions() {
+                        return err(
+                            part.span,
+                            format!(
+                                "'+' joins slices of {}, but this value is {}",
+                                item_ty, ty
+                            ),
+                        );
+                    }
+                }
+            }
+            self.visible_region(region, region_span, true)?;
+            return Ok(Type::Slice(Box::new(item_ty), Some(region.to_string())));
+        }
         if numbers {
             return err(
                 region_span,
@@ -15646,7 +15737,7 @@ impl Checker {
         }
     }
 
-    /// Resolves operator-overloading trait methods (`plus`, `cmp`, `neg`) from followed patterns (e.g. `Numeric`).
+    /// Resolves operator-overloading trait methods (`plus`, `cmp`, `neg`) from direct methods or followed patterns (e.g. `Numeric`).
     fn operator_method(&self, op: BinaryOp, ty: &Type) -> Option<&'static str> {
         let name = match op {
             BinaryOp::Add => "plus",
@@ -15657,8 +15748,23 @@ impl Checker {
             BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => "cmp",
             _ => return None,
         };
-        if matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_)) {
+        if matches!(
+            ty,
+            Type::Text(_)
+                | Type::Task(_)
+                | Type::Closure(_)
+                | Type::Array(..)
+                | Type::Slice(..)
+        ) {
             return None;
+        }
+        if let Some(owner) = self.owner_of(ty) {
+            let task_name = method_name(&owner, name);
+            if let Some(task) = self.tasks.get(&task_name)
+                && task.params.len() == 2
+            {
+                return Some(name);
+            }
         }
         self.patterns.values().find_map(|pattern| {
             let has = pattern
@@ -15669,13 +15775,30 @@ impl Checker {
     }
 
     fn operator_neg(&self, ty: &Type) -> bool {
-        !matches!(ty, Type::Text(_) | Type::Task(_) | Type::Closure(_))
-            && self.patterns.values().any(|pattern| {
-                pattern
-                    .method("neg")
-                    .is_some_and(|method| method.params.len() == 1)
-                    && self.followed_by(ty, &pattern.name).is_some()
-            })
+        if matches!(
+            ty,
+            Type::Text(_)
+                | Type::Task(_)
+                | Type::Closure(_)
+                | Type::Array(..)
+                | Type::Slice(..)
+        ) {
+            return false;
+        }
+        if let Some(owner) = self.owner_of(ty) {
+            let task_name = method_name(&owner, "neg");
+            if let Some(task) = self.tasks.get(&task_name)
+                && task.params.len() == 1
+            {
+                return true;
+            }
+        }
+        self.patterns.values().any(|pattern| {
+            pattern
+                .method("neg")
+                .is_some_and(|method| method.params.len() == 1)
+                && self.followed_by(ty, &pattern.name).is_some()
+        })
     }
 
     fn check_binary_expr(&mut self, expr: &mut Expr) -> Result<Type> {
@@ -15771,6 +15894,133 @@ impl Checker {
             let region = self.region_or_default(None, span, || JOIN_NEEDS_REGION.to_string())?;
             return self.join_into(expr, region, span);
         }
+        if op == BinaryOp::Add {
+            if let (Type::Array(item1, n), Type::Array(item2, m)) = (&lt, &rt) {
+                if item1.without_regions() != item2.without_regions() {
+                    return err(
+                        span,
+                        format!(
+                            "'+' joins arrays of one item type, but this array holds {} and the other holds {}",
+                            item2, item1
+                        ),
+                    );
+                }
+                let total = match n.checked_add(*m) {
+                    Some(t) => t,
+                    None => return err(span, "joined array length exceeds maximum array size"),
+                };
+                let res_ty = Type::Array(item1.clone(), total);
+                self.check_size(&res_ty, span)?;
+                expr.ty = Some(res_ty.clone());
+                return Ok(res_ty);
+            }
+            if matches!(lt, Type::Array(..)) && !matches!(rt, Type::Slice(..)) {
+                return err(
+                    span,
+                    format!(
+                        "'+' joins arrays of one item type, but one value is {} and the other is {}",
+                        lt, rt
+                    ),
+                );
+            }
+            if matches!(rt, Type::Array(..)) && !matches!(lt, Type::Slice(..)) {
+                return err(
+                    span,
+                    format!(
+                        "'+' joins arrays of one item type, but one value is {} and the other is {}",
+                        rt, lt
+                    ),
+                );
+            }
+            let left_slice = matches!(lt, Type::Slice(..));
+            let right_slice = matches!(rt, Type::Slice(..));
+            if left_slice || right_slice {
+                if matches!(lt, Type::Array(..)) || matches!(rt, Type::Array(..)) {
+                    return err(
+                        span,
+                        "expected a slice or item, got an array; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [T](xs) at r'",
+                    );
+                }
+                let item_match = match (&lt, &rt) {
+                    (Type::Slice(item_l, _), Type::Slice(item_r, _)) => {
+                        item_l.without_regions() == item_r.without_regions()
+                    }
+                    (Type::Slice(item_l, _), item) => {
+                        item_l.without_regions() == item.without_regions()
+                    }
+                    (item, Type::Slice(item_r, _)) => {
+                        item_r.without_regions() == item.without_regions()
+                    }
+                    _ => false,
+                };
+                if !item_match {
+                    let (expected_item, other_ty) = if let Type::Slice(item, _) = &lt {
+                        (item, &rt)
+                    } else if let Type::Slice(item, _) = &rt {
+                        (item, &lt)
+                    } else {
+                        unreachable!()
+                    };
+                    return err(
+                        span,
+                        format!(
+                            "'+' joins slices of {}, but the other value is {}",
+                            expected_item, other_ty
+                        ),
+                    );
+                }
+                let region = self.region_or_default(None, span, || {
+                    "joining slices makes a new slice, which goes in a region; name it after the last part, as in 'xs + ys at r', or name a default region for the block, as in 'region r default'".to_string()
+                })?;
+                return self.join_into(expr, region, span);
+            }
+        }
+        if op == BinaryOp::Mul {
+            if let Type::Array(item, m) = &lt {
+                let Some(n) = constant_int(r) else {
+                    return err(
+                        r.span,
+                        "repeating an array with '*' requires a constant number of times known at compile time, as in 'arr * 3'",
+                    );
+                };
+                let Some(n) = u64::try_from(n).ok().filter(|n| *n > 0) else {
+                    return err(
+                        r.span,
+                        "an array holds at least one value, so it can only be repeated 1 or more times",
+                    );
+                };
+                let total = match m.checked_mul(n) {
+                    Some(t) => t,
+                    None => return err(span, "repeated array length exceeds maximum array size"),
+                };
+                let res_ty = Type::Array(item.clone(), total);
+                self.check_size(&res_ty, span)?;
+                expr.ty = Some(res_ty.clone());
+                return Ok(res_ty);
+            }
+            if let Type::Array(item, m) = &rt {
+                let Some(n) = constant_int(l) else {
+                    return err(
+                        l.span,
+                        "repeating an array with '*' requires a constant number of times known at compile time, as in '3 * arr'",
+                    );
+                };
+                let Some(n) = u64::try_from(n).ok().filter(|n| *n > 0) else {
+                    return err(
+                        l.span,
+                        "an array holds at least one value, so it can only be repeated 1 or more times",
+                    );
+                };
+                let total = match m.checked_mul(n) {
+                    Some(t) => t,
+                    None => return err(span, "repeated array length exceeds maximum array size"),
+                };
+                let res_ty = Type::Array(item.clone(), total);
+                self.check_size(&res_ty, span)?;
+                expr.ty = Some(res_ty.clone());
+                return Ok(res_ty);
+            }
+        }
         if matches!(
             op,
             BinaryOp::Add
@@ -15839,12 +16089,15 @@ impl Checker {
                 _ => parts.push(side),
             }
         }
+        let mut region_slot = region;
+        let ty = self.check_join(&mut parts, &mut region_slot, span)?;
         expr.kind = ExprKind::Join {
             parts,
-            region: region.clone(),
+            region: region_slot,
             region_span: span,
         };
-        Ok(Type::Text(Some(region)))
+        expr.ty = Some(ty.clone());
+        Ok(ty)
     }
 
     fn check_binary(

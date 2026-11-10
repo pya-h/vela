@@ -1,0 +1,56 @@
+; 2D vectors demonstrating custom shape operator overloading:
+; implementing plus, minus, times, neg, and cmp lets Vector2
+; participate naturally in +, -, *, unary -, and comparisons (<, <=, >, >=).
+
+shape Vector2
+    x: int
+    y: int
+
+    plus(other: Vector2) -> Vector2
+        <- Vector2 { x: .x + other.x, y: .y + other.y }
+    fi
+
+    minus(other: Vector2) -> Vector2
+        <- Vector2 { x: .x - other.x, y: .y - other.y }
+    fi
+
+    times(other: Vector2) -> Vector2
+        <- Vector2 { x: .x * other.x, y: .y * other.y }
+    fi
+
+    neg() -> Vector2
+        <- Vector2 { x: -.x, y: -.y }
+    fi
+
+    ; Magnitude squared comparison
+    cmp(other: Vector2) -> int
+        <- (.x * .x + .y * .y) - (other.x * other.x + other.y * other.y)
+    fi
+fi
+
+task main()
+    fixed a = Vector2 { x: 3, y: 4 }
+    fixed b = Vector2 { x: 1, y: 2 }
+
+    ; Infix addition, subtraction, component-wise multiplication, and negation
+    fixed sum = a + b
+    fixed diff = a - b
+    fixed prod = a * b
+    fixed inv = -a
+
+    show("a + b = (", sum.x, ", ", sum.y, ")")
+    show("a - b = (", diff.x, ", ", diff.y, ")")
+    show("a * b = (", prod.x, ", ", prod.y, ")")
+    show("-a = (", inv.x, ", ", inv.y, ")")
+
+    ; Comparisons using cmp
+    when a > b
+        show("vector a is longer than vector b")
+    else
+        show("vector b is longer than or equal to vector a")
+    fi
+
+    ; Expressions can be chained naturally
+    fixed c = (a + b) * b - a
+    show("c = (", c.x, ", ", c.y, ")")
+fi

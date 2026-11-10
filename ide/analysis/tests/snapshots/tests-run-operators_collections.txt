@@ -1,0 +1,86 @@
+  1 | ; Array and slice operator overloading: +, *, +=, append, prepend
+    | comment:; Array and slice operator overloading: +, *, +=, append, prepend
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     region r default
+    | keyword:region  region:r  keyword:default
+  6 |     ; 1. Fixed array concatenation (+)
+    | comment:; 1. Fixed array concatenation (+)
+  7 |     fixed arr1 = [1, 2, 3]
+    | keyword:fixed  variable:arr1  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+  8 |     fixed arr2 = [4, 5]
+    | keyword:fixed  variable:arr2  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:]
+  9 |     fixed arr_joined = arr1 + arr2
+    | keyword:fixed  variable:arr_joined  operator:=  variable:arr1  operator:+  variable:arr2
+ 10 |     show("arr_joined: ", arr_joined)
+    | builtin-fn:show  punctuation:(  string:"arr_joined: "  punctuation:,  variable:arr_joined  punctuation:)
+ 12 |     ; 2. Fixed array repetition (*)
+    | comment:; 2. Fixed array repetition (*)
+ 13 |     fixed arr_rep1 = [10, 20] * 3
+    | keyword:fixed  variable:arr_rep1  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:]  operator:*  number:3
+ 14 |     fixed arr_rep2 = 2 * [1, 2, 3]
+    | keyword:fixed  variable:arr_rep2  operator:=  number:2  operator:*  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 15 |     show("arr_rep1: ", arr_rep1)
+    | builtin-fn:show  punctuation:(  string:"arr_rep1: "  punctuation:,  variable:arr_rep1  punctuation:)
+ 16 |     show("arr_rep2: ", arr_rep2)
+    | builtin-fn:show  punctuation:(  string:"arr_rep2: "  punctuation:,  variable:arr_rep2  punctuation:)
+ 18 |     ; 3. Slice concatenation with 'at r' and in default region
+    | comment:; 3. Slice concatenation with 'at r' and in default region
+ 19 |     fixed s1 = [1, 2, ...] at r
+    | keyword:fixed  variable:s1  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 20 |     fixed s2 = [3, 4, ...] at r
+    | keyword:fixed  variable:s2  operator:=  punctuation:[  number:3  punctuation:,  number:4  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 21 |     fixed s_concat1 = s1 + s2 at r
+    | keyword:fixed  variable:s_concat1  operator:=  variable:s1  operator:+  variable:s2  keyword:at  region:r
+ 22 |     fixed s_concat2 = s1 + s2
+    | keyword:fixed  variable:s_concat2  operator:=  variable:s1  operator:+  variable:s2
+ 23 |     show("s_concat1: ", s_concat1)
+    | builtin-fn:show  punctuation:(  string:"s_concat1: "  punctuation:,  variable:s_concat1  punctuation:)
+ 24 |     show("s_concat2: ", s_concat2)
+    | builtin-fn:show  punctuation:(  string:"s_concat2: "  punctuation:,  variable:s_concat2  punctuation:)
+ 26 |     ; 4. Slice element append (xs + item)
+    | comment:; 4. Slice element append (xs + item)
+ 27 |     fixed s_app1 = s1 + 99 at r
+    | keyword:fixed  variable:s_app1  operator:=  variable:s1  operator:+  number:99  keyword:at  region:r
+ 28 |     fixed s_app2 = s1 + 99
+    | keyword:fixed  variable:s_app2  operator:=  variable:s1  operator:+  number:99
+ 29 |     show("s_app1: ", s_app1)
+    | builtin-fn:show  punctuation:(  string:"s_app1: "  punctuation:,  variable:s_app1  punctuation:)
+ 30 |     show("s_app2: ", s_app2)
+    | builtin-fn:show  punctuation:(  string:"s_app2: "  punctuation:,  variable:s_app2  punctuation:)
+ 32 |     ; 5. Slice element prepend (item + xs)
+    | comment:; 5. Slice element prepend (item + xs)
+ 33 |     fixed s_prep1 = 100 + s1 at r
+    | keyword:fixed  variable:s_prep1  operator:=  number:100  operator:+  variable:s1  keyword:at  region:r
+ 34 |     fixed s_prep2 = 100 + s1
+    | keyword:fixed  variable:s_prep2  operator:=  number:100  operator:+  variable:s1
+ 35 |     show("s_prep1: ", s_prep1)
+    | builtin-fn:show  punctuation:(  string:"s_prep1: "  punctuation:,  variable:s_prep1  punctuation:)
+ 36 |     show("s_prep2: ", s_prep2)
+    | builtin-fn:show  punctuation:(  string:"s_prep2: "  punctuation:,  variable:s_prep2  punctuation:)
+ 38 |     ; 6. Multi-part slice join
+    | comment:; 6. Multi-part slice join
+ 39 |     fixed s3 = [5, 6, ...] at r
+    | keyword:fixed  variable:s3  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 40 |     fixed s_multi = s1 + s2 + s3 at r
+    | keyword:fixed  variable:s_multi  operator:=  variable:s1  operator:+  variable:s2  operator:+  variable:s3  keyword:at  region:r
+ 41 |     show("s_multi: ", s_multi)
+    | builtin-fn:show  punctuation:(  string:"s_multi: "  punctuation:,  variable:s_multi  punctuation:)
+ 42 |     fixed s_chain = 0 + s1 + 3 at r
+    | keyword:fixed  variable:s_chain  operator:=  number:0  operator:+  variable:s1  operator:+  number:3  keyword:at  region:r
+ 43 |     show("s_chain: ", s_chain)
+    | builtin-fn:show  punctuation:(  string:"s_chain: "  punctuation:,  variable:s_chain  punctuation:)
+ 45 |     ; 7. Slice mutation with +=
+    | comment:; 7. Slice mutation with +=
+ 46 |     flex s_mut: [int]@r = [10, 20, ...] at r
+    | keyword:flex  variable:s_mut  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 47 |     s_mut += [30, 40, ...] at r
+    | variable:s_mut  operator:+=  punctuation:[  number:30  punctuation:,  number:40  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 48 |     show("s_mut after slice +=: ", s_mut)
+    | builtin-fn:show  punctuation:(  string:"s_mut after slice +=: "  punctuation:,  variable:s_mut  punctuation:)
+ 49 |     s_mut += 50
+    | variable:s_mut  operator:+=  number:50
+ 50 |     show("s_mut after item +=: ", s_mut)
+    | builtin-fn:show  punctuation:(  string:"s_mut after item +=: "  punctuation:,  variable:s_mut  punctuation:)
+ 51 | fi
+    | keyword:fi

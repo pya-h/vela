@@ -1,0 +1,52 @@
+; Array and slice operator overloading: +, *, +=, append, prepend
+
+task main()
+    region r default
+
+    ; 1. Fixed array concatenation (+)
+    fixed arr1 = [1, 2, 3]
+    fixed arr2 = [4, 5]
+    fixed arr_joined = arr1 + arr2
+    show("arr_joined: ", arr_joined)
+
+    ; 2. Fixed array repetition (*)
+    fixed arr_rep1 = [10, 20] * 3
+    fixed arr_rep2 = 2 * [1, 2, 3]
+    show("arr_rep1: ", arr_rep1)
+    show("arr_rep2: ", arr_rep2)
+
+    ; 3. Slice concatenation with 'at r' and in default region
+    fixed s1 = [1, 2, ...] at r
+    fixed s2 = [3, 4, ...] at r
+    fixed s_concat1 = s1 + s2 at r
+    fixed s_concat2 = s1 + s2
+    show("s_concat1: ", s_concat1)
+    show("s_concat2: ", s_concat2)
+
+    ; 4. Slice element append (xs + item)
+    fixed s_app1 = s1 + 99 at r
+    fixed s_app2 = s1 + 99
+    show("s_app1: ", s_app1)
+    show("s_app2: ", s_app2)
+
+    ; 5. Slice element prepend (item + xs)
+    fixed s_prep1 = 100 + s1 at r
+    fixed s_prep2 = 100 + s1
+    show("s_prep1: ", s_prep1)
+    show("s_prep2: ", s_prep2)
+
+    ; 6. Multi-part slice join
+    fixed s3 = [5, 6, ...] at r
+    fixed s_multi = s1 + s2 + s3 at r
+    show("s_multi: ", s_multi)
+    fixed s_chain = 0 + s1 + 3 at r
+    show("s_chain: ", s_chain)
+
+    ; 7. Slice mutation with +=
+    flex s_mut: [int]@r = [10, 20, ...] at r
+    s_mut += [30, 40, ...] at r
+    show("s_mut after slice +=: ", s_mut)
+    s_mut += 50
+    show("s_mut after item +=: ", s_mut)
+fi
+

@@ -4559,18 +4559,27 @@ save(500) {
       <h3 id="operators">Operators a pattern names</h3>
       <p>
         A shape or kind following a pattern whose methods are named <code>plus</code>, <code>minus</code>,
-        <code>times</code>, <code>div</code>, <code>rem</code>, <code>neg</code>, or <code>cmp</code> answers the
-        operator each names: <code>a + b</code> is read as <code>a.plus(b)</code>, <code>a * b</code> as
-        <code>a.times(b)</code>, <code>-a</code> as <code>a.neg()</code>, and a comparison <code>a &lt; b</code>,
-        <code>a &lt;= b</code>, <code>a &gt; b</code>, <code>a &gt;= b</code> as <code>a.cmp(b)</code> read beside 0.
-        Both operands are the one type; beside a value of another type the operation is refused, and the message
-        names the method to call instead. The pattern's header says what the method takes and gives &mdash;
-        <code>std/int512</code>'s <code>Numeric&lt;T&gt;</code> asks for <code>plus(other: T) -&gt; T</code> and the
-        rest, and <code>Int512</code> follows it &mdash; so <code>Int512</code> writes arithmetic naturally, and a
-        task taking <code>&lt;N: Numeric&lt;N&gt;&gt;</code> does <code>a + b</code> on its values. <code>==</code> and
+        <code>times</code>, <code>div</code>, <code>rem</code>, <code>neg</code>, or <code>cmp</code> &mdash; or
+        defining them directly as shape methods &mdash; answers the operator each names: <code>a + b</code> is
+        read as <code>a.plus(b)</code>, <code>a * b</code> as <code>a.times(b)</code>, <code>-a</code> as
+        <code>a.neg()</code>, and a comparison <code>a &lt; b</code>, <code>a &lt;= b</code>, <code>a &gt; b</code>,
+        <code>a &gt;= b</code> as <code>a.cmp(b)</code> read beside 0. Both operands are the one type; beside a
+        value of another type the operation is refused, and the message names the method to call instead. The
+        pattern's header says what the method takes and gives &mdash; <code>std/int512</code>'s
+        <code>Numeric&lt;T&gt;</code> asks for <code>plus(other: T) -&gt; T</code> and the rest, and
+        <code>Int512</code> follows it &mdash; so <code>Int512</code> writes arithmetic naturally, and a task taking
+        <code>&lt;N: Numeric&lt;N&gt;&gt;</code> does <code>a + b</code> on its values. <code>==</code> and
         <code>~=</code> keep their own meanings for shapes, and <code>**</code> and the bitwise operators are not
         answered this way. What an operator does is the method's own: <code>Int512</code>'s trap on overflow and on
         division by zero, for instance, is kept by <code>+</code> and <code>/</code>.
+      </p>
+      <p>
+        Fixed arrays and slices answer built-in collection operators:
+        <code>[T#N] + [T#M]</code> joins arrays on the stack into <code>[T#(N+M)]</code>, and <code>arr * K</code>
+        repeats an array <code>K</code> times at compile time into <code>[T#(N*K)]</code>. Slices join with
+        <code>xs + ys at r</code> (or <code>xs + ys</code> when a default region is in scope) to produce a new slice
+        in the destination region. Adding an item with <code>xs + item</code> appends, <code>item + xs</code>
+        prepends, and in-place joins are written as <code>xs += ys</code> or <code>xs += item</code>.
       </p>
 
       <h3 id="type-of">The type of a value</h3>

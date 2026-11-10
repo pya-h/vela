@@ -1,0 +1,46 @@
+; Natural infix arithmetic and comparisons for Int512
+include std/int512 {Int512, int512, int512_parse}
+
+task main()
+    region r default
+    fixed a = int512(100)
+    fixed b = int512(25)
+    fixed c = int512(3)
+
+    ; 1. Infix arithmetic operators
+    fixed sum = a + b
+    fixed diff = a - b
+    fixed prod = a * b
+    fixed quot = a / b
+    fixed rem = a % c
+    fixed neg = -c
+
+    show("sum: ", sum.str(r))
+    show("diff: ", diff.str(r))
+    show("prod: ", prod.str(r))
+    show("quot: ", quot.str(r))
+    show("rem: ", rem.str(r))
+    show("neg: ", neg.str(r))
+
+    ; 2. Infix comparisons
+    show("a < b: ", a < b)
+    show("a <= b: ", a <= b)
+    show("a > b: ", a > b)
+    show("a >= b: ", a >= b)
+    show("b <= b: ", b <= b)
+    show("b >= b: ", b >= b)
+
+    ; 3. Nested infix expression
+    fixed expr_val = (a + b) * c - a / b
+    show("nested: ", expr_val.str(r))
+
+    ; 4. BigInt arithmetic with 512-bit values
+    fixed big1 = int512_parse("1000000000000000000000000000000") { Int512.zero() }
+    fixed big2 = int512_parse("2000000000000000000000000000000") { Int512.zero() }
+    fixed big_sum = big1 + big2
+    fixed big_diff = big2 - big1
+    show("big sum: ", big_sum.str(r))
+    show("big diff: ", big_diff.str(r))
+    show("big cmp: ", big1 < big2, " ", big2 > big1)
+fi
+

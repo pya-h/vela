@@ -1419,6 +1419,172 @@ impl Generator {
             self.w.line("return array;");
             self.w.close();
         }
+        for (l, r) in &used.array_concat {
+            let Type::Array(items, n) = l else { continue };
+            let Type::Array(_, m) = r else { continue };
+            let res_ty = Type::Array(items.clone(), n + m);
+            let c_res = c_type(&res_ty);
+            let c_l = c_type(l);
+            let c_r = c_type(r);
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}({2} a, {3} b)",
+                c_res,
+                array_concat_helper(l, r),
+                c_l,
+                c_r
+            ));
+            self.w.line(&format!("{0} res;", c_res));
+            self.w.line("memcpy(res.items, a.items, sizeof(a.items));");
+            self.w.line(&format!(
+                "memcpy(res.items + INT64_C({}), b.items, sizeof(b.items));",
+                n
+            ));
+            self.w.line("return res;");
+            self.w.close();
+        }
+        for (arr, count) in &used.array_repeat {
+            let Type::Array(items, m) = arr else { continue };
+            let res_ty = Type::Array(items.clone(), m * count);
+            let c_res = c_type(&res_ty);
+            let c_arr = c_type(arr);
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}({2} a)",
+                c_res,
+                array_repeat_helper(arr, *count),
+                c_arr
+            ));
+            self.w.line(&format!("{0} res;", c_res));
+            self.w
+                .open(&format!("for (size_t i = 0; i < INT64_C({}); i++)", count));
+            self.w.line(&format!(
+                "memcpy(res.items + i * INT64_C({}), a.items, sizeof(a.items));",
+                m
+            ));
+            self.w.close();
+            self.w.line("return res;");
+            self.w.close();
+        }
+        for slice in &used.slice_concat {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}(vela__rt__region* r, {0} a, {0} b)",
+                ctype,
+                item_helper("concat", slice)
+            ));
+            self.w.line("int64_t len = a.len + b.len;");
+            self.w.open("if (len == 0)");
+            self.w.line(&format!(
+                "return ({}){{ .items = vela__rt__no_items(), .len = 0, .room = NULL }};",
+                ctype
+            ));
+            self.w.close();
+            self.w.line(&format!(
+                "{0}* items = ({0}*)vela__rt__region_alloc(r, (size_t)len * sizeof({0}), _Alignof({0}));",
+                items
+            ));
+            self.w.open("if (a.len > 0)");
+            self.w.line(&format!(
+                "memcpy(items, a.items, (size_t)a.len * sizeof({}));",
+                items
+            ));
+            self.w.close();
+            self.w.open("if (b.len > 0)");
+            self.w.line(&format!(
+                "memcpy(items + a.len, b.items, (size_t)b.len * sizeof({}));",
+                items
+            ));
+            self.w.close();
+            if self.copies_deep(slice) {
+                let inner = item_type(slice);
+                self.w.line("vela__rt__copy c = { .r = r };");
+                self.w.open("for (int64_t i = 0; i < len; i++)");
+                self.w.line(&format!(
+                    "{}(&c, &items[i]);",
+                    copy_helper("fix", &fix_type(inner))
+                ));
+                self.w.close();
+                self.w.line("vela__rt__copy_finish(&c);");
+            }
+            self.w.line(&format!(
+                "return ({}){{ .items = items, .len = len, .room = NULL }};",
+                ctype
+            ));
+            self.w.close();
+        }
+        for slice in &used.slice_append {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}(vela__rt__region* r, {0} a, {2} item)",
+                ctype,
+                item_helper("append", slice),
+                items
+            ));
+            self.w.line("int64_t len = a.len + 1;");
+            self.w.line(&format!(
+                "{0}* items = ({0}*)vela__rt__region_alloc(r, (size_t)len * sizeof({0}), _Alignof({0}));",
+                items
+            ));
+            self.w.open("if (a.len > 0)");
+            self.w.line(&format!(
+                "memcpy(items, a.items, (size_t)a.len * sizeof({}));",
+                items
+            ));
+            self.w.close();
+            self.w.line("items[a.len] = item;");
+            if self.copies_deep(slice) {
+                let inner = item_type(slice);
+                self.w.line("vela__rt__copy c = { .r = r };");
+                self.w.open("for (int64_t i = 0; i < len; i++)");
+                self.w.line(&format!(
+                    "{}(&c, &items[i]);",
+                    copy_helper("fix", &fix_type(inner))
+                ));
+                self.w.close();
+                self.w.line("vela__rt__copy_finish(&c);");
+            }
+            self.w.line(&format!(
+                "return ({}){{ .items = items, .len = len, .room = NULL }};",
+                ctype
+            ));
+            self.w.close();
+        }
+        for slice in &used.slice_prepend {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}(vela__rt__region* r, {2} item, {0} b)",
+                ctype,
+                item_helper("prepend", slice),
+                items
+            ));
+            self.w.line("int64_t len = b.len + 1;");
+            self.w.line(&format!(
+                "{0}* items = ({0}*)vela__rt__region_alloc(r, (size_t)len * sizeof({0}), _Alignof({0}));",
+                items
+            ));
+            self.w.line("items[0] = item;");
+            self.w.open("if (b.len > 0)");
+            self.w.line(&format!(
+                "memcpy(items + 1, b.items, (size_t)b.len * sizeof({}));",
+                items
+            ));
+            self.w.close();
+            if self.copies_deep(slice) {
+                let inner = item_type(slice);
+                self.w.line("vela__rt__copy c = { .r = r };");
+                self.w.open("for (int64_t i = 0; i < len; i++)");
+                self.w.line(&format!(
+                    "{}(&c, &items[i]);",
+                    copy_helper("fix", &fix_type(inner))
+                ));
+                self.w.close();
+                self.w.line("vela__rt__copy_finish(&c);");
+            }
+            self.w.line(&format!(
+                "return ({}){{ .items = items, .len = len, .room = NULL }};",
+                ctype
+            ));
+            self.w.close();
+        }
     }
 
     fn gen_compares(&mut self, used: &UsedTypes) -> Result<()> {
@@ -1770,7 +1936,7 @@ impl Generator {
             }
             let ctype = c_type(ty);
             self.w.open(&format!(
-                "static {0} {1}(vela__rt__region* r, {0} value)",
+                "VELA__RT__MAYBE_UNUSED static inline {0} {1}(vela__rt__region* r, {0} value)",
                 ctype,
                 copy_helper("copied", ty)
             ));
@@ -4405,7 +4571,7 @@ impl Generator {
             ExprKind::LoopValue(value) => self.gen_loop_value(e, value),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e, args, region.as_deref(), false),
-            ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
+            ExprKind::Join { parts, region, .. } => self.gen_join(e, parts, region),
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
@@ -4415,7 +4581,10 @@ impl Generator {
         }
     }
 
-    fn gen_join(&mut self, parts: &[Expr], region: &str) -> Result<String> {
+    fn gen_join(&mut self, e: &Expr, parts: &[Expr], region: &str) -> Result<String> {
+        if matches!(e.ty()?, Type::Slice(..)) {
+            return self.gen_slice_join(e, parts, region);
+        }
         let read: Vec<(&Expr, Option<&str>)> = parts
             .iter()
             .map(|part| match &part.kind {
@@ -4457,6 +4626,58 @@ impl Generator {
             values.join(", "),
             values.len()
         ))
+    }
+
+    fn gen_slice_join(&mut self, e: &Expr, parts: &[Expr], region: &str) -> Result<String> {
+        let slice_ty = e.ty()?;
+        let item_ty = item_type(slice_ty);
+        let operands: Vec<&Expr> = parts.iter().collect();
+        let written = self.gen_operands(&operands)?;
+        let first_slice_idx = parts
+            .iter()
+            .position(|p| matches!(p.ty, Some(Type::Slice(..))))
+            .ok_or_else(|| Error::internal_at(e.span, "slice join without a slice part"))?;
+        let Some(acc_init) = written.get(first_slice_idx) else {
+            return Err(Error::internal_at(e.span, "slice join index out of bounds"));
+        };
+        let mut acc = acc_init.clone();
+        for i in (0..first_slice_idx).rev() {
+            let Some(operand_str) = written.get(i) else {
+                continue;
+            };
+            let val = self.copied_into(item_ty, region, operand_str);
+            acc = format!(
+                "{}({}, {}, {})",
+                item_helper("prepend", slice_ty),
+                c_ident(region),
+                val,
+                acc
+            );
+        }
+        for i in (first_slice_idx + 1)..parts.len() {
+            let Some(operand_str) = written.get(i) else {
+                continue;
+            };
+            if parts.get(i).is_some_and(|p| matches!(p.ty, Some(Type::Slice(..)))) {
+                acc = format!(
+                    "{}({}, {}, {})",
+                    item_helper("concat", slice_ty),
+                    c_ident(region),
+                    acc,
+                    operand_str
+                );
+            } else {
+                let val = self.copied_into(item_ty, region, operand_str);
+                acc = format!(
+                    "{}({}, {}, {})",
+                    item_helper("append", slice_ty),
+                    c_ident(region),
+                    acc,
+                    val
+                );
+            }
+        }
+        Ok(acc)
     }
 
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
@@ -5703,6 +5924,28 @@ impl Generator {
                 ),
             });
         }
+        if op == BinaryOp::Add && matches!(l.ty()?, Type::Array(..)) {
+            return Ok(format!(
+                "{}({}, {})",
+                array_concat_helper(l.ty()?, r.ty()?),
+                left,
+                right
+            ));
+        }
+        if op == BinaryOp::Mul && matches!(l.ty()?, Type::Array(..)) {
+            let (Type::Array(_, count_res), Type::Array(_, count_arr)) = (e.ty()?, l.ty()?) else {
+                return Err(Error::internal_at(e.span, "an array repeat that is no longer one"));
+            };
+            let mult = count_res / count_arr;
+            return Ok(format!("{}({})", array_repeat_helper(l.ty()?, mult), left));
+        }
+        if op == BinaryOp::Mul && matches!(r.ty()?, Type::Array(..)) {
+            let (Type::Array(_, count_res), Type::Array(_, count_arr)) = (e.ty()?, r.ty()?) else {
+                return Err(Error::internal_at(e.span, "an array repeat that is no longer one"));
+            };
+            let mult = count_res / count_arr;
+            return Ok(format!("{}({})", array_repeat_helper(r.ty()?, mult), right));
+        }
         if matches!(l.ty()?, Type::Text(_)) {
             let symbol = match op {
                 BinaryOp::Lt => "<",
@@ -6342,6 +6585,11 @@ struct UsedTypes {
     task_values: Vec<String>,
     kept_tasks: Vec<(String, String)>,
     widened: Vec<(Type, Type)>,
+    array_concat: Vec<(Type, Type)>,
+    array_repeat: Vec<(Type, u64)>,
+    slice_concat: TypeList,
+    slice_append: TypeList,
+    slice_prepend: TypeList,
 }
 
 #[derive(Default)]
@@ -6426,6 +6674,11 @@ impl UsedTypes {
             task_values: Vec::new(),
             kept_tasks: Vec::new(),
             widened: Vec::new(),
+            array_concat: Vec::new(),
+            array_repeat: Vec::new(),
+            slice_concat: TypeList::default(),
+            slice_append: TypeList::default(),
+            slice_prepend: TypeList::default(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -6768,6 +7021,30 @@ impl UsedTypes {
         }
     }
 
+    fn note_array_concat(&mut self, l: &Type, r: &Type) {
+        let (Type::Array(items, n), Type::Array(_, m)) = (l, r) else {
+            return;
+        };
+        let res_ty = Type::Array(items.clone(), n + m);
+        self.add(&res_ty);
+        let pair = (l.without_regions(), r.without_regions());
+        if !self.array_concat.contains(&pair) {
+            self.array_concat.push(pair);
+        }
+    }
+
+    fn note_array_repeat(&mut self, arr: &Type, count: u64) {
+        let Type::Array(items, m) = arr else {
+            return;
+        };
+        let res_ty = Type::Array(items.clone(), m * count);
+        self.add(&res_ty);
+        let pair = (arr.without_regions(), count);
+        if !self.array_repeat.contains(&pair) {
+            self.array_repeat.push(pair);
+        }
+    }
+
     fn expr(&mut self, e: &Expr) {
         if let Some(ty) = &e.ty {
             self.add(ty);
@@ -6921,6 +7198,35 @@ impl UsedTypes {
                     {
                         self.note_similar(ty)
                     }
+                    (BinaryOp::Add, Some(ty)) if matches!(ty, Type::Array(..)) => {
+                        if let Some(r_ty) = &b.ty
+                            && matches!(r_ty, Type::Array(..))
+                        {
+                            self.note_array_concat(ty, r_ty);
+                        }
+                    }
+                    (BinaryOp::Mul, Some(ty)) if matches!(ty, Type::Array(..)) => {
+                        if let (Some(Type::Array(_, count_res)), Some(Type::Array(_, count_arr))) =
+                            (&e.ty, &a.ty)
+                        {
+                            let mult = count_res / count_arr;
+                            if mult > 0 {
+                                self.note_array_repeat(ty, mult);
+                            }
+                        }
+                    }
+                    (BinaryOp::Mul, _) if matches!(b.ty, Some(Type::Array(..))) => {
+                        if let (Some(Type::Array(_, count_res)), Some(Type::Array(_, count_arr))) =
+                            (&e.ty, &b.ty)
+                        {
+                            let mult = count_res / count_arr;
+                            if mult > 0
+                                && let Some(b_ty) = &b.ty
+                            {
+                                self.note_array_repeat(b_ty, mult);
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 self.expr(a);
@@ -6964,7 +7270,19 @@ impl UsedTypes {
                 }
                 self.expr(value);
             }
-            ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
+            ExprKind::Join { parts, .. } => {
+                if let Some(ty @ Type::Slice(inner, _)) = &e.ty {
+                    note(&mut self.slice_concat, ty);
+                    note(&mut self.copied, inner);
+                    for part in parts {
+                        if !matches!(part.ty, Some(Type::Slice(..))) {
+                            note(&mut self.slice_append, ty);
+                            note(&mut self.slice_prepend, ty);
+                        }
+                    }
+                }
+                parts.iter().for_each(|part| self.expr(part));
+            }
             ExprKind::ToText { value, .. } => {
                 if let Some(ty) = &value.ty {
                     self.note_text(ty);
@@ -7591,6 +7909,14 @@ fn item_type(ty: &Type) -> &Type {
 
 fn item_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_word(ty))
+}
+
+fn array_concat_helper(l: &Type, r: &Type) -> String {
+    format!("vela__concat__array__{}__{}", type_word(l), type_word(r))
+}
+
+fn array_repeat_helper(arr: &Type, count: u64) -> String {
+    format!("vela__repeat__array__{}__{}", type_word(arr), count)
 }
 
 fn lookup_item(ty: &Type) -> Type {
