@@ -3001,6 +3001,7 @@ impl Resolver<'_> {
             ExprKind::Field(base, _)
             | ExprKind::Deref(base)
             | ExprKind::Ref(base)
+            | ExprKind::Own(base)
             | ExprKind::Unary(_, base)
             | ExprKind::Fail(base)
             | ExprKind::Wrap(base)

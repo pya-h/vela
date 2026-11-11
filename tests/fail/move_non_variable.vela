@@ -1,0 +1,10 @@
+; error: 9:13: cannot move non-variable expression with 'own'; 'own' transfers ownership of a named variable
+
+shape Packet
+    id: int
+fi
+
+task main()
+    fixed q = chan_new<own Packet>(2)
+    send(q, own Packet { id: 1 })
+fi

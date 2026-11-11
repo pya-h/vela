@@ -1,4 +1,4 @@
-; error: 2:9: Vela's library has no module 'std/network'; its modules are 'std/collections', 'std/files', 'std/gui', 'std/int512', 'std/json', 'std/loops', 'std/math', 'std/web'
+; error: 2:9: Vela's library has no module 'std/network'; its modules are 'std/collections', 'std/files', 'std/gui', 'std/int512', 'std/json', 'std/loops', 'std/math', 'std/sync', 'std/web'
 include std/network
 
 task main()

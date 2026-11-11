@@ -1,0 +1,43 @@
+; Channels transfer ownership of messages between concurrent tasks.
+; Builtin operations: chan_new, send, recv, try_recv, close, .len, .cap
+
+shape Packet
+    id: int
+    tag: text
+fi
+
+task main()
+    region r default
+    fixed c = chan_new<int>(4)
+    show("cap: ", c.cap)
+    show("initial len: ", c.len)
+
+    show("send 10: ", c.send(10))
+    show("send 20: ", c.send(20))
+    show("len after 2: ", c.len)
+
+    show("recv 1: ", c.recv())
+    show("recv 2: ", c.recv())
+    show("len after recv: ", c.len)
+
+    show("send 30: ", c.send(30))
+    show("try_recv: ", c.try_recv())
+    show("try_recv empty: ", c.try_recv())
+
+    c.close()
+
+    fixed q = chan_new<own Packet>(2)
+    flex p = Packet { id: 101, tag: "hello" }
+    send(q, own p)
+
+    p = Packet { id: 102, tag: "world" }
+    show("reassigned p.id: ", p.id)
+    send(q, own p)
+
+    fixed r1 = q.recv()
+    show("received r1 id: ", r1.id, " tag: ", r1.tag)
+    fixed r2 = q.recv()
+    show("received r2 id: ", r2.id, " tag: ", r2.tag)
+    q.close()
+fi
+

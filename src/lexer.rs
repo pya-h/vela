@@ -49,6 +49,7 @@ pub enum Token {
     Priv,
     Shared,
     Type,
+    Own,
     Ident(String),
     LParen,
     RParen,
@@ -139,6 +140,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("priv", Token::Priv),
     ("shared", Token::Shared),
     ("type", Token::Type),
+    ("own", Token::Own),
 ];
 
 pub const ESCAPES: &[(char, char)] = &[
@@ -189,6 +191,7 @@ impl Token {
                 | Token::Int(_)
                 | Token::Dot
                 | Token::Arrow
+                | Token::Own
         )
     }
 

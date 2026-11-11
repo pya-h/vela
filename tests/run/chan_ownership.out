@@ -1,0 +1,14 @@
+cap: 4
+initial len: 0
+send 10: true
+send 20: true
+len after 2: 2
+recv 1: 10
+recv 2: 20
+len after recv: 0
+send 30: true
+try_recv: { 30 }
+try_recv empty: none
+reassigned p.id: 102
+received r1 id: 101 tag: hello
+received r2 id: 102 tag: world

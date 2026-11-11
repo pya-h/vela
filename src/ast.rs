@@ -48,6 +48,8 @@ pub enum Type {
     Named(String, Option<String>),
     Range(Box<Type>),
     Maybe(Box<Type>),
+    Chan(Box<Type>),
+    Own(Box<Type>),
     Or(Box<Type>, Box<Type>),
     Fail(Box<Type>),
     Region,
@@ -301,7 +303,16 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("nothing", Type::Nothing),
 ];
 
-pub const BUILTIN_TASKS: &[&str] = &["show", "scan"];
+pub const BUILTIN_TASKS: &[&str] = &[
+    "show", "scan", "chan_new",
+];
+
+pub const CHAN: &str = "Chan";
+pub const CHAN_NEW: &str = "chan_new";
+pub const SEND: &str = "send";
+pub const RECV: &str = "recv";
+pub const TRY_RECV: &str = "try_recv";
+pub const CLOSE: &str = "close";
 
 pub const SCAN: &str = "scan";
 
@@ -715,6 +726,15 @@ impl Type {
                 write!(f, "maybe ")?;
                 grouped(f, inner, outer)
             }
+            Type::Chan(inner) => {
+                write!(f, "Chan[")?;
+                inner.write(f, outer)?;
+                write!(f, "]")
+            }
+            Type::Own(inner) => {
+                write!(f, "own ")?;
+                inner.write(f, outer)
+            }
             Type::Or(value, error) => {
                 match &**value {
                     Type::Or(..) => grouped(f, value, outer)?,
@@ -834,6 +854,8 @@ impl Type {
             | Type::Array(inner, _)
             | Type::Range(inner)
             | Type::Maybe(inner)
+            | Type::Chan(inner)
+            | Type::Own(inner)
             | Type::Fail(inner) => inner.unknown(),
             Type::Or(value, error) | Type::Map(value, error, _) => {
                 value.unknown() || error.unknown()
@@ -910,6 +932,8 @@ impl Type {
             ),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => {
@@ -974,6 +998,8 @@ impl Type {
             Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_names(f)).collect()),
@@ -1009,6 +1035,8 @@ impl Type {
             Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
             Type::Results(types) => {
@@ -1086,6 +1114,8 @@ impl Type {
             }
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
+            Type::Chan(inner) => Type::Chan(Box::new(inner.map_regions_of_names(f))),
+            Type::Own(inner) => Type::Own(Box::new(inner.map_regions_of_names(f))),
             Type::Or(value, error) => Type::Or(
                 Box::new(value.map_regions_of_names(f)),
                 Box::new(error.map_regions_of_names(f)),
@@ -1141,6 +1171,8 @@ impl Type {
             }
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => {
@@ -1216,6 +1248,8 @@ impl Type {
             }
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => {
@@ -1280,6 +1314,8 @@ impl Type {
             Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
             Type::Results(types) => {
@@ -1316,6 +1352,8 @@ impl Type {
             | Type::Slice(inner, _)
             | Type::Range(inner)
             | Type::Maybe(inner)
+            | Type::Chan(inner)
+            | Type::Own(inner)
             | Type::Fail(inner)
             | Type::Array(inner, _) => inner.collect_params(names),
             Type::Map(key, value, _) => {
@@ -1358,7 +1396,12 @@ impl Type {
                     .iter()
                     .for_each(|ty| ty.collect_regions(regions));
             }
-            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
+            Type::Range(inner)
+            | Type::Maybe(inner)
+            | Type::Chan(inner)
+            | Type::Own(inner)
+            | Type::Fail(inner)
+            | Type::Array(inner, _) => {
                 inner.collect_regions(regions)
             }
             Type::Or(value, error) => {
@@ -1514,6 +1557,7 @@ pub enum ExprKind {
     },
     Deref(Box<Expr>),
     Ref(Box<Expr>),
+    Own(Box<Expr>),
     Shared {
         shape: String,
         field: String,
@@ -2304,6 +2348,8 @@ pub fn type_word(ty: &Type) -> String {
         Type::Ptr(inner, _) => format!("ptr__{}", type_word(inner)),
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
+        Type::Chan(inner) => format!("chan__{}", type_word(inner)),
+        Type::Own(inner) => format!("own__{}", type_word(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_word(value), type_word(error)),
         Type::Unknown => "unknown".to_string(),
         Type::Fail(error) => format!("fail__{}", type_word(error)),

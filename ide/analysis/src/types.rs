@@ -411,7 +411,7 @@ impl Checked {
                 }
                 self.expr(base, kinds);
             }
-            ExprKind::Spread(inner) => self.expr(inner, kinds),
+            ExprKind::Spread(inner) | ExprKind::Own(inner) => self.expr(inner, kinds),
             ExprKind::Shared { shape, .. } if shape != START_VALUES => {
                 self.field_accesses.insert(pos(e.span), shape.clone());
             }

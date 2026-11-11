@@ -214,6 +214,8 @@ pub struct Checker {
     result_names: Vec<String>,
     /// Unset named results on the current path; Vela has no zero values so all must be assigned.
     unset: HashSet<String>,
+    moved: HashSet<String>,
+    loop_scopes: Vec<usize>,
     type_places: TypePlaces,
     sizes: HashMap<String, u128>,
     each_iterator: Option<Type>,
@@ -4570,6 +4572,8 @@ impl Checker {
         // Parameters share function-body scope to match C local scoping.
         self.scopes = vec![Scope::default()];
         self.loops.clear();
+        self.loop_scopes.clear();
+        self.moved.clear();
         self.loop_name = None;
         self.stepping = None;
         if task.kept.is_some() {
@@ -4794,6 +4798,23 @@ impl Checker {
     fn enter_loop(&mut self) {
         let name = self.loop_name.take();
         self.loops.push(name);
+        self.loop_scopes.push(self.scopes.len());
+    }
+
+    fn is_moved(&self, name: &str) -> bool {
+        self.moved.contains(name)
+    }
+
+    fn declared_outside_loop(&self, name: &str) -> bool {
+        let Some(&loop_depth) = self.loop_scopes.last() else {
+            return false;
+        };
+        for (i, scope) in self.scopes.iter().enumerate() {
+            if scope.names.contains_key(name) {
+                return i < loop_depth;
+            }
+        }
+        false
     }
 
     fn check_parted(
@@ -4879,8 +4900,10 @@ impl Checker {
         let entry = self.unset.clone();
         let stepping = self.stepping;
         self.loops.push(named);
+        self.loop_scopes.push(self.scopes.len());
         let result = self.check_parted_passes(parted, gives, span);
         self.loops.pop();
+        self.loop_scopes.pop();
         self.stepping = stepping;
         self.unset = entry;
         result?;
@@ -6417,6 +6440,7 @@ impl Checker {
                         );
                     }
                     if name != DISCARD {
+                        self.moved.remove(&name);
                         self.define(&name, ty, *mode, at)?;
                     }
                 }
@@ -6451,6 +6475,9 @@ impl Checker {
                 let mut assigned: HashMap<String, Span> = HashMap::new();
                 for target in targets.iter_mut() {
                     places.push(self.check_target(target, &mut assigned)?);
+                }
+                for name in assigned.keys() {
+                    self.moved.remove(name);
                 }
                 // Map multi-target assignments cannot auto-insert new keys.
                 if targets.len() > 1
@@ -6589,6 +6616,7 @@ impl Checker {
                 };
                 let result = self.check_condition(cond, body, branches);
                 self.loops.pop();
+                self.loop_scopes.pop();
                 self.unset = entry;
                 let body_given = result?;
                 match finally {
@@ -6755,6 +6783,7 @@ impl Checker {
                 }
                 let entry = self.unset.clone();
                 self.loops.push(named);
+                self.loop_scopes.push(self.scopes.len());
                 self.push_scope();
                 let mut each_names: Vec<Declared> =
                     vec![(name.clone(), span, item.clone(), Mode::Fixed)];
@@ -6788,6 +6817,7 @@ impl Checker {
                 });
                 self.pop_scope();
                 self.loops.pop();
+                self.loop_scopes.pop();
                 self.unset = entry;
                 if turn.is_some() {
                     self.group_turns.pop();
@@ -6936,6 +6966,7 @@ impl Checker {
             );
         }
         let entry = self.unset.clone();
+        let mut all_moved = self.moved.clone();
         let mut given = Vec::new();
         let mut states = Vec::new();
         for (i, arm) in arms.iter_mut().enumerate() {
@@ -6948,6 +6979,7 @@ impl Checker {
                     self.note_branch(found, arm.span)
                 }
             };
+            all_moved.extend(self.moved.iter().cloned());
             given.extend(value.map(|(ty, at)| (i, ty, at)));
             let state = self.branch_state(&arm.body, &entry);
             states.push(state.filter(|_| known_condition(&arm.cond) != Some(false)));
@@ -6961,6 +6993,7 @@ impl Checker {
                     }
                     None => self.check_scoped_block(else_b).map(|()| None)?,
                 };
+                all_moved.extend(self.moved.iter().cloned());
                 given.extend(value.map(|(ty, at)| (arms.len(), ty, at)));
                 states.push(self.branch_state(else_b, &entry));
             }
@@ -6969,6 +7002,7 @@ impl Checker {
                 .any(|arm| known_condition(&arm.cond) == Some(true)) => {}
             None => states.push(Some(entry.clone())),
         }
+        self.moved = all_moved;
         self.join_branches(entry, states);
         let Some(branches) = gives else {
             return Ok(None);
@@ -12414,6 +12448,7 @@ impl Checker {
                 span,
                 "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'",
             ),
+            ExprKind::Own(inner) => self.check_own(inner, span),
             ExprKind::Fail(error) => self.check_fail(error),
             ExprKind::PlanB { value, error, body } => {
                 self.check_plan_b(span, value, error.as_ref(), body)
@@ -12584,6 +12619,95 @@ impl Checker {
                 self.check_shown(arg)?;
             }
             return Ok(CallSetup::Checked(Type::Nothing));
+        }
+        if name == CHAN_NEW {
+            let Some((elem_ty, _)) = types.first().cloned() else {
+                return err(
+                    span,
+                    "'chan_new' takes one type argument naming what the channel carries, as in 'chan_new<int>(10)'",
+                );
+            };
+            if types.len() != 1 {
+                return err(
+                    span,
+                    "'chan_new' takes one type argument naming what the channel carries, as in 'chan_new<int>(10)'",
+                );
+            }
+            if args.len() != 1 {
+                return err(span, format!("'chan_new' takes 1 argument (capacity), got {}", args.len()));
+            }
+            let Some(arg0) = args.first_mut() else { unreachable!() };
+            let cap_ty = self.check_expr(arg0)?;
+            if !cap_ty.is_integer() && !cap_ty.unknown() {
+                return err(arg0.span, "channel capacity must be an integer");
+            }
+            return Ok(CallSetup::Checked(Type::Chan(Box::new(elem_ty))));
+        }
+        if name == SEND {
+            if self.tasks.contains_key(name) {
+                // User defined a task named "send", let it fall through to regular task call
+            } else if args.len() == 2 {
+                let Some((arg0, rest)) = args.split_first_mut() else { unreachable!() };
+                let Some(arg1) = rest.first_mut() else { unreachable!() };
+                let chan_ty = self.check_expr(arg0)?;
+                let elem_ty = match &chan_ty {
+                    Type::Chan(inner) => inner.as_ref().clone(),
+                    Type::Unknown => Type::Unknown,
+                    _ => return err(arg0.span, format!("'send' takes a channel as its first argument, got {}", chan_ty)),
+                };
+                let item_ty = self.check_expr(arg1)?;
+                if let Type::Own(payload) = &elem_ty {
+                    if !matches!(arg1.kind, ExprKind::Own(_)) {
+                        return err(
+                            arg1.span,
+                            format!("expected 'own' value for channel payload of type '{}'; write 'own ...'", elem_ty),
+                        );
+                    }
+                    if !fits(&item_ty, payload) && !item_ty.unknown() {
+                        return err(arg1.span, format!("cannot send value of type {} on channel carrying {}", item_ty, payload));
+                    }
+                } else if !elem_ty.unknown() && !fits(&item_ty, &elem_ty) && !item_ty.unknown() {
+                    return err(arg1.span, format!("cannot send value of type {} on channel carrying {}", item_ty, elem_ty));
+                }
+                return Ok(CallSetup::Checked(Type::Bool));
+            }
+        }
+        if name == RECV && !self.tasks.contains_key(name) && args.len() == 1 {
+            let Some(arg0) = args.first_mut() else { unreachable!() };
+            let chan_ty = self.check_expr(arg0)?;
+            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
+                let elem_ty = match &chan_ty {
+                    Type::Chan(inner) => inner.as_ref().clone(),
+                    _ => Type::Unknown,
+                };
+                let ret_ty = match elem_ty {
+                    Type::Own(payload) => *payload,
+                    other => other,
+                };
+                return Ok(CallSetup::Checked(ret_ty));
+            }
+        }
+        if name == TRY_RECV && !self.tasks.contains_key(name) && args.len() == 1 {
+            let Some(arg0) = args.first_mut() else { unreachable!() };
+            let chan_ty = self.check_expr(arg0)?;
+            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
+                let elem_ty = match &chan_ty {
+                    Type::Chan(inner) => inner.as_ref().clone(),
+                    _ => Type::Unknown,
+                };
+                let item_ty = match elem_ty {
+                    Type::Own(payload) => *payload,
+                    other => other,
+                };
+                return Ok(CallSetup::Checked(Type::Maybe(Box::new(item_ty))));
+            }
+        }
+        if name == CLOSE && !self.tasks.contains_key(name) && args.len() == 1 {
+            let Some(arg0) = args.first_mut() else { unreachable!() };
+            let chan_ty = self.check_expr(arg0)?;
+            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
+                return Ok(CallSetup::Checked(Type::Nothing));
+            }
         }
         if let Some(into) = number_cast(name) {
             return self
@@ -12820,6 +12944,15 @@ impl Checker {
     }
 
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
+        if self.is_moved(name) {
+            return err(
+                span,
+                format!(
+                    "use of moved value '{0}'; '{0}' was moved with 'own {0}'",
+                    name
+                ),
+            );
+        }
         let calling = std::mem::take(&mut self.calling);
         let reaching = std::mem::take(&mut self.reaching);
         let length_only = std::mem::take(&mut self.reading_length);
@@ -13835,6 +13968,47 @@ impl Checker {
                 both[0], both[1]
             ),
         )
+    }
+
+    fn check_own(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
+        let name = match &inner.kind {
+            ExprKind::Var(name) => name.clone(),
+            _ => {
+                return err(
+                    span,
+                    "cannot move non-variable expression with 'own'; 'own' transfers ownership of a named variable",
+                );
+            }
+        };
+        if self.globals.contains_key(&name) {
+            return err(
+                span,
+                format!("cannot transfer ownership of global variable '{}' with 'own'", name),
+            );
+        }
+        if self.is_moved(&name) {
+            return err(
+                span,
+                format!("use of moved value '{0}'; '{0}' was moved with 'own {0}'", name),
+            );
+        }
+        if !self.loops.is_empty() && self.declared_outside_loop(&name) {
+            return err(
+                span,
+                format!("cannot move '{0}' inside a loop; '{0}' was declared outside the loop", name),
+            );
+        }
+        let info = self.lookup_or_err(&name, inner.span)?;
+        if info.passing.is_ref() {
+            return err(
+                span,
+                format!("cannot move through reference '{}'", name),
+            );
+        }
+        let ty = info.ty.clone();
+        inner.ty = Some(ty.clone());
+        self.moved.insert(name);
+        Ok(Type::Own(Box::new(ty)))
     }
 
     fn check_fail(&mut self, error: &mut Expr) -> Result<Type> {
@@ -16753,6 +16927,10 @@ impl Checker {
             );
         }
         match base {
+            Type::Chan(_) => match field {
+                "len" | "cap" => Ok(Type::Int),
+                _ => err(span, format!("channel has no field '{}'; write '.len' or '.cap'", field)),
+            },
             Type::Param(param) => self.pattern_field(param, field, span),
             Type::Applied(applied) => {
                 let Some(shape) = self.shapes.get(&applied.name) else {
@@ -17312,6 +17490,19 @@ impl Checker {
                 );
             }
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
+            return Ok(());
+        }
+        if matches!(ty, Type::Chan(_)) && matches!(name.as_str(), "send" | "recv" | "try_recv" | "close") {
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::MethodCall { value, mut args, .. } = taken else {
+                return Err(Error::internal_at(span, "a method call that is no longer one"));
+            };
+            args.insert(0, *value);
+            expr.kind = ExprKind::Call {
+                name,
+                types: Vec::new(),
+                args,
+            };
             return Ok(());
         }
         if let Type::Param(param) = &ty
@@ -18741,6 +18932,17 @@ impl Checker {
         found: &mut CallTypes,
         deferred: &mut Vec<(Type, Type)>,
     ) -> Result<()> {
+        if let Type::Own(_) = ty
+            && !matches!(arg.kind, ExprKind::Own(_))
+        {
+            return err(
+                arg.span,
+                format!(
+                    "expected 'own' value for parameter '{}' of type '{}'; write 'own ...'",
+                    param, ty
+                ),
+            );
+        }
         if *ty != Type::Region {
             if let Type::Param(name) = &*ty
                 && name.contains(GROUP_ITEM)
@@ -20969,6 +21171,14 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
             a.region == e.region && task_fits(&a.task, &e.task) && a.mode <= e.mode
         }
         (Type::Task(a), Type::Task(e)) => task_fits(a, e),
+        (Type::Chan(a), Type::Chan(e)) => {
+            let a_inner = match a.as_ref() { Type::Own(t) => t.as_ref(), other => other };
+            let e_inner = match e.as_ref() { Type::Own(t) => t.as_ref(), other => other };
+            fits_regions(a_inner, e_inner)
+        }
+        (Type::Own(a), Type::Own(e)) => fits_regions(a, e),
+        (Type::Own(a), e) => fits_regions(a, e),
+        (a, Type::Own(e)) => fits_regions(a, e),
         _ => actual == expected,
     }
 }
@@ -21688,7 +21898,9 @@ impl Checker {
             return Ok(());
         }
         match &mut e.kind {
-            ExprKind::Spread(inner) | ExprKind::Kept { value: inner, .. } => {
+            ExprKind::Spread(inner)
+            | ExprKind::Kept { value: inner, .. }
+            | ExprKind::Own(inner) => {
                 self.substitute_expr(inner, given, made)
             }
             ExprKind::Closure { .. } => Ok(()),
@@ -21981,7 +22193,9 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         }
         (Type::Maybe(p), Type::Maybe(a))
         | (Type::Range(p), Type::Range(a))
-        | (Type::Fail(p), Type::Fail(a)) => unify_params(p, a, given),
+        | (Type::Fail(p), Type::Fail(a))
+        | (Type::Chan(p), Type::Chan(a))
+        | (Type::Own(p), Type::Own(a)) => unify_params(p, a, given),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
             unify_params(pv, av, given);
             unify_params(pe, ae, given);
@@ -24679,6 +24893,7 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
         | ExprKind::Closure { .. } => {}
         ExprKind::Kept { value: inner, .. }
         | ExprKind::Spread(inner)
+        | ExprKind::Own(inner)
         | ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
         | ExprKind::Deref(inner)

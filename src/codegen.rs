@@ -250,6 +250,7 @@ impl Generator {
         }
         self.gen_item_helpers(&used);
         self.gen_map_helpers(&used);
+        self.gen_channel_helpers(&used);
         self.gen_compares(&used)?;
         self.gen_widens(&used)?;
         let mut copied = used.copied.list.clone();
@@ -1527,6 +1528,48 @@ impl Generator {
             ));
             self.w.close();
             self.w.line("return res;");
+            self.w.close();
+        }
+    }
+
+    fn gen_channel_helpers(&mut self, used: &UsedTypes) {
+        for ty in &used.channels {
+            let (ctype, word) = (c_type(ty), type_word(ty));
+            // send
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline bool vela__chan_send__{}(vela__chan_t handle, {} item)",
+                word, ctype
+            ));
+            self.w.line("return vela__rt__chan_send(handle, &item);");
+            self.w.close();
+            // recv
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_recv__{}(vela__chan_t handle)",
+                ctype, word
+            ));
+            self.w.line(&format!("{} item;", ctype));
+            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w.line("vela__rt__chan_recv(handle, &item);");
+            self.w.line("return item;");
+            self.w.close();
+            // try_recv
+            let maybe_ty = Type::Maybe(Box::new(ty.clone()));
+            let maybe_ctype = c_type(&maybe_ty);
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_try_recv__{}(vela__chan_t handle)",
+                maybe_ctype, word
+            ));
+            self.w.line(&format!("{} item;", ctype));
+            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w.line("bool ok = vela__rt__chan_try_recv(handle, &item);");
+            if is_pointer(ty) {
+                self.w.line("return ok ? item : NULL;");
+            } else {
+                self.w.line(&format!(
+                    "return ({}){{ .has = ok, .value = item }};",
+                    maybe_ctype
+                ));
+            }
             self.w.close();
         }
     }
@@ -4857,6 +4900,7 @@ impl Generator {
                 "range outside 'each' reached code generation",
             )),
             ExprKind::Fail(error) => self.gen_expr(error),
+            ExprKind::Own(inner) => self.gen_expr(inner),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::Widen(inner) => self.gen_widen(e, inner),
             ExprKind::Pipe(call) => self.gen_pipe(e, call),
@@ -5279,6 +5323,8 @@ impl Generator {
     fn gen_field(&mut self, base: &Expr, field: &str) -> Result<String> {
         let b = self.gen_expr(base)?;
         match base.ty()? {
+            Type::Chan(_) if field == "len" => Ok(format!("vela__rt__chan_len({})", b)),
+            Type::Chan(_) if field == "cap" => Ok(format!("vela__rt__chan_cap({})", b)),
             Type::Array(_, count) => {
                 Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count))
             }
@@ -5332,6 +5378,76 @@ impl Generator {
         }
         if let Some(into) = number_cast(name) {
             return self.gen_number_cast(e, &into, args);
+        }
+        if name == CHAN_NEW {
+            let Some(arg0) = args.first() else {
+                return Err(Error::internal_at(e.span, "chan_new called without capacity"));
+            };
+            let cap = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = e.ty()? else {
+                return Err(Error::internal_at(e.span, "chan_new did not return Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(format!("vela__rt__chan_new({}, (int64_t)sizeof({}))", cap, c_type(payload)));
+        }
+        if name == SEND
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let Some((_, rest)) = args.split_first() else {
+                return Err(Error::internal_at(e.span, "send called without channel"));
+            };
+            let Some(arg1) = rest.first() else {
+                return Err(Error::internal_at(e.span, "send called without item"));
+            };
+            let chan = self.gen_expr(arg0)?;
+            let item = self.gen_expr(arg1)?;
+            let Type::Chan(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "send on non-Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(format!("vela__chan_send__{}({}, {})", type_word(payload), chan, item));
+        }
+        if name == RECV
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "recv on non-Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(format!("vela__chan_recv__{}({})", type_word(payload), chan));
+        }
+        if name == TRY_RECV
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "try_recv on non-Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(format!("vela__chan_try_recv__{}({})", type_word(payload), chan));
+        }
+        if name == CLOSE
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            return Ok(format!("vela__rt__chan_close({})", chan));
         }
         let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
         let called = instance_name(name, &given);
@@ -6652,6 +6768,7 @@ impl Layout<'_> {
             | Type::Ptr(..)
             | Type::None
             | Type::Region
+            | Type::Chan(_)
             | Type::Task(_) => (8, 8),
             Type::Closure(_) => (16, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
@@ -6662,6 +6779,7 @@ impl Layout<'_> {
             Type::Text(_) => (16, 8),
             Type::Slice(..) => (24, 8),
             Type::Fail(error) => self.of(error),
+            Type::Own(inner) => self.of(inner),
             Type::Array(items, count) => {
                 let (size, align) = self.of(items);
                 (
@@ -6849,6 +6967,7 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Ref(inner)
         | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner)
+        | ExprKind::Own(inner)
         | ExprKind::Wrap(inner)
         | ExprKind::Widen(inner)
         | ExprKind::Copy { value: inner, .. }
@@ -6947,6 +7066,7 @@ struct UsedTypes {
     slice_concat: TypeList,
     slice_append: TypeList,
     slice_prepend: TypeList,
+    channels: TypeList,
 }
 
 #[derive(Default)]
@@ -7077,6 +7197,7 @@ impl UsedTypes {
             slice_concat: TypeList::default(),
             slice_append: TypeList::default(),
             slice_prepend: TypeList::default(),
+            channels: TypeList::default(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -7268,6 +7389,18 @@ impl UsedTypes {
                 self.add(&Type::Slice(value.clone(), None));
                 self.note_key(key);
                 self.compounds.insert(ty.clone());
+            }
+            Type::Chan(inner) => {
+                let payload = match inner.as_ref() {
+                    Type::Own(p) => p.as_ref(),
+                    other => other,
+                };
+                self.add(payload);
+                self.add(&Type::Maybe(Box::new(payload.clone())));
+                note(&mut self.channels, payload);
+            }
+            Type::Own(inner) => {
+                self.add(inner);
             }
             _ => {}
         }
@@ -7553,6 +7686,7 @@ impl UsedTypes {
             | ExprKind::Ref(inner)
             | ExprKind::New { value: inner, .. }
             | ExprKind::Fail(inner)
+            | ExprKind::Own(inner)
             | ExprKind::Wrap(inner) => self.expr(inner),
             ExprKind::Widen(inner) => {
                 if let (Some(from), Some(to)) = (&inner.ty, &e.ty) {
@@ -7872,6 +8006,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Deref(inner)
         | ExprKind::Ref(inner)
         | ExprKind::Fail(inner)
+        | ExprKind::Own(inner)
         | ExprKind::Wrap(inner)
         | ExprKind::Widen(inner)
         | ExprKind::Pipe(inner)
@@ -8320,6 +8455,8 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_word(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_word(value), type_word(error)),
         Type::Fail(error) => c_type(error),
+        Type::Chan(_) => "vela__chan_t".to_string(),
+        Type::Own(inner) => c_type(inner),
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => {
             format!("vela__{}", type_word(ty))
         }
@@ -8331,6 +8468,7 @@ fn c_type(ty: &Type) -> String {
 fn compound_name(ty: &Type) -> String {
     match ty {
         Type::Map(..) => format!("vela__{}", type_word(ty)),
+        Type::Own(inner) => compound_name(inner),
         other => c_type(other),
     }
 }
@@ -8342,6 +8480,7 @@ fn map_entry(ty: &Type) -> String {
 fn item_type(ty: &Type) -> &Type {
     match ty {
         Type::Array(items, _) | Type::Slice(items, _) => items,
+        Type::Own(inner) => item_type(inner),
         other => other,
     }
 }

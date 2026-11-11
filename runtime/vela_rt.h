@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <pthread.h>
 
 #if defined(__has_include)
 #  if __has_include(<dlfcn.h>)
@@ -4319,6 +4320,201 @@ static inline vela__rt__text vela__rt__gui_canvas_export_ppm(int64_t handle, vel
         *ptr++ = (char)((c >> 8) & 0xFF);  /* B */
     }
     return (vela__rt__text){ .bytes = buf, .len = (int64_t)total_len };
+}
+
+/* ========================================================================= */
+/* Channels & Thread-Safe Ownership-Transfer Queues                          */
+/* ========================================================================= */
+
+typedef int64_t vela__chan_t;
+
+typedef struct vela__rt__chan {
+    pthread_mutex_t lock;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+    uint8_t* buffer;
+    size_t cap;
+    size_t item_size;
+    size_t count;
+    size_t head;
+    size_t tail;
+    bool closed;
+} vela__rt__chan;
+
+typedef struct vela__rt__chan_slot {
+    vela__rt__chan* chan;
+    uint32_t generation;
+} vela__rt__chan_slot;
+
+typedef struct vela__rt__chan_table {
+    vela__rt__chan_slot* slots;
+    size_t count;
+    pthread_mutex_t lock;
+    bool initialized;
+} vela__rt__chan_table;
+
+static vela__rt__chan_table vela__rt__global_chan_table = {
+    NULL, 0, PTHREAD_MUTEX_INITIALIZER, false
+};
+
+static inline void vela__rt__chan_init_table_if_needed(void) {
+    if (!vela__rt__global_chan_table.initialized) {
+        vela__rt__global_chan_table.slots = NULL;
+        vela__rt__global_chan_table.count = 0;
+        pthread_mutex_init(&vela__rt__global_chan_table.lock, NULL);
+        vela__rt__global_chan_table.initialized = true;
+    }
+}
+
+static inline vela__rt__chan* vela__rt__chan_of(int64_t handle) {
+    if (handle <= 0) return NULL;
+    size_t index = (size_t)(handle & 0xffffffffu);
+    uint32_t generation = (uint32_t)((uint64_t)handle >> 32);
+    vela__rt__chan* chan = NULL;
+    pthread_mutex_lock(&vela__rt__global_chan_table.lock);
+    if (index < vela__rt__global_chan_table.count) {
+        vela__rt__chan_slot* slot = &vela__rt__global_chan_table.slots[index];
+        if (slot->generation == generation) {
+            chan = slot->chan;
+        }
+    }
+    pthread_mutex_unlock(&vela__rt__global_chan_table.lock);
+    return chan;
+}
+
+static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
+    size_t cap = cap_in > 0 ? (size_t)cap_in : 1;
+    size_t item_size = item_size_in > 0 ? (size_t)item_size_in : 1;
+    vela__rt__chan* chan = (vela__rt__chan*)malloc(sizeof(vela__rt__chan));
+    if (chan == NULL) {
+        vela__rt__out_of_memory();
+    }
+    chan->buffer = (uint8_t*)malloc(cap * item_size);
+    if (chan->buffer == NULL) {
+        free(chan);
+        vela__rt__out_of_memory();
+    }
+    chan->cap = cap;
+    chan->item_size = item_size;
+    chan->count = 0;
+    chan->head = 0;
+    chan->tail = 0;
+    chan->closed = false;
+    pthread_mutex_init(&chan->lock, NULL);
+    pthread_cond_init(&chan->not_empty, NULL);
+    pthread_cond_init(&chan->not_full, NULL);
+
+    pthread_mutex_lock(&vela__rt__global_chan_table.lock);
+    vela__rt__chan_init_table_if_needed();
+    size_t index = 0;
+    while (index < vela__rt__global_chan_table.count && vela__rt__global_chan_table.slots[index].chan != NULL) {
+        index++;
+    }
+    if (index == vela__rt__global_chan_table.count) {
+        size_t new_count = vela__rt__global_chan_table.count == 0 ? 8 : vela__rt__global_chan_table.count * 2;
+        vela__rt__chan_slot* new_slots = (vela__rt__chan_slot*)realloc(
+            vela__rt__global_chan_table.slots, new_count * sizeof(vela__rt__chan_slot)
+        );
+        if (new_slots == NULL) {
+            pthread_mutex_unlock(&vela__rt__global_chan_table.lock);
+            free(chan->buffer);
+            free(chan);
+            vela__rt__out_of_memory();
+        }
+        for (size_t i = vela__rt__global_chan_table.count; i < new_count; i++) {
+            new_slots[i].chan = NULL;
+            new_slots[i].generation = 0;
+        }
+        vela__rt__global_chan_table.slots = new_slots;
+        vela__rt__global_chan_table.count = new_count;
+    }
+    vela__rt__chan_slot* slot = &vela__rt__global_chan_table.slots[index];
+    slot->chan = chan;
+    slot->generation++;
+    int64_t handle = (int64_t)(((uint64_t)slot->generation << 32) | (uint64_t)index);
+    pthread_mutex_unlock(&vela__rt__global_chan_table.lock);
+    return handle;
+}
+
+static inline bool vela__rt__chan_send(int64_t handle, const void* item) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return false;
+    pthread_mutex_lock(&chan->lock);
+    while (chan->count == chan->cap && !chan->closed) {
+        pthread_cond_wait(&chan->not_full, &chan->lock);
+    }
+    if (chan->closed) {
+        pthread_mutex_unlock(&chan->lock);
+        return false;
+    }
+    memcpy(chan->buffer + (chan->tail * chan->item_size), item, chan->item_size);
+    chan->tail = (chan->tail + 1) % chan->cap;
+    chan->count++;
+    pthread_cond_signal(&chan->not_empty);
+    pthread_mutex_unlock(&chan->lock);
+    return true;
+}
+
+static inline bool vela__rt__chan_recv(int64_t handle, void* out_item) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return false;
+    pthread_mutex_lock(&chan->lock);
+    while (chan->count == 0 && !chan->closed) {
+        pthread_cond_wait(&chan->not_empty, &chan->lock);
+    }
+    if (chan->count == 0 && chan->closed) {
+        pthread_mutex_unlock(&chan->lock);
+        return false;
+    }
+    memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
+    chan->head = (chan->head + 1) % chan->cap;
+    chan->count--;
+    pthread_cond_signal(&chan->not_full);
+    pthread_mutex_unlock(&chan->lock);
+    return true;
+}
+
+static inline bool vela__rt__chan_try_recv(int64_t handle, void* out_item) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return false;
+    pthread_mutex_lock(&chan->lock);
+    if (chan->count == 0) {
+        pthread_mutex_unlock(&chan->lock);
+        return false;
+    }
+    memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
+    chan->head = (chan->head + 1) % chan->cap;
+    chan->count--;
+    pthread_cond_signal(&chan->not_full);
+    pthread_mutex_unlock(&chan->lock);
+    return true;
+}
+
+static inline void vela__rt__chan_close(int64_t handle) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    pthread_mutex_lock(&chan->lock);
+    if (!chan->closed) {
+        chan->closed = true;
+        pthread_cond_broadcast(&chan->not_empty);
+        pthread_cond_broadcast(&chan->not_full);
+    }
+    pthread_mutex_unlock(&chan->lock);
+}
+
+static inline int64_t vela__rt__chan_len(int64_t handle) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return 0;
+    pthread_mutex_lock(&chan->lock);
+    int64_t len = (int64_t)chan->count;
+    pthread_mutex_unlock(&chan->lock);
+    return len;
+}
+
+static inline int64_t vela__rt__chan_cap(int64_t handle) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return 0;
+    return (int64_t)chan->cap;
 }
 
 #endif

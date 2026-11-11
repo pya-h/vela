@@ -1,0 +1,13 @@
+; std/sync: Concurrency, Channels and Synchronization for Vela
+
+; Channels transfer ownership of messages between concurrent tasks.
+; Builtin channel primitives:
+;   - chan_new<T>(capacity: int) -> Chan[T]
+;   - send(c: Chan[T], item: own T) -> bool
+;   - recv(c: Chan[T]) -> T
+;   - try_recv(c: Chan[T]) -> maybe T
+;   - close(c: Chan[T]) -> nothing
+
+task channel<T>(capacity: int) -> Chan[T]
+    <- chan_new<T>(capacity)
+fi

@@ -1122,10 +1122,10 @@ impl Parser {
 
     fn at_method_from(&self, pos: usize) -> bool {
         let mut pos = pos;
-        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_) | Token::New)) {
+        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_) | Token::New | Token::Own)) {
             pos += 1;
         }
-        matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+        matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New | Token::Own)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
     }
 
     fn parse_member_decorators(&mut self, what: &str) -> Result<(Vec<Decorator>, Vec<Expr>)> {
@@ -1933,6 +1933,13 @@ impl Parser {
             self.leave(1);
             return items;
         }
+        if self.match_token(Token::Own) {
+            self.type_parts.push(("own".to_string(), span));
+            self.enter()?;
+            let inner = Box::new(self.parse_prefixed_type()?);
+            self.leave(1);
+            return Ok(Type::Own(inner));
+        }
         let prefix = if self.match_token(Token::Caret) {
             Some(Token::Caret)
         } else if self.match_token(Token::Maybe) {
@@ -2055,6 +2062,15 @@ impl Parser {
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
         }
         self.type_parts.push((name.clone(), span));
+        let is_chan = name == "Chan" || name.ends_with(".Chan");
+        if is_chan && self.check(Token::LBracket) {
+            self.advance();
+            self.enter()?;
+            let ty = self.parse_type_parts()?;
+            self.leave(1);
+            self.expect(Token::RBracket)?;
+            return Ok(Type::Chan(Box::new(ty)));
+        }
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
         }
@@ -2063,6 +2079,10 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), format!("'{}' takes no types, so '< … >' has nothing to name", name)));
             }
             let types = self.parse_given_types()?;
+            if is_chan {
+                let inner = types.into_iter().next().unwrap_or(Type::Unknown);
+                return Ok(Type::Chan(Box::new(inner)));
+            }
             return Ok(Type::Applied(Box::new(Applied { name, types, region: None })));
         }
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
@@ -3533,6 +3553,32 @@ impl Parser {
         if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not | Token::Amp) {
             return self.parse_prefixed();
         }
+        if self.check(Token::Own) {
+            let next = self.tokens.get(self.pos + 1);
+            if matches!(
+                next,
+                Some(
+                    Token::Ident(_)
+                        | Token::LParen
+                        | Token::LBracket
+                        | Token::Amp
+                        | Token::Minus
+                        | Token::Not
+                        | Token::Fail
+                        | Token::New
+                        | Token::Int(_)
+                        | Token::Float(_)
+                        | Token::Char(_)
+                        | Token::Text(_)
+                        | Token::Interpolated(_)
+                        | Token::True
+                        | Token::False
+                        | Token::None
+                )
+            ) {
+                return self.parse_prefixed();
+            }
+        }
         self.parse_postfix()
     }
 
@@ -3550,6 +3596,12 @@ impl Parser {
             let place = self.parse_operand()?;
             self.leave(1);
             return Ok(Expr::new(ExprKind::Ref(Box::new(place)), span));
+        }
+        if self.match_token(Token::Own) {
+            self.enter()?;
+            let val = self.parse_operand()?;
+            self.leave(1);
+            return Ok(Expr::new(ExprKind::Own(Box::new(val)), span));
         }
         let op = if self.match_token(Token::Minus) {
             UnaryOp::Neg
@@ -3733,7 +3785,7 @@ impl Parser {
             {
                 self.parse_member_of_this(span)
             }
-            Token::Ident(_) => self.parse_name_use(span),
+            Token::Ident(_) | Token::Own => self.parse_name_use(span),
             _ => self.parse_literal(span),
         }
     }
@@ -4653,6 +4705,7 @@ impl Parser {
     fn expect_ident(&mut self) -> Result<String> {
         match self.peek() {
             Token::Ident(s) => { let v = s.clone(); self.advance(); Ok(v) }
+            Token::Own => { self.advance(); Ok("own".to_string()) }
             _ => Err(self.name_expected()),
         }
     }

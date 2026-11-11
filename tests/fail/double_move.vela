@@ -1,0 +1,12 @@
+; error: 11:13: use of moved value 'p'; 'p' was moved with 'own p'
+
+shape Packet
+    id: int
+fi
+
+task main()
+    fixed q = chan_new<own Packet>(2)
+    fixed p = Packet { id: 1 }
+    send(q, own p)
+    send(q, own p)
+fi

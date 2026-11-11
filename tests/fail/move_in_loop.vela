@@ -1,0 +1,15 @@
+; error: 13:17: cannot move 'p' inside a loop; 'p' was declared outside the loop
+
+shape Packet
+    id: int
+fi
+
+task main()
+    fixed q = chan_new<own Packet>(5)
+    fixed p = Packet { id: 1 }
+    flex count = 0
+    loop count < 3
+        count = count + 1
+        send(q, own p)
+    fi
+fi
