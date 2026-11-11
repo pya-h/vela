@@ -1,0 +1,44 @@
+  1 | ; Joining slices whose items hold text, with '+' and '+=': the join copies the items' text into its region.
+    | comment:; Joining slices whose items hold text, with '+' and '+=': the join copies the items' text into its region.
+  3 | shape P
+    | keyword:shape  type:P
+  4 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  5 | fi
+    | keyword:fi
+  7 | task join(a: [text]@r, b: [text]@r, r: region) -> [text]@r
+    | keyword:task  task:join  punctuation:(  parameter:a  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:,  parameter:b  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
+  8 |     <- a + b at r
+    | keyword:<-  parameter:a  operator:+  parameter:b  keyword:at  region:r
+  9 | fi
+    | keyword:fi
+ 11 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 12 |     region r default
+    | keyword:region  region:r  keyword:default
+ 13 |     region q
+    | keyword:region  region:q
+ 14 |     flex ps: [P]@r = [P { name: "a" }, ...] at r
+    | keyword:flex  variable:ps  punctuation::  punctuation:[  type:P  punctuation:]  operator:@  region:r  operator:=  punctuation:[  type:P  punctuation:{  field:name  punctuation::  string:"a"  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 15 |     ps += P { name: "b" }
+    | variable:ps  operator:+=  type:P  punctuation:{  field:name  punctuation::  string:"b"  punctuation:}
+ 16 |     fixed more: [P]@q = [P { name: "c" }, ...] at q
+    | keyword:fixed  variable:more  punctuation::  punctuation:[  type:P  punctuation:]  operator:@  region:q  operator:=  punctuation:[  type:P  punctuation:{  field:name  punctuation::  string:"c"  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:q
+ 17 |     ps += more
+    | variable:ps  operator:+=  variable:more
+ 18 |     fixed front = P { name: "z" } + ps at r
+    | keyword:fixed  variable:front  operator:=  type:P  punctuation:{  field:name  punctuation::  string:"z"  punctuation:}  operator:+  variable:ps  keyword:at  region:r
+ 19 |     each p in front
+    | keyword:each  variable:p  keyword:in  variable:front
+ 20 |         show(p.name)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:name  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 |     flex words: [text]@r = ["x", ...] at r
+    | keyword:flex  variable:words  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  operator:=  punctuation:[  string:"x"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 23 |     words += "y"
+    | variable:words  operator:+=  string:"y"
+ 24 |     show(join(words, ["w", ...] at r, r)[2])
+    | builtin-fn:show  punctuation:(  task:join  punctuation:(  variable:words  punctuation:,  punctuation:[  string:"w"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:[  number:2  punctuation:]  punctuation:)
+ 25 | fi
+    | keyword:fi

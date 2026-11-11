@@ -1,0 +1,25 @@
+; Requests a client shapes to break the server: lengths too large to add, chunks cutting through
+; a character, and paths ending inside one. Each is read without stopping the program.
+include std/web { is_request_complete, is_response_complete, decode_chunked_body, hex_to_int, match_route, parse_request }
+
+task main()
+    region r default
+    show(is_request_complete("POST / HTTP/1.1\r\nContent-Length: 9223372036854775807\r\n\r\nabc"))
+    show(is_response_complete("HTTP/1.1 200 OK\r\nContent-Length: 9223372036854775807\r\n\r\nabc"))
+    show(is_request_complete("POST / HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc"))
+    show(decode_chunked_body("7fffffffffffffff\r\nabc\r\n0\r\n\r\n", r).len)
+    show(decode_chunked_body("1\r\né\r\n0\r\n\r\n", r).len)
+    show(decode_chunked_body("3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n", r))
+    show(hex_to_int("ffffffffffffffffff"), " ", hex_to_int("1F"))
+    flex params = new [text: text]() at r
+    show(match_route("/static/*", "/statié", params, r))
+    show(match_route("/a", "/é", params, r))
+    fixed cut = parse_request("POST /é HTTP/1.1\r\nContent-Length: 1\r\n\r\né", r) { failure e
+        <-
+    }
+    show(cut.body_data.len)
+    fixed two = parse_request("POST / HTTP/1.1\r\nContent-Length: 2\r\n\r\nabGET / HTTP/1.1\r\n\r\n", r) { failure e
+        <-
+    }
+    show(two.body_data)
+fi

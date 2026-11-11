@@ -1,0 +1,17 @@
+; Iterator makers and consumers given lambdas that keep what they use, and plain ones.
+include std/collections
+
+task main()
+    region r default
+    fixed k = 3
+    flex xs = [1, 2, 3, 4, ...] at r
+    fixed ys = xs.map([@r] n -> n * k).filter([@r] n -> n > k).collect(r)
+    show(ys.len, " ", ys[0])
+    fixed zs = xs.map(n -> n + 1).collect(r)
+    show(zs[0])
+    flex it = xs.map([@r] n -> n + k)
+    show(it.fold(0, [@r] (a, n) -> a + n * k))
+    flex it2 = xs.skip(1)
+    show(it2.any([@r] n -> n == k), " ", xs.map(n -> n).all([@r] n -> n < 10 * k))
+    show(xs.map(n -> n).find([@r] n -> n > k))
+fi

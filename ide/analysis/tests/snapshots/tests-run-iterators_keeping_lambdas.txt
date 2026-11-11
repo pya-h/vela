@@ -1,0 +1,32 @@
+  1 | ; Iterator makers and consumers given lambdas that keep what they use, and plain ones.
+    | comment:; Iterator makers and consumers given lambdas that keep what they use, and plain ones.
+  2 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r default
+    | keyword:region  region:r  keyword:default
+  6 |     fixed k = 3
+    | keyword:fixed  variable:k  operator:=  number:3
+  7 |     flex xs = [1, 2, 3, 4, ...] at r
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+  8 |     fixed ys = xs.map([@r] n -> n * k).filter([@r] n -> n > k).collect(r)
+    | keyword:fixed  variable:ys  operator:=  variable:xs  punctuation:.  method:map  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:*  variable:k  punctuation:)  punctuation:.  field:filter  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:>  variable:k  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)
+  9 |     show(ys.len, " ", ys[0])
+    | builtin-fn:show  punctuation:(  variable:ys  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:ys  punctuation:[  number:0  punctuation:]  punctuation:)
+ 10 |     fixed zs = xs.map(n -> n + 1).collect(r)
+    | keyword:fixed  variable:zs  operator:=  variable:xs  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  operator:+  number:1  punctuation:)  punctuation:.  field:collect  punctuation:(  region:r  punctuation:)
+ 11 |     show(zs[0])
+    | builtin-fn:show  punctuation:(  variable:zs  punctuation:[  number:0  punctuation:]  punctuation:)
+ 12 |     flex it = xs.map([@r] n -> n + k)
+    | keyword:flex  variable:it  operator:=  variable:xs  punctuation:.  method:map  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:+  variable:k  punctuation:)
+ 13 |     show(it.fold(0, [@r] (a, n) -> a + n * k))
+    | builtin-fn:show  punctuation:(  variable:it  punctuation:.  field:fold  punctuation:(  number:0  punctuation:,  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:a  punctuation:,  parameter:n  punctuation:)  operator:->  parameter:a  operator:+  parameter:n  operator:*  variable:k  punctuation:)  punctuation:)
+ 14 |     flex it2 = xs.skip(1)
+    | keyword:flex  variable:it2  operator:=  variable:xs  punctuation:.  method:skip  punctuation:(  number:1  punctuation:)
+ 15 |     show(it2.any([@r] n -> n == k), " ", xs.map(n -> n).all([@r] n -> n < 10 * k))
+    | builtin-fn:show  punctuation:(  variable:it2  punctuation:.  field:any  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:==  variable:k  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  punctuation:)  punctuation:.  field:all  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:<  number:10  operator:*  variable:k  punctuation:)  punctuation:)
+ 16 |     show(xs.map(n -> n).find([@r] n -> n > k))
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  method:map  punctuation:(  parameter:n  operator:->  parameter:n  punctuation:)  punctuation:.  field:find  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:>  variable:k  punctuation:)  punctuation:)
+ 17 | fi
+    | keyword:fi

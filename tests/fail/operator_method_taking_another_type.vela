@@ -1,0 +1,14 @@
+; error: 12:17: this operator on two Money values calls 'Money.plus', which must take another Money, 'plus(other: Money)', but this one takes int; call it by name, as in 'x.plus(y)'
+shape Money
+    cents: int
+
+    plus(other: int) -> Money
+        <- Money { cents: .cents + other }
+    fi
+fi
+
+task main()
+    fixed a = Money { cents: 1 }
+    fixed c = a + Money { cents: 2 }
+    show(c.cents)
+fi

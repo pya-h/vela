@@ -263,7 +263,20 @@ impl Generator {
                 copied.push(slice.clone());
             }
         }
+        for slice in used
+            .slice_concat
+            .list
+            .iter()
+            .chain(&used.slice_append.list)
+            .chain(&used.slice_prepend.list)
+            .filter(|slice| self.copies_deep(slice))
+        {
+            if !copied.contains(slice) {
+                copied.push(slice.clone());
+            }
+        }
         self.gen_copies(&copied);
+        self.gen_join_helpers(&used);
         self.gen_closure_helpers(&used);
         self.w.blank();
 
@@ -1465,6 +1478,11 @@ impl Generator {
             self.w.line("return res;");
             self.w.close();
         }
+    }
+
+    /// Joins of slices: their helpers come after the copy helpers, since a join into a region copies
+    /// what its items point to with the fixers those make.
+    fn gen_join_helpers(&mut self, used: &UsedTypes) {
         for slice in &used.slice_concat {
             let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
             self.w.open(&format!(
@@ -2612,6 +2630,8 @@ impl Generator {
                 self.w.line("first = false;");
                 if matches!(&**key, Type::Text(_)) {
                     self.w.line("vela__rt__put_json_text(w, v->entries[i].key);");
+                } else if matches!(&**key, Type::Char) {
+                    self.w.line("vela__rt__put_json_char(w, v->entries[i].key);");
                 } else {
                     self.w.line("VELA__RT__PUT(w, \"\\\"\");");
                     self.w.line(&self.put_item(key, "v->entries[i].key"));
@@ -6532,7 +6552,7 @@ impl Generator {
             Type::Uint64 => format!("vela__rt__put_uint(w, {});", value),
             ty if ty.is_integer() => format!("vela__rt__put_int(w, (int64_t){});", value),
             Type::Char => format!("vela__rt__put_json_char(w, {});", value),
-            ty if ty.is_float() => format!("vela__rt__put_float(w, (double){});", value),
+            ty if ty.is_float() => format!("vela__rt__put_json_float(w, (double){}, {});", value, *ty == Type::Float32),
             Type::Bool => format!("vela__rt__put_bool(w, {});", value),
             Type::Text(_) => format!("vela__rt__put_json_text(w, {});", value),
             Type::None => "VELA__RT__PUT(w, \"null\");".to_string(),
@@ -6718,7 +6738,8 @@ fn json_function(ty: &Type) -> String {
         Type::Uint64 => "vela__rt__uint_str".to_string(),
         Type::Char => "vela__rt__json_char".to_string(),
         ty if ty.is_integer() => "vela__rt__int_str".to_string(),
-        ty if ty.is_float() => "vela__rt__float_str".to_string(),
+        Type::Float32 => "vela__rt__json_float32".to_string(),
+        ty if ty.is_float() => "vela__rt__json_float".to_string(),
         Type::Bool => "vela__rt__bool_str".to_string(),
         Type::Text(_) => "vela__rt__json_text".to_string(),
         other => json_helper(&other.without_regions()),

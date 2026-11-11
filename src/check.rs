@@ -15784,6 +15784,28 @@ impl Checker {
         })
     }
 
+    /// Why a shape's own operator method can't answer the operator, when it can't: the method takes
+    /// another value of the shape, and 'cmp' gives an int, below 0, 0, or above 0.
+    fn operator_misfit(&self, method: &str, ty: &Type) -> Option<String> {
+        let owner = self.owner_of(ty)?;
+        let task = self.tasks.get(&method_name(&owner, method))?;
+        let (_, other) = task.params.get(1)?;
+        let written = unqualified(&owner);
+        if other.without_regions() != ty.without_regions() {
+            return Some(format!(
+                "this operator on two {0} values calls '{0}.{1}', which must take another {0}, '{1}(other: {0})', but this one takes {2}; call it by name, as in 'x.{1}(y)'",
+                written, method, other
+            ));
+        }
+        if method == "cmp" && task.ret != Type::Int {
+            return Some(format!(
+                "this comparison calls '{0}.cmp', which gives an int, below 0, 0, or above 0, as 'cmp(other: {0}) -> int' does, but this one gives {1}",
+                written, task.ret
+            ));
+        }
+        None
+    }
+
     fn operator_neg(&self, ty: &Type) -> bool {
         if matches!(
             ty,
@@ -16046,6 +16068,9 @@ impl Checker {
             && lt.without_regions() == rt.without_regions()
             && let Some(method) = self.operator_method(op, &lt)
         {
+            if let Some(why) = self.operator_misfit(method, &lt) {
+                return err(span, why);
+            }
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             let ExprKind::Binary(_, l, r) = taken else {
                 return Err(Error::internal_at(
@@ -17360,6 +17385,59 @@ impl Checker {
         Ok(Type::Text(Some(region.to_string())))
     }
 
+    /// Refuses JSON for a value holding what JSON has no form for: a pointer (what it points
+    /// to may point back), a task, or a lambda.
+    fn json_writes(&self, ty: &Type, span: Span) -> Result<()> {
+        let Some(part) = self.unjsonable_in(ty, &mut Vec::new()) else {
+            return Ok(());
+        };
+        let what = match part {
+            Type::Ptr(..) => "a pointer, since what one points to may point back",
+            Type::Task(_) => "a task",
+            _ => "a lambda",
+        };
+        if part == *ty {
+            return err(span, format!("'json' can't write {}: JSON has no form for {}", ty, what));
+        }
+        err(
+            span,
+            format!(
+                "'json' can't write {}, since it holds {}: JSON has no form for {}; give the shape holding it its own method 'json(r: region) -> text@r'",
+                ty, part, what
+            ),
+        )
+    }
+
+    fn unjsonable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
+        match ty {
+            Type::Ptr(..) | Type::Task(_) | Type::Closure(_) => Some(ty.clone()),
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
+                self.unjsonable_in(inner, seen)
+            }
+            Type::Map(key, value, _) => self
+                .unjsonable_in(key, seen)
+                .or_else(|| self.unjsonable_in(value, seen)),
+            Type::Tuple(items) => items.iter().find_map(|item| self.unjsonable_in(item, seen)),
+            Type::Named(..) | Type::Applied(_) if self.has_own_json(ty) => None,
+            Type::Named(..) | Type::Applied(_) => {
+                let name = match ty {
+                    Type::Applied(applied) => applied.name.clone(),
+                    Type::Named(name, _) => name.clone(),
+                    _ => return None,
+                };
+                if seen.contains(&name) {
+                    return None;
+                }
+                let parts = self.written_parts(ty)?;
+                seen.push(name);
+                let found = parts.iter().find_map(|part| self.unjsonable_in(part, seen));
+                seen.pop();
+                found
+            }
+            _ => None,
+        }
+    }
+
     fn has_builtin_json(&self, ty: &Type) -> bool {
         !self.has_own_json(ty) && self.writable(ty)
     }
@@ -17419,6 +17497,7 @@ impl Checker {
             ExprKind::Ref(_) => self.check_address(value)?,
             _ => self.check_expr(value)?,
         };
+        self.json_writes(&ty, value.span)?;
         self.note_written_strs(&ty, value.span);
         self.visible_region(region, region_span, true)?;
         Ok(Type::Text(Some(region.to_string())))
@@ -21247,7 +21326,16 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::ToText { value, .. } | ExprKind::ToJson { value, .. } => {
+            ExprKind::ToJson { value, .. } => {
+                self.substitute_expr(value, given, made)?;
+                if let Some(ty) = &value.ty {
+                    self.json_writes(ty, value.span)?;
+                }
+                self.need_written_strs(value, made);
+                note_chosen_address(value, made);
+                Ok(())
+            }
+            ExprKind::ToText { value, .. } => {
                 self.substitute_expr(value, given, made)?;
                 self.need_written_strs(value, made);
                 note_chosen_address(value, made);

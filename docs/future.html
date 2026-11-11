@@ -2219,9 +2219,49 @@ fi</code></pre>
         it, and ends first; a region given as a parameter, or one declared before the variable, is refused. Built: see
         <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.
       </p>
+      <p id="lambda-fields">
+        <strong>Held in a field.</strong> <span class="badge b-done">Done</span> A field holds a lambda that keeps what it
+        uses as <code>f: [@this](int) -&gt; int</code>, kept in the region of the value holding it, which a value in no
+        region fills with a plain task only. The iterators of <code>std/collections</code> hold their makers' lambdas so.
+        Built: see <a href="vela.html#lambda-fields">In a field</a>.
+      </p>
+      <p id="changing-lambda-fields">
+        <strong>Changing lambdas in a field.</strong> <span class="badge b-idea">Problem</span> A field holds
+        <code>[@this](…)</code> only; <code>[flex @this](…)</code> and <code>[bind @this](…)</code> are refused. The reason is
+        copying. A value of a shape is copied whole, by <code>fixed d = c</code>, by passing it, by
+        <code>Hold { inner: c }</code>, and a copy of a lambda is two words, its function and its block, so both copies
+        would name one block. A <code>[flex @r]</code> lambda changes its copies in that block, so a change made through one
+        value would show through the other, and two values that look apart would share a counter; that is why such a lambda
+        is never copied at all. A <code>[bind @r]</code> one changes only contents, which copies share anyway, but it can
+        still assign a number it keeps. And a field read through a <code>fixed</code> value can't change, so its lambda
+        could not even be called there. An iterator made with <code>map</code> of a lambda that counts as it goes is the
+        case that asks for it.
+      </p>
+      <p>
+        Ways to lift it, cheapest first:
+      </p>
+      <ul>
+        <li><strong>A <code>[bind @r]</code> that keeps only twofold copies.</strong> One that keeps only slices, maps, and
+          pointers changes only what every copy shares already, so copying it changes nothing a copy could see.
+          Settling that rule (left open in <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>) lets a
+          field hold such a lambda as <code>[bind @this]</code> with no new runtime cost. It doesn't cover a counter.</li>
+        <li><strong>A shape holding one is held alone.</strong> A shape or kind with a <code>[flex @this]</code> field
+          takes the lambda's own rules: never copied, held in a <code>flex</code> variable, given as a place
+          (<code>flex&amp; it</code>), never bound with <code>fixed</code> nor put in a tuple, slice, or maybe, and the
+          compiler marks such types as it marks those holding pointers. Nothing is paid at runtime, but an iterator holding
+          one stops being a value like any other: it can't be passed by value or kept in two variables.</li>
+        <li><strong>Copying the block with the value.</strong> Copying a value holding a <code>[flex @this]</code> lambda
+          copies the lambda's block too, into the same region, so each copy changes copies of its own. The compiler writes
+          a copier for each lambda's block, as it does for a <code>copy</code>; each copy costs an allocation in the
+          region, and an assignment that looks free isn't.</li>
+      </ul>
+      <p>
+        The first is safe to build alone; the second fits Vela's rules best when a changing lambda is the point, and the
+        third keeps values plain at a cost in memory. Which one is the user's call.
+      </p>
       <p>
         <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[flex&amp; p.x, @r]</code>;
-        a lambda that keeps what it uses held in a field of a shape or kind; compared, or
+        compared, or
         copied into another region with what it keeps; a rule for <code>add</code> and <code>del</code> on a slice the
         lambda keeps a copy of, which today it refuses (a slice kept as a place grows), since its copy shares the items and not the length; and data of another
         region used in place where Vela can see that the region outlives <code>r</code>. Weighed and dropped: marks for

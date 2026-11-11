@@ -192,6 +192,20 @@ export class Workbench {
       this.showEditorOrWelcome();
       this.scheduleProblems();
     });
+    // The files a Vela file uses: open ones as edited, others from the workspace.
+    this.analyzer.modules.connect({
+      read: async (path) => {
+        try {
+          return (await this.api.readFile(path)).content;
+        } catch {
+          return null;
+        }
+      },
+      openText: (path) => {
+        const doc = this.documents.get(path);
+        return doc ? this.latest(doc).doc.toString() : undefined;
+      },
+    });
     // Defer analysis refresh so edits triggered inside an editor update don't re-enter dispatch.
     this.analyzer.modules.onChange(() => {
       clearTimeout(this.modulesTimer);

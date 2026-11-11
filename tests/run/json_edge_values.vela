@@ -1,0 +1,27 @@
+; JSON of values with no plain JSON form: control characters escape as \u00XX, nan and the
+; infinities become null, floats keep every digit they need, and char keys are escaped.
+include std/json
+
+task main()
+    region r default
+    show("a\0b\tc".json(r))
+    show((0.0 / 0.0).json(r), " ", (1.0 / 0.0).json(r), " ", [1.5, -1.0 / 0.0].json(r))
+    show((0.1 + 0.2).json(r), " ", (123456789.0).json(r), " ", (0.1).json(r))
+    fixed small: float32 = 0.1
+    show(small.json(r))
+    flex keys = new [char: int]() at r
+    keys['"'] = 1
+    keys['a'] = 2
+    show(keys.json(r))
+    show(json.stringify(json.Json.Float(0.0 / 0.0), r))
+    show(json.stringify(json.Json.Str("café\0"), r))
+    fixed v = json.parse("[\"caf\\u00e9\", \"\\ud83d\\ude00\", \"\\u0041\", \"\\ud800x\"]") { failure e
+        show(e.str(r))
+        <-
+    }
+    show(json.stringify(v, r))
+    fixed bad = json.parse("\"\\u12g4\"") { failure e
+        show(e.str(r))
+        <-
+    }
+fi

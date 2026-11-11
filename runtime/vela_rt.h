@@ -1130,10 +1130,52 @@ static inline void vela__rt__put_json_text(vela__rt__writer* w, vela__rt__text x
             vela__rt__put(w, x.bytes + from, i - from);
             vela__rt__put(w, escape, 2);
             from = i + 1;
+        } else if (c < 0x20) {
+            /* The other control characters have no short escape. */
+            char code[7];
+            snprintf(code, sizeof code, "\\u%04x", (unsigned)c);
+            vela__rt__put(w, x.bytes + from, i - from);
+            vela__rt__put(w, code, 6);
+            from = i + 1;
         }
     }
     vela__rt__put(w, x.bytes + from, len - from);
     VELA__RT__PUT(w, "\"");
+}
+
+/* A float as JSON: the fewest digits that read back as the same number (as a 32-bit float
+   when `single`), and null for nan and the infinities, which JSON has no numbers for. */
+static inline vela__rt__text vela__rt__json_float_view(char* room, double x, bool single) {
+    if (!isfinite(x)) {
+        return VELA__RT__TEXT("null");
+    }
+    int len = 0;
+    for (int digits = single ? 6 : 15; digits <= (single ? 9 : 17); digits++) {
+        len = snprintf(room, VELA__RT__NUMBER_ROOM, "%.*g", digits, x);
+        double back = strtod(room, NULL);
+        if (single ? (float)back == (float)x : back == x) {
+            break;
+        }
+    }
+    return (vela__rt__text){ room, (int64_t)len };
+}
+
+static inline void vela__rt__put_json_float(vela__rt__writer* w, double x, bool single) {
+    char room[VELA__RT__NUMBER_ROOM];
+    vela__rt__text t = vela__rt__json_float_view(room, x, single);
+    vela__rt__put(w, t.bytes, (size_t)t.len);
+}
+
+static inline vela__rt__text vela__rt__json_float(vela__rt__region* r, double x) {
+    vela__rt__writer w = VELA__RT__BUILDER;
+    vela__rt__put_json_float(&w, x, false);
+    return vela__rt__built(&w, r);
+}
+
+static inline vela__rt__text vela__rt__json_float32(vela__rt__region* r, float x) {
+    vela__rt__writer w = VELA__RT__BUILDER;
+    vela__rt__put_json_float(&w, x, true);
+    return vela__rt__built(&w, r);
 }
 
 static inline vela__rt__text vela__rt__json_text(vela__rt__region* r, vela__rt__text x) {
@@ -3040,6 +3082,20 @@ static inline vela__rt__text vela__rt__web_text_trim(vela__rt__text s) {
         end--;
     }
     return (vela__rt__text){ s.bytes + start, end - start };
+}
+
+/* Bytes from..to of s, kept within it, with no check for where characters start. */
+static inline vela__rt__text vela__rt__web_text_bytes(vela__rt__text s, int64_t from, int64_t to) {
+    if (to > s.len) {
+        to = s.len;
+    }
+    if (from < 0) {
+        from = 0;
+    }
+    if (from > to) {
+        from = to;
+    }
+    return (vela__rt__text){ s.bytes + from, to - from };
 }
 
 static inline bool vela__rt__web_text_eq_ignore_case(vela__rt__text a, vela__rt__text b) {

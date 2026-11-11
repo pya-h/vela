@@ -159,11 +159,11 @@ shape Request
         loop pos < .body_data.len
             fixed next_nl = text_find(.body_data, "\n", pos)
             when next_nl < 0
-                lines.add("{.body_data[pos.. .body_data.len]}" at r)
+                lines.add("{cut(.body_data, pos, .body_data.len)}" at r)
                 break
             fi
-            fixed line_end = when next_nl > pos and .body_data[next_nl - 1..next_nl] == "\r" next_nl - 1 else next_nl fi
-            lines.add("{.body_data[pos..line_end]}" at r)
+            fixed line_end = when next_nl > pos and cut(.body_data, next_nl - 1, next_nl) == "\r" next_nl - 1 else next_nl fi
+            lines.add("{cut(.body_data, pos, line_end)}" at r)
             pos = next_nl + 1
         fi
         <- lines
@@ -701,20 +701,20 @@ task file_response(path: text@p, r: region default) -> Response@r ~ WebError@r
 fi
 
 task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: region default) -> bool
-    fixed norm_path: text@r = when path.len > 1 and path[path.len - 1..path.len] == "/" path[0..path.len - 1] else path fi
+    fixed norm_path: text@r = when path.len > 1 and cut(path, path.len - 1, path.len) == "/" cut(path, 0, path.len - 1) else path fi
     when pattern == norm_path
         <- true
     fi
 
-    when pattern.len >= 2 and pattern[pattern.len - 2..pattern.len] == "/*"
-        fixed prefix = pattern[0..pattern.len - 2]
-        when norm_path.len >= prefix.len and norm_path[0..prefix.len] == prefix
+    when pattern.len >= 2 and cut(pattern, pattern.len - 2, pattern.len) == "/*"
+        fixed prefix = cut(pattern, 0, pattern.len - 2)
+        when norm_path.len >= prefix.len and cut(norm_path, 0, prefix.len) == prefix
             when norm_path.len == prefix.len
                 params["*"] = ""
                 <- true
             fi
-            when norm_path[prefix.len..prefix.len + 1] == "/"
-                params["*"] = norm_path[prefix.len + 1..norm_path.len]
+            when cut(norm_path, prefix.len, prefix.len + 1) == "/"
+                params["*"] = cut(norm_path, prefix.len + 1, norm_path.len)
                 <- true
             fi
         fi
@@ -726,19 +726,19 @@ task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: 
     loop pat_pos < pattern.len and path_pos < norm_path.len
         fixed next_pat_slash = text_find(pattern, "/", pat_pos)
         fixed pat_end = when next_pat_slash >= 0 next_pat_slash else pattern.len fi
-        fixed pat_seg = pattern[pat_pos..pat_end]
+        fixed pat_seg = cut(pattern, pat_pos, pat_end)
         pat_pos = when next_pat_slash >= 0 next_pat_slash + 1 else pattern.len fi
 
         fixed next_path_slash = text_find(norm_path, "/", path_pos)
         fixed path_end = when next_path_slash >= 0 next_path_slash else norm_path.len fi
-        fixed path_seg = norm_path[path_pos..path_end]
+        fixed path_seg = cut(norm_path, path_pos, path_end)
         path_pos = when next_path_slash >= 0 next_path_slash + 1 else norm_path.len fi
 
-        when pat_seg.len >= 2 and pat_seg[0..1] == "\{" and pat_seg[pat_seg.len - 1..pat_seg.len] == "\}"
-            fixed param_name = pat_seg[1..pat_seg.len - 1]
+        when pat_seg.len >= 2 and cut(pat_seg, 0, 1) == "\{" and cut(pat_seg, pat_seg.len - 1, pat_seg.len) == "\}"
+            fixed param_name = cut(pat_seg, 1, pat_seg.len - 1)
             params["{param_name}" at r] = path_seg
         else when pat_seg == "*"
-            params["*"] = norm_path[path_pos..norm_path.len]
+            params["*"] = cut(norm_path, path_pos, norm_path.len)
             <- true
         else when pat_seg != path_seg
             <- false
@@ -766,7 +766,7 @@ task is_request_complete(buf: text@p) -> bool
     when te_idx_upper >= 0 and te_idx_upper < body_start
         fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
         when is_chunked
-            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and cut(buf, body_start + 4, body_start + 9) == "0\r\n\r\n")
         fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
@@ -776,9 +776,10 @@ task is_request_complete(buf: text@p) -> bool
         when cl_end <= cl_idx_lower + 15
             <- false
         fi
-        fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
+        fixed cl_val_str = trim(cut(buf, cl_idx_lower + 15, cl_end))
         fixed content_len = int(cl_val_str) { 0 }
-        <- buf.len >= body_start + 4 + content_len
+        ; Compared with what has come, not added to where it starts, so a huge length can't overflow.
+        <- content_len <= buf.len - body_start - 4
     fi
     <- true
 fi
@@ -923,6 +924,14 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
                         cs.close() { failure _ }
                         conns[i] = ActiveConn { sock: server_sock, active: false }
                     fi
+                else when conn.buf.len + chunk.len > server.max_body_size + 65536
+                    ; A request still unfinished past the largest body and 64 KiB of headers is refused,
+                    ; so a client can't make the server hold an endless request.
+                    send_error_response(conn.sock, 413, "Payload Too Large", "413 Payload Too Large\n", req_r)
+                    Poll.unwatch(conn.sock)
+                    flex cs = conn.sock
+                    cs.close() { failure _ }
+                    conns[i] = ActiveConn { sock: server_sock, active: false }
                 else
                     fixed partial_buf = when conn.buf.len == 0 "{chunk}" at r else "{conn.buf}{chunk}" at r fi
                     conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: true, buf: partial_buf }
@@ -1000,9 +1009,47 @@ task send_error_response(client: Socket, code: int, reason: text@r, body: text@r
     send_response(client, resp, false, r)
 fi
 
+; Writes all of 'data'. One write on a socket that doesn't wait sends only what fits, so a large
+; response would end early; this waits while the client's side is full, and gives up, false, when
+; the client takes nothing for 5 seconds or the connection ends.
+priv task write_all(client: Socket, data: text@p) -> bool
+    flex sent = 0
+    loop sent < data.len
+        fixed n = client.write(cut(data, sent, data.len)) { failure _
+            <- false
+        }
+        when n == 0
+            fixed ready = client.poll(2, 5000) { failure _
+                <- false
+            }
+            when ready == 0
+                <- false
+            fi
+        fi
+        sent += n
+    fi
+    <- true
+fi
+
+; 't' with each line break made a space: a header or reason holding one would end it early and
+; start a header, or a response, its text chose.
+priv task one_line(t: text@p, r: region) -> text@r
+    flex out: text@r = ""
+    flex from = 0
+    flex i = 0
+    loop i < t.len
+        when t[i] == '\r' or t[i] == '\n'
+            out = "{out}{cut(t, from, i)} " at r
+            from = i + 1
+        fi
+        i++
+    fi
+    <- "{out}{cut(t, from, t.len)}" at r
+fi
+
 task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
     when resp.is_stream and resp.chunks is {chunk_list}
-        flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
+        flex wire = "HTTP/1.1 {resp.status} {one_line(resp.reason, r)}\r\n"
         when not resp.headers.has("transfer-encoding")
             wire = "{wire}Transfer-Encoding: chunked\r\n"
         fi
@@ -1011,20 +1058,24 @@ task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region
             wire = "{wire}Connection: {conn_val}\r\n"
         fi
         each k, v in resp.headers
-            wire = "{wire}{k}: {v}\r\n"
+            wire = "{wire}{one_line(k, r)}: {one_line(v, r)}\r\n"
         fi
         wire = "{wire}\r\n"
-        client.write(wire) { 0 }
+        when not write_all(client, wire)
+            <-
+        fi
         each chunk in chunk_list
             when chunk.len > 0
                 fixed hex_len = int_to_hex(chunk.len, r)
-                client.write("{hex_len}\r\n{chunk}\r\n") { 0 }
+                when not write_all(client, "{hex_len}\r\n{chunk}\r\n")
+                    <-
+                fi
             fi
         fi
-        client.write("0\r\n\r\n") { 0 }
+        write_all(client, "0\r\n\r\n")
         <-
     fi
-    flex wire = "HTTP/1.1 {resp.status} {resp.reason}\r\n"
+    flex wire = "HTTP/1.1 {resp.status} {one_line(resp.reason, r)}\r\n"
     when not resp.headers.has("content-length")
         wire = "{wire}Content-Length: {resp.body_data.len}\r\n"
     fi
@@ -1033,10 +1084,10 @@ task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region
         wire = "{wire}Connection: {conn_val}\r\n"
     fi
     each k, v in resp.headers
-        wire = "{wire}{k}: {v}\r\n"
+        wire = "{wire}{one_line(k, r)}: {one_line(v, r)}\r\n"
     fi
     wire = "{wire}\r\n{resp.body_data}"
-    client.write(wire) { 0 }
+    write_all(client, wire)
 fi
 
 task read_http_request(client: Socket, max_body: int, r: region default) -> text@r ~ WebError
@@ -1057,6 +1108,9 @@ task read_http_request(client: Socket, max_body: int, r: region default) -> text
             when text_find(chunk, "\r\n\r\n", 0) >= 0
                 break
             fi
+            when chunk.len > 65536
+                <- fail WebError.BadRequest("request headers too large")
+            fi
         fi
     fi
 
@@ -1066,13 +1120,12 @@ task read_http_request(client: Socket, max_body: int, r: region default) -> text
         fixed cl_idx_lower = when cl_idx >= 0 cl_idx else text_find(chunk, "content-length:", 0) fi
         when cl_idx_lower >= 0 and cl_idx_lower < body_start
             fixed cl_end = text_find(chunk, "\r\n", cl_idx_lower)
-            fixed cl_val_str = trim(chunk[cl_idx_lower + 15..cl_end])
+            fixed cl_val_str = trim(cut(chunk, cl_idx_lower + 15, cl_end))
             fixed content_len = int(cl_val_str) { 0 }
             when content_len > max_body
                 <- fail WebError.PayloadTooLarge
             fi
-            fixed expected_total = body_start + 4 + content_len
-            loop chunk.len < expected_total
+            loop chunk.len - body_start - 4 < content_len
                 fixed more = client.read(4096, r) { "" }
                 when more.len == 0
                     break
@@ -1089,7 +1142,7 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
     when line_end < 0
         <- fail WebError.BadRequest("missing request line")
     fi
-    fixed req_line = raw[0..line_end]
+    fixed req_line = cut(raw, 0, line_end)
 
     fixed sp1 = text_find(req_line, " ", 0)
     when sp1 < 0
@@ -1100,13 +1153,13 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
         <- fail WebError.BadRequest("invalid request line")
     fi
 
-    fixed method_str = req_line[0..sp1]
-    fixed uri = req_line[sp1 + 1..sp2]
+    fixed method_str = cut(req_line, 0, sp1)
+    fixed uri = cut(req_line, sp1 + 1, sp2)
     fixed method = method_of(method_str) { Method.Get }
 
     fixed q_mark = text_find(uri, "?", 0)
-    fixed path: text@r = when q_mark >= 0 uri[0..q_mark] else uri fi
-    fixed query: text@r = when q_mark >= 0 uri[q_mark + 1..uri.len] else "" fi
+    fixed path: text@r = when q_mark >= 0 cut(uri, 0, q_mark) else uri fi
+    fixed query: text@r = when q_mark >= 0 cut(uri, q_mark + 1, uri.len) else "" fi
 
     flex headers = new [text: text]() at r
     fixed hdr_end = text_find(raw, "\r\n\r\n", 0)
@@ -1120,26 +1173,29 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
         when next_crlf < 0 or next_crlf > hdr_end
             break
         fi
-        fixed line = raw[cursor..next_crlf]
+        fixed line = cut(raw, cursor, next_crlf)
         cursor = next_crlf + 2
         when line.len == 0
             continue
         fi
         fixed colon = text_find(line, ":", 0)
         when colon > 0
-            fixed h_name = to_lower(trim(line[0..colon]), r)
-            fixed h_val = trim(line[colon + 1..line.len])
+            fixed h_name = to_lower(trim(cut(line, 0, colon)), r)
+            fixed h_val = trim(cut(line, colon + 1, line.len))
             headers[h_name] = h_val
         fi
     fi
 
-    fixed raw_body = raw[hdr_end + 4..raw.len]
+    fixed raw_body = cut(raw, hdr_end + 4, raw.len)
     fixed is_chunked = when headers[#"transfer-encoding"] is {te}
         text_find(te, "chunked", 0) >= 0
     else
         false
     fi
-    fixed body = when is_chunked decode_chunked_body(raw_body, r) else raw_body fi
+    ; A body is as long as its Content-Length says, and bytes after it aren't part of it.
+    fixed declared = when headers[#"content-length"] is {cl} int(cl) { -1 } else -1 fi
+    fixed sized_body = when declared >= 0 and declared < raw_body.len cut(raw_body, 0, declared) else raw_body fi
+    fixed body = when is_chunked decode_chunked_body(raw_body, r) else sized_body fi
     <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body, params: new [text: text]() at r }
 fi
 
@@ -1149,25 +1205,25 @@ task parse_addr(addr: text@p) -> (text@p, int)
         <- (addr, 80)
     fi
     when colon == 0
-        fixed port = int(addr[1..addr.len]) { 80 }
+        fixed port = int(cut(addr, 1, addr.len)) { 80 }
         <- ("127.0.0.1", port)
     fi
-    fixed host = addr[0..colon]
-    fixed port = int(addr[colon + 1..addr.len]) { 80 }
+    fixed host = cut(addr, 0, colon)
+    fixed port = int(cut(addr, colon + 1, addr.len)) { 80 }
     <- (host, port)
 fi
 
 task parse_url(url: text@p) -> (text@p, int, text@p) ~ WebError
     flex rest = url
-    when url.len >= 8 and url[0..8] == "https://"
+    when url.len >= 8 and cut(url, 0, 8) == "https://"
         <- fail WebError.BadRequest("https is not supported")
     fi
-    when url.len >= 7 and url[0..7] == "http://"
-        rest = url[7..url.len]
+    when url.len >= 7 and cut(url, 0, 7) == "http://"
+        rest = cut(url, 7, url.len)
     fi
     fixed slash_idx = text_find(rest, "/", 0)
-    fixed host_port = when slash_idx >= 0 rest[0..slash_idx] else rest fi
-    fixed path = when slash_idx >= 0 rest[slash_idx..rest.len] else "/" fi
+    fixed host_port = when slash_idx >= 0 cut(rest, 0, slash_idx) else rest fi
+    fixed path = when slash_idx >= 0 cut(rest, slash_idx, rest.len) else "/" fi
     fixed (host, port) = parse_addr(host_port)
     <- (host, port, path)
 fi
@@ -1182,7 +1238,7 @@ task is_response_complete(buf: text@p) -> bool
     when te_idx_upper >= 0 and te_idx_upper < body_start
         fixed is_chunked = text_find(buf, "chunked", te_idx_upper) >= 0
         when is_chunked
-            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and buf[body_start + 4..body_start + 9] == "0\r\n\r\n")
+            <- text_find(buf, "\r\n0\r\n\r\n", body_start) >= 0 or (buf.len >= body_start + 9 and cut(buf, body_start + 4, body_start + 9) == "0\r\n\r\n")
         fi
     fi
     fixed cl_idx = text_find(buf, "Content-Length:", 0)
@@ -1192,13 +1248,14 @@ task is_response_complete(buf: text@p) -> bool
         when cl_end <= cl_idx_lower + 15
             <- false
         fi
-        fixed cl_val_str = trim(buf[cl_idx_lower + 15..cl_end])
+        fixed cl_val_str = trim(cut(buf, cl_idx_lower + 15, cl_end))
         fixed content_len = int(cl_val_str) { 0 }
-        <- buf.len >= body_start + 4 + content_len
+        ; Compared with what has come, not added to where it starts, so a huge length can't overflow.
+        <- content_len <= buf.len - body_start - 4
     fi
     fixed sp1 = text_find(buf, " ", 0)
     when sp1 >= 0 and sp1 + 4 <= body_start
-        fixed code_str = buf[sp1 + 1..sp1 + 4]
+        fixed code_str = cut(buf, sp1 + 1, sp1 + 4)
         when code_str == "204" or code_str == "304"
             <- true
         fi
@@ -1208,17 +1265,17 @@ fi
 
 task parse_response(raw: text@r, r: region default) -> Response@r
     fixed line_end = text_find(raw, "\r\n", 0)
-    fixed status_line = when line_end >= 0 raw[0..line_end] else raw fi
+    fixed status_line = when line_end >= 0 cut(raw, 0, line_end) else raw fi
     fixed sp1 = text_find(status_line, " ", 0)
     fixed sp2 = when sp1 >= 0 text_find(status_line, " ", sp1 + 1) else -1 fi
     fixed status_code = when sp1 >= 0
         fixed code_end = when sp2 >= 0 sp2 else status_line.len fi
-        int(status_line[sp1 + 1..code_end]) { 200 }
+        int(cut(status_line, sp1 + 1, code_end)) { 200 }
     else
         200
     fi
     fixed reason = when sp2 >= 0
-        trim(status_line[sp2 + 1..status_line.len])
+        trim(cut(status_line, sp2 + 1, status_line.len))
     else
         reason_of(status_code)
     fi
@@ -1232,16 +1289,16 @@ task parse_response(raw: text@r, r: region default) -> Response@r
             when next_line < 0 or next_line > hdr_end
                 break
             fi
-            fixed line = raw[pos..next_line]
+            fixed line = cut(raw, pos, next_line)
             fixed colon = text_find(line, ":", 0)
             when colon > 0
-                fixed h_name = to_lower(trim(line[0..colon]), r)
-                fixed h_val = trim(line[colon + 1..line.len])
+                fixed h_name = to_lower(trim(cut(line, 0, colon)), r)
+                fixed h_val = trim(cut(line, colon + 1, line.len))
                 headers[h_name] = h_val
             fi
             pos = next_line + 2
         fi
-        fixed body_raw = raw[hdr_end + 4..raw.len]
+        fixed body_raw = cut(raw, hdr_end + 4, raw.len)
         fixed is_chunked = when headers[#"transfer-encoding"] is {te}
             text_find(te, "chunked", 0) >= 0
         else
@@ -1419,13 +1476,13 @@ task query_param(raw_query: text@p, key: text@q) -> maybe text@p
     loop cursor < raw_query.len
         fixed next_amp = text_find(raw_query, "&", cursor)
         fixed part_end = when next_amp >= 0 next_amp else raw_query.len fi
-        fixed part = raw_query[cursor..part_end]
+        fixed part = cut(raw_query, cursor, part_end)
         cursor = part_end + 1
         fixed eq = text_find(part, "=", 0)
         when eq > 0
-            fixed k = part[0..eq]
+            fixed k = cut(part, 0, eq)
             when k == key
-                <- part[eq + 1..part.len]
+                <- cut(part, eq + 1, part.len)
             fi
         fi
     fi
@@ -1500,7 +1557,7 @@ task int_to_hex(n: int, r: region default) -> text@r
     flex res: text@r = ""
     loop val > 0
         fixed rem = val % 16
-        res = "{digits[rem..rem + 1]}{res}" at r
+        res = "{cut(digits, rem, rem + 1)}{res}" at r
         val = val / 16
     fi
     <- res
@@ -1510,7 +1567,7 @@ task hex_to_int(s: text@p) -> int
     flex val = 0
     flex i = 0
     loop i < s.len
-        fixed ch = s[i..i + 1]
+        fixed ch = cut(s, i, i + 1)
         fixed d = when ch >= "0" and ch <= "9"
             int(ch) { 0 }
         else when ch == "a" or ch == "A"
@@ -1531,6 +1588,10 @@ task hex_to_int(s: text@p) -> int
         when d < 0
             break
         fi
+        ; Too many digits for an int: -1, as a length no chunk has.
+        when val > 576460752303423487
+            <- -1
+        fi
         val = val * 16 + d
         i++
     fi
@@ -1545,20 +1606,26 @@ task decode_chunked_body(raw_body: text@r, r: region default) -> text@r
         when crlf < 0
             break
         fi
-        fixed hex_str = trim(raw_body[cursor..crlf])
+        fixed hex_str = trim(cut(raw_body, cursor, crlf))
         cursor = crlf + 2
         fixed chunk_len = hex_to_int(hex_str)
         when chunk_len <= 0
             break
         fi
-        when cursor + chunk_len > raw_body.len
+        when chunk_len > raw_body.len - cursor
             break
         fi
-        fixed chunk = raw_body[cursor..cursor + chunk_len]
+        fixed chunk = cut(raw_body, cursor, cursor + chunk_len)
         result = "{result}{chunk}" at r
         cursor = cursor + chunk_len + 2
     fi
     <- result
+fi
+
+; The bytes of 's' from 'from' to 'to', kept within it. Requests are bytes a client chose, so a
+; cut lands anywhere, even inside a character, where a text slice would stop the server.
+priv task cut(s: text@p, from: int, to: int) -> text@p
+    <- native_text_bytes(s, from, to)
 fi
 
 task text_rfind(haystack: text@p, needle: text@q) -> int
@@ -1578,12 +1645,12 @@ fi
 task mime_type(path: text@p, r: region default) -> text
     fixed last_slash = text_rfind(path, "/")
     fixed filename_start = when last_slash >= 0 last_slash + 1 else 0 fi
-    fixed filename = path[filename_start..path.len]
+    fixed filename = cut(path, filename_start, path.len)
     fixed dot_idx = text_rfind(filename, ".")
     when dot_idx < 0
         <- "application/octet-stream"
     fi
-    fixed ext = to_lower(filename[dot_idx + 1..filename.len], r)
+    fixed ext = to_lower(cut(filename, dot_idx + 1, filename.len), r)
     when ext == "html" or ext == "htm"
         <- "text/html; charset=utf-8"
     else when ext == "css"
@@ -1626,7 +1693,7 @@ task validate_file_path(path: text@p) -> bool
     loop pos < path.len
         fixed next_slash = text_find(path, "/", pos)
         fixed seg_end = when next_slash >= 0 next_slash else path.len fi
-        fixed seg = path[pos..seg_end]
+        fixed seg = cut(path, pos, seg_end)
         when seg == ".."
             <- false
         fi
@@ -1646,20 +1713,20 @@ task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: regio
     when req.param("*") is {matched_wildcard}
         sub_path = matched_wildcard
     else when prefix.len > 0
-        when req.path.len < prefix.len or req.path[0..prefix.len] != prefix
+        when req.path.len < prefix.len or cut(req.path, 0, prefix.len) != prefix
             <- fail WebError.RouteNotFound(req.path)
         fi
-        sub_path = "{req.path[prefix.len..req.path.len]}" at r
+        sub_path = "{cut(req.path, prefix.len, req.path.len)}" at r
     else
         sub_path = req.path
     fi
-    loop sub_path.len > 0 and sub_path[0..1] == "/"
-        sub_path = "{sub_path[1..sub_path.len]}" at r
+    loop sub_path.len > 0 and cut(sub_path, 0, 1) == "/"
+        sub_path = "{cut(sub_path, 1, sub_path.len)}" at r
     fi
     when sub_path.len == 0 or sub_path == "."
         sub_path = "index.html"
     fi
-    when sub_path.len > 0 and sub_path[sub_path.len - 1..sub_path.len] == "/"
+    when sub_path.len > 0 and cut(sub_path, sub_path.len - 1, sub_path.len) == "/"
         sub_path = "{sub_path}index.html" at r
     fi
     when not validate_file_path(sub_path)
@@ -1667,7 +1734,7 @@ task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: regio
     fi
     fixed disk_path: text@r = when folder.len == 0
         sub_path
-    else when folder[folder.len - 1..folder.len] == "/"
+    else when cut(folder, folder.len - 1, folder.len) == "/"
         "{folder}{sub_path}" at r
     else
         "{folder}/{sub_path}" at r
@@ -1702,6 +1769,7 @@ priv native task native_socket_status() -> int
 priv native task native_text_find(haystack: text@p, needle: text@q, from: int) -> int
 priv native task native_text_lower(s: text@p, into: region) -> text@into
 priv native task native_text_trim(s: text@p) -> text@p
+priv native task native_text_bytes(s: text@p, from: int, to: int) -> text@p
 priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool
 priv native task native_time_ms() -> int
 priv native task native_sleep_ms(ms: int) -> int

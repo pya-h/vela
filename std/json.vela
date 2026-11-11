@@ -129,6 +129,26 @@ task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ Js
                 out = "{out}{text(char(8)) at r}" at r
             else when esc == 'f'
                 out = "{out}{text(char(12)) at r}" at r
+            else when esc == 'u'
+                flex code = hex4(raw, pos)
+                when code < 0
+                    <- fail JsonError.InvalidEscape(pos - 2)
+                fi
+                pos += 4
+                ; A character past the first 65536 comes as two escapes, a high half then a low one;
+                ; a half alone becomes U+FFFD, the replacement character.
+                when code >= 55296 and code < 56320
+                    fixed low = when pos + 1 < raw.len and raw[pos] == '\\' and raw[pos + 1] == 'u' hex4(raw, pos + 2) else -1 fi
+                    when low >= 56320 and low < 57344
+                        code = 65536 + (code - 55296) * 1024 + (low - 56320)
+                        pos += 6
+                    else
+                        code = 65533
+                    fi
+                else when code >= 56320 and code < 57344
+                    code = 65533
+                fi
+                out = "{out}{utf8_of(code, r)}" at r
             else
                 out = "{out}{esc}" at r
             fi
@@ -138,6 +158,48 @@ task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ Js
         fi
     fi
     <- fail JsonError.UnexpectedEnd(pos)
+fi
+
+; The number four hex digits at 'pos' write, or -1 when they aren't there.
+priv task hex4(raw: text@r, pos: int) -> int
+    when pos + 4 > raw.len
+        <- -1
+    fi
+    flex value = 0
+    flex i = 0
+    loop i < 4
+        fixed c = raw[pos + i]
+        flex digit = -1
+        when c >= '0' and c <= '9'
+            digit = c - '0'
+        else when c >= 'a' and c <= 'f'
+            digit = c - 'a' + 10
+        else when c >= 'A' and c <= 'F'
+            digit = c - 'A' + 10
+        fi
+        when digit < 0
+            <- -1
+        fi
+        value = value * 16 + digit
+        i++
+    fi
+    <- value
+fi
+
+; The UTF-8 bytes of the character 'code'.
+priv task utf8_of(code: int, r: region default) -> text@r
+    when code < 128
+        <- byte(code, r)
+    else when code < 2048
+        <- "{byte(192 + code / 64, r)}{byte(128 + code % 64, r)}" at r
+    else when code < 65536
+        <- "{byte(224 + code / 4096, r)}{byte(128 + code / 64 % 64, r)}{byte(128 + code % 64, r)}" at r
+    fi
+    <- "{byte(240 + code / 262144, r)}{byte(128 + code / 4096 % 64, r)}{byte(128 + code / 64 % 64, r)}{byte(128 + code % 64, r)}" at r
+fi
+
+priv task byte(code: int, r: region) -> text@r
+    <- text(char(code)) at r
 fi
 
 task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonError@r
@@ -319,30 +381,7 @@ task parse(raw: text@r, r: region default) -> Json@r ~ JsonError@r
 fi
 
 task escape_json_string(s: text@p, r: region default) -> text@r
-    flex out: text@r = "\""
-    flex i = 0
-    loop i < s.len
-        fixed c = s[i]
-        when c == '"'
-            out = "{out}\\\"" at r
-        else when c == '\\'
-            out = "{out}\\\\" at r
-        else when c == '\n'
-            out = "{out}\\n" at r
-        else when c == '\r'
-            out = "{out}\\r" at r
-        else when c == '\t'
-            out = "{out}\\t" at r
-        else when c == char(8)
-            out = "{out}\\b" at r
-        else when c == char(12)
-            out = "{out}\\f" at r
-        else
-            out = "{out}{s[i..i+1]}" at r
-        fi
-        i++
-    fi
-    <- "{out}\"" at r
+    <- s.json(r)
 fi
 
 task stringify_array(items: [Json]@p, r: region default) -> text@r
@@ -377,7 +416,8 @@ task stringify(val: Json@p, r: region default) -> text@r
     case Null = "null"
     case Bool b = when b "true" else "false" fi
     case Int n = "{n}" at r
-    case Float f = "{f}" at r
+    ; JSON has no numbers for nan and the infinities, so they are null.
+    case Float f = when f - f == f - f f.json(r) else "null" fi
     case Str s = escape_json_string(s, r)
     case Array items = stringify_array(items, r)
     case Object props = stringify_object(props, r)

@@ -1,0 +1,48 @@
+  1 | ; Requests a client shapes to break the server: lengths too large to add, chunks cutting through
+    | comment:; Requests a client shapes to break the server: lengths too large to add, chunks cutting through
+  2 | ; a character, and paths ending inside one. Each is read without stopping the program.
+    | comment:; a character, and paths ending inside one. Each is read without stopping the program.
+  3 | include std/web { is_request_complete, is_response_complete, decode_chunked_body, hex_to_int, match_route, parse_request }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  task:is_request_complete  punctuation:,  task:is_response_complete  punctuation:,  task:decode_chunked_body  punctuation:,  task:hex_to_int  punctuation:,  task:match_route  punctuation:,  task:parse_request  punctuation:}
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r default
+    | keyword:region  region:r  keyword:default
+  7 |     show(is_request_complete("POST / HTTP/1.1\r\nContent-Length: 9223372036854775807\r\n\r\nabc"))
+    | builtin-fn:show  punctuation:(  task:is_request_complete  punctuation:(  string:"POST / HTTP/1.1  escape:\r  escape:\n  string:Content-Length: 9223372036854775807  escape:\r  escape:\n  escape:\r  escape:\n  string:abc"  punctuation:)  punctuation:)
+  8 |     show(is_response_complete("HTTP/1.1 200 OK\r\nContent-Length: 9223372036854775807\r\n\r\nabc"))
+    | builtin-fn:show  punctuation:(  task:is_response_complete  punctuation:(  string:"HTTP/1.1 200 OK  escape:\r  escape:\n  string:Content-Length: 9223372036854775807  escape:\r  escape:\n  escape:\r  escape:\n  string:abc"  punctuation:)  punctuation:)
+  9 |     show(is_request_complete("POST / HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc"))
+    | builtin-fn:show  punctuation:(  task:is_request_complete  punctuation:(  string:"POST / HTTP/1.1  escape:\r  escape:\n  string:Content-Length: 3  escape:\r  escape:\n  escape:\r  escape:\n  string:abc"  punctuation:)  punctuation:)
+ 10 |     show(decode_chunked_body("7fffffffffffffff\r\nabc\r\n0\r\n\r\n", r).len)
+    | builtin-fn:show  punctuation:(  task:decode_chunked_body  punctuation:(  string:"7fffffffffffffff  escape:\r  escape:\n  string:abc  escape:\r  escape:\n  string:0  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
+ 11 |     show(decode_chunked_body("1\r\né\r\n0\r\n\r\n", r).len)
+    | builtin-fn:show  punctuation:(  task:decode_chunked_body  punctuation:(  string:"1  escape:\r  escape:\n  string:é  escape:\r  escape:\n  string:0  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
+ 12 |     show(decode_chunked_body("3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n", r))
+    | builtin-fn:show  punctuation:(  task:decode_chunked_body  punctuation:(  string:"3  escape:\r  escape:\n  string:abc  escape:\r  escape:\n  string:2  escape:\r  escape:\n  string:de  escape:\r  escape:\n  string:0  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 13 |     show(hex_to_int("ffffffffffffffffff"), " ", hex_to_int("1F"))
+    | builtin-fn:show  punctuation:(  task:hex_to_int  punctuation:(  string:"ffffffffffffffffff"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:hex_to_int  punctuation:(  string:"1F"  punctuation:)  punctuation:)
+ 14 |     flex params = new [text: text]() at r
+    | keyword:flex  variable:params  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 15 |     show(match_route("/static/*", "/statié", params, r))
+    | builtin-fn:show  punctuation:(  task:match_route  punctuation:(  string:"/static/*"  punctuation:,  string:"/statié"  punctuation:,  variable:params  punctuation:,  region:r  punctuation:)  punctuation:)
+ 16 |     show(match_route("/a", "/é", params, r))
+    | builtin-fn:show  punctuation:(  task:match_route  punctuation:(  string:"/a"  punctuation:,  string:"/é"  punctuation:,  variable:params  punctuation:,  region:r  punctuation:)  punctuation:)
+ 17 |     fixed cut = parse_request("POST /é HTTP/1.1\r\nContent-Length: 1\r\n\r\né", r) { failure e
+    | keyword:fixed  variable:cut  operator:=  task:parse_request  punctuation:(  string:"POST /é HTTP/1.1  escape:\r  escape:\n  string:Content-Length: 1  escape:\r  escape:\n  escape:\r  escape:\n  string:é"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 18 |         <-
+    | keyword:<-
+ 19 |     }
+    | punctuation:}
+ 20 |     show(cut.body_data.len)
+    | builtin-fn:show  punctuation:(  variable:cut  punctuation:.  field:body_data  punctuation:.  field:len  punctuation:)
+ 21 |     fixed two = parse_request("POST / HTTP/1.1\r\nContent-Length: 2\r\n\r\nabGET / HTTP/1.1\r\n\r\n", r) { failure e
+    | keyword:fixed  variable:two  operator:=  task:parse_request  punctuation:(  string:"POST / HTTP/1.1  escape:\r  escape:\n  string:Content-Length: 2  escape:\r  escape:\n  escape:\r  escape:\n  string:abGET / HTTP/1.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 22 |         <-
+    | keyword:<-
+ 23 |     }
+    | punctuation:}
+ 24 |     show(two.body_data)
+    | builtin-fn:show  punctuation:(  variable:two  punctuation:.  field:body_data  punctuation:)
+ 25 | fi
+    | keyword:fi

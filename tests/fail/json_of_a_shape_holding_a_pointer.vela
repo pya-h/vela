@@ -1,0 +1,11 @@
+; error: 10:10: 'json' can't write Node@r, since it holds ^Node: JSON has no form for a pointer, since what one points to may point back; give the shape holding it its own method 'json(r: region) -> text@r'
+shape Node
+    v: int
+    next: maybe ^Node
+fi
+
+task main()
+    region r default
+    fixed n: Node@r = Node { v: 1, next: none }
+    show(n.json(r))
+fi

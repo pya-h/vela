@@ -1,0 +1,6 @@
+; error: 5:10: 'json' can't write ^int@r: JSON has no form for a pointer, since what one points to may point back
+task main()
+    region r default
+    fixed p = new int(3) at r
+    show(p.json(r))
+fi

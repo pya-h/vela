@@ -1,0 +1,12 @@
+; error: 11:29: this comparison calls 'Money.cmp', which gives an int, below 0, 0, or above 0, as 'cmp(other: Money) -> int' does, but this one gives bool
+shape Money
+    cents: int
+
+    cmp(other: Money) -> bool
+        <- .cents < other.cents
+    fi
+fi
+
+task main()
+    show(Money { cents: 1 } < Money { cents: 2 })
+fi

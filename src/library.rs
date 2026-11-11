@@ -72,6 +72,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/web.native_text_find", "vela__rt__web_text_find"),
     ("std/web.native_text_lower", "vela__rt__web_text_lower"),
     ("std/web.native_text_trim", "vela__rt__web_text_trim"),
+    ("std/web.native_text_bytes", "vela__rt__web_text_bytes"),
     ("std/web.native_text_eq_ignore_case", "vela__rt__web_text_eq_ignore_case"),
     ("std/web.native_time_ms", "vela__rt__web_time_ms"),
     ("std/web.native_sleep_ms", "vela__rt__web_sleep_ms"),

@@ -1,0 +1,52 @@
+  1 | ; JSON of values with no plain JSON form: control characters escape as \u00XX, nan and the
+    | comment:; JSON of values with no plain JSON form: control characters escape as \u00XX, nan and the
+  2 | ; infinities become null, floats keep every digit they need, and char keys are escaped.
+    | comment:; infinities become null, floats keep every digit they need, and char keys are escaped.
+  3 | include std/json
+    | keyword:include  module:std  operator:/  module:json
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r default
+    | keyword:region  region:r  keyword:default
+  7 |     show("a\0b\tc".json(r))
+    | builtin-fn:show  punctuation:(  string:"a  escape:\0  string:b  escape:\t  string:c"  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+  8 |     show((0.0 / 0.0).json(r), " ", (1.0 / 0.0).json(r), " ", [1.5, -1.0 / 0.0].json(r))
+    | builtin-fn:show  punctuation:(  punctuation:(  number:0.0  operator:/  number:0.0  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:(  number:1.0  operator:/  number:0.0  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:[  number:1.5  punctuation:,  operator:-  number:1.0  operator:/  number:0.0  punctuation:]  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+  9 |     show((0.1 + 0.2).json(r), " ", (123456789.0).json(r), " ", (0.1).json(r))
+    | builtin-fn:show  punctuation:(  punctuation:(  number:0.1  operator:+  number:0.2  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:(  number:123456789.0  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:(  number:0.1  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 10 |     fixed small: float32 = 0.1
+    | keyword:fixed  variable:small  punctuation::  type-builtin:float32  operator:=  number:0.1
+ 11 |     show(small.json(r))
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 12 |     flex keys = new [char: int]() at r
+    | keyword:flex  variable:keys  operator:=  keyword:new  punctuation:[  type-builtin:char  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 13 |     keys['"'] = 1
+    | variable:keys  punctuation:[  string:'"'  punctuation:]  operator:=  number:1
+ 14 |     keys['a'] = 2
+    | variable:keys  punctuation:[  string:'a'  punctuation:]  operator:=  number:2
+ 15 |     show(keys.json(r))
+    | builtin-fn:show  punctuation:(  variable:keys  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 16 |     show(json.stringify(json.Json.Float(0.0 / 0.0), r))
+    | builtin-fn:show  punctuation:(  module:json  punctuation:.  task:stringify  punctuation:(  module:json  punctuation:.  type:Json  punctuation:.  variant:Float  punctuation:(  number:0.0  operator:/  number:0.0  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:)
+ 17 |     show(json.stringify(json.Json.Str("café\0"), r))
+    | builtin-fn:show  punctuation:(  module:json  punctuation:.  task:stringify  punctuation:(  module:json  punctuation:.  type:Json  punctuation:.  variant:Str  punctuation:(  string:"café  escape:\0  string:"  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:)
+ 18 |     fixed v = json.parse("[\"caf\\u00e9\", \"\\ud83d\\ude00\", \"\\u0041\", \"\\ud800x\"]") { failure e
+    | keyword:fixed  variable:v  operator:=  module:json  punctuation:.  task:parse  punctuation:(  string:"[  escape:\"  string:caf  escape:\\  string:u00e9  escape:\"  string:,   escape:\"  escape:\\  string:ud83d  escape:\\  string:ude00  escape:\"  string:,   escape:\"  escape:\\  string:u0041  escape:\"  string:,   escape:\"  escape:\\  string:ud800x  escape:\"  string:]"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 19 |         show(e.str(r))
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 20 |         <-
+    | keyword:<-
+ 21 |     }
+    | punctuation:}
+ 22 |     show(json.stringify(v, r))
+    | builtin-fn:show  punctuation:(  module:json  punctuation:.  task:stringify  punctuation:(  variable:v  punctuation:,  region:r  punctuation:)  punctuation:)
+ 23 |     fixed bad = json.parse("\"\\u12g4\"") { failure e
+    | keyword:fixed  variable:bad  operator:=  module:json  punctuation:.  task:parse  punctuation:(  string:"  escape:\"  escape:\\  string:u12g4  escape:\"  string:"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 24 |         show(e.str(r))
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 25 |         <-
+    | keyword:<-
+ 26 |     }
+    | punctuation:}
+ 27 | fi
+    | keyword:fi

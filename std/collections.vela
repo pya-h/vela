@@ -14,11 +14,11 @@ pattern Iterator<T>
     ; Marked `alters` because advancing consumes the iterator; consumers also require a mutable place.
     alters next() -> maybe T
 
-    map<R>(f: (T) -> R) -> MapIter<this, T, R>@this
+    map<R>(f: [@this](T) -> R) -> MapIter<this, T, R>@this
         <- MapIter { inner: .this, f: f }
     fi
 
-    filter(keep: (T) -> bool) -> FilterIter<this, T>@this
+    filter(keep: [@this](T) -> bool) -> FilterIter<this, T>@this
         <- FilterIter { inner: .this, keep: keep }
     fi
 
@@ -48,7 +48,7 @@ pattern Iterator<T>
         <- made
     fi
 
-    alters fold<A>(initial: A, step: (A, T) -> A) -> A
+    alters fold<A>(initial: A, step: [@q](A, T) -> A) -> A
         flex done = initial
         endless
             fixed item = .next() { break }
@@ -57,7 +57,7 @@ pattern Iterator<T>
         <- done
     fi
 
-    alters find(test: (T) -> bool) -> maybe T
+    alters find(test: [@q](T) -> bool) -> maybe T
         endless
             fixed item = .next() { <- none }
             when test(item)
@@ -67,7 +67,7 @@ pattern Iterator<T>
         <- none
     fi
 
-    alters all(test: (T) -> bool) -> bool
+    alters all(test: [@q](T) -> bool) -> bool
         endless
             fixed item = .next() { break }
             when not test(item)
@@ -77,7 +77,7 @@ pattern Iterator<T>
         <- true
     fi
 
-    alters any(test: (T) -> bool) -> bool
+    alters any(test: [@q](T) -> bool) -> bool
         endless
             fixed item = .next() { break }
             when test(item)
@@ -90,7 +90,7 @@ fi
 
 shape MapIter<I: Iterator<T>, T, R>::Iterator<R>
     inner: I
-    f: (T) -> R
+    f: [@this](T) -> R
 
     alters next() -> maybe R
         fixed item = .inner.next() { <- none }
@@ -100,7 +100,7 @@ fi
 
 shape FilterIter<I: Iterator<T>, T>::Iterator<T>
     inner: I
-    keep: (T) -> bool
+    keep: [@this](T) -> bool
 
     alters next() -> maybe T
         endless

@@ -1,0 +1,25 @@
+; Joining slices whose items hold text, with '+' and '+=': the join copies the items' text into its region.
+
+shape P
+    name: text
+fi
+
+task join(a: [text]@r, b: [text]@r, r: region) -> [text]@r
+    <- a + b at r
+fi
+
+task main()
+    region r default
+    region q
+    flex ps: [P]@r = [P { name: "a" }, ...] at r
+    ps += P { name: "b" }
+    fixed more: [P]@q = [P { name: "c" }, ...] at q
+    ps += more
+    fixed front = P { name: "z" } + ps at r
+    each p in front
+        show(p.name)
+    fi
+    flex words: [text]@r = ["x", ...] at r
+    words += "y"
+    show(join(words, ["w", ...] at r, r)[2])
+fi

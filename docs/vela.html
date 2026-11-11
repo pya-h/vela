@@ -1704,7 +1704,12 @@ show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyw
         <strong>Values as JSON.</strong> <code>x.json() at r</code> (or <code>x.json(r)</code>, <code>x.json()@r</code>, or
         <code>to_json(x, r)</code> in <code>std/json</code>) turns a value into standard RFC 8259 JSON text in region <code>r</code>.
         Numbers, booleans, and characters format according to JSON rules; text strings and characters are escaped and quoted with
-        standard JSON escapes (<code>\"</code>, <code>\\</code>, <code>\n</code>, <code>\t</code>, <code>\r</code>).
+        standard JSON escapes (<code>\"</code>, <code>\\</code>, <code>\n</code>, <code>\t</code>, <code>\r</code>), and
+        the other control characters as <code>\u00XX</code>. A float is written with the fewest digits that read back as
+        the same number, <code>0.30000000000000004</code>, and <code>nan</code> and the infinities, which JSON has no
+        numbers for, as <code>null</code>. A key of a map that isn't text is written as text, <code>{"1":"one"}</code>.
+        A pointer, a task, and a lambda have no JSON form, so a value holding one is an error, unless the shape holding it
+        has its own <code>json</code> method.
         Arrays and slices serialize as <code>[v1,v2,…]</code>, and <code>maybe</code> serializes as <code>null</code> when <code>none</code>
         or as its inner value.
         Map literals serialize directly as JSON objects, <code>{"key":val,…}</code>, and shapes serialize their public fields directly as JSON objects
@@ -3224,8 +3229,18 @@ fi</code></pre>
         there is kept where the program keeps it, and a task value held in a variable in a block of <code>r</code>, so a
         call that names <code>r</code> by no other value can't keep one (keep it first, <code>fixed kept: [@r](int) -&gt; int = plain</code>). A lambda that keeps what
         it uses never goes where a plain task's type is expected: that type names no region, so the value could outlive
-        <code>r</code>. Such a lambda isn't compared, copied with <code>copy</code>, held in a field of a shape or kind,
-        or given as a wrapper's own value yet. A stop inside any lambda says where it is, <code>at 6:39 in a lambda</code>.
+        <code>r</code>. Such a lambda isn't compared, copied with <code>copy</code>, or given as a wrapper's own value
+        yet. A stop inside any lambda says where it is, <code>at 6:39 in a lambda</code>.
+      </p>
+      <p id="lambda-fields">
+        <strong>In a field.</strong> A field holds one as <code>f: [@this](int) -&gt; int</code>: <code>this</code> is the
+        region of the value holding it, so the lambda keeps what it uses there, and the value names that region, as a value
+        holding text in a region does, <code>fixed op: Op@r = Op { f: [@r] n -&gt; n * k }</code>, called as
+        <code>op.f(3)</code>. A value in no region holds only a plain task or lambda there, as a text field of one holds
+        lasting text, and a plain <code>(int) -&gt; int</code> field stays plain. A <code>[flex @r]</code> or
+        <code>[bind @r]</code> lambda is never held in a field, since a value holding it is copied, and a shared field,
+        which lives in no value, holds a task value instead. The iterators of <a href="#iterators">std/collections</a>
+        hold what their makers are given this way.
       </p>
       <p>
         <strong>Keeping a variable as a place.</strong> A variable named in the list beside the region is kept as the
@@ -4557,7 +4572,9 @@ save(500) {
         shorter, and <code>enumerate</code> an <code>Indexed</code> (fields <code>.index</code> and <code>.item</code>) from
         0. Either side of <code>zip</code> may be a slice, read as its own iterator. <code>collect(r)</code> gathers what is
         left into a slice in <code>r</code>; <code>fold</code>, <code>find</code>, <code>all</code>, and <code>any</code> read
-        what is left and give one value.
+        what is left and give one value. Each takes a plain lambda or one that keeps what it uses,
+        <code>xs.map([@r] n -&gt; n * k)</code>; a maker holds it in a field (see <a href="#lambda-fields">In a field</a>),
+        so the iterator it makes lives in that lambda's region.
       </p>
       <p>
         Reading an item advances the iterator, so a consumer is <code>alters</code> and asks for a changeable place or a
@@ -5506,7 +5523,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A plain lambda takes nothing from the code around it, and no lambda can be written inside a task or method
           that takes types (see <a href="#lambdas">Lambdas</a>). One that keeps what it uses, <code>[@r]</code>, keeps
           copies in one region, keeps a variable as a place only where that region is declared after it (never a field
-          or an item), and isn't compared, copied, held in a field, or given as a wrapper's value (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
+          or an item), isn't compared, copied, or given as a wrapper's value, and a field holds it only as <code>[@this](…)</code>, never as <code>[flex @r]</code> or <code>[bind @r]</code> (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
         <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither, nor a task that sends several values;
           a builtin or a macro is no decorator; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
