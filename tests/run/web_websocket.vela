@@ -1,0 +1,137 @@
+; Tests RFC 6455 WebSockets in std/web: handshake, masking, frame encoding/decoding, text, ping, and close.
+include std/web { Socket, WebSocket, WebSocketMessage, Request, Method, ws_upgrade, ws_accept, text_find }
+
+task main()
+    region r default
+    ; 1. Verify RFC 6455 §1.3 handshake accept key calculation
+    fixed resp = ws_upgrade("dGhlIHNhbXBsZSBub25jZQ==", r)
+    fixed accept = when resp.headers[#"Sec-WebSocket-Accept"] is {a} a else "missing" fi
+    show("accept_key: ", accept)
+
+    ; 2. Verify Request.is_websocket_upgrade
+    flex hdrs = new [text: text]() at r
+    hdrs["upgrade"] = "websocket"
+    hdrs["connection"] = "Upgrade"
+    hdrs["sec-websocket-key"] = "dGhlIHNhbXBsZSBub25jZQ=="
+    fixed ws_req = Request { method: Method.Get, path: "/chat", raw_query: "", headers: hdrs, body_data: "", params: new [text: text]() at r }
+    show("is_upgrade: ", ws_req.is_websocket_upgrade())
+
+    flex plain_hdrs = new [text: text]() at r
+    plain_hdrs["accept"] = "text/html"
+    fixed http_req = Request { method: Method.Get, path: "/", raw_query: "", headers: plain_hdrs, body_data: "", params: new [text: text]() at r }
+    show("is_plain_upgrade: ", http_req.is_websocket_upgrade())
+
+    ; 3. Setup loopback WebSocket connection
+    flex server = Socket.open(r) { failure _
+        show("server open failed")
+        <-
+    }
+    server.bind_to("127.0.0.1", 18098) { failure _
+        show("bind failed")
+        <-
+    }
+    server.listen(16) { failure _
+        show("listen failed")
+        <-
+    }
+
+    fixed client_sock = Socket.open(r) { failure _
+        show("client open failed")
+        <-
+    }
+    client_sock.connect("127.0.0.1", 18098) { failure _
+        show("connect failed")
+        <-
+    }
+
+    fixed accepted_sock = server.accept(r) { failure _
+        show("accept failed")
+        <-
+    }
+
+    ; Upgrade accepted connection into WebSocket
+    flex server_ws = ws_accept(ws_req, accepted_sock, r) { failure _
+        show("ws_accept failed")
+        <-
+    }
+
+    ; Client reads the 101 response from server
+    fixed srv_reply = client_sock.read(256, r) { failure _
+        show("client handshake read failed")
+        <-
+    }
+    show("handshake 101: ", text_find(srv_reply, "101 Switching Protocols", 0) >= 0)
+
+    flex client_ws = WebSocket { sock: client_sock, is_client: true, closed: false }
+
+    ; 4. Send client text message (masked)
+    client_ws.send_text("Hello WebSocket!", r) { failure _
+        show("send_text failed")
+        <-
+    }
+
+    fixed msg1 = server_ws.recv(r) { failure _
+        show("recv text failed")
+        <-
+    }
+    match msg1
+    case WebSocketMessage.Text payload
+        show("server got text: ", payload)
+    case _
+        show("server got unexpected message")
+    fi
+
+    ; 5. Send server text reply (unmasked)
+    server_ws.send_text("Welcome from server!", r) { failure _
+        show("server send_text failed")
+        <-
+    }
+
+    fixed msg2 = client_ws.recv(r) { failure _
+        show("client recv text failed")
+        <-
+    }
+    match msg2
+    case WebSocketMessage.Text payload
+        show("client got text: ", payload)
+    case _
+        show("client got unexpected message")
+    fi
+
+    ; 6. Ping frame
+    client_ws.ping("ping-123", r) { failure _
+        show("ping failed")
+        <-
+    }
+
+    fixed msg3 = server_ws.recv(r) { failure _
+        show("recv ping failed")
+        <-
+    }
+    match msg3
+    case WebSocketMessage.Ping payload
+        show("server got ping: ", payload)
+    case _
+        show("server got unexpected ping message")
+    fi
+
+    ; 7. Close frame
+    client_ws.close(1000, "done", r) { failure _
+        show("close failed")
+        <-
+    }
+
+    fixed msg4 = server_ws.recv(r) { failure _
+        show("recv close failed")
+        <-
+    }
+    match msg4
+    case WebSocketMessage.Close code reason
+        show("server got close: code=", code, " reason=", reason)
+    case _
+        show("server got unexpected close message")
+    fi
+
+    server_ws.close(1000, "bye", r) { failure _ }
+    server.close() { failure _ }
+fi

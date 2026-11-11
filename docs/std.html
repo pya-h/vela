@@ -388,6 +388,54 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     </section>
 
     <section>
+      <h2 id="gui">std/gui</h2>
+      <p>
+        Foundational 2D software canvas rasterization, windowing, geometry, and per-frame region discipline.
+        Brought in with <code>include std/gui {Window, Canvas, GuiEvent, Point, Size, Rect, Color, Button, Label}</code>
+        or <code>include std/gui =&gt; gui</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Button}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"Counter Application"</span>, 320, 240) { <span class="keyword">failure</span> _ &lt;- }
+    <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 50, width: 100, height: 36 }, label: <span class="string">"Click me"</span> }
+    <span class="keyword">fixed</span> canvas = win.canvas()
+
+    <span class="keyword">loop</span> win.is_open
+        <span class="keyword">region</span> frame <span class="keyword">default</span>
+        <span class="keyword">fixed</span> ev = win.poll_event()
+        <span class="keyword">match</span> ev
+        <span class="keyword">case</span> GuiEvent.Redraw
+            canvas.clear(Color.hex(0x0F172A))
+            btn.draw(canvas, Point { x: 0, y: 0 }, false)
+            win.present()
+        <span class="keyword">case</span> GuiEvent.CloseRequested
+            win.close()
+            <span class="keyword">break</span>
+        <span class="keyword">case</span> _
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>Point</code></td><td>2D coordinate: <code>Point { x: int, y: int }</code></td></tr>
+        <tr><td><code>Size</code></td><td>Dimensions: <code>Size { width: int, height: int }</code></td></tr>
+        <tr><td><code>Rect</code></td><td>2D bounding box: <code>Rect { x, y, width, height }</code>, with <code>.contains(point)</code> and <code>.intersects(other_rect)</code></td></tr>
+        <tr><td><code>Color</code></td><td>RGBA color: <code>Color { r, g, b, a }</code>, <code>Color.rgb(r, g, b)</code>, <code>Color.rgba(r, g, b, a)</code>, <code>Color.hex(0xRRGGBB)</code>, and built-in palettes (<code>.black()</code>, <code>.white()</code>, <code>.red()</code>, <code>.green()</code>, <code>.blue()</code>, <code>.gray()</code>, <code>.transparent()</code>)</td></tr>
+        <tr><td><code>Window</code></td><td>Window context: <code>Window.open(title, width, height)</code>, <code>.canvas()</code>, <code>.poll_event()</code>, <code>.push_event(type, a1, a2, a3)</code>, <code>.present()</code>, <code>.close()</code>, <code>.is_open</code></td></tr>
+        <tr><td><code>Canvas</code></td><td>Software rasterization drawing context: <code>.clear(color)</code>, <code>.draw_pixel(x, y, color)</code>, <code>.pixel_at(x, y)</code>, <code>.fill_rect(rect, color)</code>, <code>.draw_rect(rect, color)</code>, <code>.draw_line(x1, y1, x2, y2, color)</code>, <code>.draw_text(msg, pos, color)</code>, <code>.export_ppm(r)</code></td></tr>
+        <tr><td><code>GuiEvent</code></td><td>Event kind: <code>MouseDown(x, y, btn)</code>, <code>MouseUp(x, y, btn)</code>, <code>MouseMove(x, y)</code>, <code>KeyDown(key, mods)</code>, <code>KeyUp(key, mods)</code>, <code>Resize(w, h)</code>, <code>CloseRequested</code>, <code>Redraw</code>, <code>None</code></td></tr>
+        <tr><td><code>Button</code></td><td>Interactive widget: <code>Button { rect, label }</code>, <code>.draw(canvas, mouse_pos, is_down)</code></td></tr>
+        <tr><td><code>Label</code></td><td>Text widget: <code>Label { pos, text, color }</code>, <code>.draw(canvas)</code></td></tr>
+      </table>
+      <ul>
+        <li><strong>Per-frame arena discipline.</strong> Interactive frame loops allocate all temporary drawing buffers, glyph records, and event handlers inside a dedicated per-frame region (<code>region frame default</code>). At the end of every frame iteration, all frame data is instantly reclaimed in $O(1)$ time with zero garbage collection overhead.</li>
+        <li><strong>Embedded 8x8 bitmap font.</strong> <code>canvas.draw_text</code> renders ASCII text directly into the frame buffer without requiring external font files or system rasterization dependencies.</li>
+        <li><strong>Portable testing and PPM export.</strong> <code>canvas.export_ppm(r)</code> outputs standard binary PPM images, and <code>win.push_event(...)</code> enables 100% deterministic, headless GUI testing in CI environments.</li>
+      </ul>
+    </section>
+
+    <section>
       <h2 id="int512">std/int512</h2>
       <p>
         512-bit signed integers in two's complement, <code>Int512</code>. Brought in with
@@ -590,6 +638,11 @@ $(auth)
         <tr><td><code>Response.stream(chunks, r)</code>, <code>Response.sse(chunks, r)</code></td><td>Constructs HTTP/1.1 chunked transfer responses or Server-Sent Events (SSE)</td></tr>
         <tr><td><code>sse_event(data, event, id, r)</code>, <code>sse_msg(event, data, r)</code></td><td>Formats compliant SSE stream messages (<code>event: ...\ndata: ...\n\n</code>)</td></tr>
         <tr><td><code>req.body_lines(r)</code></td><td>Parses request body line-by-line into a region-scoped slice <code>[text]@r</code></td></tr>
+        <tr><td><code>WebSocket</code></td><td>RFC 6455 WebSocket handle: <code>.send_text(msg, r)</code>, <code>.send_binary(data, r)</code>, <code>.ping(data, r)</code>, <code>.pong(data, r)</code>, <code>.close(code, reason, r)</code>, <code>.recv(into)</code>, <code>.is_open()</code></td></tr>
+        <tr><td><code>WebSocketMessage</code></td><td>Typed message kind: <code>Text(payload)</code>, <code>Binary(payload)</code>, <code>Close(code, reason)</code>, <code>Ping(payload)</code>, <code>Pong(payload)</code>, <code>None</code></td></tr>
+        <tr><td><code>ws_upgrade(client_key, r)</code>, <code>ws_accept(req, client, r)</code></td><td>Performs RFC 6455 WebSocket handshake and produces HTTP 101 Switching Protocols response</td></tr>
+        <tr><td><code>ws_connect(url, r)</code></td><td>Connects to a WebSocket server URL (<code>ws://host:port/path</code>) and completes client handshake</td></tr>
+        <tr><td><code>router.ws(pattern, handler)</code>, <code>ws(pattern, handler)</code></td><td>Enrolls a persistent WebSocket route handler <code>(ws: WebSocket@r, req: Request@r, r: region default) -&gt; nothing</code></td></tr>
       </table>
       <ul>
         <li><strong>Path parameters and wildcards.</strong> Patterns like <code>/users/\{id\}</code> capture dynamic path segments accessible via <code>req.param("id")</code>. Wildcards like <code>/assets/*</code> capture remaining path text via <code>req.param("*")</code>.</li>

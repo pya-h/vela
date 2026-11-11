@@ -6140,9 +6140,10 @@ impl Checker {
                 mode,
                 reference: true,
                 init,
+                ..
             } => self.check_reference(names, *mode, init),
             StmtKind::Binding {
-                names, mode, init, ..
+                names, mode, init, colon, ..
             } => {
                 let mut from_loop = HashSet::new();
                 let each_given = init.len() == names.len();
@@ -6169,6 +6170,98 @@ impl Checker {
                     {
                         bound.ty = Some((**given).clone());
                         from_loop.insert(i);
+                    }
+                }
+                if *colon {
+                    let def_region = self.default_region().ok_or_else(|| {
+                        Error::at(
+                            span,
+                            format!(
+                                "':=' allocates into the default region, but no default region is active in this block; declare 'region r {}' or use 'new T(expr) at r'",
+                                DEFAULT
+                            ),
+                        )
+                    })?;
+                    for (bound, value) in names.iter_mut().zip(init.iter_mut()) {
+                        match &mut bound.ty {
+                            Some(Type::Ptr(pointee, region)) => {
+                                if region.is_none() {
+                                    *region = Some(def_region.clone());
+                                }
+                                let pointee_ty = pointee.as_ref().clone();
+                                let inner_val = std::mem::replace(value, Expr::new(ExprKind::NoneLit, value.span));
+                                value.kind = ExprKind::New {
+                                    ty: Box::new(pointee_ty),
+                                    ty_span: bound.ty_span.unwrap_or(bound.span),
+                                    value: Box::new(inner_val),
+                                    region: Some(def_region.clone()),
+                                    region_span: value.span,
+                                };
+                            }
+                            Some(Type::Slice(_item, region)) => {
+                                if region.is_none() {
+                                    *region = Some(def_region.clone());
+                                }
+                                if let ExprKind::Array(values) = &mut value.kind {
+                                    let inner = Expr::new(ExprKind::Array(std::mem::take(values)), value.span);
+                                    value.kind = ExprKind::Shortcut {
+                                        value: Box::new(inner),
+                                        region: Some(def_region.clone()),
+                                        region_span: value.span,
+                                    };
+                                }
+                            }
+                            Some(Type::Map(_k, _v, region)) => {
+                                if region.is_none() {
+                                    *region = Some(def_region.clone());
+                                }
+                                if let ExprKind::Pairs(pairs) = &mut value.kind {
+                                    let inner = Expr::new(ExprKind::Pairs(std::mem::take(pairs)), value.span);
+                                    value.kind = ExprKind::Shortcut {
+                                        value: Box::new(inner),
+                                        region: Some(def_region.clone()),
+                                        region_span: value.span,
+                                    };
+                                }
+                            }
+                            Some(ty) => {
+                                return err(
+                                    bound.ty_span.unwrap_or(bound.span),
+                                    format!("':=' allocates into a region and produces a pointer, slice, or map; use '=' to assign a direct value, or '^{}' for a pointer", ty),
+                                );
+                            }
+                            None => {
+                                match &mut value.kind {
+                                    ExprKind::Array(values) => {
+                                        let inner = Expr::new(ExprKind::Array(std::mem::take(values)), value.span);
+                                        value.kind = ExprKind::Shortcut {
+                                            value: Box::new(inner),
+                                            region: Some(def_region.clone()),
+                                            region_span: value.span,
+                                        };
+                                    }
+                                    ExprKind::Pairs(pairs) => {
+                                        let inner = Expr::new(ExprKind::Pairs(std::mem::take(pairs)), value.span);
+                                        value.kind = ExprKind::Shortcut {
+                                            value: Box::new(inner),
+                                            region: Some(def_region.clone()),
+                                            region_span: value.span,
+                                        };
+                                    }
+                                    ExprKind::Shortcut { region, .. } => {
+                                        if region.is_none() {
+                                            *region = Some(def_region.clone());
+                                        }
+                                    }
+                                    _ => {
+                                        return err(
+                                            value.span,
+                                            "':=' with a scalar value or shape literal requires an explicit pointer type annotation (such as 'bind x: ^int := 4') to prevent ambiguity with whole values",
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 for bound in names.iter_mut() {
@@ -6586,6 +6679,7 @@ impl Checker {
                                     mode: Mode::Flex,
                                     reference: false,
                                     init: vec![range],
+                                    colon: false,
                                 },
                                 span,
                             );
@@ -6621,6 +6715,7 @@ impl Checker {
                             mode: Mode::Fixed,
                             reference: false,
                             init: vec![until_none],
+                            colon: false,
                         },
                         span,
                     );
@@ -6795,12 +6890,14 @@ impl Checker {
                 self.note_sent(values);
                 Ok(())
             }
-            StmtKind::Region { name, default } => {
-                self.define_region(name, span, true)?;
-                match default {
-                    true => self.set_default_region(name, span),
-                    false => Ok(()),
+            StmtKind::Region { names } => {
+                for decl in names {
+                    self.define_region(&decl.name, decl.span, true)?;
+                    if decl.default {
+                        self.set_default_region(&decl.name, decl.span)?;
+                    }
                 }
+                Ok(())
             }
         }
     }
@@ -21364,6 +21461,7 @@ impl Checker {
                     mode: Mode::Fixed,
                     reference: false,
                     init: vec![value],
+                    colon: false,
                 },
                 at,
             )];

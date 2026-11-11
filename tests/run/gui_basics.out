@@ -1,0 +1,16 @@
+contains inside: true
+contains outside: false
+intersects overlapping: true
+intersects separated: false
+color rgb: 255 128 64 255
+color hex: 255 128 64 255
+window open: true
+pixel at (10,10): 255 0 0
+fill_rect pixel: 0 255 0
+draw_line pixel: 0 0 255
+ppm exported: true
+ppm header P6: true
+event: redraw
+event: mouse_down at (42, 84) button=1
+event: close_requested
+window closed: true

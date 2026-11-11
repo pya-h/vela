@@ -1,0 +1,6 @@
+count incremented: 1
+count incremented: 2
+count incremented: 3
+count decremented: 2
+count reset: 0
+counter app closed; final count: 0

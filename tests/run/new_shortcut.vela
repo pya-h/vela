@@ -1,0 +1,24 @@
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    region r default
+
+    bind x: ^int := 42
+    show(x^)
+
+    flex s := [1, 2, 3]
+    show(s[0] + s[1] + s[2])
+
+    flex m := ["a": 10, "b": 20]
+    show(m["a"] + m["b"])
+
+    fixed p: ^Point := Point { x: 100, y: 200 }
+    show(p^.x + p^.y)
+
+    hold h: ^int := 99
+    show(h^)
+fi
+

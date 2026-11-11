@@ -1,0 +1,8 @@
+accept_key: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+is_upgrade: true
+is_plain_upgrade: false
+handshake 101: true
+server got text: Hello WebSocket!
+client got text: Welcome from server!
+server got ping: ping-123
+server got close: code=1000 reason=done

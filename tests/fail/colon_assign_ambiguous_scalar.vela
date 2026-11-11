@@ -1,0 +1,5 @@
+; error: 4:15: ':=' with a scalar value or shape literal requires an explicit pointer type annotation (such as 'bind x: ^int := 4') to prevent ambiguity with whole values
+task main()
+    region r default
+    bind x := 4
+fi

@@ -223,8 +223,10 @@ impl Checked {
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter().for_each(|value| self.expr(value, kinds))
             }
-            StmtKind::Region { .. } => {
-                self.declare(stmt.span, Type::Region);
+            StmtKind::Region { names } => {
+                for decl in names {
+                    self.declare(decl.span, Type::Region);
+                }
             }
             StmtKind::Binding { names, init, .. } => {
                 for bound in names.iter().flat_map(vela::ast::Bound::leaves) {

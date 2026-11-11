@@ -2359,6 +2359,12 @@ impl Parser {
             return self.parse_assignment(span, first);
         }
         let expr = self.parse_expr()?;
+        if self.check(Token::ColonAssign) {
+            return Err(Error::at(
+                self.peek_span(),
+                "Vela variables must be declared with 'fixed', 'flex', 'bind', or 'hold' before the variable name; ':=' cannot be used for reassignment",
+            ));
+        }
         if self.check(Token::Comma) || self.check(Token::Assign) {
             return self.parse_assignment(span, Target::Place(expr));
         }
@@ -2531,12 +2537,17 @@ impl Parser {
         if reference && names.iter().any(|bound| !bound.parts.is_empty()) {
             return Err(Error::at(span, format!("a reference names one place, so '{}&' takes one name, not a tuple's items", word)));
         }
-        self.expect(Token::Assign)?;
+        let colon = self.match_token(Token::ColonAssign);
+        if !colon {
+            self.expect(Token::Assign)?;
+        } else if reference {
+            return Err(Error::at(span, "a reference is not allocated with ':='; write '=' and '&' to refer to a place, as in 'bind& x = &y'"));
+        }
         let init = self.parse_value_list()?;
         if reference && init.len() > 1 {
             return Err(Error::at(init.get(1).map_or(span, |value| value.span), "a reference names one place, so it takes one value, as in '&x'"));
         }
-        let kind = StmtKind::Binding { names, mode, reference, init };
+        let kind = StmtKind::Binding { names, mode, reference, init, colon };
         Ok(Stmt::new(kind, span))
     }
 
@@ -3112,9 +3123,27 @@ impl Parser {
     fn parse_region(&mut self) -> Result<Stmt> {
         self.advance();
         let span = self.peek_span();
-        let name = self.expect_ident()?;
-        let default = self.match_default(true)?;
-        Ok(Stmt::new(StmtKind::Region { name, default }, span))
+        let mut names = Vec::new();
+        let mut seen_default = false;
+        loop {
+            let name_span = self.peek_span();
+            let name = self.expect_ident()?;
+            let default = self.match_default(true)?;
+            if default {
+                if seen_default {
+                    return Err(Error::at(
+                        name_span,
+                        "only one region in a 'region' statement may be 'default'",
+                    ));
+                }
+                seen_default = true;
+            }
+            names.push(RegionDecl { name, default, span: name_span });
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        Ok(Stmt::new(StmtKind::Region { names }, span))
     }
 
     fn parse_expr(&mut self) -> Result<Expr> {

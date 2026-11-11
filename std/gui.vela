@@ -1,0 +1,269 @@
+; std/gui: foundation for GUI, 2D software canvas rasterization, windowing, and events.
+
+kind GuiEvent
+    MouseDown(x: int, y: int, button: int)
+    MouseUp(x: int, y: int, button: int)
+    MouseMove(x: int, y: int)
+    KeyDown(key: int, modifiers: int)
+    KeyUp(key: int, modifiers: int)
+    Resize(width: int, height: int)
+    CloseRequested
+    Redraw
+    None
+fi
+
+kind GuiError
+    OpenFailed(why: text)
+    InvalidHandle
+fi
+
+shape Point
+    x: int = 0
+    y: int = 0
+fi
+
+shape Size
+    width: int = 0
+    height: int = 0
+fi
+
+shape Rect
+    x: int = 0
+    y: int = 0
+    width: int = 0
+    height: int = 0
+
+    contains(p: Point) -> bool
+        <- p.x >= .x and p.x < .x + .width and p.y >= .y and p.y < .y + .height
+    fi
+
+    intersects(other: Rect) -> bool
+        <- .x < other.x + other.width and .x + .width > other.x and .y < other.y + other.height and .y + .height > other.y
+    fi
+fi
+
+shape Color
+    r: int = 0
+    g: int = 0
+    b: int = 0
+    a: int = 255
+
+    shared rgb(r: int, g: int, b: int) -> Color
+        <- Color { r: r, g: g, b: b, a: 255 }
+    fi
+
+    shared rgba(r: int, g: int, b: int, a: int) -> Color
+        <- Color { r: r, g: g, b: b, a: a }
+    fi
+
+    shared hex(code: int) -> Color
+        fixed r = (code / 65536) % 256
+        fixed g = (code / 256) % 256
+        fixed b = code % 256
+        <- Color { r: r, g: g, b: b, a: 255 }
+    fi
+
+    shared black() -> Color
+        <- Color { r: 0, g: 0, b: 0, a: 255 }
+    fi
+
+    shared white() -> Color
+        <- Color { r: 255, g: 255, b: 255, a: 255 }
+    fi
+
+    shared red() -> Color
+        <- Color { r: 255, g: 0, b: 0, a: 255 }
+    fi
+
+    shared green() -> Color
+        <- Color { r: 0, g: 255, b: 0, a: 255 }
+    fi
+
+    shared blue() -> Color
+        <- Color { r: 0, g: 0, b: 255, a: 255 }
+    fi
+
+    shared gray() -> Color
+        <- Color { r: 128, g: 128, b: 128, a: 255 }
+    fi
+
+    shared transparent() -> Color
+        <- Color { r: 0, g: 0, b: 0, a: 0 }
+    fi
+fi
+
+shape Canvas
+    handle: int
+    width: int
+    height: int
+
+    clear(c: Color)
+        native_gui_canvas_clear(.handle, c.r, c.g, c.b, c.a)
+    fi
+
+    draw_pixel(x: int, y: int, c: Color)
+        native_gui_canvas_draw_pixel(.handle, x, y, c.r, c.g, c.b, c.a)
+    fi
+
+    pixel_at(x: int, y: int) -> Color
+        fixed r = native_gui_canvas_pixel_r(.handle, x, y)
+        fixed g = native_gui_canvas_pixel_g(.handle, x, y)
+        fixed b = native_gui_canvas_pixel_b(.handle, x, y)
+        fixed a = native_gui_canvas_pixel_a(.handle, x, y)
+        <- Color { r: r, g: g, b: b, a: a }
+    fi
+
+    fill_rect(r: Rect, c: Color)
+        native_gui_canvas_fill_rect(.handle, r.x, r.y, r.width, r.height, c.r, c.g, c.b, c.a)
+    fi
+
+    draw_rect(r: Rect, c: Color)
+        native_gui_canvas_draw_rect(.handle, r.x, r.y, r.width, r.height, c.r, c.g, c.b, c.a)
+    fi
+
+    draw_line(x1: int, y1: int, x2: int, y2: int, c: Color)
+        native_gui_canvas_draw_line(.handle, x1, y1, x2, y2, c.r, c.g, c.b, c.a)
+    fi
+
+    draw_text(msg: text@p, pos: Point, c: Color)
+        native_gui_canvas_draw_text(.handle, pos.x, pos.y, msg, c.r, c.g, c.b, c.a)
+    fi
+
+    export_ppm(r: region default) -> text@r
+        <- native_gui_canvas_export_ppm(.handle, r)
+    fi
+fi
+
+shape Window
+    handle: int = -1
+    width: int = 0
+    height: int = 0
+    is_open: bool = false
+
+    shared open(title: text@p, width: int = 800, height: int = 600) -> Window ~ GuiError
+        fixed h = native_gui_window_open(title, width, height)
+        when h < 0
+            <- fail GuiError.OpenFailed("failed to create window context")
+        fi
+        <- Window { handle: h, width: width, height: height, is_open: true }
+    fi
+
+    canvas() -> Canvas
+        <- Canvas { handle: .handle, width: .width, height: .height }
+    fi
+
+    alters poll_event() -> GuiEvent
+        when not .is_open or .handle < 0
+            <- GuiEvent.None
+        fi
+        fixed ev_type = native_gui_window_poll_event(.handle)
+        when ev_type == 0
+            <- GuiEvent.None
+        else when ev_type == 1
+            fixed x = native_gui_window_event_arg(.handle, 1)
+            fixed y = native_gui_window_event_arg(.handle, 2)
+            fixed btn = native_gui_window_event_arg(.handle, 3)
+            <- GuiEvent.MouseDown(x, y, btn)
+        else when ev_type == 2
+            fixed x = native_gui_window_event_arg(.handle, 1)
+            fixed y = native_gui_window_event_arg(.handle, 2)
+            fixed btn = native_gui_window_event_arg(.handle, 3)
+            <- GuiEvent.MouseUp(x, y, btn)
+        else when ev_type == 3
+            fixed x = native_gui_window_event_arg(.handle, 1)
+            fixed y = native_gui_window_event_arg(.handle, 2)
+            <- GuiEvent.MouseMove(x, y)
+        else when ev_type == 4
+            fixed key = native_gui_window_event_arg(.handle, 1)
+            fixed mods = native_gui_window_event_arg(.handle, 2)
+            <- GuiEvent.KeyDown(key, mods)
+        else when ev_type == 5
+            fixed key = native_gui_window_event_arg(.handle, 1)
+            fixed mods = native_gui_window_event_arg(.handle, 2)
+            <- GuiEvent.KeyUp(key, mods)
+        else when ev_type == 6
+            fixed w = native_gui_window_event_arg(.handle, 1)
+            fixed h = native_gui_window_event_arg(.handle, 2)
+            .width = w
+            .height = h
+            <- GuiEvent.Resize(w, h)
+        else when ev_type == 7
+            .is_open = false
+            <- GuiEvent.CloseRequested
+        else when ev_type == 8
+            <- GuiEvent.Redraw
+        else
+            <- GuiEvent.None
+        fi
+    fi
+
+    push_event(ev_type: int, a1: int = 0, a2: int = 0, a3: int = 0)
+        when .handle >= 0
+            native_gui_window_push_event(.handle, ev_type, a1, a2, a3)
+        fi
+    fi
+
+    alters present()
+        when .handle >= 0
+            native_gui_window_present(.handle)
+        fi
+    fi
+
+    alters close()
+        when .handle >= 0
+            native_gui_window_close(.handle)
+            .handle = -1
+            .is_open = false
+        fi
+    fi
+fi
+
+shape Button
+    rect: Rect
+    label: text
+
+    draw(canvas: Canvas, mouse_pos: Point, mouse_down: bool)
+        fixed hovered = .rect.contains(mouse_pos)
+        fixed bg = when hovered and mouse_down
+            Color.hex(0x1E40AF)
+        else when hovered
+            Color.hex(0x3B82F6)
+        else
+            Color.hex(0x2563EB)
+        fi
+        canvas.fill_rect(.rect, bg)
+        canvas.draw_rect(.rect, Color.white())
+        fixed text_x = .rect.x + 8
+        fixed text_y = .rect.y + (.rect.height - 8) / 2
+        canvas.draw_text(.label, Point { x: text_x, y: text_y }, Color.white())
+    fi
+fi
+
+shape Label
+    pos: Point
+    text: text
+    color: Color
+
+    draw(canvas: Canvas)
+        canvas.draw_text(.text, .pos, .color)
+    fi
+fi
+
+priv native task native_gui_window_open(title: text@p, width: int, height: int) -> int
+priv native task native_gui_window_close(handle: int)
+priv native task native_gui_window_is_open(handle: int) -> bool
+priv native task native_gui_window_poll_event(handle: int) -> int
+priv native task native_gui_window_event_arg(handle: int, idx: int) -> int
+priv native task native_gui_window_push_event(handle: int, ev_type: int, a1: int, a2: int, a3: int)
+priv native task native_gui_window_present(handle: int)
+priv native task native_gui_canvas_clear(handle: int, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_draw_pixel(handle: int, x: int, y: int, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_pixel_r(handle: int, x: int, y: int) -> int
+priv native task native_gui_canvas_pixel_g(handle: int, x: int, y: int) -> int
+priv native task native_gui_canvas_pixel_b(handle: int, x: int, y: int) -> int
+priv native task native_gui_canvas_pixel_a(handle: int, x: int, y: int) -> int
+priv native task native_gui_canvas_fill_rect(handle: int, x: int, y: int, w: int, h: int, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_draw_rect(handle: int, x: int, y: int, w: int, h: int, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_draw_line(handle: int, x1: int, y1: int, x2: int, y2: int, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_draw_text(handle: int, x: int, y: int, text: text@p, r: int, g: int, b: int, a: int)
+priv native task native_gui_canvas_export_ppm(handle: int, into: region) -> text@into

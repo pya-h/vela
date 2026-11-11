@@ -1,0 +1,79 @@
+; Tests std/gui foundation: geometry, colors, window, canvas rasterization, and per-frame event dispatch.
+include std/gui { Window, GuiEvent, Point, Rect, Color }
+
+task main()
+    ; 1. Geometry tests
+    fixed r1 = Rect { x: 10, y: 10, width: 50, height: 50 }
+    fixed p_in = Point { x: 20, y: 30 }
+    fixed p_out = Point { x: 80, y: 90 }
+    show("contains inside: ", r1.contains(p_in))
+    show("contains outside: ", r1.contains(p_out))
+
+    fixed r2 = Rect { x: 30, y: 30, width: 40, height: 40 }
+    fixed r3 = Rect { x: 100, y: 100, width: 20, height: 20 }
+    show("intersects overlapping: ", r1.intersects(r2))
+    show("intersects separated: ", r1.intersects(r3))
+
+    ; 2. Color tests
+    fixed c1 = Color.rgb(255, 128, 64)
+    show("color rgb: ", c1.r, " ", c1.g, " ", c1.b, " ", c1.a)
+    fixed c2 = Color.hex(0xFF8040)
+    show("color hex: ", c2.r, " ", c2.g, " ", c2.b, " ", c2.a)
+
+    ; 3. Window & Canvas rasterization
+    flex win = Window.open("Test Window", 160, 120) { failure _
+        show("failed to open window")
+        <-
+    }
+    show("window open: ", win.is_open)
+
+    fixed canvas = win.canvas()
+    canvas.clear(Color.black())
+
+    ; Test pixel drawing and readback
+    canvas.draw_pixel(10, 10, Color.red())
+    fixed px1 = canvas.pixel_at(10, 10)
+    show("pixel at (10,10): ", px1.r, " ", px1.g, " ", px1.b)
+
+    ; Test fill_rect and readback
+    canvas.fill_rect(Rect { x: 20, y: 20, width: 10, height: 10 }, Color.green())
+    fixed px2 = canvas.pixel_at(25, 25)
+    show("fill_rect pixel: ", px2.r, " ", px2.g, " ", px2.b)
+
+    ; Test draw_line
+    canvas.draw_line(0, 0, 10, 0, Color.blue())
+    fixed px3 = canvas.pixel_at(5, 0)
+    show("draw_line pixel: ", px3.r, " ", px3.g, " ", px3.b)
+
+    ; Test draw_text
+    canvas.draw_text("Vela", Point { x: 50, y: 50 }, Color.white())
+
+    ; Test PPM export
+    region export_r default
+    fixed ppm = canvas.export_ppm(export_r)
+    show("ppm exported: ", ppm.len > 0)
+    show("ppm header P6: ", ppm.len >= 3 and ppm[0] == 'P' and ppm[1] == '6')
+
+    ; 4. Event queue and frame loop simulation
+    win.push_event(1, 42, 84, 1) ; MouseDown
+    win.push_event(7)            ; CloseRequested
+
+    loop win.is_open
+        region frame default
+        fixed ev = win.poll_event()
+        match ev
+        case GuiEvent.Redraw
+            show("event: redraw")
+        case GuiEvent.MouseDown x y btn
+            show("event: mouse_down at (", x, ", ", y, ") button=", btn)
+        case GuiEvent.CloseRequested
+            show("event: close_requested")
+            win.close()
+            break
+        case _
+            show("event: other")
+        fi
+    fi
+
+    show("window closed: ", not win.is_open)
+fi

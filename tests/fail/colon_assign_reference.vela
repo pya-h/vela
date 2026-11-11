@@ -1,0 +1,6 @@
+; error: 5:11: a reference is not allocated with ':='; write '=' and '&' to refer to a place, as in 'bind& x = &y'
+task main()
+    region r default
+    flex y = 1
+    bind& x := &y
+fi

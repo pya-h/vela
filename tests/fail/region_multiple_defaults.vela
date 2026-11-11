@@ -1,0 +1,4 @@
+; error: 3:24: only one region in a 'region' statement may be 'default'
+task main()
+    region r1 default, r2 default
+fi

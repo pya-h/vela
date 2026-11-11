@@ -34,6 +34,15 @@ kind WebError
     BadResponse(why: text)
 fi
 
+kind WebSocketMessage
+    Text(payload: text)
+    Binary(payload: text)
+    Close(code: int, reason: text)
+    Ping(payload: text)
+    Pong(payload: text)
+    None
+fi
+
 shape Socket
     priv handle: int = -1
 
@@ -126,6 +135,46 @@ shape Request
     headers: [text: text]
     body_data: text
     params: [text: text]
+    socket_handle: int = -1
+
+    socket() -> Socket
+        <- Socket { handle: .socket_handle }
+    fi
+
+    is_websocket_upgrade() -> bool
+        when .header("upgrade") is {u}
+            when not text_eq_ignore_case(trim(u), "websocket")
+                <- false
+            fi
+        else
+            <- false
+        fi
+        when .header("connection") is {c}
+            region temp default
+            fixed c_lower = to_lower(c, temp)
+            when text_find(c_lower, "upgrade", 0) < 0
+                <- false
+            fi
+        else
+            <- false
+        fi
+        <- true
+    fi
+
+    websocket_key() -> maybe text@this
+        <- .header("sec-websocket-key")
+    fi
+
+    upgrade_websocket(r: region default) -> WebSocket ~ WebError@r
+        when not .is_websocket_upgrade()
+            <- fail WebError.BadRequest("not a websocket upgrade request")
+        fi
+        when .socket_handle < 0
+            <- fail WebError.BadRequest("request has no attached socket")
+        fi
+        fixed client = Socket { handle: .socket_handle }
+        <- ws_accept(.this, client, r)
+    fi
 
     header(name: text@p) -> maybe text@this
         when .headers[#name] is {found}
@@ -434,10 +483,173 @@ task fetch_json(url: text@p, body: text@p, r: region default) -> Response@r ~ We
     <- Client.fetch_json(url, body, r)
 fi
 
+shape WebSocket
+    sock: Socket
+    is_client: bool = false
+    closed: bool = false
+
+    is_open() -> bool
+        <- not .closed and .sock.raw_handle() >= 0
+    fi
+
+    raw_handle() -> int
+        <- .sock.raw_handle()
+    fi
+
+    send_text(msg: text@p, r: region default) -> int ~ SocketError
+        when .closed
+            <- fail SocketError.Closed
+        fi
+        fixed frame = native_ws_encode_frame(1, msg, true, .is_client, r)
+        <- .sock.write(frame)
+    fi
+
+    send_binary(data: text@p, r: region default) -> int ~ SocketError
+        when .closed
+            <- fail SocketError.Closed
+        fi
+        fixed frame = native_ws_encode_frame(2, data, true, .is_client, r)
+        <- .sock.write(frame)
+    fi
+
+    ping(payload: text@p, r: region default) -> int ~ SocketError
+        when .closed
+            <- fail SocketError.Closed
+        fi
+        fixed frame = native_ws_encode_frame(9, payload, true, .is_client, r)
+        <- .sock.write(frame)
+    fi
+
+    pong(payload: text@p, r: region default) -> int ~ SocketError
+        when .closed
+            <- fail SocketError.Closed
+        fi
+        fixed frame = native_ws_encode_frame(10, payload, true, .is_client, r)
+        <- .sock.write(frame)
+    fi
+
+    alters close(code: int, reason: text@p, r: region default) -> nothing ~ SocketError
+        when .closed
+            <-
+        fi
+        .closed = true
+        fixed frame = native_ws_encode_close(code, reason, .is_client, r)
+        .sock.write(frame) { failure _ 0 }
+        .sock.close() { failure _ }
+    fi
+
+    alters recv(into: region default) -> WebSocketMessage@into ~ SocketError
+        fixed handle = .sock.raw_handle()
+        when handle < 0 or .closed
+            <- WebSocketMessage.None
+        fi
+        loop not .closed
+            region stash_r default
+            fixed stashed = native_socket_stashed(handle, stash_r)
+            fixed frame_len = native_ws_frame_info(stashed)
+            when frame_len > 0
+                fixed opcode = native_ws_frame_opcode(stashed)
+                fixed payload = native_ws_frame_payload(stashed, into)
+                fixed close_code = when opcode == 8 native_ws_frame_close_code(stashed) else 1000 fi
+                native_socket_stash_consume(handle, frame_len)
+
+                when opcode == 1
+                    <- WebSocketMessage.Text(payload)
+                else when opcode == 2
+                    <- WebSocketMessage.Binary(payload)
+                else when opcode == 8
+                    .closed = true
+                    <- WebSocketMessage.Close(close_code, payload)
+                else when opcode == 9
+                    .pong(payload, stash_r) { failure _ 0 }
+                    <- WebSocketMessage.Ping(payload)
+                else when opcode == 10
+                    <- WebSocketMessage.Pong(payload)
+                fi
+            fi
+            fixed chunk = .sock.read(4096, stash_r) { failure err
+                when err is SocketError.Closed
+                    .closed = true
+                    <- WebSocketMessage.Close(1006, "connection closed unexpectedly")
+                fi
+                <- fail err
+            }
+            when chunk.len == 0
+                .closed = true
+                <- WebSocketMessage.Close(1006, "connection closed")
+            fi
+            native_socket_stash(handle, chunk)
+        fi
+        <- WebSocketMessage.None
+    fi
+fi
+
+task ws_upgrade(client_key: text@p, r: region default) -> Response@r
+    fixed accept = native_ws_accept_key(client_key, r)
+    flex hdrs = new [text: text]() at r
+    hdrs["Upgrade"] = "websocket"
+    hdrs["Connection"] = "Upgrade"
+    hdrs["Sec-WebSocket-Accept"] = accept
+    <- Response { status: 101, reason: "Switching Protocols", headers: hdrs, body_data: "" }
+fi
+
+task ws_accept(req: Request@p, client: Socket, r: region default) -> WebSocket ~ WebError@r
+    when not req.is_websocket_upgrade()
+        <- fail WebError.BadRequest("not a websocket upgrade request")
+    fi
+    fixed key = when req.websocket_key() is {k}
+        k
+    else
+        <- fail WebError.BadRequest("missing Sec-WebSocket-Key")
+    fi
+    fixed resp = ws_upgrade(key, r)
+    send_response(client, resp, false, r)
+    <- WebSocket { sock: client, is_client: false, closed: false }
+fi
+
+task ws_connect(url: text@p, r: region default) -> WebSocket ~ WebError@r
+    fixed (host, port, path) = parse_url(url) { failure e
+        <- fail e
+    }
+    flex sock = Socket.open(r) { failure _
+        <- fail WebError.ServerFailed("failed to open socket")
+    }
+    sock.connect(host, port) { failure _
+        sock.close() { failure _ }
+        <- fail WebError.ServerFailed("failed to connect")
+    }
+    fixed key = "dGhlIHNhbXBsZSBub25jZQ=="
+    fixed expected_accept = native_ws_accept_key(key, r)
+    flex wire = "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    sock.write(wire) { failure _
+        sock.close() { failure _ }
+        <- fail WebError.ServerFailed("failed to send handshake")
+    }
+    fixed resp_raw = read_http_request(sock, 16384, r) { failure _
+        sock.close() { failure _ }
+        <- fail WebError.BadResponse("failed reading handshake response")
+    }
+    when text_find(resp_raw, "101", 0) < 0
+        sock.close() { failure _ }
+        <- fail WebError.BadResponse("server did not return 101 Switching Protocols")
+    fi
+    when text_find(resp_raw, expected_accept, 0) < 0
+        sock.close() { failure _ }
+        <- fail WebError.BadResponse("server Sec-WebSocket-Accept mismatch")
+    fi
+    fixed hdr_end = text_find(resp_raw, "\r\n\r\n", 0)
+    when hdr_end >= 0 and hdr_end + 4 < resp_raw.len
+        fixed leftover = cut(resp_raw, hdr_end + 4, resp_raw.len)
+        native_socket_stash(sock.raw_handle(), leftover)
+    fi
+    <- WebSocket { sock: sock, is_client: true, closed: false }
+fi
+
 shape RouteEntry
     method_code: int = 0
     pattern: text = ""
     handler: maybe (Request@r, @r) -> Response@r ~ WebError@r = none
+    ws_handler: maybe (WebSocket, Request@r, @r) -> nothing = none
     folder: text = ""
     prefix: text = ""
 fi
@@ -492,6 +704,14 @@ shape Router
         <- .this
     fi
 
+    alters ws(pattern: text, handler: (WebSocket, Request@r, @r) -> nothing) -> Router@this
+        when .count < 128
+            .routes[.count] = RouteEntry { method_code: 1, pattern: pattern, ws_handler: handler }
+            .count++
+        fi
+        <- .this
+    fi
+
     route(req: Request@r, r: region default) -> Response@r ~ WebError@r
         flex idx = 0
         flex path_matched = false
@@ -503,8 +723,17 @@ shape Router
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
                     when entry.folder != ""
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.ws_handler is {wsh}
+                        when not req.is_websocket_upgrade()
+                            <- fail WebError.BadRequest("expected websocket upgrade")
+                        fi
+                        fixed ws = req.upgrade_websocket(r) { failure err
+                            <- fail err
+                        }
+                        wsh(ws, req, r)
+                        <- Response.with_status(101, r, "Switching Protocols")
                     else when entry.handler is {h}
-                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
+                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params, socket_handle: req.socket_handle }
                         fixed resp = h(routed_req, r) { failure err
                             when .error_handler is {eh}
                                 <- eh(err, routed_req, r)
@@ -573,8 +802,17 @@ shape DefaultRouter
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
                     when entry.folder != ""
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.ws_handler is {wsh}
+                        when not req.is_websocket_upgrade()
+                            <- fail WebError.BadRequest("expected websocket upgrade")
+                        fi
+                        fixed ws = req.upgrade_websocket(r) { failure err
+                            <- fail err
+                        }
+                        wsh(ws, req, r)
+                        <- Response.with_status(101, r, "Switching Protocols")
                     else when entry.handler is {h}
-                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params }
+                        fixed routed_req = Request { method: req.method, path: req.path, raw_query: req.raw_query, headers: req.headers, body_data: req.body_data, params: params, socket_handle: req.socket_handle }
                         fixed resp = h(routed_req, r) { failure err
                             when DefaultRouter.error_handler is {eh}
                                 <- eh(err, routed_req, r)
@@ -597,6 +835,13 @@ shape DefaultRouter
             <- eh(WebError.RouteNotFound(req.path), req, r)
         fi
         <- fail WebError.RouteNotFound(req.path)
+    fi
+
+    shared ws(pattern: text, handler: (WebSocket, Request@r, @r) -> nothing)
+        when DefaultRouter.count < 128
+            DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: 1, pattern: pattern, ws_handler: handler }
+            DefaultRouter.count++
+        fi
     fi
 
     shared get(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
@@ -650,6 +895,10 @@ fi
 
 task route(handler: (Request@r, @r) -> Response@r ~ WebError@r, pattern: text)
     DefaultRouter.enroll(0, pattern, handler)
+fi
+
+task ws(pattern: text, handler: (WebSocket, Request@r, @r) -> nothing)
+    DefaultRouter.ws(pattern, handler)
 fi
 
 task router() -> Router
@@ -793,7 +1042,7 @@ fi
 
 ; Answers one whole request: the response is queued on the socket, not waited for.
 priv task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
-    fixed req = parse_request(raw, r) { failure e
+    fixed req_parsed = parse_request(raw, r) { failure e
         fixed why = match e
         case WebError.BadRequest why = why
         case _ = "malformed request"
@@ -801,6 +1050,7 @@ priv task process_connection_request(flex client: Socket, raw: text@r, handler: 
         put_error(client, 400, "Bad Request", "400 Bad Request: {why}\n" at r, r)
         <- false
     }
+    fixed req = Request { method: req_parsed.method, path: req_parsed.path, raw_query: req_parsed.raw_query, headers: req_parsed.headers, body_data: req_parsed.body_data, params: req_parsed.params, socket_handle: client.raw_handle() }
     when req.body_data.len > max_body
         when err_handler is {eh}
             fixed err_resp = eh(WebError.PayloadTooLarge, req, r)
@@ -840,6 +1090,10 @@ priv task process_connection_request(flex client: Socket, raw: text@r, handler: 
         put_response(client, err_resp, false, r)
         <- false
     }
+
+    when resp.status == 101
+        <- false
+    fi
 
     when resp.headers[#"connection"] is {c}
         when text_eq_ignore_case(c, "close")
@@ -1089,6 +1343,15 @@ fi
 
 ; Queues a response on the socket without waiting for it to go out.
 priv task put_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
+    when resp.status == 101
+        flex wire = "HTTP/1.1 101 {one_line(resp.reason, r)}\r\n"
+        each k, v in resp.headers
+            wire = "{wire}{one_line(k, r)}: {one_line(v, r)}\r\n"
+        fi
+        wire = "{wire}\r\n"
+        put_bytes(client, wire)
+        <-
+    fi
     when resp.is_stream and resp.chunks is {chunk_list}
         flex wire = "HTTP/1.1 {resp.status} {one_line(resp.reason, r)}\r\n"
         when not resp.headers.has("transfer-encoding")
@@ -1245,7 +1508,7 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
     fixed declared = when headers[#"content-length"] is {cl} int(cl) { -1 } else -1 fi
     fixed sized_body = when declared >= 0 and declared < raw_body.len cut(raw_body, 0, declared) else raw_body fi
     fixed body = when is_chunked decode_chunked_body(raw_body, r) else sized_body fi
-    <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body, params: new [text: text]() at r }
+    <- Request { method: method, path: path, raw_query: query, headers: headers, body_data: body, params: new [text: text]() at r, socket_handle: -1 }
 fi
 
 task parse_addr(addr: text@p) -> (text@p, int)
@@ -1269,6 +1532,9 @@ task parse_url(url: text@p) -> (text@p, int, text@p) ~ WebError
     fi
     when url.len >= 7 and cut(url, 0, 7) == "http://"
         rest = cut(url, 7, url.len)
+    fi
+    when url.len >= 5 and cut(url, 0, 5) == "ws://"
+        rest = cut(url, 5, url.len)
     fi
     fixed slash_idx = text_find(rest, "/", 0)
     fixed host_port = when slash_idx >= 0 cut(rest, 0, slash_idx) else rest fi
@@ -1305,7 +1571,7 @@ task is_response_complete(buf: text@p) -> bool
     fixed sp1 = text_find(buf, " ", 0)
     when sp1 >= 0 and sp1 + 4 <= body_start
         fixed code_str = cut(buf, sp1 + 1, sp1 + 4)
-        when code_str == "204" or code_str == "304"
+        when code_str == "204" or code_str == "304" or code_str == "101"
             <- true
         fi
     fi
@@ -1855,3 +2121,11 @@ priv native task native_poll_wait(timeout_ms: int) -> int
 priv native task native_poll_revents(handle: int) -> int
 priv native task native_poll_is_readable(handle: int) -> bool
 priv native task native_poll_is_writable(handle: int) -> bool
+priv native task native_ws_accept_key(key: text@p, into: region) -> text@into
+priv native task native_ws_encode_frame(opcode: int, payload: text@p, fin: bool, mask: bool, into: region) -> text@into
+priv native task native_ws_encode_close(code: int, reason: text@p, mask: bool, into: region) -> text@into
+priv native task native_ws_frame_info(raw: text@p) -> int
+priv native task native_ws_frame_opcode(raw: text@p) -> int
+priv native task native_ws_frame_payload(raw: text@p, into: region) -> text@into
+priv native task native_ws_frame_close_code(raw: text@p) -> int
+priv native task native_socket_stash_consume(handle: int, count: int)

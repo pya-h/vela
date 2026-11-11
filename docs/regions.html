@@ -280,7 +280,7 @@
       <div class="note">
         <p><strong>The whole model in five rules</strong></p>
         <ol>
-          <li><code>region r</code> declares a region; <code>new T(v) at r</code>, or <code>new@r T(v)</code>, allocates in it.
+          <li><code>region r</code> declares a region; <code>region r1, r2, ...</code> declares several on one line; <code>new T(v) at r</code>, or <code>new@r T(v)</code>, allocates in it.
             <code>region r default</code> makes <code>r</code> the block's <a href="#default-region">default</a>, and
             then what allocates there names no region.</li>
           <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>

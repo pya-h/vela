@@ -317,6 +317,56 @@ fi</pre>
         <li>Symbolic links resolving outside the root directory are refused, guaranteeing zero path traversal vulnerabilities out of the box.</li>
       </ul>
     </section>
+
+    <section>
+      <h2>6. Real-Time WebSockets (RFC 6455)</h2>
+      <p>
+        For bidirectional, low-latency streaming applications (live metrics, collaborative tools, terminal connections),
+        <code>std/web</code> provides native RFC 6455 WebSockets integrated directly with Vela's region-scoped memory discipline.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Handshake & WebSocket Upgrades</h3>
+        <p>
+          Incoming HTTP/1.1 requests can be inspected and upgraded into a persistent <code>WebSocket</code> shape.
+          The handshake validates <code>Upgrade: websocket</code>, calculates the RFC 6455 <code>Sec-WebSocket-Accept</code>
+          key via SHA-1 and Base64, and returns HTTP <code>101 Switching Protocols</code>:
+        </p>
+        <pre><span class="keyword">include</span> std/web { router, WebSocket, WebSocketMessage, Request, Response, serve }
+
+<span class="keyword">task</span> main()
+  <span class="keyword">flex</span> app = router()
+
+  <span class="comment">; Register a WebSocket route handler:</span>
+  app.ws(<span class="string">"/live"</span>, <span class="keyword">task</span> (ws: WebSocket@r, req: Request@r, r: <span class="keyword">region default</span>)
+    <span class="keyword">loop</span> ws.is_open()
+      <span class="keyword">region</span> msg_r <span class="keyword">default</span>
+      <span class="keyword">fixed</span> msg = ws.recv(msg_r) { <span class="keyword">failure</span> _ <span class="keyword">break</span> }
+      <span class="keyword">match</span> msg
+      <span class="keyword">case</span> WebSocketMessage.Text payload
+        ws.send_text(<span class="string">"Echo: {payload}"</span> <span class="keyword">at</span> msg_r) { <span class="keyword">failure</span> _ <span class="keyword">break</span> }
+      <span class="keyword">case</span> WebSocketMessage.Close code reason
+        ws.close(code, <span class="string">"bye"</span>, msg_r) { <span class="keyword">failure</span> _ }
+        <span class="keyword">break</span>
+      <span class="keyword">case</span> _
+        <span class="comment">; Automatic ping/pong handling</span>
+      <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+  )
+
+  serve(<span class="string">"127.0.0.1:8080"</span>, app.route) { <span class="keyword">failure</span> _ }
+<span class="keyword">fi</span></pre>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Frame Framing, Masking & Region Discipline</h3>
+        <ul>
+          <li><strong>Client-to-server masking:</strong> RFC 6455 requires all frames sent from client to server to be masked with a 4-byte key; <code>WebSocket</code> automatically applies and validates masks.</li>
+          <li><strong>Zero-copy per-message regions:</strong> In accordance with Vela's region architecture, message payloads are allocated in the caller's active frame/message region (<code>region msg_r default</code>) and instantly reclaimed upon loop iteration with zero GC pauses.</li>
+          <li><strong>Ping / Pong keep-alive:</strong> Heartbeat ping/pong frames are encoded and decoded natively.</li>
+        </ul>
+      </div>
+    </section>
   </main>
 
   <footer>

@@ -1,0 +1,4 @@
+; error: 3:10: ':=' allocates into the default region, but no default region is active in this block; declare 'region r default' or use 'new T(expr) at r'
+task main()
+    bind x: ^int := 4
+fi

@@ -57,6 +57,7 @@ pub enum Token {
     LBracket,
     RBracket,
     Colon,
+    ColonAssign,
     Hash,
     Dollar,
     Question,
@@ -211,6 +212,7 @@ impl Token {
             Token::LBracket => "[",
             Token::RBracket => "]",
             Token::Colon => ":",
+            Token::ColonAssign => ":=",
             Token::Hash => "#",
             Token::Dollar => "$",
             Token::Question => "?",
@@ -571,7 +573,14 @@ impl Lexer {
             '}' => Token::RBrace,
             '[' => Token::LBracket,
             ']' => Token::RBracket,
-            ':' => Token::Colon,
+            ':' => {
+                if self.peek() == '=' {
+                    self.advance();
+                    Token::ColonAssign
+                } else {
+                    Token::Colon
+                }
+            }
             '#' => Token::Hash,
             '$' => Token::Dollar,
             '?' => Token::Question,

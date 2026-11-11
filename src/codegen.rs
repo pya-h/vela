@@ -3581,6 +3581,7 @@ impl Generator {
                 mode,
                 reference: true,
                 init,
+                ..
             } => {
                 if let (
                     [bound],
@@ -4019,13 +4020,15 @@ impl Generator {
                     self.w.line(&format!("return {};", result));
                 }
             }
-            StmtKind::Region { name, .. } => {
-                self.w.line(&format!(
-                    "vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};",
-                    c_ident(name)
-                ));
-                if let Some(block) = self.regions.last_mut() {
-                    block.push(name.clone());
+            StmtKind::Region { names } => {
+                for decl in names {
+                    self.w.line(&format!(
+                        "vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};",
+                        c_ident(&decl.name)
+                    ));
+                    if let Some(block) = self.regions.last_mut() {
+                        block.push(decl.name.clone());
+                    }
                 }
             }
         }

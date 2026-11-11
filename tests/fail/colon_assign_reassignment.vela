@@ -1,0 +1,6 @@
+; error: 4:7: Vela variables must be declared with 'fixed', 'flex', 'bind', or 'hold' before the variable name; ':=' cannot be used for reassignment
+task main()
+    flex x = 1
+    x := 2
+fi
+

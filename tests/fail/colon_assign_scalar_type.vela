@@ -1,0 +1,5 @@
+; error: 4:13: ':=' allocates into a region and produces a pointer, slice, or map; use '=' to assign a direct value, or '^int' for a pointer
+task main()
+    region r default
+    bind x: int := 4
+fi

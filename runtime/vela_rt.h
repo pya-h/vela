@@ -2923,6 +2923,22 @@ static inline void vela__rt__web_socket_unstash(int64_t handle) {
     slot->in_len = slot->in_cap = 0;
 }
 
+/* Consumes count bytes from the front of the socket's stash. */
+static inline void vela__rt__web_socket_stash_consume(int64_t handle, int64_t count) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL || count <= 0) {
+        return;
+    }
+    if ((size_t)count >= slot->in_len) {
+        free(slot->in_bytes);
+        slot->in_bytes = NULL;
+        slot->in_len = slot->in_cap = 0;
+    } else {
+        memmove(slot->in_bytes, slot->in_bytes + count, slot->in_len - (size_t)count);
+        slot->in_len -= (size_t)count;
+    }
+}
+
 /* Sends what the socket takes now from its queue. Gives the bytes still queued, or a negative status when the
    connection is gone; the queue's memory is given back once it is empty. */
 static inline int64_t vela__rt__web_socket_flush(int64_t handle) {
@@ -3325,6 +3341,680 @@ static inline bool vela__rt__web_text_eq_ignore_case(vela__rt__text a, vela__rt_
         }
     }
     return true;
+}
+
+/* ==================== WebSocket Helpers (RFC 6455) ==================== */
+
+static inline uint32_t vela__rt__sha1_rol(uint32_t value, uint32_t bits) {
+    return (value << bits) | (value >> (32 - bits));
+}
+
+static inline void vela__rt__sha1_process_block(uint32_t state[5], const uint8_t block[64]) {
+    uint32_t w[80];
+    for (int t = 0; t < 16; t++) {
+        w[t] = ((uint32_t)block[t * 4] << 24) |
+               ((uint32_t)block[t * 4 + 1] << 16) |
+               ((uint32_t)block[t * 4 + 2] << 8) |
+               ((uint32_t)block[t * 4 + 3]);
+    }
+    for (int t = 16; t < 80; t++) {
+        w[t] = vela__rt__sha1_rol(w[t - 3] ^ w[t - 8] ^ w[t - 14] ^ w[t - 16], 1);
+    }
+
+    uint32_t a = state[0];
+    uint32_t b = state[1];
+    uint32_t c = state[2];
+    uint32_t d = state[3];
+    uint32_t e = state[4];
+
+    for (int t = 0; t < 80; t++) {
+        uint32_t f, k;
+        if (t < 20) {
+            f = (b & c) | ((~b) & d);
+            k = 0x5A827999;
+        } else if (t < 40) {
+            f = b ^ c ^ d;
+            k = 0x6ED9EBA1;
+        } else if (t < 60) {
+            f = (b & c) | (b & d) | (c & d);
+            k = 0x8F1BBCDC;
+        } else {
+            f = b ^ c ^ d;
+            k = 0xCA62C1D6;
+        }
+        uint32_t temp = vela__rt__sha1_rol(a, 5) + f + e + k + w[t];
+        e = d;
+        d = c;
+        c = vela__rt__sha1_rol(b, 30);
+        b = a;
+        a = temp;
+    }
+
+    state[0] += a;
+    state[1] += b;
+    state[2] += c;
+    state[3] += d;
+    state[4] += e;
+}
+
+static inline void vela__rt__sha1(const uint8_t* data, size_t len, uint8_t hash[20]) {
+    uint32_t state[5] = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0 };
+    uint64_t total_bits = (uint64_t)len * 8;
+    size_t offset = 0;
+    while (len >= 64) {
+        vela__rt__sha1_process_block(state, data + offset);
+        offset += 64;
+        len -= 64;
+    }
+    uint8_t block[64];
+    memcpy(block, data + offset, len);
+    block[len++] = 0x80;
+    if (len > 56) {
+        memset(block + len, 0, 64 - len);
+        vela__rt__sha1_process_block(state, block);
+        len = 0;
+    }
+    memset(block + len, 0, 56 - len);
+    for (int t = 0; t < 8; t++) {
+        block[56 + t] = (uint8_t)((total_bits >> (56 - t * 8)) & 0xFF);
+    }
+    vela__rt__sha1_process_block(state, block);
+
+    for (int t = 0; t < 5; t++) {
+        hash[t * 4] = (uint8_t)((state[t] >> 24) & 0xFF);
+        hash[t * 4 + 1] = (uint8_t)((state[t] >> 16) & 0xFF);
+        hash[t * 4 + 2] = (uint8_t)((state[t] >> 8) & 0xFF);
+        hash[t * 4 + 3] = (uint8_t)(state[t] & 0xFF);
+    }
+}
+
+static const char vela__rt__base64_chars[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static inline size_t vela__rt__base64_encode(const uint8_t* data, size_t len, char* out) {
+    size_t out_len = 0;
+    for (size_t i = 0; i < len; i += 3) {
+        uint32_t v = (uint32_t)data[i] << 16;
+        if (i + 1 < len) v |= (uint32_t)data[i + 1] << 8;
+        if (i + 2 < len) v |= (uint32_t)data[i + 2];
+
+        out[out_len++] = vela__rt__base64_chars[(v >> 18) & 0x3F];
+        out[out_len++] = vela__rt__base64_chars[(v >> 12) & 0x3F];
+        out[out_len++] = (i + 1 < len) ? vela__rt__base64_chars[(v >> 6) & 0x3F] : '=';
+        out[out_len++] = (i + 2 < len) ? vela__rt__base64_chars[v & 0x3F] : '=';
+    }
+    return out_len;
+}
+
+static const char vela__rt__ws_guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+static inline vela__rt__text vela__rt__web_ws_accept_key(vela__rt__text key, vela__rt__region* into) {
+    if (key.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    size_t total_in = (size_t)key.len + sizeof(vela__rt__ws_guid) - 1;
+    uint8_t* combined = (uint8_t*)malloc(total_in);
+    if (!combined) {
+        vela__rt__out_of_memory();
+    }
+    memcpy(combined, key.bytes, (size_t)key.len);
+    memcpy(combined + key.len, vela__rt__ws_guid, sizeof(vela__rt__ws_guid) - 1);
+
+    uint8_t hash[20];
+    vela__rt__sha1(combined, total_in, hash);
+    free(combined);
+
+    char* out = (char*)vela__rt__region_alloc(into, 28, 1);
+    size_t out_len = vela__rt__base64_encode(hash, 20, out);
+    return (vela__rt__text){ .bytes = out, .len = (int64_t)out_len };
+}
+
+static inline vela__rt__text vela__rt__web_ws_encode_frame(int64_t opcode, vela__rt__text payload, bool fin, bool mask, vela__rt__region* into) {
+    size_t header_len = 2;
+    if (payload.len >= 126 && payload.len <= 65535) {
+        header_len += 2;
+    } else if (payload.len > 65535) {
+        header_len += 8;
+    }
+    if (mask) {
+        header_len += 4;
+    }
+
+    size_t total_len = header_len + (size_t)payload.len;
+    char* buf = (char*)vela__rt__region_alloc(into, total_len, 1);
+
+    uint8_t b0 = (fin ? 0x80 : 0x00) | ((uint8_t)opcode & 0x0F);
+    uint8_t b1 = mask ? 0x80 : 0x00;
+
+    size_t pos = 2;
+    if (payload.len < 126) {
+        b1 |= (uint8_t)payload.len;
+    } else if (payload.len <= 65535) {
+        b1 |= 126;
+        buf[pos++] = (char)((payload.len >> 8) & 0xFF);
+        buf[pos++] = (char)(payload.len & 0xFF);
+    } else {
+        b1 |= 127;
+        for (int i = 7; i >= 0; i--) {
+            buf[pos++] = (char)(((uint64_t)payload.len >> (i * 8)) & 0xFF);
+        }
+    }
+    buf[0] = (char)b0;
+    buf[1] = (char)b1;
+
+    if (mask) {
+        uint8_t mask_key[4] = { 0x37, 0xFA, 0x21, 0x3D };
+        memcpy(buf + pos, mask_key, 4);
+        pos += 4;
+        for (int64_t i = 0; i < payload.len; i++) {
+            buf[pos + i] = (char)((uint8_t)payload.bytes[i] ^ mask_key[i % 4]);
+        }
+    } else if (payload.len > 0) {
+        memcpy(buf + pos, payload.bytes, (size_t)payload.len);
+    }
+
+    return (vela__rt__text){ .bytes = buf, .len = (int64_t)total_len };
+}
+
+static inline vela__rt__text vela__rt__web_ws_encode_close(int64_t code, vela__rt__text reason, bool mask, vela__rt__region* into) {
+    size_t payload_len = 2 + (reason.len > 0 ? (size_t)reason.len : 0);
+    char* payload = (char*)malloc(payload_len);
+    if (!payload) vela__rt__out_of_memory();
+    payload[0] = (char)((code >> 8) & 0xFF);
+    payload[1] = (char)(code & 0xFF);
+    if (reason.len > 0) {
+        memcpy(payload + 2, reason.bytes, (size_t)reason.len);
+    }
+    vela__rt__text p = { .bytes = payload, .len = (int64_t)payload_len };
+    vela__rt__text frame = vela__rt__web_ws_encode_frame(8, p, true, mask, into);
+    free(payload);
+    return frame;
+}
+
+static inline int64_t vela__rt__web_ws_frame_info(vela__rt__text raw) {
+    if (raw.len < 2) return 0;
+    bool mask = ((uint8_t)raw.bytes[1] & 0x80) != 0;
+    int len_code = (uint8_t)raw.bytes[1] & 0x7F;
+    int64_t header_size = 2 + (mask ? 4 : 0);
+    int64_t payload_len = len_code;
+
+    if (len_code == 126) {
+        header_size += 2;
+        if (raw.len < header_size) return 0;
+        payload_len = ((uint8_t)raw.bytes[2] << 8) | (uint8_t)raw.bytes[3];
+    } else if (len_code == 127) {
+        header_size += 8;
+        if (raw.len < header_size) return 0;
+        payload_len = 0;
+        for (int i = 0; i < 8; i++) {
+            payload_len = (payload_len << 8) | (uint8_t)raw.bytes[2 + i];
+        }
+    }
+    if (raw.len < header_size + payload_len) return 0;
+    return header_size + payload_len;
+}
+
+static inline int64_t vela__rt__web_ws_frame_opcode(vela__rt__text raw) {
+    if (raw.len < 1) return 0;
+    return (uint8_t)raw.bytes[0] & 0x0F;
+}
+
+static inline vela__rt__text vela__rt__web_ws_frame_payload(vela__rt__text raw, vela__rt__region* into) {
+    if (raw.len < 2) return (vela__rt__text){ "", 0 };
+    bool mask = ((uint8_t)raw.bytes[1] & 0x80) != 0;
+    int len_code = (uint8_t)raw.bytes[1] & 0x7F;
+    int64_t header_size = 2;
+    int64_t payload_len = len_code;
+
+    if (len_code == 126) {
+        header_size += 2;
+        payload_len = ((uint8_t)raw.bytes[2] << 8) | (uint8_t)raw.bytes[3];
+    } else if (len_code == 127) {
+        header_size += 8;
+        payload_len = 0;
+        for (int i = 0; i < 8; i++) {
+            payload_len = (payload_len << 8) | (uint8_t)raw.bytes[2 + i];
+        }
+    }
+    int64_t mask_offset = header_size;
+    if (mask) {
+        header_size += 4;
+    }
+    if (payload_len <= 0 || raw.len < header_size + payload_len) {
+        return (vela__rt__text){ "", 0 };
+    }
+
+    uint8_t opcode = (uint8_t)raw.bytes[0] & 0x0F;
+    int64_t start = header_size;
+    int64_t out_len = payload_len;
+    if (opcode == 8 && payload_len >= 2) {
+        start += 2;
+        out_len -= 2;
+    }
+
+    char* buf = (char*)vela__rt__region_alloc(into, (size_t)out_len, 1);
+    if (mask) {
+        const uint8_t* mask_key = (const uint8_t*)(raw.bytes + mask_offset);
+        for (int64_t i = 0; i < out_len; i++) {
+            int64_t orig_idx = (opcode == 8 && payload_len >= 2) ? (i + 2) : i;
+            buf[i] = (char)((uint8_t)raw.bytes[start + i] ^ mask_key[orig_idx % 4]);
+        }
+    } else {
+        memcpy(buf, raw.bytes + start, (size_t)out_len);
+    }
+
+    return (vela__rt__text){ .bytes = buf, .len = out_len };
+}
+
+static inline int64_t vela__rt__web_ws_frame_close_code(vela__rt__text raw) {
+    if (raw.len < 2) return 1000;
+    bool mask = ((uint8_t)raw.bytes[1] & 0x80) != 0;
+    int len_code = (uint8_t)raw.bytes[1] & 0x7F;
+    int64_t header_size = 2;
+    int64_t payload_len = len_code;
+
+    if (len_code == 126) {
+        header_size += 2;
+        payload_len = ((uint8_t)raw.bytes[2] << 8) | (uint8_t)raw.bytes[3];
+    } else if (len_code == 127) {
+        header_size += 8;
+        payload_len = 0;
+        for (int i = 0; i < 8; i++) {
+            payload_len = (payload_len << 8) | (uint8_t)raw.bytes[2 + i];
+        }
+    }
+    int64_t mask_offset = header_size;
+    if (mask) {
+        header_size += 4;
+    }
+    if (payload_len < 2 || raw.len < header_size + 2) {
+        return 1000;
+    }
+
+    uint8_t b0 = (uint8_t)raw.bytes[header_size];
+    uint8_t b1 = (uint8_t)raw.bytes[header_size + 1];
+    if (mask) {
+        const uint8_t* mask_key = (const uint8_t*)(raw.bytes + mask_offset);
+        b0 ^= mask_key[0];
+        b1 ^= mask_key[1];
+    }
+    return ((int64_t)b0 << 8) | b1;
+}
+
+/* ==================== Standard GUI Library (std/gui) ==================== */
+
+#define VELA__RT__GUI_MAX_WINDOWS 16
+#define VELA__RT__GUI_EVENT_QUEUE_SIZE 64
+
+static const uint8_t vela__rt__gui_font[96][8] = {
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 32 ' ' */
+    { 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x18, 0x00 }, /* 33 '!' */
+    { 0x66, 0x66, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 34 '"' */
+    { 0x24, 0x7E, 0x24, 0x24, 0x7E, 0x24, 0x00, 0x00 }, /* 35 '#' */
+    { 0x18, 0x3E, 0x60, 0x3C, 0x06, 0x7C, 0x18, 0x00 }, /* 36 '$' */
+    { 0x62, 0x64, 0x08, 0x10, 0x26, 0x46, 0x00, 0x00 }, /* 37 '%' */
+    { 0x38, 0x6C, 0x38, 0x76, 0xCE, 0xCC, 0x76, 0x00 }, /* 38 '&' */
+    { 0x18, 0x18, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 39 "'" */
+    { 0x0C, 0x18, 0x30, 0x30, 0x30, 0x18, 0x0C, 0x00 }, /* 40 '(' */
+    { 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x18, 0x30, 0x00 }, /* 41 ')' */
+    { 0x00, 0x24, 0x18, 0x7E, 0x18, 0x24, 0x00, 0x00 }, /* 42 '*' */
+    { 0x00, 0x18, 0x18, 0x7E, 0x18, 0x18, 0x00, 0x00 }, /* 43 '+' */
+    { 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x08, 0x10 }, /* 44 ',' */
+    { 0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00 }, /* 45 '-' */
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00 }, /* 46 '.' */
+    { 0x02, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x40, 0x00 }, /* 47 '/' */
+    { 0x3C, 0x66, 0x6E, 0x76, 0x66, 0x66, 0x3C, 0x00 }, /* 48 '0' */
+    { 0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x7E, 0x00 }, /* 49 '1' */
+    { 0x3C, 0x66, 0x06, 0x1C, 0x30, 0x66, 0x7E, 0x00 }, /* 50 '2' */
+    { 0x3C, 0x66, 0x06, 0x1C, 0x06, 0x66, 0x3C, 0x00 }, /* 51 '3' */
+    { 0x0C, 0x1C, 0x34, 0x64, 0x7E, 0x04, 0x04, 0x00 }, /* 52 '4' */
+    { 0x7E, 0x60, 0x7C, 0x06, 0x06, 0x66, 0x3C, 0x00 }, /* 53 '5' */
+    { 0x1C, 0x30, 0x60, 0x7C, 0x66, 0x66, 0x3C, 0x00 }, /* 54 '6' */
+    { 0x7E, 0x06, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x00 }, /* 55 '7' */
+    { 0x3C, 0x66, 0x66, 0x3C, 0x66, 0x66, 0x3C, 0x00 }, /* 56 '8' */
+    { 0x3C, 0x66, 0x66, 0x3E, 0x06, 0x0C, 0x38, 0x00 }, /* 57 '9' */
+    { 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00, 0x00 }, /* 58 ':' */
+    { 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x08, 0x10 }, /* 59 ';' */
+    { 0x0C, 0x18, 0x30, 0x60, 0x30, 0x18, 0x0C, 0x00 }, /* 60 '<' */
+    { 0x00, 0x7E, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00 }, /* 61 '=' */
+    { 0x30, 0x18, 0x0C, 0x06, 0x0C, 0x18, 0x30, 0x00 }, /* 62 '>' */
+    { 0x3C, 0x66, 0x06, 0x1C, 0x18, 0x00, 0x18, 0x00 }, /* 63 '?' */
+    { 0x3C, 0x66, 0x6E, 0x6A, 0x6E, 0x60, 0x3C, 0x00 }, /* 64 '@' */
+    { 0x18, 0x3C, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x00 }, /* 65 'A' */
+    { 0x7C, 0x66, 0x66, 0x7C, 0x66, 0x66, 0x7C, 0x00 }, /* 66 'B' */
+    { 0x3C, 0x66, 0x60, 0x60, 0x60, 0x66, 0x3C, 0x00 }, /* 67 'C' */
+    { 0x78, 0x6C, 0x66, 0x66, 0x66, 0x6C, 0x78, 0x00 }, /* 68 'D' */
+    { 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x7E, 0x00 }, /* 69 'E' */
+    { 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x00 }, /* 70 'F' */
+    { 0x3C, 0x66, 0x60, 0x6E, 0x66, 0x66, 0x3E, 0x00 }, /* 71 'G' */
+    { 0x66, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x00 }, /* 72 'H' */
+    { 0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00 }, /* 73 'I' */
+    { 0x1E, 0x06, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00 }, /* 74 'J' */
+    { 0x66, 0x6C, 0x78, 0x70, 0x78, 0x6C, 0x66, 0x00 }, /* 75 'K' */
+    { 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x7E, 0x00 }, /* 76 'L' */
+    { 0x63, 0x77, 0x7F, 0x6B, 0x63, 0x63, 0x63, 0x00 }, /* 77 'M' */
+    { 0x66, 0x76, 0x7E, 0x7E, 0x6E, 0x66, 0x66, 0x00 }, /* 78 'N' */
+    { 0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00 }, /* 79 'O' */
+    { 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60, 0x60, 0x00 }, /* 80 'P' */
+    { 0x3C, 0x66, 0x66, 0x66, 0x6E, 0x3C, 0x0E, 0x00 }, /* 81 'Q' */
+    { 0x7C, 0x66, 0x66, 0x7C, 0x78, 0x6C, 0x66, 0x00 }, /* 82 'R' */
+    { 0x3C, 0x66, 0x60, 0x3C, 0x06, 0x66, 0x3C, 0x00 }, /* 83 'S' */
+    { 0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00 }, /* 84 'T' */
+    { 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00 }, /* 85 'U' */
+    { 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x00 }, /* 86 'V' */
+    { 0x63, 0x63, 0x63, 0x6B, 0x7F, 0x77, 0x63, 0x00 }, /* 87 'W' */
+    { 0x66, 0x66, 0x3C, 0x18, 0x3C, 0x66, 0x66, 0x00 }, /* 88 'X' */
+    { 0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x18, 0x00 }, /* 89 'Y' */
+    { 0x7E, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x7E, 0x00 }, /* 90 'Z' */
+    { 0x3C, 0x30, 0x30, 0x30, 0x30, 0x30, 0x3C, 0x00 }, /* 91 '[' */
+    { 0x40, 0x60, 0x30, 0x18, 0x0C, 0x06, 0x02, 0x00 }, /* 92 '\\' */
+    { 0x3C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x3C, 0x00 }, /* 93 ']' */
+    { 0x18, 0x3C, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 94 '^' */
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7E, 0x00 }, /* 95 '_' */
+    { 0x18, 0x0C, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 96 '`' */
+    { 0x00, 0x00, 0x3C, 0x06, 0x3E, 0x66, 0x3E, 0x00 }, /* 97 'a' */
+    { 0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x7C, 0x00 }, /* 98 'b' */
+    { 0x00, 0x00, 0x3C, 0x66, 0x60, 0x66, 0x3C, 0x00 }, /* 99 'c' */
+    { 0x06, 0x06, 0x3E, 0x66, 0x66, 0x66, 0x3E, 0x00 }, /* 100 'd' */
+    { 0x00, 0x00, 0x3C, 0x66, 0x7E, 0x60, 0x3C, 0x00 }, /* 101 'e' */
+    { 0x1C, 0x30, 0x78, 0x30, 0x30, 0x30, 0x30, 0x00 }, /* 102 'f' */
+    { 0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x3C }, /* 103 'g' */
+    { 0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x00 }, /* 104 'h' */
+    { 0x18, 0x00, 0x38, 0x18, 0x18, 0x18, 0x3C, 0x00 }, /* 105 'i' */
+    { 0x0C, 0x00, 0x0C, 0x0C, 0x0C, 0x6C, 0x38, 0x00 }, /* 106 'j' */
+    { 0x60, 0x60, 0x66, 0x6C, 0x78, 0x6C, 0x66, 0x00 }, /* 107 'k' */
+    { 0x38, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00 }, /* 108 'l' */
+    { 0x00, 0x00, 0x66, 0x7F, 0x7F, 0x6B, 0x63, 0x00 }, /* 109 'm' */
+    { 0x00, 0x00, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x00 }, /* 110 'n' */
+    { 0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x3C, 0x00 }, /* 111 'o' */
+    { 0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60 }, /* 112 'p' */
+    { 0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x06 }, /* 113 'q' */
+    { 0x00, 0x00, 0x6C, 0x76, 0x60, 0x60, 0x60, 0x00 }, /* 114 'r' */
+    { 0x00, 0x00, 0x3E, 0x60, 0x3C, 0x06, 0x7C, 0x00 }, /* 115 's' */
+    { 0x30, 0x30, 0x78, 0x30, 0x30, 0x34, 0x18, 0x00 }, /* 116 't' */
+    { 0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3E, 0x00 }, /* 117 'u' */
+    { 0x00, 0x00, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x00 }, /* 118 'v' */
+    { 0x00, 0x00, 0x63, 0x6B, 0x7F, 0x77, 0x63, 0x00 }, /* 119 'w' */
+    { 0x00, 0x00, 0x66, 0x3C, 0x18, 0x3C, 0x66, 0x00 }, /* 120 'x' */
+    { 0x00, 0x00, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x3C }, /* 121 'y' */
+    { 0x00, 0x00, 0x7E, 0x0C, 0x18, 0x30, 0x7E, 0x00 }, /* 122 'z' */
+    { 0x0E, 0x18, 0x18, 0x70, 0x18, 0x18, 0x0E, 0x00 }, /* 123 '{' */
+    { 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00 }, /* 124 '|' */
+    { 0x70, 0x18, 0x18, 0x0E, 0x18, 0x18, 0x70, 0x00 }, /* 125 '}' */
+    { 0x36, 0x5C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 126 '~' */
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 127 '\x7F' */
+};
+
+typedef struct {
+    int64_t handle;
+    char* title;
+    int64_t width;
+    int64_t height;
+    bool is_open;
+    uint32_t* framebuffer; /* RGBA 0xRRGGBBAA */
+    int event_head;
+    int event_tail;
+    int event_count;
+    int64_t events[VELA__RT__GUI_EVENT_QUEUE_SIZE][4]; /* [type, a1, a2, a3] */
+    int64_t current_event[4];
+} vela__rt__gui_window;
+
+static vela__rt__gui_window vela__rt__gui_windows[VELA__RT__GUI_MAX_WINDOWS];
+static bool vela__rt__gui_initialized = false;
+
+static inline void vela__rt__gui_init_subsystem(void) {
+    if (!vela__rt__gui_initialized) {
+        memset(vela__rt__gui_windows, 0, sizeof(vela__rt__gui_windows));
+        vela__rt__gui_initialized = true;
+    }
+}
+
+static inline vela__rt__gui_window* vela__rt__gui_window_get(int64_t handle) {
+    if (handle < 1 || handle > VELA__RT__GUI_MAX_WINDOWS) return NULL;
+    vela__rt__gui_window* win = &vela__rt__gui_windows[handle - 1];
+    if (!win->is_open || win->framebuffer == NULL) return NULL;
+    return win;
+}
+
+static inline void vela__rt__gui_window_push_event_internal(vela__rt__gui_window* win, int64_t type, int64_t a1, int64_t a2, int64_t a3) {
+    if (win->event_count >= VELA__RT__GUI_EVENT_QUEUE_SIZE) return;
+    win->events[win->event_tail][0] = type;
+    win->events[win->event_tail][1] = a1;
+    win->events[win->event_tail][2] = a2;
+    win->events[win->event_tail][3] = a3;
+    win->event_tail = (win->event_tail + 1) % VELA__RT__GUI_EVENT_QUEUE_SIZE;
+    win->event_count++;
+}
+
+static inline int64_t vela__rt__gui_window_open(vela__rt__text title, int64_t width, int64_t height) {
+    vela__rt__gui_init_subsystem();
+    if (width <= 0) width = 800;
+    if (height <= 0) height = 600;
+
+    int slot_idx = -1;
+    for (int i = 0; i < VELA__RT__GUI_MAX_WINDOWS; i++) {
+        if (!vela__rt__gui_windows[i].is_open) {
+            slot_idx = i;
+            break;
+        }
+    }
+    if (slot_idx < 0) return -1;
+
+    vela__rt__gui_window* win = &vela__rt__gui_windows[slot_idx];
+    memset(win, 0, sizeof(*win));
+    win->handle = (int64_t)(slot_idx + 1);
+    win->width = width;
+    win->height = height;
+    win->framebuffer = (uint32_t*)calloc((size_t)(width * height), sizeof(uint32_t));
+    if (!win->framebuffer) return -1;
+
+    if (title.len > 0) {
+        win->title = (char*)malloc((size_t)title.len + 1);
+        if (win->title) {
+            memcpy(win->title, title.bytes, (size_t)title.len);
+            win->title[title.len] = '\0';
+        }
+    }
+    win->is_open = true;
+
+    /* Enqueue initial Redraw event */
+    vela__rt__gui_window_push_event_internal(win, 8, 0, 0, 0);
+
+    return win->handle;
+}
+
+static inline void vela__rt__gui_window_close(int64_t handle) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win) return;
+    win->is_open = false;
+    if (win->framebuffer) {
+        free(win->framebuffer);
+        win->framebuffer = NULL;
+    }
+    if (win->title) {
+        free(win->title);
+        win->title = NULL;
+    }
+}
+
+static inline bool vela__rt__gui_window_is_open(int64_t handle) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    return win != NULL && win->is_open;
+}
+
+static inline void vela__rt__gui_window_push_event(int64_t handle, int64_t type, int64_t a1, int64_t a2, int64_t a3) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win) return;
+    vela__rt__gui_window_push_event_internal(win, type, a1, a2, a3);
+}
+
+static inline int64_t vela__rt__gui_window_poll_event(int64_t handle) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || win->event_count == 0) {
+        if (win) {
+            memset(win->current_event, 0, sizeof(win->current_event));
+        }
+        return 0;
+    }
+    win->current_event[0] = win->events[win->event_head][0];
+    win->current_event[1] = win->events[win->event_head][1];
+    win->current_event[2] = win->events[win->event_head][2];
+    win->current_event[3] = win->events[win->event_head][3];
+    win->event_head = (win->event_head + 1) % VELA__RT__GUI_EVENT_QUEUE_SIZE;
+    win->event_count--;
+    return win->current_event[0];
+}
+
+static inline int64_t vela__rt__gui_window_event_arg(int64_t handle, int64_t idx) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || idx < 1 || idx > 3) return 0;
+    return win->current_event[idx];
+}
+
+static inline void vela__rt__gui_window_present(int64_t handle) {
+    (void)handle;
+}
+
+static inline void vela__rt__gui_canvas_clear(int64_t handle, int64_t r, int64_t g, int64_t b, int64_t a) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win) return;
+    uint32_t c = ((uint32_t)(r & 0xFF) << 24) | ((uint32_t)(g & 0xFF) << 16) | ((uint32_t)(b & 0xFF) << 8) | (uint32_t)(a & 0xFF);
+    size_t total = (size_t)(win->width * win->height);
+    for (size_t i = 0; i < total; i++) {
+        win->framebuffer[i] = c;
+    }
+}
+
+static inline void vela__rt__gui_canvas_draw_pixel(int64_t handle, int64_t x, int64_t y, int64_t r, int64_t g, int64_t b, int64_t a) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || x < 0 || x >= win->width || y < 0 || y >= win->height) return;
+    uint32_t c = ((uint32_t)(r & 0xFF) << 24) | ((uint32_t)(g & 0xFF) << 16) | ((uint32_t)(b & 0xFF) << 8) | (uint32_t)(a & 0xFF);
+    win->framebuffer[y * win->width + x] = c;
+}
+
+static inline int64_t vela__rt__gui_canvas_pixel_r(int64_t handle, int64_t x, int64_t y) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || x < 0 || x >= win->width || y < 0 || y >= win->height) return 0;
+    return (int64_t)((win->framebuffer[y * win->width + x] >> 24) & 0xFF);
+}
+
+static inline int64_t vela__rt__gui_canvas_pixel_g(int64_t handle, int64_t x, int64_t y) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || x < 0 || x >= win->width || y < 0 || y >= win->height) return 0;
+    return (int64_t)((win->framebuffer[y * win->width + x] >> 16) & 0xFF);
+}
+
+static inline int64_t vela__rt__gui_canvas_pixel_b(int64_t handle, int64_t x, int64_t y) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || x < 0 || x >= win->width || y < 0 || y >= win->height) return 0;
+    return (int64_t)((win->framebuffer[y * win->width + x] >> 8) & 0xFF);
+}
+
+static inline int64_t vela__rt__gui_canvas_pixel_a(int64_t handle, int64_t x, int64_t y) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || x < 0 || x >= win->width || y < 0 || y >= win->height) return 0;
+    return (int64_t)(win->framebuffer[y * win->width + x] & 0xFF);
+}
+
+static inline void vela__rt__gui_canvas_fill_rect(int64_t handle, int64_t rx, int64_t ry, int64_t rw, int64_t rh, int64_t r, int64_t g, int64_t b, int64_t a) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || rw <= 0 || rh <= 0) return;
+    int64_t x0 = rx < 0 ? 0 : rx;
+    int64_t y0 = ry < 0 ? 0 : ry;
+    int64_t x1 = (rx + rw > win->width) ? win->width : (rx + rw);
+    int64_t y1 = (ry + rh > win->height) ? win->height : (ry + rh);
+    if (x0 >= x1 || y0 >= y1) return;
+
+    uint32_t c = ((uint32_t)(r & 0xFF) << 24) | ((uint32_t)(g & 0xFF) << 16) | ((uint32_t)(b & 0xFF) << 8) | (uint32_t)(a & 0xFF);
+    for (int64_t y = y0; y < y1; y++) {
+        uint32_t* row = &win->framebuffer[y * win->width + x0];
+        for (int64_t x = x0; x < x1; x++) {
+            *row++ = c;
+        }
+    }
+}
+
+static inline void vela__rt__gui_canvas_draw_rect(int64_t handle, int64_t rx, int64_t ry, int64_t rw, int64_t rh, int64_t r, int64_t g, int64_t b, int64_t a) {
+    if (rw <= 0 || rh <= 0) return;
+    vela__rt__gui_canvas_fill_rect(handle, rx, ry, rw, 1, r, g, b, a);
+    vela__rt__gui_canvas_fill_rect(handle, rx, ry + rh - 1, rw, 1, r, g, b, a);
+    vela__rt__gui_canvas_fill_rect(handle, rx, ry, 1, rh, r, g, b, a);
+    vela__rt__gui_canvas_fill_rect(handle, rx + rw - 1, ry, 1, rh, r, g, b, a);
+}
+
+static inline void vela__rt__gui_canvas_draw_line(int64_t handle, int64_t x0, int64_t y0, int64_t x1, int64_t y1, int64_t r, int64_t g, int64_t b, int64_t a) {
+    int64_t dx = x1 > x0 ? (x1 - x0) : (x0 - x1);
+    int64_t sx = x0 < x1 ? 1 : -1;
+    int64_t dy = -(y1 > y0 ? (y1 - y0) : (y0 - y1));
+    int64_t sy = y0 < y1 ? 1 : -1;
+    int64_t err = dx + dy;
+
+    while (1) {
+        vela__rt__gui_canvas_draw_pixel(handle, x0, y0, r, g, b, a);
+        if (x0 == x1 && y0 == y1) break;
+        int64_t e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+static inline void vela__rt__gui_canvas_draw_text(int64_t handle, int64_t x, int64_t y, vela__rt__text text, int64_t r, int64_t g, int64_t b, int64_t a) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || text.len <= 0) return;
+
+    int64_t cur_x = x;
+    int64_t cur_y = y;
+
+    for (int64_t i = 0; i < text.len; i++) {
+        uint8_t ch = (uint8_t)text.bytes[i];
+        if (ch == '\n') {
+            cur_x = x;
+            cur_y += 10;
+            continue;
+        }
+        if (ch < 32 || ch > 127) ch = '?';
+        const uint8_t* glyph = vela__rt__gui_font[ch - 32];
+        for (int row = 0; row < 8; row++) {
+            uint8_t bits = glyph[row];
+            for (int col = 0; col < 8; col++) {
+                if (bits & (0x80 >> col)) {
+                    vela__rt__gui_canvas_draw_pixel(handle, cur_x + col, cur_y + row, r, g, b, a);
+                }
+            }
+        }
+        cur_x += 8;
+    }
+}
+
+static inline vela__rt__text vela__rt__gui_canvas_export_ppm(int64_t handle, vela__rt__region* into) {
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || win->width <= 0 || win->height <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "P6\n%ld %ld\n255\n", (long)win->width, (long)win->height);
+    if (header_len <= 0) return (vela__rt__text){ "", 0 };
+
+    size_t pixel_bytes = (size_t)(win->width * win->height * 3);
+    size_t total_len = (size_t)header_len + pixel_bytes;
+    char* buf = (char*)vela__rt__region_alloc(into, total_len, 1);
+    memcpy(buf, header, (size_t)header_len);
+
+    char* ptr = buf + header_len;
+    size_t count = (size_t)(win->width * win->height);
+    for (size_t i = 0; i < count; i++) {
+        uint32_t c = win->framebuffer[i];
+        *ptr++ = (char)((c >> 24) & 0xFF); /* R */
+        *ptr++ = (char)((c >> 16) & 0xFF); /* G */
+        *ptr++ = (char)((c >> 8) & 0xFF);  /* B */
+    }
+    return (vela__rt__text){ .bytes = buf, .len = (int64_t)total_len };
 }
 
 #endif

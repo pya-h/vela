@@ -301,6 +301,13 @@ finally</pre>
         or <code>hold</code> (place can be reassigned as a whole, contents cannot be changed).
       </p>
       <p>
+        Variable initialization can use <code>=</code> for ordinary values or <code>:=</code> as a shortcut to allocate in the block's active
+        <a href="#default-region">default region</a>. <code>:=</code> is valid only on declarations (never on reassignment).
+        It accepts unambiguous slice literals (<code>flex s := [1, 2, 3]</code>) and map literals (<code>flex m := ["a": 1]</code>),
+        or explicit pointer type annotations (<code>bind x: ^int := 4</code>). Ambiguous scalar assignments without a pointer type
+        are rejected at compile time.
+      </p>
+      <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>, and the
         <a href="#number-sizes">sized numbers</a>) aren't reserved words: no task, shape, kind, or
@@ -4708,12 +4715,13 @@ save(500) {
       <div class="note">
         <strong>The rules in short.</strong>
         <ul>
-          <li><code>region r</code> declares a region; <code>new T(v) at r</code> (or <code>new@r T(v)</code>) copies a value into it.</li>
+          <li><code>region r</code> declares a region; <code>region r1, r2, ...</code> declares multiple regions on one line; <code>new T(v) at r</code> (or <code>new@r T(v)</code>) copies a value into it.</li>
           <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>
           <li>When the block declaring <code>r</code> closes, however it closes, everything in <code>r</code> is freed.</li>
           <li>A task allocates only in a region it is given as a parameter, <code>r: region</code>; it can read and link pointers in any region its parameters' types name.</li>
           <li><code>region r default</code> (and <code>r: region default</code>) makes <code>r</code> the block's
             <a href="#default-region">default region</a>: what allocates there needs no <code>at r</code>.</li>
+          <li><code>:=</code> on variable definitions allocates directly into the block's default region (e.g. <code>bind x: ^int := 4</code>, <code>flex s := [1, 2, 3]</code>).</li>
           <li>A pointer is never stored in a different region than the one its type names.</li>
         </ul>
       </div>

@@ -1,0 +1,12 @@
+task main()
+    region r1, r2, r3
+    fixed a = [1, 2, 3, ...] at r1
+    fixed b = [4, 5, 6, ...] at r2
+    fixed c = [7, 8, 9, ...] at r3
+    show(a[0] + b[1] + c[2])
+
+    region d default, extra
+    fixed s = [10, 20, ...]
+    fixed e = [30, ...] at extra
+    show(s[0] + s[1] + e[0])
+fi

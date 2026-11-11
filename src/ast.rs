@@ -1699,6 +1699,7 @@ pub enum StmtKind {
         mode: Mode,
         reference: bool,
         init: Vec<Expr>,
+        colon: bool,
     },
     Assign(Vec<Target>, Vec<Expr>),
     Step {
@@ -1725,9 +1726,15 @@ pub enum StmtKind {
     Send(Vec<Expr>),
     SetResults(Vec<Binding>, Vec<Expr>),
     Region {
-        name: String,
-        default: bool,
+        names: Vec<RegionDecl>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionDecl {
+    pub name: String,
+    pub default: bool,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

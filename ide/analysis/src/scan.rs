@@ -2236,9 +2236,10 @@ impl<'a> Classifier<'a> {
                 | Token::Le
                 | Token::Ge
                 | Token::Assign
+                | Token::ColonAssign
                 | Token::Range => {
                     self.push(range, TokenClass::Operator, None);
-                    if *token == Token::Assign {
+                    if *token == Token::Assign || *token == Token::ColonAssign {
                         declaring_list = None;
                         in_pattern = false;
                     }
@@ -2360,7 +2361,10 @@ impl<'a> Classifier<'a> {
                         }
                         Token::New => in_type = true,
                         Token::At => region_next = Some(false),
-                        Token::Region if !was_type => declaring = Some("region"),
+                        Token::Region if !was_type => {
+                            declaring = Some("region");
+                            declaring_list = Some("region");
+                        }
                         Token::Include => in_include = true,
                         _ => {}
                     }
@@ -2563,7 +2567,7 @@ impl<'a> Classifier<'a> {
                 );
             }
             let detail = if after == Some(&Token::Colon) {
-                tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::Comma))
+                tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::ColonAssign | Token::Comma))
             } else {
                 String::new()
             };

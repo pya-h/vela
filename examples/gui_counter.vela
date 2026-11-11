@@ -1,0 +1,57 @@
+; An interactive counter application built with std/gui.
+; Demonstrates per-frame region discipline, software canvas rendering, and button interaction.
+include std/gui { Window, GuiEvent, Point, Rect, Color, Button }
+
+task main()
+    flex win = Window.open("Counter Application", 320, 240) { failure _
+        show("failed opening window")
+        <-
+    }
+
+    fixed btn_inc = Button { rect: Rect { x: 30, y: 100, width: 80, height: 36 }, label: "+ Add" }
+    fixed btn_dec = Button { rect: Rect { x: 130, y: 100, width: 80, height: 36 }, label: "- Sub" }
+    fixed btn_rst = Button { rect: Rect { x: 230, y: 100, width: 70, height: 36 }, label: "Reset" }
+
+    flex count = 0
+    fixed canvas = win.canvas()
+
+    ; Simulate user clicks on buttons
+    win.push_event(1, 50, 110, 1)   ; click "+ Add"
+    win.push_event(1, 50, 110, 1)   ; click "+ Add"
+    win.push_event(1, 50, 110, 1)   ; click "+ Add"
+    win.push_event(1, 150, 110, 1)  ; click "- Sub"
+    win.push_event(1, 250, 110, 1)  ; click "Reset"
+    win.push_event(7)               ; CloseRequested
+
+    loop win.is_open
+        region frame default
+        fixed ev = win.poll_event()
+        match ev
+        case GuiEvent.Redraw
+            canvas.clear(Color.hex(0x0F172A))
+            btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
+            btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
+            btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
+            canvas.draw_text("Counter: {count}", Point { x: 30, y: 50 }, Color.white())
+            win.present()
+        case GuiEvent.MouseDown x y btn
+            fixed click_pos = Point { x: x, y: y }
+            when btn_inc.rect.contains(click_pos)
+                count++
+                show("count incremented: ", count)
+            else when btn_dec.rect.contains(click_pos)
+                count--
+                show("count decremented: ", count)
+            else when btn_rst.rect.contains(click_pos)
+                count = 0
+                show("count reset: ", count)
+            fi
+        case GuiEvent.CloseRequested
+            win.close()
+            show("counter app closed; final count: ", count)
+            break
+        case _
+        fi
+    fi
+fi
+

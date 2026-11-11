@@ -1,0 +1,4 @@
+; error: 3:15: 'r' is already the name of a region at 3:12
+task main()
+    region r, r
+fi
