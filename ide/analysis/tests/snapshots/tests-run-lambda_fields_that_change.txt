@@ -1,0 +1,104 @@
+  1 | ; Fields holding lambdas that change things. A '[bind @this]' lambda changes only
+    | comment:; Fields holding lambdas that change things. A '[bind @this]' lambda changes only
+  2 | ; what every copy of it shares, so the value holding it is copied as any other. A
+    | comment:; what every copy of it shares, so the value holding it is copied as any other. A
+  3 | ; '[flex @this]' lambda changes its own copies, so the value holding it is held as
+    | comment:; '[flex @this]' lambda changes its own copies, so the value holding it is held as
+  4 | ; such a lambda is: in a 'flex' variable, given as a place, never copied.
+    | comment:; such a lambda is: in a 'flex' variable, given as a place, never copied.
+  6 | shape Tally
+    | keyword:shape  type:Tally
+  7 |     put: [bind @this](int) -> nothing
+    | field:put  punctuation::  punctuation:[  keyword:bind  operator:@  region:this  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+  8 | fi
+    | keyword:fi
+ 10 | shape Counter
+    | keyword:shape  type:Counter
+ 11 |     start: int
+    | field:start  punctuation::  type-builtin:int
+ 12 |     next: [flex @this]() -> int
+    | field:next  punctuation::  punctuation:[  keyword:flex  operator:@  region:this  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 14 |     peek() -> int
+    | method:peek  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 15 |         <- .start
+    | keyword:<-  punctuation:.  field:start
+ 16 |     fi
+    | keyword:fi
+ 18 |     alters twice() -> int
+    | keyword:alters  method:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 19 |         <- .next() + .next()
+    | keyword:<-  punctuation:.  field:next  punctuation:(  punctuation:)  operator:+  punctuation:.  field:next  punctuation:(  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi
+ 23 | shape Pair
+    | keyword:shape  type:Pair
+ 24 |     left: Counter
+    | field:left  punctuation::  type:Counter
+ 25 |     right: int
+    | field:right  punctuation::  type-builtin:int
+ 26 | fi
+    | keyword:fi
+ 28 | task counter(start: int, r: region) -> Counter@r
+    | keyword:task  task:counter  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Counter  operator:@  region:r
+ 29 |     flex n = start
+    | keyword:flex  variable:n  operator:=  parameter:start
+ 30 |     <- Counter { start: start, next: [flex @r]() -> int
+    | keyword:<-  type:Counter  punctuation:{  field:start  punctuation::  parameter:start  punctuation:,  field:next  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 31 |         n = n + 1
+    | variable:n  operator:=  variable:n  operator:+  number:1
+ 32 |         <- n
+    | keyword:<-  variable:n
+ 33 |     fi }
+    | keyword:fi  punctuation:}
+ 34 | fi
+    | keyword:fi
+ 36 | task bump(flex& c: Counter@r) -> int
+    | keyword:task  task:bump  punctuation:(  keyword:flex  keyword:&  parameter:c  punctuation::  type:Counter  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 37 |     <- c.next()
+    | keyword:<-  parameter:c  punctuation:.  field:next  punctuation:(  punctuation:)
+ 38 | fi
+    | keyword:fi
+ 40 | task look(fixed& c: Counter@r) -> int
+    | keyword:task  task:look  punctuation:(  keyword:fixed  keyword:&  parameter:c  punctuation::  type:Counter  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 41 |     <- c.peek()
+    | keyword:<-  parameter:c  punctuation:.  method:peek  punctuation:(  punctuation:)
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 45 |     region r
+    | keyword:region  region:r
+ 46 |     flex totals = [0, 0, ...] at r
+    | keyword:flex  variable:totals  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 47 |     flex t: Tally@r = Tally { put: [bind @r](n: int) -> nothing
+    | keyword:flex  variable:t  punctuation::  type:Tally  operator:@  region:r  operator:=  type:Tally  punctuation:{  field:put  punctuation::  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  variable:n  punctuation::  variable:int  punctuation:)  operator:->  type-builtin:nothing
+ 48 |         totals[0] = totals[0] + n
+    | variable:totals  punctuation:[  number:0  punctuation:]  operator:=  variable:totals  punctuation:[  number:0  punctuation:]  operator:+  variable:n
+ 49 |     fi }
+    | keyword:fi  punctuation:}
+ 50 |     t.put(2)
+    | variable:t  punctuation:.  field:put  punctuation:(  number:2  punctuation:)
+ 51 |     flex other = t
+    | keyword:flex  variable:other  operator:=  variable:t
+ 52 |     other.put(5)
+    | variable:other  punctuation:.  field:put  punctuation:(  number:5  punctuation:)
+ 53 |     show(totals)
+    | builtin-fn:show  punctuation:(  variable:totals  punctuation:)
+ 55 |     flex c = counter(10, r)
+    | keyword:flex  variable:c  operator:=  task:counter  punctuation:(  number:10  punctuation:,  variable:r  punctuation:)
+ 56 |     show(c.next(), " ", c.next(), " ", c.twice())
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  method:twice  punctuation:(  punctuation:)  punctuation:)
+ 57 |     show(bump(&c), " ", look(&c))
+    | builtin-fn:show  punctuation:(  task:bump  punctuation:(  operator:&  variable:c  punctuation:)  punctuation:,  string:" "  punctuation:,  task:look  punctuation:(  operator:&  variable:c  punctuation:)  punctuation:)
+ 59 |     flex p: Pair@r = Pair { left: counter(0, r), right: 1 }
+    | keyword:flex  variable:p  punctuation::  type:Pair  operator:@  region:r  operator:=  type:Pair  punctuation:{  field:left  punctuation::  task:counter  punctuation:(  number:0  punctuation:,  variable:r  punctuation:)  punctuation:,  field:right  punctuation::  number:1  punctuation:}
+ 60 |     show(p.left.next(), " ", p.left.peek() + p.right)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:left  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:left  punctuation:.  method:peek  punctuation:(  punctuation:)  operator:+  variable:p  punctuation:.  field:right  punctuation:)
+ 61 |     c = counter(100, r)
+    | variable:c  operator:=  task:counter  punctuation:(  number:100  punctuation:,  variable:r  punctuation:)
+ 62 |     show(c.next())
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:)
+ 63 | fi
+    | keyword:fi

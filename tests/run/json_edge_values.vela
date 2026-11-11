@@ -20,8 +20,22 @@ task main()
         <-
     }
     show(json.stringify(v, r))
-    fixed bad = json.parse("\"\\u12g4\"") { failure e
+    show_parse("\"\\u12g4\"")
+    ; Strict JSON: an unknown escape and a raw control character are refused, and text that
+    ; isn't ASCII parses or fails cleanly, wherever it stands.
+    show_parse("\"a\\qb\"")
+    show_parse("\"a\tb\"")
+    show_parse("é")
+    show_parse("[1, é]")
+    show_parse("nulé")
+    show_parse("\{\"ü\": \"日本\"\}")
+fi
+
+task show_parse(source: text)
+    region r default
+    fixed v = json.parse(source) { failure e
         show(e.str(r))
         <-
     }
+    show(json.stringify(v, r))
 fi

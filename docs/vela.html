@@ -363,7 +363,7 @@ finally</pre>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>x -&gt; x * 2</code>, <code>(a, b) -&gt; a + b</code>, <code>() -&gt; 42</code></td><td>a one-line lambda, its types from the place it goes (see <a href="#shortcut-lambdas">One-line lambdas</a>)</td></tr>
         <tr><td><code>[@r](x: int) -&gt; int … fi</code>, <code>[@r](int) -&gt; int</code></td><td>a lambda that keeps a copy of what it uses of the code around it in region <code>r</code>, and its type (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
-        <tr><td><code>[flex @r](…) … fi</code>, <code>[bind @r](…) … fi</code></td><td>such a lambda that changes its copies, or only their contents, held in a <code>flex</code> variable and never copied</td></tr>
+        <tr><td><code>[flex @r](…) … fi</code>, <code>[bind @r](…) … fi</code></td><td>such a lambda that changes its copies, held in a <code>flex</code> variable and never copied, or only what its copies share, copied freely</td></tr>
         <tr><td><code>[flex&amp; count, fixed&amp; big, @r](…) … fi</code></td><td>such a lambda keeping variables themselves, to change or to read in place (or <code>bind&amp; xs</code>, to change their contents), with <code>r</code> declared after them (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
@@ -3214,13 +3214,16 @@ fi</code></pre>
         goes where a <code>[flex @r]</code> is expected, never the other way.
       </p>
       <p id="lambda-bind">
-        <strong>Changing only their contents.</strong> <code>[bind @r]</code> changes the contents of its copies, an
-        item, a field, what a pointer points to, but never assigns one as a whole, as a <code>bind</code> name does; a
-        copy with no contents, a number say, it only reads. It is held as a <code>[flex @r]</code> lambda is, never
-        copied, since a copy would share the copies it changes, and it can't keep a copy of what a fixed name owns. A
-        <code>[@r]</code> lambda goes where a <code>[bind @r]</code> is expected, and a <code>[bind @r]</code> one where
-        a <code>[flex @r]</code> is, never the other way. Whether one that changes only what a twofold copy names,
-        which every copy shares anyway, may be copied is left for later (see
+        <strong>Changing only what copies share.</strong> <code>[bind @r]</code> changes only what every copy of it
+        shares: the items of a slice it keeps a copy of, a map, what a pointer points to. It never assigns a copy as a
+        whole, as a <code>bind</code> name doesn't, and its own copy of anything else, a number, a shape, an array, it
+        only reads; one that changes those is a <code>[flex @r]</code> lambda, and a <code>[bind @r]</code> one that
+        tries is told so. Since a copy of it would change only what the first one changes, it is copied as a slice is:
+        bound with <code>fixed</code>, given as a value, held in a field, kept by another lambda. Calling it changes
+        what it shares, as <code>xs[0] = 1</code> changes a slice's items, so it is called through a
+        <code>flex</code> or <code>bind</code> name, never a <code>fixed</code> one, and it can't keep a copy of what a
+        fixed name owns. A <code>[@r]</code> lambda goes where a <code>[bind @r]</code> is expected, and a
+        <code>[bind @r]</code> one where a <code>[flex @r]</code> is, never the other way (see
         <a href="safety.html#bind-lambdas">safety</a>).
       </p>
       <p>
@@ -3237,10 +3240,42 @@ fi</code></pre>
         region of the value holding it, so the lambda keeps what it uses there, and the value names that region, as a value
         holding text in a region does, <code>fixed op: Op@r = Op { f: [@r] n -&gt; n * k }</code>, called as
         <code>op.f(3)</code>. A value in no region holds only a plain task or lambda there, as a text field of one holds
-        lasting text, and a plain <code>(int) -&gt; int</code> field stays plain. A <code>[flex @r]</code> or
-        <code>[bind @r]</code> lambda is never held in a field, since a value holding it is copied, and a shared field,
-        which lives in no value, holds a task value instead. The iterators of <a href="#iterators">std/collections</a>
+        lasting text, and a plain <code>(int) -&gt; int</code> field stays plain. A shared field, which lives in no
+        value, holds a task value instead. The iterators of <a href="#iterators">std/collections</a>
         hold what their makers are given this way.
+      </p>
+      <p id="changing-lambda-fields">
+        <strong>A field that changes things.</strong> A field holds a <code>[bind @this](…)</code> lambda as it holds a
+        <code>[@this]</code> one, since it changes only what its copies share, and the value holding it is copied as any
+        other; it is called through a value that changes, <code>flex t</code> or <code>bind t</code>, as
+        <code>t.put(2)</code>. A <code>[flex @this](…)</code> lambda changes its own copies, so a shape holding one, in a
+        field or in a shape of a field, is held as such a lambda is: in a <code>flex</code> variable, given as a place,
+        <code>flex&amp; c: Counter@r</code>, or, to read it, <code>fixed&amp; c</code>, made by a task that sends it, and
+        never copied, bound with <code>fixed</code>, or held in a tuple, a slice, a <code>maybe</code>, or another
+        value's variant. Its fields are read and its methods called where it is, <code>c.start</code>,
+        <code>c.peek()</code>; its lambda is called there, <code>c.next()</code>, never taken out, and only through a
+        place that changes, so a method calling it is <code>alters</code>. A variant holds none, since a
+        <code>match</code> takes its values out as copies.
+      </p>
+      <pre><code>shape Counter
+    start: int
+    next: [flex @this]() -&gt; int
+fi
+
+task counter(start: int, r: region) -&gt; Counter@r
+    flex n = start
+    &lt;- Counter { start: start, next: [flex @r]() -&gt; int
+        n = n + 1
+        &lt;- n
+    fi }
+fi
+
+task main()
+    region r
+    flex c = counter(10, r)
+    show(c.next(), " ", c.next())                 ; 11 12
+fi</code></pre>
+      <p>
       </p>
       <p>
         <strong>Keeping a variable as a place.</strong> A variable named in the list beside the region is kept as the
@@ -5523,7 +5558,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A plain lambda takes nothing from the code around it, and no lambda can be written inside a task or method
           that takes types (see <a href="#lambdas">Lambdas</a>). One that keeps what it uses, <code>[@r]</code>, keeps
           copies in one region, keeps a variable as a place only where that region is declared after it (never a field
-          or an item), isn't compared, copied, or given as a wrapper's value, and a field holds it only as <code>[@this](…)</code>, never as <code>[flex @r]</code> or <code>[bind @r]</code> (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
+          or an item), isn't compared, copied, or given as a wrapper's value, and a field holds one as <code>[@this](…)</code>, <code>[bind @this](…)</code>, or <code>[flex @this](…)</code>, which makes the value holding it held, never copied (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
         <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither, nor a task that sends several values;
           a builtin or a macro is no decorator; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>

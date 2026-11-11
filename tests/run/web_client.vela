@@ -33,14 +33,29 @@ task main()
 
     ; 2. Response Parsing
     fixed raw_200 = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n\{\"status\":\"ok\"\}"
-    fixed resp_200 = parse_response(raw_200, r)
+    fixed resp_200 = parse_response(raw_200, r) { failure _
+        Response.with_status(0, r)
+    }
     show("resp 200 status: ", resp_200.status, " ", resp_200.reason)
     show("resp 200 header: ", resp_200.headers["content-type"])
     show("resp 200 body: ", resp_200.body_data)
 
     fixed raw_404 = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
-    fixed resp_404 = parse_response(raw_404, r)
+    fixed resp_404 = parse_response(raw_404, r) { failure _
+        Response.with_status(0, r)
+    }
     show("resp 404 status: ", resp_404.status, " ", resp_404.reason)
+
+    ; A reply that isn't HTTP fails instead of passing for 200 OK.
+    each garbage in ["", "hello", "HTTP/1.1 abc OK\r\n\r\n", "HTTP/1.1 2000 OK\r\n\r\n", "HTTP/1.1 200 OK\r\nX: y"]
+        fixed got = parse_response(garbage, r) { failure e
+            show("garbage refused: ", match e
+                case WebError.BadResponse why = why
+                case _ = "other"
+            fi)
+            Response.with_status(0, r)
+        }
+    fi
 
     ; 3. Client Configuration
     fixed cli = Client.new(1000).timeout(3000)
@@ -100,7 +115,9 @@ task main()
     flex c_close = client_sock
     c_close.close() { failure _ }
 
-    fixed client_parsed = parse_response(client_raw, r)
+    fixed client_parsed = parse_response(client_raw, r) { failure _
+        Response.with_status(0, r)
+    }
     show("client received: ", client_parsed.status, " ", client_parsed.body_data)
 
     flex s_close = server_sock

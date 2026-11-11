@@ -1,3 +1,3 @@
-handler: GET /greeting for Vela on 127.0.0.1
+handler: GET /greeting for Café au lait on 127.0.0.1
 client status: HTTP/1.1 200 OK
-client body: Hello, Vela!
+client body: Hello, Café au lait!

@@ -54,7 +54,7 @@ task main()
         <-
     }
 
-    flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
+    flex conns: [ActiveConn#64] = [ActiveConn { sock: server_sock }#64]
     Poll.clear()
     Poll.watch(server_sock, 1)
 
@@ -75,13 +75,13 @@ task main()
         <-
     }
 
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
 
     ; 2. Both clients write requests concurrently.
     client_send(c1, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     client_send(c2, "GET /c2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
 
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
 
     ; 3. Read responses from both clients.
     show_response(c1, "c1", srv_r)
@@ -89,12 +89,12 @@ task main()
 
     ; 4. Keep-alive reuse on same connection: c1 sends a second request.
     client_send(c1, "GET /c1-second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
     show_response(c1, "c1 second", srv_r)
 
     ; 5. Explicit Connection: close termination on c2.
     client_send(c2, "GET /close-me HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
     show_response(c2, "c2 close", srv_r)
 
     fixed c2_eof = c2.read(64, srv_r) { "" }
@@ -107,13 +107,13 @@ task main()
     c3.connect("127.0.0.1", port) { failure _
         <-
     }
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
 
     client_send(c3, "GET /stalled")
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
 
     sleep_ms(120)
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
     show_response(c3, "c3 timeout", srv_r)
 
     ; 7. Idle sweep: c4 completes a request and remains idle past 200ms.
@@ -123,13 +123,13 @@ task main()
     c4.connect("127.0.0.1", port) { failure _
         <-
     }
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
     client_send(c4, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
     show_response(c4, "c4 initial", srv_r)
 
     sleep_ms(220)
-    event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
+    event_loop_tick(srv, server_sock, &conns, app_handler, 50)
 
     fixed c4_eof = c4.read(64, srv_r) { "" }
     show("c4 idle swept: ", c4_eof.len == 0)

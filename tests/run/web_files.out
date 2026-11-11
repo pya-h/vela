@@ -4,6 +4,7 @@ validate traversal nested: false
 validate backslash: false
 validate colon: false
 validate empty seg: false
+validate absolute: false
 mime html: text/html; charset=utf-8
 mime css: text/css; charset=utf-8
 mime js: application/javascript; charset=utf-8
@@ -11,6 +12,7 @@ mime json: application/json; charset=utf-8
 mime txt: text/plain; charset=utf-8
 mime bin: application/octet-stream
 direct file_response: 200 <h1>Vela Web</h1>
+absolute file_response refused: file_response takes a relative path with no .. part
 status: HTTP/1.1 200 OK
 type: text/html; charset=utf-8
 body: <h1>Vela Web</h1>
@@ -35,6 +37,18 @@ body: 400 Bad Request: invalid path: traversal or illegal character rejected
 status: HTTP/1.1 404 Not Found
 type: text/plain
 body: 404 Not Found: /static/missing.txt
+status: HTTP/1.1 200 OK
+type: application/javascript; charset=utf-8
+body: console.log("vela");
+status: HTTP/1.1 400 Bad Request
+type: text/plain
+body: 400 Bad Request: invalid path: traversal or illegal character rejected
+status: HTTP/1.1 400 Bad Request
+type: text/plain
+body: 400 Bad Request: a % in the path starts no %XX escape
+status: HTTP/1.1 400 Bad Request
+type: text/plain
+body: 400 Bad Request: the path's escapes don't decode to UTF-8
 status: HTTP/1.1 200 OK
 type: text/plain; charset=utf-8
 body: hello streamed world!

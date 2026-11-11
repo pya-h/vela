@@ -697,18 +697,21 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
       </div>
 
       <div class="entry" id="bind-lambdas">
-        <h3>A <code>[bind @r]</code> lambda is never copied <span class="badge b-later">later</span></h3>
+        <h3>A <code>[bind @r]</code> lambda changes only what copies share <span class="badge b-checked">checked</span></h3>
         <p>
-          A <code>[bind @r]</code> lambda changes the contents of the copies it keeps, and every copy of the lambda's
-          value would name the same kept copies, so a change through one would be seen through all. For now it is held
-          as a <code>[flex @r]</code> lambda is: in a <code>flex</code> variable, called, or given on as a place, never
-          copied (the author's decision, 2026-10-12). A lambda that changes only the items of a slice it keeps a copy
-          of changes nothing every copy wouldn't share anyway, so the rule refuses some programs that would be safe.
+          A <code>[bind @r]</code> lambda changes only what every copy of it shares: the items of a slice it keeps a
+          copy of, a map, what a pointer points to. Its own copy of anything else, a shape's field or an array's item,
+          it only reads, and the checker refuses a write there, pointing to <code>[flex @r]</code>. So a copy of the
+          lambda changes nothing another copy wouldn't see anyway, and it is copied freely: held in a field, given as a
+          value, bound with <code>fixed</code>. Calling one changes what it shares, so it is called only through a
+          <code>flex</code> or <code>bind</code> name, as a slice's items change only through one, and it never keeps a
+          copy of what a fixed name owns (the author's decision, 2026-11-11; until then it was held as a
+          <code>[flex @r]</code> lambda is).
         </p>
         <dl>
-          <dt>Ways it could go</dt>
-          <dd>A <code>[bind @r]</code> lambda whose copies are all twofold, changing only what they name, could be
-            copied freely, and only one changing a whole copy's contents, a shape's field say, held.</dd>
+          <dt>What it costs</dt>
+          <dd>A lambda that changes a field of its own copy of a shape is a <code>[flex @r]</code> one, held in one
+            variable and never copied, where it used to be a <code>[bind @r]</code> one.</dd>
         </dl>
       </div>
 

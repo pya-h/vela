@@ -1,0 +1,11 @@
+; error: 5:20: a variant can't hold a '[flex @r]' lambda, since a 'match' takes its values out as copies and such a lambda is never copied; hold it in a shape's field
+; A match takes a variant's values out as copies, so no variant holds a
+; '[flex @this]' lambda, which is never copied.
+kind Step
+    Counting(next: [flex @this]() -> int)
+    Done
+fi
+
+task main()
+    show(1)
+fi

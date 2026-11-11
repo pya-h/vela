@@ -1,0 +1,11 @@
+; error: 10:5: 'inc' is a '[bind @r]' lambda, and calling it changes what its copies share, so it is called through a place that changes, a 'flex' or 'bind' name, which 'inc' isn't
+; A '[bind @r]' lambda is copied freely, but calling one changes what its copies
+; share, so it is called through a place that changes, as 'xs[0] = 1' needs one.
+task main()
+    region r
+    flex xs = [1, ...] at r
+    fixed inc = [bind @r](n: int) -> nothing
+        xs[0] = xs[0] + n
+    fi
+    inc(2)
+fi

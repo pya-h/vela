@@ -1,0 +1,86 @@
+  1 | ; Lambdas in fields that change things.
+    | comment:; Lambdas in fields that change things.
+  2 | ; A turnstile counts who passes with a [flex @this] lambda, which keeps its own
+    | comment:; A turnstile counts who passes with a [flex @this] lambda, which keeps its own
+  3 | ; count, so the turnstile is held in one flex variable and given as a place.
+    | comment:; count, so the turnstile is held in one flex variable and given as a place.
+  4 | ; Its log is a [bind @this] lambda: it changes only a map, which every copy
+    | comment:; Its log is a [bind @this] lambda: it changes only a map, which every copy
+  5 | ; shares, so a value holding it is copied as any other.
+    | comment:; shares, so a value holding it is copied as any other.
+  7 | shape Log
+    | keyword:shape  type:Log
+  8 |     write: [bind @this](text@this, text@this) -> nothing
+    | field:write  punctuation::  punctuation:[  keyword:bind  operator:@  region:this  punctuation:]  punctuation:(  type-builtin:text  operator:@  region:this  punctuation:,  type-builtin:text  operator:@  region:this  punctuation:)  operator:->  type-builtin:nothing
+  9 | fi
+    | keyword:fi
+ 11 | shape Turnstile
+    | keyword:shape  type:Turnstile
+ 12 |     gate: text
+    | field:gate  punctuation::  type-builtin:text
+ 13 |     pass: [flex @this]() -> int
+    | field:pass  punctuation::  punctuation:[  keyword:flex  operator:@  region:this  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 15 |     alters admit(who: text@this, bind log: Log@this) -> nothing
+    | keyword:alters  method:admit  punctuation:(  parameter:who  punctuation::  type-builtin:text  operator:@  region:this  punctuation:,  keyword:bind  parameter:log  punctuation::  type:Log  operator:@  region:this  punctuation:)  operator:->  type-builtin:nothing
+ 16 |         fixed number = .pass()
+    | keyword:fixed  variable:number  operator:=  punctuation:.  field:pass  punctuation:(  punctuation:)
+ 17 |         show(who, " is visitor ", number, " at ", .gate)
+    | builtin-fn:show  punctuation:(  parameter:who  punctuation:,  string:" is visitor "  punctuation:,  variable:number  punctuation:,  string:" at "  punctuation:,  punctuation:.  field:gate  punctuation:)
+ 18 |         log.write(.gate, who)
+    | parameter:log  punctuation:.  field:write  punctuation:(  punctuation:.  field:gate  punctuation:,  parameter:who  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | task turnstile(gate: text@r, r: region) -> Turnstile@r
+    | keyword:task  task:turnstile  punctuation:(  parameter:gate  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Turnstile  operator:@  region:r
+ 23 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 24 |     <- Turnstile { gate: gate, pass: [flex @r]() -> int
+    | keyword:<-  type:Turnstile  punctuation:{  field:gate  punctuation::  parameter:gate  punctuation:,  field:pass  punctuation::  punctuation:[  keyword:flex  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 25 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 26 |         <- count
+    | keyword:<-  variable:count
+ 27 |     fi }
+    | keyword:fi  punctuation:}
+ 28 | fi
+    | keyword:fi
+ 30 | task rush(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
+    | keyword:task  task:rush  punctuation:(  keyword:flex  keyword:&  parameter:t  punctuation::  type:Turnstile  operator:@  region:r  punctuation:,  keyword:bind  parameter:log  punctuation::  type:Log  operator:@  region:r  punctuation:,  parameter:crowd  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)
+ 31 |     each who in crowd
+    | keyword:each  variable:who  keyword:in  parameter:crowd
+ 32 |         t.admit(who, log)
+    | parameter:t  punctuation:.  method:admit  punctuation:(  variable:who  punctuation:,  parameter:log  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     region r
+    | keyword:region  region:r
+ 38 |     flex last = new [text: text]() at r
+    | keyword:flex  variable:last  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 39 |     bind log: Log@r = Log { write: [bind @r](gate: text@r, who: text@r) -> nothing
+    | keyword:bind  variable:log  punctuation::  type:Log  operator:@  region:r  operator:=  type:Log  punctuation:{  field:write  punctuation::  punctuation:[  keyword:bind  operator:@  region:r  punctuation:]  punctuation:(  variable:gate  punctuation::  variable:text  operator:@  region:r  punctuation:,  field:who  punctuation::  variable:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing
+ 40 |         last[gate] = who
+    | variable:last  punctuation:[  variable:gate  punctuation:]  operator:=  variable:who
+ 41 |     fi }
+    | keyword:fi  punctuation:}
+ 42 |     flex north = turnstile("north", r)
+    | keyword:flex  variable:north  operator:=  task:turnstile  punctuation:(  string:"north"  punctuation:,  variable:r  punctuation:)
+ 43 |     north.admit("Ada", log)
+    | variable:north  punctuation:.  method:admit  punctuation:(  string:"Ada"  punctuation:,  variable:log  punctuation:)
+ 44 |     rush(&north, log, ["Lin", "Sam", ...] at r)
+    | task:rush  punctuation:(  operator:&  variable:north  punctuation:,  variable:log  punctuation:,  punctuation:[  string:"Lin"  punctuation:,  string:"Sam"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)
+ 45 |     flex south = turnstile("south", r)
+    | keyword:flex  variable:south  operator:=  task:turnstile  punctuation:(  string:"south"  punctuation:,  variable:r  punctuation:)
+ 46 |     south.admit("Kim", log)
+    | variable:south  punctuation:.  method:admit  punctuation:(  string:"Kim"  punctuation:,  variable:log  punctuation:)
+ 47 |     show(north.pass(), " passed north")
+    | builtin-fn:show  punctuation:(  variable:north  punctuation:.  field:pass  punctuation:(  punctuation:)  punctuation:,  string:" passed north"  punctuation:)
+ 48 |     show(last)                                   ; ["north": "Sam", "south": "Kim"]
+    | builtin-fn:show  punctuation:(  variable:last  punctuation:)  comment:; ["north": "Sam", "south": "Kim"]
+ 49 | fi
+    | keyword:fi

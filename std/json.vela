@@ -97,7 +97,7 @@ fi
 
 task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ JsonError@r
     when pos >= raw.len or raw[pos] != '"'
-        <- fail JsonError.UnexpectedToken(when pos < raw.len raw[pos..pos+1] else "EOF" fi, pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     fi
     pos++
     flex out: text@r = ""
@@ -106,6 +106,9 @@ task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ Js
         when c == '"'
             pos++
             <- out
+        else when c < ' '
+            ; JSON strings can't hold a control character as it is; it must be escaped.
+            <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
         else when c == '\\'
             pos++
             when pos >= raw.len
@@ -150,14 +153,50 @@ task parse_string(raw: text@r, flex& pos: int, r: region default) -> text@r ~ Js
                 fi
                 out = "{out}{utf8_of(code, r)}" at r
             else
-                out = "{out}{esc}" at r
+                <- fail JsonError.InvalidEscape(pos - 2)
             fi
         else
-            out = "{out}{raw[pos..pos+1]}" at r
-            pos++
+            ; Plain bytes run to the next quote, backslash, or control character, which are all
+            ; single bytes, so the run never ends inside a character.
+            fixed start = pos
+            loop pos < raw.len and raw[pos] != '"' and raw[pos] != '\\' and raw[pos] >= ' '
+                pos++
+            fi
+            out = "{out}{raw[start..pos]}" at r
         fi
     fi
     <- fail JsonError.UnexpectedEnd(pos)
+fi
+
+; The character at 'pos', whole, for an error to show; "EOF" past the end, and "byte" when the
+; byte there doesn't start a character.
+priv task char_at(raw: text@r, pos: int, r: region default) -> text@r
+    when pos >= raw.len
+        <- "EOF"
+    fi
+    when raw[pos] >= char(128) and raw[pos] < char(192)
+        <- "byte"
+    fi
+    flex end = pos + 1
+    loop end < raw.len and raw[end] >= char(128) and raw[end] < char(192)
+        end++
+    fi
+    <- raw[pos..end]
+fi
+
+; Whether 'word', which is ASCII, is written at 'pos'; compared by bytes, so no slice is cut.
+priv task word_at(raw: text@r, pos: int, word: text@q) -> bool
+    when pos + word.len > raw.len
+        <- false
+    fi
+    flex i = 0
+    loop i < word.len
+        when raw[pos + i] != word[i]
+            <- false
+        fi
+        i++
+    fi
+    <- true
 fi
 
 ; The number four hex digits at 'pos' write, or -1 when they aren't there.
@@ -275,7 +314,7 @@ task parse_array(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Jso
         else when c == ','
             pos++
         else
-            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+            <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
         fi
     fi
     <- Array(items)
@@ -296,14 +335,14 @@ task parse_object(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
             <- fail JsonError.UnexpectedEnd(pos)
         fi
         when raw[pos] != '"'
-            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+            <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
         fi
         fixed key = parse_string(raw, &pos, r) { failure e
             <- fail e
         }
         skip_whitespace(raw, &pos)
         when pos >= raw.len or raw[pos] != ':'
-            <- fail JsonError.UnexpectedToken(when pos < raw.len raw[pos..pos+1] else "EOF" fi, pos)
+            <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
         fi
         pos++
         skip_whitespace(raw, &pos)
@@ -322,7 +361,7 @@ task parse_object(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
         else when c == ','
             pos++
         else
-            <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+            <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
         fi
     fi
     <- Object(props)
@@ -335,23 +374,23 @@ task parse_val(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonE
     fi
     fixed c = raw[pos]
     when c == 'n'
-        when pos + 4 <= raw.len and raw[pos..pos+4] == "null"
+        when word_at(raw, pos, "null")
             pos = pos + 4
             <- Null
         fi
-        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     else when c == 't'
-        when pos + 4 <= raw.len and raw[pos..pos+4] == "true"
+        when word_at(raw, pos, "true")
             pos = pos + 4
             <- Bool(true)
         fi
-        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     else when c == 'f'
-        when pos + 5 <= raw.len and raw[pos..pos+5] == "false"
+        when word_at(raw, pos, "false")
             pos = pos + 5
             <- Bool(false)
         fi
-        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     else when c == '"'
         fixed s = parse_string(raw, &pos, r) { failure e
             <- fail e
@@ -364,7 +403,7 @@ task parse_val(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ JsonE
     else when c == '-' or (c >= '0' and c <= '9')
         <- parse_number(raw, &pos, r)
     else
-        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     fi
 fi
 
@@ -375,7 +414,7 @@ task parse(raw: text@r, r: region default) -> Json@r ~ JsonError@r
     }
     skip_whitespace(raw, &pos)
     when pos < raw.len
-        <- fail JsonError.UnexpectedToken(raw[pos..pos+1], pos)
+        <- fail JsonError.UnexpectedToken(char_at(raw, pos, r), pos)
     fi
     <- val
 fi

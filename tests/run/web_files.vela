@@ -53,7 +53,9 @@ task send_and_receive(server: Socket, raw_req: text@p, port: int, r: region defa
     fi
     client.close() { failure _ }
     when full_resp.len >= 15
-        fixed resp = parse_response(full_resp, r)
+        fixed resp = parse_response(full_resp, r) { failure _
+            Response.with_status(0, r)
+        }
         show("status: HTTP/1.1 ", resp.status, " ", resp.reason)
         when resp.headers[#"content-type"] is {ct}
             show("type: ", ct)
@@ -72,6 +74,7 @@ task main()
     show("validate backslash: ", validate_file_path("a\\b"))
     show("validate colon: ", validate_file_path("C:secret"))
     show("validate empty seg: ", validate_file_path("a//b"))
+    show("validate absolute: ", validate_file_path("/etc/passwd"))
 
     ; 2. Unit tests: MIME type mapping
     show("mime html: ", mime_type("test.html", r))
@@ -88,6 +91,13 @@ task main()
         Response.with_status(500, r)
     }
     show("direct file_response: ", direct_resp.status, " ", trim(direct_resp.body_data))
+    fixed absolute_resp = file_response("/etc/hostname", r) { failure e
+        show("absolute file_response refused: ", match e
+            case WebError.BadRequest why = why
+            case _ = "other"
+        fi)
+        Response.with_status(400, r)
+    }
 
     ; 4. Integration test: serve_files through router over socket
     serve_files("/static/*", folder, "/static")
@@ -111,6 +121,12 @@ task main()
     send_and_receive(server, "GET /static/../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
     send_and_receive(server, "GET /static/a/../../secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
     send_and_receive(server, "GET /static/missing.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    ; Paths are decoded before they're used: %61pp.js is app.js, an escaped .. is still refused,
+    ; and a % that starts no escape, or escapes that aren't UTF-8, make a bad request.
+    send_and_receive(server, "GET /static/%61pp.js HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/%2e%2e/secret.txt HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/100% HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
+    send_and_receive(server, "GET /static/%C3 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)
 
     ; 5. Streaming and SSE
     send_and_receive(server, "GET /stream HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", port, r)

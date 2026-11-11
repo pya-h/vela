@@ -1,0 +1,15 @@
+; error: 12:9: cannot assign to a field of immutable variable 'p'; 'p' is the copy this lambda keeps of a variable of the code around it, and a '[bind @r]' lambda changes only what every copy of it shares, the items of a slice, a map, what a pointer points to, so it only reads its own copy of anything else; one that changes its copies is written '[flex @r](…)'
+; A '[bind @r]' lambda changes only what every copy of it shares; its own copy of
+; a shape it only reads, so one that changes it is a '[flex @r]' lambda.
+shape Point
+    x: int
+fi
+
+task main()
+    region r
+    flex p = Point { x: 1 }
+    flex g = [bind @r]() -> nothing
+        p.x = 5
+    fi
+    g()
+fi

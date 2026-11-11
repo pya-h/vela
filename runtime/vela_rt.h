@@ -2583,9 +2583,16 @@ enum {
     VELA__RT__SOCK_TIMEOUT = 8
 };
 
+/* A socket's slot. Besides the descriptor, it keeps bytes read but not yet used (the stash) and bytes queued
+   but not yet sent (the queue, live from out_start to out_len), both outside any region and freed on close,
+   so a server holding many connections for long keeps only what each one still needs. */
 typedef struct vela__rt__socket_slot {
     int fd;
     uint32_t generation;
+    char* in_bytes;
+    size_t in_len, in_cap;
+    char* out_bytes;
+    size_t out_start, out_len, out_cap;
 } vela__rt__socket_slot;
 
 typedef struct vela__rt__socket_table {
@@ -2637,6 +2644,12 @@ static inline int64_t vela__rt__web_socket_close(int64_t handle) {
     }
     int fd = slot->fd;
     slot->fd = -1;
+    free(slot->in_bytes);
+    free(slot->out_bytes);
+    slot->in_bytes = NULL;
+    slot->out_bytes = NULL;
+    slot->in_len = slot->in_cap = 0;
+    slot->out_start = slot->out_len = slot->out_cap = 0;
     int res = close(fd);
     return vela__rt__sockets_done(res == 0 ? VELA__RT__SOCK_OK : VELA__RT__SOCK_FAILED);
 }
@@ -2661,7 +2674,7 @@ static inline int64_t vela__rt__socket_alloc_slot(int fd, vela__rt__region* with
             vela__rt__out_of_memory();
         }
         for (size_t i = table->count; i < count; i++) {
-            slots[i] = (vela__rt__socket_slot){ -1, 0 };
+            slots[i] = (vela__rt__socket_slot){ .fd = -1 };
         }
         table->slots = slots;
         table->count = count;
@@ -2832,6 +2845,126 @@ static inline int64_t vela__rt__web_socket_write(int64_t handle, vela__rt__text 
     }
     vela__rt__sockets_done(VELA__RT__SOCK_OK);
     return (int64_t)n;
+}
+
+/* Appends n bytes to a growing buffer, doubling it as needed. */
+static inline void vela__rt__socket_buf_add(char** bytes, size_t* len, size_t* cap, const char* src, size_t n) {
+    if (n == 0) {
+        return;
+    }
+    if (n > SIZE_MAX - *len) {
+        vela__rt__out_of_memory();
+    }
+    if (*len + n > *cap) {
+        size_t want = *cap == 0 ? 4096 : *cap;
+        while (want < *len + n) {
+            if (want > SIZE_MAX / 2) {
+                want = *len + n;
+                break;
+            }
+            want *= 2;
+        }
+        char* grown = realloc(*bytes, want);
+        if (grown == NULL) {
+            vela__rt__out_of_memory();
+        }
+        *bytes = grown;
+        *cap = want;
+    }
+    memcpy(*bytes + *len, src, n);
+    *len += n;
+}
+
+/* Keeps data in the socket's stash; gives how many bytes the stash holds, or -1 for a closed socket. */
+static inline int64_t vela__rt__web_socket_stash(int64_t handle, vela__rt__text data) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -1;
+    }
+    if (data.len > 0) {
+        vela__rt__socket_buf_add(&slot->in_bytes, &slot->in_len, &slot->in_cap, data.bytes, (size_t)data.len);
+    }
+    return (int64_t)slot->in_len;
+}
+
+/* A copy of the socket's stash in 'into'. */
+static inline vela__rt__text vela__rt__web_socket_stashed(int64_t handle, vela__rt__region* into) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL || slot->in_len == 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* copy = vela__rt__region_alloc(into, slot->in_len, 1);
+    memcpy(copy, slot->in_bytes, slot->in_len);
+    return (vela__rt__text){ copy, (int64_t)slot->in_len };
+}
+
+/* Empties the socket's stash and gives back its memory. */
+static inline void vela__rt__web_socket_unstash(int64_t handle) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return;
+    }
+    free(slot->in_bytes);
+    slot->in_bytes = NULL;
+    slot->in_len = slot->in_cap = 0;
+}
+
+/* Sends what the socket takes now from its queue. Gives the bytes still queued, or a negative status when the
+   connection is gone; the queue's memory is given back once it is empty. */
+static inline int64_t vela__rt__web_socket_flush(int64_t handle) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    while (slot->out_start < slot->out_len) {
+        ssize_t n = send(slot->fd, slot->out_bytes + slot->out_start, slot->out_len - slot->out_start, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            return -vela__rt__sockets_done(errno == EPIPE || errno == ECONNRESET ? VELA__RT__SOCK_CONN_RESET : VELA__RT__SOCK_FAILED);
+        }
+        slot->out_start += (size_t)n;
+    }
+    if (slot->out_start == slot->out_len) {
+        free(slot->out_bytes);
+        slot->out_bytes = NULL;
+        slot->out_start = slot->out_len = slot->out_cap = 0;
+    }
+    vela__rt__sockets_done(VELA__RT__SOCK_OK);
+    return (int64_t)(slot->out_len - slot->out_start);
+}
+
+/* Queues data to send after what is queued already, and sends what the socket takes now; never waits. Gives
+   the bytes still queued, or a negative status when the connection is gone. */
+static inline int64_t vela__rt__web_socket_queue(int64_t handle, vela__rt__text data) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    if (slot == NULL) {
+        return -vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    if (data.len > 0) {
+        if (slot->out_start > 0) {
+            memmove(slot->out_bytes, slot->out_bytes + slot->out_start, slot->out_len - slot->out_start);
+            slot->out_len -= slot->out_start;
+            slot->out_start = 0;
+        }
+        vela__rt__socket_buf_add(&slot->out_bytes, &slot->out_len, &slot->out_cap, data.bytes, (size_t)data.len);
+    }
+    return vela__rt__web_socket_flush(handle);
+}
+
+/* The bytes still queued on the socket; 0 for a closed one. */
+static inline int64_t vela__rt__web_socket_queued(int64_t handle) {
+    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
+    return slot == NULL ? 0 : (int64_t)(slot->out_len - slot->out_start);
+}
+
+/* Accepts a connection whose socket no region closes: its owner closes it. */
+static inline int64_t vela__rt__web_socket_accept_owned(int64_t handle) {
+    return vela__rt__web_socket_accept(handle, NULL);
 }
 
 static inline vela__rt__text vela__rt__web_socket_read(int64_t handle, int64_t max_bytes, vela__rt__region* into) {
@@ -3082,6 +3215,74 @@ static inline vela__rt__text vela__rt__web_text_trim(vela__rt__text s) {
         end--;
     }
     return (vela__rt__text){ s.bytes + start, end - start };
+}
+
+static inline int vela__rt__web_hex_digit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+/* Whether every % in s starts a %XX escape. */
+static inline bool vela__rt__web_url_well_formed(vela__rt__text s) {
+    for (int64_t i = 0; i < s.len; i++) {
+        if (s.bytes[i] == '%') {
+            if (i + 2 >= s.len) return false;
+            if (vela__rt__web_hex_digit(s.bytes[i + 1]) < 0 || vela__rt__web_hex_digit(s.bytes[i + 2]) < 0) return false;
+            i += 2;
+        }
+    }
+    return true;
+}
+
+/* s with each %XX turned into its byte, and + into a space when plus is set; a % that starts no escape stays. */
+static inline vela__rt__text vela__rt__web_url_decode(vela__rt__text s, bool plus, vela__rt__region* into) {
+    if (s.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* buf = vela__rt__region_alloc(into, (size_t)s.len, 1);
+    int64_t n = 0;
+    for (int64_t i = 0; i < s.len; i++) {
+        char c = s.bytes[i];
+        if (c == '%' && i + 2 < s.len) {
+            int hi = vela__rt__web_hex_digit(s.bytes[i + 1]);
+            int lo = vela__rt__web_hex_digit(s.bytes[i + 2]);
+            if (hi >= 0 && lo >= 0) {
+                buf[n++] = (char)(hi * 16 + lo);
+                i += 2;
+                continue;
+            }
+        }
+        buf[n++] = (plus && c == '+') ? ' ' : c;
+    }
+    return (vela__rt__text){ buf, n };
+}
+
+/* Whether s is well-formed UTF-8: no stray or missing continuation bytes, no overlong forms, no surrogates. */
+static inline bool vela__rt__web_text_is_utf8(vela__rt__text s) {
+    const unsigned char* b = (const unsigned char*)s.bytes;
+    int64_t i = 0;
+    while (i < s.len) {
+        unsigned char c = b[i];
+        int64_t need;
+        uint32_t code;
+        if (c < 0x80) { i++; continue; }
+        else if (c >= 0xC2 && c <= 0xDF) { need = 1; code = c & 0x1F; }
+        else if (c >= 0xE0 && c <= 0xEF) { need = 2; code = c & 0x0F; }
+        else if (c >= 0xF0 && c <= 0xF4) { need = 3; code = c & 0x07; }
+        else return false;
+        if (i + need >= s.len) return false;
+        for (int64_t k = 1; k <= need; k++) {
+            if ((b[i + k] & 0xC0) != 0x80) return false;
+            code = (code << 6) | (b[i + k] & 0x3F);
+        }
+        if ((need == 2 && code < 0x800) || (need == 3 && (code < 0x10000 || code > 0x10FFFF)) || (code >= 0xD800 && code <= 0xDFFF)) {
+            return false;
+        }
+        i += need + 1;
+    }
+    return true;
 }
 
 /* Bytes from..to of s, kept within it, with no check for where characters start. */

@@ -1,0 +1,24 @@
+; error: 23:14: 'c' holds a '[flex @r]' lambda, which changes what it keeps, so 'c' is never copied: use its fields and methods, as 'c.field', or give it as a place, '&c', to a 'flex& x: Counter@r' parameter
+; A shape holding a '[flex @this]' lambda is held as the lambda is: never copied.
+shape Counter
+    n: int
+    next: [flex @this]() -> int
+
+    peek() -> int
+        <- .n
+    fi
+fi
+
+task counter(start: int, r: region) -> Counter@r
+    flex k = start
+    <- Counter { n: start, next: [flex @r]() -> int
+        k = k + 1
+        <- k
+    fi }
+fi
+
+task main()
+    region r
+    flex c = counter(1, r)
+    flex d = c
+fi

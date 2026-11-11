@@ -1,0 +1,24 @@
+; error: 23:16: 'next' is a '[flex @r]' lambda, which changes what it keeps and is never copied, so it stays in the value holding it: call it, '….next(…)'
+; A '[flex @this]' lambda stays in the value holding it; it is called there.
+shape Counter
+    n: int
+    next: [flex @this]() -> int
+
+    peek() -> int
+        <- .n
+    fi
+fi
+
+task counter(start: int, r: region) -> Counter@r
+    flex k = start
+    <- Counter { n: start, next: [flex @r]() -> int
+        k = k + 1
+        <- k
+    fi }
+fi
+
+task main()
+    region r
+    flex c = counter(1, r)
+    flex f = c.next
+fi

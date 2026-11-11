@@ -1,6 +1,6 @@
 ; A '[bind @r]' lambda changes the contents of what it keeps: the items of
-; its copy of a slice, which are the slice's own. Like a '[flex @r]' one, it is
-; never copied, so a 'flex' variable holds it.
+; its copy of a slice, which are the slice's own. Every copy of the lambda shares
+; them anyway, so it is copied as a slice is, and a 'flex' or 'bind' name calls it.
 
 task main()
     region r
@@ -11,5 +11,9 @@ task main()
     fi
     inc(2)
     inc(3)
+    flex other = inc
+    other(10)
+    bind third = other
+    third(100)
     show(xs[0])
 fi

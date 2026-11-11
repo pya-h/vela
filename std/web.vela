@@ -31,6 +31,7 @@ kind WebError
     MethodNotAllowed(method: text, path: text)
     Unauthorized(why: text)
     ServerFailed(why: text)
+    BadResponse(why: text)
 fi
 
 shape Socket
@@ -149,8 +150,9 @@ shape Request
         <- none
     fi
 
-    query(key: text@p) -> maybe text@this
-        <- query_param(.raw_query, key)
+    ; The value of 'key' in the query, with %XX escapes and + decoded.
+    query(key: text@p, r: region default) -> maybe text@r
+        <- query_param(.raw_query, key, r)
     fi
 
     body_lines(r: region default) -> [text]@r
@@ -679,9 +681,12 @@ task serve_files(pattern: text, folder: text, prefix: text = "")
     DefaultRouter.files(pattern, folder, prefix)
 fi
 
+; A response holding the file at 'path', which is relative to where the program runs and can't
+; leave it: an absolute path or one with a .. part is refused, so a path taken from a request
+; can't reach other files.
 task file_response(path: text@p, r: region default) -> Response@r ~ WebError@r
     when not validate_file_path(path)
-        <- fail WebError.BadRequest("invalid file path")
+        <- fail WebError.BadRequest("file_response takes a relative path with no .. part")
     fi
     flex f = File { path: path }
     when not f.exists()
@@ -748,12 +753,14 @@ task match_route(pattern: text@p, path: text@r, flex params: [text: text]@r, r: 
     <- pat_pos >= pattern.len and path_pos >= norm_path.len
 fi
 
+; One connection of the event loop. What it has sent of a request waits in its socket's stash, and what is
+; left to send of a response waits in its socket's queue; both are outside any region and go with the socket.
 shape ActiveConn
     sock: Socket
     active: bool = false
     last_active: int = 0
     reading: bool = false
-    buf: text = ""
+    closing: bool = false
 fi
 
 task is_request_complete(buf: text@p) -> bool
@@ -784,22 +791,27 @@ task is_request_complete(buf: text@p) -> bool
     <- true
 fi
 
-task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
+; Answers one whole request: the response is queued on the socket, not waited for.
+priv task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
     fixed req = parse_request(raw, r) { failure e
-        send_error_response(client, 400, "Bad Request", "Malformed request headers\n", r)
+        fixed why = match e
+        case WebError.BadRequest why = why
+        case _ = "malformed request"
+        fi
+        put_error(client, 400, "Bad Request", "400 Bad Request: {why}\n" at r, r)
         <- false
     }
     when req.body_data.len > max_body
         when err_handler is {eh}
             fixed err_resp = eh(WebError.PayloadTooLarge, req, r)
-            send_response(client, err_resp, false, r)
+            put_response(client, err_resp, false, r)
             <- false
         else when DefaultRouter.error_handler is {deh}
             fixed err_resp = deh(WebError.PayloadTooLarge, req, r)
-            send_response(client, err_resp, false, r)
+            put_response(client, err_resp, false, r)
             <- false
         fi
-        send_error_response(client, 413, "Payload Too Large", "413 Payload Too Large\n", r)
+        put_error(client, 413, "Payload Too Large", "413 Payload Too Large\n", r)
         <- false
     fi
 
@@ -825,7 +837,7 @@ task process_connection_request(flex client: Socket, raw: text@r, handler: (Requ
             case _ = status(500, r, "Internal Server Error").header("content-type", "text/plain").set_body("500 Internal Server Error\n")
             fi
         fi
-        send_response(client, err_resp, false, r)
+        put_response(client, err_resp, false, r)
         <- false
     }
 
@@ -835,11 +847,31 @@ task process_connection_request(flex client: Socket, raw: text@r, handler: (Requ
         fi
     fi
 
-    send_response(client, resp, will_keep, r)
+    put_response(client, resp, will_keep, r)
     <- will_keep
 fi
 
-task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [ActiveConn@r#64], handler: (Request@r, @r) -> Response@r ~ WebError@r, timeout_ms: int, r: region default)
+; Closes a connection and frees its slot; what its socket kept goes with it.
+priv task drop_conn(flex& conns: [ActiveConn#64], index: int, server_sock: Socket)
+    Poll.unwatch(conns[index].sock)
+    flex cs = conns[index].sock
+    cs.close() { failure _ }
+    conns[index] = ActiveConn { sock: server_sock, active: false }
+fi
+
+; Where a connection goes after a response: on to the next request, or closed once its response is out.
+; While a response waits in the queue, the loop watches for room to send it instead of for requests.
+priv task after_response(flex& conns: [ActiveConn#64], index: int, sock: Socket, keep: bool, server_sock: Socket)
+    fixed queued = native_socket_queued(sock.raw_handle())
+    when queued == 0 and not keep
+        drop_conn(&conns, index, server_sock)
+        <-
+    fi
+    Poll.watch(sock, when queued > 0 2 else 1 fi)
+    conns[index] = ActiveConn { sock: sock, active: true, last_active: time_ms(), reading: false, closing: not keep }
+fi
+
+task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [ActiveConn#64], handler: (Request@r, @r) -> Response@r ~ WebError@r, timeout_ms: int)
     fixed now = time_ms()
 
     flex c_idx = 0
@@ -848,16 +880,12 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
         when conn.active
             fixed elapsed = now - conn.last_active
             when conn.reading and elapsed > server.read_timeout_ms
-                send_error_response(conn.sock, 408, "Request Timeout", "408 Request Timeout\n", r)
-                Poll.unwatch(conn.sock)
-                flex s = conn.sock
-                s.close() { failure _ }
-                conns[c_idx] = ActiveConn { sock: server_sock, active: false }
+                region err_r default
+                put_error(conn.sock, 408, "Request Timeout", "408 Request Timeout\n", err_r)
+                drop_conn(&conns, c_idx, server_sock)
             else when not conn.reading and elapsed > server.idle_timeout_ms
-                Poll.unwatch(conn.sock)
-                flex s = conn.sock
-                s.close() { failure _ }
-                conns[c_idx] = ActiveConn { sock: server_sock, active: false }
+                ; Idle, or a client that has taken nothing of its response for this long.
+                drop_conn(&conns, c_idx, server_sock)
             fi
         fi
         c_idx++
@@ -871,14 +899,17 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
 
     when Poll.is_readable(server_sock)
         endless
-            fixed client_sock = server_sock.accept(r) { failure _
+            ; A socket the loop closes itself, so accepting one keeps nothing in any region.
+            fixed handle = native_socket_accept_owned(server_sock.raw_handle())
+            when handle < 0
                 break
-            }
+            fi
+            fixed client_sock = Socket { handle: handle }
             flex slot_idx = 0
             flex placed = false
             loop slot_idx < 64
                 when not conns[slot_idx].active
-                    conns[slot_idx] = ActiveConn { sock: client_sock, active: true, last_active: now, reading: false, buf: "" }
+                    conns[slot_idx] = ActiveConn { sock: client_sock, active: true, last_active: now, reading: false }
                     Poll.watch(client_sock, 1)
                     placed = true
                     break
@@ -886,7 +917,8 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
                 slot_idx++
             fi
             when not placed
-                send_error_response(client_sock, 503, "Service Unavailable", "503 Server Busy\n", r)
+                region err_r default
+                put_error(client_sock, 503, "Service Unavailable", "503 Server Busy\n", err_r)
                 flex cs = client_sock
                 cs.close() { failure _ }
             fi
@@ -896,45 +928,43 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
     flex i = 0
     loop i < 64
         fixed conn = conns[i]
-        when conn.active and Poll.is_readable(conn.sock)
+        fixed handle = conn.sock.raw_handle()
+        when conn.active and native_socket_queued(handle) > 0
+            ; A response still going out: send what the client takes now, and never wait for the rest.
+            when Poll.is_writable(conn.sock) or Poll.is_readable(conn.sock)
+                fixed left = native_socket_flush(handle)
+                when left < 0
+                    drop_conn(&conns, i, server_sock)
+                else
+                    after_response(&conns, i, conn.sock, not conn.closing, server_sock)
+                fi
+            fi
+        else when conn.active and conn.closing
+            drop_conn(&conns, i, server_sock)
+        else when conn.active and Poll.is_readable(conn.sock)
             region req_r default
-            fixed chunk = conn.sock.read(4096, req_r) { failure _
-                Poll.unwatch(conn.sock)
-                flex cs = conn.sock
-                cs.close() { failure _ }
-                conns[i] = ActiveConn { sock: server_sock, active: false }
+            fixed chunk = conn.sock.read(65536, req_r) { failure _
+                drop_conn(&conns, i, server_sock)
                 i++
                 continue
             }
             when chunk.len == 0
-                Poll.unwatch(conn.sock)
-                flex cs = conn.sock
-                cs.close() { failure _ }
-                conns[i] = ActiveConn { sock: server_sock, active: false }
+                drop_conn(&conns, i, server_sock)
             else
-                fixed is_complete = when conn.buf.len == 0 is_request_complete(chunk) else is_request_complete("{conn.buf}{chunk}" at req_r) fi
-                when is_complete
-                    fixed full_req = when conn.buf.len == 0 chunk else "{conn.buf}{chunk}" at req_r fi
-                    fixed keep_conn = process_connection_request(conn.sock, full_req, handler, server.max_body_size, server.keep_alive_enabled, server.error_handler, req_r)
-                    when keep_conn
-                        conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: false, buf: "" }
-                    else
-                        Poll.unwatch(conn.sock)
-                        flex cs = conn.sock
-                        cs.close() { failure _ }
-                        conns[i] = ActiveConn { sock: server_sock, active: false }
-                    fi
-                else when conn.buf.len + chunk.len > server.max_body_size + 65536
+                fixed held = native_socket_stash(handle, chunk)
+                fixed whole = native_socket_stashed(handle, req_r)
+                when is_request_complete(whole)
+                    native_socket_unstash(handle)
+                    fixed keep = process_connection_request(conn.sock, whole, handler, server.max_body_size, server.keep_alive_enabled, server.error_handler, req_r)
+                    after_response(&conns, i, conn.sock, keep, server_sock)
+                else when held > server.max_body_size + 65536
                     ; A request still unfinished past the largest body and 64 KiB of headers is refused,
                     ; so a client can't make the server hold an endless request.
-                    send_error_response(conn.sock, 413, "Payload Too Large", "413 Payload Too Large\n", req_r)
-                    Poll.unwatch(conn.sock)
-                    flex cs = conn.sock
-                    cs.close() { failure _ }
-                    conns[i] = ActiveConn { sock: server_sock, active: false }
+                    native_socket_unstash(handle)
+                    put_error(conn.sock, 413, "Payload Too Large", "413 Payload Too Large\n", req_r)
+                    after_response(&conns, i, conn.sock, false, server_sock)
                 else
-                    fixed partial_buf = when conn.buf.len == 0 "{chunk}" at r else "{conn.buf}{chunk}" at r fi
-                    conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: true, buf: partial_buf }
+                    conns[i] = ActiveConn { sock: conn.sock, active: true, last_active: time_ms(), reading: true }
                 fi
             fi
         fi
@@ -942,13 +972,11 @@ task event_loop_tick(server: Server@p, server_sock: Socket, flex& conns: [Active
     fi
 fi
 
-task cleanup_event_loop(server_sock: Socket, flex& conns: [ActiveConn@r#64])
+task cleanup_event_loop(server_sock: Socket, flex& conns: [ActiveConn#64])
     flex j = 0
     loop j < 64
         when conns[j].active
-            Poll.unwatch(conns[j].sock)
-            flex cs = conns[j].sock
-            cs.close() { failure _ }
+            drop_conn(&conns, j, server_sock)
         fi
         j++
     fi
@@ -971,12 +999,12 @@ task run_event_loop(server: Server@p, handler: (Request@r, @r) -> Response@r ~ W
         <- fail WebError.ListenFailed
     }
 
-    flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
+    flex conns: [ActiveConn#64] = [ActiveConn { sock: server_sock }#64]
     Poll.clear()
     Poll.watch(server_sock, 1)
 
     loop not ServerState.should_stop
-        event_loop_tick(server, server_sock, &conns, handler, 50, srv_r)
+        event_loop_tick(server, server_sock, &conns, handler, 50)
     fi
 
     cleanup_event_loop(server_sock, &conns)
@@ -1001,34 +1029,40 @@ task handle_connection(flex client: Socket, handler: (Request@r, @r) -> Response
         <-
     }
     process_connection_request(client, raw, handler, max_body, false, none, r)
+    drain(client, 5000)
     client.close() { failure _ }
 fi
 
+; Sends a plain text error response, waiting until it is out (see send_response).
 task send_error_response(client: Socket, code: int, reason: text@r, body: text@r, r: region default) -> nothing
-    fixed resp = status(code, r, reason).header("content-type", "text/plain").set_body(body)
-    send_response(client, resp, false, r)
+    put_error(client, code, reason, body, r)
+    drain(client, 5000)
 fi
 
-; Writes all of 'data'. One write on a socket that doesn't wait sends only what fits, so a large
-; response would end early; this waits while the client's side is full, and gives up, false, when
-; the client takes nothing for 5 seconds or the connection ends.
-priv task write_all(client: Socket, data: text@p) -> bool
-    flex sent = 0
-    loop sent < data.len
-        fixed n = client.write(cut(data, sent, data.len)) { failure _
+priv task put_error(client: Socket, code: int, reason: text@r, body: text@r, r: region default) -> nothing
+    fixed resp = status(code, r, reason).header("content-type", "text/plain").set_body(body)
+    put_response(client, resp, false, r)
+fi
+
+; Queues 'data' on the socket, sending what it takes now without waiting; false when the connection is gone.
+priv task put_bytes(client: Socket, data: text@p) -> bool
+    <- native_socket_queue(client.raw_handle(), data) >= 0
+fi
+
+; Waits until what is queued on the socket is sent; false when the client takes nothing for 'wait_ms'
+; or the connection ends.
+priv task drain(client: Socket, wait_ms: int) -> bool
+    flex left = native_socket_flush(client.raw_handle())
+    loop left > 0
+        fixed ready = client.poll(2, wait_ms) { failure _
             <- false
         }
-        when n == 0
-            fixed ready = client.poll(2, 5000) { failure _
-                <- false
-            }
-            when ready == 0
-                <- false
-            fi
+        when ready == 0
+            <- false
         fi
-        sent += n
+        left = native_socket_flush(client.raw_handle())
     fi
-    <- true
+    <- left == 0
 fi
 
 ; 't' with each line break made a space: a header or reason holding one would end it early and
@@ -1047,7 +1081,14 @@ priv task one_line(t: text@p, r: region) -> text@r
     <- "{out}{cut(t, from, t.len)}" at r
 fi
 
+; Sends a response and waits until it is out, giving up when the client takes nothing for 5 seconds.
 task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
+    put_response(client, resp, keep_alive, r)
+    drain(client, 5000)
+fi
+
+; Queues a response on the socket without waiting for it to go out.
+priv task put_response(client: Socket, resp: Response@r, keep_alive: bool, r: region default) -> nothing
     when resp.is_stream and resp.chunks is {chunk_list}
         flex wire = "HTTP/1.1 {resp.status} {one_line(resp.reason, r)}\r\n"
         when not resp.headers.has("transfer-encoding")
@@ -1061,18 +1102,18 @@ task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region
             wire = "{wire}{one_line(k, r)}: {one_line(v, r)}\r\n"
         fi
         wire = "{wire}\r\n"
-        when not write_all(client, wire)
+        when not put_bytes(client, wire)
             <-
         fi
         each chunk in chunk_list
             when chunk.len > 0
                 fixed hex_len = int_to_hex(chunk.len, r)
-                when not write_all(client, "{hex_len}\r\n{chunk}\r\n")
+                when not put_bytes(client, "{hex_len}\r\n{chunk}\r\n")
                     <-
                 fi
             fi
         fi
-        write_all(client, "0\r\n\r\n")
+        put_bytes(client, "0\r\n\r\n")
         <-
     fi
     flex wire = "HTTP/1.1 {resp.status} {one_line(resp.reason, r)}\r\n"
@@ -1087,7 +1128,7 @@ task send_response(client: Socket, resp: Response@r, keep_alive: bool, r: region
         wire = "{wire}{one_line(k, r)}: {one_line(v, r)}\r\n"
     fi
     wire = "{wire}\r\n{resp.body_data}"
-    write_all(client, wire)
+    put_bytes(client, wire)
 fi
 
 task read_http_request(client: Socket, max_body: int, r: region default) -> text@r ~ WebError
@@ -1158,7 +1199,15 @@ task parse_request(raw: text@r, r: region default) -> Request@r ~ WebError
     fixed method = method_of(method_str) { Method.Get }
 
     fixed q_mark = text_find(uri, "?", 0)
-    fixed path: text@r = when q_mark >= 0 cut(uri, 0, q_mark) else uri fi
+    fixed raw_path: text@r = when q_mark >= 0 cut(uri, 0, q_mark) else uri fi
+    ; The path is decoded once, here, so routes and files see /café for /caf%C3%A9.
+    when not native_url_well_formed(raw_path)
+        <- fail WebError.BadRequest("a % in the path starts no %XX escape")
+    fi
+    fixed path = native_url_decode(raw_path, false, r)
+    when not native_text_is_utf8(path)
+        <- fail WebError.BadRequest("the path's escapes don't decode to UTF-8")
+    fi
     fixed query: text@r = when q_mark >= 0 cut(uri, q_mark + 1, uri.len) else "" fi
 
     flex headers = new [text: text]() at r
@@ -1263,23 +1312,30 @@ task is_response_complete(buf: text@p) -> bool
     <- false
 fi
 
-task parse_response(raw: text@r, r: region default) -> Response@r
+task parse_response(raw: text@r, r: region default) -> Response@r ~ WebError@r
     fixed line_end = text_find(raw, "\r\n", 0)
-    fixed status_line = when line_end >= 0 cut(raw, 0, line_end) else raw fi
+    when line_end < 0
+        <- fail WebError.BadResponse("missing status line")
+    fi
+    fixed status_line = cut(raw, 0, line_end)
+    when status_line.len < 5 or cut(status_line, 0, 5) != "HTTP/"
+        <- fail WebError.BadResponse("status line doesn't start with HTTP/")
+    fi
     fixed sp1 = text_find(status_line, " ", 0)
-    fixed sp2 = when sp1 >= 0 text_find(status_line, " ", sp1 + 1) else -1 fi
-    fixed status_code = when sp1 >= 0
-        fixed code_end = when sp2 >= 0 sp2 else status_line.len fi
-        int(cut(status_line, sp1 + 1, code_end)) { 200 }
-    else
-        200
+    when sp1 < 0
+        <- fail WebError.BadResponse("status line has no status")
+    fi
+    fixed sp2 = text_find(status_line, " ", sp1 + 1)
+    fixed code_end = when sp2 >= 0 sp2 else status_line.len fi
+    fixed status_code = when code_end - sp1 - 1 == 3 int(cut(status_line, sp1 + 1, code_end)) { -1 } else -1 fi
+    when status_code < 100 or status_code > 599
+        <- fail WebError.BadResponse("status isn't a number from 100 to 599")
     fi
     fixed reason = when sp2 >= 0
         trim(cut(status_line, sp2 + 1, status_line.len))
     else
         reason_of(status_code)
     fi
-
     flex headers = new [text: text]() at r
     fixed hdr_end = text_find(raw, "\r\n\r\n", 0)
     when hdr_end >= 0
@@ -1307,7 +1363,7 @@ task parse_response(raw: text@r, r: region default) -> Response@r
         fixed body = when is_chunked decode_chunked_body(body_raw, r) else body_raw fi
         <- Response { status: status_code, reason: reason, headers: headers, body_data: body }
     fi
-    <- Response { status: status_code, reason: reason, headers: headers, body_data: "" }
+    <- fail WebError.BadResponse("headers not terminated")
 fi
 
 task http_client_request(method_str: text@p, url: text@p, body: text@p, content_type: text@p, timeout_ms: int, r: region default) -> Response@r ~ WebError@r
@@ -1373,7 +1429,9 @@ task http_client_request(method_str: text@p, url: text@p, body: text@p, content_
     when raw_resp.len == 0
         <- fail WebError.BadRequest("empty response from server")
     fi
-    <- parse_response(raw_resp, r)
+    <- parse_response(raw_resp, r) { failure e
+        <- fail e
+    }
 fi
 
 task reason_of(code: int) -> text
@@ -1468,7 +1526,9 @@ task text_eq_ignore_case(a: text@p, b: text@q) -> bool
     <- native_text_eq_ignore_case(a, b)
 fi
 
-task query_param(raw_query: text@p, key: text@q) -> maybe text@p
+; The value of 'key' in a query like a=1&b=x+y, with %XX escapes and + decoded in keys and values.
+; A value whose escapes don't decode to UTF-8 is given as it was written.
+task query_param(raw_query: text@p, key: text@q, r: region default) -> maybe text@r
     when raw_query.len == 0 or key.len == 0
         <- none
     fi
@@ -1480,9 +1540,12 @@ task query_param(raw_query: text@p, key: text@q) -> maybe text@p
         cursor = part_end + 1
         fixed eq = text_find(part, "=", 0)
         when eq > 0
-            fixed k = cut(part, 0, eq)
+            region scratch default
+            fixed k = native_url_decode(cut(part, 0, eq), true, scratch)
             when k == key
-                <- cut(part, eq + 1, part.len)
+                fixed raw_value = cut(part, eq + 1, part.len)
+                fixed value = native_url_decode(raw_value, true, r)
+                <- when native_text_is_utf8(value) value else "{raw_value}" at r fi
             fi
         fi
     fi
@@ -1677,8 +1740,10 @@ task mime_type(path: text@p, r: region default) -> text
     <- "application/octet-stream"
 fi
 
+; Whether a path stays inside the folder it is read from: relative, with no .. part, no
+; backslash or colon, and no control character.
 task validate_file_path(path: text@p) -> bool
-    when path.len == 0
+    when path.len == 0 or cut(path, 0, 1) == "/"
         <- false
     fi
     flex i = 0
@@ -1768,6 +1833,16 @@ priv native task native_socket_poll(handle: int, events: int, timeout_ms: int) -
 priv native task native_socket_status() -> int
 priv native task native_text_find(haystack: text@p, needle: text@q, from: int) -> int
 priv native task native_text_lower(s: text@p, into: region) -> text@into
+priv native task native_socket_stash(handle: int, data: text@p) -> int
+priv native task native_socket_stashed(handle: int, into: region) -> text@into
+priv native task native_socket_unstash(handle: int)
+priv native task native_socket_flush(handle: int) -> int
+priv native task native_socket_queue(handle: int, data: text@p) -> int
+priv native task native_socket_queued(handle: int) -> int
+priv native task native_socket_accept_owned(handle: int) -> int
+priv native task native_url_well_formed(s: text@p) -> bool
+priv native task native_url_decode(s: text@p, plus: bool, into: region) -> text@into
+priv native task native_text_is_utf8(s: text@p) -> bool
 priv native task native_text_trim(s: text@p) -> text@p
 priv native task native_text_bytes(s: text@p, from: int, to: int) -> text@p
 priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool

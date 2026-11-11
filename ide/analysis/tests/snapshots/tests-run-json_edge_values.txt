@@ -40,13 +40,39 @@
     | punctuation:}
  22 |     show(json.stringify(v, r))
     | builtin-fn:show  punctuation:(  module:json  punctuation:.  task:stringify  punctuation:(  variable:v  punctuation:,  region:r  punctuation:)  punctuation:)
- 23 |     fixed bad = json.parse("\"\\u12g4\"") { failure e
-    | keyword:fixed  variable:bad  operator:=  module:json  punctuation:.  task:parse  punctuation:(  string:"  escape:\"  escape:\\  string:u12g4  escape:\"  string:"  punctuation:)  punctuation:{  keyword:failure  variable:e
- 24 |         show(e.str(r))
+ 23 |     show_parse("\"\\u12g4\"")
+    | task:show_parse  punctuation:(  string:"  escape:\"  escape:\\  string:u12g4  escape:\"  string:"  punctuation:)
+ 24 |     ; Strict JSON: an unknown escape and a raw control character are refused, and text that
+    | comment:; Strict JSON: an unknown escape and a raw control character are refused, and text that
+ 25 |     ; isn't ASCII parses or fails cleanly, wherever it stands.
+    | comment:; isn't ASCII parses or fails cleanly, wherever it stands.
+ 26 |     show_parse("\"a\\qb\"")
+    | task:show_parse  punctuation:(  string:"  escape:\"  string:a  escape:\\  string:qb  escape:\"  string:"  punctuation:)
+ 27 |     show_parse("\"a\tb\"")
+    | task:show_parse  punctuation:(  string:"  escape:\"  string:a  escape:\t  string:b  escape:\"  string:"  punctuation:)
+ 28 |     show_parse("é")
+    | task:show_parse  punctuation:(  string:"é"  punctuation:)
+ 29 |     show_parse("[1, é]")
+    | task:show_parse  punctuation:(  string:"[1, é]"  punctuation:)
+ 30 |     show_parse("nulé")
+    | task:show_parse  punctuation:(  string:"nulé"  punctuation:)
+ 31 |     show_parse("\{\"ü\": \"日本\"\}")
+    | task:show_parse  punctuation:(  string:"  escape:\{  escape:\"  string:ü  escape:\"  string::   escape:\"  string:日本  escape:\"  escape:\}  string:"  punctuation:)
+ 32 | fi
+    | keyword:fi
+ 34 | task show_parse(source: text)
+    | keyword:task  task:show_parse  punctuation:(  parameter:source  punctuation::  type-builtin:text  punctuation:)
+ 35 |     region r default
+    | keyword:region  region:r  keyword:default
+ 36 |     fixed v = json.parse(source) { failure e
+    | keyword:fixed  variable:v  operator:=  module:json  punctuation:.  task:parse  punctuation:(  parameter:source  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 37 |         show(e.str(r))
     | builtin-fn:show  punctuation:(  variable:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
- 25 |         <-
+ 38 |         <-
     | keyword:<-
- 26 |     }
+ 39 |     }
     | punctuation:}
- 27 | fi
+ 40 |     show(json.stringify(v, r))
+    | builtin-fn:show  punctuation:(  module:json  punctuation:.  task:stringify  punctuation:(  variable:v  punctuation:,  region:r  punctuation:)  punctuation:)
+ 41 | fi
     | keyword:fi

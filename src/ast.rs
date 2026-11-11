@@ -2088,6 +2088,8 @@ impl Mode {
 pub fn has_contents(ty: &Type, is_shape: &dyn Fn(&str) -> bool) -> bool {
     match ty {
         Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Ptr(..) => true,
+        // A `[bind @r]` lambda changes what it shares when called, as a slice's items change.
+        Type::Closure(closure) => closure.mode == KeptMode::Bind,
         Type::Maybe(inner) | Type::Fail(inner) => has_contents(inner, is_shape),
         Type::Or(a, b) => has_contents(a, is_shape) || has_contents(b, is_shape),
         Type::Named(name, _) => is_shape(name),

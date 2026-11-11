@@ -72,8 +72,8 @@
     | keyword:<-
  41 |     }
     | punctuation:}
- 43 |     fixed req_text = "GET /greeting?name=Vela HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
-    | keyword:fixed  variable:req_text  operator:=  string:"GET /greeting?name=Vela HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"
+ 43 |     fixed req_text = "GET /gr%65eting?x=1&na%6De=Caf%C3%A9+au+lait HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    | keyword:fixed  variable:req_text  operator:=  string:"GET /gr%65eting?x=1&na%6De=Caf%C3%A9+au+lait HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"
  44 |     client.write(req_text) { failure _
     | variable:client  punctuation:.  method:write  punctuation:(  variable:req_text  punctuation:)  punctuation:{  keyword:failure  keyword:_
  45 |         <-

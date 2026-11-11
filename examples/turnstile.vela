@@ -1,0 +1,49 @@
+; Lambdas in fields that change things.
+; A turnstile counts who passes with a [flex @this] lambda, which keeps its own
+; count, so the turnstile is held in one flex variable and given as a place.
+; Its log is a [bind @this] lambda: it changes only a map, which every copy
+; shares, so a value holding it is copied as any other.
+
+shape Log
+    write: [bind @this](text@this, text@this) -> nothing
+fi
+
+shape Turnstile
+    gate: text
+    pass: [flex @this]() -> int
+
+    alters admit(who: text@this, bind log: Log@this) -> nothing
+        fixed number = .pass()
+        show(who, " is visitor ", number, " at ", .gate)
+        log.write(.gate, who)
+    fi
+fi
+
+task turnstile(gate: text@r, r: region) -> Turnstile@r
+    flex count = 0
+    <- Turnstile { gate: gate, pass: [flex @r]() -> int
+        count = count + 1
+        <- count
+    fi }
+fi
+
+task rush(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
+    each who in crowd
+        t.admit(who, log)
+    fi
+fi
+
+task main()
+    region r
+    flex last = new [text: text]() at r
+    bind log: Log@r = Log { write: [bind @r](gate: text@r, who: text@r) -> nothing
+        last[gate] = who
+    fi }
+    flex north = turnstile("north", r)
+    north.admit("Ada", log)
+    rush(&north, log, ["Lin", "Sam", ...] at r)
+    flex south = turnstile("south", r)
+    south.admit("Kim", log)
+    show(north.pass(), " passed north")
+    show(last)                                   ; ["north": "Sam", "south": "Kim"]
+fi

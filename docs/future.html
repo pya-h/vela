@@ -2226,38 +2226,18 @@ fi</code></pre>
         Built: see <a href="vela.html#lambda-fields">In a field</a>.
       </p>
       <p id="changing-lambda-fields">
-        <strong>Changing lambdas in a field.</strong> <span class="badge b-idea">Problem</span> A field holds
-        <code>[@this](…)</code> only; <code>[flex @this](…)</code> and <code>[bind @this](…)</code> are refused. The reason is
-        copying. A value of a shape is copied whole, by <code>fixed d = c</code>, by passing it, by
-        <code>Hold { inner: c }</code>, and a copy of a lambda is two words, its function and its block, so both copies
-        would name one block. A <code>[flex @r]</code> lambda changes its copies in that block, so a change made through one
-        value would show through the other, and two values that look apart would share a counter; that is why such a lambda
-        is never copied at all. A <code>[bind @r]</code> one changes only contents, which copies share anyway, but it can
-        still assign a number it keeps. And a field read through a <code>fixed</code> value can't change, so its lambda
-        could not even be called there. An iterator made with <code>map</code> of a lambda that counts as it goes is the
-        case that asks for it.
-      </p>
-      <p>
-        Ways to lift it, cheapest first:
-      </p>
-      <ul>
-        <li><strong>A <code>[bind @r]</code> that keeps only twofold copies.</strong> One that keeps only slices, maps, and
-          pointers changes only what every copy shares already, so copying it changes nothing a copy could see.
-          Settling that rule (left open in <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>) lets a
-          field hold such a lambda as <code>[bind @this]</code> with no new runtime cost. It doesn't cover a counter.</li>
-        <li><strong>A shape holding one is held alone.</strong> A shape or kind with a <code>[flex @this]</code> field
-          takes the lambda's own rules: never copied, held in a <code>flex</code> variable, given as a place
-          (<code>flex&amp; it</code>), never bound with <code>fixed</code> nor put in a tuple, slice, or maybe, and the
-          compiler marks such types as it marks those holding pointers. Nothing is paid at runtime, but an iterator holding
-          one stops being a value like any other: it can't be passed by value or kept in two variables.</li>
-        <li><strong>Copying the block with the value.</strong> Copying a value holding a <code>[flex @this]</code> lambda
-          copies the lambda's block too, into the same region, so each copy changes copies of its own. The compiler writes
-          a copier for each lambda's block, as it does for a <code>copy</code>; each copy costs an allocation in the
-          region, and an assignment that looks free isn't.</li>
-      </ul>
-      <p>
-        The first is safe to build alone; the second fits Vela's rules best when a changing lambda is the point, and the
-        third keeps values plain at a cost in memory. Which one is the user's call.
+        <strong>Changing lambdas in a field.</strong> <span class="badge b-done">Done</span> Of the three ways weighed
+        (a <code>[bind @r]</code> that keeps only twofold copies, a shape holding a changing lambda held alone, and copying
+        the lambda's block with the value), the author chose the first two together, 2026-11-11. A
+        <code>[bind @r]</code> lambda now changes only what its copies share, a slice's items, a map, what a pointer
+        points to, and only reads its own copy of anything else, so it is copied freely and a field holds it as
+        <code>[bind @this]</code>; one that changes a shape or array copy of its own is a <code>[flex @r]</code> lambda.
+        A shape with a <code>[flex @this]</code> field, or a field of such a shape, is held as the lambda is: in a
+        <code>flex</code> variable, given as a place, never copied, and its lambda is called where it is, through a place
+        that changes. A variant holds none, since a <code>match</code> copies values out. Nothing is paid at runtime.
+        Built: see <a href="vela.html#changing-lambda-fields">A field that changes things</a>. The third way, copying the
+        block, stays open for a held value that should become a plain one, such as an iterator of
+        <code>std/collections</code> made with a counting lambda, which today holds only <code>[@this]</code> ones.
       </p>
       <p>
         <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[flex&amp; p.x, @r]</code>;

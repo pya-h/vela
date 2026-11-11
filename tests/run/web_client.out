@@ -6,6 +6,11 @@ resp 200 status: 200 OK
 resp 200 header: application/json
 resp 200 body: {"status":"ok"}
 resp 404 status: 404 Not Found
+garbage refused: missing status line
+garbage refused: missing status line
+garbage refused: status isn't a number from 100 to 599
+garbage refused: status isn't a number from 100 to 599
+garbage refused: headers not terminated
 client timeout: 3000
 unreachable caught: BadRequest
 server received request: true

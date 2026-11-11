@@ -137,6 +137,8 @@ struct VarInfo {
     kept: bool,
     owners: Vec<Own>,
     family: Option<usize>,
+    /// A copy a `[bind @r]` lambda keeps of what isn't a slice, map, or pointer, which it only reads.
+    bind_reads: bool,
 }
 
 #[derive(Default)]
@@ -198,6 +200,9 @@ pub struct Checker {
     takes_region: HashSet<String>,
     /// Types with mutable contents (pointers, slices, arrays), which tuples reject.
     changeable: HashSet<String>,
+    /// Shapes holding a `[flex @this]` lambda, in a field or in a shape of a field. A value of one is held as
+    /// such a lambda is: in a flex variable, given as a place, never copied.
+    held_types: HashSet<String>,
     variants: HashMap<String, VariantInfo>,
     macros: HashMap<String, MacroInfo>,
     modules: HashMap<String, ModuleScope>,
@@ -280,6 +285,11 @@ pub struct Checker {
     kept_used: std::cell::RefCell<Vec<String>>,
     /// True while checking a variable read solely as a call target or `&` place (allows `[flex @r]` lambdas).
     calling: bool,
+    /// Set while checking what a field is read from, or what a method is called on: a held value may be
+    /// reached into there, as `it.f(…)` or `it.next()`, though it is never copied.
+    reaching: bool,
+    /// Set while checking a field that is called, `it.f(…)`.
+    calling_field: bool,
     /// True while checking `xs.len`, which does not observe item reallocation from sibling slice aliases.
     reading_length: bool,
     kept_call: Option<String>,
@@ -673,6 +683,7 @@ impl Checker {
             .cloned()
             .collect();
         self.changeable = types_holding(items, holds_changeable);
+        self.held_types = types_holding(items, holds_held_field);
         self.declare_patterns();
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
@@ -1953,6 +1964,18 @@ impl Checker {
                     .variants
                     .iter_mut()
                     .try_for_each(|v| self.check_fields(&mut v.payload));
+                // A match takes a variant's values out as copies, so no variant holds what is never copied.
+                if let Some(field) = k.variants.iter().flat_map(|v| &v.payload).find(|field| {
+                    held_value(&field.ty, &self.held_types) || holds_held(&field.ty, &self.held_types)
+                }) {
+                    return err(
+                        self.place(field.ty_span, "flex"),
+                        format!(
+                            "a variant can't hold {}, since a 'match' takes its values out as copies and such a lambda is never copied; hold it in a shape's field",
+                            held_phrase(&field.ty)
+                        ),
+                    );
+                }
                 let imitated = payloads.and_then(|()| {
                     k.imitates.iter_mut().try_for_each(|(ty, at)| {
                         *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
@@ -3422,14 +3445,17 @@ impl Checker {
             }
             let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
             // Mutable-capture closures cannot be copied, so they require `flex&`.
-            if held_lambda(&ty) && param.passing != Passing::FlexRef {
+            // A shape holding one may also be given to read, 'fixed& c', since nothing calls its lambda there.
+            let place_ok = param.passing == Passing::FlexRef
+                || (param.passing == Passing::FixedRef && !held_lambda(&ty));
+            if held_value(&ty, &self.held_types) && !place_ok && param.name != THIS {
                 return err(
                     param.span,
                     format!(
-                        "'{0}' is a '{2}' lambda, which changes what it keeps and is never copied, so it is given as a place, 'flex& {0}: {1}'",
+                        "'{0}' is {2}, which changes what it keeps and is never copied, so it is given as a place, 'flex& {0}: {1}'",
                         param.name,
                         ty,
-                        held_word(&ty)
+                        held_phrase(&ty)
                     ),
                 );
             }
@@ -3907,22 +3933,15 @@ impl Checker {
             }
             Type::Closure(closure) => {
                 // `[@this]` field closures live in the owner's region; safe to copy because owner copies share region.
+                // A `[bind @this]` one changes only what copies share, so it is copied too; a `[flex @this]` one
+                // makes the value holding it held, never copied (see `held_types`).
                 if place == TypePlace::Field && closure.region == THIS_WORD {
-                    if closure.mode != KeptMode::Plain {
-                        return err(
-                            self.place(span, &format!("@{}", closure.region)),
-                            format!(
-                                "a field can't hold a lambda that changes what it keeps, '{}', since a value holding it is copied; hold one that reads its copies, '[@this](…)'",
-                                ty
-                            ),
-                        );
-                    }
                     let task = self.resolve_task_type(&closure.task, span, Some(THIS_WORD))?;
                     return Ok(Type::Closure(Box::new(
                         ClosureType {
                             task,
                             region: THIS_WORD.to_string(),
-                            mode: KeptMode::Plain,
+                            mode: closure.mode,
                         }
                         .normalized(),
                     )));
@@ -4053,11 +4072,11 @@ impl Checker {
     }
 
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
-        if holds_held_lambda(ty) {
+        if holds_held(ty, &self.held_types) {
             return err(
                 span,
                 format!(
-                    "{} holds a '[flex @r]' or '[bind @r]' lambda, which changes what it keeps and is never copied, so it is held alone, in a 'flex' variable",
+                    "{} holds a '[flex @r]' lambda, or a shape holding one, inside another value, but such a lambda changes what it keeps and is never copied, so it is held alone, in a 'flex' variable",
                     ty
                 ),
             );
@@ -5654,6 +5673,7 @@ impl Checker {
                 kept: false,
                 owners,
                 family: None,
+                bind_reads: false,
             },
         );
         match clash {
@@ -6279,21 +6299,21 @@ impl Checker {
                     }
                 }
                 for (name, at, ty) in declared {
-                    if held_lambda(&ty) && *mode != Mode::Flex {
+                    if held_value(&ty, &self.held_types) && *mode != Mode::Flex {
                         return err(
                             at,
                             format!(
-                                "'{0}' is a '{1}' lambda, which changes what it keeps, so it is held in a 'flex' variable: 'flex {0} = …'",
+                                "'{0}' is {1}, which changes what it keeps, so it is held in a 'flex' variable: 'flex {0} = …'",
                                 name,
-                                held_word(&ty)
+                                held_phrase(&ty)
                             ),
                         );
                     }
-                    if holds_held_lambda(&ty) {
+                    if holds_held(&ty, &self.held_types) {
                         return err(
                             at,
                             format!(
-                                "'{}' would hold a '[flex @r]' or '[bind @r]' lambda inside a value, which is copied with it; such a lambda is held alone, in a 'flex' variable",
+                                "'{}' would hold a '[flex @r]' lambda, or a shape holding one, inside another value, which is copied with it; such a value is held alone, in a 'flex' variable",
                                 name
                             ),
                         );
@@ -8646,6 +8666,46 @@ impl Checker {
                 }
             })
             .collect()
+    }
+
+    /// Calling a `[bind @r]` lambda changes what its copies share, so it is called through a place that may
+    /// change contents, as `xs[0] = 1` needs one: a flex or bind name, or a value such a name holds.
+    fn check_bind_call(&self, callee: &Expr, ty: &Type) -> Result<()> {
+        let mut base = callee;
+        while let ExprKind::Field(inner, _) | ExprKind::Index(inner, _) = &base.kind {
+            base = inner;
+        }
+        let ExprKind::Var(name) = &base.kind else {
+            return Ok(());
+        };
+        let Some(info) = self.lookup(name) else {
+            return Ok(());
+        };
+        if info.mode.can_change_contents(true) {
+            return Ok(());
+        }
+        let (called, changes) = match (&callee.kind, held_lambda(ty)) {
+            (ExprKind::Var(_), _) => (format!("'{}' is", name), "what its copies share"),
+            (_, true) => (format!("this lambda, held in '{}', is", name), "what it keeps"),
+            (_, false) => (format!("this lambda, held in '{}', is", name), "what its copies share"),
+        };
+        if name == THIS {
+            return Err(self.this_cannot_change(
+                callee.span,
+                &format!("calling a '{}' lambda it holds", held_kind(ty)),
+            ));
+        }
+        err(
+            callee.span,
+            format!(
+                "{0} a '{1}' lambda, and calling it changes {2}, so it is called through a place that changes, a 'flex' or 'bind' name, which '{3}' isn't{4}",
+                called,
+                held_kind(ty),
+                changes,
+                name,
+                self.param_hint(name, info)
+            ),
+        )
     }
 
     fn check_field_base(&mut self, base: &mut Expr, written: &str) -> Result<Type> {
@@ -11569,6 +11629,7 @@ impl Checker {
         for (name, info) in &kept.outer {
             let mut info = info.clone();
             info.kept = true;
+            info.bind_reads = false;
             info.param = false;
             info.passing = Passing::Copy;
             info.refers = None;
@@ -11582,9 +11643,16 @@ impl Checker {
                     _ => Mode::Fixed,
                 };
             } else {
+                // A `[bind @r]` lambda changes only what its copies share with every copy of it: the items of a
+                // slice, a map, what a pointer points to. Its own copy of anything else it only reads, which is
+                // what lets a bind lambda be copied.
                 info.mode = match kept.mode {
                     KeptMode::Flex => Mode::Flex,
-                    KeptMode::Bind => Mode::Bind,
+                    KeptMode::Bind if shared_contents(&info.ty) => Mode::Bind,
+                    KeptMode::Bind => {
+                        info.bind_reads = true;
+                        Mode::Fixed
+                    }
                     KeptMode::Plain => Mode::Fixed,
                 };
             }
@@ -11617,13 +11685,13 @@ impl Checker {
                 ),
             );
         }
-        if held_lambda(ty) {
+        if held_value(ty, &self.held_types) {
             return err(
                 span,
                 format!(
-                    "'{0}' is a '{1}' lambda, which is never copied, so a lambda can't keep a copy of it; give it as a parameter, 'flex& {0}', or keep it as a place, '[flex& {0}, @s]', in a region declared after it",
+                    "'{0}' is {1}, which is never copied, so a lambda can't keep a copy of it; give it as a parameter, 'flex& {0}', or keep it as a place, '[flex& {0}, @s]', in a region declared after it",
                     name,
-                    held_word(ty)
+                    held_phrase(ty)
                 ),
             );
         }
@@ -11669,8 +11737,8 @@ impl Checker {
                             mistakes.push(Error::at(span, format!("this lambda uses '{0}', which the lambda around it keeps for it, and '{0}' is in region '{1}', where that lambda, kept in '{2}', keeps nothing; copy it into '{2}' first, as in 'fixed mine = {0}.copy() at {2}'", name, other, around.region)));
                             continue;
                         }
-                        if held_lambda(&ty) && !refused {
-                            mistakes.push(Error::at(span, format!("this lambda uses '{}', a '{}' lambda, which the lambda around it would keep a copy of, and it is never copied", name, held_word(&ty))));
+                        if held_value(&ty, &self.held_types) && !refused {
+                            mistakes.push(Error::at(span, format!("this lambda uses '{}', {}, which the lambda around it would keep a copy of, and it is never copied", name, held_phrase(&ty))));
                             continue;
                         }
                     }
@@ -11978,12 +12046,17 @@ impl Checker {
             self.prepare_shortcut_lambda(callee, &expected)?;
         }
         self.calling = matches!(callee.kind, ExprKind::Var(_));
+        self.calling_field = matches!(callee.kind, ExprKind::Field(..));
         let ty = self.check_expr(callee);
         self.calling = false;
+        self.calling_field = false;
         let ty = ty?;
         if ty.unknown() {
             self.check_each(args);
             return Ok(Type::Unknown);
+        }
+        if bind_lambda(&ty) || (held_lambda(&ty) && !matches!(callee.kind, ExprKind::Var(_))) {
+            self.check_bind_call(callee, &ty)?;
         }
         let named = match &callee.kind {
             ExprKind::Var(name) => format!("'{}'", name),
@@ -12202,10 +12275,30 @@ impl Checker {
                         self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)),
                     );
                 }
+                let reached = std::mem::take(&mut self.reaching);
+                let called = std::mem::take(&mut self.calling_field);
                 self.reading_length = field == LEN && matches!(base.kind, ExprKind::Var(_));
+                self.reaching = matches!(base.kind, ExprKind::Var(_) | ExprKind::Field(..));
                 let base_ty = self.check_expr(base);
+                self.reaching = false;
                 self.reading_length = false;
-                self.field_type(&base_ty?, field, span)
+                let ty = self.field_type(&base_ty?, field, span)?;
+                if held_value(&ty, &self.held_types) && !reached && !called {
+                    return err(
+                        span,
+                        format!(
+                            "'{0}' is {1}, which changes what it keeps and is never copied, so it stays in the value holding it: {2}",
+                            field,
+                            held_phrase(&ty),
+                            if held_lambda(&ty) {
+                                format!("call it, '….{}(…)'", field)
+                            } else {
+                                format!("use its fields and methods, as '….{}.x', or give it as a place, '&….{}'", field, field)
+                            }
+                        ),
+                    );
+                }
+                Ok(ty)
             }
             ExprKind::Index(base, index) => {
                 let base_ty = self.check_expr(base)?;
@@ -12601,11 +12694,21 @@ impl Checker {
 
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
         let calling = std::mem::take(&mut self.calling);
+        let reaching = std::mem::take(&mut self.reaching);
         let length_only = std::mem::take(&mut self.reading_length);
         let info = self.lookup_or_err(name, span)?;
         let (ty, kept, mode) = (info.ty.clone(), info.kept, info.mode);
         if kept {
             self.check_kept_use(name, &ty, span)?;
+        }
+        if !held_lambda(&ty) && held_value(&ty, &self.held_types) && !calling && !reaching {
+            return err(
+                span,
+                format!(
+                    "'{0}' holds a '[flex @r]' lambda, which changes what it keeps, so '{0}' is never copied: use its fields and methods, as '{0}.field', or give it as a place, '&{0}', to a 'flex& x: {1}' parameter",
+                    name, ty
+                ),
+            );
         }
         // `[flex @r]`/`[bind @r]` closures cannot be copied and must be used via calls or `&` places.
         if held_lambda(&ty) && !calling {
@@ -16934,7 +17037,12 @@ impl Checker {
                 );
             }
             ExprKind::Ref(_) => self.check_address(value),
-            _ => self.check_expr(value),
+            _ => {
+                self.reaching = matches!(value.kind, ExprKind::Var(_) | ExprKind::Field(..));
+                let found = self.check_expr(value);
+                self.reaching = false;
+                found
+            }
         };
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
@@ -18310,16 +18418,22 @@ impl Checker {
                 }
                 let expected = in_copy(ty, &found.given);
                 self.prepare_shortcut_lambda(arg, &expected)?;
+                // A method is called on a held value where it is: its receiver only reads it, and a method that
+                // changes it takes it as a place.
+                self.reaching = param == THIS
+                    && matches!(arg.kind, ExprKind::Var(_) | ExprKind::Field(..));
                 let actual = if self.filled_default(task, i, arg) {
                     let outer =
                         std::mem::replace(&mut self.current_module, module_of(task).to_string());
                     let actual =
                         self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param);
                     self.current_module = outer;
+                    self.reaching = false;
                     actual?
                 } else {
                     self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?
                 };
+                self.reaching = false;
                 // Coerce slices into `SliceIter` where a bound expects `std/collections.Iterator`.
                 let actual = match (&*ty, &actual) {
                     (Type::Param(name), Type::Slice(..)) => {
@@ -18575,24 +18689,21 @@ impl Checker {
         }
         for (param, at) in info.types.iter().zip(&places) {
             if let Some(ty) = given.get(&param.name) {
-                if held_lambda(ty)
-                    || holds_held_lambda(ty)
-                    || group_items(&given, &param.name).is_some_and(|(types, _)| {
-                        types
-                            .iter()
-                            .any(|ty| held_lambda(ty) || holds_held_lambda(ty))
-                    })
+                let held = |ty: &Type| held_value(ty, &self.held_types) || holds_held(ty, &self.held_types);
+                if held(ty)
+                    || group_items(&given, &param.name)
+                        .is_some_and(|(types, _)| types.iter().any(held))
                 {
                     return err(
                         *at,
                         format!(
-                            "task '{}' takes '{}' as a type, and is given a '{}' lambda for it, which changes what it keeps and is never copied, as its body may copy a value of that type; give it a '[@r]' lambda, or a task taking the lambda as 'flex& f: {}'",
+                            "task '{}' takes '{}' as a type, and is given {} for it, which changes what it keeps and is never copied, as its body may copy a value of that type; give it a '[@r]' lambda, or a task taking it as 'flex& f: {}'",
                             unqualified(task),
                             param.name,
                             if held_lambda(ty) {
-                                held_word(ty)
+                                "a '[flex @r]' lambda".to_string()
                             } else {
-                                "[flex @r]' or '[bind @r]"
+                                format!("'{}', which holds a '[flex @r]' lambda", ty)
                             },
                             ty
                         ),
@@ -21766,7 +21877,9 @@ fn holds_twofold(ty: &Type, regional: &HashSet<String>, lambdas: bool) -> bool {
         Type::Or(value, error) => {
             holds_twofold(value, regional, lambdas) || holds_twofold(error, regional, lambdas)
         }
-        Type::Closure(closure) => lambdas && holds_twofold(&closure.task.ret, regional, lambdas),
+        Type::Closure(closure) => {
+            lambdas && (closure.mode == KeptMode::Bind || holds_twofold(&closure.task.ret, regional, lambdas))
+        }
         _ => holds_pointers(ty, regional),
     }
 }
@@ -21810,16 +21923,41 @@ fn is_callable(ty: &Type) -> bool {
     matches!(ty, Type::Task(_) | Type::Closure(_))
 }
 
-/// `[flex @r]`/`[bind @r]` closures mutate captured state and cannot be copied.
+/// `[flex @r]` closures change their own copies, which every copy of one would share, so they are never copied.
+/// A `[bind @r]` one changes only what its copies share already, so it is copied as a slice is.
 fn held_lambda(ty: &Type) -> bool {
-    matches!(ty, Type::Closure(closure) if closure.mode != KeptMode::Plain)
+    matches!(ty, Type::Closure(closure) if closure.mode == KeptMode::Flex)
 }
 
-fn held_word(ty: &Type) -> &'static str {
+fn held_word(_: &Type) -> &'static str {
+    "[flex @r]"
+}
+
+/// What a held value is, for a message: a `[flex @r]` lambda, or a value holding one.
+fn held_phrase(ty: &Type) -> String {
+    if held_lambda(ty) {
+        "a '[flex @r]' lambda".to_string()
+    } else {
+        format!("a '{}', holding a '[flex @r]' lambda", ty)
+    }
+}
+
+fn held_kind(ty: &Type) -> &'static str {
     match ty {
         Type::Closure(closure) if closure.mode == KeptMode::Bind => "[bind @r]",
         _ => "[flex @r]",
     }
+}
+
+/// A `[bind @r]` closure, which changes contents shared with every copy of it.
+fn bind_lambda(ty: &Type) -> bool {
+    matches!(ty, Type::Closure(closure) if closure.mode == KeptMode::Bind)
+}
+
+/// Whether every copy of a value of this type shares its contents: a slice's items, a map, what a pointer points
+/// to. A `[bind @r]` lambda changes only these of what it keeps.
+fn shared_contents(ty: &Type) -> bool {
+    matches!(ty, Type::Slice(..) | Type::Map(..) | Type::Ptr(..))
 }
 
 fn has_closure(ty: &Type) -> bool {
@@ -21838,6 +21976,40 @@ fn has_closure(ty: &Type) -> bool {
     }
 }
 
+/// Whether a field of this type makes the value holding it held: a `[flex @this]` lambda, or a held shape.
+fn holds_held_field(ty: &Type, held: &HashSet<String>) -> bool {
+    match ty {
+        Type::Closure(closure) => closure.mode == KeptMode::Flex,
+        Type::Named(name, _) => held.contains(name),
+        Type::Applied(applied) => held.contains(&applied.name),
+        _ => false,
+    }
+}
+
+/// A value never copied: a `[flex @r]` lambda, or a shape holding one.
+fn held_value(ty: &Type, held: &HashSet<String>) -> bool {
+    held_lambda(ty) || holds_held_field(ty, held)
+}
+
+/// A type holding a held value inside another value, a tuple, a slice, a maybe, which would copy it.
+fn holds_held(ty: &Type, held: &HashSet<String>) -> bool {
+    let inside = |ty: &Type| held_value(ty, held) || holds_held(ty, held);
+    match ty {
+        Type::Closure(_) => false,
+        Type::Ptr(inner, _)
+        | Type::Slice(inner, _)
+        | Type::Array(inner, _)
+        | Type::Range(inner)
+        | Type::Maybe(inner)
+        | Type::Fail(inner) => inside(inner),
+        Type::Map(key, value, _) | Type::Or(key, value) => inside(key) || inside(value),
+        Type::Tuple(items) => items.iter().any(inside),
+        Type::Applied(applied) => applied.types.iter().any(inside),
+        _ => false,
+    }
+}
+
+#[allow(dead_code)]
 fn holds_held_lambda(ty: &Type) -> bool {
     match ty {
         Type::Closure(_) => false,
@@ -24918,6 +25090,12 @@ fn param_hint_for(name: &str, info: &VarInfo, shares: bool) -> String {
     if info.kept && info.passing == Passing::FixedRef {
         return format!(
             "; this lambda keeps '{0}' as 'fixed& {0}', which only reads it, and one that changes it keeps it as 'flex& {0}'",
+            name
+        );
+    }
+    if info.bind_reads {
+        return format!(
+            "; '{0}' is the copy this lambda keeps of a variable of the code around it, and a '[bind @r]' lambda changes only what every copy of it shares, the items of a slice, a map, what a pointer points to, so it only reads its own copy of anything else; one that changes its copies is written '[flex @r](…)'",
             name
         );
     }

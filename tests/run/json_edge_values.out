@@ -7,3 +7,9 @@ null
 "café\u0000"
 ["café","😀","A","�x"]
 invalid escape sequence at position 1
+invalid escape sequence at position 2
+unexpected token '	' at position 2
+unexpected token 'é' at position 0
+unexpected token 'é' at position 4
+unexpected token 'n' at position 0
+{"ü":"日本"}

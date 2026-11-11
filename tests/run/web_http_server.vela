@@ -40,7 +40,7 @@ task main()
         <-
     }
 
-    fixed req_text = "GET /greeting?name=Vela HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    fixed req_text = "GET /gr%65eting?x=1&na%6De=Caf%C3%A9+au+lait HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
     client.write(req_text) { failure _
         <-
     }

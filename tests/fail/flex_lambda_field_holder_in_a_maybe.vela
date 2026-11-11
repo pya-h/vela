@@ -1,0 +1,23 @@
+; error: 22:13: maybe Counter@r holds a '[flex @r]' lambda, or a shape holding one, inside another value, but such a lambda changes what it keeps and is never copied, so it is held alone, in a 'flex' variable
+; A shape holding a '[flex @this]' lambda is never held inside another value.
+shape Counter
+    n: int
+    next: [flex @this]() -> int
+
+    peek() -> int
+        <- .n
+    fi
+fi
+
+task counter(start: int, r: region) -> Counter@r
+    flex k = start
+    <- Counter { n: start, next: [flex @r]() -> int
+        k = k + 1
+        <- k
+    fi }
+fi
+
+task main()
+    region r
+    flex m: maybe Counter@r = none
+fi

@@ -1,0 +1,29 @@
+; error: 28:12: this lambda, held in 'c', is a '[flex @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'flex' or 'bind' name, which 'c' isn't; 'c' is a 'fixed&' parameter, which only reads the caller's place, and one that changes it is written 'flex& c: Counter@r'
+; Calling a '[flex @this]' lambda changes what it keeps, so its holder is a place
+; that changes, never a 'fixed&' one.
+shape Counter
+    n: int
+    next: [flex @this]() -> int
+
+    peek() -> int
+        <- .n
+    fi
+fi
+
+task counter(start: int, r: region) -> Counter@r
+    flex k = start
+    <- Counter { n: start, next: [flex @r]() -> int
+        k = k + 1
+        <- k
+    fi }
+fi
+
+task main()
+    region r
+    flex c = counter(1, r)
+    look(&c)
+fi
+
+task look(fixed& c: Counter@r)
+    show(c.next())
+fi

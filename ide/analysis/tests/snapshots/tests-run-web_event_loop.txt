@@ -100,8 +100,8 @@
     | keyword:<-
  55 |     }
     | punctuation:}
- 57 |     flex conns: [ActiveConn@srv_r#64] = [ActiveConn { sock: server_sock }#64]
-    | keyword:flex  variable:conns  punctuation::  punctuation:[  type:ActiveConn  operator:@  region:srv_r  punctuation:#  number:64  punctuation:]  operator:=  punctuation:[  type:ActiveConn  punctuation:{  field:sock  punctuation::  variable:server_sock  punctuation:}  punctuation:#  number:64  punctuation:]
+ 57 |     flex conns: [ActiveConn#64] = [ActiveConn { sock: server_sock }#64]
+    | keyword:flex  variable:conns  punctuation::  punctuation:[  type:ActiveConn  punctuation:#  number:64  punctuation:]  operator:=  punctuation:[  type:ActiveConn  punctuation:{  field:sock  punctuation::  variable:server_sock  punctuation:}  punctuation:#  number:64  punctuation:]
  58 |     Poll.clear()
     | type:Poll  punctuation:.  method:clear  punctuation:(  punctuation:)
  59 |     Poll.watch(server_sock, 1)
@@ -134,16 +134,16 @@
     | keyword:<-
  76 |     }
     | punctuation:}
- 78 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 78 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
  80 |     ; 2. Both clients write requests concurrently.
     | comment:; 2. Both clients write requests concurrently.
  81 |     client_send(c1, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     | task:client_send  punctuation:(  variable:c1  punctuation:,  string:"GET /c1 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
  82 |     client_send(c2, "GET /c2 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     | task:client_send  punctuation:(  variable:c2  punctuation:,  string:"GET /c2 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
- 84 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 84 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
  86 |     ; 3. Read responses from both clients.
     | comment:; 3. Read responses from both clients.
  87 |     show_response(c1, "c1", srv_r)
@@ -154,16 +154,16 @@
     | comment:; 4. Keep-alive reuse on same connection: c1 sends a second request.
  91 |     client_send(c1, "GET /c1-second HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     | task:client_send  punctuation:(  variable:c1  punctuation:,  string:"GET /c1-second HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
- 92 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 92 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
  93 |     show_response(c1, "c1 second", srv_r)
     | task:show_response  punctuation:(  variable:c1  punctuation:,  string:"c1 second"  punctuation:,  region:srv_r  punctuation:)
  95 |     ; 5. Explicit Connection: close termination on c2.
     | comment:; 5. Explicit Connection: close termination on c2.
  96 |     client_send(c2, "GET /close-me HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
     | task:client_send  punctuation:(  variable:c2  punctuation:,  string:"GET /close-me HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  string:Connection: close  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
- 97 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+ 97 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
  98 |     show_response(c2, "c2 close", srv_r)
     | task:show_response  punctuation:(  variable:c2  punctuation:,  string:"c2 close"  punctuation:,  region:srv_r  punctuation:)
 100 |     fixed c2_eof = c2.read(64, srv_r) { "" }
@@ -184,16 +184,16 @@
     | keyword:<-
 109 |     }
     | punctuation:}
-110 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+110 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 112 |     client_send(c3, "GET /stalled")
     | task:client_send  punctuation:(  variable:c3  punctuation:,  string:"GET /stalled"  punctuation:)
-113 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+113 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 115 |     sleep_ms(120)
     | task:sleep_ms  punctuation:(  number:120  punctuation:)
-116 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+116 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 117 |     show_response(c3, "c3 timeout", srv_r)
     | task:show_response  punctuation:(  variable:c3  punctuation:,  string:"c3 timeout"  punctuation:,  region:srv_r  punctuation:)
 119 |     ; 7. Idle sweep: c4 completes a request and remains idle past 200ms.
@@ -210,18 +210,18 @@
     | keyword:<-
 125 |     }
     | punctuation:}
-126 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+126 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 127 |     client_send(c4, "GET /c1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     | task:client_send  punctuation:(  variable:c4  punctuation:,  string:"GET /c1 HTTP/1.1  escape:\r  escape:\n  string:Host: 127.0.0.1  escape:\r  escape:\n  escape:\r  escape:\n  string:"  punctuation:)
-128 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+128 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 129 |     show_response(c4, "c4 initial", srv_r)
     | task:show_response  punctuation:(  variable:c4  punctuation:,  string:"c4 initial"  punctuation:,  region:srv_r  punctuation:)
 131 |     sleep_ms(220)
     | task:sleep_ms  punctuation:(  number:220  punctuation:)
-132 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50, srv_r)
-    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:,  region:srv_r  punctuation:)
+132 |     event_loop_tick(srv, server_sock, &conns, app_handler, 50)
+    | task:event_loop_tick  punctuation:(  variable:srv  punctuation:,  variable:server_sock  punctuation:,  operator:&  variable:conns  punctuation:,  task:app_handler  punctuation:,  number:50  punctuation:)
 134 |     fixed c4_eof = c4.read(64, srv_r) { "" }
     | keyword:fixed  variable:c4_eof  operator:=  variable:c4  punctuation:.  method:read  punctuation:(  number:64  punctuation:,  region:srv_r  punctuation:)  punctuation:{  string:""  punctuation:}
 135 |     show("c4 idle swept: ", c4_eof.len == 0)
