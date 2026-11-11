@@ -1,0 +1,76 @@
+; Channels & Ownership Transfer: thread-safe bounded message passing
+; where values transferred with 'own' have single ownership, preventing
+; data races by design.
+
+shape Job
+    id: int
+    payload: text
+    priority: int
+fi
+
+shape Result
+    job_id: int
+    status: text
+    processed: bool
+fi
+
+task process_job(j: own Job) -> Result
+    show("processing job #", j.id, " (", j.payload, ") with priority ", j.priority)
+    <- Result { job_id: j.id, status: "completed", processed: true }
+fi
+
+task main()
+    region r default
+
+    ; 1. Bounded integer channel
+    fixed numbers = chan_new<int>(3)
+    show("numbers capacity: ", numbers.cap)
+
+    numbers.send(100)
+    numbers.send(200)
+    show("numbers in queue: ", numbers.len)
+
+    show("received: ", numbers.recv())
+    show("received: ", numbers.recv())
+    show("queue after receives: ", numbers.len)
+
+    ; Non-blocking try_recv on empty channel
+    show("try_recv on empty: ", numbers.try_recv())
+
+    numbers.send(300)
+    show("try_recv with item: ", numbers.try_recv())
+    numbers.close()
+
+    ; 2. Structured message channel with ownership transfer
+    fixed jobs = chan_new<own Job>(4)
+    fixed results = chan_new<own Result>(4)
+
+    ; Enqueue jobs with ownership transfer
+    flex j1 = Job { id: 1, payload: "encode video", priority: 10 }
+    send(jobs, own j1)
+    ; 'j1' is now moved and cannot be read here
+
+    flex j2 = Job { id: 2, payload: "generate thumbnail", priority: 5 }
+    send(jobs, own j2)
+
+    flex j3 = Job { id: 3, payload: "sync metadata", priority: 1 }
+    send(jobs, own j3)
+
+    show("jobs queued: ", jobs.len)
+
+    ; Process queued jobs
+    loop jobs.len > 0
+        fixed job = jobs.recv()
+        fixed res = process_job(own job)
+        results.send(own res)
+    fi
+
+    show("results queued: ", results.len)
+    loop results.len > 0
+        fixed res = results.recv()
+        show("job #", res.job_id, " ", res.status)
+    fi
+
+    jobs.close()
+    results.close()
+fi

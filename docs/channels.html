@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Channels &amp; Ownership Transfer</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(56,189,248,0.14) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.14) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top-nav {
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin: 1rem auto 0;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 680px;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h2 .icon {
+      font-size: 1.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+      font-size: 1.35rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; color: var(--fg); }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-right: 0.5rem;
+    }
+    .b-blue { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-green { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .b-purple { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    .warning {
+      background: linear-gradient(90deg, rgba(244,114,182,0.1), transparent);
+      border-left: 4px solid var(--accent-4);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .warning strong { color: var(--accent-4); }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .card h4 {
+      margin: 0 0 0.5rem;
+      color: var(--accent-2);
+      font-size: 1.1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.02);
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <nav class="top-nav">
+      <a href="vela.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html" class="active">Channels</a>
+      <a href="events.html">Events</a>
+      <a href="std.html">Standard Library</a>
+      <a href="web.html">Web</a>
+    </nav>
+    <h1>Channels &amp; Ownership</h1>
+    <p class="tagline">
+      Go-style friendly bounded channels combined with Rust-grade linear ownership transfer.
+      Safe, race-free concurrency compiled directly to strict ISO C11.
+    </p>
+    <div style="margin-top: 1.5rem;">
+      <span class="badge b-blue">Concurrency</span>
+      <span class="badge b-green">Thread-Safe FIFO</span>
+      <span class="badge b-purple">Linear Move Safety</span>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2><span class="icon">💡</span> The Core Concept</h2>
+      <p>
+        Concurrent programming in traditional languages often presents a false dichotomy:
+      </p>
+      <ul>
+        <li><strong>Shared Mutable Memory (C, C++, Java):</strong> Threads communicate by mutating shared structures under mutex locks. This model is notoriously prone to data races, deadlocks, lock contention, and subtle memory ordering bugs.</li>
+        <li><strong>Raw Channels Without Ownership (Go):</strong> Channels make communication ergonomic, but sending a pointer or reference across a channel allows both sender and receiver to mutate the same memory concurrently, creating silent data races.</li>
+      </ul>
+      <p>
+        Vela eliminates this entire problem class by pairing <strong>first-class bounded channels</strong> (<code>Chan[T]</code>) with <strong>linear ownership transfer</strong> (<code>own T</code>).
+      </p>
+      <div class="note">
+        <strong>The Vela Invariant:</strong> When an <code>own T</code> value is sent over a channel, the sender's binding is permanently invalidated at compile time. Only the receiving task can ever read or mutate the message payload. No locks or defensive copies are needed on the carried data!
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">📦</span> Channel Types &amp; Creation</h2>
+      <p>
+        A channel is declared with <code>Chan[T]</code> (or the generic form <code>Chan&lt;T&gt;</code>). The type argument <code>T</code> specifies the message payload.
+      </p>
+
+      <div class="cards">
+        <div class="card">
+          <h4>Primitive Channels: <code>Chan[int]</code></h4>
+          <p>Carries plain value types (integers, floats, booleans). Items are copied into the channel's bounded ring buffer upon send.</p>
+        </div>
+        <div class="card">
+          <h4>Owned Channels: <code>Chan[own Shape]</code></h4>
+          <p>Carries structured shapes or resources with ownership handoff. Sending requires the <code>own</code> keyword (e.g. <code>send(c, own item)</code>).</p>
+        </div>
+        <div class="card">
+          <h4>Region Transfer: <code>Chan[own region]</code></h4>
+          <p>Transfers an entire allocated region across tasks in \(O(1)\) zero-copy time without copying individual elements.</p>
+        </div>
+      </div>
+
+      <h3>Creating a Channel</h3>
+      <p>
+        Channels are allocated with the builtin primitive <code>chan_new&lt;T&gt;(capacity)</code> or via the standard library helper <code>channel&lt;T&gt;(capacity)</code> from <code>std/sync</code>:
+      </p>
+      <pre><code>include std/sync
+
+task main()
+    ; Creates a bounded FIFO ring buffer holding up to 16 jobs
+    fixed queue = chan_new&lt;own Job&gt;(16)
+    show("queue capacity: ", queue.cap)
+fi</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="icon">⚙️</span> Builtin Operations</h2>
+      <p>
+        All channel operations are available both as top-level builtin tasks and as natural method syntax on channel values:
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Operation</th>
+            <th>Method Syntax</th>
+            <th>Return Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>send(c, item)</code></td>
+            <td><code>c.send(item)</code></td>
+            <td><code>bool</code></td>
+            <td>Blocks if the buffer is full until space is freed. Returns <code>true</code> on success, or <code>false</code> if the channel is closed.</td>
+          </tr>
+          <tr>
+            <td><code>recv(c)</code></td>
+            <td><code>c.recv()</code></td>
+            <td><code>T</code></td>
+            <td>Blocks if the buffer is empty until a message arrives. Returns the received payload.</td>
+          </tr>
+          <tr>
+            <td><code>try_recv(c)</code></td>
+            <td><code>c.try_recv()</code></td>
+            <td><code>maybe T</code></td>
+            <td>Non-blocking receive. Returns <code>{ value }</code> if a message is immediately available, or <code>none</code> if empty.</td>
+          </tr>
+          <tr>
+            <td><code>close(c)</code></td>
+            <td><code>c.close()</code></td>
+            <td><code>nothing</code></td>
+            <td>Closes the channel. Subsequent receives drain existing items; subsequent sends fail gracefully.</td>
+          </tr>
+          <tr>
+            <td>—</td>
+            <td><code>c.len</code></td>
+            <td><code>int</code></td>
+            <td>Returns the current count of items queued in the channel buffer.</td>
+          </tr>
+          <tr>
+            <td>—</td>
+            <td><code>c.cap</code></td>
+            <td><code>int</code></td>
+            <td>Returns the maximum capacity of the channel's bounded ring buffer.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="icon">🛡️</span> Compile-Time Ownership Safety</h2>
+      <p>
+        The Vela compiler enforces strict linear move checking at compile time to guarantee zero use-after-move and zero double-move bugs:
+      </p>
+
+      <h3>1. Use-After-Move Detection</h3>
+      <p>Once a variable is passed with <code>own x</code>, any subsequent read of <code>x</code> is rejected at compile time:</p>
+      <pre><code>fixed q = chan_new&lt;own Packet&gt;(4)
+fixed p = Packet { id: 42, payload: "data" }
+
+send(q, own p)
+; Error: use of moved value 'p'; 'p' was moved with 'own p'
+show(p.id)</code></pre>
+
+      <h3>2. Double-Move Prevention</h3>
+      <p>Attempting to move the same variable twice without reinitializing it is caught immediately:</p>
+      <pre><code>send(q, own p)
+; Error: use of moved value 'p'; 'p' was moved with 'own p'
+send(q, own p)</code></pre>
+
+      <h3>3. Loop Move Protection</h3>
+      <p>Moving a variable declared outside a loop inside the loop body is prohibited, preventing a use-after-move on iteration 2:</p>
+      <pre><code>fixed p = Packet { id: 1 }
+loop count &lt; 3
+    ; Error: cannot move 'p' inside a loop; 'p' was declared outside the loop
+    send(q, own p)
+fi</code></pre>
+
+      <h3>4. Reassignment Restores Usability</h3>
+      <p>Assigning a new value to a mutable binding clears the moved state, making the variable available for use again:</p>
+      <pre><code>flex p = Packet { id: 1 }
+send(q, own p)   ; 'p' is moved
+
+p = Packet { id: 2 }  ; 'p' is restored with a new value!
+show(p.id)             ; Completely valid! Prints 2
+send(q, own p)   ; 'p' is moved again</code></pre>
+
+      <h3>5. Non-Variable Move Rejection</h3>
+      <p>Ownership transfer applies exclusively to named bindings, preventing ambiguous temporaries:</p>
+      <pre><code>; Error: cannot move non-variable expression with 'own'
+send(q, own Packet { id: 1 })</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="icon">🚀</span> Complete Working Example</h2>
+      <p>
+        The following complete program demonstrates a multi-stage producer-worker pipeline with typed channels, ownership transfers, and non-blocking polling:
+      </p>
+
+      <pre><code>shape Job
+    id: int
+    payload: text
+    priority: int
+fi
+
+shape Result
+    job_id: int
+    status: text
+    processed: bool
+fi
+
+task process_job(j: own Job) -> Result
+    show("processing job #", j.id, " (", j.payload, ") with priority ", j.priority)
+    &lt;- Result { job_id: j.id, status: "completed", processed: true }
+fi
+
+task main()
+    region r default
+
+    ; Bounded integer channel
+    fixed numbers = chan_new&lt;int&gt;(3)
+    numbers.send(100)
+    numbers.send(200)
+    show("queue len: ", numbers.len)
+    show("received: ", numbers.recv())
+    numbers.close()
+
+    ; Structured job queue with ownership transfer
+    fixed jobs = chan_new&lt;own Job&gt;(4)
+    fixed results = chan_new&lt;own Result&gt;(4)
+
+    flex j1 = Job { id: 1, payload: "encode video", priority: 10 }
+    send(jobs, own j1)
+
+    flex j2 = Job { id: 2, payload: "generate thumbnail", priority: 5 }
+    send(jobs, own j2)
+
+    ; Drain and process
+    loop jobs.len &gt; 0
+        fixed job = jobs.recv()
+        fixed res = process_job(own job)
+        results.send(own res)
+    fi
+
+    ; Read results
+    loop results.len &gt; 0
+        fixed res = results.recv()
+        show("job #", res.job_id, " ", res.status)
+    fi
+
+    jobs.close()
+    results.close()
+fi</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="icon">🔬</span> Under the Hood: C11 Runtime Architecture</h2>
+      <p>
+        When Vela compiles your program with <code>--emit-c</code> or builds native binaries, channels are mapped to high-performance C11 primitives in <code>runtime/vela_rt.h</code>:
+      </p>
+      <ul>
+        <li><strong>Ring Buffer:</strong> Each channel maintains a circular FIFO memory buffer with <code>head</code>, <code>tail</code>, and <code>count</code> tracking.</li>
+        <li><strong>POSIX Synchronization:</strong> Thread safety is ensured via <code>pthread_mutex_t</code> and two condition variables: <code>not_empty</code> (waking blocked receivers) and <code>not_full</code> (waking blocked senders).</li>
+        <li><strong>Handle Table:</strong> Channel references are passed as 64-bit integer handles (<code>vela__chan_t</code>) indexed into a generation-checked slot table. This eliminates dangling pointer segfaults and ensures zero-cost value passing.</li>
+        <li><strong>Typed Code Generation:</strong> The Vela code generator automatically synthesizes static inline helpers such as <code>vela__chan_send__*</code> and <code>vela__chan_recv__*</code> tailored to each carried type, avoiding runtime boxing or dynamic type dispatch.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    Vela Documentation &bull; Built with Safety, Concurrency, and Simplicity
+  </footer>
+
+</body>
+</html>
+

@@ -3134,6 +3134,8 @@ impl Checker {
                     mode: closure.mode,
                 }))
             }
+            Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Own(inner) => Type::Own(boxed(inner)),
             other => other.clone(),
         }
     }
@@ -16931,6 +16933,7 @@ impl Checker {
                 "len" | "cap" => Ok(Type::Int),
                 _ => err(span, format!("channel has no field '{}'; write '.len' or '.cap'", field)),
             },
+            Type::Own(inner) => self.field_type(inner, field, span),
             Type::Param(param) => self.pattern_field(param, field, span),
             Type::Applied(applied) => {
                 let Some(shape) = self.shapes.get(&applied.name) else {
@@ -17160,6 +17163,10 @@ impl Checker {
     }
 
     fn owner_of(&self, ty: &Type) -> Option<String> {
+        let ty = match ty {
+            Type::Own(inner) => inner.as_ref(),
+            other => other,
+        };
         match self.unmade(ty) {
             Type::Named(name, _) => Some(name),
             Type::Applied(applied) => Some(applied.name.clone()),
@@ -17505,6 +17512,10 @@ impl Checker {
             };
             return Ok(());
         }
+        let ty = match ty {
+            Type::Own(inner) => *inner,
+            other => other,
+        };
         if let Type::Param(param) = &ty
             && let Some(pattern) = self.pattern_with_method(param, &name, span)?
         {
