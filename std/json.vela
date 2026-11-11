@@ -383,3 +383,11 @@ task stringify(val: Json@p, r: region default) -> text@r
     case Object props = stringify_object(props, r)
     fi
 fi
+
+task to_json<T: shown>(val: T, r: region default) -> text@r
+    <- val.json(r)
+fi
+
+task json_of<T: shown>(val: T, r: region default) -> text@r
+    <- val.json(r)
+fi

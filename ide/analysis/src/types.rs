@@ -506,7 +506,7 @@ impl Checked {
                 self.expr(value, kinds);
             }
             // Only method-form `n.str()` precedes its receiver in column order; `text(n)` does not.
-            ExprKind::ToText { value, .. } => {
+            ExprKind::ToText { value, .. } | ExprKind::ToJson { value, .. } => {
                 if (value.span.line, value.span.col) < (e.span.line, e.span.col) {
                     self.field_accesses.insert(pos(e.span), String::new());
                 }

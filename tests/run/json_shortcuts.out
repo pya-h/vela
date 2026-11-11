@@ -1,0 +1,16 @@
+42
+-17
+true
+"hello world"
+"line1\nline2\t\"quoted\""
+{"id":1,"name":"Alice","active":true}
+{"title":"nested","inner":{"val":42}}
+{"id":7,"balance":12.5}
+{"error":"not_found","path":"/api/test"}
+{}
+[10,20,30]
+[{"id":1,"name":"A","active":true},{"id":2,"name":"B","active":false}]
+99
+null
+custom(123)
+

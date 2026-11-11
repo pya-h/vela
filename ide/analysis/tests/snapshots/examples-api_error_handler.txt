@@ -4,28 +4,28 @@
     | comment:; routes can fail with WebError, and a custom error handler converts errors into
   3 | ; consistent JSON error payloads instead of plain text responses.
     | comment:; consistent JSON error payloads instead of plain text responses.
-  4 | include std/web { Request, Response, WebError, Method, Router, json, router }
-    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:Router  punctuation:,  task:json  punctuation:,  task:router  punctuation:}
+  4 | include std/web { Request, Response, WebError, Method, Router, json, json_of, router }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:Router  punctuation:,  task:json  punctuation:,  task:json_of  punctuation:,  task:router  punctuation:}
   6 | task handle_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
     | keyword:task  task:handle_error  punctuation:(  parameter:err  punctuation::  type:WebError  operator:@  region:r  punctuation:,  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r
   7 |     match err
     | keyword:match  parameter:err
   8 |     case WebError.RouteNotFound where_
     | keyword:case  type:WebError  punctuation:.  variant:RouteNotFound  variable:where_
-  9 |         <- json("\{\"error\":\"not_found\",\"path\":\"{where_}\"\}" at r, r).status_code(404)
-    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:not_found  escape:\"  string:,  escape:\"  string:path  escape:\"  string::  escape:\"  string:{  variable:where_  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:404  punctuation:)
+  9 |         <- json_of(["error": "not_found", "path": where_] at r, r).status_code(404)
+    | keyword:<-  task:json_of  punctuation:(  punctuation:[  string:"error"  punctuation::  string:"not_found"  punctuation:,  string:"path"  punctuation::  type:where_  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:404  punctuation:)
  10 |     case WebError.Unauthorized why
     | keyword:case  type:WebError  punctuation:.  variant:Unauthorized  variable:why
- 11 |         <- json("\{\"error\":\"unauthorized\",\"detail\":\"{why}\"\}" at r, r).status_code(401)
-    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:unauthorized  escape:\"  string:,  escape:\"  string:detail  escape:\"  string::  escape:\"  string:{  variable:why  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:401  punctuation:)
+ 11 |         <- json_of(["error": "unauthorized", "detail": why] at r, r).status_code(401)
+    | keyword:<-  task:json_of  punctuation:(  punctuation:[  string:"error"  punctuation::  string:"unauthorized"  punctuation:,  string:"detail"  punctuation::  type:why  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:401  punctuation:)
  12 |     case WebError.BadRequest why
     | keyword:case  type:WebError  punctuation:.  variant:BadRequest  variable:why
- 13 |         <- json("\{\"error\":\"bad_request\",\"detail\":\"{why}\"\}" at r, r).status_code(400)
-    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:bad_request  escape:\"  string:,  escape:\"  string:detail  escape:\"  string::  escape:\"  string:{  variable:why  string:}  escape:\"  escape:\}  string:"  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:400  punctuation:)
+ 13 |         <- json_of(["error": "bad_request", "detail": why] at r, r).status_code(400)
+    | keyword:<-  task:json_of  punctuation:(  punctuation:[  string:"error"  punctuation::  string:"bad_request"  punctuation:,  string:"detail"  punctuation::  type:why  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:400  punctuation:)
  14 |     case _
     | keyword:case  keyword:_
- 15 |         <- json("\{\"error\":\"internal\"\}", r).status_code(500)
-    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:error  escape:\"  string::  escape:\"  string:internal  escape:\"  escape:\}  string:"  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:500  punctuation:)
+ 15 |         <- json_of(["error": "internal"] at r, r).status_code(500)
+    | keyword:<-  task:json_of  punctuation:(  punctuation:[  string:"error"  punctuation::  string:"internal"  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)  punctuation:.  method:status_code  punctuation:(  number:500  punctuation:)
  16 |     fi
     | keyword:fi
  17 | fi
@@ -36,8 +36,8 @@
     | keyword:when  parameter:req  punctuation:.  method:header  punctuation:(  string:"authorization"  punctuation:)  keyword:is  punctuation:{  variable:token  punctuation:}
  21 |         when token == "Bearer secret"
     | keyword:when  variable:token  operator:==  string:"Bearer secret"
- 22 |             <- json("\{\"secret\":\"vela-2026\"\}", r)
-    | keyword:<-  task:json  punctuation:(  string:"  escape:\{  escape:\"  string:secret  escape:\"  string::  escape:\"  string:vela-2026  escape:\"  escape:\}  string:"  punctuation:,  region:r  punctuation:)
+ 22 |             <- json_of(["secret": "vela-2026"] at r, r)
+    | keyword:<-  task:json_of  punctuation:(  punctuation:[  string:"secret"  punctuation::  string:"vela-2026"  punctuation:]  keyword:at  region:r  punctuation:,  region:r  punctuation:)
  23 |         fi
     | keyword:fi
  24 |     fi

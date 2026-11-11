@@ -377,6 +377,7 @@ finally</pre>
         <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
         <tr><td><code>f(x) at r</code>, <code>f(x)@r</code></td><td>the region a task or method takes last, given after the call: <code>at r</code> covers everything before it (a whole <code>+</code> chain), <code>@r</code> only the call right before it (see <a href="#region-after-call">The region after a call</a>)</td></tr>
         <tr><td><code>x.str() at r</code>, <code>x.str(r)</code>, <code>text(x) at r</code></td><td>a value as text in region <code>r</code> (see <a href="#str">Values as text</a>)</td></tr>
+        <tr><td><code>x.json() at r</code>, <code>x.json(r)</code>, <code>to_json(x, r)</code></td><td>a value as JSON text in region <code>r</code> (see <a href="#json">Values as JSON</a>)</td></tr>
         <tr><td><code>"n = {n}" at r</code>, <code>"n = {n}"@r</code></td><td>text holding values, in region <code>r</code>; <code>\{</code> and <code>\}</code> write braces (see <a href="#interpolation">Text holding values</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>xs.added(v) at r</code>, <code>xs.without(i) at r</code>, <code>m.added(k, v)</code>, <code>m.without(k)</code></td><td>a new slice or map with one change, a complete copy, leaving the original as it was (see <a href="#added-without">A new slice with one change</a>)</td></tr>
@@ -1699,6 +1700,18 @@ show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyw
     show(<span class="string">"p = "</span>, p)                            <span class="comment">; the same line, with no region to name</span>
     show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment">; error: '+' joins text, but this value is int; turn it into text first …</span>
 <span class="keyword">fi</span></pre>
+      <p id="json">
+        <strong>Values as JSON.</strong> <code>x.json() at r</code> (or <code>x.json(r)</code>, <code>x.json()@r</code>, or
+        <code>to_json(x, r)</code> in <code>std/json</code>) turns a value into standard RFC 8259 JSON text in region <code>r</code>.
+        Numbers, booleans, and characters format according to JSON rules; text strings and characters are escaped and quoted with
+        standard JSON escapes (<code>\"</code>, <code>\\</code>, <code>\n</code>, <code>\t</code>, <code>\r</code>).
+        Arrays and slices serialize as <code>[v1,v2,…]</code>, and <code>maybe</code> serializes as <code>null</code> when <code>none</code>
+        or as its inner value.
+        Map literals serialize directly as JSON objects, <code>{"key":val,…}</code>, and shapes serialize their public fields directly as JSON objects
+        (omitting <code>priv</code> fields). A shape or kind can also define its own <code>json(r: region) -&gt; text@r</code> method.
+        In server development, <code>std/web</code> provides <code>json_of(value, r)</code> and <code>json_map(map, r)</code>
+        to return an HTTP <code>Response</code> with <code>application/json; charset=utf-8</code> directly without manual string interpolation.
+      </p>
       <p id="interpolation">
         <strong>Text holding values.</strong> A value in braces inside text, <code>"n = {n}" at r</code>, is turned into
         text as <code>n.str()</code> does and put in its place: <code>"{name} is {age}" at r</code> is new text in

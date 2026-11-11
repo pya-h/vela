@@ -196,6 +196,14 @@ shape Response
         <- Response { status: 200, reason: "OK", headers: hdrs, body_data: body }
     fi
 
+    shared json_of<T: shown>(val: T, r: region default) -> Response@r
+        <- Response.json(val.json(r), r)
+    fi
+
+    shared json_map<K: shown, V: shown>(map: [K: V]@r, r: region default) -> Response@r
+        <- Response.json(map.json(r), r)
+    fi
+
     shared stream(chunks: [text]@r, r: region default) -> Response@r
         flex hdrs = new [text: text]() at r
         hdrs["content-type"] = "text/plain; charset=utf-8"
@@ -260,6 +268,14 @@ fi
 
 task json(body: text@r, r: region default) -> Response@r
     <- Response.json(body, r)
+fi
+
+task json_of<T: shown>(val: T, r: region default) -> Response@r
+    <- Response.json_of(val, r)
+fi
+
+task json_map<K: shown, V: shown>(map: [K: V]@r, r: region default) -> Response@r
+    <- Response.json_map(map, r)
 fi
 
 task stream_response(chunks: [text]@r, r: region default) -> Response@r

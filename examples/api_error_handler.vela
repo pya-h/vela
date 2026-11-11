@@ -1,25 +1,25 @@
 ; A REST API demonstrating structured error handling with custom error handlers:
 ; routes can fail with WebError, and a custom error handler converts errors into
 ; consistent JSON error payloads instead of plain text responses.
-include std/web { Request, Response, WebError, Method, Router, json, router }
+include std/web { Request, Response, WebError, Method, Router, json, json_of, router }
 
 task handle_error(err: WebError@r, req: Request@r, r: region default) -> Response@r
     match err
     case WebError.RouteNotFound where_
-        <- json("\{\"error\":\"not_found\",\"path\":\"{where_}\"\}" at r, r).status_code(404)
+        <- json_of(["error": "not_found", "path": where_] at r, r).status_code(404)
     case WebError.Unauthorized why
-        <- json("\{\"error\":\"unauthorized\",\"detail\":\"{why}\"\}" at r, r).status_code(401)
+        <- json_of(["error": "unauthorized", "detail": why] at r, r).status_code(401)
     case WebError.BadRequest why
-        <- json("\{\"error\":\"bad_request\",\"detail\":\"{why}\"\}" at r, r).status_code(400)
+        <- json_of(["error": "bad_request", "detail": why] at r, r).status_code(400)
     case _
-        <- json("\{\"error\":\"internal\"\}", r).status_code(500)
+        <- json_of(["error": "internal"] at r, r).status_code(500)
     fi
 fi
 
 task get_secret(req: Request@r, r: region default) -> Response@r ~ WebError@r
     when req.header("authorization") is {token}
         when token == "Bearer secret"
-            <- json("\{\"secret\":\"vela-2026\"\}", r)
+            <- json_of(["secret": "vela-2026"] at r, r)
         fi
     fi
     <- fail WebError.Unauthorized("token invalid or missing")

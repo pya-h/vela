@@ -1,0 +1,72 @@
+shape User
+    id: int
+    name: text
+    active: bool
+fi
+
+shape Inner
+    val: int
+fi
+
+shape Outer
+    title: text
+    inner: Inner
+fi
+
+shape SecretBox
+    id: int
+    priv secret: text
+    balance: float
+fi
+
+shape Custom
+    x: int
+
+    json(r: region default) -> text@r
+        <- "custom({.x})" at r
+    fi
+fi
+
+task main()
+    region r default
+
+    ; 1. Primitives as JSON
+    show(42.json(r))
+    show((-17).json(r))
+    show(true.json(r))
+    show("hello world".json(r))
+    show("line1\nline2\t\"quoted\"".json(r))
+
+    ; 2. Shapes as JSON
+    fixed u = User { id: 1, name: "Alice", active: true }
+    show(u.json(r))
+
+    fixed nested = Outer { title: "nested", inner: Inner { val: 42 } }
+    show(nested.json(r))
+
+    fixed sb = SecretBox { id: 7, secret: "hidden", balance: 12.5 }
+    show(sb.json(r))
+
+    ; 3. Maps as JSON
+    fixed m = ["error": "not_found", "path": "/api/test"] at r
+    show(m.json(r))
+
+    fixed empty_map = new [text: text]() at r
+    show(empty_map.json(r))
+
+    ; 4. Slices & Maybe as JSON
+    fixed nums = [10, 20, 30, ...] at r
+    show(nums.json(r))
+
+    fixed users = [User { id: 1, name: "A", active: true }, User { id: 2, name: "B", active: false }, ...] at r
+    show(users.json(r))
+
+    fixed some_val: maybe int = 99
+    fixed none_val: maybe int = none
+    show(some_val.json(r))
+    show(none_val.json(r))
+
+    ; 5. Custom json method
+    fixed c = Custom { x: 123 }
+    show(c.json(r))
+fi

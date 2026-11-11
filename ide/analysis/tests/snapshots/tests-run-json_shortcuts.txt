@@ -1,0 +1,112 @@
+  1 | shape User
+    | keyword:shape  type:User
+  2 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  3 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  4 |     active: bool
+    | field:active  punctuation::  type-builtin:bool
+  5 | fi
+    | keyword:fi
+  7 | shape Inner
+    | keyword:shape  type:Inner
+  8 |     val: int
+    | field:val  punctuation::  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | shape Outer
+    | keyword:shape  type:Outer
+ 12 |     title: text
+    | field:title  punctuation::  type-builtin:text
+ 13 |     inner: Inner
+    | field:inner  punctuation::  type:Inner
+ 14 | fi
+    | keyword:fi
+ 16 | shape SecretBox
+    | keyword:shape  type:SecretBox
+ 17 |     id: int
+    | field:id  punctuation::  type-builtin:int
+ 18 |     priv secret: text
+    | keyword:priv  field:secret  punctuation::  type-builtin:text
+ 19 |     balance: float
+    | field:balance  punctuation::  type-builtin:float
+ 20 | fi
+    | keyword:fi
+ 22 | shape Custom
+    | keyword:shape  type:Custom
+ 23 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 25 |     json(r: region default) -> text@r
+    | method:json  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 26 |         <- "custom({.x})" at r
+    | keyword:<-  string:"custom({  punctuation:.  field:x  string:})"  keyword:at  region:r
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     region r default
+    | keyword:region  region:r  keyword:default
+ 33 |     ; 1. Primitives as JSON
+    | comment:; 1. Primitives as JSON
+ 34 |     show(42.json(r))
+    | builtin-fn:show  punctuation:(  number:42  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 35 |     show((-17).json(r))
+    | builtin-fn:show  punctuation:(  punctuation:(  operator:-  number:17  punctuation:)  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 36 |     show(true.json(r))
+    | builtin-fn:show  punctuation:(  keyword:true  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 37 |     show("hello world".json(r))
+    | builtin-fn:show  punctuation:(  string:"hello world"  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 38 |     show("line1\nline2\t\"quoted\"".json(r))
+    | builtin-fn:show  punctuation:(  string:"line1  escape:\n  string:line2  escape:\t  escape:\"  string:quoted  escape:\"  string:"  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 40 |     ; 2. Shapes as JSON
+    | comment:; 2. Shapes as JSON
+ 41 |     fixed u = User { id: 1, name: "Alice", active: true }
+    | keyword:fixed  variable:u  operator:=  type:User  punctuation:{  field:id  punctuation::  number:1  punctuation:,  field:name  punctuation::  string:"Alice"  punctuation:,  field:active  punctuation::  keyword:true  punctuation:}
+ 42 |     show(u.json(r))
+    | builtin-fn:show  punctuation:(  variable:u  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 44 |     fixed nested = Outer { title: "nested", inner: Inner { val: 42 } }
+    | keyword:fixed  variable:nested  operator:=  type:Outer  punctuation:{  field:title  punctuation::  string:"nested"  punctuation:,  field:inner  punctuation::  type:Inner  punctuation:{  field:val  punctuation::  number:42  punctuation:}  punctuation:}
+ 45 |     show(nested.json(r))
+    | builtin-fn:show  punctuation:(  variable:nested  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 47 |     fixed sb = SecretBox { id: 7, secret: "hidden", balance: 12.5 }
+    | keyword:fixed  variable:sb  operator:=  type:SecretBox  punctuation:{  field:id  punctuation::  number:7  punctuation:,  field:secret  punctuation::  string:"hidden"  punctuation:,  field:balance  punctuation::  number:12.5  punctuation:}
+ 48 |     show(sb.json(r))
+    | builtin-fn:show  punctuation:(  variable:sb  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 50 |     ; 3. Maps as JSON
+    | comment:; 3. Maps as JSON
+ 51 |     fixed m = ["error": "not_found", "path": "/api/test"] at r
+    | keyword:fixed  variable:m  operator:=  punctuation:[  string:"error"  punctuation::  string:"not_found"  punctuation:,  string:"path"  punctuation::  string:"/api/test"  punctuation:]  keyword:at  region:r
+ 52 |     show(m.json(r))
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 54 |     fixed empty_map = new [text: text]() at r
+    | keyword:fixed  variable:empty_map  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 55 |     show(empty_map.json(r))
+    | builtin-fn:show  punctuation:(  variable:empty_map  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 57 |     ; 4. Slices & Maybe as JSON
+    | comment:; 4. Slices & Maybe as JSON
+ 58 |     fixed nums = [10, 20, 30, ...] at r
+    | keyword:fixed  variable:nums  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 59 |     show(nums.json(r))
+    | builtin-fn:show  punctuation:(  variable:nums  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 61 |     fixed users = [User { id: 1, name: "A", active: true }, User { id: 2, name: "B", active: false }, ...] at r
+    | keyword:fixed  variable:users  operator:=  punctuation:[  type:User  punctuation:{  field:id  punctuation::  number:1  punctuation:,  field:name  punctuation::  string:"A"  punctuation:,  field:active  punctuation::  keyword:true  punctuation:}  punctuation:,  type:User  punctuation:{  field:id  punctuation::  number:2  punctuation:,  field:name  punctuation::  string:"B"  punctuation:,  field:active  punctuation::  keyword:false  punctuation:}  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 62 |     show(users.json(r))
+    | builtin-fn:show  punctuation:(  variable:users  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 64 |     fixed some_val: maybe int = 99
+    | keyword:fixed  variable:some_val  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:99
+ 65 |     fixed none_val: maybe int = none
+    | keyword:fixed  variable:none_val  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 66 |     show(some_val.json(r))
+    | builtin-fn:show  punctuation:(  variable:some_val  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 67 |     show(none_val.json(r))
+    | builtin-fn:show  punctuation:(  variable:none_val  punctuation:.  field:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 69 |     ; 5. Custom json method
+    | comment:; 5. Custom json method
+ 70 |     fixed c = Custom { x: 123 }
+    | keyword:fixed  variable:c  operator:=  type:Custom  punctuation:{  field:x  punctuation::  number:123  punctuation:}
+ 71 |     show(c.json(r))
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:json  punctuation:(  region:r  punctuation:)  punctuation:)
+ 72 | fi
+    | keyword:fi

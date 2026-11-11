@@ -3020,7 +3020,8 @@ impl Resolver<'_> {
             }
             ExprKind::Copy { value, .. }
             | ExprKind::Shortcut { value, .. }
-            | ExprKind::ToText { value, .. } => self.expr(value),
+            | ExprKind::ToText { value, .. }
+            | ExprKind::ToJson { value, .. } => self.expr(value),
         }
     }
 

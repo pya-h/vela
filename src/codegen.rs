@@ -316,6 +316,7 @@ impl Generator {
             ));
         }
         self.gen_writers(&used)?;
+        self.gen_json_writers(&used)?;
 
         let mut has_main = false;
         for item in items {
@@ -2505,6 +2506,232 @@ impl Generator {
         Ok(())
     }
 
+    fn gen_json_writers(&mut self, used: &UsedTypes) -> Result<()> {
+        for ty in &used.json_writes {
+            self.w.line(&format!(
+                "VELA__RT__MAYBE_UNUSED static void {}(vela__rt__writer* w, {} v);",
+                json_write_helper(ty),
+                written_c_type(ty)
+            ));
+        }
+        for ty in &used.jsons {
+            self.w.line(&format!(
+                "VELA__RT__MAYBE_UNUSED static vela__rt__text {}(vela__rt__region* r, {} v);",
+                json_helper(ty),
+                written_c_type(ty)
+            ));
+        }
+        for ty in &used.json_writes {
+            self.gen_json_writer(ty)?;
+        }
+        for ty in &used.jsons {
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static vela__rt__text {}(vela__rt__region* r, {} v)",
+                json_helper(ty),
+                written_c_type(ty)
+            ));
+            match ty {
+                Type::Named(owner, _) if self.has_own_json(owner) => self
+                    .w
+                    .line(&format!("return {};", self.own_json_call(owner, "r")?)),
+                _ => {
+                    self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
+                    self.w.line(&format!("{}(&w, v);", json_write_helper(ty)));
+                    self.w.line("return vela__rt__built(&w, r);");
+                }
+            }
+            self.w.close();
+        }
+        if !used.json_writes.is_empty() || !used.jsons.is_empty() {
+            self.w.blank();
+        }
+        Ok(())
+    }
+
+    fn has_own_json(&self, owner: &str) -> bool {
+        self.json_task(owner).is_some()
+    }
+
+    fn json_task(&self, owner: &str) -> Option<String> {
+        let given = match (self.shapes.get(owner), self.kinds.get(owner)) {
+            (Some(shape), _) => shape.given.as_slice(),
+            (None, Some(kind)) => kind.given.as_slice(),
+            (None, None) => &[],
+        };
+        json_task(owner, given, |task| self.hidden_params.contains_key(task))
+    }
+
+    fn own_json_call(&self, owner: &str, region: &str) -> Result<String> {
+        let method = self
+            .json_task(owner)
+            .ok_or_else(|| Error::internal(format!("no method 'json' of '{}' to call", owner)))?;
+        let value = if self.hidden_of(&method).first().copied().unwrap_or(false) {
+            "&v"
+        } else {
+            "v"
+        };
+        Ok(format!("{}({}, {})", mangle(&method), value, region))
+    }
+
+    fn gen_json_writer(&mut self, ty: &Type) -> Result<()> {
+        self.w.open(&format!(
+            "VELA__RT__MAYBE_UNUSED static void {}(vela__rt__writer* w, {} v)",
+            json_write_helper(ty),
+            written_c_type(ty)
+        ));
+        match ty {
+            Type::Array(items, _) | Type::Slice(items, _) => {
+                let count = match ty {
+                    Type::Array(_, count) => count.to_string(),
+                    _ => "v.len".to_string(),
+                };
+                self.w.line("VELA__RT__PUT(w, \"[\");");
+                self.w
+                    .open(&format!("for (int64_t i = 0; i < {}; i++)", count));
+                self.w.open("if (i > 0)");
+                self.w.line("VELA__RT__PUT(w, \",\");");
+                self.w.close();
+                self.w.line(&self.put_json_item(items, "v.items[i]"));
+                self.w.close();
+                self.w.line("VELA__RT__PUT(w, \"]\");");
+            }
+            Type::Map(key, value, _) => {
+                self.w.open("if (v->live == 0)");
+                self.w.line("VELA__RT__PUT(w, \"{}\");");
+                self.w.line("return;");
+                self.w.close();
+                self.w.line("VELA__RT__PUT(w, \"{\");");
+                self.w.line("bool first = true;");
+                self.w.open("for (int64_t i = 0; i < v->used; i++)");
+                self.w.open("if (v->entries[i].hash == 0)");
+                self.w.line("continue;");
+                self.w.close();
+                self.w.open("if (!first)");
+                self.w.line("VELA__RT__PUT(w, \",\");");
+                self.w.close();
+                self.w.line("first = false;");
+                if matches!(&**key, Type::Text(_)) {
+                    self.w.line("vela__rt__put_json_text(w, v->entries[i].key);");
+                } else {
+                    self.w.line("VELA__RT__PUT(w, \"\\\"\");");
+                    self.w.line(&self.put_item(key, "v->entries[i].key"));
+                    self.w.line("VELA__RT__PUT(w, \"\\\"\");");
+                }
+                self.w.line("VELA__RT__PUT(w, \":\");");
+                self.w.line(&self.put_json_item(value, "v->entries[i].value"));
+                self.w.close();
+                self.w.line("VELA__RT__PUT(w, \"}\");");
+            }
+            Type::Tuple(items) => {
+                self.w.line("VELA__RT__PUT(w, \"[\");");
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        self.w.line("VELA__RT__PUT(w, \",\");");
+                    }
+                    self.w
+                        .line(&self.put_json_item(item, &format!("v.{}", tuple_member(i))));
+                }
+                self.w.line("VELA__RT__PUT(w, \"]\");");
+            }
+            Type::Maybe(inner) => {
+                let (empty, value) = if is_pointer(inner) {
+                    ("v == NULL", "v".to_string())
+                } else {
+                    ("!v.has", "v.value".to_string())
+                };
+                self.w.open(&format!("if ({})", empty));
+                self.w.line("VELA__RT__PUT(w, \"null\");");
+                self.w.line("return;");
+                self.w.close();
+                self.w.line(&self.put_json_item(inner, &value));
+            }
+            Type::Named(owner, _) if self.has_own_json(owner) => {
+                self.w
+                    .line("vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };");
+                self.w.line(&format!(
+                    "vela__rt__put_text(w, {});",
+                    self.own_json_call(owner, "r")?
+                ));
+                self.w.line("vela__rt__region_free(r);");
+            }
+            Type::Named(name, _) if self.shapes.contains_key(name) => {
+                let fields: Vec<Field> = self
+                    .shapes
+                    .get(name)
+                    .map(|shape| {
+                        shape
+                            .fields
+                            .iter()
+                            .filter(|field| !field.private)
+                            .cloned()
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if fields.is_empty() {
+                    self.w.line("(void)v;");
+                    self.w.line("VELA__RT__PUT(w, \"{}\");");
+                } else {
+                    self.w.line("VELA__RT__PUT(w, \"{\");");
+                    for (i, field) in fields.iter().enumerate() {
+                        if i > 0 {
+                            self.w.line("VELA__RT__PUT(w, \",\");");
+                        }
+                        self.w.line(&format!(
+                            "VELA__RT__PUT(w, \"\\\"{}\\\":\");",
+                            field.name
+                        ));
+                        self.w.line(
+                            &self.put_json_item(&field.ty, &format!("v.{}", c_ident(&field.name))),
+                        );
+                    }
+                    self.w.line("VELA__RT__PUT(w, \"}\");");
+                }
+            }
+            Type::Named(name, _) if self.kinds.contains_key(name) => {
+                let Some(kind) = self.kinds.get(name).cloned() else {
+                    return Err(Error::internal(format!("no kind '{}' to write as json", name)));
+                };
+                self.w.open("switch (v.tag)");
+                for variant in &kind.variants {
+                    self.w
+                        .line(&format!("case {}:", tag_value(&kind.name, &variant.tag)));
+                    if variant.payload.is_empty() {
+                        self.w.line(&format!("    VELA__RT__PUT(w, \"\\\"{}\\\"\");", variant.tag));
+                    } else {
+                        self.w.line(&format!("    VELA__RT__PUT(w, \"{{\\\"tag\\\":\\\"{}\\\"\");", variant.tag));
+                        for field in &variant.payload {
+                            self.w.line(&format!("    VELA__RT__PUT(w, \",\\\"{}\\\":\");", field.name));
+                            self.w.line(&format!(
+                                "    {}",
+                                self.put_json_item(
+                                    &field.ty,
+                                    &format!(
+                                        "v.data.{}.{}",
+                                        c_ident(&variant.tag),
+                                        c_ident(&field.name)
+                                    )
+                                )
+                            ));
+                        }
+                        self.w.line("    VELA__RT__PUT(w, \"}\");");
+                    }
+                    self.w.line("    break;");
+                }
+                self.w.line("default:");
+                self.w.line("    break;");
+                self.w.close();
+            }
+            other => {
+                return Err(Error::internal(format!(
+                    "writing a value of type {} as json",
+                    other
+                )));
+            }
+        }
+        self.w.close();
+        Ok(())
+    }
+
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
         let alters = self.altering.contains(&t.name);
@@ -4573,6 +4800,7 @@ impl Generator {
             ExprKind::Scan { args, region, .. } => self.gen_scan(e, args, region.as_deref(), false),
             ExprKind::Join { parts, region, .. } => self.gen_join(e, parts, region),
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
+            ExprKind::ToJson { value, region, .. } => self.gen_to_json(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
                 e.span,
@@ -4683,6 +4911,13 @@ impl Generator {
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
         let _ = e;
         let helper = text_function(value.ty()?);
+        let value = self.gen_expr(value)?;
+        Ok(format!("{}({}, {})", helper, c_ident(region), value))
+    }
+
+    fn gen_to_json(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
+        let _ = e;
+        let helper = json_function(value.ty()?);
         let value = self.gen_expr(value)?;
         Ok(format!("{}({}, {})", helper, c_ident(region), value))
     }
@@ -6291,6 +6526,19 @@ impl Generator {
             _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
         }
     }
+
+    fn put_json_item(&self, ty: &Type, value: &str) -> String {
+        match ty {
+            Type::Uint64 => format!("vela__rt__put_uint(w, {});", value),
+            ty if ty.is_integer() => format!("vela__rt__put_int(w, (int64_t){});", value),
+            Type::Char => format!("vela__rt__put_json_char(w, {});", value),
+            ty if ty.is_float() => format!("vela__rt__put_float(w, (double){});", value),
+            Type::Bool => format!("vela__rt__put_bool(w, {});", value),
+            Type::Text(_) => format!("vela__rt__put_json_text(w, {});", value),
+            Type::None => "VELA__RT__PUT(w, \"null\");".to_string(),
+            _ => format!("{}(w, {});", json_write_helper(&ty.without_regions()), value),
+        }
+    }
 }
 
 fn str_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Option<String> {
@@ -6300,6 +6548,16 @@ fn str_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Optio
     }
     let source = owner.split("__of__").next().filter(|_| !given.is_empty())?;
     let made = instance_name(&method_name(source, STR), given);
+    exists(&made).then_some(made)
+}
+
+fn json_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Option<String> {
+    let own = method_name(owner, JSON);
+    if exists(&own) {
+        return Some(own);
+    }
+    let source = owner.split("__of__").next().filter(|_| !given.is_empty())?;
+    let made = instance_name(&method_name(source, JSON), given);
     exists(&made).then_some(made)
 }
 
@@ -6455,6 +6713,26 @@ fn scan_helper(ty: &Type) -> String {
     format!("vela__scan__{}", type_word(ty))
 }
 
+fn json_function(ty: &Type) -> String {
+    match ty {
+        Type::Uint64 => "vela__rt__uint_str".to_string(),
+        Type::Char => "vela__rt__json_char".to_string(),
+        ty if ty.is_integer() => "vela__rt__int_str".to_string(),
+        ty if ty.is_float() => "vela__rt__float_str".to_string(),
+        Type::Bool => "vela__rt__bool_str".to_string(),
+        Type::Text(_) => "vela__rt__json_text".to_string(),
+        other => json_helper(&other.without_regions()),
+    }
+}
+
+fn json_helper(ty: &Type) -> String {
+    format!("vela__json__{}", type_word(ty))
+}
+
+fn json_write_helper(ty: &Type) -> String {
+    format!("vela__json_write__{}", type_word(ty))
+}
+
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::Spread(inner) => has_prelude(inner),
@@ -6500,7 +6778,8 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Widen(inner)
         | ExprKind::Copy { value: inner, .. }
         | ExprKind::Shortcut { value: inner, .. }
-        | ExprKind::ToText { value: inner, .. } => has_prelude(inner),
+        | ExprKind::ToText { value: inner, .. }
+        | ExprKind::ToJson { value: inner, .. } => has_prelude(inner),
         ExprKind::MapOp { map, key: None, .. } => has_prelude(map),
         ExprKind::MapOp {
             map,
@@ -6559,6 +6838,9 @@ struct UsedTypes {
     compounds: TypeList,
     writes: TypeList,
     texts: TypeList,
+    jsons: TypeList,
+    json_writes: TypeList,
+    json_parts: HashMap<String, Vec<Type>>,
     parts: HashMap<String, Vec<Type>>,
     read: TypeList,
     scanned: TypeList,
@@ -6643,11 +6925,52 @@ impl UsedTypes {
         note(&mut self.texts, ty);
     }
 
+    fn note_json(&mut self, ty: &Type) {
+        if ty.is_numeric() || matches!(ty, Type::Char | Type::Bool | Type::Text(_)) {
+            return;
+        }
+        if !matches!(ty, Type::Named(name, _) if !self.json_parts.contains_key(name)) {
+            self.note_json_write(ty);
+        }
+        note(&mut self.jsons, ty);
+    }
+
+    fn note_json_write(&mut self, ty: &Type) {
+        let ty = ty.without_regions();
+        match &ty {
+            _ if ty.is_numeric() => return,
+            Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => return,
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
+                self.note_json_write(inner)
+            }
+            Type::Map(key, value, _) => {
+                self.note_json_write(key);
+                self.note_json_write(value);
+            }
+            Type::Tuple(items) => items.iter().for_each(|item| self.note_json_write(item)),
+            Type::Named(name, _) => {
+                if self.json_writes.contains(&ty) {
+                    return;
+                }
+                note(&mut self.json_writes, &ty);
+                for part in self.json_parts.get(name).cloned().unwrap_or_default() {
+                    self.note_json_write(&part);
+                }
+                return;
+            }
+            _ => return,
+        }
+        note(&mut self.json_writes, &ty);
+    }
+
     fn collect(items: &[Item]) -> UsedTypes {
         let mut used = UsedTypes {
             compounds: TypeList::default(),
             writes: TypeList::default(),
             texts: TypeList::default(),
+            jsons: TypeList::default(),
+            json_writes: TypeList::default(),
+            json_parts: HashMap::new(),
             parts: HashMap::new(),
             read: TypeList::default(),
             scanned: TypeList::default(),
@@ -6727,6 +7050,34 @@ impl UsedTypes {
                     if k.types.is_empty() && str_task(&k.name, &k.given, exists).is_none() =>
                 {
                     used.parts.insert(
+                        k.name.clone(),
+                        k.variants
+                            .iter()
+                            .flat_map(|v| v.payload.iter().map(|f| f.ty.clone()))
+                            .collect(),
+                    );
+                }
+                _ => {}
+            }
+        }
+        for item in items {
+            match item {
+                Item::Shape(s)
+                    if s.types.is_empty() && json_task(&s.name, &s.given, exists).is_none() =>
+                {
+                    used.json_parts.insert(
+                        s.name.clone(),
+                        s.fields
+                            .iter()
+                            .filter(|f| !f.private)
+                            .map(|f| f.ty.clone())
+                            .collect(),
+                    );
+                }
+                Item::Kind(k)
+                    if k.types.is_empty() && json_task(&k.name, &k.given, exists).is_none() =>
+                {
+                    used.json_parts.insert(
                         k.name.clone(),
                         k.variants
                             .iter()
@@ -7289,6 +7640,12 @@ impl UsedTypes {
                 }
                 self.expr(value)
             }
+            ExprKind::ToJson { value, .. } => {
+                if let Some(ty) = &value.ty {
+                    self.note_json(ty);
+                }
+                self.expr(value)
+            }
             ExprKind::Scan { args, .. } => {
                 match (&e.ty, args.len()) {
                     (Some(ty @ Type::Or(number, _)), 2) => {
@@ -7475,7 +7832,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Join { parts, region, .. } => {
             region == name || parts.iter().any(|part| expr_reads(part, name))
         }
-        ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),
+        ExprKind::ToText { value, region, .. }
+        | ExprKind::ToJson { value, region, .. } => region == name || expr_reads(value, name),
         ExprKind::Copy { value, region, .. } | ExprKind::Shortcut { value, region, .. } => {
             region.as_deref() == Some(name) || expr_reads(value, name)
         }

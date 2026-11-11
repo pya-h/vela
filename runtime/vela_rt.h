@@ -1108,6 +1108,52 @@ static inline vela__rt__text vela__rt__built(vela__rt__writer* w, vela__rt__regi
     return t;
 }
 
+/* Escapes a string according to RFC 8259 JSON format. */
+static inline void vela__rt__put_json_text(vela__rt__writer* w, vela__rt__text x) {
+    VELA__RT__PUT(w, "\"");
+    size_t from = 0;
+    size_t len = x.len < 0 ? 0 : (size_t)x.len;
+    for (size_t i = 0; i < len; i++) {
+        uint8_t c = (uint8_t)x.bytes[i];
+        const char* escape = NULL;
+        switch (c) {
+        case '"': escape = "\\\""; break;
+        case '\\': escape = "\\\\"; break;
+        case '\n': escape = "\\n"; break;
+        case '\t': escape = "\\t"; break;
+        case '\r': escape = "\\r"; break;
+        case '\b': escape = "\\b"; break;
+        case '\f': escape = "\\f"; break;
+        default: break;
+        }
+        if (escape != NULL) {
+            vela__rt__put(w, x.bytes + from, i - from);
+            vela__rt__put(w, escape, 2);
+            from = i + 1;
+        }
+    }
+    vela__rt__put(w, x.bytes + from, len - from);
+    VELA__RT__PUT(w, "\"");
+}
+
+static inline vela__rt__text vela__rt__json_text(vela__rt__region* r, vela__rt__text x) {
+    vela__rt__writer w = VELA__RT__BUILDER;
+    vela__rt__put_json_text(&w, x);
+    return vela__rt__built(&w, r);
+}
+
+static inline void vela__rt__put_json_char(vela__rt__writer* w, uint8_t c) {
+    char buf[1] = { (char)c };
+    vela__rt__text t = { .bytes = buf, .len = 1 };
+    vela__rt__put_json_text(w, t);
+}
+
+static inline vela__rt__text vela__rt__json_char(vela__rt__region* r, uint8_t c) {
+    char buf[1] = { (char)c };
+    vela__rt__text t = { .bytes = buf, .len = 1 };
+    return vela__rt__json_text(r, t);
+}
+
 /* Iterative worklist + address table preserves aliasing and cycles without recursing on C stack. */
 
 struct vela__rt__copy;

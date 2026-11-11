@@ -309,6 +309,8 @@ pub const COPY: &str = "copy";
 
 pub const STR: &str = "str";
 
+pub const JSON: &str = "json";
+
 pub const NEW_WORD: &str = "new";
 
 pub const MACRO: &str = "macro";
@@ -1559,6 +1561,11 @@ pub enum ExprKind {
         region_span: Span,
     },
     ToText {
+        value: Box<Expr>,
+        region: String,
+        region_span: Span,
+    },
+    ToJson {
         value: Box<Expr>,
         region: String,
         region_span: Span,
