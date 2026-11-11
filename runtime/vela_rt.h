@@ -3358,7 +3358,11 @@ static inline bool vela__rt__is_interactive(void) {
     if (getenv("VELA_TEST") != NULL) {
         return false;
     }
-    return true;
+#if !defined(_WIN32)
+    return isatty(0) != 0 && isatty(1) != 0;
+#else
+    return _isatty(0) != 0 && _isatty(1) != 0;
+#endif
 }
 
 static inline bool vela__rt__web_is_interactive(void) {
@@ -3984,6 +3988,12 @@ static inline int64_t vela__rt__gui_window_open(vela__rt__text title, int64_t wi
         if (vela__rt__init_x11()) {
             const char* dname = getenv("DISPLAY");
             void* dpy = vela__rt__x11.XOpenDisplay(dname);
+            if (!dpy && (!dname || dname[0] == '\0')) {
+                dpy = vela__rt__x11.XOpenDisplay(":0");
+                if (!dpy) {
+                    dpy = vela__rt__x11.XOpenDisplay(":1");
+                }
+            }
             if (dpy) {
                 int screen = vela__rt__x11.XDefaultScreen(dpy);
                 unsigned long root = vela__rt__x11.XRootWindow(dpy, screen);
@@ -4001,15 +4011,25 @@ static inline int64_t vela__rt__gui_window_open(vela__rt__text title, int64_t wi
                 vela__rt__x11.XSelectInput(dpy, xwin, mask);
                 void* gc = vela__rt__x11.XCreateGC(dpy, xwin, 0, NULL);
                 win->x11_buffer = (uint32_t*)malloc((size_t)(width * height) * sizeof(uint32_t));
-                vela__rt__x11_image* img = vela__rt__x11.XCreateImage(dpy, visual, (unsigned int)depth, 2 /* ZPixmap */, 0, (char*)win->x11_buffer, (unsigned int)width, (unsigned int)height, 32, (int)(width * 4));
-                vela__rt__x11.XMapWindow(dpy, xwin);
-                vela__rt__x11.XFlush(dpy);
+                vela__rt__x11_image* img = (gc && win->x11_buffer) ? vela__rt__x11.XCreateImage(dpy, visual, (unsigned int)depth, 2 /* ZPixmap */, 0, (char*)win->x11_buffer, (unsigned int)width, (unsigned int)height, 32, (int)(width * 4)) : NULL;
+                if (gc && win->x11_buffer && img) {
+                    vela__rt__x11.XMapWindow(dpy, xwin);
+                    vela__rt__x11.XFlush(dpy);
 
-                win->x11_display = dpy;
-                win->x11_window = xwin;
-                win->x11_gc = gc;
-                win->x11_ximage = img;
-                win->wm_delete_window = wm_del;
+                    win->x11_display = dpy;
+                    win->x11_window = xwin;
+                    win->x11_gc = gc;
+                    win->x11_ximage = img;
+                    win->wm_delete_window = wm_del;
+                } else {
+                    if (gc) vela__rt__x11.XFreeGC(dpy, gc);
+                    if (win->x11_buffer) {
+                        free(win->x11_buffer);
+                        win->x11_buffer = NULL;
+                    }
+                    vela__rt__x11.XDestroyWindow(dpy, xwin);
+                    vela__rt__x11.XCloseDisplay(dpy);
+                }
             }
         }
     }

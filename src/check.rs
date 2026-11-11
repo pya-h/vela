@@ -12348,18 +12348,7 @@ impl Checker {
                 self.check_closure(&lambda, &region, mode, &places, span)
             }
             ExprKind::Kept { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
-            ExprKind::TaskValue(name) => {
-                if is_lambda(name) {
-                    let seen = self
-                        .scopes
-                        .iter()
-                        .flat_map(|scope| scope.names.keys().cloned())
-                        .collect();
-                    self.lambda_outer.insert(name.clone(), seen);
-                    self.note_lambda_loops(name);
-                }
-                self.task_value_type(name, span)
-            }
+            ExprKind::TaskValue(name) => self.check_task_value(name, span),
             ExprKind::Invoke { callee, args } => self.check_invoke(callee, args, span),
             ExprKind::Var(name)
                 if self.lookup(name).is_none()
@@ -12369,53 +12358,7 @@ impl Checker {
                 Ok(Type::Unknown)
             }
             ExprKind::Var(name) => self.check_var(name, span),
-            ExprKind::Field(base, field) if self.group_of(base).is_some() => {
-                if field == GROUP_TUPLE_WRITTEN {
-                    *field = GROUP_TUPLE.to_string();
-                }
-                self.check_group_member(base, field, span)
-            }
-            ExprKind::Field(base, field) if field == GROUP_TUPLE_WRITTEN => {
-                let message = match &base.kind {
-                    ExprKind::Var(name) => format!("'({0}...)' makes a tuple of a group's values, as '(args...)' does, and '{0}' is no group's values", name),
-                    _ => "'(...)' around a value and three dots makes a tuple of a group's values, as '(args...)' does, and this is no group's values".to_string(),
-                };
-                err(base.span, message)
-            }
-            ExprKind::Field(base, field) => {
-                if !self.called_on_a_value()
-                    && matches!(&base.kind, ExprKind::Var(name) if name == THIS)
-                {
-                    return err(
-                        span,
-                        self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)),
-                    );
-                }
-                let reached = std::mem::take(&mut self.reaching);
-                let called = std::mem::take(&mut self.calling_field);
-                self.reading_length = field == LEN && matches!(base.kind, ExprKind::Var(_));
-                self.reaching = matches!(base.kind, ExprKind::Var(_) | ExprKind::Field(..));
-                let base_ty = self.check_expr(base);
-                self.reaching = false;
-                self.reading_length = false;
-                let ty = self.field_type(&base_ty?, field, span)?;
-                if held_value(&ty, &self.held_types) && !reached && !called {
-                    return err(
-                        span,
-                        format!(
-                            "'{0}' is {1}, which changes what it keeps and is never copied, so it stays in the value holding it: {2}",
-                            field,
-                            held_phrase(&ty),
-                            if held_lambda(&ty) {
-                                format!("call it, '….{}(…)'", field)
-                            } else {
-                                format!("use its fields and methods, as '….{}.x', or give it as a place, '&….{}'", field, field)
-                            }
-                        ),
-                    );
-                }
-                Ok(ty)
-            }
+            ExprKind::Field(base, field) => self.check_field_access(base, field, span),
             ExprKind::Index(base, index) => {
                 let base_ty = self.check_expr(base)?;
                 self.check_index(base, &base_ty, index, span)
@@ -12530,6 +12473,74 @@ impl Checker {
                 format!("the method call '{}' was not rewritten", name),
             )),
         }
+    }
+
+    #[inline(never)]
+    fn check_task_value(&mut self, name: &str, span: Span) -> Result<Type> {
+        if is_lambda(name) {
+            let seen = self
+                .scopes
+                .iter()
+                .flat_map(|scope| scope.names.keys().cloned())
+                .collect();
+            self.lambda_outer.insert(name.to_string(), seen);
+            self.note_lambda_loops(name);
+        }
+        self.task_value_type(name, span)
+    }
+
+    #[inline(never)]
+    fn check_field_access(
+        &mut self,
+        base: &mut Expr,
+        field: &mut String,
+        span: Span,
+    ) -> Result<Type> {
+        if self.group_of(base).is_some() {
+            if field == GROUP_TUPLE_WRITTEN {
+                *field = GROUP_TUPLE.to_string();
+            }
+            return self.check_group_member(base, field, span);
+        }
+        if field == GROUP_TUPLE_WRITTEN {
+            let message = match &base.kind {
+                ExprKind::Var(name) => format!("'({0}...)' makes a tuple of a group's values, as '(args...)' does, and '{0}' is no group's values", name),
+                _ => "'(...)' around a value and three dots makes a tuple of a group's values, as '(args...)' does, and this is no group's values".to_string(),
+            };
+            return err(base.span, message);
+        }
+        if !self.called_on_a_value()
+            && matches!(&base.kind, ExprKind::Var(name) if name == THIS)
+        {
+            return err(
+                span,
+                self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)),
+            );
+        }
+        let reached = std::mem::take(&mut self.reaching);
+        let called = std::mem::take(&mut self.calling_field);
+        self.reading_length = field == LEN && matches!(base.kind, ExprKind::Var(_));
+        self.reaching = matches!(base.kind, ExprKind::Var(_) | ExprKind::Field(..));
+        let base_ty = self.check_expr(base);
+        self.reaching = false;
+        self.reading_length = false;
+        let ty = self.field_type(&base_ty?, field, span)?;
+        if held_value(&ty, &self.held_types) && !reached && !called {
+            return err(
+                span,
+                format!(
+                    "'{0}' is {1}, which changes what it keeps and is never copied, so it stays in the value holding it: {2}",
+                    field,
+                    held_phrase(&ty),
+                    if held_lambda(&ty) {
+                        format!("call it, '….{}(…)'", field)
+                    } else {
+                        format!("use its fields and methods, as '….{}.x', or give it as a place, '&….{}'", field, field)
+                    }
+                ),
+            );
+        }
+        Ok(ty)
     }
 
     /// Split from `task_call_setup` because `check_call_args` recurses through nested calls and must keep small stack frames.
@@ -16083,8 +16094,26 @@ impl Checker {
         {
             return self.check_address_compare(l, r, span);
         }
-        let mut lt = self.check_expr(l)?;
-        let mut rt = self.check_expr(r)?;
+        let lt = self.check_expr(l)?;
+        let rt = self.check_expr(r)?;
+        self.check_binary_expr_typed(expr, op, lt, rt, span)
+    }
+
+    #[inline(never)]
+    fn check_binary_expr_typed(
+        &mut self,
+        expr: &mut Expr,
+        op: BinaryOp,
+        mut lt: Type,
+        mut rt: Type,
+        span: Span,
+    ) -> Result<Type> {
+        let ExprKind::Binary(_, l, r) = &mut expr.kind else {
+            return Err(Error::internal_at(
+                span,
+                "a binary operation that is not one",
+            ));
+        };
         if holds_untold(&lt) && !holds_untold(&rt) {
             self.settle_variant(l, &rt)?;
             lt = l.ty.clone().unwrap_or(lt);
@@ -18480,17 +18509,17 @@ impl Checker {
             .map(|region| (region.clone(), region))
             .into_iter()
             .collect();
-        let mut found = CallTypes {
+        let mut found = Box::new(CallTypes {
             given,
             shown: HashMap::new(),
             regions,
             taken: HashMap::new(),
             untold: false,
-        };
+        });
         // Argument checking and settling live in separate helpers to keep recursive call stack frames small.
-        let mut info = info.clone();
+        let mut info = Box::new(info.clone());
         self.check_args_of(task, args, &mut info, &mut found)?;
-        self.settle_call_args(span, task, written, args, &info, found)
+        self.settle_call_args(span, task, written, args, &info, *found)
     }
 
     fn note_group_taken(
@@ -18603,141 +18632,90 @@ impl Checker {
             (Some(first), Some(last)) => first < last,
             _ => false,
         };
-        let is_shortcut = |i: usize| args.get(i).is_some_and(|arg| self.is_shortcut_lambda(arg));
-        let mut order: Vec<usize> =
-            (0..args.len().min(info.params.len()).min(info.passing.len())).collect();
-        order.sort_by_key(|&i| {
-            (
-                reorder_groups && info.params.get(i).is_some_and(|(_, ty)| group_item(ty)),
-                is_shortcut(i),
-            )
-        });
-        let shortcuts: Vec<bool> = (0..args.len()).map(is_shortcut).collect();
-        for i in order {
-            // Check array-vs-slice mismatches before trailing shortcut lambdas so error attribution points at the array.
-            if shortcuts.get(i).copied().unwrap_or(false)
-                && let Some((at, got)) = (0..args.len())
-                    .filter(|&j| !shortcuts.get(j).copied().unwrap_or(false))
-                    .find_map(|j| {
-                        let (_, want) = info.params.get(j)?;
-                        let arg = args.get(j)?;
-                        let got = arg.ty.as_ref()?;
-                        matches!((got, want), (Type::Array(..), Type::Slice(..)))
-                            .then(|| (arg.span, got.clone()))
-                    })
-            {
-                if let Some(lambda) = args
-                    .get(i)
-                    .and_then(|arg| self.shortcut_lambda_name(arg))
-                    .map(str::to_string)
+        let has_shortcut = args.iter().any(|arg| self.is_shortcut_lambda(arg));
+        let (params, passing_list, types) = (&mut info.params, &mut info.passing, &info.types);
+        if reorder_groups || has_shortcut {
+            let is_shortcut = |i: usize| args.get(i).is_some_and(|arg| self.is_shortcut_lambda(arg));
+            let mut order: Vec<usize> =
+                (0..args.len().min(params.len()).min(passing_list.len())).collect();
+            order.sort_by_key(|&i| {
+                (
+                    reorder_groups && params.get(i).is_some_and(|(_, ty)| group_item(ty)),
+                    is_shortcut(i),
+                )
+            });
+            let shortcuts: Vec<bool> = (0..args.len()).map(is_shortcut).collect();
+            for i in order {
+                // Check array-vs-slice mismatches before trailing shortcut lambdas so error attribution points at the array.
+                if shortcuts.get(i).copied().unwrap_or(false)
+                    && let Some((at, got)) = (0..args.len())
+                        .filter(|&j| !shortcuts.get(j).copied().unwrap_or(false))
+                        .find_map(|j| {
+                            let (_, want) = params.get(j)?;
+                            let arg = args.get(j)?;
+                            let got = arg.ty.as_ref()?;
+                            matches!((got, want), (Type::Array(..), Type::Slice(..)))
+                                .then(|| (arg.span, got.clone()))
+                        })
                 {
-                    self.inferred_shortcut_lambdas.insert(lambda);
-                }
-                return err(
-                    at,
-                    format!(
-                        "expected a slice, got {}; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'",
-                        got
-                    ),
-                );
-            }
-            let (Some(arg), Some((param, ty)), Some(passing)) = (
-                args.get_mut(i),
-                info.params.get_mut(i),
-                info.passing.get_mut(i),
-            ) else {
-                continue;
-            };
-            if *ty != Type::Region {
-                if let Type::Param(name) = &*ty
-                    && name.contains(GROUP_ITEM)
-                    && let Some(place) = self.group_place(task, arg, param, name, found)?
-                {
-                    *passing = place;
-                }
-                let expected = in_copy(ty, &found.given);
-                self.prepare_shortcut_lambda(arg, &expected)?;
-                // A method is called on a held value where it is: its receiver only reads it, and a method that
-                // changes it takes it as a place.
-                self.reaching = param == THIS
-                    && matches!(arg.kind, ExprKind::Var(_) | ExprKind::Field(..));
-                let actual = if self.filled_default(task, i, arg) {
-                    let outer =
-                        std::mem::replace(&mut self.current_module, module_of(task).to_string());
-                    let actual =
-                        self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param);
-                    self.current_module = outer;
-                    self.reaching = false;
-                    actual?
-                } else {
-                    self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?
-                };
-                self.reaching = false;
-                // Coerce slices into `SliceIter` where a bound expects `std/collections.Iterator`.
-                let actual = match (&*ty, &actual) {
-                    (Type::Param(name), Type::Slice(..)) => {
-                        let bounded = info.types.iter().any(|type_param| {
-                            type_param.name == *name
-                                && type_param
-                                    .patterns
-                                    .iter()
-                                    .any(|followed| followed.name == "std/collections.Iterator")
-                        });
-                        match bounded {
-                            false => actual,
-                            true => {
-                                let at = arg.span;
-                                let taken = std::mem::replace(&mut arg.kind, ExprKind::NoneLit);
-                                let mut iter = Expr::new(
-                                    ExprKind::StructInit {
-                                        name: "std/collections.SliceIter".to_string(),
-                                        types: Vec::new(),
-                                        fields: vec![
-                                            FieldInit {
-                                                name: "items".to_string(),
-                                                span: at,
-                                                value: Expr::new(taken, at),
-                                                filled: false,
-                                            },
-                                            FieldInit {
-                                                name: "place".to_string(),
-                                                span: at,
-                                                value: Expr::new(ExprKind::IntLit(0), at),
-                                                filled: false,
-                                            },
-                                        ],
-                                    },
-                                    at,
-                                );
-                                let iter_ty = self.check_expr(&mut iter)?;
-                                arg.kind = iter.kind;
-                                arg.ty = Some(iter_ty.clone());
-                                iter_ty
-                            }
-                        }
+                    if let Some(lambda) = args
+                        .get(i)
+                        .and_then(|arg| self.shortcut_lambda_name(arg))
+                        .map(str::to_string)
+                    {
+                        self.inferred_shortcut_lambdas.insert(lambda);
                     }
-                    _ => actual,
-                };
-                self.match_regions(ty, &actual, &mut found.regions);
-                Self::note_group_taken(ty, &actual, arg.span, found)?;
-                found.untold |= matches!(ty, Type::Task(_)) && actual.unknown();
-                if let (Type::Task(_), Type::Task(task)) = (&*ty, &actual)
-                    && (task
-                        .params
-                        .iter()
-                        .chain([&task.ret])
-                        .any(|ty| !ty.regions().is_empty())
-                        || task.taken.iter().any(|how| matches!(how, Taken::Region(_))))
-                {
-                    deferred.push((ty.clone(), actual));
-                    continue;
+                    return err(
+                        at,
+                        format!(
+                            "expected a slice, got {}; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'",
+                            got
+                        ),
+                    );
                 }
-                self.match_params(ty, &actual, &mut found.given);
-                self.match_params(ty, &actual, &mut found.shown);
-                self.solve_bounds(&info.types, &mut found.given);
-                continue;
+                let (Some(arg), Some((param, ty)), Some(passing)) = (
+                    args.get_mut(i),
+                    params.get_mut(i),
+                    passing_list.get_mut(i),
+                ) else {
+                    continue;
+                };
+                self.check_single_arg(
+                    task,
+                    what,
+                    i,
+                    arg,
+                    param,
+                    ty,
+                    passing,
+                    types,
+                    found,
+                    &mut deferred,
+                )?;
             }
-            self.check_region_argument(task, arg, param, &mut found.regions)?;
+        } else {
+            let n = args.len().min(params.len()).min(passing_list.len());
+            for i in 0..n {
+                let (Some(arg), Some((param, ty)), Some(passing)) = (
+                    args.get_mut(i),
+                    params.get_mut(i),
+                    passing_list.get_mut(i),
+                ) else {
+                    continue;
+                };
+                self.check_single_arg(
+                    task,
+                    what,
+                    i,
+                    arg,
+                    param,
+                    ty,
+                    passing,
+                    types,
+                    found,
+                    &mut deferred,
+                )?;
+            }
         }
         for (ty, actual) in deferred {
             let actual = in_callers_regions(&ty, &actual, &found.given);
@@ -18746,6 +18724,121 @@ impl Checker {
         }
         self.solve_bounds(&info.types, &mut found.given);
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
+    fn check_single_arg(
+        &mut self,
+        task: &str,
+        what: &str,
+        i: usize,
+        arg: &mut Expr,
+        param: &str,
+        ty: &mut Type,
+        passing: &mut Passing,
+        types: &[TypeParam],
+        found: &mut CallTypes,
+        deferred: &mut Vec<(Type, Type)>,
+    ) -> Result<()> {
+        if *ty != Type::Region {
+            if let Type::Param(name) = &*ty
+                && name.contains(GROUP_ITEM)
+                && let Some(place) = self.group_place(task, arg, param, name, found)?
+            {
+                *passing = place;
+            }
+            let expected = in_copy(ty, &found.given);
+            self.prepare_shortcut_lambda(arg, &expected)?;
+            // A method is called on a held value where it is: its receiver only reads it, and a method that
+            // changes it takes it as a place.
+            self.reaching = param == THIS
+                && matches!(arg.kind, ExprKind::Var(_) | ExprKind::Field(..));
+            let callee_desc = format!("{} '{}'", what, task);
+            let actual = if self.filled_default(task, i, arg) {
+                let outer =
+                    std::mem::replace(&mut self.current_module, module_of(task).to_string());
+                let actual =
+                    self.check_argument(arg, *passing, &callee_desc, param);
+                self.current_module = outer;
+                self.reaching = false;
+                actual?
+            } else {
+                let actual = self.check_argument(arg, *passing, &callee_desc, param);
+                self.reaching = false;
+                actual?
+            };
+            let actual = self.coerce_slice_iter(arg, ty, actual, types)?;
+            self.match_regions(ty, &actual, &mut found.regions);
+            Self::note_group_taken(ty, &actual, arg.span, found)?;
+            found.untold |= matches!(ty, Type::Task(_)) && actual.unknown();
+            if let (Type::Task(_), Type::Task(task)) = (&*ty, &actual)
+                && (task
+                    .params
+                    .iter()
+                    .chain([&task.ret])
+                    .any(|ty| !ty.regions().is_empty())
+                    || task.taken.iter().any(|how| matches!(how, Taken::Region(_))))
+            {
+                deferred.push((ty.clone(), actual));
+                return Ok(());
+            }
+            self.match_params(ty, &actual, &mut found.given);
+            self.match_params(ty, &actual, &mut found.shown);
+            self.solve_bounds(types, &mut found.given);
+            return Ok(());
+        }
+        self.check_region_argument(task, arg, param, &mut found.regions)
+    }
+
+    #[inline(never)]
+    fn coerce_slice_iter(
+        &mut self,
+        arg: &mut Expr,
+        ty: &Type,
+        actual: Type,
+        types: &[TypeParam],
+    ) -> Result<Type> {
+        let (Type::Param(name), Type::Slice(..)) = (ty, &actual) else {
+            return Ok(actual);
+        };
+        let bounded = types.iter().any(|type_param| {
+            type_param.name == *name
+                && type_param
+                    .patterns
+                    .iter()
+                    .any(|followed| followed.name == "std/collections.Iterator")
+        });
+        if !bounded {
+            return Ok(actual);
+        }
+        let at = arg.span;
+        let taken = std::mem::replace(&mut arg.kind, ExprKind::NoneLit);
+        let mut iter = Expr::new(
+            ExprKind::StructInit {
+                name: "std/collections.SliceIter".to_string(),
+                types: Vec::new(),
+                fields: vec![
+                    FieldInit {
+                        name: "items".to_string(),
+                        span: at,
+                        value: Expr::new(taken, at),
+                        filled: false,
+                    },
+                    FieldInit {
+                        name: "place".to_string(),
+                        span: at,
+                        value: Expr::new(ExprKind::IntLit(0), at),
+                        filled: false,
+                    },
+                ],
+            },
+            at,
+        );
+        let iter_ty = self.check_expr(&mut iter)?;
+        arg.kind = iter.kind;
+        arg.ty = Some(iter_ty.clone());
+        Ok(iter_ty)
     }
 
     fn check_bounds_allow(&self, types: &[TypeParam]) -> Result<()> {

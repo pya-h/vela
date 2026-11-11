@@ -71,6 +71,7 @@ fn run_in(exe: &Path, input: Vec<u8>, folder: &Path) -> std::process::Output {
     use std::process::Stdio;
     let mut command = Command::new(exe);
     command.current_dir(folder);
+    command.env("VELA_TEST", "1");
     // Leak checking is part of AddressSanitizer only on Linux.
     let leaks = if cfg!(target_os = "linux") { "detect_leaks=1" } else { "detect_leaks=0" };
     command.env("ASAN_OPTIONS", format!("{}:abort_on_error=0", leaks));
