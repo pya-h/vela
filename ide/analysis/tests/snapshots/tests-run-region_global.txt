@@ -1,0 +1,62 @@
+  1 | shape Point
+    | keyword:shape  type:Point
+  2 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  3 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  4 | fi
+    | keyword:fi
+  6 | region global(1024)
+    | keyword:region  region:global  punctuation:(  number:1024  punctuation:)
+  7 |     fixed base: int = 100
+    | keyword:fixed  variable:base  punctuation::  type-builtin:int  operator:=  number:100
+  8 |     flex counter: int = 0
+    | keyword:flex  variable:counter  punctuation::  type-builtin:int  operator:=  number:0
+  9 |     bind multiplier: int = 2
+    | keyword:bind  variable:multiplier  punctuation::  type-builtin:int  operator:=  number:2
+ 10 |     hold whole_only: Point = Point { x: 10, y: 20 }
+    | keyword:hold  variable:whole_only  punctuation::  type:Point  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
+ 11 | fi
+    | keyword:fi
+ 13 | task bump(by: int)
+    | keyword:task  task:bump  punctuation:(  parameter:by  punctuation::  type-builtin:int  punctuation:)
+ 14 |     counter = counter + by
+    | variable:counter  operator:=  variable:counter  operator:+  parameter:by
+ 15 | fi
+    | keyword:fi
+ 17 | task sum_at(r: region, a: int, b: int) -> ^Point@r
+    | keyword:task  task:sum_at  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Point  operator:@  region:r
+ 18 |     <- new Point(Point { x: a, y: b }) at r
+    | keyword:<-  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  parameter:a  punctuation:,  field:y  punctuation::  parameter:b  punctuation:}  punctuation:)  keyword:at  region:r
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     show("base=", base, " counter=", counter)
+    | builtin-fn:show  punctuation:(  string:"base="  punctuation:,  variable:base  punctuation:,  string:" counter="  punctuation:,  variable:counter  punctuation:)
+ 23 |     bump(5)
+    | task:bump  punctuation:(  number:5  punctuation:)
+ 24 |     bump(10)
+    | task:bump  punctuation:(  number:10  punctuation:)
+ 25 |     show("after bumps counter=", counter)
+    | builtin-fn:show  punctuation:(  string:"after bumps counter="  punctuation:,  variable:counter  punctuation:)
+ 27 |     ; Hold can be reassigned by whole
+    | comment:; Hold can be reassigned by whole
+ 28 |     whole_only = Point { x: 30, y: 40 }
+    | variable:whole_only  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:40  punctuation:}
+ 29 |     show("whole_only=(", whole_only.x, ", ", whole_only.y, ")")
+    | builtin-fn:show  punctuation:(  string:"whole_only=("  punctuation:,  variable:whole_only  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:whole_only  punctuation:.  field:y  punctuation:,  string:")"  punctuation:)
+ 31 |     ; Dynamic allocation inside global
+    | comment:; Dynamic allocation inside global
+ 32 |     fixed pt: ^Point@global = new Point(Point { x: counter * multiplier, y: base }) at global
+    | keyword:fixed  variable:pt  punctuation::  operator:^  type:Point  operator:@  region:global  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  variable:counter  operator:*  variable:multiplier  punctuation:,  field:y  punctuation::  variable:base  punctuation:}  punctuation:)  keyword:at  region:global
+ 33 |     show("allocated at global: (", pt^.x, ", ", pt^.y, ")")
+    | builtin-fn:show  punctuation:(  string:"allocated at global: ("  punctuation:,  variable:pt  operator:^  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:pt  operator:^  punctuation:.  field:y  punctuation:,  string:")"  punctuation:)
+ 35 |     ; Passing global as a region parameter to task
+    | comment:; Passing global as a region parameter to task
+ 36 |     fixed pt2 = sum_at(global, 7, 8)
+    | keyword:fixed  variable:pt2  operator:=  task:sum_at  punctuation:(  variable:global  punctuation:,  number:7  punctuation:,  number:8  punctuation:)
+ 37 |     show("sum_at global: (", pt2^.x, ", ", pt2^.y, ")")
+    | builtin-fn:show  punctuation:(  string:"sum_at global: ("  punctuation:,  variable:pt2  operator:^  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:pt2  operator:^  punctuation:.  field:y  punctuation:,  string:")"  punctuation:)
+ 38 | fi
+    | keyword:fi

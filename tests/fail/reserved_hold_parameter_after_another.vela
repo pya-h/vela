@@ -1,4 +1,4 @@
-; error: 4:27: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 4:27: expected a name, got 'hold', which is a reserved word
 ; The error is at the old word, wherever in the header it is.
 
 task countdown(step: int, hold n: int) -> int

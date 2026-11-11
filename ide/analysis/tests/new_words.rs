@@ -102,16 +102,10 @@ fn the_old_words_are_keywords_still() {
 }
 
 #[test]
-fn an_old_word_written_as_a_variable_word_is_an_error_that_names_the_new_one() {
-    let flex = "'hold' is a reserved word with no use yet; a variable that changes is written 'flex'";
-    for (source, line, col, message) in [
-        ("task main()\n    hold x = 1\nfi\n", 2, 5, flex),
-        ("task f(hold& n: int)\n    n = 1\nfi\n", 1, 8, flex),
-        ("task main()\n    region r\n    flex f = [hold @r]() -> int\n        <- 1\n    fi\nfi\n", 3, 15, flex),
-        ("task main()\n    fixed t = (1, 2)\n    when t is hold(a, b)\n        show(a)\n    fi\nfi\n", 3, 15, flex),
-    ] {
-        assert_eq!(only_error(source), (line, col, message.to_string()), "{:?}", source);
-    }
+fn hold_is_a_variable_word_now() {
+    checks("task main()\n    hold x = 1\nfi\n");
+    checks("task main()\n    fixed t = (1, 2)\n    hold (a, b) = t\nfi\n");
+    checks("task main()\n    fixed t = (1, 2)\n    hold(a, b) = t\nfi\n");
 }
 
 #[test]
@@ -122,15 +116,15 @@ fn bind_is_a_variable_word_now() {
 }
 
 #[test]
-fn an_old_word_written_as_a_name_is_an_error_that_it_is_reserved() {
-    for (source, line, col, word) in [
-        ("task hold(n: int)\nfi\n", 1, 6, "hold"),
-        ("task main()\n    fixed n = 1\n    show(\"{hold}\")\nfi\n", 3, 12, "hold"),
-        ("task main()\n    region r\n    fixed s: hold@r = \"a\" at r\nfi\n", 3, 14, "hold"),
-        ("task main()\n    show(hold (1))\nfi\n", 2, 10, "hold"),
-    ] {
-        assert_eq!(only_error(source), (line, col, format!("'{}' is a reserved word, so it can't be a name", word)), "{:?}", source);
-    }
+fn hold_written_as_a_name_is_an_error() {
+    assert_eq!(
+        only_error("task main()\n    fixed hold = 1\nfi\n"),
+        (2, 11, "expected a name, got 'hold', which is a reserved word".to_string())
+    );
+    assert_eq!(
+        only_error("task hold(n: int)\nfi\n"),
+        (1, 6, "expected a name, got 'hold', which is a reserved word".to_string())
+    );
 }
 
 #[test]
@@ -142,12 +136,10 @@ fn bind_written_as_a_name_is_an_error() {
 }
 
 #[test]
-fn the_old_words_are_never_offered() {
-    for marked in ["task main()\n    @@\nfi\n", "task f(@@)\nfi\n", "task main()\n    b@@\nfi\n", "task main()\n    h@@\nfi\n"] {
-        let offered = labels(marked);
-        assert!(!offered.iter().any(|label| ["hold", "hold&"].contains(&label.as_str())), "{:?}: {:?}", marked, offered);
-    }
-    assert!(labels("task main()\n    @@\nfi\n").iter().any(|label| label == "fixed"));
+fn variable_words_are_offered() {
+    let offered = labels("task main()\n    @@\nfi\n");
+    assert!(offered.iter().any(|label| label == "fixed"));
+    assert!(offered.iter().any(|label| label == "flex"));
     for marked in ["task main()\n    fixed x = 1\n    bind @@\nfi\n", "task main()\n    fixed x = 1\n    hold @@\nfi\n"] {
         assert!(labels(marked).is_empty(), "{:?}: {:?}", marked, labels(marked));
     }

@@ -209,6 +209,7 @@ pub struct Checker {
     private: HashSet<String>,
     current_module: String,
     scopes: Vec<Scope>,
+    globals: HashMap<String, VarInfo>,
     current_ret: Option<Type>,
     result_names: Vec<String>,
     /// Unset named results on the current path; Vela has no zero values so all must be assigned.
@@ -685,6 +686,7 @@ impl Checker {
         self.changeable = types_holding(items, holds_changeable);
         self.held_types = types_holding(items, holds_held_field);
         self.declare_patterns();
+        self.check_global_region(items);
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.settle_receiver(t);
@@ -1648,6 +1650,7 @@ impl Checker {
                 Item::Shape(s) => s.private,
                 Item::Kind(k) => k.private,
                 Item::Macro(m) => m.private,
+                Item::GlobalRegion(_) => false,
             };
             if private {
                 self.private.insert(item.name().to_string());
@@ -1742,6 +1745,7 @@ impl Checker {
                         },
                     );
                 }
+                Item::GlobalRegion(_) => {}
             }
         }
         for error in found {
@@ -1784,7 +1788,7 @@ impl Checker {
             let name = match item {
                 Item::Shape(s) => s.name.clone(),
                 Item::Kind(k) => k.name.clone(),
-                Item::Task(_) | Item::Macro(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => continue,
             };
             if let Err((error, cycle)) = self.check_value_cycle(&name, &mut acyclic, &mut order) {
                 self.record(error);
@@ -1993,6 +1997,7 @@ impl Checker {
                 m.value = self.macro_value(&m.name, &mut Vec::new())?
             }
             Item::Macro(_) => {}
+            Item::GlobalRegion(_) => {}
             Item::Task(t) => {
                 self.this_type = method_this(t);
                 self.in_pattern_default = self.is_default(t);
@@ -2247,7 +2252,7 @@ impl Checker {
                 &k.name,
                 k.variants.iter().flat_map(|v| &v.payload).collect(),
             ),
-            Item::Macro(_) => return Ok(()),
+            Item::Macro(_) | Item::GlobalRegion(_) => return Ok(()),
         };
         if private {
             return Ok(());
@@ -3207,7 +3212,7 @@ impl Checker {
         }
     }
 
-    /// Shared fields outlive all regions and hold no handles, so they cannot contain regions or `File`.
+    /// Shared fields outlive all local regions and hold no handles, so they cannot contain local regions or `File`.
     fn check_shared_type(&self, ty: &Type, span: Span, field: &str) -> Result<()> {
         if holds_pointers(ty, &self.regional) {
             return err(
@@ -4424,7 +4429,7 @@ impl Checker {
                         .map(|v| v.payload.iter().map(|f| f.ty.clone()).collect())
                         .collect(),
                 )),
-                Item::Task(_) | Item::Macro(_) => {}
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
         }
         for made in self.made_of.keys() {
@@ -5742,7 +5747,7 @@ impl Checker {
                 return Some(info);
             }
         }
-        None
+        self.globals.get(name)
     }
 
     fn default_region(&self) -> Option<String> {
@@ -7960,6 +7965,15 @@ impl Checker {
                     ),
                     None => format!("cannot change '{}':", written),
                 };
+                if info.mode == Mode::Hold {
+                    return err(
+                        place.span,
+                        format!(
+                            "{} cannot change contents of 'hold' variable '{}'; 'hold' allows reassigning the variable by whole, not its contents",
+                            change, name
+                        ),
+                    );
+                }
                 err(
                     place.span,
                     format!(
@@ -8730,14 +8744,19 @@ impl Checker {
                         .mode
                         .can_change_contents(self.bind_has_contents(&info.ty))
                 {
-                    return err(
-                        span,
+                    let msg = if info.mode == Mode::Hold {
+                        format!(
+                            "cannot assign to a field of 'hold' variable '{}'; a 'hold' variable can only be reassigned by whole, declare it with 'flex' to change contents",
+                            name
+                        )
+                    } else {
                         format!(
                             "cannot assign to a field of immutable variable '{}'{}",
                             name,
                             self.param_hint(name, info)
-                        ),
-                    );
+                        )
+                    };
+                    return err(span, msg);
                 }
                 self.check_expr(base)
             }
@@ -18133,6 +18152,129 @@ impl Checker {
         self.coerce(value, &field.ty)
     }
 
+    fn check_global_region(&mut self, items: &mut [Item]) {
+        let Some(Item::GlobalRegion(g)) = items.iter_mut().find(|i| matches!(i, Item::GlobalRegion(_))) else {
+            return;
+        };
+        let cap = g.capacity;
+        let span = g.span;
+        self.globals.insert(
+            "global".to_string(),
+            VarInfo {
+                ty: Type::Region,
+                mode: Mode::Fixed,
+                span,
+                allocates: true,
+                result: false,
+                param: false,
+                passing: Passing::Fixed,
+                refers: None,
+                kept: false,
+                owners: Vec::new(),
+                family: None,
+                bind_reads: false,
+            },
+        );
+        let mut total_bytes: usize = 0;
+        self.push_scope();
+        for stmt in &mut g.stmts {
+            let StmtKind::Binding { names, init, mode, .. } = &mut stmt.kind else {
+                continue;
+            };
+            let mode = *mode;
+            let Some(first_bound) = names.first_mut() else {
+                continue;
+            };
+            let name = first_bound.name.clone();
+            let b_span = first_bound.span;
+            let explicit_ty = first_bound.ty.clone();
+
+            let Some(val) = init.first_mut() else {
+                continue;
+            };
+            let val_ty = match self.check_expr(val) {
+                Ok(t) => t,
+                Err(e) => {
+                    self.errors.push(e);
+                    Type::Unknown
+                }
+            };
+            let final_ty = if let Some(exp) = &explicit_ty {
+                if let Err(e) = self.coerce(val, exp) {
+                    self.errors.push(e);
+                }
+                exp.clone()
+            } else {
+                val_ty
+            };
+            first_bound.ty = Some(final_ty.clone());
+
+            if matches!(final_ty, Type::Slice(..) | Type::Map(..)) {
+                self.errors.push(Error::at(
+                    b_span,
+                    "a variable in 'region global' cannot hold a slice or map: they grow dynamically and can exhaust the fixed global segment; use a fixed array '[T#N]' or allocate in a task region instead",
+                ));
+            }
+            if self.holds_file(&final_ty) {
+                self.errors.push(Error::at(
+                    b_span,
+                    "a variable in 'region global' cannot hold a 'File', which the region it is opened in closes, and a global variable lives as long as the program",
+                ));
+            }
+            if holds_pointers(&final_ty, &self.regional) {
+                let regions = final_ty.regions();
+                for r in regions {
+                    if r != "global" && r != ANY_REGION {
+                        self.errors.push(Error::at(
+                            b_span,
+                            format!(
+                                "a variable in 'region global' cannot hold a pointer into region '{}': 'global' lives for the entire program, but region '{}' ends before it",
+                                r, r
+                            ),
+                        ));
+                    }
+                }
+            }
+
+            let size = if mode == Mode::Bind {
+                0
+            } else {
+                self.size_of(&final_ty)
+            };
+            total_bytes = total_bytes.saturating_add(size);
+
+            let info = VarInfo {
+                ty: final_ty,
+                mode,
+                span: b_span,
+                allocates: false,
+                result: false,
+                param: false,
+                passing: Passing::Fixed,
+                refers: None,
+                kept: false,
+                owners: Vec::new(),
+                family: None,
+                bind_reads: false,
+            };
+            self.globals.insert(name.clone(), info.clone());
+            if let Some(scope) = self.scopes.last_mut() {
+                scope.names.insert(name, info);
+            }
+        }
+        self.pop_scope();
+
+        if (total_bytes as u64) > cap {
+            self.errors.push(Error::at(
+                span,
+                format!(
+                    "variables declared in 'region global' take {} bytes, which exceeds the region's size of {} bytes",
+                    total_bytes, cap
+                ),
+            ));
+        }
+    }
+
     fn check_shared_fields(&mut self, items: &mut [Item]) {
         for item in items.iter_mut() {
             let Item::Shape(shape) = item else { continue };
@@ -18887,6 +19029,7 @@ impl Checker {
             Mode::Fixed => "fixed&",
             Mode::Bind => "bind&",
             Mode::Flex => "flex&",
+            Mode::Hold => "hold&",
         };
         let (Some(bound), Some(value)) = (names.first_mut(), init.first_mut()) else {
             return Ok(());
@@ -20557,7 +20700,7 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
                 .flat_map(|v| &v.payload)
                 .map(|f| f.ty.clone())
                 .collect(),
-            Item::Task(_) | Item::Macro(_) => Vec::new(),
+            Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => Vec::new(),
         }
     };
     let mut users: HashMap<String, Vec<usize>> = HashMap::new();
@@ -20603,7 +20746,9 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
     }
     let region =
         |a: &Option<String>, e: &Option<String>| a == e || a.as_deref() == Some(ANY_REGION);
-    let lasting = |a: &Option<String>, e: &Option<String>| region(a, e) || a.is_none();
+    let lasting = |a: &Option<String>, e: &Option<String>| {
+        region(a, e) || a.is_none() || (a.as_deref() == Some("global") && e.is_some())
+    };
     match (actual, expected) {
         (Type::Ptr(a, ar), Type::Ptr(e, er)) | (Type::Slice(a, ar), Type::Slice(e, er)) => {
             region(ar, er) && fits_regions(a, e)
@@ -24020,6 +24165,15 @@ impl CallGraph {
                         .filter_map(|member| member.field.default.as_ref())
                     {
                         walk_expr(value, &mut |e| note_value(e, &mut values));
+                    }
+                }
+                Item::GlobalRegion(g) => {
+                    for stmt in &g.stmts {
+                        if let StmtKind::Binding { init, .. } = &stmt.kind {
+                            for value in init {
+                                walk_expr(value, &mut |e| note_value(e, &mut values));
+                            }
+                        }
                     }
                 }
                 Item::Kind(_) | Item::Macro(_) => {}

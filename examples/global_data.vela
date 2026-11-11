@@ -1,0 +1,46 @@
+; Fixed-size static data segment: 'region global(N)' allocates a bounded segment
+; in the program's static data, living for the whole run without heap allocation.
+; Variables inside can use 'fixed', 'flex', 'bind', or 'hold' (reassignable by
+; whole, immutable internal contents).
+
+shape ServerStatus
+    online: bool
+    version: int
+fi
+
+shape MetricNode
+    name: text
+    value: int
+fi
+
+region global(1024)
+    fixed service_name = "metrics-collector"
+    bind port = 9000
+    flex total_requests = 0
+    hold status = ServerStatus { online: true, version: 1 }
+    fixed primary_metric: ^MetricNode@global = new MetricNode(MetricNode { name: "cpu_usage", value: 42 }) at global
+fi
+
+task record_request(r: region, tag: text) -> ^MetricNode@r
+    total_requests = total_requests + 1
+    <- new MetricNode(MetricNode { name: tag, value: total_requests }) at r
+fi
+
+task main()
+    show("service: ", service_name, " on port ", port)
+    show("status: online=", status.online, " version=", status.version)
+    show("primary metric: ", primary_metric^.name, "=", primary_metric^.value)
+
+    ; Record several requests using global region
+    fixed m1 = record_request(global, "http_get")
+    fixed m2 = record_request(global, "http_post")
+    fixed m3 = record_request(global, "http_get")
+
+    show("recorded requests: ", m1^.name, "#", m1^.value, ", ", m2^.name, "#", m2^.value, ", ", m3^.name, "#", m3^.value)
+    show("total requests so far: ", total_requests)
+
+    ; 'hold' variable reassigned as a whole
+    status = ServerStatus { online: false, version: 2 }
+    show("updated status: online=", status.online, " version=", status.version)
+fi
+

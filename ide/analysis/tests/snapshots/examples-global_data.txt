@@ -1,0 +1,74 @@
+  1 | ; Fixed-size static data segment: 'region global(N)' allocates a bounded segment
+    | comment:; Fixed-size static data segment: 'region global(N)' allocates a bounded segment
+  2 | ; in the program's static data, living for the whole run without heap allocation.
+    | comment:; in the program's static data, living for the whole run without heap allocation.
+  3 | ; Variables inside can use 'fixed', 'flex', 'bind', or 'hold' (reassignable by
+    | comment:; Variables inside can use 'fixed', 'flex', 'bind', or 'hold' (reassignable by
+  4 | ; whole, immutable internal contents).
+    | comment:; whole, immutable internal contents).
+  6 | shape ServerStatus
+    | keyword:shape  type:ServerStatus
+  7 |     online: bool
+    | field:online  punctuation::  type-builtin:bool
+  8 |     version: int
+    | field:version  punctuation::  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | shape MetricNode
+    | keyword:shape  type:MetricNode
+ 12 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 13 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 14 | fi
+    | keyword:fi
+ 16 | region global(1024)
+    | keyword:region  region:global  punctuation:(  number:1024  punctuation:)
+ 17 |     fixed service_name = "metrics-collector"
+    | keyword:fixed  variable:service_name  operator:=  string:"metrics-collector"
+ 18 |     bind port = 9000
+    | keyword:bind  variable:port  operator:=  number:9000
+ 19 |     flex total_requests = 0
+    | keyword:flex  variable:total_requests  operator:=  number:0
+ 20 |     hold status = ServerStatus { online: true, version: 1 }
+    | keyword:hold  variable:status  operator:=  type:ServerStatus  punctuation:{  field:online  punctuation::  keyword:true  punctuation:,  field:version  punctuation::  number:1  punctuation:}
+ 21 |     fixed primary_metric: ^MetricNode@global = new MetricNode(MetricNode { name: "cpu_usage", value: 42 }) at global
+    | keyword:fixed  variable:primary_metric  punctuation::  operator:^  type:MetricNode  operator:@  region:global  operator:=  keyword:new  type:MetricNode  punctuation:(  type:MetricNode  punctuation:{  field:name  punctuation::  string:"cpu_usage"  punctuation:,  field:value  punctuation::  number:42  punctuation:}  punctuation:)  keyword:at  region:global
+ 22 | fi
+    | keyword:fi
+ 24 | task record_request(r: region, tag: text) -> ^MetricNode@r
+    | keyword:task  task:record_request  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:tag  punctuation::  type-builtin:text  punctuation:)  operator:->  operator:^  type:MetricNode  operator:@  region:r
+ 25 |     total_requests = total_requests + 1
+    | variable:total_requests  operator:=  variable:total_requests  operator:+  number:1
+ 26 |     <- new MetricNode(MetricNode { name: tag, value: total_requests }) at r
+    | keyword:<-  keyword:new  type:MetricNode  punctuation:(  type:MetricNode  punctuation:{  field:name  punctuation::  parameter:tag  punctuation:,  field:value  punctuation::  variable:total_requests  punctuation:}  punctuation:)  keyword:at  region:r
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     show("service: ", service_name, " on port ", port)
+    | builtin-fn:show  punctuation:(  string:"service: "  punctuation:,  variable:service_name  punctuation:,  string:" on port "  punctuation:,  variable:port  punctuation:)
+ 31 |     show("status: online=", status.online, " version=", status.version)
+    | builtin-fn:show  punctuation:(  string:"status: online="  punctuation:,  variable:status  punctuation:.  field:online  punctuation:,  string:" version="  punctuation:,  variable:status  punctuation:.  field:version  punctuation:)
+ 32 |     show("primary metric: ", primary_metric^.name, "=", primary_metric^.value)
+    | builtin-fn:show  punctuation:(  string:"primary metric: "  punctuation:,  variable:primary_metric  operator:^  punctuation:.  field:name  punctuation:,  string:"="  punctuation:,  variable:primary_metric  operator:^  punctuation:.  field:value  punctuation:)
+ 34 |     ; Record several requests using global region
+    | comment:; Record several requests using global region
+ 35 |     fixed m1 = record_request(global, "http_get")
+    | keyword:fixed  variable:m1  operator:=  task:record_request  punctuation:(  variable:global  punctuation:,  string:"http_get"  punctuation:)
+ 36 |     fixed m2 = record_request(global, "http_post")
+    | keyword:fixed  variable:m2  operator:=  task:record_request  punctuation:(  variable:global  punctuation:,  string:"http_post"  punctuation:)
+ 37 |     fixed m3 = record_request(global, "http_get")
+    | keyword:fixed  variable:m3  operator:=  task:record_request  punctuation:(  variable:global  punctuation:,  string:"http_get"  punctuation:)
+ 39 |     show("recorded requests: ", m1^.name, "#", m1^.value, ", ", m2^.name, "#", m2^.value, ", ", m3^.name, "#", m3^.value)
+    | builtin-fn:show  punctuation:(  string:"recorded requests: "  punctuation:,  variable:m1  operator:^  punctuation:.  field:name  punctuation:,  string:"#"  punctuation:,  variable:m1  operator:^  punctuation:.  field:value  punctuation:,  string:", "  punctuation:,  variable:m2  operator:^  punctuation:.  field:name  punctuation:,  string:"#"  punctuation:,  variable:m2  operator:^  punctuation:.  field:value  punctuation:,  string:", "  punctuation:,  variable:m3  operator:^  punctuation:.  field:name  punctuation:,  string:"#"  punctuation:,  variable:m3  operator:^  punctuation:.  field:value  punctuation:)
+ 40 |     show("total requests so far: ", total_requests)
+    | builtin-fn:show  punctuation:(  string:"total requests so far: "  punctuation:,  variable:total_requests  punctuation:)
+ 42 |     ; 'hold' variable reassigned as a whole
+    | comment:; 'hold' variable reassigned as a whole
+ 43 |     status = ServerStatus { online: false, version: 2 }
+    | variable:status  operator:=  type:ServerStatus  punctuation:{  field:online  punctuation::  keyword:false  punctuation:,  field:version  punctuation::  number:2  punctuation:}
+ 44 |     show("updated status: online=", status.online, " version=", status.version)
+    | builtin-fn:show  punctuation:(  string:"updated status: online="  punctuation:,  variable:status  punctuation:.  field:online  punctuation:,  string:" version="  punctuation:,  variable:status  punctuation:.  field:version  punctuation:)
+ 45 | fi
+    | keyword:fi

@@ -1,4 +1,4 @@
-; error: 7:18: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 7:18: expected an expression, got 'hold'
 ; A lambda that changes its copies is '[flex @r]'.
 
 task main()

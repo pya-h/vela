@@ -1,0 +1,4 @@
+p=(1, 2)
+reassigned p=(10, 20)
+num=42
+reassigned num=100

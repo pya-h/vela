@@ -1,0 +1,5 @@
+base=100 counter=0
+after bumps counter=15
+whole_only=(30, 40)
+allocated at global: (30, 100)
+sum_at global: (7, 8)

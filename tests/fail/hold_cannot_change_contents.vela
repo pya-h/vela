@@ -1,0 +1,10 @@
+; error: 9:5: cannot assign to a field of 'hold' variable 'p'; a 'hold' variable can only be reassigned by whole, declare it with 'flex' to change contents
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    hold p = Point { x: 1, y: 2 }
+    p.x = 10
+fi

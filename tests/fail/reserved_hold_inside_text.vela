@@ -1,4 +1,4 @@
-; error: 6:16: 'hold' is a reserved word, so it can't be a name
+; error: 6:16: expected an expression, got 'hold'
 ; A value in text is read as code, where 'hold' is reserved too.
 
 task main()

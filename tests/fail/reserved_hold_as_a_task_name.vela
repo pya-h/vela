@@ -1,4 +1,4 @@
-; error: 4:6: 'hold' is a reserved word, so it can't be a name
+; error: 4:6: expected a name, got 'hold', which is a reserved word
 ; 'hold' is a reserved word, so no task takes it as its name, and calling one is the same error.
 
 task hold() -> int

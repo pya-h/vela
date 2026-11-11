@@ -1,0 +1,6 @@
+; error: modules/with_global.vela:1:1: 'region global' can only be defined in the main program file, not in an included module
+include modules/with_global
+
+task main()
+fi
+

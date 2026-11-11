@@ -1,0 +1,28 @@
+  1 | shape Coord
+    | keyword:shape  type:Coord
+  2 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  3 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  4 | fi
+    | keyword:fi
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     hold p = Coord { x: 1, y: 2 }
+    | keyword:hold  variable:p  operator:=  type:Coord  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+  8 |     show("p=(", p.x, ", ", p.y, ")")
+    | builtin-fn:show  punctuation:(  string:"p=("  punctuation:,  variable:p  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:p  punctuation:.  field:y  punctuation:,  string:")"  punctuation:)
+  9 |     p = Coord { x: 10, y: 20 }
+    | variable:p  operator:=  type:Coord  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
+ 10 |     show("reassigned p=(", p.x, ", ", p.y, ")")
+    | builtin-fn:show  punctuation:(  string:"reassigned p=("  punctuation:,  variable:p  punctuation:.  field:x  punctuation:,  string:", "  punctuation:,  variable:p  punctuation:.  field:y  punctuation:,  string:")"  punctuation:)
+ 12 |     hold num = 42
+    | keyword:hold  variable:num  operator:=  number:42
+ 13 |     show("num=", num)
+    | builtin-fn:show  punctuation:(  string:"num="  punctuation:,  variable:num  punctuation:)
+ 14 |     num = 100
+    | variable:num  operator:=  number:100
+ 15 |     show("reassigned num=", num)
+    | builtin-fn:show  punctuation:(  string:"reassigned num="  punctuation:,  variable:num  punctuation:)
+ 16 | fi
+    | keyword:fi

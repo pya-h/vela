@@ -1,0 +1,38 @@
+shape Point
+    x: int
+    y: int
+fi
+
+region global(1024)
+    fixed base: int = 100
+    flex counter: int = 0
+    bind multiplier: int = 2
+    hold whole_only: Point = Point { x: 10, y: 20 }
+fi
+
+task bump(by: int)
+    counter = counter + by
+fi
+
+task sum_at(r: region, a: int, b: int) -> ^Point@r
+    <- new Point(Point { x: a, y: b }) at r
+fi
+
+task main()
+    show("base=", base, " counter=", counter)
+    bump(5)
+    bump(10)
+    show("after bumps counter=", counter)
+
+    ; Hold can be reassigned by whole
+    whole_only = Point { x: 30, y: 40 }
+    show("whole_only=(", whole_only.x, ", ", whole_only.y, ")")
+
+    ; Dynamic allocation inside global
+    fixed pt: ^Point@global = new Point(Point { x: counter * multiplier, y: base }) at global
+    show("allocated at global: (", pt^.x, ", ", pt^.y, ")")
+
+    ; Passing global as a region parameter to task
+    fixed pt2 = sum_at(global, 7, 8)
+    show("sum_at global: (", pt2^.x, ", ", pt2^.y, ")")
+fi

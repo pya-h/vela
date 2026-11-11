@@ -1,0 +1,4 @@
+region global(64)
+    fixed a = 1
+fi
+

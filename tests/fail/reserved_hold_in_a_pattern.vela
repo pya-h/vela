@@ -1,4 +1,4 @@
-; error: 9:21: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 9:21: expected a name, got 'hold', which is a reserved word
 ; Names a pattern binds that may change are 'is {flex v}'.
 
 task find() -> maybe int

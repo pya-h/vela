@@ -494,6 +494,7 @@ impl Parser {
     fn at_item_start(&self) -> bool {
         match self.peek() {
             Token::Task | Token::Shape | Token::Kind | Token::Include => true,
+            Token::Region => matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global"),
             Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
             _ => self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
@@ -595,6 +596,7 @@ impl Parser {
                 Item::Shape(s) => s.private = true,
                 Item::Kind(k) => k.private = true,
                 Item::Macro(m) => m.private = true,
+                Item::GlobalRegion(_) => unreachable!(),
             }
             return Ok(item);
         }
@@ -610,6 +612,11 @@ impl Parser {
                 _ => String::new(),
             };
             return Err(Error::at(self.peek_span(), format!("a macro is written with '#' before its name, as in '#{} = …'", name)));
+        }
+        if self.check(Token::Region)
+            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global")
+        {
+            return self.parse_global_region().map(Item::GlobalRegion);
         }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),
@@ -629,6 +636,8 @@ impl Parser {
                     Token::Ident(_)
                         | Token::Fixed
                         | Token::Flex
+                        | Token::Bind
+                        | Token::Hold
                         | Token::When
                         | Token::Loop
                         | Token::Each
@@ -652,6 +661,64 @@ impl Parser {
             }
             _ => Err(self.unexpected("'task', 'shape', or 'kind'")),
         }
+    }
+
+    fn parse_global_region(&mut self) -> Result<GlobalRegionDef> {
+        let span = self.peek_span();
+        self.advance();
+        let _ = self.expect_ident()?;
+        self.expect(Token::LParen)?;
+        let cap_span = self.peek_span();
+        let capacity = match self.peek() {
+            Token::Int(n) => *n,
+            _ => {
+                return Err(Error::at(
+                    cap_span,
+                    "the size of 'region global' is a positive integer, as in 'region global(64)'",
+                ));
+            }
+        };
+        self.advance();
+        let Some(capacity) = u64::try_from(capacity).ok().filter(|c| *c > 0) else {
+            return Err(Error::at(
+                cap_span,
+                "'region global' must allocate at least 1 byte",
+            ));
+        };
+        const MAX_GLOBAL_REGION_BYTES: u64 = 67_108_864;
+        if capacity > MAX_GLOBAL_REGION_BYTES {
+            return Err(Error::at(
+                cap_span,
+                format!(
+                    "'region global' cannot allocate more than {} bytes",
+                    MAX_GLOBAL_REGION_BYTES
+                ),
+            ));
+        }
+        self.expect(Token::RParen)?;
+        self.skip_newlines();
+        let mut stmts = Vec::new();
+        while !self.check(Token::Fi) && !self.is_at_end() {
+            self.skip_newlines();
+            if self.check(Token::Fi) || self.is_at_end() {
+                break;
+            }
+            let stmt = self.parse_stmt()?;
+            if !matches!(stmt.kind, StmtKind::Binding { .. }) {
+                return Err(Error::at(
+                    stmt.span,
+                    "only variable bindings ('fixed', 'flex', 'bind', 'hold') are allowed in 'region global'",
+                ));
+            }
+            stmts.push(stmt);
+            self.skip_newlines();
+        }
+        self.expect(Token::Fi)?;
+        Ok(GlobalRegionDef {
+            capacity,
+            span,
+            stmts,
+        })
     }
 
     fn parse_decorated(&mut self) -> Result<Item> {
@@ -2231,6 +2298,7 @@ impl Parser {
             Token::Fixed => self.parse_binding(Mode::Fixed),
             Token::Flex => self.parse_binding(Mode::Flex),
             Token::Bind => self.parse_binding(Mode::Bind),
+            Token::Hold => self.parse_binding(Mode::Hold),
             Token::When => self.parse_when(),
             Token::Loop | Token::Endless | Token::Each => {
                 let stmt = match self.peek() {
@@ -2672,11 +2740,13 @@ impl Parser {
         for (n, (first, last)) in start.into_iter().enumerate() {
             self.pos = first;
             let item = match self.peek() {
-                Token::Flex | Token::Fixed | Token::Bind => {
+                Token::Flex | Token::Fixed | Token::Bind | Token::Hold => {
                     let mode = if self.check(Token::Fixed) {
                         Mode::Fixed
                     } else if self.check(Token::Bind) {
                         Mode::Bind
+                    } else if self.check(Token::Hold) {
+                        Mode::Hold
                     } else {
                         Mode::Flex
                     };
@@ -4578,62 +4648,8 @@ impl Parser {
 /// yet, which are an error wherever they are written. Written where a
 /// variable's word goes (before a name, a `&`, an `@`, or a `(` apart from it),
 /// the error names the word a program writes today.
-fn reserved_word(tokens: &[(&Token, Span, Span)]) -> Option<Error> {
-    for (i, (token, start, end)) in tokens.iter().enumerate() {
-        if let Token::Interpolated(pieces) = token {
-            for piece in pieces {
-                if let Piece::Value { tokens: inner, .. } = piece {
-                    let inner: Vec<(&Token, Span, Span)> = inner
-                        .iter()
-                        .filter_map(|t| match &t.kind {
-                            LexKind::Token(token) => Some((token, t.start, t.end)),
-                            _ => None,
-                        })
-                        .collect();
-                    if let Some(error) = reserved_word(&inner) {
-                        return Some(error);
-                    }
-                }
-            }
-        }
-        let (word, today) = match token {
-            Token::Hold => ("hold", "a variable that changes is written 'flex'"),
-            _ => continue,
-        };
-        let before = i.checked_sub(1).and_then(|at| tokens.get(at)).map(|(token, _, _)| *token);
-        let starts_line = matches!(before, None | Some(Token::Newline));
-        let starts = starts_line || matches!(before, Some(Token::Is | Token::Case | Token::Each | Token::Loop));
-        let as_word = match tokens.get(i + 1) {
-            Some((Token::Ident(_) | Token::Amp, _, _)) => true,
-            Some((Token::AtSign, _, _)) => matches!(before, Some(Token::LBracket)),
-            Some((Token::LParen, next, _)) => starts && (next != end || !starts_line || assigned_after(tokens, i + 1)),
-            _ => false,
-        };
-        return Some(if as_word {
-            Error::at(*start, format!("'{}' is a reserved word with no use yet; {}", word, today))
-        } else {
-            Error::at(*start, format!("'{}' is a reserved word, so it can't be a name", word))
-        });
-    }
+fn reserved_word(_tokens: &[(&Token, Span, Span)]) -> Option<Error> {
     None
-}
-
-fn assigned_after(tokens: &[(&Token, Span, Span)], open: usize) -> bool {
-    let mut depth = 0;
-    for (at, (token, _, _)) in tokens.iter().enumerate().skip(open) {
-        match token {
-            Token::LParen => depth += 1,
-            Token::RParen => {
-                depth -= 1;
-                if depth == 0 {
-                    return matches!(tokens.get(at + 1), Some((Token::Assign, _, _)));
-                }
-            }
-            Token::Newline => return false,
-            _ => {}
-        }
-    }
-    false
 }
 
 fn two_headers(called: &str, method: &str) -> String {

@@ -1,0 +1,12 @@
+; error: 6:1: a program can have at most one 'region global'
+region global(64)
+    fixed a = 1
+fi
+
+region global(64)
+    fixed b = 2
+fi
+
+task main()
+fi
+

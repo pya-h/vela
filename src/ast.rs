@@ -2057,17 +2057,18 @@ pub enum Mode {
     Fixed,
     Bind,
     Flex,
+    Hold,
 }
 
 impl Mode {
     pub fn can_assign(self) -> bool {
-        self == Mode::Flex
+        matches!(self, Mode::Flex | Mode::Hold)
     }
 
     pub fn can_change_contents(self, has_contents: bool) -> bool {
         match self {
             Mode::Flex => true,
-            Mode::Fixed => false,
+            Mode::Fixed | Mode::Hold => false,
             Mode::Bind => has_contents,
         }
     }
@@ -2081,6 +2082,7 @@ impl Mode {
             Mode::Fixed => "fixed",
             Mode::Bind => "bind",
             Mode::Flex => "flex",
+            Mode::Hold => "hold",
         }
     }
 }
@@ -2165,11 +2167,19 @@ pub fn unqualified(name: &str) -> &str {
 }
 
 #[derive(Debug, Clone)]
+pub struct GlobalRegionDef {
+    pub capacity: u64,
+    pub span: Span,
+    pub stmts: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Item {
     Task(TaskDef),
     Shape(ShapeDef),
     Kind(KindDef),
     Macro(MacroDef),
+    GlobalRegion(GlobalRegionDef),
 }
 
 impl Item {
@@ -2179,6 +2189,7 @@ impl Item {
             Item::Shape(s) => &s.name,
             Item::Kind(k) => &k.name,
             Item::Macro(m) => &m.name,
+            Item::GlobalRegion(_) => "global",
         }
     }
 }

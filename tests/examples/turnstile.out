@@ -4,4 +4,3 @@ Sam is visitor 3 at north
 Kim is visitor 1 at south
 4 passed north
 ["north": "Sam", "south": "Kim"]
-

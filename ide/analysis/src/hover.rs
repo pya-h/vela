@@ -302,6 +302,13 @@ fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, St
                 doc
             ),
         ),
+        Mode::Hold => (
+            format!("hold {}", typed),
+            format!(
+                "{} It can be assigned as a whole, but its contents cannot be changed.",
+                doc
+            ),
+        ),
         Mode::Fixed => (typed.to_string(), doc.to_string()),
     }
 }

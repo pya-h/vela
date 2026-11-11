@@ -1,0 +1,7 @@
+; error: 3:11: a variable in 'region global' cannot hold a slice or map: they grow dynamically and can exhaust the fixed global segment; use a fixed array '[T#N]' or allocate in a task region instead
+region global(1024)
+    fixed s: [int] = [1, 2, ...] at global
+fi
+
+task main()
+fi

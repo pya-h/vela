@@ -1,0 +1,6 @@
+service: metrics-collector on port 9000
+status: online=true version=1
+primary metric: cpu_usage=42
+recorded requests: http_get#1, http_post#2, http_get#3
+total requests so far: 3
+updated status: online=false version=2

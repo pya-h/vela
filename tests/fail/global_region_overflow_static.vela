@@ -1,0 +1,8 @@
+; error: 2:1: variables declared in 'region global' take 16 bytes, which exceeds the region's size of 8 bytes
+region global(8)
+    fixed a: int = 1
+    fixed b: int = 2
+fi
+
+task main()
+fi

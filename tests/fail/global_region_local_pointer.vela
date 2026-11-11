@@ -1,0 +1,7 @@
+; error: 3:11: a variable in 'region global' cannot hold a pointer into region 'r': 'global' lives for the entire program, but region 'r' ends before it
+region global(1024)
+    fixed p: maybe ^int@r = none
+fi
+
+task main()
+fi

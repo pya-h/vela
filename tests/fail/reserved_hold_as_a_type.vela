@@ -1,4 +1,4 @@
-; error: 7:14: 'hold' is a reserved word, so it can't be a name
+; error: 7:14: expected a name, got 'hold', which is a reserved word
 ; A type with a region written against it is no variable's word, so the
 ; message only says the word can't be a name.
 

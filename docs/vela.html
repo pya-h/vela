@@ -296,8 +296,9 @@ true false none  fi   maybe is     fail failure include priv
 block shared type break continue endless fixed flex
 finally</pre>
       <p>
-        <code>hold</code> is reserved with no use yet: writing it is an error. Where a variable's word goes, the
-        message names the one to write, <code>flex</code>.
+        A variable is declared with one of four words: <code>fixed</code> (immutable binding),
+        <code>flex</code> (mutable place and contents), <code>bind</code> (place cannot be reassigned, contents may change),
+        or <code>hold</code> (place can be reassigned as a whole, contents cannot be changed).
       </p>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
@@ -963,8 +964,9 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
 
       <h3>Bindings</h3>
       <p><code>fixed</code> creates an immutable binding. <code>flex</code> creates a mutable variable. <code>bind</code>
-        creates a name bound to one value: it can never be assigned as a whole, but its contents may change. Written
-        <code>fixed&amp;</code>, <code>flex&amp;</code> or <code>bind&amp;</code>, each is another name for a place
+        creates a name bound to one value: it can never be assigned as a whole, but its contents may change. <code>hold</code>
+        creates a variable that can be reassigned as a whole, but its contents cannot be changed. Written
+        <code>fixed&amp;</code>, <code>flex&amp;</code>, <code>bind&amp;</code>, or <code>hold&amp;</code>, each is another name for a place
         instead (see <a href="#references">References</a>).</p>
       <pre><span class="keyword">fixed</span> pi = 3.14
 <span class="keyword">flex</span> count = 0
@@ -972,7 +974,10 @@ count = count + 1
 <span class="keyword">flex</span> total: float = 0.0     <span class="comment">; the type can be written out</span>
 <span class="keyword">bind</span> scores = [<span class="number">0</span>, <span class="number">0</span>, ...] <span class="keyword">at</span> r
 scores[<span class="number">0</span>] = <span class="number">10</span>              <span class="comment">; the slice's items may change</span>
-<span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span></pre>
+<span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span>
+<span class="keyword">hold</span> origin = Point { x: 0, y: 0 }
+origin = Point { x: 10, y: 20 }  <span class="comment">; ok: reassigned by whole</span>
+<span class="comment">; origin.x = 5              ; error: cannot assign to a field of 'hold' variable</span></pre>
       <p id="bind">
         <strong>What a <code>bind</code> name allows.</strong> Its contents change; it is never assigned as a whole:
       </p>
@@ -4806,6 +4811,25 @@ show(next^)                                <span class="comment">; error: this p
         There is no way to free one value early: <code>free p</code> is an error that explains this. Memory a
         region hands out stays in use until the region is freed, so a value replaced in a long-lived region (a
         <code>flex</code> pointer given a new <code>new</code>) keeps the old one's memory until then.
+      </p>
+
+      <h3 id="region-global">Static data: region global(N)</h3>
+      <p>
+        For programs requiring bounded static memory that lives for the program's entire duration,
+        the main program file may declare a static global region with an exact byte capacity:
+      </p>
+      <pre><span class="keyword">region</span> global(1024)
+    <span class="keyword">fixed</span> base: int = 100
+    <span class="keyword">flex</span> counter: int = 0
+    <span class="keyword">bind</span> multiplier: int = 2
+    <span class="keyword">hold</span> state: State = State { active: true }
+<span class="keyword">fi</span></pre>
+      <p>
+        Variables defined in <code>region global</code> are allocated in the static data segment and live for the entire
+        program. Dynamic allocations may also be made into <code>global</code> (via <code>new T(val) at global</code>),
+        and tasks can take <code>global</code> wherever a region is expected. Dynamic allocations that exceed the declared
+        byte capacity trap at runtime with an allocation error. Variables in <code>region global</code> cannot hold dynamically
+        growing collections (slices or maps) or pointers into shorter-lived local regions.
       </p>
 
       <h3>Tasks and regions</h3>

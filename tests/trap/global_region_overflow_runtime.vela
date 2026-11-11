@@ -1,0 +1,20 @@
+; trap: global region exceeded 32 bytes
+shape Big
+    a: int
+    b: int
+    c: int
+fi
+
+region global(32)
+fi
+
+task main()
+    show("before")
+    ; First allocation takes 24 bytes (fits within 32)
+    fixed p1 = new Big(Big { a: 1, b: 2, c: 3 }) at global
+    show(p1^.a)
+    ; Second allocation takes another 24 bytes (24 + 24 = 48 > 32) -> traps
+    fixed p2 = new Big(Big { a: 4, b: 5, c: 6 }) at global
+    show(p2^.a)
+fi
+

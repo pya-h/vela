@@ -1,4 +1,4 @@
-; error: 4:11: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 4:11: expected a name, got 'hold', which is a reserved word
 ; 'hold&' is not the caller's place that changes: that is 'flex&'.
 
 task bump(hold& n: int)

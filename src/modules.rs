@@ -193,6 +193,26 @@ impl State {
             None,
         )?;
         self.visit(main, loader)?;
+        let mut global_seen: Option<Span> = None;
+        for module in &self.modules {
+            for item in &module.items {
+                if let Item::GlobalRegion(g) = item {
+                    if module.file != 0 || !module.id.is_empty() {
+                        return Err(Error::at(
+                            g.span,
+                            "'region global' can only be defined in the main program file, not in an included module",
+                        ));
+                    }
+                    if global_seen.is_some() {
+                        return Err(Error::at(
+                            g.span,
+                            "a program can have at most one 'region global'",
+                        ));
+                    }
+                    global_seen = Some(g.span);
+                }
+            }
+        }
         // A loop that gives a value fails with `std/loops`'s `LoopResult`, which
         // a file names only if it includes it.
         let key = PathBuf::from(format!("<{0}>/{0}/{1}", library::ROOT, library::LOOPS));
@@ -719,7 +739,7 @@ impl State {
                     match item {
                         Item::Kind(k) => resolver.imitated(k)?,
                         Item::Shape(s) => resolver.followed(s)?,
-                        Item::Task(_) | Item::Macro(_) => {}
+                        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
                     }
                 }
                 return Ok(scope);
@@ -1073,6 +1093,7 @@ fn own_names(module: &Module) -> Names {
                 }
             }
             Item::Macro(m) => add(&m.name, What::Macro, m.private, m.span, None),
+            Item::GlobalRegion(_) => {}
         }
     }
     for alias in &module.type_aliases {
@@ -1332,7 +1353,7 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
             let (owner, types, follows) = match item {
                 Item::Shape(s) => (&s.name, &s.types, &s.follows),
                 Item::Kind(k) => (&k.name, &k.types, &k.follows),
-                Item::Task(_) | Item::Macro(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => continue,
             };
             for (followed, pattern) in follows.iter().filter_map(|(ty, _)| {
                 followed_name(ty)
@@ -2116,6 +2137,12 @@ impl Resolver<'_> {
             Item::Macro(m) => {
                 m.name = self.own_full(&m.name);
                 self.expr(&mut m.value)
+            }
+            Item::GlobalRegion(g) => {
+                for stmt in &mut g.stmts {
+                    self.stmt(stmt)?;
+                }
+                Ok(())
             }
         }
     }

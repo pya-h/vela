@@ -1,4 +1,4 @@
-; error: 6:12: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 6:12: expected a name, got 'hold', which is a reserved word
 ; A shared field any code may change is 'shared flex'.
 
 shape Counter

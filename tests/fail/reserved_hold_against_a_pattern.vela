@@ -1,4 +1,4 @@
-; error: 7:15: 'hold' is a reserved word with no use yet; a variable that changes is written 'flex'
+; error: 7:15: expected a variant, '{value}', 'none', 'failure e', or '_', got 'hold'
 ; A pattern's names that may change may be written against the word,
 ; 'is flex(a, b)', so the message names the word to write there too.
 

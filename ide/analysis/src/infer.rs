@@ -432,6 +432,9 @@ impl<'a> Knowledge<'a> {
             if at > line && self.token(at - 1) == Some(&Token::Bind) {
                 return Mode::Bind;
             }
+            if at > line && self.token(at - 1) == Some(&Token::Hold) {
+                return Mode::Hold;
+            }
             let mut depth = 0usize;
             let Some(open) = (line..at).rev().find(|&q| match self.token(q) {
                 Some(Token::RParen) => {

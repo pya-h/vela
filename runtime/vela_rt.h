@@ -574,9 +574,10 @@ typedef struct vela__rt__closer {
 typedef struct vela__rt__region {
     vela__rt__chunk* newest;
     vela__rt__closer* closers;
+    size_t fixed_cap;
 } vela__rt__region;
 
-#define VELA__RT__REGION_EMPTY { NULL, NULL }
+#define VELA__RT__REGION_EMPTY { NULL, NULL, 0 }
 
 enum { VELA__RT__CHUNK_FIRST = 4096, VELA__RT__CHUNK_MAX = 1 << 20 };
 
@@ -588,6 +589,11 @@ static inline _Noreturn void vela__rt__out_of_memory(void) {
 
 /* Double ordinary chunks up to 1 MB; oversized allocs go behind newest so small bumps keep the tip. */
 static inline void* vela__rt__region_grow(vela__rt__region* r, size_t size) {
+    if (r->fixed_cap > 0) {
+        fflush(stdout);
+        fprintf(stderr, "vela: global region exceeded %zu bytes\n", r->fixed_cap);
+        abort();
+    }
     size_t header = sizeof(vela__rt__chunk);
     size_t total = VELA__RT__CHUNK_FIRST;
     if (r->newest != NULL) {
@@ -623,6 +629,11 @@ static inline void* vela__rt__region_grow(vela__rt__region* r, size_t size) {
 
 /* Ensures allocation sits at newest->data's tip so repeated joins grow in place. */
 static inline void* vela__rt__region_grow_newest(vela__rt__region* r, size_t size, size_t capacity) {
+    if (r->fixed_cap > 0) {
+        fflush(stdout);
+        fprintf(stderr, "vela: global region exceeded %zu bytes\n", r->fixed_cap);
+        abort();
+    }
     size_t header = sizeof(vela__rt__chunk);
     if (capacity < size) {
         capacity = size;
@@ -1951,6 +1962,9 @@ static inline int64_t vela__rt__files_remove(vela__rt__text path) {
 
 /* Invoke closers before freeing chunks because closer records live inside the arena. */
 static inline void vela__rt__region_free(vela__rt__region* r) {
+    if (r->fixed_cap > 0) {
+        return;
+    }
     for (vela__rt__closer* closer = r->closers; closer != NULL; closer = closer->next) {
         if (closer->close_fn != NULL) {
             closer->close_fn(closer->handle);

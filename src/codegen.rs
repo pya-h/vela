@@ -173,7 +173,7 @@ impl Generator {
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
                 Item::Shape(_) => {}
-                Item::Task(_) | Item::Macro(_) => {}
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
         }
         self.hidden_params.clear();
@@ -238,7 +238,7 @@ impl Generator {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
-                TypeDef::Item(Item::Task(_) | Item::Macro(_)) => {}
+                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_)) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
@@ -331,6 +331,47 @@ impl Generator {
         self.gen_writers(&used)?;
         self.gen_json_writers(&used)?;
 
+        if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
+            let layout = Layout {
+                shapes: &self.shapes,
+                kinds: &self.kinds,
+            };
+            let mut static_bytes: usize = 0;
+            for stmt in &g.stmts {
+                if let StmtKind::Binding { names, mode, .. } = &stmt.kind
+                    && *mode != Mode::Bind
+                {
+                    for b in names {
+                        if let Some(ty) = &b.ty {
+                            static_bytes = static_bytes.saturating_add(layout.of(ty).0);
+                        }
+                    }
+                }
+            }
+            self.w.blank();
+            self.w.line(&format!(
+                "static struct {{\n    struct vela__rt__chunk* previous;\n    size_t size;\n    size_t used;\n    _Alignas(max_align_t) unsigned char data[{}];\n}} vela__global_storage = {{\n    .previous = NULL,\n    .size = {},\n    .used = {},\n    .data = {{0}}\n}};",
+                g.capacity, g.capacity, static_bytes
+            ));
+            self.w.line(&format!(
+                "static vela__rt__region vela__global_region[1] = {{{{\n    .newest = (vela__rt__chunk*)(void*)&vela__global_storage,\n    .closers = NULL,\n    .fixed_cap = {}\n}}}};",
+                g.capacity
+            ));
+            for stmt in &g.stmts {
+                if let StmtKind::Binding { names, .. } = &stmt.kind {
+                    for bound in names {
+                        let ty = bound.ty.as_ref().ok_or_else(|| {
+                            Error::internal_at(
+                                bound.span,
+                                format!("global variable '{}' has no type", bound.name),
+                            )
+                        })?;
+                        self.w.line(&format!("static {} {};", c_type(ty), c_ident(&bound.name)));
+                    }
+                }
+            }
+        }
+
         let mut has_main = false;
         for item in items {
             if let Item::Task(t) = item
@@ -349,6 +390,16 @@ impl Generator {
             // pipe or a file. `scan` flushes before it reads, and the runtime
             // flushes before it stops a program.
             self.w.open("int main(void)");
+            if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
+                for stmt in &g.stmts {
+                    if let StmtKind::Binding { names, init, .. } = &stmt.kind {
+                        let values = self.gen_value_list(names.len(), init, stmt.span)?;
+                        for (bound, value) in names.iter().zip(values) {
+                            self.w.line(&format!("{} = {};", c_ident(&bound.name), value));
+                        }
+                    }
+                }
+            }
             for (name, member) in &shared {
                 let Some(value) = &member.field.default else {
                     return Err(Error::internal_at(
@@ -7144,6 +7195,9 @@ impl UsedTypes {
                     }
                 }
                 Item::Task(_) | Item::Macro(_) => {}
+                Item::GlobalRegion(g) => {
+                    used.block(&g.stmts);
+                }
             }
         }
         used
@@ -7875,7 +7929,7 @@ fn type_name(item: &Item) -> Option<&str> {
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) if !k.types.is_empty() => None,
         Item::Kind(k) => Some(&k.name),
-        Item::Task(_) | Item::Macro(_) => None,
+        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => None,
     }
 }
 
@@ -7979,7 +8033,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             .flat_map(|v| &v.payload)
             .flat_map(|f| value_dependencies(&f.ty))
             .collect(),
-        TypeDef::Item(Item::Task(_) | Item::Macro(_)) => Vec::new(),
+        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value)
             .into_iter()
@@ -8154,6 +8208,9 @@ fn c_name(name: &str) -> String {
 }
 
 fn c_ident(name: &str) -> String {
+    if name == "global" {
+        return "vela__global_region".to_string();
+    }
     if name == THIS {
         return "vela__this".to_string();
     }
