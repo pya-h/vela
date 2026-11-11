@@ -249,6 +249,10 @@ shape Label
     fi
 fi
 
+task is_interactive() -> bool
+    <- native_is_interactive()
+fi
+
 priv native task native_gui_window_open(title: text@p, width: int, height: int) -> int
 priv native task native_gui_window_close(handle: int)
 priv native task native_gui_window_is_open(handle: int) -> bool
@@ -267,3 +271,4 @@ priv native task native_gui_canvas_draw_rect(handle: int, x: int, y: int, w: int
 priv native task native_gui_canvas_draw_line(handle: int, x1: int, y1: int, x2: int, y2: int, r: int, g: int, b: int, a: int)
 priv native task native_gui_canvas_draw_text(handle: int, x: int, y: int, text: text@p, r: int, g: int, b: int, a: int)
 priv native task native_gui_canvas_export_ppm(handle: int, into: region) -> text@into
+priv native task native_is_interactive() -> bool

@@ -28,6 +28,17 @@
 #include <fcntl.h>
 #include <poll.h>
 
+#if defined(__has_include)
+#  if __has_include(<dlfcn.h>)
+#    include <dlfcn.h>
+#    define VELA_HAS_DLFCN 1
+#  endif
+#endif
+
+#ifndef VELA_HAS_DLFCN
+#  define VELA_HAS_DLFCN 0
+#endif
+
 static inline void vela__rt__show_line(void) {
     putchar('\n');
 }
@@ -3343,6 +3354,17 @@ static inline bool vela__rt__web_text_eq_ignore_case(vela__rt__text a, vela__rt_
     return true;
 }
 
+static inline bool vela__rt__is_interactive(void) {
+    if (getenv("VELA_TEST") != NULL) {
+        return false;
+    }
+    return true;
+}
+
+static inline bool vela__rt__web_is_interactive(void) {
+    return vela__rt__is_interactive();
+}
+
 /* ==================== WebSocket Helpers (RFC 6455) ==================== */
 
 static inline uint32_t vela__rt__sha1_rol(uint32_t value, uint32_t bits) {
@@ -3745,6 +3767,41 @@ static const uint8_t vela__rt__gui_font[96][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, /* 127 '\x7F' */
 };
 
+#define VELA__X11_KEY_PRESS_MASK      (1L << 0)
+#define VELA__X11_KEY_RELEASE_MASK    (1L << 1)
+#define VELA__X11_BUTTON_PRESS_MASK   (1L << 2)
+#define VELA__X11_BUTTON_RELEASE_MASK (1L << 3)
+#define VELA__X11_POINTER_MOTION_MASK (1L << 6)
+#define VELA__X11_EXPOSURE_MASK       (1L << 15)
+#define VELA__X11_STRUCTURE_NOTIFY    (1L << 17)
+
+typedef struct vela__rt__x11_image_s {
+    int width, height;
+    int xoffset;
+    int format;
+    char *data;
+    int byte_order;
+    int bitmap_unit;
+    int bitmap_bit_order;
+    int bitmap_pad;
+    int depth;
+    int bytes_per_line;
+    int bits_per_pixel;
+    unsigned long red_mask;
+    unsigned long green_mask;
+    unsigned long blue_mask;
+    char *obdata;
+    struct {
+        struct vela__rt__x11_image_s* (*create_image)(void);
+        int (*destroy_image)(struct vela__rt__x11_image_s*);
+    } f;
+} vela__rt__x11_image;
+
+typedef union {
+    int type;
+    char pad[192];
+} vela__rt__x11_event;
+
 typedef struct {
     int64_t handle;
     char* title;
@@ -3757,7 +3814,81 @@ typedef struct {
     int event_count;
     int64_t events[VELA__RT__GUI_EVENT_QUEUE_SIZE][4]; /* [type, a1, a2, a3] */
     int64_t current_event[4];
+    void* x11_display;
+    unsigned long x11_window;
+    void* x11_gc;
+    vela__rt__x11_image* x11_ximage;
+    uint32_t* x11_buffer;
+    unsigned long wm_delete_window;
 } vela__rt__gui_window;
+
+#if VELA_HAS_DLFCN
+typedef struct {
+    void* lib;
+    void* (*XOpenDisplay)(const char*);
+    int (*XCloseDisplay)(void*);
+    int (*XDefaultScreen)(void*);
+    unsigned long (*XRootWindow)(void*, int);
+    unsigned long (*XCreateSimpleWindow)(void*, unsigned long, int, int, unsigned int, unsigned int, unsigned int, unsigned long, unsigned long);
+    int (*XStoreName)(void*, unsigned long, const char*);
+    int (*XSelectInput)(void*, unsigned long, long);
+    int (*XMapWindow)(void*, unsigned long);
+    unsigned long (*XInternAtom)(void*, const char*, int);
+    int (*XSetWMProtocols)(void*, unsigned long, unsigned long*, int);
+    void* (*XCreateGC)(void*, unsigned long, unsigned long, void*);
+    int (*XFreeGC)(void*, void*);
+    int (*XDestroyWindow)(void*, unsigned long);
+    void* (*XDefaultVisual)(void*, int);
+    int (*XDefaultDepth)(void*, int);
+    vela__rt__x11_image* (*XCreateImage)(void*, void*, unsigned int, int, int, char*, unsigned int, unsigned int, int, int);
+    int (*XPutImage)(void*, unsigned long, void*, vela__rt__x11_image*, int, int, int, int, unsigned int, unsigned int);
+    int (*XPending)(void*);
+    int (*XNextEvent)(void*, vela__rt__x11_event*);
+    int (*XFlush)(void*);
+} vela__rt__x11_api;
+
+static vela__rt__x11_api vela__rt__x11 = {0};
+static bool vela__rt__x11_loaded = false;
+
+static inline bool vela__rt__init_x11(void) {
+    if (vela__rt__x11_loaded) return vela__rt__x11.lib != NULL;
+    vela__rt__x11_loaded = true;
+    void* lib = dlopen("libX11.so.6", RTLD_LAZY);
+    if (!lib) lib = dlopen("libX11.so", RTLD_LAZY);
+    if (!lib) return false;
+    vela__rt__x11.lib = lib;
+
+    #define VELA_LOAD_X(fn) do { \
+        void* sym = dlsym(lib, #fn); \
+        if (!sym) { dlclose(lib); vela__rt__x11.lib = NULL; return false; } \
+        memcpy(&vela__rt__x11.fn, &sym, sizeof(vela__rt__x11.fn)); \
+    } while(0)
+
+    VELA_LOAD_X(XOpenDisplay);
+    VELA_LOAD_X(XCloseDisplay);
+    VELA_LOAD_X(XDefaultScreen);
+    VELA_LOAD_X(XRootWindow);
+    VELA_LOAD_X(XCreateSimpleWindow);
+    VELA_LOAD_X(XStoreName);
+    VELA_LOAD_X(XSelectInput);
+    VELA_LOAD_X(XMapWindow);
+    VELA_LOAD_X(XInternAtom);
+    VELA_LOAD_X(XSetWMProtocols);
+    VELA_LOAD_X(XCreateGC);
+    VELA_LOAD_X(XFreeGC);
+    VELA_LOAD_X(XDestroyWindow);
+    VELA_LOAD_X(XDefaultVisual);
+    VELA_LOAD_X(XDefaultDepth);
+    VELA_LOAD_X(XCreateImage);
+    VELA_LOAD_X(XPutImage);
+    VELA_LOAD_X(XPending);
+    VELA_LOAD_X(XNextEvent);
+    VELA_LOAD_X(XFlush);
+
+    #undef VELA_LOAD_X
+    return true;
+}
+#endif
 
 static vela__rt__gui_window vela__rt__gui_windows[VELA__RT__GUI_MAX_WINDOWS];
 static bool vela__rt__gui_initialized = false;
@@ -3784,6 +3915,33 @@ static inline void vela__rt__gui_window_push_event_internal(vela__rt__gui_window
     win->events[win->event_tail][3] = a3;
     win->event_tail = (win->event_tail + 1) % VELA__RT__GUI_EVENT_QUEUE_SIZE;
     win->event_count++;
+}
+
+static inline void vela__rt__gui_window_resize_internal(vela__rt__gui_window* win, int64_t new_w, int64_t new_h) {
+    if (new_w <= 0 || new_h <= 0) return;
+    uint32_t* new_fb = (uint32_t*)calloc((size_t)(new_w * new_h), sizeof(uint32_t));
+    if (!new_fb) return;
+    free(win->framebuffer);
+    win->framebuffer = new_fb;
+    win->width = new_w;
+    win->height = new_h;
+#if VELA_HAS_DLFCN
+    if (win->x11_display && win->x11_ximage) {
+        win->x11_ximage->data = NULL;
+        if (win->x11_ximage->f.destroy_image) {
+            win->x11_ximage->f.destroy_image(win->x11_ximage);
+        }
+        win->x11_ximage = NULL;
+        if (win->x11_buffer) {
+            free(win->x11_buffer);
+        }
+        win->x11_buffer = (uint32_t*)malloc((size_t)(new_w * new_h) * sizeof(uint32_t));
+        int screen = vela__rt__x11.XDefaultScreen(win->x11_display);
+        void* visual = vela__rt__x11.XDefaultVisual(win->x11_display, screen);
+        int depth = vela__rt__x11.XDefaultDepth(win->x11_display, screen);
+        win->x11_ximage = vela__rt__x11.XCreateImage(win->x11_display, visual, (unsigned int)depth, 2 /* ZPixmap */, 0, (char*)win->x11_buffer, (unsigned int)new_w, (unsigned int)new_h, 32, (int)(new_w * 4));
+    }
+#endif
 }
 
 static inline int64_t vela__rt__gui_window_open(vela__rt__text title, int64_t width, int64_t height) {
@@ -3820,6 +3978,43 @@ static inline int64_t vela__rt__gui_window_open(vela__rt__text title, int64_t wi
     /* Enqueue initial Redraw event */
     vela__rt__gui_window_push_event_internal(win, 8, 0, 0, 0);
 
+#if VELA_HAS_DLFCN
+    /* When not running in automated tests, try connecting to desktop display */
+    if (getenv("VELA_TEST") == NULL) {
+        if (vela__rt__init_x11()) {
+            const char* dname = getenv("DISPLAY");
+            void* dpy = vela__rt__x11.XOpenDisplay(dname);
+            if (dpy) {
+                int screen = vela__rt__x11.XDefaultScreen(dpy);
+                unsigned long root = vela__rt__x11.XRootWindow(dpy, screen);
+                void* visual = vela__rt__x11.XDefaultVisual(dpy, screen);
+                int depth = vela__rt__x11.XDefaultDepth(dpy, screen);
+                unsigned long xwin = vela__rt__x11.XCreateSimpleWindow(dpy, root, 100, 100, (unsigned int)width, (unsigned int)height, 0, 0, 0);
+                if (win->title) {
+                    vela__rt__x11.XStoreName(dpy, xwin, win->title);
+                }
+                unsigned long wm_del = vela__rt__x11.XInternAtom(dpy, "WM_DELETE_WINDOW", 0);
+                vela__rt__x11.XSetWMProtocols(dpy, xwin, &wm_del, 1);
+                long mask = VELA__X11_EXPOSURE_MASK | VELA__X11_KEY_PRESS_MASK | VELA__X11_KEY_RELEASE_MASK |
+                            VELA__X11_BUTTON_PRESS_MASK | VELA__X11_BUTTON_RELEASE_MASK |
+                            VELA__X11_POINTER_MOTION_MASK | VELA__X11_STRUCTURE_NOTIFY;
+                vela__rt__x11.XSelectInput(dpy, xwin, mask);
+                void* gc = vela__rt__x11.XCreateGC(dpy, xwin, 0, NULL);
+                win->x11_buffer = (uint32_t*)malloc((size_t)(width * height) * sizeof(uint32_t));
+                vela__rt__x11_image* img = vela__rt__x11.XCreateImage(dpy, visual, (unsigned int)depth, 2 /* ZPixmap */, 0, (char*)win->x11_buffer, (unsigned int)width, (unsigned int)height, 32, (int)(width * 4));
+                vela__rt__x11.XMapWindow(dpy, xwin);
+                vela__rt__x11.XFlush(dpy);
+
+                win->x11_display = dpy;
+                win->x11_window = xwin;
+                win->x11_gc = gc;
+                win->x11_ximage = img;
+                win->wm_delete_window = wm_del;
+            }
+        }
+    }
+#endif
+
     return win->handle;
 }
 
@@ -3827,6 +4022,31 @@ static inline void vela__rt__gui_window_close(int64_t handle) {
     vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
     if (!win) return;
     win->is_open = false;
+#if VELA_HAS_DLFCN
+    if (win->x11_display) {
+        if (win->x11_gc) {
+            vela__rt__x11.XFreeGC(win->x11_display, win->x11_gc);
+            win->x11_gc = NULL;
+        }
+        if (win->x11_ximage) {
+            win->x11_ximage->data = NULL;
+            if (win->x11_ximage->f.destroy_image) {
+                win->x11_ximage->f.destroy_image(win->x11_ximage);
+            }
+            win->x11_ximage = NULL;
+        }
+        if (win->x11_buffer) {
+            free(win->x11_buffer);
+            win->x11_buffer = NULL;
+        }
+        if (win->x11_window) {
+            vela__rt__x11.XDestroyWindow(win->x11_display, win->x11_window);
+            win->x11_window = 0;
+        }
+        vela__rt__x11.XCloseDisplay(win->x11_display);
+        win->x11_display = NULL;
+    }
+#endif
     if (win->framebuffer) {
         free(win->framebuffer);
         win->framebuffer = NULL;
@@ -3850,10 +4070,61 @@ static inline void vela__rt__gui_window_push_event(int64_t handle, int64_t type,
 
 static inline int64_t vela__rt__gui_window_poll_event(int64_t handle) {
     vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
-    if (!win || win->event_count == 0) {
-        if (win) {
-            memset(win->current_event, 0, sizeof(win->current_event));
+    if (!win) return 0;
+
+#if VELA_HAS_DLFCN
+    if (win->x11_display) {
+        while (vela__rt__x11.XPending(win->x11_display) > 0) {
+            vela__rt__x11_event ev;
+            vela__rt__x11.XNextEvent(win->x11_display, &ev);
+            if (ev.type == 12 /* Expose */) {
+                vela__rt__gui_window_push_event_internal(win, 8, 0, 0, 0); /* Redraw */
+            } else if (ev.type == 4 /* ButtonPress */) {
+                int x = *(const int*)(ev.pad + 64);
+                int y = *(const int*)(ev.pad + 68);
+                unsigned int button = *(const unsigned int*)(ev.pad + 84);
+                vela__rt__gui_window_push_event_internal(win, 1, x, y, (int64_t)button); /* MouseDown */
+            } else if (ev.type == 5 /* ButtonRelease */) {
+                int x = *(const int*)(ev.pad + 64);
+                int y = *(const int*)(ev.pad + 68);
+                unsigned int button = *(const unsigned int*)(ev.pad + 84);
+                vela__rt__gui_window_push_event_internal(win, 2, x, y, (int64_t)button); /* MouseUp */
+            } else if (ev.type == 6 /* MotionNotify */) {
+                int x = *(const int*)(ev.pad + 64);
+                int y = *(const int*)(ev.pad + 68);
+                vela__rt__gui_window_push_event_internal(win, 3, x, y, 0); /* MouseMove */
+            } else if (ev.type == 2 /* KeyPress */) {
+                unsigned int keycode = *(const unsigned int*)(ev.pad + 84);
+                unsigned int state = *(const unsigned int*)(ev.pad + 80);
+                vela__rt__gui_window_push_event_internal(win, 4, (int64_t)keycode, (int64_t)state, 0); /* KeyDown */
+            } else if (ev.type == 3 /* KeyRelease */) {
+                unsigned int keycode = *(const unsigned int*)(ev.pad + 84);
+                unsigned int state = *(const unsigned int*)(ev.pad + 80);
+                vela__rt__gui_window_push_event_internal(win, 5, (int64_t)keycode, (int64_t)state, 0); /* KeyUp */
+            } else if (ev.type == 22 /* ConfigureNotify */) {
+                int w = *(const int*)(ev.pad + 56);
+                int h = *(const int*)(ev.pad + 60);
+                if (w != win->width || h != win->height) {
+                    vela__rt__gui_window_resize_internal(win, w, h);
+                    vela__rt__gui_window_push_event_internal(win, 6, w, h, 0); /* Resize */
+                }
+            } else if (ev.type == 33 /* ClientMessage */) {
+                unsigned long data0 = *(const unsigned long*)(ev.pad + 56);
+                if (data0 == win->wm_delete_window) {
+                    vela__rt__gui_window_push_event_internal(win, 7, 0, 0, 0); /* CloseRequested */
+                }
+            }
         }
+    }
+#endif
+
+    if (win->event_count == 0) {
+        memset(win->current_event, 0, sizeof(win->current_event));
+#if VELA_HAS_DLFCN
+        if (win->x11_display) {
+            poll(NULL, 0, 8);
+        }
+#endif
         return 0;
     }
     win->current_event[0] = win->events[win->event_head][0];
@@ -3872,7 +4143,20 @@ static inline int64_t vela__rt__gui_window_event_arg(int64_t handle, int64_t idx
 }
 
 static inline void vela__rt__gui_window_present(int64_t handle) {
-    (void)handle;
+    vela__rt__gui_window* win = vela__rt__gui_window_get(handle);
+    if (!win || !win->is_open) return;
+#if VELA_HAS_DLFCN
+    if (win->x11_display && win->x11_window && win->x11_gc && win->x11_ximage && win->x11_buffer) {
+        size_t total = (size_t)(win->width * win->height);
+        for (size_t i = 0; i < total; i++) {
+            uint32_t c = win->framebuffer[i];
+            /* Convert RGBA (0xRRGGBBAA) to 24/32-bit TrueColor BGRX (0x00RRGGBB) */
+            win->x11_buffer[i] = (c >> 8);
+        }
+        vela__rt__x11.XPutImage(win->x11_display, win->x11_window, win->x11_gc, win->x11_ximage, 0, 0, 0, 0, (unsigned int)win->width, (unsigned int)win->height);
+        vela__rt__x11.XFlush(win->x11_display);
+    }
+#endif
 }
 
 static inline void vela__rt__gui_canvas_clear(int64_t handle, int64_t r, int64_t g, int64_t b, int64_t a) {

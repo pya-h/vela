@@ -124,7 +124,14 @@ const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn run_with_timeout(exe: &Path, input: Vec<u8>, folder: &Path) -> Option<std::process::Output> {
     use std::process::Stdio;
-    let mut child = Command::new(exe).current_dir(folder).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(exe)
+        .env("VELA_TEST", "1")
+        .current_dir(folder)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     // Written on a thread, and closed after, so the program sees the input end;
     // a program that stops reading early closes the pipe, which isn't an error.
     let mut stdin = child.stdin.take().unwrap();

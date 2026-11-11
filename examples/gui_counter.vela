@@ -1,6 +1,15 @@
 ; An interactive counter application built with std/gui.
 ; Demonstrates per-frame region discipline, software canvas rendering, and button interaction.
-include std/gui { Window, GuiEvent, Point, Rect, Color, Button }
+include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Button, is_interactive }
+
+task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, r: region default)
+    canvas.clear(Color.hex(0x0F172A))
+    btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
+    btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
+    btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
+    canvas.draw_text("Counter: {count}" at r, Point { x: 30, y: 50 }, Color.white())
+    win.present()
+fi
 
 task main()
     flex win = Window.open("Counter Application", 320, 240) { failure _
@@ -15,36 +24,36 @@ task main()
     flex count = 0
     fixed canvas = win.canvas()
 
-    ; Simulate user clicks on buttons
-    win.push_event(1, 50, 110, 1)   ; click "+ Add"
-    win.push_event(1, 50, 110, 1)   ; click "+ Add"
-    win.push_event(1, 50, 110, 1)   ; click "+ Add"
-    win.push_event(1, 150, 110, 1)  ; click "- Sub"
-    win.push_event(1, 250, 110, 1)  ; click "Reset"
-    win.push_event(7)               ; CloseRequested
+    ; Simulate user clicks on buttons when running in automated testing
+    when not is_interactive()
+        win.push_event(1, 50, 110, 1)   ; click "+ Add"
+        win.push_event(1, 50, 110, 1)   ; click "+ Add"
+        win.push_event(1, 50, 110, 1)   ; click "+ Add"
+        win.push_event(1, 150, 110, 1)  ; click "- Sub"
+        win.push_event(1, 250, 110, 1)  ; click "Reset"
+        win.push_event(7)               ; CloseRequested
+    fi
 
     loop win.is_open
         region frame default
         fixed ev = win.poll_event()
         match ev
         case GuiEvent.Redraw
-            canvas.clear(Color.hex(0x0F172A))
-            btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
-            btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
-            btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
-            canvas.draw_text("Counter: {count}", Point { x: 30, y: 50 }, Color.white())
-            win.present()
+            draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
         case GuiEvent.MouseDown x y btn
             fixed click_pos = Point { x: x, y: y }
             when btn_inc.rect.contains(click_pos)
                 count++
                 show("count incremented: ", count)
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
             else when btn_dec.rect.contains(click_pos)
                 count--
                 show("count decremented: ", count)
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
             else when btn_rst.rect.contains(click_pos)
                 count = 0
                 show("count reset: ", count)
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
             fi
         case GuiEvent.CloseRequested
             win.close()

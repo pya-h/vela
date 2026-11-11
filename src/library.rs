@@ -84,6 +84,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/web.native_url_well_formed", "vela__rt__web_url_well_formed"),
     ("std/web.native_url_decode", "vela__rt__web_url_decode"),
     ("std/web.native_text_is_utf8", "vela__rt__web_text_is_utf8"),
+    ("std/web.native_is_interactive", "vela__rt__web_is_interactive"),
     ("std/web.native_text_eq_ignore_case", "vela__rt__web_text_eq_ignore_case"),
     ("std/web.native_time_ms", "vela__rt__web_time_ms"),
     ("std/web.native_sleep_ms", "vela__rt__web_sleep_ms"),
@@ -120,6 +121,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/gui.native_gui_canvas_draw_line", "vela__rt__gui_canvas_draw_line"),
     ("std/gui.native_gui_canvas_draw_text", "vela__rt__gui_canvas_draw_text"),
     ("std/gui.native_gui_canvas_export_ppm", "vela__rt__gui_canvas_export_ppm"),
+    ("std/gui.native_is_interactive", "vela__rt__is_interactive"),
 ];
 
 pub fn module(name: &str) -> Option<&'static str> {

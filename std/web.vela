@@ -1269,6 +1269,10 @@ task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = d
     <- s.serve(handler)
 fi
 
+task is_interactive() -> bool
+    <- native_is_interactive()
+fi
+
 task serve_one(server_sock: Socket, handler: (Request@r, @r) -> Response@r ~ WebError@r, r: region default) -> nothing ~ WebError
     fixed client_sock = server_sock.accept(r) { failure e
         <- fail WebError.BadRequest("failed accepting connection")
@@ -2129,3 +2133,4 @@ priv native task native_ws_frame_opcode(raw: text@p) -> int
 priv native task native_ws_frame_payload(raw: text@p, into: region) -> text@into
 priv native task native_ws_frame_close_code(raw: text@p) -> int
 priv native task native_socket_stash_consume(handle: int, count: int)
+priv native task native_is_interactive() -> bool
