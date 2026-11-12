@@ -1,36 +1,49 @@
 ; An interactive counter application built with std/gui.
-; Demonstrates per-frame region discipline, software canvas rendering, and button interaction.
-include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Button, is_interactive }
+; Demonstrates per-frame region discipline, rich styled widgets (Button, Label, ProgressBar, Style),
+; and software canvas rendering with event dispatching.
+include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, Label, ProgressBar, is_interactive }
 
-task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, r: region default)
+task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, progress: ProgressBar, title_label: Label, r: region default)
     canvas.clear(Color.hex(0x0F172A))
+
+    title_label.draw(canvas)
+    canvas.draw_text("Current count: {count}" at r, Point { x: 30, y: 55 }, Color.hex(0x38BDF8))
+
+    ; Draw progress bar reflecting count percentage (0 - 100%)
+    progress.draw(canvas)
+
+    ; Draw styled action buttons
     btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
     btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
     btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
-    canvas.draw_text("Counter: {count}" at r, Point { x: 30, y: 50 }, Color.white())
+
     win.present()
 fi
 
 task main()
-    flex win = Window.open("Counter Application", 320, 240) { failure _
+    flex win = Window.open("Rich GUI Counter", 340, 220) { failure _
         show("failed opening window")
         <-
     }
 
-    fixed btn_inc = Button { rect: Rect { x: 30, y: 100, width: 80, height: 36 }, label: "+ Add" }
-    fixed btn_dec = Button { rect: Rect { x: 130, y: 100, width: 80, height: 36 }, label: "- Sub" }
-    fixed btn_rst = Button { rect: Rect { x: 230, y: 100, width: 70, height: 36 }, label: "Reset" }
+    fixed title_label = Label { pos: Point { x: 30, y: 25 }, text: "Vela Modern Counter", color: Color.white() }
+
+    fixed btn_inc = Button { rect: Rect { x: 30, y: 130, width: 85, height: 36 }, label: "+ Add", style: Style.success() }
+    fixed btn_dec = Button { rect: Rect { x: 125, y: 130, width: 85, height: 36 }, label: "- Sub", style: Style.primary() }
+    fixed btn_rst = Button { rect: Rect { x: 220, y: 130, width: 85, height: 36 }, label: "Reset", style: Style.danger() }
+
+    flex progress = ProgressBar { rect: Rect { x: 30, y: 85, width: 275, height: 18 }, fill_color: Color.hex(0x10B981) }
 
     flex count = 0
     fixed canvas = win.canvas()
 
-    ; Simulate user clicks on buttons when running in automated testing
+    ; Simulate user clicks on buttons when running in automated headless testing
     when not is_interactive()
-        win.push_event(1, 50, 110, 1)   ; click "+ Add"
-        win.push_event(1, 50, 110, 1)   ; click "+ Add"
-        win.push_event(1, 50, 110, 1)   ; click "+ Add"
-        win.push_event(1, 150, 110, 1)  ; click "- Sub"
-        win.push_event(1, 250, 110, 1)  ; click "Reset"
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 145, 140, 1)  ; click "- Sub"
+        win.push_event(1, 240, 140, 1)  ; click "Reset"
         win.push_event(7)               ; CloseRequested
     fi
 
@@ -39,21 +52,25 @@ task main()
         fixed ev = win.poll_event()
         match ev
         case GuiEvent.Redraw
-            draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
+            progress.set_value(count * 20)
+            draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
         case GuiEvent.MouseDown x y btn
             fixed click_pos = Point { x: x, y: y }
             when btn_inc.rect.contains(click_pos)
                 count++
-                show("count incremented: ", count)
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
+                progress.set_value(count * 20)
+                show("count incremented: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
             else when btn_dec.rect.contains(click_pos)
                 count--
-                show("count decremented: ", count)
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
+                progress.set_value(count * 20)
+                show("count decremented: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
             else when btn_rst.rect.contains(click_pos)
                 count = 0
-                show("count reset: ", count)
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, frame)
+                progress.set_value(0)
+                show("count reset: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
             fi
         case GuiEvent.CloseRequested
             win.close()
@@ -63,4 +80,3 @@ task main()
         fi
     fi
 fi
-

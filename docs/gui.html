@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Graphical User Interfaces (GUI)</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #818cf8;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 20% 30%, rgba(56,189,248,0.14) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(129,140,248,0.12) 0%, transparent 40%),
+        var(--bg-2);
+    }
+    nav.top-nav {
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h2 .icon {
+      font-size: 1.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      font-size: 1.35rem;
+      color: #e2e8f0;
+    }
+    p, li {
+      color: #cbd5e1;
+      font-size: 1.05rem;
+    }
+    ul, ol {
+      padding-left: 1.5rem;
+    }
+    li {
+      margin-bottom: 0.5rem;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #f1f5f9;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: rgba(255,255,255,0.08);
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #e2e8f0;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    .card h4 {
+      margin-top: 0;
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+    .card p {
+      margin-bottom: 0;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2rem 0;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--code-bg);
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .callout {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      margin: 2rem 0;
+    }
+    .callout.tip {
+      background: rgba(52, 211, 153, 0.08);
+      border-left-color: var(--accent-3);
+    }
+    .callout h4 {
+      margin: 0 0 0.5rem 0;
+      color: var(--fg);
+    }
+    .callout p {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="top-nav">
+      <a href="vela.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="events.html">Events</a>
+      <a href="std.html">Standard Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html" class="active">GUI</a>
+    </nav>
+    <h1>Graphical User Interfaces</h1>
+    <p class="tagline">
+      Modern software 2D rendering, native desktop presentation, rich interactive widgets, and deterministic headless testing with zero-cost region discipline.
+    </p>
+  </header>
+
+  <main>
+    <h2><span class="icon">🏛️</span> Architecture &amp; Core Philosophy</h2>
+    <p>
+      Vela's standard GUI library (<code>std/gui</code>) is built around three foundational design principles:
+    </p>
+    <div class="grid">
+      <div class="card">
+        <h4>1. Software 2D Rasterizer</h4>
+        <p>A fast, pixel-accurate CPU rasterizer drawing directly into a linear 32-bit RGBA frame buffer. No external rendering engine or heavyweight GPU stack required.</p>
+      </div>
+      <div class="card">
+        <h4>2. Native Presentation Backend</h4>
+        <p>Direct presentation to native platform windows (X11 on Linux) when a display server is present, with automatic graceful fallback to virtual headless operation in CI.</p>
+      </div>
+      <div class="card">
+        <h4>3. Per-Frame Region Discipline</h4>
+        <p>All transient frame allocations (formatted strings, layout calculations, temporary bounds) live in a single frame region that resets each tick with zero heap fragmentation.</p>
+      </div>
+    </div>
+
+    <h2><span class="icon">📐</span> Geometry &amp; Color Primitives</h2>
+    <p>
+      All widgets and canvas operations are positioned using straightforward value shapes:
+    </p>
+    <pre><code>; Geometry primitives
+fixed pt = Point { x: 30, y: 50 }
+fixed sz = Size { width: 200, height: 40 }
+fixed box = Rect { x: 20, y: 30, width: 160, height: 36 }
+
+; Check if a point falls within a rectangle (e.g. for mouse clicks)
+when box.contains(mouse_pos)
+    show("clicked inside box")
+fi</code></pre>
+
+    <h3>Color Representation</h3>
+    <p>
+      Colors are represented as 32-bit RGBA values with convenient constructor helpers:
+    </p>
+    <pre><code>fixed c1 = Color.rgb(37, 99, 235)           ; Solid RGB (alpha = 255)
+fixed c2 = Color.rgba(15, 23, 42, 180)       ; RGBA with transparency
+fixed c3 = Color.hex(0x38BDF8)              ; Hexadecimal literal (0xRRGGBB)
+
+; Built-in color constants
+fixed white = Color.white()
+fixed black = Color.black()
+fixed trans = Color.transparent()</code></pre>
+
+    <h2><span class="icon">🎨</span> Styling System (Themes &amp; Modifiers)</h2>
+    <p>
+      The <code>Style</code> shape provides a clean, unified way to theme any widget. You can use standard presets or customize individual properties fluently:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Preset</th>
+          <th>Background</th>
+          <th>Border</th>
+          <th>Intended Usage</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Style.primary()</code></td>
+          <td>Royal Blue (<code>0x2563EB</code>)</td>
+          <td>Light Blue</td>
+          <td>Primary call-to-action buttons, submit actions</td>
+        </tr>
+        <tr>
+          <td><code>Style.secondary()</code></td>
+          <td>Muted Slate (<code>0x475569</code>)</td>
+          <td>Slate 400</td>
+          <td>Secondary actions, auxiliary controls</td>
+        </tr>
+        <tr>
+          <td><code>Style.success()</code></td>
+          <td>Emerald Green (<code>0x059669</code>)</td>
+          <td>Green 400</td>
+          <td>Confirmations, add items, positive feedback</td>
+        </tr>
+        <tr>
+          <td><code>Style.danger()</code></td>
+          <td>Crimson Red (<code>0xDC2626</code>)</td>
+          <td>Red 400</td>
+          <td>Deletions, resets, critical cancellations</td>
+        </tr>
+        <tr>
+          <td><code>Style.dark()</code></td>
+          <td>Obsidian (<code>0x0F172A</code>)</td>
+          <td>Slate 700</td>
+          <td>Dark mode panels, text inputs, list boxes</td>
+        </tr>
+        <tr>
+          <td><code>Style.light()</code></td>
+          <td>Crisp Gray (<code>0xF1F5F9</code>)</td>
+          <td>Slate 300</td>
+          <td>Light mode elements and high-contrast containers</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Fluent Style Customization</h3>
+    <p>
+      Modify presets without rewriting full shapes using modifier methods:
+    </p>
+    <pre><code>fixed custom_style = Style.primary()
+    .with_bg(Color.hex(0x6366F1))           ; Change background to Indigo
+    .with_border(Color.hex(0xA5B4FC), 2)    ; 2px lighter border
+    .with_padding(8)                        ; Adjust internal padding</code></pre>
+
+    <h2><span class="icon">🧩</span> Rich Widget Gallery</h2>
+    <p>
+      Vela provides out-of-the-box widgets designed for common desktop application tasks:
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h4>Button</h4>
+        <p>Interactive push button with automated hover, active pressed state, border styling, and centered label drawing.</p>
+      </div>
+      <div class="card">
+        <h4>Label</h4>
+        <p>Crisp typography display supporting custom text colors and optional background pill pill rendering.</p>
+      </div>
+      <div class="card">
+        <h4>TextBox</h4>
+        <p>Single-line input with focus outline glow, placeholder support, cursor pipe indicator, and backspace handling.</p>
+      </div>
+      <div class="card">
+        <h4>ListBox</h4>
+        <p>Selectable list holding items with mouse hover highlighting, row click selection, and active item queries.</p>
+      </div>
+      <div class="card">
+        <h4>CheckBox</h4>
+        <p>Interactive toggle box with animated check fill, hover feedback, and paired text description.</p>
+      </div>
+      <div class="card">
+        <h4>ProgressBar</h4>
+        <p>Horizontal progress indicator bounded between 0% and 100% with customizable fill color.</p>
+      </div>
+      <div class="card">
+        <h4>ImageView</h4>
+        <p>Graphic container with framed borders and built-in checkerboard pattern for media previews.</p>
+      </div>
+      <div class="card">
+        <h4>MessageBox &amp; InputBox</h4>
+        <p>Modal dialog overlays with darkened backdrop dimming, title bar, message/input fields, and OK buttons.</p>
+      </div>
+      <div class="card">
+        <h4>VBox &amp; HBox</h4>
+        <p>Flow layout helpers that automatically advance cursor coordinates with consistent widget spacing.</p>
+      </div>
+    </div>
+
+    <h2><span class="icon">🔄</span> The Window &amp; Event Loop</h2>
+    <p>
+      Desktop applications run on an event loop. Opening a <code>Window</code> creates the native window and gives access to its <code>Canvas</code>:
+    </p>
+    <pre><code>include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Button, is_interactive }
+
+task main()
+    flex win = Window.open("My Application", 400, 300) { failure err
+        show("Failed to open window")
+        <-
+    }
+    fixed canvas = win.canvas()
+
+    loop win.is_open
+        region frame default
+        fixed ev = win.poll_event()
+
+        match ev
+        case GuiEvent.Redraw
+            canvas.clear(Color.hex(0x0F172A))
+            canvas.draw_text("Hello, Vela GUI!" at frame, Point { x: 40, y: 50 }, Color.white())
+            win.present()
+
+        case GuiEvent.MouseDown x y btn
+            show("Mouse clicked at: ", x, ", ", y)
+
+        case GuiEvent.CloseRequested
+            win.close()
+            break
+
+        case _
+        fi
+    fi
+fi</code></pre>
+
+    <h2><span class="icon">🤖</span> Headless Automated Testing</h2>
+    <div class="callout tip">
+      <h4>Deterministic GUI Testing Without an X Server</h4>
+      <p>
+        In CI environments or server runners where <code>DISPLAY</code> is unavailable, <code>is_interactive()</code> returns <code>false</code>. You can push synthetic events using <code>win.push_event(...)</code> to simulate exact user interactions deterministically!
+      </p>
+    </div>
+    <pre><code>when not is_interactive()
+    ; Synthetic event sequence:
+    win.push_event(1, 50, 140, 1)   ; Simulate MouseDown at (50, 140)
+    win.push_event(7)               ; Simulate CloseRequested
+fi</code></pre>
+
+    <h2><span class="icon">🚀</span> Complete Example: Modern Counter Application</h2>
+    <p>
+      Here is the complete code for an interactive counter featuring custom button styling, a progress bar, and automated test dispatching:
+    </p>
+    <pre><code>; An interactive counter application built with std/gui.
+include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, Label, ProgressBar, is_interactive }
+
+task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, progress: ProgressBar, title_label: Label, r: region default)
+    canvas.clear(Color.hex(0x0F172A))
+
+    title_label.draw(canvas)
+    canvas.draw_text("Current count: {count}" at r, Point { x: 30, y: 55 }, Color.hex(0x38BDF8))
+
+    ; Draw progress bar reflecting count percentage (0 - 100%)
+    progress.draw(canvas)
+
+    ; Draw styled action buttons
+    btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
+    btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
+    btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
+
+    win.present()
+fi
+
+task main()
+    flex win = Window.open("Rich GUI Counter", 340, 220) { failure _
+        show("failed opening window")
+        <-
+    }
+
+    fixed title_label = Label { pos: Point { x: 30, y: 25 }, text: "Vela Modern Counter", color: Color.white() }
+
+    fixed btn_inc = Button { rect: Rect { x: 30, y: 130, width: 85, height: 36 }, label: "+ Add", style: Style.success() }
+    fixed btn_dec = Button { rect: Rect { x: 125, y: 130, width: 85, height: 36 }, label: "- Sub", style: Style.primary() }
+    fixed btn_rst = Button { rect: Rect { x: 220, y: 130, width: 85, height: 36 }, label: "Reset", style: Style.danger() }
+
+    flex progress = ProgressBar { rect: Rect { x: 30, y: 85, width: 275, height: 18 }, fill_color: Color.hex(0x10B981) }
+
+    flex count = 0
+    fixed canvas = win.canvas()
+
+    ; Simulate user clicks when running in automated headless testing
+    when not is_interactive()
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 50, 140, 1)   ; click "+ Add"
+        win.push_event(1, 145, 140, 1)  ; click "- Sub"
+        win.push_event(1, 240, 140, 1)  ; click "Reset"
+        win.push_event(7)               ; CloseRequested
+    fi
+
+    loop win.is_open
+        region frame default
+        fixed ev = win.poll_event()
+        match ev
+        case GuiEvent.Redraw
+            progress.set_value(count * 20)
+            draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+        case GuiEvent.MouseDown x y btn
+            fixed click_pos = Point { x: x, y: y }
+            when btn_inc.rect.contains(click_pos)
+                count++
+                progress.set_value(count * 20)
+                show("count incremented: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            else when btn_dec.rect.contains(click_pos)
+                count--
+                progress.set_value(count * 20)
+                show("count decremented: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            else when btn_rst.rect.contains(click_pos)
+                count = 0
+                progress.set_value(0)
+                show("count reset: ", count, " (progress: ", progress.value, "%)")
+                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            fi
+        case GuiEvent.CloseRequested
+            win.close()
+            show("counter app closed; final count: ", count)
+            break
+        case _
+        fi
+    fi
+fi</code></pre>
+  </main>
+
+  <footer>
+    &copy; 2026 Vela Language Project &bull; Native Desktop &amp; GUI Architecture
+  </footer>
+</body>
+</html>
+

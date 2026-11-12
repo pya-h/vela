@@ -1,6 +1,6 @@
-count incremented: 1
-count incremented: 2
-count incremented: 3
-count decremented: 2
-count reset: 0
+count incremented: 1 (progress: 20%)
+count incremented: 2 (progress: 40%)
+count incremented: 3 (progress: 60%)
+count decremented: 2 (progress: 40%)
+count reset: 0 (progress: 0%)
 counter app closed; final count: 0

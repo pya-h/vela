@@ -218,34 +218,460 @@ shape Window
     fi
 fi
 
+shape Style
+    bg: Color = Color { r: 30, g: 41, b: 59, a: 255 }
+    fg: Color = Color { r: 248, g: 250, b: 252, a: 255 }
+    border: Color = Color { r: 71, g: 85, b: 105, a: 255 }
+    border_width: int = 1
+    hover_bg: Color = Color { r: 51, g: 65, b: 85, a: 255 }
+    active_bg: Color = Color { r: 15, g: 23, b: 42, a: 255 }
+    padding: int = 6
+
+    shared default() -> Style
+        <- Style {}
+    fi
+
+    shared primary() -> Style
+        <- Style { bg: Color.hex(0x2563EB), fg: Color.white(), border: Color.hex(0x60A5FA), border_width: 1, hover_bg: Color.hex(0x3B82F6), active_bg: Color.hex(0x1D4ED8), padding: 6 }
+    fi
+
+    shared secondary() -> Style
+        <- Style { bg: Color.hex(0x475569), fg: Color.white(), border: Color.hex(0x94A3B8), border_width: 1, hover_bg: Color.hex(0x64748B), active_bg: Color.hex(0x334155), padding: 6 }
+    fi
+
+    shared success() -> Style
+        <- Style { bg: Color.hex(0x059669), fg: Color.white(), border: Color.hex(0x34D399), border_width: 1, hover_bg: Color.hex(0x10B981), active_bg: Color.hex(0x047857), padding: 6 }
+    fi
+
+    shared danger() -> Style
+        <- Style { bg: Color.hex(0xDC2626), fg: Color.white(), border: Color.hex(0xF87171), border_width: 1, hover_bg: Color.hex(0xEF4444), active_bg: Color.hex(0xB91C1C), padding: 6 }
+    fi
+
+    shared dark() -> Style
+        <- Style { bg: Color.hex(0x0F172A), fg: Color.hex(0xF8FAFC), border: Color.hex(0x334155), border_width: 1, hover_bg: Color.hex(0x1E293B), active_bg: Color.hex(0x020617), padding: 6 }
+    fi
+
+    shared light() -> Style
+        <- Style { bg: Color.hex(0xF1F5F9), fg: Color.hex(0x0F172A), border: Color.hex(0xCBD5E1), border_width: 1, hover_bg: Color.hex(0xE2E8F0), active_bg: Color.hex(0xFFFFFF), padding: 6 }
+    fi
+
+    with_bg(c: Color) -> Style
+        <- Style { bg: c, fg: .fg, border: .border, border_width: .border_width, hover_bg: .hover_bg, active_bg: .active_bg, padding: .padding }
+    fi
+
+    with_fg(c: Color) -> Style
+        <- Style { bg: .bg, fg: c, border: .border, border_width: .border_width, hover_bg: .hover_bg, active_bg: .active_bg, padding: .padding }
+    fi
+
+    with_border(c: Color, width: int = 1) -> Style
+        <- Style { bg: .bg, fg: .fg, border: c, border_width: width, hover_bg: .hover_bg, active_bg: .active_bg, padding: .padding }
+    fi
+
+    with_padding(p: int) -> Style
+        <- Style { bg: .bg, fg: .fg, border: .border, border_width: .border_width, hover_bg: .hover_bg, active_bg: .active_bg, padding: p }
+    fi
+fi
+
 shape Button
     rect: Rect
     label: text
+    style: Style = Style { bg: Color { r: 37, g: 99, b: 235, a: 255 }, fg: Color { r: 255, g: 255, b: 255, a: 255 }, border: Color { r: 96, g: 165, b: 250, a: 255 }, border_width: 1, hover_bg: Color { r: 59, g: 130, b: 246, a: 255 }, active_bg: Color { r: 29, g: 78, b: 216, a: 255 }, padding: 6 }
 
     draw(canvas: Canvas, mouse_pos: Point, mouse_down: bool)
         fixed hovered = .rect.contains(mouse_pos)
         fixed bg = when hovered and mouse_down
-            Color.hex(0x1E40AF)
+            .style.active_bg
         else when hovered
-            Color.hex(0x3B82F6)
+            .style.hover_bg
         else
-            Color.hex(0x2563EB)
+            .style.bg
         fi
         canvas.fill_rect(.rect, bg)
-        canvas.draw_rect(.rect, Color.white())
-        fixed text_x = .rect.x + 8
+        when .style.border_width > 0
+            canvas.draw_rect(.rect, .style.border)
+        fi
+        fixed text_x = .rect.x + .style.padding + 2
         fixed text_y = .rect.y + (.rect.height - 8) / 2
-        canvas.draw_text(.label, Point { x: text_x, y: text_y }, Color.white())
+        canvas.draw_text(.label, Point { x: text_x, y: text_y }, .style.fg)
     fi
 fi
 
 shape Label
     pos: Point
     text: text
-    color: Color
+    color: Color = Color { r: 255, g: 255, b: 255, a: 255 }
+    bg: Color = Color { r: 0, g: 0, b: 0, a: 0 }
 
     draw(canvas: Canvas)
+        when .bg.a > 0
+            fixed padding = 2
+            fixed w = .text.len * 8 + padding * 2
+            fixed h = 12
+            canvas.fill_rect(Rect { x: .pos.x - padding, y: .pos.y - 2, width: w, height: h }, .bg)
+        fi
         canvas.draw_text(.text, .pos, .color)
+    fi
+fi
+
+shape TextBox
+    rect: Rect
+    text: text = ""
+    placeholder: text = ""
+    focused: bool = false
+    cursor: int = 0
+    style: Style = Style {}
+
+    alters set_text(t: text@this)
+        .text = t
+        .cursor = t.len
+    fi
+
+    alters handle_click(p: Point) -> bool
+        .focused = .rect.contains(p)
+        <- .focused
+    fi
+
+    alters handle_key(key: int, modifiers: int)
+        when not .focused
+            <-
+        fi
+        when (key == 8 or key == 127) and .text.len > 0
+            fixed new_len = .text.len - 1
+            .text = .text[0..new_len]
+            .cursor = new_len
+        fi
+    fi
+
+    draw(canvas: Canvas)
+        canvas.fill_rect(.rect, .style.bg)
+        fixed border_color = when .focused
+            Color.hex(0x38BDF8)
+        else
+            .style.border
+        fi
+        canvas.draw_rect(.rect, border_color)
+
+        fixed text_x = .rect.x + .style.padding
+        fixed text_y = .rect.y + (.rect.height - 8) / 2
+
+        when .text.len == 0 and not .focused and .placeholder.len > 0
+            canvas.draw_text(.placeholder, Point { x: text_x, y: text_y }, Color.hex(0x64748B))
+        else
+            canvas.draw_text(.text, Point { x: text_x, y: text_y }, .style.fg)
+            when .focused
+                fixed cursor_x = text_x + .text.len * 8
+                canvas.draw_text("|", Point { x: cursor_x, y: text_y }, Color.hex(0x38BDF8))
+            fi
+        fi
+    fi
+fi
+
+shape ListBox
+    rect: Rect
+    items: [text#16] = [""#16]
+    count: int = 0
+    selected_index: int = -1
+    item_height: int = 22
+    style: Style = Style {}
+
+    alters add_item(item: text@this)
+        when .count < 16
+            .items[.count] = item
+            .count++
+        fi
+    fi
+
+    selected_item() -> text@this
+        when .selected_index >= 0 and .selected_index < .count
+            <- .items[.selected_index]
+        fi
+        <- ""
+    fi
+
+    alters handle_click(p: Point) -> int
+        when not .rect.contains(p)
+            <- -1
+        fi
+        fixed idx = (p.y - .rect.y) / .item_height
+        when idx >= 0 and idx < .count
+            .selected_index = idx
+            <- idx
+        fi
+        <- -1
+    fi
+
+    draw(canvas: Canvas, mouse_pos: Point)
+        canvas.fill_rect(.rect, .style.bg)
+        canvas.draw_rect(.rect, .style.border)
+
+        flex i = 0
+        loop i < .count
+            fixed row_y = .rect.y + i * .item_height
+            fixed row_rect = Rect { x: .rect.x + 1, y: row_y, width: .rect.width - 2, height: .item_height }
+            fixed is_selected = i == .selected_index
+            fixed is_hovered = row_rect.contains(mouse_pos)
+
+            when is_selected
+                canvas.fill_rect(row_rect, Color.hex(0x2563EB))
+            else when is_hovered
+                canvas.fill_rect(row_rect, Color.hex(0x1E293B))
+            fi
+
+            fixed item_text = .items[i]
+            fixed fg = when is_selected
+                Color.white()
+            else
+                .style.fg
+            fi
+            canvas.draw_text(item_text, Point { x: .rect.x + 8, y: row_y + (.item_height - 8) / 2 }, fg)
+            i++
+        fi
+    fi
+fi
+
+shape CheckBox
+    rect: Rect
+    label: text
+    checked: bool = false
+    style: Style = Style {}
+
+    alters toggle()
+        .checked = not .checked
+    fi
+
+    alters handle_click(p: Point) -> bool
+        when .rect.contains(p)
+            .toggle()
+            <- true
+        fi
+        <- false
+    fi
+
+    draw(canvas: Canvas, mouse_pos: Point)
+        fixed box_size = 16
+        fixed box_y = .rect.y + (.rect.height - box_size) / 2
+        fixed box_rect = Rect { x: .rect.x, y: box_y, width: box_size, height: box_size }
+        fixed hovered = .rect.contains(mouse_pos)
+
+        fixed bg = when hovered
+            .style.hover_bg
+        else
+            .style.bg
+        fi
+        canvas.fill_rect(box_rect, bg)
+        canvas.draw_rect(box_rect, .style.border)
+
+        when .checked
+            fixed inner_rect = Rect { x: box_rect.x + 3, y: box_rect.y + 3, width: box_size - 6, height: box_size - 6 }
+            canvas.fill_rect(inner_rect, Color.hex(0x38BDF8))
+        fi
+
+        fixed text_x = .rect.x + box_size + 8
+        fixed text_y = .rect.y + (.rect.height - 8) / 2
+        canvas.draw_text(.label, Point { x: text_x, y: text_y }, .style.fg)
+    fi
+fi
+
+shape ProgressBar
+    rect: Rect
+    value: int = 0
+    fill_color: Color = Color { r: 56, g: 189, b: 248, a: 255 }
+    style: Style = Style {}
+
+    alters set_value(v: int)
+        .value = when v < 0 0 else when v > 100 100 else v fi
+    fi
+
+    draw(canvas: Canvas)
+        canvas.fill_rect(.rect, .style.bg)
+        when .value > 0
+            fixed filled_w = (.rect.width * .value) / 100
+            fixed filled_rect = Rect { x: .rect.x, y: .rect.y, width: filled_w, height: .rect.height }
+            canvas.fill_rect(filled_rect, .fill_color)
+        fi
+        canvas.draw_rect(.rect, .style.border)
+    fi
+fi
+
+shape ImageView
+    rect: Rect
+    border_color: Color = Color { r: 71, g: 85, b: 105, a: 255 }
+
+    draw_checkerboard(canvas: Canvas, cell_size: int = 8)
+        canvas.fill_rect(.rect, Color.hex(0x1E293B))
+        flex y = .rect.y
+        loop y < .rect.y + .rect.height
+            flex x = .rect.x
+            loop x < .rect.x + .rect.width
+                fixed is_alt = ((x - .rect.x) / cell_size + (y - .rect.y) / cell_size) % 2 == 0
+                when is_alt
+                    fixed w = when x + cell_size <= .rect.x + .rect.width cell_size else .rect.x + .rect.width - x fi
+                    fixed h = when y + cell_size <= .rect.y + .rect.height cell_size else .rect.y + .rect.height - y fi
+                    canvas.fill_rect(Rect { x: x, y: y, width: w, height: h }, Color.hex(0x334155))
+                fi
+                x += cell_size
+            fi
+            y += cell_size
+        fi
+        canvas.draw_rect(.rect, .border_color)
+    fi
+
+    draw_frame(canvas: Canvas, bg: Color)
+        canvas.fill_rect(.rect, bg)
+        canvas.draw_rect(.rect, .border_color)
+    fi
+fi
+
+shape MessageBox
+    rect: Rect = Rect { x: 30, y: 30, width: 260, height: 130 }
+    title: text = "Message"
+    message: text = ""
+    visible: bool = false
+    style: Style = Style {}
+
+    alters show_modal(title: text, message: text)
+        .title = title
+        .message = message
+        .visible = true
+    fi
+
+    alters dismiss()
+        .visible = false
+    fi
+
+    alters handle_click(p: Point) -> bool
+        when not .visible
+            <- false
+        fi
+        fixed btn_rect = Rect { x: .rect.x + .rect.width - 70, y: .rect.y + .rect.height - 35, width: 60, height: 26 }
+        when btn_rect.contains(p)
+            .visible = false
+            <- true
+        fi
+        <- false
+    fi
+
+    draw(canvas: Canvas, win_w: int, win_h: int, mouse_pos: Point, mouse_down: bool)
+        when not .visible
+            <-
+        fi
+        canvas.fill_rect(Rect { x: 0, y: 0, width: win_w, height: win_h }, Color.rgba(0, 0, 0, 160))
+        canvas.fill_rect(.rect, .style.bg)
+        canvas.draw_rect(.rect, .style.border)
+
+        fixed title_bar = Rect { x: .rect.x, y: .rect.y, width: .rect.width, height: 26 }
+        canvas.fill_rect(title_bar, Color.hex(0x1E293B))
+        canvas.draw_rect(title_bar, .style.border)
+        canvas.draw_text(.title, Point { x: .rect.x + 8, y: .rect.y + 9 }, Color.hex(0x38BDF8))
+
+        canvas.draw_text(.message, Point { x: .rect.x + 12, y: .rect.y + 45 }, .style.fg)
+
+        fixed ok_rect = Rect { x: .rect.x + .rect.width - 70, y: .rect.y + .rect.height - 35, width: 60, height: 26 }
+        fixed btn = Button { rect: ok_rect, label: "OK", style: Style.primary() }
+        btn.draw(canvas, mouse_pos, mouse_down)
+    fi
+fi
+
+shape InputBox
+    rect: Rect = Rect { x: 30, y: 30, width: 260, height: 140 }
+    title: text = "Input"
+    prompt: text = "Enter text:"
+    input: TextBox = TextBox { rect: Rect { x: 45, y: 65, width: 230, height: 28 }, placeholder: "Type here...", focused: true }
+    visible: bool = false
+    style: Style = Style {}
+
+    alters show_modal(title: text, prompt: text, default_text: text = "")
+        .title = title
+        .prompt = prompt
+        .input.text = default_text
+        .input.cursor = default_text.len
+        .input.focused = true
+        .visible = true
+    fi
+
+    alters dismiss()
+        .visible = false
+    fi
+
+    value() -> text@this
+        <- .input.text
+    fi
+
+    alters handle_click(p: Point) -> bool
+        when not .visible
+            <- false
+        fi
+        .input.handle_click(p)
+        fixed btn_rect = Rect { x: .rect.x + .rect.width - 70, y: .rect.y + .rect.height - 35, width: 60, height: 26 }
+        when btn_rect.contains(p)
+            .visible = false
+            <- true
+        fi
+        <- false
+    fi
+
+    alters handle_key(key: int, modifiers: int)
+        when not .visible
+            <-
+        fi
+        .input.handle_key(key, modifiers)
+    fi
+
+    draw(canvas: Canvas, win_w: int, win_h: int, mouse_pos: Point, mouse_down: bool)
+        when not .visible
+            <-
+        fi
+        canvas.fill_rect(Rect { x: 0, y: 0, width: win_w, height: win_h }, Color.rgba(0, 0, 0, 160))
+        canvas.fill_rect(.rect, .style.bg)
+        canvas.draw_rect(.rect, .style.border)
+
+        fixed title_bar = Rect { x: .rect.x, y: .rect.y, width: .rect.width, height: 26 }
+        canvas.fill_rect(title_bar, Color.hex(0x1E293B))
+        canvas.draw_rect(title_bar, .style.border)
+        canvas.draw_text(.title, Point { x: .rect.x + 8, y: .rect.y + 9 }, Color.hex(0x38BDF8))
+
+        canvas.draw_text(.prompt, Point { x: .rect.x + 12, y: .rect.y + 40 }, .style.fg)
+        .input.draw(canvas)
+
+        fixed ok_rect = Rect { x: .rect.x + .rect.width - 70, y: .rect.y + .rect.height - 35, width: 60, height: 26 }
+        fixed btn = Button { rect: ok_rect, label: "OK", style: Style.primary() }
+        btn.draw(canvas, mouse_pos, mouse_down)
+    fi
+fi
+
+shape VBox
+    x: int = 0
+    y: int = 0
+    width: int = 100
+    spacing: int = 8
+    cursor_y: int = 0
+
+    shared new(x: int, y: int, width: int, spacing: int = 8) -> VBox
+        <- VBox { x: x, y: y, width: width, spacing: spacing, cursor_y: y }
+    fi
+
+    alters next(height: int) -> Rect
+        fixed r = Rect { x: .x, y: .cursor_y, width: .width, height: height }
+        .cursor_y += height + .spacing
+        <- r
+    fi
+fi
+
+shape HBox
+    x: int = 0
+    y: int = 0
+    height: int = 32
+    spacing: int = 8
+    cursor_x: int = 0
+
+    shared new(x: int, y: int, height: int, spacing: int = 8) -> HBox
+        <- HBox { x: x, y: y, height: height, spacing: spacing, cursor_x: x }
+    fi
+
+    alters next(width: int) -> Rect
+        fixed r = Rect { x: .cursor_x, y: .y, width: width, height: .height }
+        .cursor_x += width + .spacing
+        <- r
     fi
 fi
 
