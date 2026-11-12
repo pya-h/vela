@@ -390,15 +390,16 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     <section>
       <h2 id="gui">std/gui</h2>
       <p>
-        Foundational 2D software canvas rasterization, windowing, geometry, and per-frame region discipline.
-        Brought in with <code>include std/gui {Window, Canvas, GuiEvent, Point, Size, Rect, Color, Button, Label}</code>
-        or <code>include std/gui =&gt; gui</code>.
+        Foundational 2D software canvas rasterization, native X11 window presentation, styling themes,
+        interactive widgets, and per-frame region discipline.
+        Brought in with <code>include std/gui {Window, Canvas, GuiEvent, Point, Size, Rect, Color, Style, Button, Label, TextBox, ListBox, CheckBox, ProgressBar, ImageView, MessageBox, InputBox, VBox, HBox, is_interactive}</code>
+        or <code>include std/gui =&gt; gui</code>. See also the comprehensive guide in <a href="gui.html">docs/gui.html</a>.
       </p>
-      <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Button}
+      <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">flex</span> win = Window.open(<span class="string">"Counter Application"</span>, 320, 240) { <span class="keyword">failure</span> _ &lt;- }
-    <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 50, width: 100, height: 36 }, label: <span class="string">"Click me"</span> }
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) { <span class="keyword">failure</span> _ &lt;- }
+    <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 120, width: 90, height: 36 }, label: <span class="string">"Action"</span>, style: Style.primary() }
     <span class="keyword">fixed</span> canvas = win.canvas()
 
     <span class="keyword">loop</span> win.is_open
@@ -422,16 +423,26 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <tr><td><code>Size</code></td><td>Dimensions: <code>Size { width: int, height: int }</code></td></tr>
         <tr><td><code>Rect</code></td><td>2D bounding box: <code>Rect { x, y, width, height }</code>, with <code>.contains(point)</code> and <code>.intersects(other_rect)</code></td></tr>
         <tr><td><code>Color</code></td><td>RGBA color: <code>Color { r, g, b, a }</code>, <code>Color.rgb(r, g, b)</code>, <code>Color.rgba(r, g, b, a)</code>, <code>Color.hex(0xRRGGBB)</code>, and built-in palettes (<code>.black()</code>, <code>.white()</code>, <code>.red()</code>, <code>.green()</code>, <code>.blue()</code>, <code>.gray()</code>, <code>.transparent()</code>)</td></tr>
+        <tr><td><code>Style</code></td><td>Unified styling theme shape: presets <code>Style.default()</code>, <code>.primary()</code>, <code>.secondary()</code>, <code>.success()</code>, <code>.danger()</code>, <code>.dark()</code>, <code>.light()</code>, and fluent modifiers <code>.with_bg(c)</code>, <code>.with_fg(c)</code>, <code>.with_border(c, width)</code>, <code>.with_padding(p)</code></td></tr>
         <tr><td><code>Window</code></td><td>Window context: <code>Window.open(title, width, height)</code>, <code>.canvas()</code>, <code>.poll_event()</code>, <code>.push_event(type, a1, a2, a3)</code>, <code>.present()</code>, <code>.close()</code>, <code>.is_open</code></td></tr>
         <tr><td><code>Canvas</code></td><td>Software rasterization drawing context: <code>.clear(color)</code>, <code>.draw_pixel(x, y, color)</code>, <code>.pixel_at(x, y)</code>, <code>.fill_rect(rect, color)</code>, <code>.draw_rect(rect, color)</code>, <code>.draw_line(x1, y1, x2, y2, color)</code>, <code>.draw_text(msg, pos, color)</code>, <code>.export_ppm(r)</code></td></tr>
         <tr><td><code>GuiEvent</code></td><td>Event kind: <code>MouseDown(x, y, btn)</code>, <code>MouseUp(x, y, btn)</code>, <code>MouseMove(x, y)</code>, <code>KeyDown(key, mods)</code>, <code>KeyUp(key, mods)</code>, <code>Resize(w, h)</code>, <code>CloseRequested</code>, <code>Redraw</code>, <code>None</code></td></tr>
-        <tr><td><code>Button</code></td><td>Interactive widget: <code>Button { rect, label }</code>, <code>.draw(canvas, mouse_pos, is_down)</code></td></tr>
-        <tr><td><code>Label</code></td><td>Text widget: <code>Label { pos, text, color }</code>, <code>.draw(canvas)</code></td></tr>
+        <tr><td><code>Button</code></td><td>Interactive widget: <code>Button { rect, label, style }</code>, <code>.draw(canvas, mouse_pos, is_down)</code>, <code>.clicked(pos)</code></td></tr>
+        <tr><td><code>Label</code></td><td>Text widget: <code>Label { pos, text, color, bg }</code>, <code>.draw(canvas)</code></td></tr>
+        <tr><td><code>TextBox</code></td><td>Single-line input widget: <code>TextBox { rect, text, placeholder, style }</code>, <code>.set_text(t)</code>, <code>.clear()</code>, <code>.handle_click(pos)</code>, <code>.handle_key(key, mods)</code>, <code>.draw(canvas)</code></td></tr>
+        <tr><td><code>ListBox</code></td><td>Selectable list: <code>ListBox { rect, item_height, style }</code>, <code>.add_item(t)</code>, <code>.clear()</code>, <code>.select(idx)</code>, <code>.selected_item()</code>, <code>.handle_click(pos)</code>, <code>.draw(canvas, mouse_pos)</code></td></tr>
+        <tr><td><code>CheckBox</code></td><td>Toggle box: <code>CheckBox { rect, label, checked, style }</code>, <code>.toggle()</code>, <code>.handle_click(pos)</code>, <code>.clicked(pos)</code>, <code>.draw(canvas, mouse_pos)</code></td></tr>
+        <tr><td><code>ProgressBar</code></td><td>Progress indicator: <code>ProgressBar { rect, value, fill_color, style }</code>, <code>.set_value(v)</code> (0..100), <code>.draw(canvas)</code></td></tr>
+        <tr><td><code>ImageView</code></td><td>Graphic frame: <code>ImageView { rect, border_color }</code>, <code>.draw_checkerboard(canvas, cell_size)</code>, <code>.draw_frame(canvas, bg)</code></td></tr>
+        <tr><td><code>MessageBox</code></td><td>Modal alert overlay: <code>MessageBox { style }</code>, <code>.show_modal(title, message)</code>, <code>.dismiss()</code>, <code>.handle_click(pos)</code>, <code>.draw(canvas, win_w, win_h, mouse_pos, is_down)</code></td></tr>
+        <tr><td><code>InputBox</code></td><td>Modal prompt overlay: <code>InputBox { style }</code>, <code>.show_modal(title, prompt, default)</code>, <code>.dismiss()</code>, <code>.value()</code>, <code>.handle_click(pos)</code>, <code>.handle_key(key, mods)</code>, <code>.draw(...)</code></td></tr>
+        <tr><td><code>VBox</code>, <code>HBox</code></td><td>Linear layout flow calculators: <code>VBox.new(x, y, width, spacing)</code>, <code>HBox.new(x, y, height, spacing)</code>, <code>.next(size)</code>, <code>.reset()</code></td></tr>
       </table>
       <ul>
         <li><strong>Per-frame arena discipline.</strong> Interactive frame loops allocate all temporary drawing buffers, glyph records, and event handlers inside a dedicated per-frame region (<code>region frame default</code>). At the end of every frame iteration, all frame data is instantly reclaimed in $O(1)$ time with zero garbage collection overhead.</li>
         <li><strong>Embedded 8x8 bitmap font.</strong> <code>canvas.draw_text</code> renders ASCII text directly into the frame buffer without requiring external font files or system rasterization dependencies.</li>
         <li><strong>Portable testing and PPM export.</strong> <code>canvas.export_ppm(r)</code> outputs standard binary PPM images, and <code>win.push_event(...)</code> enables 100% deterministic, headless GUI testing in CI environments.</li>
+        <li><strong>Desktop window presentation.</strong> Automatically presents native desktop windows using dynamic X11 linking when a display server is present, falling back cleanly to headless mode when running in headless CI or without a display.</li>
       </ul>
     </section>
 

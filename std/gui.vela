@@ -294,6 +294,10 @@ shape Button
         fixed text_y = .rect.y + (.rect.height - 8) / 2
         canvas.draw_text(.label, Point { x: text_x, y: text_y }, .style.fg)
     fi
+
+    clicked(p: Point) -> bool
+        <- .rect.contains(p)
+    fi
 fi
 
 shape Label
@@ -324,6 +328,11 @@ shape TextBox
     alters set_text(t: text@this)
         .text = t
         .cursor = t.len
+    fi
+
+    alters clear()
+        .text = ""
+        .cursor = 0
     fi
 
     alters handle_click(p: Point) -> bool
@@ -381,6 +390,17 @@ shape ListBox
         fi
     fi
 
+    alters clear()
+        .count = 0
+        .selected_index = -1
+    fi
+
+    alters select(idx: int)
+        when idx >= -1 and idx < .count
+            .selected_index = idx
+        fi
+    fi
+
     selected_item() -> text@this
         when .selected_index >= 0 and .selected_index < .count
             <- .items[.selected_index]
@@ -392,7 +412,12 @@ shape ListBox
         when not .rect.contains(p)
             <- -1
         fi
-        fixed idx = (p.y - .rect.y) / .item_height
+        fixed h = when .item_height > 0
+            .item_height
+        else
+            22
+        fi
+        fixed idx = (p.y - .rect.y) / h
         when idx >= 0 and idx < .count
             .selected_index = idx
             <- idx
@@ -404,10 +429,15 @@ shape ListBox
         canvas.fill_rect(.rect, .style.bg)
         canvas.draw_rect(.rect, .style.border)
 
+        fixed h = when .item_height > 0
+            .item_height
+        else
+            22
+        fi
         flex i = 0
         loop i < .count
-            fixed row_y = .rect.y + i * .item_height
-            fixed row_rect = Rect { x: .rect.x + 1, y: row_y, width: .rect.width - 2, height: .item_height }
+            fixed row_y = .rect.y + i * h
+            fixed row_rect = Rect { x: .rect.x + 1, y: row_y, width: .rect.width - 2, height: h }
             fixed is_selected = i == .selected_index
             fixed is_hovered = row_rect.contains(mouse_pos)
 
@@ -423,7 +453,7 @@ shape ListBox
             else
                 .style.fg
             fi
-            canvas.draw_text(item_text, Point { x: .rect.x + 8, y: row_y + (.item_height - 8) / 2 }, fg)
+            canvas.draw_text(item_text, Point { x: .rect.x + 8, y: row_y + (h - 8) / 2 }, fg)
             i++
         fi
     fi
@@ -470,6 +500,10 @@ shape CheckBox
         fixed text_y = .rect.y + (.rect.height - 8) / 2
         canvas.draw_text(.label, Point { x: text_x, y: text_y }, .style.fg)
     fi
+
+    clicked(p: Point) -> bool
+        <- .rect.contains(p)
+    fi
 fi
 
 shape ProgressBar
@@ -498,20 +532,21 @@ shape ImageView
     border_color: Color = Color { r: 71, g: 85, b: 105, a: 255 }
 
     draw_checkerboard(canvas: Canvas, cell_size: int = 8)
+        fixed cs = when cell_size > 0 cell_size else 8 fi
         canvas.fill_rect(.rect, Color.hex(0x1E293B))
         flex y = .rect.y
         loop y < .rect.y + .rect.height
             flex x = .rect.x
             loop x < .rect.x + .rect.width
-                fixed is_alt = ((x - .rect.x) / cell_size + (y - .rect.y) / cell_size) % 2 == 0
+                fixed is_alt = ((x - .rect.x) / cs + (y - .rect.y) / cs) % 2 == 0
                 when is_alt
-                    fixed w = when x + cell_size <= .rect.x + .rect.width cell_size else .rect.x + .rect.width - x fi
-                    fixed h = when y + cell_size <= .rect.y + .rect.height cell_size else .rect.y + .rect.height - y fi
+                    fixed w = when x + cs <= .rect.x + .rect.width cs else .rect.x + .rect.width - x fi
+                    fixed h = when y + cs <= .rect.y + .rect.height cs else .rect.y + .rect.height - y fi
                     canvas.fill_rect(Rect { x: x, y: y, width: w, height: h }, Color.hex(0x334155))
                 fi
-                x += cell_size
+                x += cs
             fi
-            y += cell_size
+            y += cs
         fi
         canvas.draw_rect(.rect, .border_color)
     fi
@@ -529,7 +564,7 @@ shape MessageBox
     visible: bool = false
     style: Style = Style {}
 
-    alters show_modal(title: text, message: text)
+    alters show_modal(title: text@this, message: text@this)
         .title = title
         .message = message
         .visible = true
@@ -580,7 +615,7 @@ shape InputBox
     visible: bool = false
     style: Style = Style {}
 
-    alters show_modal(title: text, prompt: text, default_text: text = "")
+    alters show_modal(title: text@this, prompt: text@this, default_text: text@this = "")
         .title = title
         .prompt = prompt
         .input.text = default_text
@@ -655,6 +690,10 @@ shape VBox
         .cursor_y += height + .spacing
         <- r
     fi
+
+    alters reset()
+        .cursor_y = .y
+    fi
 fi
 
 shape HBox
@@ -672,6 +711,10 @@ shape HBox
         fixed r = Rect { x: .cursor_x, y: .y, width: width, height: .height }
         .cursor_x += width + .spacing
         <- r
+    fi
+
+    alters reset()
+        .cursor_x = .x
     fi
 fi
 
