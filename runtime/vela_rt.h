@@ -3370,6 +3370,22 @@ static inline bool vela__rt__web_is_interactive(void) {
     return vela__rt__is_interactive();
 }
 
+static inline bool vela__rt__gui_is_interactive(void) {
+    if (getenv("VELA_TEST") != NULL) {
+        return false;
+    }
+#if VELA_HAS_DLFCN && !defined(_WIN32)
+    const char* d = getenv("DISPLAY");
+    const char* w = getenv("WAYLAND_DISPLAY");
+    if ((!d || d[0] == '\0') && (!w || w[0] == '\0')) {
+        return false;
+    }
+    return isatty(0) != 0 && isatty(1) != 0;
+#else
+    return false;
+#endif
+}
+
 /* ==================== WebSocket Helpers (RFC 6455) ==================== */
 
 static inline uint32_t vela__rt__sha1_rol(uint32_t value, uint32_t bits) {

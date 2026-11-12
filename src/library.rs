@@ -122,7 +122,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/gui.native_gui_canvas_draw_line", "vela__rt__gui_canvas_draw_line"),
     ("std/gui.native_gui_canvas_draw_text", "vela__rt__gui_canvas_draw_text"),
     ("std/gui.native_gui_canvas_export_ppm", "vela__rt__gui_canvas_export_ppm"),
-    ("std/gui.native_is_interactive", "vela__rt__is_interactive"),
+    ("std/gui.native_is_interactive", "vela__rt__gui_is_interactive"),
 ];
 
 pub fn module(name: &str) -> Option<&'static str> {
