@@ -739,7 +739,7 @@ impl State {
                     match item {
                         Item::Kind(k) => resolver.imitated(k)?,
                         Item::Shape(s) => resolver.followed(s)?,
-                        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => {}
+                        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_) => {}
                     }
                 }
                 return Ok(scope);
@@ -1000,6 +1000,7 @@ enum What {
     Shape,
     Kind,
     Actor,
+    Event,
     Alias,
     Pattern,
     Variant,
@@ -1013,6 +1014,7 @@ impl What {
             What::Shape => "shape",
             What::Kind => "kind",
             What::Actor => "actor",
+            What::Event => "event",
             What::Alias => "type alias",
             What::Pattern => "pattern",
             What::Variant => "variant",
@@ -1108,6 +1110,7 @@ fn own_names(module: &Module) -> Names {
             }
             Item::Macro(m) => add(&m.name, What::Macro, m.private, m.span, None),
             Item::GlobalRegion(_) => {}
+            Item::Event(e) => add(&e.name, What::Event, e.private, e.span, None),
         }
     }
     for alias in &module.type_aliases {
@@ -1384,7 +1387,7 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
             let (owner, types, follows) = match item {
                 Item::Shape(s) => (&s.name, &s.types, &s.follows),
                 Item::Kind(k) => (&k.name, &k.types, &k.follows),
-                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_) => continue,
             };
             for (followed, pattern) in follows.iter().filter_map(|(ty, _)| {
                 followed_name(ty)
@@ -2192,6 +2195,14 @@ impl Resolver<'_> {
                     }
                     self.block(&mut handler.body)?;
                 }
+                Ok(())
+            }
+            Item::Event(e) => {
+                e.name = self.own_full(&e.name);
+                if let Some(cond) = &mut e.cond {
+                    self.condition(cond)?;
+                }
+                self.block(&mut e.body)?;
                 Ok(())
             }
         }

@@ -1,0 +1,12 @@
+; error: 6:12: 'auto' cannot be used on a shared event; shared events are always active
+
+shape Player
+    shared count: int = 0
+
+    shared event on_count on .count auto
+        show("count changed")
+    fi
+fi
+
+task main()
+fi

@@ -63,6 +63,7 @@ pub struct Generator {
     piped: Vec<String>,
     kinds: HashMap<String, KindDef>,
     actors: HashMap<String, ActorDef>,
+    events: HashMap<String, EventDef>,
     shapes: HashMap<String, ShapeDef>,
     copied_through: HashSet<String>,
     ret: Type,
@@ -124,6 +125,7 @@ impl Default for Generator {
             temp_counter: 0,
             kinds: HashMap::new(),
             actors: HashMap::new(),
+            events: HashMap::new(),
             shapes: HashMap::new(),
             copied_through: HashSet::new(),
             ret: Type::Nothing,
@@ -159,6 +161,7 @@ impl Generator {
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
         self.kinds.clear();
         self.shapes.clear();
+        self.events.clear();
         self.altering.clear();
         for item in items {
             if let Item::Task(t) = item
@@ -177,6 +180,9 @@ impl Generator {
                 Item::Shape(_) => {}
                 Item::Actor(a) => {
                     self.actors.insert(a.name.clone(), a.clone());
+                }
+                Item::Event(e) => {
+                    self.events.insert(e.name.clone(), e.clone());
                 }
                 Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
@@ -267,7 +273,7 @@ impl Generator {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
-                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_)) => {}
+                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
@@ -419,9 +425,25 @@ impl Generator {
             }
         }
 
+        let events_list: Vec<EventDef> = self.events.values().cloned().collect();
+        for e in &events_list {
+            if let Some(shape) = &e.owner {
+                if !e.shared {
+                    self.w.line(&format!("static void {}__{}(struct {}* vela__this);", mangle(shape), mangle(&e.name), mangle(shape)));
+                } else {
+                    self.w.line(&format!("static void {}(void);", mangle(&e.name)));
+                }
+            } else {
+                self.w.line(&format!("static void {}(void);", mangle(&e.name)));
+            }
+        }
+
         for item in items {
             if let Item::Actor(a) = item {
                 self.gen_actor(a)?;
+            }
+            if let Item::Event(e) = item {
+                self.gen_event(e)?;
             }
         }
 
@@ -472,7 +494,17 @@ impl Generator {
                     self.w.line(&format!("{}();", mangle(&t.name)));
                 }
             }
+            for ev in self.events.values() {
+                if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Start) {
+                    self.w.line(&format!("{}();", mangle(&ev.name)));
+                }
+            }
             self.w.line("vela_main();");
+            for ev in self.events.values() {
+                if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::End) {
+                    self.w.line(&format!("{}();", mangle(&ev.name)));
+                }
+            }
             self.w.line("return 0;");
             self.w.close();
         }
@@ -789,7 +821,13 @@ impl Generator {
 
     fn gen_shape(&mut self, s: &ShapeDef) {
         self.w.open(&format!("struct {}", mangle(&s.name)));
-        if s.fields.is_empty() {
+        let has_listenable_events = self.events.values().any(|e| {
+            e.owner.as_deref() == Some(&s.name) && !e.shared && !e.auto
+        });
+        if has_listenable_events {
+            self.w.line("uint32_t vela__events__;");
+        }
+        if s.fields.is_empty() && !has_listenable_events {
             // ISO C has no empty structs.
             self.w.line("char vela__empty__;");
         }
@@ -933,6 +971,106 @@ impl Generator {
         self.w.line("return mailbox;");
         self.w.close();
 
+        Ok(())
+    }
+
+    fn gen_event(&mut self, e: &EventDef) -> Result<()> {
+        let is_member = e.owner.is_some() && !e.shared;
+        self.ret = Type::Nothing;
+        self.task = e.name.clone();
+        self.regions.clear();
+        self.loops.clear();
+        self.results.clear();
+        if is_member && let Some(shape) = &e.owner {
+            self.pointers = [THIS.to_string()].into_iter().collect();
+            self.w.open(&format!("static void {}__{}(struct {}* vela__this)", mangle(shape), mangle(&e.name), mangle(shape)));
+        } else {
+            self.pointers.clear();
+            self.w.open(&format!("static void {}(void)", mangle(&e.name)));
+        }
+
+        if let Some(cond) = &e.cond {
+            let mut parts = Vec::new();
+            for part in cond.parts() {
+                parts.push(self.gen_condition(&part.value)?);
+            }
+            if !parts.is_empty() {
+                self.w.line(&format!("if (!({})) return;", parts.join(" && ")));
+            }
+        }
+
+        self.gen_block(&e.body)?;
+        self.w.close();
+        Ok(())
+    }
+
+    fn gen_mutation_trigger(&mut self, place: &Expr) -> Result<()> {
+        if self.events.is_empty() {
+            return Ok(());
+        }
+        match &place.kind {
+            ExprKind::Field(base, field_name) => {
+                let is_this = matches!(&base.kind, ExprKind::Var(v) if v == THIS);
+                let shape_name = base.ty().ok().and_then(|t| match t {
+                    Type::Named(s, _) => Some(s.clone()),
+                    _ => None,
+                });
+                if let Some(shape) = shape_name {
+                    let matching_events: Vec<EventDef> = self
+                        .events
+                        .values()
+                        .filter(|e| {
+                            e.owner.as_deref() == Some(&shape) && !e.shared && trigger_matches_field(field_name, e)
+                        })
+                        .cloned()
+                        .collect();
+
+                    let listenable_events: Vec<String> = self
+                        .events
+                        .values()
+                        .filter(|e| e.owner.as_deref() == Some(&shape) && !e.shared && !e.auto)
+                        .map(|e| e.name.clone())
+                        .collect();
+
+                    if is_this {
+                        for ev in matching_events {
+                            if ev.auto {
+                                self.w.line(&format!("{}__{}(vela__this);", mangle(&shape), mangle(&ev.name)));
+                            } else if let Some(idx) = listenable_events.iter().position(|n| n == &ev.name) {
+                                self.w.line(&format!(
+                                    "if (vela__this->vela__events__ & (1u << {})) {{ {}__{}(vela__this); }}",
+                                    idx, mangle(&shape), mangle(&ev.name)
+                                ));
+                            }
+                        }
+                    } else {
+                        let base_place = self.gen_place(base)?;
+                        for ev in matching_events {
+                            if ev.auto {
+                                self.w.line(&format!("{}__{}(&({}));", mangle(&shape), mangle(&ev.name), base_place));
+                            } else if let Some(idx) = listenable_events.iter().position(|n| n == &ev.name) {
+                                self.w.line(&format!(
+                                    "if ((({}).vela__events__) & (1u << {})) {{ {}__{}(&({})); }}",
+                                    base_place, idx, mangle(&shape), mangle(&ev.name), base_place
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            ExprKind::Var(var_name) => {
+                let matching_events: Vec<EventDef> = self
+                    .events
+                    .values()
+                    .filter(|e| (e.owner.is_none() || e.shared) && trigger_matches_var(var_name, e))
+                    .cloned()
+                    .collect();
+                for ev in matching_events {
+                    self.w.line(&format!("{}();", mangle(&ev.name)));
+                }
+            }
+            _ => {}
+        }
         Ok(())
     }
 
@@ -3017,6 +3155,21 @@ impl Generator {
         self.w.open(&signature(t, alters, &hidden, &|name| {
             self.shapes.contains_key(name)
         }));
+        for ev in self.events.values() {
+            if let EventTrigger::BeforeTask(target) = &ev.trigger {
+                let matches = target == &t.name
+                    || target.strip_prefix('.').is_some_and(|clean| {
+                        t.owner.as_ref().is_some_and(|o| o.name == clean || t.name.ends_with(&format!("__{}", clean)))
+                    });
+                if matches {
+                    if let Some(owner) = &ev.owner && !ev.shared {
+                        self.w.line(&format!("{}__{}(vela__this);", mangle(owner), mangle(&ev.name)));
+                    } else {
+                        self.w.line(&format!("{}();", mangle(&ev.name)));
+                    }
+                }
+            }
+        }
         if t.native {
             let function = crate::library::native(&t.name).ok_or_else(|| {
                 Error::internal_at(
@@ -3107,6 +3260,21 @@ impl Generator {
             self.gen_startup(t)?;
         } else {
             self.gen_block(&t.body)?;
+        }
+        for ev in self.events.values() {
+            if let EventTrigger::AfterTask(target) = &ev.trigger {
+                let matches = target == &t.name
+                    || target.strip_prefix('.').is_some_and(|clean| {
+                        t.owner.as_ref().is_some_and(|o| o.name == clean || t.name.ends_with(&format!("__{}", clean)))
+                    });
+                if matches {
+                    if let Some(owner) = &ev.owner && !ev.shared {
+                        self.w.line(&format!("{}__{}(vela__this);", mangle(owner), mangle(&ev.name)));
+                    } else {
+                        self.w.line(&format!("{}();", mangle(&ev.name)));
+                    }
+                }
+            }
         }
         match &t.ret {
             Type::Nothing => self.w.line("return;"),
@@ -3859,6 +4027,7 @@ impl Generator {
                     let value = self.gen_expr(rhs);
                     self.replaced = None;
                     self.w.line(&format!("*{} = {};", pointer, value?));
+                    self.gen_mutation_trigger(lhs)?;
                 } else if let ([Target::Place(lhs)], [rhs]) =
                     (targets.as_slice(), values.as_slice())
                     && let ExprKind::Index(map, key) = &lhs.kind
@@ -3921,10 +4090,12 @@ impl Generator {
                             .line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
                         let value = self.gen_expr(rhs)?;
                         self.w.line(&format!("*{} = {};", pointer, value));
+                        self.gen_mutation_trigger(lhs)?;
                     } else {
                         let l = self.gen_place(lhs)?;
                         let r = self.gen_expr(rhs)?;
                         self.w.line(&format!("{} = {};", l, r));
+                        self.gen_mutation_trigger(lhs)?;
                     }
                 } else {
                     self.gen_multi_assign(targets, values, stmt.span)?;
@@ -5541,6 +5712,43 @@ impl Generator {
         }
         if let Some(into) = number_cast(name) {
             return self.gen_number_cast(e, &into, args);
+        }
+        if name.ends_with("__event_listen") {
+            let Some((shape_name, _)) = name.split_once("__event_listen") else { unreachable!() };
+            let Some(receiver) = args.first() else { unreachable!() };
+            let place = self.gen_place(receiver)?;
+
+            let listenable_events: Vec<String> = self
+                .events
+                .values()
+                .filter(|e| {
+                    (e.owner.as_deref() == Some(shape_name)
+                        || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(shape_name)))
+                        && !e.shared
+                        && !e.auto
+                })
+                .map(|e| e.name.clone())
+                .collect();
+
+            let mask = if args.len() == 1 {
+                if listenable_events.is_empty() {
+                    0u32
+                } else {
+                    (1u32 << listenable_events.len()) - 1
+                }
+            } else {
+                let mut m = 0u32;
+                for arg in args.iter().skip(1) {
+                    if let ExprKind::TextLit(ev_name) = &arg.kind
+                        && let Some(idx) = listenable_events.iter().position(|n| n == ev_name)
+                    {
+                        m |= 1u32 << idx;
+                    }
+                }
+                m
+            };
+
+            return Ok(format!("(({}).vela__events__ |= {}u, (void)0)", place, mask));
         }
         if name == CHAN_NEW {
             let Some(arg0) = args.first() else {
@@ -7504,6 +7712,14 @@ impl UsedTypes {
                         used.block(&handler.body);
                     }
                 }
+                Item::Event(e) => {
+                    if let Some(cond) = &e.cond {
+                        for part in cond.parts() {
+                            used.expr(&part.value);
+                        }
+                    }
+                    used.block(&e.body);
+                }
                 Item::Task(_) | Item::Macro(_) => {}
                 Item::GlobalRegion(g) => {
                     used.block(&g.stmts);
@@ -8270,7 +8486,7 @@ fn type_name(item: &Item) -> Option<&str> {
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) if !k.types.is_empty() => None,
         Item::Kind(k) => Some(&k.name),
-        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => None,
+        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_) => None,
     }
 }
 
@@ -8374,7 +8590,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             .flat_map(|v| &v.payload)
             .flat_map(|f| value_dependencies(&f.ty))
             .collect(),
-        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_)) => Vec::new(),
+        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value)
             .into_iter()
@@ -8829,5 +9045,31 @@ fn int_constant(e: &Expr) -> Option<String> {
             int_constant(operand).map(|inner| format!("(-{})", inner))
         }
         _ => None,
+    }
+}
+
+fn trigger_matches_field(field_name: &str, e: &EventDef) -> bool {
+    match &e.trigger {
+        EventTrigger::Change(targets) => {
+            targets.iter().any(|t| {
+                let clean = t.strip_prefix('.').unwrap_or(t);
+                let clean = clean.split_once('.').map_or(clean, |(_, f)| f);
+                clean == field_name
+            })
+        }
+        EventTrigger::Lifecycle(LifecycleKind::Change) => true,
+        _ => false,
+    }
+}
+
+fn trigger_matches_var(var_name: &str, e: &EventDef) -> bool {
+    match &e.trigger {
+        EventTrigger::Change(targets) => {
+            targets.iter().any(|t| {
+                let clean = t.strip_prefix('.').unwrap_or(t);
+                clean == var_name
+            })
+        }
+        _ => false,
     }
 }

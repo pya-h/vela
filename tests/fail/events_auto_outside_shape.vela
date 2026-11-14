@@ -1,0 +1,8 @@
+; error: 3:1: 'auto' is only allowed on member events inside a shape
+
+event top_event on start auto
+    show("top")
+fi
+
+task main()
+fi

@@ -1,0 +1,65 @@
+; Tests the event system: lifecycle hooks, task interceptors, auto events,
+; manual listener registration with .listen(), direct alters, and transitive indirect alters.
+
+shape Player
+    hp: int
+    shield: int
+    alive: bool
+
+    event auto_ping on .hp auto
+        show("auto_ping: hp is ", .hp)
+    fi
+
+    alters(.alive) event check_death on .shield auto
+        when .shield <= 0 and .hp <= 0
+            .alive = false
+            show("player died!")
+        fi
+    fi
+
+    alters(.shield, .alive) event absorb on .hp
+        when .shield > 0
+            .shield -= 5
+            show("absorb: shield is ", .shield)
+        fi
+    fi
+
+    event manual_ping on .shield
+        show("manual_ping: shield is ", .shield)
+    fi
+fi
+
+task heal()
+    show("healing...")
+fi
+
+event before_heal on before heal
+    show("interceptor: before heal")
+fi
+
+event after_heal on after heal
+    show("interceptor: after heal")
+fi
+
+event on_start on start
+    show("lifecycle: start")
+fi
+
+event on_end on end
+    show("lifecycle: end")
+fi
+
+task main()
+    flex p = Player { hp: 10, shield: 5, alive: true }
+
+    ; Before listening to absorb: only auto_ping runs
+    p.hp = 5
+
+    ; Listen to both absorb and manual_ping
+    p.listen("absorb", "manual_ping")
+
+    ; Now absorb runs -> shield becomes 0 -> check_death (auto) and manual_ping run!
+    p.hp = -1
+
+    heal()
+fi

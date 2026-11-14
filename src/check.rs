@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::ast::*;
 use crate::codegen;
@@ -180,6 +180,7 @@ pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
     actors: HashMap<String, ActorDef>,
+    events: HashMap<String, EventDef>,
     in_actor: Option<String>,
     patterns: HashMap<String, PatternDef>,
     task_spans: HashMap<String, Span>,
@@ -753,6 +754,7 @@ impl Checker {
         self.current_module.clear();
         self.finish_kept();
         self.order_start_values(items);
+        self.check_events_and_alters();
     }
 
     /// Registers pattern signatures and maps methods as generic tasks over `THIS_TYPE` until call substitution.
@@ -1655,6 +1657,7 @@ impl Checker {
                 Item::Kind(k) => k.private,
                 Item::Actor(a) => a.private,
                 Item::Macro(m) => m.private,
+                Item::Event(e) => e.private,
                 Item::GlobalRegion(_) => false,
             };
             if private {
@@ -1788,6 +1791,9 @@ impl Checker {
                     );
                 }
                 Item::GlobalRegion(_) => {}
+                Item::Event(e) => {
+                    self.events.insert(e.name.clone(), e.clone());
+                }
             }
         }
         for error in found {
@@ -1830,7 +1836,7 @@ impl Checker {
             let name = match item {
                 Item::Shape(s) => s.name.clone(),
                 Item::Kind(k) => k.name.clone(),
-                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_) => continue,
             };
             if let Err((error, cycle)) = self.check_value_cycle(&name, &mut acyclic, &mut order) {
                 self.record(error);
@@ -2085,8 +2091,274 @@ impl Checker {
                 self.stand_ins.clear();
                 read?;
             }
+            Item::Event(e) => {
+                self.check_event(e)?;
+            }
         }
         Ok(())
+    }
+
+    fn check_event(&mut self, event: &mut EventDef) -> Result<()> {
+        if event.auto {
+            if event.owner.is_none() {
+                return err(event.span, "'auto' is only allowed on member events inside a shape");
+            }
+            if event.shared {
+                return err(event.span, "'auto' cannot be used on a shared event; shared events are always active");
+            }
+        }
+        let old_scopes = std::mem::take(&mut self.scopes);
+        let old_owner = self.current_owner.take();
+        let old_method = self.current_method.take();
+        let old_this = self.this_type.take();
+        let old_shape = self.current_shape.take();
+        let old_task = std::mem::take(&mut self.current_task);
+
+        self.current_task = event.name.clone();
+        self.scopes = vec![Scope::default()];
+
+        if let Some(owner) = &event.owner {
+            let this_ty = Type::Named(owner.clone(), None);
+            self.this_type = Some(this_ty.clone());
+            self.current_shape = Some(owner.clone());
+            if !event.shared {
+                self.current_owner = Some(owner.clone());
+                self.current_method = Some(Owner {
+                    name: event.name.clone(),
+                    alters: true,
+                    alters_span: event.alters_span,
+                    shared: false,
+                });
+                self.define_param(
+                    THIS,
+                    this_ty,
+                    Mode::Flex,
+                    Passing::FlexRef,
+                    event.span,
+                )?;
+            }
+        }
+
+        if let Some(cond) = &mut event.cond {
+            let mut curr = Some(cond);
+            while let Some(c) = curr {
+                let ty = self.check_expr(&mut c.value)?;
+                if !matches!(ty, Type::Bool | Type::Unknown) {
+                    self.record(Error::at(c.value.span, "an event 'when' condition must evaluate to a bool"));
+                }
+                curr = c.and.as_deref_mut();
+            }
+        }
+
+        let _ = self.check_block(&mut event.body);
+
+        self.scopes = old_scopes;
+        self.current_owner = old_owner;
+        self.current_method = old_method;
+        self.this_type = old_this;
+        self.current_shape = old_shape;
+        self.current_task = old_task;
+
+        Ok(())
+    }
+
+    fn check_events_and_alters(&mut self) {
+        if self.events.is_empty() {
+            return;
+        }
+        let mut events: Vec<EventDef> = self.events.values().cloned().collect();
+        events.sort_by(|a, b| (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name)));
+
+        // 1. Collect direct mutations for each event
+        let mut direct_mutations: HashMap<String, HashSet<String>> = HashMap::new();
+        for event in &events {
+            let mut muts = HashSet::new();
+            collect_block_mutations(&event.body, &mut muts);
+            direct_mutations.insert(event.name.clone(), muts);
+        }
+
+        // 2. Direct alters check
+        for event in &events {
+            if let Some(muts) = direct_mutations.get(&event.name) {
+                for m in muts {
+                    if m.contains('.') && !m.starts_with('.') && event.owner.is_some() {
+                        continue;
+                    }
+                    if !event.alters.iter().any(|a| target_matches(a, m, event.owner.as_deref())) {
+                        let target_display = if let Some(owner) = &event.owner {
+                            if let Some(stripped) = m.strip_prefix('.') {
+                                format!("{}.{}", owner, stripped)
+                            } else {
+                                format!("{}.{}", owner, m)
+                            }
+                        } else {
+                            m.clone()
+                        };
+                        let mut new_alters = event.alters.clone();
+                        new_alters.push(m.clone());
+                        self.record(Error::at(
+                            event.span,
+                            format!(
+                                "event '{}' mutates '{}' directly; add '{}' to alters list: 'alters({})'",
+                                event.name,
+                                target_display,
+                                target_display,
+                                new_alters.join(", ")
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+
+        // 3. Build trigger graph: event_name -> Vec<(triggered_event_name, via_field)>
+        let mut adj: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        for e1 in &events {
+            let mut edges = Vec::new();
+            if let Some(muts) = direct_mutations.get(&e1.name) {
+                for m in muts {
+                    for e2 in &events {
+                        if trigger_matches(m, e2) {
+                            edges.push((e2.name.clone(), m.clone()));
+                        }
+                    }
+                }
+            }
+            adj.insert(e1.name.clone(), edges);
+        }
+
+        // 4. Cycle detection
+        let mut visited: HashMap<String, usize> = HashMap::new();
+        let mut path: Vec<String> = Vec::new();
+
+        fn find_cycles(
+            u: &str,
+            adj: &HashMap<String, Vec<(String, String)>>,
+            events_by_name: &HashMap<String, &EventDef>,
+            visited: &mut HashMap<String, usize>,
+            path: &mut Vec<String>,
+            errors: &mut Vec<Error>,
+        ) {
+            visited.insert(u.to_string(), 1);
+            path.push(u.to_string());
+
+            if let Some(neighbors) = adj.get(u) {
+                for (v, _) in neighbors {
+                    match visited.get(v).copied().unwrap_or(0) {
+                        1 => {
+                            let cycle_start = path.iter().position(|x| x == v).unwrap_or(0);
+                            let cycle = path.get(cycle_start..).unwrap_or(path);
+                            let all_guarded = cycle.iter().all(|name| {
+                                events_by_name.get(name).is_some_and(|e| e.cond.is_some())
+                            });
+                            if !all_guarded {
+                                let mut desc = String::new();
+                                for (i, name) in cycle.iter().enumerate() {
+                                    if i > 0 {
+                                        desc.push_str(", which triggers ");
+                                    }
+                                    desc.push_str(&format!("'{}'", name));
+                                }
+                                desc.push_str(&format!(", which triggers '{}'", v));
+                                if let Some(e) = events_by_name.get(u) {
+                                    errors.push(Error::at(
+                                        e.span,
+                                        format!(
+                                            "unconditional event cycle detected: {}; cycles must be guarded by 'when' conditions",
+                                            desc
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                        0 => {
+                            find_cycles(v, adj, events_by_name, visited, path, errors);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            path.pop();
+            visited.insert(u.to_string(), 2);
+        }
+
+        let events_by_name: HashMap<String, &EventDef> = events.iter().map(|e| (e.name.clone(), e)).collect();
+        let mut cycle_errors = Vec::new();
+        for event in &events {
+            if visited.get(&event.name).copied().unwrap_or(0) == 0 {
+                find_cycles(&event.name, &adj, &events_by_name, &mut visited, &mut path, &mut cycle_errors);
+            }
+        }
+        for err in cycle_errors {
+            self.record(err);
+        }
+
+        // 5. Transitive closure and Indirect Alters Rule
+        for root in &events {
+            let mut queue: VecDeque<(String, String)> = VecDeque::new();
+            let mut seen_events: HashSet<String> = HashSet::new();
+
+            if let Some(neighbors) = adj.get(&root.name) {
+                for (next_ev, via) in neighbors {
+                    queue.push_back((next_ev.clone(), via.clone()));
+                }
+            }
+
+            while let Some((curr_name, via_field)) = queue.pop_front() {
+                if curr_name == root.name || seen_events.contains(&curr_name) {
+                    continue;
+                }
+                seen_events.insert(curr_name.clone());
+
+                let curr_ev = match events_by_name.get(&curr_name) {
+                    Some(e) => *e,
+                    None => continue,
+                };
+
+                if let Some(downstream_muts) = direct_mutations.get(&curr_name) {
+                    for m in downstream_muts {
+                        if m.contains('.') && !m.starts_with('.') && curr_ev.owner.is_some() {
+                            continue;
+                        }
+                        if !root.alters.iter().any(|a| target_matches(a, m, root.owner.as_deref())) {
+                            let target_display = if let Some(owner) = &curr_ev.owner {
+                                if let Some(stripped) = m.strip_prefix('.') {
+                                    format!("{}.{}", owner, stripped)
+                                } else {
+                                    format!("{}.{}", owner, m)
+                                }
+                            } else {
+                                m.clone()
+                            };
+                            let mut suggested_list = root.alters.clone();
+                            if !suggested_list.iter().any(|a| target_matches(a, m, root.owner.as_deref())) {
+                                suggested_list.push(m.clone());
+                            }
+                            let suggested_str = format!("alters({})", suggested_list.join(", "));
+                            self.record(Error::at(
+                                root.span,
+                                format!(
+                                    "event '{}' indirectly alters '{}' (via event '{}' on '{}'); add '{}' to its alters list: '{}'",
+                                    root.name,
+                                    target_display,
+                                    curr_name,
+                                    via_field,
+                                    target_display,
+                                    suggested_str
+                                ),
+                            ));
+                        }
+                    }
+                }
+
+                if let Some(next_neighbors) = adj.get(&curr_name) {
+                    for (next_ev, _) in next_neighbors {
+                        queue.push_back((next_ev.clone(), via_field.clone()));
+                    }
+                }
+            }
+        }
     }
 
     fn check_task_declaration(&mut self, t: &mut TaskDef) -> Result<()> {
@@ -2332,7 +2604,7 @@ impl Checker {
                 &a.name,
                 a.handlers.iter().flat_map(|h| &h.params).collect(),
             ),
-            Item::Macro(_) | Item::GlobalRegion(_) => return Ok(()),
+            Item::Macro(_) | Item::GlobalRegion(_) | Item::Event(_) => return Ok(()),
         };
         if private {
             return Ok(());
@@ -4515,7 +4787,7 @@ impl Checker {
                     a.name.as_str(),
                     vec![a.fields.iter().map(|f| f.ty.clone()).collect()],
                 )),
-                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Event(_) => {}
             }
         }
         for made in self.made_of.keys() {
@@ -12708,6 +12980,9 @@ impl Checker {
             }
             return Ok(CallSetup::Checked(Type::Nothing));
         }
+        if name.ends_with("__event_listen") {
+            return Ok(CallSetup::Checked(Type::Nothing));
+        }
         if name == CHAN_NEW {
             let Some((elem_ty, _)) = types.first().cloned() else {
                 return err(
@@ -17595,6 +17870,56 @@ impl Checker {
             }
             return self.builtin_json(expr);
         }
+        if name == "listen" {
+            let owner = self.owner_of(&ty);
+            if let Some(owner) = owner {
+                let full = method_name(&owner, &name);
+                let has_method = self.tasks.contains_key(&full);
+                if !has_method {
+                    let shape_events: Vec<String> = self
+                        .events
+                        .values()
+                        .filter(|e| {
+                            e.owner
+                                .as_ref()
+                                .is_some_and(|o| o == &owner || unqualified(o) == unqualified(&owner))
+                                && !e.shared
+                                && !e.auto
+                        })
+                        .map(|e| e.name.clone())
+                        .collect();
+                    if !shape_events.is_empty() {
+                        if let ExprKind::MethodCall { args, .. } = &mut expr.kind {
+                            for arg in args.iter_mut() {
+                                let arg_ty = self.check_expr(arg)?;
+                                if let ExprKind::TextLit(ev_name) = &arg.kind {
+                                    if !shape_events.iter().any(|name| name == ev_name) {
+                                        return err(
+                                            arg.span,
+                                            format!("shape '{}' has no event named '{}'", unqualified(&owner), ev_name),
+                                        );
+                                    }
+                                } else if !matches!(arg_ty, Type::Text(_) | Type::Unknown) {
+                                    return err(arg.span, "event names passed to 'listen' must be text");
+                                }
+                            }
+                        }
+                        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+                        let ExprKind::MethodCall { value, args, .. } = taken else { unreachable!() };
+                        let mut all = Vec::with_capacity(args.len() + 1);
+                        all.push(*value);
+                        all.extend(args);
+                        expr.kind = ExprKind::Call {
+                            name: format!("{}__event_listen", owner),
+                            types: Vec::new(),
+                            args: all,
+                        };
+                        expr.ty = Some(Type::Nothing);
+                        return Ok(());
+                    }
+                }
+            }
+        }
         if let Type::Map(..) = ty
             && let Some(op) = MapOp::from_word(&name)
         {
@@ -21264,7 +21589,7 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
                 .map(|f| f.ty.clone())
                 .collect(),
             Item::Actor(a) => a.fields.iter().map(|f| f.ty.clone()).collect(),
-            Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => Vec::new(),
+            Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Event(_) => Vec::new(),
         }
     };
     let mut users: HashMap<String, Vec<usize>> = HashMap::new();
@@ -24756,7 +25081,7 @@ impl CallGraph {
                         }
                     }
                 }
-                Item::Kind(_) | Item::Macro(_) | Item::Actor(_) => {}
+                Item::Kind(_) | Item::Macro(_) | Item::Actor(_) | Item::Event(_) => {}
             }
         }
         CallGraph {
@@ -26088,4 +26413,106 @@ fn with_given(pattern: &PatternDef, given: &HashMap<String, Type>) -> PatternDef
         method.ret = put(&method.ret);
     }
     pattern
+}
+
+fn collect_block_mutations(block: &[Stmt], out: &mut HashSet<String>) {
+    for stmt in block {
+        match &stmt.kind {
+            StmtKind::Assign(targets, _) => {
+                for target in targets {
+                    if let Target::Place(place) = target {
+                        extract_place_mutation(place, out);
+                    }
+                }
+            }
+            StmtKind::Step { target, .. } => {
+                extract_place_mutation(target, out);
+            }
+            StmtKind::When(arms, else_b) => {
+                for arm in arms {
+                    collect_block_mutations(&arm.body, out);
+                }
+                if let Some(b) = else_b {
+                    collect_block_mutations(b, out);
+                }
+            }
+            StmtKind::Loop(_, body, finally) => {
+                collect_block_mutations(body, out);
+                if let Some(b) = finally {
+                    collect_block_mutations(b, out);
+                }
+            }
+            StmtKind::Block(body) => {
+                collect_block_mutations(body, out);
+            }
+            StmtKind::Named(_, inner) => {
+                collect_block_mutations(std::slice::from_ref(&**inner), out);
+            }
+            StmtKind::Turns(turns) => {
+                for turn in turns {
+                    collect_block_mutations(turn, out);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn extract_place_mutation(place: &Expr, out: &mut HashSet<String>) {
+    match &place.kind {
+        ExprKind::Field(base, field) => {
+            if matches!(&base.kind, ExprKind::Var(v) if v == THIS) {
+                out.insert(format!(".{}", field));
+            } else if let ExprKind::Var(var) = &base.kind {
+                out.insert(format!("{}.{}", var, field));
+            }
+        }
+        ExprKind::Var(name) => {
+            out.insert(name.clone());
+        }
+        ExprKind::Lookup(base, _) | ExprKind::Index(base, _) => {
+            extract_place_mutation(base, out);
+        }
+        _ => {}
+    }
+}
+
+fn target_matches(declared: &str, mutated: &str, owner: Option<&str>) -> bool {
+    let dec = declared.trim();
+    let mut_target = mutated.trim();
+    if dec == mut_target {
+        return true;
+    }
+    let dec_clean = dec.strip_prefix('.').unwrap_or(dec);
+    let mut_clean = mut_target.strip_prefix('.').unwrap_or(mut_target);
+    if dec_clean == mut_clean {
+        return true;
+    }
+    if let Some(o) = owner {
+        let qualified = format!("{}.{}", o, dec_clean);
+        if qualified == mut_target {
+            return true;
+        }
+        let qualified_mut = format!("{}.{}", o, mut_clean);
+        if dec == qualified_mut || dec_clean == qualified_mut {
+            return true;
+        }
+    }
+    false
+}
+
+fn trigger_matches(mutated: &str, e2: &EventDef) -> bool {
+    match &e2.trigger {
+        EventTrigger::Change(targets) => {
+            targets.iter().any(|t| target_matches(t, mutated, e2.owner.as_deref()))
+        }
+        EventTrigger::Lifecycle(LifecycleKind::Change) => {
+            if let Some(o) = &e2.owner {
+                mutated.starts_with('.') || mutated.starts_with(&format!("{}.", o))
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
 }

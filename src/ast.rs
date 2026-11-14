@@ -2254,6 +2254,7 @@ pub enum Item {
     Macro(MacroDef),
     GlobalRegion(GlobalRegionDef),
     Actor(ActorDef),
+    Event(EventDef),
 }
 
 impl Item {
@@ -2265,6 +2266,7 @@ impl Item {
             Item::Macro(m) => &m.name,
             Item::GlobalRegion(_) => "global",
             Item::Actor(a) => &a.name,
+            Item::Event(e) => &e.name,
         }
     }
 }
@@ -2648,4 +2650,37 @@ pub struct AliasDef {
     pub span: Span,
     pub ty_span: Span,
     pub private: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct EventDef {
+    pub name: String,
+    pub owner: Option<String>,
+    pub trigger: EventTrigger,
+    pub alters: Vec<String>,
+    pub alters_span: Option<Span>,
+    pub cond: Option<Condition>,
+    pub body: Block,
+    pub auto: bool,
+    pub shared: bool,
+    pub private: bool,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventTrigger {
+    Change(Vec<String>),
+    Read(String),
+    BeforeTask(String),
+    AfterTask(String),
+    Lifecycle(LifecycleKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleKind {
+    Init,
+    Drop,
+    Change,
+    Start,
+    End,
 }

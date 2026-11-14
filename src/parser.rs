@@ -10,6 +10,7 @@ const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and
 const MISPLACED_TYPE_ALIAS: &str = "a type alias is written outside every task, shape, and kind, as in 'alias SampleTask => (int) -> int' at the start of a line";
 
 const MISPLACED_PATTERN: &str = "a pattern is written outside every task, shape, and kind, as in 'pattern Shaped' at the start of a line, and closes with 'fi'";
+const AUTO: &str = "auto";
 
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
@@ -493,10 +494,10 @@ impl Parser {
 
     fn at_item_start(&self) -> bool {
         match self.peek() {
-            Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Include => true,
+            Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event | Token::Include => true,
             Token::Region => matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global"),
-            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind | Token::Actor)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
-            _ => self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1) || self.at_event_after(1),
+            _ => self.at_event_after(0) || self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
 
@@ -508,7 +509,43 @@ impl Parser {
         }
         let rest = self.tokens.get(self.pos + 1..).unwrap_or_default();
         let next = rest.iter().find(|token| **token != Token::Newline).unwrap_or(&Token::Eof);
-        matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv)
+        matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Event)
+    }
+
+    fn at_event_after(&self, mut ahead: usize) -> bool {
+        let mut saw_shared = false;
+        let mut saw_alters = false;
+        loop {
+            match self.tokens.get(self.pos + ahead) {
+                Some(Token::Shared) if !saw_shared => {
+                    saw_shared = true;
+                    ahead += 1;
+                }
+                Some(Token::Ident(w)) if w == ALTERS && !saw_alters => {
+                    saw_alters = true;
+                    ahead += 1;
+                    if self.tokens.get(self.pos + ahead) == Some(&Token::LParen) {
+                        ahead += 1;
+                        let mut depth = 1;
+                        while ahead < self.tokens.len() && depth > 0 {
+                            match self.tokens.get(self.pos + ahead) {
+                                Some(Token::LParen) => depth += 1,
+                                Some(Token::RParen) => depth -= 1,
+                                Some(Token::Eof) | None => return false,
+                                _ => {}
+                            }
+                            ahead += 1;
+                        }
+                    }
+                }
+                Some(Token::Event) => return true,
+                _ => return false,
+            }
+        }
+    }
+
+    fn at_shape_event(&self) -> bool {
+        self.at_event_after(0) || (self.check(Token::Priv) && self.at_event_after(1))
     }
 
     /// Whether the tokens `ahead` of the cursor, on a line the cursor starts,
@@ -590,6 +627,7 @@ impl Parser {
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
                 Token::Actor => self.parse_actor().map(Item::Actor)?,
                 _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
+                _ if self.at_event_after(0) => self.parse_event(None, true).map(Item::Event)?,
                 _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, actor, pattern, type alias, or macro, or a shape's field")),
             };
             match &mut item {
@@ -598,6 +636,7 @@ impl Parser {
                 Item::Kind(k) => k.private = true,
                 Item::Actor(a) => a.private = true,
                 Item::Macro(m) => m.private = true,
+                Item::Event(e) => e.private = true,
                 Item::GlobalRegion(_) => unreachable!(),
             }
             return Ok(item);
@@ -619,6 +658,9 @@ impl Parser {
             && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global")
         {
             return self.parse_global_region().map(Item::GlobalRegion);
+        }
+        if self.at_event_after(0) {
+            return self.parse_event(None, false).map(Item::Event);
         }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),
@@ -1001,13 +1043,20 @@ impl Parser {
         let mut fields: Vec<Field> = Vec::new();
         let mut shared: Vec<SharedField> = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
-        while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
+        let mut events: Vec<EventDef> = Vec::new();
+        while !self.check(Token::Fi) && !self.is_at_end() && (!self.at_item_start() || self.at_shape_event()) {
             self.skip_newlines();
-            if self.check(Token::Fi) || self.at_item_start() { break; }
+            if self.check(Token::Fi) || (self.at_item_start() && !self.at_shape_event()) { break; }
             self.reject_stray_end()?;
             let (decorators, wrappers) = self.parse_member_decorators("shape")?;
             let private = self.match_token(Token::Priv);
             self.reject_misplaced_method_words()?;
+            if self.at_event_after(0) {
+                let event = self.parse_event(Some(&name), private)?;
+                events.push(event);
+                self.skip_newlines();
+                continue;
+            }
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance();
                 let mut method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
@@ -1048,6 +1097,7 @@ impl Parser {
         }
         self.expect_fi("shape", opened)?;
         self.methods.extend(methods.into_iter().map(Item::Task));
+        self.methods.extend(events.into_iter().map(Item::Event));
         Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false, follows })
     }
 
@@ -1408,6 +1458,155 @@ impl Parser {
             handlers,
             span,
             private: false,
+        })
+    }
+
+    fn parse_alter_target(&mut self) -> Result<String> {
+        let mut s = String::new();
+        if self.match_token(Token::Dot) {
+            s.push('.');
+            s.push_str(&self.expect_ident()?);
+        } else {
+            s.push_str(&self.expect_ident()?);
+        }
+        while self.match_token(Token::Dot) {
+            s.push('.');
+            s.push_str(&self.expect_ident()?);
+        }
+        Ok(s)
+    }
+
+    fn parse_event(&mut self, owner: Option<&str>, private: bool) -> Result<EventDef> {
+        let mut shared = false;
+        let mut alters = Vec::new();
+        let mut alters_span = None;
+
+        loop {
+            if self.check(Token::Shared) {
+                if shared {
+                    return Err(Error::at(self.peek_span(), "'shared' is already written here"));
+                }
+                self.advance();
+                shared = true;
+                continue;
+            }
+            if matches!(self.peek(), Token::Ident(word) if word == ALTERS) {
+                if alters_span.is_some() {
+                    return Err(Error::at(self.peek_span(), "'alters' is already written here"));
+                }
+                let at = self.peek_span();
+                self.advance();
+                alters_span = Some(at);
+                if self.match_token(Token::LParen) {
+                    while !self.check(Token::RParen) && !self.is_at_end() {
+                        let target = self.parse_alter_target()?;
+                        alters.push(target);
+                        if !self.match_token(Token::Comma) {
+                            break;
+                        }
+                    }
+                    if !self.match_token(Token::RParen) {
+                        return Err(Error::at(self.peek_span(), "expected ')' to close 'alters(...)'"));
+                    }
+                }
+                continue;
+            }
+            break;
+        }
+
+        let opened = self.peek_span();
+        if !self.match_token(Token::Event) {
+            return Err(Error::at(opened, "expected 'event'"));
+        }
+        let name = self.expect_ident()?;
+
+        let trigger_span = self.peek_span();
+        let trigger = if matches!(self.peek(), Token::Ident(w) if w == "on") {
+            self.advance();
+            if matches!(self.peek(), Token::Ident(w) if w == "before") {
+                self.advance();
+                let target = self.parse_alter_target()?;
+                EventTrigger::BeforeTask(target)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "after") {
+                self.advance();
+                let target = self.parse_alter_target()?;
+                EventTrigger::AfterTask(target)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "call") {
+                return Err(Error::at(self.peek_span(), "to run an event before or after a task or method, write 'before <name>' or 'after <name>'"));
+            } else if matches!(self.peek(), Token::Ident(w) if w == READ) {
+                self.advance();
+                let target = self.parse_alter_target()?;
+                EventTrigger::Read(target)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "init") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
+                self.advance();
+                EventTrigger::Lifecycle(LifecycleKind::Init)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "drop") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
+                self.advance();
+                EventTrigger::Lifecycle(LifecycleKind::Drop)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "change") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
+                self.advance();
+                EventTrigger::Lifecycle(LifecycleKind::Change)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "start") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
+                self.advance();
+                EventTrigger::Lifecycle(LifecycleKind::Start)
+            } else if matches!(self.peek(), Token::Ident(w) if w == "end") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
+                self.advance();
+                EventTrigger::Lifecycle(LifecycleKind::End)
+            } else {
+                let mut targets = Vec::new();
+                loop {
+                    targets.push(self.parse_alter_target()?);
+                    if !self.match_token(Token::Comma) {
+                        break;
+                    }
+                }
+                EventTrigger::Change(targets)
+            }
+        } else if matches!(self.peek(), Token::Ident(w) if w == "before") {
+            self.advance();
+            let target = self.parse_alter_target()?;
+            EventTrigger::BeforeTask(target)
+        } else if matches!(self.peek(), Token::Ident(w) if w == "after") {
+            self.advance();
+            let target = self.parse_alter_target()?;
+            EventTrigger::AfterTask(target)
+        } else {
+            return Err(Error::at(trigger_span, "expected 'on', 'before', or 'after'"));
+        };
+
+        let cond = if self.match_token(Token::When) {
+            Some(self.parse_condition()?)
+        } else {
+            None
+        };
+
+        let auto = if matches!(self.peek(), Token::Ident(w) if w == AUTO) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), "unexpected token in event header"));
+        }
+
+        self.skip_newlines();
+        let body = self.parse_block_until(&[Token::Fi])?;
+        self.expect_fi("event", opened)?;
+
+        Ok(EventDef {
+            name,
+            owner: owner.map(ToString::to_string),
+            trigger,
+            alters,
+            alters_span,
+            cond,
+            body,
+            auto,
+            shared,
+            private,
+            span: opened,
         })
     }
 
@@ -3852,7 +4051,7 @@ impl Parser {
             {
                 self.parse_member_of_this(span)
             }
-            Token::Ident(_) | Token::Own => self.parse_name_use(span),
+            Token::Ident(_) | Token::Own | Token::Event => self.parse_name_use(span),
             _ => self.parse_literal(span),
         }
     }
@@ -4789,6 +4988,7 @@ impl Parser {
         match self.peek() {
             Token::Ident(s) => { let v = s.clone(); self.advance(); Ok(v) }
             Token::Own => { self.advance(); Ok("own".to_string()) }
+            Token::Event => { self.advance(); Ok("event".to_string()) }
             _ => Err(self.name_expected()),
         }
     }

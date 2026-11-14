@@ -1,0 +1,22 @@
+; error: 14:21: event 'absorb' indirectly alters 'Player.alive' (via event 'check_death' on '.shield'); add 'Player.alive' to its alters list: 'alters(.shield, .alive)'
+
+shape Player
+    hp: int
+    shield: int
+    alive: bool
+
+    alters(.alive) event check_death on .shield
+        when .shield <= 0 and .hp <= 0
+            .alive = false
+        fi
+    fi
+
+    alters(.shield) event absorb on .hp
+        when .shield > 0
+            .shield -= 5
+        fi
+    fi
+fi
+
+task main()
+fi

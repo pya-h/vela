@@ -1,0 +1,17 @@
+; error: 11:20: unconditional event cycle detected: 'a', which triggers 'b', which triggers 'a'; cycles must be guarded by 'when' conditions
+
+shape Box
+    x: int
+    y: int
+
+    alters(.y, .x) event a on .x
+        .y = 1
+    fi
+
+    alters(.x, .y) event b on .y
+        .x = 2
+    fi
+fi
+
+task main()
+fi
