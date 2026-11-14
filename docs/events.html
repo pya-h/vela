@@ -376,21 +376,64 @@
         </p>
       </div>
 
-      <div class="suggestion">
-        <h4>Suggestion: <code>alters</code> could name what it changes</h4>
+      <div class="decision">
+        <h4>The Indirect Alters Rule: Transitive Causality</h4>
         <p>
-          <span class="badge b-sugg">Suggestion</span> An event that runs by surprise is easier to trust when it says
-          exactly what it touches:
+          <span class="badge b-user">Specification</span> An event that runs by surprise is only trustworthy when it explicitly declares
+          its complete mutation blast radius. An event must list not only the fields it directly modifies, but also any fields modified
+          by other events that it triggers:
         </p>
-        <pre><code><span class="keyword">alters</span>(changes) <span class="keyword">event</span> tally on total
-    changes = changes + <span class="number">1</span>
+        <pre><code><span class="keyword">shape</span> Player
+    hp: int
+    shield: int
+    alive: bool = <span class="keyword">true</span>
+
+    <span class="comment">; Directly modifies .shield; indirectly alters .alive (via check_death)</span>
+    <span class="keyword">alters</span>(.shield, .alive) <span class="keyword">event</span> absorb on .hp <span class="keyword">when</span> .hp &lt; <span class="number">50</span> <span class="keyword">auto</span>
+        .shield = .shield - <span class="number">10</span>
+    <span class="keyword">fi</span>
+
+    <span class="comment">; Directly modifies .alive</span>
+    <span class="keyword">alters</span>(.alive) <span class="keyword">event</span> check_death on .shield <span class="keyword">when</span> .shield &lt;= <span class="number">0</span> <span class="keyword">auto</span>
+        .alive = <span class="keyword">false</span>
+    <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
         <p>
-          The compiler would refuse a change to anything not in the list. That lets a reader see an event's whole
-          effect in its header. It also gives the compiler what it needs to find <a href="#cycles">cycles</a>: event A
-          changes <code>x</code>, which triggers B, which changes <code>y</code>, which triggers A. It could be optional:
-          a bare <code>alters</code> still means "may change anything outside".
+          <strong>Purpose &amp; Rationale:</strong> In event-driven systems, the number one source of critical bugs is "action-at-a-distance" —
+          where touching field <code>X</code> secretly causes a cascade of downstream events that corrupt field <code>Y</code>. The Indirect
+          Alters Rule ensures complete transparency: a reader or auditor looking at <code>absorb</code> immediately knows that <code>alive</code>
+          can be altered when <code>absorb</code> runs.
         </p>
+        <p>
+          <strong>What it prevents:</strong>
+        </p>
+        <ul>
+          <li><strong>Hidden mutation cascades:</strong> No field can ever change without being explicitly advertised in the root event's header.</li>
+          <li><strong>Unseen side-effects in libraries:</strong> Downstream listeners cannot silently introduce unexpected mutations into upstream workflows.</li>
+          <li><strong>Hidden recursion cycles:</strong> Circular mutation loops are exposed immediately in the complementary <code>alters</code> headers.</li>
+        </ul>
+        <p>
+          <strong>Pros &amp; Cons:</strong>
+        </p>
+        <ul>
+          <li><em>Pros:</em> Zero surprise mutations, compile-time deterministic verification, clear mental model, and robust architectural boundaries.</li>
+          <li><em>Cons:</em> If a downstream event's mutations change, upstream event headers must be updated to acknowledge the new alters (which is intentional to prevent accidental side effects).</li>
+        </ul>
+        <p>
+          <strong>Smart Compiler Diagnostics:</strong> When an indirect alters target is omitted, the compiler traces the causality graph
+          and provides the exact chain of triggers in its error message:
+        </p>
+        <pre><code>error: event 'absorb' indirectly alters 'Player.alive' (via event 'check_death' on '.shield');
+add 'Player.alive' to its alters list: 'alters(.shield, .alive)'</code></pre>
+        <p>
+          <strong>Risks &amp; Solutions:</strong>
+        </p>
+        <ul>
+          <li><strong>Risk: Unbounded dynamic listeners across compilation units.</strong> If arbitrary external listeners could attach dynamically at runtime, static transitive reachability could become undecidable across separate compilation units.
+          <br><em>Solution:</em> The Indirect Alters Rule is statically checked across all events declared within the shape, module, and <code>auto</code> scopes. For decoupled, cross-component or cross-thread notifications, developers use asynchronous <strong>Actor channels</strong> (<code>send(actor, Msg)</code>), which transfer immutable or owned values without cascading synchronous mutations.</li>
+          <li><strong>Risk: Mutual recursion cycles (A triggers B, B triggers A).</strong>
+          <br><em>Solution:</em> Event cycles are strictly prohibited by default. They are permitted <em>only</em> if every step in the cycle is guarded by a terminating <code>when &lt;condition&gt;</code> guard, and both events declare the shared set of altered targets (e.g., <code>alters(X, Y)</code>).</li>
+        </ul>
       </div>
     </section>
 
@@ -498,7 +541,7 @@
         It needs one new word, <code>event</code>. The word <code>on</code> introduces the trigger. It is only a keyword
         in that position, so it could stay usable as a name elsewhere.
       </p>
-      <pre><code>[<span class="keyword">priv</span>] [<span class="keyword">shared</span>] [<span class="keyword">alters</span>] <span class="keyword">event</span> &lt;name&gt; on &lt;trigger&gt; [<span class="keyword">when</span> &lt;condition&gt;]
+      <pre><code>[<span class="keyword">priv</span>] [<span class="keyword">shared</span>] [<span class="keyword">alters</span>(&lt;targets&gt;)] <span class="keyword">event</span> &lt;name&gt; (on &lt;trigger&gt; | before &lt;task&gt; | after &lt;task&gt;) [<span class="keyword">when</span> &lt;condition&gt;] [<span class="keyword">auto</span>]
     …
 <span class="keyword">fi</span></code></pre>
       <div class="table-wrap">
@@ -507,12 +550,25 @@
           <tbody>
             <tr><td>a field or variable changes</td><td><code>on total</code>, <code>on .hp</code>, <code>on .x, .y</code>, <code>on Player.alive</code></td></tr>
             <tr><td>a value is read</td><td><code>on read .hp</code></td></tr>
-            <tr><td>a task or method is called</td><td><code>on call save</code> (before), <code>on call save after</code>, <code>on call .grow</code></td></tr>
+            <tr><td>a task or method is called</td><td><code>before save</code>, <code>after save</code>, <code>before .grow</code>, <code>after .grow</code></td></tr>
             <tr><td>the shape's own life</td><td><code>on init</code>, <code>on drop</code>, <code>on change</code></td></tr>
             <tr><td>the program</td><td><code>on start</code>, <code>on end</code></td></tr>
           </tbody>
         </table>
       </div>
+      <p>
+        <strong>Event Scope, Registration &amp; the <code>auto</code> keyword:</strong>
+      </p>
+      <ul>
+        <li><code>shared</code> events are globally active for the lifetime of the program.</li>
+        <li>Non-shared member events inside a shape require explicit activation per instance via <code>.listen()</code> to avoid unwanted listener overhead on idle instances:
+          <ul>
+            <li><code>player.listen()</code> registers all non-shared member events on that instance.</li>
+            <li><code>player.listen("on_damage", "on_heal")</code> registers only the specified events.</li>
+          </ul>
+        </li>
+        <li><strong>The <code>auto</code> keyword:</strong> When placed at the end of an in-shape member event declaration (e.g. <code>event on_damage on .hp auto</code>), the event is automatically active on every instance upon construction without requiring <code>.listen()</code>. Using <code>auto</code> on a <code>shared</code> event or outside a shape is a compile-time error.</li>
+      </ul>
       <p>
         Spelling the special events as <code>on init</code> rather than <code>oninit</code> keeps them to one pattern:
         every event is <code>event name on something</code>. Only <code>event</code> becomes a reserved word, and
@@ -626,15 +682,18 @@ record.paused       <span class="comment">; true or false</span></code></pre>
         runs after the statement that made the change.
       </p>
 
-      <h3 id="cycles">Events that trigger themselves, or each other</h3>
+      <h3 id="cycles">Events that trigger themselves, or each other (Cycle Rejection Policy)</h3>
       <p>
-        An event that changes what it watches would run forever. <span class="badge b-sugg">Suggestion</span> Refuse
-        this when compiling. Since the compiler knows what triggers each event and what each event changes (and knows
-        it exactly with the <a href="#alters"><code>alters(…)</code> list</a>), it can build the graph of events and
-        refuse any cycle in it, with an error that names the whole loop: "record changes best, which runs cap, which
-        changes score, which runs record". A runtime guard ("an event running already does not run again") is the
-        fallback for cycles the compiler can't see. It is cheaper to explain, but it hides the bug instead of reporting
-        it.
+        An event that changes what it watches, or triggers another event that cycles back, risks infinite recursion.
+        <span class="badge b-user">Specification</span> By default, the compiler strictly refuses any static event cycle at compile time,
+        tracing the exact causal loop: <em>"record changes best, which runs cap, which changes score, which runs record"</em>.
+      </p>
+      <p>
+        <strong>Cycle Exception Rule:</strong> Cycles are permitted <em>only</em> when every link in the cycle is explicitly guarded by
+        a terminating <code>when &lt;condition&gt;</code> guard (such as <code>when .hp &lt; 50</code> or <code>when .shield &gt; 0</code>), ensuring
+        the loop terminates deterministically. Furthermore, in accordance with the <a href="#alters">Indirect Alters Rule</a>, every event
+        participating in the cycle must list the full set of altered fields in its <code>alters(…)</code> declaration (e.g. <code>alters(X, Y)</code> on both).
+        Any unguarded or unproven cycle is rejected at compile time.
       </p>
 
       <h3 id="order">Several events on one trigger</h3>
