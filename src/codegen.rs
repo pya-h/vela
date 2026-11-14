@@ -238,7 +238,7 @@ impl Generator {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
-                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_)) => {}
+                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_)) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
@@ -5395,7 +5395,7 @@ impl Generator {
         }
         if name == SEND
             && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
         {
             let Some((_, rest)) = args.split_first() else {
                 return Err(Error::internal_at(e.span, "send called without channel"));
@@ -5405,14 +5405,18 @@ impl Generator {
             };
             let chan = self.gen_expr(arg0)?;
             let item = self.gen_expr(arg1)?;
-            let Type::Chan(inner) = arg0.ty()? else {
-                return Err(Error::internal_at(e.span, "send on non-Chan"));
+            let payload_type = match arg0.ty()? {
+                Type::Chan(inner) => match inner.as_ref() {
+                    Type::Own(p) => p.as_ref().clone(),
+                    other => other.clone(),
+                },
+                Type::Actor(actor_ty) => match actor_ty.as_ref() {
+                    Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
+                    _ => Type::Unknown,
+                },
+                _ => return Err(Error::internal_at(e.span, "send on non-Chan/Actor")),
             };
-            let payload = match inner.as_ref() {
-                Type::Own(p) => p.as_ref(),
-                other => other,
-            };
-            return Ok(format!("vela__chan_send__{}({}, {})", type_word(payload), chan, item));
+            return Ok(format!("vela__chan_send__{}({}, {})", type_word(&payload_type), chan, item));
         }
         if name == RECV
             && let Some(arg0) = args.first()
@@ -5444,7 +5448,7 @@ impl Generator {
         }
         if name == CLOSE
             && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
         {
             let chan = self.gen_expr(arg0)?;
             return Ok(format!("vela__rt__chan_close({})", chan));
@@ -7399,6 +7403,14 @@ impl UsedTypes {
                 self.add(&Type::Maybe(Box::new(payload.clone())));
                 note(&mut self.channels, payload);
             }
+            Type::Actor(actor_ty) => {
+                let msg_type = match actor_ty.as_ref() {
+                    Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
+                    _ => Type::Unknown,
+                };
+                self.add(&msg_type);
+                note(&mut self.channels, &msg_type);
+            }
             Type::Own(inner) => {
                 self.add(inner);
             }
@@ -8067,7 +8079,7 @@ fn type_name(item: &Item) -> Option<&str> {
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) if !k.types.is_empty() => None,
         Item::Kind(k) => Some(&k.name),
-        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => None,
+        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => None,
     }
 }
 
@@ -8171,7 +8183,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             .flat_map(|v| &v.payload)
             .flat_map(|f| value_dependencies(&f.ty))
             .collect(),
-        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_)) => Vec::new(),
+        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value)
             .into_iter()
@@ -8455,7 +8467,7 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_word(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_word(value), type_word(error)),
         Type::Fail(error) => c_type(error),
-        Type::Chan(_) => "vela__chan_t".to_string(),
+        Type::Chan(_) | Type::Actor(_) => "vela__chan_t".to_string(),
         Type::Own(inner) => c_type(inner),
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => {
             format!("vela__{}", type_word(ty))

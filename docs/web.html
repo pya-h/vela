@@ -126,6 +126,7 @@
     .type { color: #38bdf8; }
     .string { color: #4ade80; }
     .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -275,77 +276,77 @@
         <code>Upgrade: websocket</code>, the router automatically handles the cryptographic handshake and invokes your handler with an open <code>WebSocket</code>:
       </p>
 
-      <pre><code>include std/web { router, WebSocket, WebSocketMessage, Request, serve }
+      <pre><code><span class="keyword">include</span> std/web { router, WebSocket, WebSocketMessage, Request, serve }
 
-task main()
-    flex app = router()
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> app = router()
 
-    ; Register WebSocket endpoint at /ws/chat
-    app.ws("/ws/chat", task (ws: WebSocket, req: Request@r, r: region default)
-        show("client connected to websocket from ", req.header("user-agent") { "unknown" })
+    <span class="comment">; Register WebSocket endpoint at /ws/chat</span>
+    app.ws(<span class="string">"/ws/chat"</span>, <span class="keyword">task</span> (ws: WebSocket, req: Request@r, r: <span class="keyword">region default</span>)
+        show(<span class="string">"client connected to websocket from "</span>, req.header(<span class="string">"user-agent"</span>) { <span class="string">"unknown"</span> })
 
-        loop ws.is_open()
-            region msg_r default
-            fixed msg = ws.recv(msg_r) { failure _ break }
+        <span class="keyword">loop</span> ws.is_open()
+            <span class="keyword">region</span> msg_r <span class="keyword">default</span>
+            <span class="keyword">fixed</span> msg = ws.recv(msg_r) { <span class="keyword">failure</span> _ <span class="keyword">break</span> }
 
-            match msg
-            case WebSocketMessage.Text text_msg
-                show("received text: ", text_msg)
-                ; Echo the message back to the client
-                ws.send_text("Echo: " + text_msg at msg_r, msg_r) { failure _ break }
+            <span class="keyword">match</span> msg
+            <span class="keyword">case</span> WebSocketMessage.Text text_msg
+                show(<span class="string">"received text: "</span>, text_msg)
+                <span class="comment">; Echo the message back to the client</span>
+                ws.send_text(<span class="string">"Echo: "</span> + text_msg <span class="keyword">at</span> msg_r, msg_r) { <span class="keyword">failure</span> _ <span class="keyword">break</span> }
 
-            case WebSocketMessage.Binary bin_data
-                show("received binary payload, size: ", bin_data.len)
-                ws.send_binary(bin_data, msg_r) { failure _ break }
+            <span class="keyword">case</span> WebSocketMessage.Binary bin_data
+                show(<span class="string">"received binary payload, size: "</span>, bin_data.len)
+                ws.send_binary(bin_data, msg_r) { <span class="keyword">failure</span> _ <span class="keyword">break</span> }
 
-            case WebSocketMessage.Ping payload
-                ; Automatic pong response
-                show("ping received")
+            <span class="keyword">case</span> WebSocketMessage.Ping payload
+                <span class="comment">; Automatic pong response</span>
+                show(<span class="string">"ping received"</span>)
 
-            case WebSocketMessage.Close code reason
-                show("client closed with code ", code, ": ", reason)
-                ws.close(code, "acknowledging close", msg_r) { failure _ }
-                break
+            <span class="keyword">case</span> WebSocketMessage.Close code reason
+                show(<span class="string">"client closed with code "</span>, code, <span class="string">": "</span>, reason)
+                ws.close(code, <span class="string">"acknowledging close"</span>, msg_r) { <span class="keyword">failure</span> _ }
+                <span class="keyword">break</span>
 
-            case _
-            fi
-        fi
+            <span class="keyword">case</span> _
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
     )
 
-    show("WebSocket server listening on http://127.0.0.1:8080/ws/chat")
-    serve("127.0.0.1:8080", app.route) { failure _ }
-fi</code></pre>
+    show(<span class="string">"WebSocket server listening on http://127.0.0.1:8080/ws/chat"</span>)
+    serve(<span class="string">"127.0.0.1:8080"</span>, app.route) { <span class="keyword">failure</span> _ }
+<span class="keyword">fi</span></code></pre>
 
       <h3>Client-Side WebSocket Connections</h3>
       <p>
         Vela programs can also initiate outgoing WebSocket connections using <code>ws_connect(url, region)</code>. The client handles the handshake, key generation, and RFC 6455 client masking automatically:
       </p>
 
-      <pre><code>include std/web { ws_connect, WebSocketMessage }
+      <pre><code><span class="keyword">include</span> std/web { ws_connect, WebSocketMessage }
 
-task main()
-    region r default
-    fixed ws = ws_connect("ws://127.0.0.1:8080/ws/chat", r) { failure err
-        show("connection failed: ", err)
-        <-
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> ws = ws_connect(<span class="string">"ws://127.0.0.1:8080/ws/chat"</span>, r) { <span class="keyword">failure</span> err
+        show(<span class="string">"connection failed: "</span>, err)
+        &lt;-
     }
 
-    ; Send greeting message
-    ws.send_text("Hello from Vela client!", r) { failure _ }
+    <span class="comment">; Send greeting message</span>
+    ws.send_text(<span class="string">"Hello from Vela client!"</span>, r) { <span class="keyword">failure</span> _ }
 
-    ; Await response
-    region msg_r default
-    fixed reply = ws.recv(msg_r) { failure _ WebSocketMessage.None }
-    match reply
-    case WebSocketMessage.Text payload
-        show("server replied: ", payload)
-    case _
-        show("no text reply received")
-    fi
+    <span class="comment">; Await response</span>
+    <span class="keyword">region</span> msg_r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> reply = ws.recv(msg_r) { <span class="keyword">failure</span> _ WebSocketMessage.None }
+    <span class="keyword">match</span> reply
+    <span class="keyword">case</span> WebSocketMessage.Text payload
+        show(<span class="string">"server replied: "</span>, payload)
+    <span class="keyword">case</span> _
+        show(<span class="string">"no text reply received"</span>)
+    <span class="keyword">fi</span>
 
-    ; Gracefully close the connection
-    ws.close(1000, "work done", r) { failure _ }
-fi</code></pre>
+    <span class="comment">; Gracefully close the connection</span>
+    ws.close(<span class="number">1000</span>, <span class="string">"work done"</span>, r) { <span class="keyword">failure</span> _ }
+<span class="keyword">fi</span></code></pre>
 
       <h3>WebSocket API Reference</h3>
       <table>
@@ -421,50 +422,50 @@ fi</code></pre>
         Vela provides both declarative decorator-based routing and programmatic <code>Router</code> instances:
       </p>
 
-      <pre><code>include std/web { router, Request, Response, WebError, text_response, json_response, serve }
+      <pre><code><span class="keyword">include</span> std/web { router, Request, Response, WebError, text_response, json_response, serve }
 
-task get_user(req: Request@r, r: region default) -> Response@r ~ WebError@r
-    fixed id = req.param("id") { "0" }
-    <- text_response("User profile for ID: {id}" at r, r)
-fi
+<span class="keyword">task</span> get_user(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">fixed</span> id = req.param(<span class="string">"id"</span>) { <span class="string">"0"</span> }
+    &lt;- text_response(<span class="string">"User profile for ID: {id}"</span> <span class="keyword">at</span> r, r)
+<span class="keyword">fi</span>
 
-task create_user(req: Request@r, r: region default) -> Response@r ~ WebError@r
-    fixed body = req.body()
-    show("creating user: ", body)
-    <- text_response("Created", r)
-fi
+<span class="keyword">task</span> create_user(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    <span class="keyword">fixed</span> body = req.body()
+    show(<span class="string">"creating user: "</span>, body)
+    &lt;- text_response(<span class="string">"Created"</span>, r)
+<span class="keyword">fi</span>
 
-task main()
-    flex app = router()
-    app.get("/users/{id}", get_user)
-    app.post("/users", create_user)
-    app.files("/assets/*", "public")
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> app = router()
+    app.get(<span class="string">"/users/{id}"</span>, get_user)
+    app.post(<span class="string">"/users"</span>, create_user)
+    app.files(<span class="string">"/assets/*"</span>, <span class="string">"public"</span>)
 
-    serve("127.0.0.1:8080", app.route) { failure err
-        show("server stopped: ", err)
+    serve(<span class="string">"127.0.0.1:8080"</span>, app.route) { <span class="keyword">failure</span> err
+        show(<span class="string">"server stopped: "</span>, err)
     }
-fi</code></pre>
+<span class="keyword">fi</span></code></pre>
 
       <h3>Continuous Listening with <code>Server</code></h3>
       <p>
         In production systems or long-running daemons, use <code>Server.bind(host, port)</code> and <code>server.serve(handler)</code> to accept requests continuously:
       </p>
-      <pre><code>include std/web { Server, Request, Response, text_response }
+      <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, text_response }
 
-task main()
-    region r default
-    fixed srv = Server.bind("0.0.0.0", 8080, r) { failure err
-        show("bind failed: ", err)
-        <-
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> srv = Server.bind(<span class="string">"0.0.0.0"</span>, <span class="number">8080</span>, r) { <span class="keyword">failure</span> err
+        show(<span class="string">"bind failed: "</span>, err)
+        &lt;-
     }
 
-    show("API server listening on 0.0.0.0:8080...")
-    srv.serve(task (req: Request@req_r, req_r: region default)
-        <- text_response("Welcome to Vela backend API", req_r)
-    ) { failure err
-        show("serve terminated: ", err)
+    show(<span class="string">"API server listening on 0.0.0.0:8080..."</span>)
+    srv.serve(<span class="keyword">task</span> (req: Request@req_r, req_r: <span class="keyword">region default</span>)
+        &lt;- text_response(<span class="string">"Welcome to Vela backend API"</span>, req_r)
+    ) { <span class="keyword">failure</span> err
+        show(<span class="string">"serve terminated: "</span>, err)
     }
-fi</code></pre>
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>
@@ -473,25 +474,25 @@ fi</code></pre>
         <code>std/web</code> includes a high-performance HTTP client for REST queries, microservice RPC, and external API requests:
       </p>
 
-      <pre><code>include std/web { Client, fetch, fetch_json }
+      <pre><code><span class="keyword">include</span> std/web { Client, fetch, fetch_json }
 
-task main()
-    region r default
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
 
-    ; Simple GET request
-    fixed resp = fetch("http://httpbin.org/get", r) { failure err
-        show("fetch failed: ", err)
-        <-
+    <span class="comment">; Simple GET request</span>
+    <span class="keyword">fixed</span> resp = fetch(<span class="string">"http://httpbin.org/get"</span>, r) { <span class="keyword">failure</span> err
+        show(<span class="string">"fetch failed: "</span>, err)
+        &lt;-
     }
-    show("status: ", resp.status)
-    show("body: ", resp.body())
+    show(<span class="string">"status: "</span>, resp.status)
+    show(<span class="string">"body: "</span>, resp.body())
 
-    ; POST JSON payload
-    fixed post_resp = fetch_json("http://httpbin.org/post", "{\"name\": \"Vela\", \"active\": true}", r) { failure _
-        <-
+    <span class="comment">; POST JSON payload</span>
+    <span class="keyword">fixed</span> post_resp = fetch_json(<span class="string">"http://httpbin.org/post"</span>, <span class="string">"{\"name\": \"Vela\", \"active\": true}"</span>, r) { <span class="keyword">failure</span> _
+        &lt;-
     }
-    show("post status: ", post_resp.status)
-fi</code></pre>
+    show(<span class="string">"post status: "</span>, post_resp.status)
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>

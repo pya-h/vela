@@ -49,6 +49,7 @@ pub enum Type {
     Range(Box<Type>),
     Maybe(Box<Type>),
     Chan(Box<Type>),
+    Actor(Box<Type>),
     Own(Box<Type>),
     Or(Box<Type>, Box<Type>),
     Fail(Box<Type>),
@@ -308,6 +309,7 @@ pub const BUILTIN_TASKS: &[&str] = &[
 ];
 
 pub const CHAN: &str = "Chan";
+pub const ACTOR: &str = "Actor";
 pub const CHAN_NEW: &str = "chan_new";
 pub const SEND: &str = "send";
 pub const RECV: &str = "recv";
@@ -731,6 +733,11 @@ impl Type {
                 inner.write(f, outer)?;
                 write!(f, "]")
             }
+            Type::Actor(inner) => {
+                write!(f, "Actor[")?;
+                inner.write(f, outer)?;
+                write!(f, "]")
+            }
             Type::Own(inner) => {
                 write!(f, "own ")?;
                 inner.write(f, outer)
@@ -855,6 +862,7 @@ impl Type {
             | Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner) => inner.unknown(),
             Type::Or(value, error) | Type::Map(value, error, _) => {
@@ -933,6 +941,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
@@ -999,6 +1008,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
@@ -1036,6 +1046,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
@@ -1115,6 +1126,7 @@ impl Type {
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
             Type::Chan(inner) => Type::Chan(Box::new(inner.map_regions_of_names(f))),
+            Type::Actor(inner) => Type::Actor(Box::new(inner.map_regions_of_names(f))),
             Type::Own(inner) => Type::Own(Box::new(inner.map_regions_of_names(f))),
             Type::Or(value, error) => Type::Or(
                 Box::new(value.map_regions_of_names(f)),
@@ -1172,6 +1184,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
@@ -1249,6 +1262,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
@@ -1315,6 +1329,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
@@ -1353,6 +1368,7 @@ impl Type {
             | Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner)
             | Type::Array(inner, _) => inner.collect_params(names),
@@ -1399,6 +1415,7 @@ impl Type {
             Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner)
             | Type::Array(inner, _) => {
@@ -1529,6 +1546,11 @@ pub enum ExprKind {
         name: String,
         types: Vec<TypeArg>,
         args: Vec<Expr>,
+    },
+    Spawn {
+        actor: String,
+        args: Vec<Expr>,
+        span: Span,
     },
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -2231,6 +2253,7 @@ pub enum Item {
     Kind(KindDef),
     Macro(MacroDef),
     GlobalRegion(GlobalRegionDef),
+    Actor(ActorDef),
 }
 
 impl Item {
@@ -2241,6 +2264,7 @@ impl Item {
             Item::Kind(k) => &k.name,
             Item::Macro(m) => &m.name,
             Item::GlobalRegion(_) => "global",
+            Item::Actor(a) => &a.name,
         }
     }
 }
@@ -2349,6 +2373,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
         Type::Chan(inner) => format!("chan__{}", type_word(inner)),
+        Type::Actor(inner) => format!("actor__{}", type_word(inner)),
         Type::Own(inner) => format!("own__{}", type_word(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_word(value), type_word(error)),
         Type::Unknown => "unknown".to_string(),
@@ -2527,6 +2552,23 @@ pub struct ShapeDef {
     pub span: Span,
     pub private: bool,
     pub follows: Vec<(Type, Span)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActorDef {
+    pub name: String,
+    pub fields: Vec<Field>,
+    pub handlers: Vec<ActorHandler>,
+    pub span: Span,
+    pub private: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActorHandler {
+    pub name: String,
+    pub params: Vec<Field>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

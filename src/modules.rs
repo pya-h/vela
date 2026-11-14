@@ -739,7 +739,7 @@ impl State {
                     match item {
                         Item::Kind(k) => resolver.imitated(k)?,
                         Item::Shape(s) => resolver.followed(s)?,
-                        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
+                        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => {}
                     }
                 }
                 return Ok(scope);
@@ -999,6 +999,7 @@ enum What {
     Task,
     Shape,
     Kind,
+    Actor,
     Alias,
     Pattern,
     Variant,
@@ -1011,6 +1012,7 @@ impl What {
             What::Task => "task",
             What::Shape => "shape",
             What::Kind => "kind",
+            What::Actor => "actor",
             What::Alias => "type alias",
             What::Pattern => "pattern",
             What::Variant => "variant",
@@ -1092,6 +1094,18 @@ fn own_names(module: &Module) -> Names {
                     );
                 }
             }
+            Item::Actor(a) => {
+                add(&a.name, What::Actor, a.private, a.span, None);
+                for handler in &a.handlers {
+                    add(
+                        &handler.name,
+                        What::Variant,
+                        a.private,
+                        handler.span,
+                        Some(full(&a.name)),
+                    );
+                }
+            }
             Item::Macro(m) => add(&m.name, What::Macro, m.private, m.span, None),
             Item::GlobalRegion(_) => {}
         }
@@ -1132,17 +1146,34 @@ fn variants_of_kinds(modules: &[Module]) -> Variants {
             }
         };
         for item in &module.items {
-            let Item::Kind(k) = item else { continue };
-            let tags = variants.entry(full(&k.name)).or_default();
-            for variant in &k.variants {
-                let entry = Entry {
-                    full: full(&variant.tag),
-                    what: What::Variant,
-                    private: k.private,
-                    span: variant.span,
-                    kind: Some(full(&k.name)),
-                };
-                tags.entry(variant.tag.clone()).or_insert(entry);
+            match item {
+                Item::Kind(k) => {
+                    let tags = variants.entry(full(&k.name)).or_default();
+                    for variant in &k.variants {
+                        let entry = Entry {
+                            full: full(&variant.tag),
+                            what: What::Variant,
+                            private: k.private,
+                            span: variant.span,
+                            kind: Some(full(&k.name)),
+                        };
+                        tags.entry(variant.tag.clone()).or_insert(entry);
+                    }
+                }
+                Item::Actor(a) => {
+                    let tags = variants.entry(full(&a.name)).or_default();
+                    for handler in &a.handlers {
+                        let entry = Entry {
+                            full: full(&handler.name),
+                            what: What::Variant,
+                            private: a.private,
+                            span: handler.span,
+                            kind: Some(full(&a.name)),
+                        };
+                        tags.entry(handler.name.clone()).or_insert(entry);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -1353,7 +1384,7 @@ fn follow_patterns(modules: &mut [Module]) -> HashMap<String, Vec<(String, Type)
             let (owner, types, follows) = match item {
                 Item::Shape(s) => (&s.name, &s.types, &s.follows),
                 Item::Kind(k) => (&k.name, &k.types, &k.follows),
-                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => continue,
             };
             for (followed, pattern) in follows.iter().filter_map(|(ty, _)| {
                 followed_name(ty)
@@ -2141,6 +2172,25 @@ impl Resolver<'_> {
             Item::GlobalRegion(g) => {
                 for stmt in &mut g.stmts {
                     self.stmt(stmt)?;
+                }
+                Ok(())
+            }
+            Item::Actor(a) => {
+                a.name = self.own_full(&a.name);
+                for field in &mut a.fields {
+                    field.ty = self.ty(&field.ty, field.ty_span)?;
+                    if let Some(value) = &mut field.default {
+                        self.expr(value)?;
+                    }
+                }
+                for handler in &mut a.handlers {
+                    for param in &mut handler.params {
+                        param.ty = self.ty(&param.ty, param.ty_span)?;
+                        if let Some(value) = &mut param.default {
+                            self.expr(value)?;
+                        }
+                    }
+                    self.block(&mut handler.body)?;
                 }
                 Ok(())
             }
@@ -3050,6 +3100,10 @@ impl Resolver<'_> {
             | ExprKind::Shortcut { value, .. }
             | ExprKind::ToText { value, .. }
             | ExprKind::ToJson { value, .. } => self.expr(value),
+            ExprKind::Spawn { actor, args, span } => {
+                self.rename(actor, *span, &[What::Actor])?;
+                args.iter_mut().try_for_each(|e| self.expr(e))
+            }
         }
     }
 

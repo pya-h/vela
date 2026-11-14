@@ -126,6 +126,11 @@
       background: transparent;
       padding: 0;
     }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -240,28 +245,28 @@
     <p>
       All widgets and canvas operations are positioned using straightforward value shapes:
     </p>
-    <pre><code>; Geometry primitives
-fixed pt = Point { x: 30, y: 50 }
-fixed sz = Size { width: 200, height: 40 }
-fixed box = Rect { x: 20, y: 30, width: 160, height: 36 }
+    <pre><code><span class="comment">; Geometry primitives</span>
+<span class="keyword">fixed</span> pt = Point { x: <span class="number">30</span>, y: <span class="number">50</span> }
+<span class="keyword">fixed</span> sz = Size { width: <span class="number">200</span>, height: <span class="number">40</span> }
+<span class="keyword">fixed</span> box = Rect { x: <span class="number">20</span>, y: <span class="number">30</span>, width: <span class="number">160</span>, height: <span class="number">36</span> }
 
-; Check if a point falls within a rectangle (e.g. for mouse clicks)
-when box.contains(mouse_pos)
-    show("clicked inside box")
-fi</code></pre>
+<span class="comment">; Check if a point falls within a rectangle (e.g. for mouse clicks)</span>
+<span class="keyword">when</span> box.contains(mouse_pos)
+    show(<span class="string">"clicked inside box"</span>)
+<span class="keyword">fi</span></code></pre>
 
     <h3>Color Representation</h3>
     <p>
       Colors are represented as 32-bit RGBA values with convenient constructor helpers:
     </p>
-    <pre><code>fixed c1 = Color.rgb(37, 99, 235)           ; Solid RGB (alpha = 255)
-fixed c2 = Color.rgba(15, 23, 42, 180)       ; RGBA with transparency
-fixed c3 = Color.hex(0x38BDF8)              ; Hexadecimal literal (0xRRGGBB)
+    <pre><code><span class="keyword">fixed</span> c1 = Color.rgb(<span class="number">37</span>, <span class="number">99</span>, <span class="number">235</span>)           <span class="comment">; Solid RGB (alpha = 255)</span>
+<span class="keyword">fixed</span> c2 = Color.rgba(<span class="number">15</span>, <span class="number">23</span>, <span class="number">42</span>, <span class="number">180</span>)       <span class="comment">; RGBA with transparency</span>
+<span class="keyword">fixed</span> c3 = Color.hex(<span class="number">0x38BDF8</span>)              <span class="comment">; Hexadecimal literal (0xRRGGBB)</span>
 
-; Built-in color constants
-fixed white = Color.white()
-fixed black = Color.black()
-fixed trans = Color.transparent()</code></pre>
+<span class="comment">; Built-in color constants</span>
+<span class="keyword">fixed</span> white = Color.white()
+<span class="keyword">fixed</span> black = Color.black()
+<span class="keyword">fixed</span> trans = Color.transparent()</code></pre>
 
     <h2><span class="icon">🎨</span> Styling System (Themes &amp; Modifiers)</h2>
     <p>
@@ -321,10 +326,10 @@ fixed trans = Color.transparent()</code></pre>
     <p>
       Modify presets without rewriting full shapes using modifier methods:
     </p>
-    <pre><code>fixed custom_style = Style.primary()
-    .with_bg(Color.hex(0x6366F1))           ; Change background to Indigo
-    .with_border(Color.hex(0xA5B4FC), 2)    ; 2px lighter border
-    .with_padding(8)                        ; Adjust internal padding</code></pre>
+    <pre><code><span class="keyword">fixed</span> custom_style = Style.primary()
+    .with_bg(Color.hex(<span class="number">0x6366F1</span>))           <span class="comment">; Change background to Indigo</span>
+    .with_border(Color.hex(<span class="number">0xA5B4FC</span>), <span class="number">2</span>)    <span class="comment">; 2px lighter border</span>
+    .with_padding(<span class="number">8</span>)                        <span class="comment">; Adjust internal padding</span></code></pre>
 
     <h2><span class="icon">🧩</span> Rich Widget Gallery</h2>
     <p>
@@ -374,36 +379,36 @@ fixed trans = Color.transparent()</code></pre>
     <p>
       Desktop applications run on an event loop. Opening a <code>Window</code> creates the native window and gives access to its <code>Canvas</code>:
     </p>
-    <pre><code>include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Button, is_interactive }
+    <pre><code><span class="keyword">include</span> std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Button, is_interactive }
 
-task main()
-    flex win = Window.open("My Application", 400, 300) { failure err
-        show("Failed to open window")
-        <-
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"My Application"</span>, <span class="number">400</span>, <span class="number">300</span>) { <span class="keyword">failure</span> err
+        show(<span class="string">"Failed to open window"</span>)
+        &lt;-
     }
-    fixed canvas = win.canvas()
+    <span class="keyword">fixed</span> canvas = win.canvas()
 
-    loop win.is_open
-        region frame default
-        fixed ev = win.poll_event()
+    <span class="keyword">loop</span> win.is_open
+        <span class="keyword">region</span> frame <span class="keyword">default</span>
+        <span class="keyword">fixed</span> ev = win.poll_event()
 
-        match ev
-        case GuiEvent.Redraw
-            canvas.clear(Color.hex(0x0F172A))
-            canvas.draw_text("Hello, Vela GUI!" at frame, Point { x: 40, y: 50 }, Color.white())
+        <span class="keyword">match</span> ev
+        <span class="keyword">case</span> GuiEvent.Redraw
+            canvas.clear(Color.hex(<span class="number">0x0F172A</span>))
+            canvas.draw_text(<span class="string">"Hello, Vela GUI!"</span> <span class="keyword">at</span> frame, Point { x: <span class="number">40</span>, y: <span class="number">50</span> }, Color.white())
             win.present()
 
-        case GuiEvent.MouseDown x y btn
-            show("Mouse clicked at: ", x, ", ", y)
+        <span class="keyword">case</span> GuiEvent.MouseDown x y btn
+            show(<span class="string">"Mouse clicked at: "</span>, x, <span class="string">", "</span>, y)
 
-        case GuiEvent.CloseRequested
+        <span class="keyword">case</span> GuiEvent.CloseRequested
             win.close()
-            break
+            <span class="keyword">break</span>
 
-        case _
-        fi
-    fi
-fi</code></pre>
+        <span class="keyword">case</span> _
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></code></pre>
 
     <h2><span class="icon">🤖</span> Headless Automated Testing</h2>
     <div class="callout tip">
@@ -412,96 +417,96 @@ fi</code></pre>
         In CI environments or server runners where <code>DISPLAY</code> is unavailable, <code>is_interactive()</code> returns <code>false</code>. You can push synthetic events using <code>win.push_event(...)</code> to simulate exact user interactions deterministically!
       </p>
     </div>
-    <pre><code>when not is_interactive()
-    ; Synthetic event sequence:
-    win.push_event(1, 50, 140, 1)   ; Simulate MouseDown at (50, 140)
-    win.push_event(7)               ; Simulate CloseRequested
-fi</code></pre>
+    <pre><code><span class="keyword">when</span> <span class="keyword">not</span> is_interactive()
+    <span class="comment">; Synthetic event sequence:</span>
+    win.push_event(<span class="number">1</span>, <span class="number">50</span>, <span class="number">140</span>, <span class="number">1</span>)   <span class="comment">; Simulate MouseDown at (50, 140)</span>
+    win.push_event(<span class="number">7</span>)               <span class="comment">; Simulate CloseRequested</span>
+<span class="keyword">fi</span></code></pre>
 
     <h2><span class="icon">🚀</span> Complete Example: Modern Counter Application</h2>
     <p>
       Here is the complete code for an interactive counter featuring custom button styling, a progress bar, and automated test dispatching:
     </p>
-    <pre><code>; An interactive counter application built with std/gui.
-include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, Label, ProgressBar, is_interactive }
+    <pre><code><span class="comment">; An interactive counter application built with std/gui.</span>
+<span class="keyword">include</span> std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, Label, ProgressBar, is_interactive }
 
-task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, progress: ProgressBar, title_label: Label, r: region default)
-    canvas.clear(Color.hex(0x0F172A))
+<span class="keyword">task</span> draw_scene(canvas: Canvas, <span class="keyword">flex&amp;</span> win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, progress: ProgressBar, title_label: Label, r: <span class="keyword">region default</span>)
+    canvas.clear(Color.hex(<span class="number">0x0F172A</span>))
 
     title_label.draw(canvas)
-    canvas.draw_text("Current count: {count}" at r, Point { x: 30, y: 55 }, Color.hex(0x38BDF8))
+    canvas.draw_text(<span class="string">"Current count: {count}"</span> <span class="keyword">at</span> r, Point { x: <span class="number">30</span>, y: <span class="number">55</span> }, Color.hex(<span class="number">0x38BDF8</span>))
 
-    ; Draw progress bar reflecting count percentage (0 - 100%)
+    <span class="comment">; Draw progress bar reflecting count percentage (0 - 100%)</span>
     progress.draw(canvas)
 
-    ; Draw styled action buttons
-    btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
-    btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
-    btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
+    <span class="comment">; Draw styled action buttons</span>
+    btn_inc.draw(canvas, Point { x: <span class="number">0</span>, y: <span class="number">0</span> }, <span class="keyword">false</span>)
+    btn_dec.draw(canvas, Point { x: <span class="number">0</span>, y: <span class="number">0</span> }, <span class="keyword">false</span>)
+    btn_rst.draw(canvas, Point { x: <span class="number">0</span>, y: <span class="number">0</span> }, <span class="keyword">false</span>)
 
     win.present()
-fi
+<span class="keyword">fi</span>
 
-task main()
-    flex win = Window.open("Rich GUI Counter", 340, 220) { failure _
-        show("failed opening window")
-        <-
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"Rich GUI Counter"</span>, <span class="number">340</span>, <span class="number">220</span>) { <span class="keyword">failure</span> _
+        show(<span class="string">"failed opening window"</span>)
+        &lt;-
     }
 
-    fixed title_label = Label { pos: Point { x: 30, y: 25 }, text: "Vela Modern Counter", color: Color.white() }
+    <span class="keyword">fixed</span> title_label = Label { pos: Point { x: <span class="number">30</span>, y: <span class="number">25</span> }, text: <span class="string">"Vela Modern Counter"</span>, color: Color.white() }
 
-    fixed btn_inc = Button { rect: Rect { x: 30, y: 130, width: 85, height: 36 }, label: "+ Add", style: Style.success() }
-    fixed btn_dec = Button { rect: Rect { x: 125, y: 130, width: 85, height: 36 }, label: "- Sub", style: Style.primary() }
-    fixed btn_rst = Button { rect: Rect { x: 220, y: 130, width: 85, height: 36 }, label: "Reset", style: Style.danger() }
+    <span class="keyword">fixed</span> btn_inc = Button { rect: Rect { x: <span class="number">30</span>, y: <span class="number">130</span>, width: <span class="number">85</span>, height: <span class="number">36</span> }, label: <span class="string">"+ Add"</span>, style: Style.success() }
+    <span class="keyword">fixed</span> btn_dec = Button { rect: Rect { x: <span class="number">125</span>, y: <span class="number">130</span>, width: <span class="number">85</span>, height: <span class="number">36</span> }, label: <span class="string">"- Sub"</span>, style: Style.primary() }
+    <span class="keyword">fixed</span> btn_rst = Button { rect: Rect { x: <span class="number">220</span>, y: <span class="number">130</span>, width: <span class="number">85</span>, height: <span class="number">36</span> }, label: <span class="string">"Reset"</span>, style: Style.danger() }
 
-    flex progress = ProgressBar { rect: Rect { x: 30, y: 85, width: 275, height: 18 }, fill_color: Color.hex(0x10B981) }
+    <span class="keyword">flex</span> progress = ProgressBar { rect: Rect { x: <span class="number">30</span>, y: <span class="number">85</span>, width: <span class="number">275</span>, height: <span class="number">18</span> }, fill_color: Color.hex(<span class="number">0x10B981</span>) }
 
-    flex count = 0
-    fixed canvas = win.canvas()
+    <span class="keyword">flex</span> count = <span class="number">0</span>
+    <span class="keyword">fixed</span> canvas = win.canvas()
 
-    ; Simulate user clicks when running in automated headless testing
-    when not is_interactive()
-        win.push_event(1, 50, 140, 1)   ; click "+ Add"
-        win.push_event(1, 50, 140, 1)   ; click "+ Add"
-        win.push_event(1, 50, 140, 1)   ; click "+ Add"
-        win.push_event(1, 145, 140, 1)  ; click "- Sub"
-        win.push_event(1, 240, 140, 1)  ; click "Reset"
-        win.push_event(7)               ; CloseRequested
-    fi
+    <span class="comment">; Simulate user clicks when running in automated headless testing</span>
+    <span class="keyword">when</span> <span class="keyword">not</span> is_interactive()
+        win.push_event(<span class="number">1</span>, <span class="number">50</span>, <span class="number">140</span>, <span class="number">1</span>)   <span class="comment">; click "+ Add"</span>
+        win.push_event(<span class="number">1</span>, <span class="number">50</span>, <span class="number">140</span>, <span class="number">1</span>)   <span class="comment">; click "+ Add"</span>
+        win.push_event(<span class="number">1</span>, <span class="number">50</span>, <span class="number">140</span>, <span class="number">1</span>)   <span class="comment">; click "+ Add"</span>
+        win.push_event(<span class="number">1</span>, <span class="number">145</span>, <span class="number">140</span>, <span class="number">1</span>)  <span class="comment">; click "- Sub"</span>
+        win.push_event(<span class="number">1</span>, <span class="number">240</span>, <span class="number">140</span>, <span class="number">1</span>)  <span class="comment">; click "Reset"</span>
+        win.push_event(<span class="number">7</span>)               <span class="comment">; CloseRequested</span>
+    <span class="keyword">fi</span>
 
-    loop win.is_open
-        region frame default
-        fixed ev = win.poll_event()
-        match ev
-        case GuiEvent.Redraw
-            progress.set_value(count * 20)
-            draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
-        case GuiEvent.MouseDown x y btn
-            fixed click_pos = Point { x: x, y: y }
-            when btn_inc.rect.contains(click_pos)
+    <span class="keyword">loop</span> win.is_open
+        <span class="keyword">region</span> frame <span class="keyword">default</span>
+        <span class="keyword">fixed</span> ev = win.poll_event()
+        <span class="keyword">match</span> ev
+        <span class="keyword">case</span> GuiEvent.Redraw
+            progress.set_value(count * <span class="number">20</span>)
+            draw_scene(canvas, &amp;win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+        <span class="keyword">case</span> GuiEvent.MouseDown x y btn
+            <span class="keyword">fixed</span> click_pos = Point { x: x, y: y }
+            <span class="keyword">when</span> btn_inc.rect.contains(click_pos)
                 count++
-                progress.set_value(count * 20)
-                show("count incremented: ", count, " (progress: ", progress.value, "%)")
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
-            else when btn_dec.rect.contains(click_pos)
+                progress.set_value(count * <span class="number">20</span>)
+                show(<span class="string">"count incremented: "</span>, count, <span class="string">" (progress: "</span>, progress.value, <span class="string">"%)"</span>)
+                draw_scene(canvas, &amp;win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            <span class="keyword">else</span> <span class="keyword">when</span> btn_dec.rect.contains(click_pos)
                 count--
-                progress.set_value(count * 20)
-                show("count decremented: ", count, " (progress: ", progress.value, "%)")
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
-            else when btn_rst.rect.contains(click_pos)
-                count = 0
-                progress.set_value(0)
-                show("count reset: ", count, " (progress: ", progress.value, "%)")
-                draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
-            fi
-        case GuiEvent.CloseRequested
+                progress.set_value(count * <span class="number">20</span>)
+                show(<span class="string">"count decremented: "</span>, count, <span class="string">" (progress: "</span>, progress.value, <span class="string">"%)"</span>)
+                draw_scene(canvas, &amp;win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            <span class="keyword">else</span> <span class="keyword">when</span> btn_rst.rect.contains(click_pos)
+                count = <span class="number">0</span>
+                progress.set_value(<span class="number">0</span>)
+                show(<span class="string">"count reset: "</span>, count, <span class="string">" (progress: "</span>, progress.value, <span class="string">"%)"</span>)
+                draw_scene(canvas, &amp;win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+            <span class="keyword">fi</span>
+        <span class="keyword">case</span> GuiEvent.CloseRequested
             win.close()
-            show("counter app closed; final count: ", count)
-            break
-        case _
-        fi
-    fi
-fi</code></pre>
+            show(<span class="string">"counter app closed; final count: "</span>, count)
+            <span class="keyword">break</span>
+        <span class="keyword">case</span> _
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></code></pre>
   </main>
 
   <footer>
