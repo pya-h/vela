@@ -2,7 +2,7 @@ use serde::Serialize;
 use vela::ast::{ALTERS, BUILTIN_TASKS, BUILTIN_TYPES};
 use vela::lexer::KEYWORDS;
 
-pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "actor", "when", "loop", "endless", "each", "block", "match"];
+pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "actor", "event", "when", "loop", "endless", "each", "block", "match"];
 pub const BLOCK_MODIFIERS: &[&str] = &["priv"];
 pub const BRANCH_KEYWORDS: &[&str] = &["else", "case", "finally"];
 pub const BLOCK_CLOSER: &str = "fi";
@@ -58,6 +58,8 @@ mod tests {
             "task t()\nfi\n",
             "shape S\nfi\n",
             "kind K\n    A\nfi\n",
+            "actor A\nfi\n",
+            "event e on start\nfi\n",
             "task t()\n    when true\n    fi\nfi\n",
             "task t()\n    loop false\n    fi\nfi\n",
             "task t()\n    endless\n        break\n    fi\nfi\n",

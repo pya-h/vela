@@ -158,6 +158,12 @@ impl Generator {
         self
     }
 
+    fn sorted_events(&self) -> Vec<EventDef> {
+        let mut list: Vec<EventDef> = self.events.values().cloned().collect();
+        list.sort_by(|a, b| (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name)));
+        list
+    }
+
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
         self.kinds.clear();
         self.shapes.clear();
@@ -182,7 +188,11 @@ impl Generator {
                     self.actors.insert(a.name.clone(), a.clone());
                 }
                 Item::Event(e) => {
-                    self.events.insert(e.name.clone(), e.clone());
+                    let key = match &e.owner {
+                        Some(owner) => format!("{}.{}", owner, e.name),
+                        None => e.name.clone(),
+                    };
+                    self.events.insert(key, e.clone());
                 }
                 Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
@@ -425,8 +435,7 @@ impl Generator {
             }
         }
 
-        let events_list: Vec<EventDef> = self.events.values().cloned().collect();
-        for e in &events_list {
+        for e in self.sorted_events() {
             if let Some(shape) = &e.owner {
                 if !e.shared {
                     self.w.line(&format!("static void {}__{}(struct {}* vela__this);", mangle(shape), mangle(&e.name), mangle(shape)));
@@ -494,13 +503,13 @@ impl Generator {
                     self.w.line(&format!("{}();", mangle(&t.name)));
                 }
             }
-            for ev in self.events.values() {
+            for ev in self.sorted_events() {
                 if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Start) {
                     self.w.line(&format!("{}();", mangle(&ev.name)));
                 }
             }
             self.w.line("vela_main();");
-            for ev in self.events.values() {
+            for ev in self.sorted_events() {
                 if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::End) {
                     self.w.line(&format!("{}();", mangle(&ev.name)));
                 }
@@ -822,7 +831,10 @@ impl Generator {
     fn gen_shape(&mut self, s: &ShapeDef) {
         self.w.open(&format!("struct {}", mangle(&s.name)));
         let has_listenable_events = self.events.values().any(|e| {
-            e.owner.as_deref() == Some(&s.name) && !e.shared && !e.auto
+            (e.owner.as_deref() == Some(&s.name)
+                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&s.name)))
+                && !e.shared
+                && !e.auto
         });
         if has_listenable_events {
             self.w.line("uint32_t vela__events__;");
@@ -1017,20 +1029,28 @@ impl Generator {
                 });
                 if let Some(shape) = shape_name {
                     let matching_events: Vec<EventDef> = self
+                        .sorted_events()
+                        .into_iter()
+                        .filter(|e| {
+                            (e.owner.as_deref() == Some(&shape)
+                                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&shape)))
+                                && !e.shared
+                                && trigger_matches_field(field_name, e)
+                        })
+                        .collect();
+
+                    let mut listenable_events: Vec<String> = self
                         .events
                         .values()
                         .filter(|e| {
-                            e.owner.as_deref() == Some(&shape) && !e.shared && trigger_matches_field(field_name, e)
+                            (e.owner.as_deref() == Some(&shape)
+                                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&shape)))
+                                && !e.shared
+                                && !e.auto
                         })
-                        .cloned()
-                        .collect();
-
-                    let listenable_events: Vec<String> = self
-                        .events
-                        .values()
-                        .filter(|e| e.owner.as_deref() == Some(&shape) && !e.shared && !e.auto)
                         .map(|e| e.name.clone())
                         .collect();
+                    listenable_events.sort();
 
                     if is_this {
                         for ev in matching_events {
@@ -1060,10 +1080,9 @@ impl Generator {
             }
             ExprKind::Var(var_name) => {
                 let matching_events: Vec<EventDef> = self
-                    .events
-                    .values()
+                    .sorted_events()
+                    .into_iter()
                     .filter(|e| (e.owner.is_none() || e.shared) && trigger_matches_var(var_name, e))
-                    .cloned()
                     .collect();
                 for ev in matching_events {
                     self.w.line(&format!("{}();", mangle(&ev.name)));
@@ -3155,7 +3174,7 @@ impl Generator {
         self.w.open(&signature(t, alters, &hidden, &|name| {
             self.shapes.contains_key(name)
         }));
-        for ev in self.events.values() {
+        for ev in self.sorted_events() {
             if let EventTrigger::BeforeTask(target) = &ev.trigger {
                 let matches = target == &t.name
                     || target.strip_prefix('.').is_some_and(|clean| {
@@ -3261,7 +3280,7 @@ impl Generator {
         } else {
             self.gen_block(&t.body)?;
         }
-        for ev in self.events.values() {
+        for ev in self.sorted_events() {
             if let EventTrigger::AfterTask(target) = &ev.trigger {
                 let matches = target == &t.name
                     || target.strip_prefix('.').is_some_and(|clean| {
@@ -5718,7 +5737,7 @@ impl Generator {
             let Some(receiver) = args.first() else { unreachable!() };
             let place = self.gen_place(receiver)?;
 
-            let listenable_events: Vec<String> = self
+            let mut listenable_events: Vec<String> = self
                 .events
                 .values()
                 .filter(|e| {
@@ -5729,6 +5748,7 @@ impl Generator {
                 })
                 .map(|e| e.name.clone())
                 .collect();
+            listenable_events.sort();
 
             let mask = if args.len() == 1 {
                 if listenable_events.is_empty() {

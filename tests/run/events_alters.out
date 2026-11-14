@@ -1,9 +1,9 @@
 lifecycle: start
 auto_ping: hp is 5
+auto_ping: hp is -1
 player died!
 manual_ping: shield is 0
 absorb: shield is 0
-auto_ping: hp is -1
 interceptor: before heal
 healing...
 interceptor: after heal

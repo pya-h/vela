@@ -1792,7 +1792,11 @@ impl Checker {
                 }
                 Item::GlobalRegion(_) => {}
                 Item::Event(e) => {
-                    self.events.insert(e.name.clone(), e.clone());
+                    let key = match &e.owner {
+                        Some(owner) => format!("{}.{}", owner, e.name),
+                        None => e.name.clone(),
+                    };
+                    self.events.insert(key, e.clone());
                 }
             }
         }
@@ -2169,17 +2173,24 @@ impl Checker {
         let mut events: Vec<EventDef> = self.events.values().cloned().collect();
         events.sort_by(|a, b| (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name)));
 
+        fn event_id(e: &EventDef) -> String {
+            match &e.owner {
+                Some(owner) => format!("{}.{}", owner, e.name),
+                None => e.name.clone(),
+            }
+        }
+
         // 1. Collect direct mutations for each event
         let mut direct_mutations: HashMap<String, HashSet<String>> = HashMap::new();
         for event in &events {
             let mut muts = HashSet::new();
             collect_block_mutations(&event.body, &mut muts);
-            direct_mutations.insert(event.name.clone(), muts);
+            direct_mutations.insert(event_id(event), muts);
         }
 
         // 2. Direct alters check
         for event in &events {
-            if let Some(muts) = direct_mutations.get(&event.name) {
+            if let Some(muts) = direct_mutations.get(&event_id(event)) {
                 for m in muts {
                     if m.contains('.') && !m.starts_with('.') && event.owner.is_some() {
                         continue;
@@ -2211,20 +2222,23 @@ impl Checker {
             }
         }
 
-        // 3. Build trigger graph: event_name -> Vec<(triggered_event_name, via_field)>
+        // 3. Build trigger graph: event_id -> Vec<(triggered_event_id, via_field)>
         let mut adj: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for e1 in &events {
             let mut edges = Vec::new();
-            if let Some(muts) = direct_mutations.get(&e1.name) {
+            if let Some(muts) = direct_mutations.get(&event_id(e1)) {
                 for m in muts {
                     for e2 in &events {
+                        if m.starts_with('.') && e1.owner != e2.owner {
+                            continue;
+                        }
                         if trigger_matches(m, e2) {
-                            edges.push((e2.name.clone(), m.clone()));
+                            edges.push((event_id(e2), m.clone()));
                         }
                     }
                 }
             }
-            adj.insert(e1.name.clone(), edges);
+            adj.insert(event_id(e1), edges);
         }
 
         // 4. Cycle detection
@@ -2234,7 +2248,7 @@ impl Checker {
         fn find_cycles(
             u: &str,
             adj: &HashMap<String, Vec<(String, String)>>,
-            events_by_name: &HashMap<String, &EventDef>,
+            events_by_id: &HashMap<String, &EventDef>,
             visited: &mut HashMap<String, usize>,
             path: &mut Vec<String>,
             errors: &mut Vec<Error>,
@@ -2248,19 +2262,21 @@ impl Checker {
                         1 => {
                             let cycle_start = path.iter().position(|x| x == v).unwrap_or(0);
                             let cycle = path.get(cycle_start..).unwrap_or(path);
-                            let all_guarded = cycle.iter().all(|name| {
-                                events_by_name.get(name).is_some_and(|e| e.cond.is_some())
+                            let all_guarded = cycle.iter().all(|id| {
+                                events_by_id.get(id).is_some_and(|e| e.cond.is_some())
                             });
                             if !all_guarded {
                                 let mut desc = String::new();
-                                for (i, name) in cycle.iter().enumerate() {
+                                for (i, id) in cycle.iter().enumerate() {
                                     if i > 0 {
                                         desc.push_str(", which triggers ");
                                     }
-                                    desc.push_str(&format!("'{}'", name));
+                                    let ev_name = events_by_id.get(id).map(|e| e.name.as_str()).unwrap_or(id.as_str());
+                                    desc.push_str(&format!("'{}'", ev_name));
                                 }
-                                desc.push_str(&format!(", which triggers '{}'", v));
-                                if let Some(e) = events_by_name.get(u) {
+                                let target_name = events_by_id.get(v).map(|e| e.name.as_str()).unwrap_or(v.as_str());
+                                desc.push_str(&format!(", which triggers '{}'", target_name));
+                                if let Some(e) = events_by_id.get(u) {
                                     errors.push(Error::at(
                                         e.span,
                                         format!(
@@ -2272,7 +2288,7 @@ impl Checker {
                             }
                         }
                         0 => {
-                            find_cycles(v, adj, events_by_name, visited, path, errors);
+                            find_cycles(v, adj, events_by_id, visited, path, errors);
                         }
                         _ => {}
                     }
@@ -2283,11 +2299,12 @@ impl Checker {
             visited.insert(u.to_string(), 2);
         }
 
-        let events_by_name: HashMap<String, &EventDef> = events.iter().map(|e| (e.name.clone(), e)).collect();
+        let events_by_id: HashMap<String, &EventDef> = events.iter().map(|e| (event_id(e), e)).collect();
         let mut cycle_errors = Vec::new();
         for event in &events {
-            if visited.get(&event.name).copied().unwrap_or(0) == 0 {
-                find_cycles(&event.name, &adj, &events_by_name, &mut visited, &mut path, &mut cycle_errors);
+            let id = event_id(event);
+            if visited.get(&id).copied().unwrap_or(0) == 0 {
+                find_cycles(&id, &adj, &events_by_id, &mut visited, &mut path, &mut cycle_errors);
             }
         }
         for err in cycle_errors {
@@ -2296,27 +2313,28 @@ impl Checker {
 
         // 5. Transitive closure and Indirect Alters Rule
         for root in &events {
+            let root_id = event_id(root);
             let mut queue: VecDeque<(String, String)> = VecDeque::new();
             let mut seen_events: HashSet<String> = HashSet::new();
 
-            if let Some(neighbors) = adj.get(&root.name) {
+            if let Some(neighbors) = adj.get(&root_id) {
                 for (next_ev, via) in neighbors {
                     queue.push_back((next_ev.clone(), via.clone()));
                 }
             }
 
-            while let Some((curr_name, via_field)) = queue.pop_front() {
-                if curr_name == root.name || seen_events.contains(&curr_name) {
+            while let Some((curr_id, via_field)) = queue.pop_front() {
+                if curr_id == root_id || seen_events.contains(&curr_id) {
                     continue;
                 }
-                seen_events.insert(curr_name.clone());
+                seen_events.insert(curr_id.clone());
 
-                let curr_ev = match events_by_name.get(&curr_name) {
+                let curr_ev = match events_by_id.get(&curr_id) {
                     Some(e) => *e,
                     None => continue,
                 };
 
-                if let Some(downstream_muts) = direct_mutations.get(&curr_name) {
+                if let Some(downstream_muts) = direct_mutations.get(&curr_id) {
                     for m in downstream_muts {
                         if m.contains('.') && !m.starts_with('.') && curr_ev.owner.is_some() {
                             continue;
@@ -2342,7 +2360,7 @@ impl Checker {
                                     "event '{}' indirectly alters '{}' (via event '{}' on '{}'); add '{}' to its alters list: '{}'",
                                     root.name,
                                     target_display,
-                                    curr_name,
+                                    curr_ev.name,
                                     via_field,
                                     target_display,
                                     suggested_str
@@ -2352,7 +2370,7 @@ impl Checker {
                     }
                 }
 
-                if let Some(next_neighbors) = adj.get(&curr_name) {
+                if let Some(next_neighbors) = adj.get(&curr_id) {
                     for (next_ev, _) in next_neighbors {
                         queue.push_back((next_ev.clone(), via_field.clone()));
                     }
