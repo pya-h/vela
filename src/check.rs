@@ -179,6 +179,8 @@ enum TypePlace {
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
+    actors: HashMap<String, ActorDef>,
+    in_actor: Option<String>,
     patterns: HashMap<String, PatternDef>,
     task_spans: HashMap<String, Span>,
     /// Shapes/kinds that failed a pattern conformance check; skip verifying copied defaults to avoid duplicate errors.
@@ -1651,6 +1653,7 @@ impl Checker {
                 Item::Task(t) => t.private,
                 Item::Shape(s) => s.private,
                 Item::Kind(k) => k.private,
+                Item::Actor(a) => a.private,
                 Item::Macro(m) => m.private,
                 Item::GlobalRegion(_) => false,
             };
@@ -1733,6 +1736,25 @@ impl Checker {
                         self.shortcut_lambdas.insert(t.name.clone(), t.clone());
                     }
                 }
+                Item::Actor(a) => {
+                    if taken(&a.name, a.span) {
+                        continue;
+                    }
+                    for handler in &a.handlers {
+                        let full = format!("{}.{}", a.name, handler.name);
+                        let variant = Variant {
+                            tag: handler.name.clone(),
+                            payload: handler.params.clone(),
+                            span: handler.span,
+                        };
+                        let info = VariantInfo {
+                            kind: format!("{}Msg", a.name),
+                            variant,
+                        };
+                        self.variants.insert(full, info);
+                    }
+                    self.actors.insert(a.name.clone(), a.clone());
+                }
                 Item::Macro(m) => {
                     if taken(&m.name, m.span) {
                         continue;
@@ -1790,7 +1812,7 @@ impl Checker {
             let name = match item {
                 Item::Shape(s) => s.name.clone(),
                 Item::Kind(k) => k.name.clone(),
-                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => continue,
+                Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) => continue,
             };
             if let Err((error, cycle)) = self.check_value_cycle(&name, &mut acyclic, &mut order) {
                 self.record(error);
@@ -1993,6 +2015,38 @@ impl Checker {
                 if let Some(kind) = self.kinds.get_mut(&k.name) {
                     kind.variants = k.variants.clone();
                     kind.imitates = k.imitates.clone();
+                }
+            }
+            Item::Actor(a) => {
+                self.check_fields(&mut a.fields)?;
+                for handler in &mut a.handlers {
+                    self.check_fields(&mut handler.params)?;
+                    let module = std::mem::replace(&mut self.current_module, module_of(&a.name).to_string());
+                    self.in_actor = Some(a.name.clone());
+                    self.in_pattern_default = false;
+                    self.this_type = None;
+                    self.current_method = None;
+                    self.current_ret = None;
+                    self.result_names.clear();
+                    self.unset.clear();
+                    self.scopes = vec![Scope::default()];
+                    self.loops.clear();
+                    self.loop_scopes.clear();
+                    self.moved.clear();
+                    for field in &a.fields {
+                        self.define(&field.name, field.ty.clone(), Mode::Flex, field.span)?;
+                    }
+                    for param in &handler.params {
+                        self.define(&param.name, param.ty.clone(), Mode::Fixed, param.span)?;
+                    }
+                    self.check_block(&mut handler.body)?;
+                    self.scopes.clear();
+                    self.in_actor = None;
+                    self.current_module = module;
+                }
+                if let Some(actor) = self.actors.get_mut(&a.name) {
+                    actor.fields = a.fields.clone();
+                    actor.handlers = a.handlers.clone();
                 }
             }
             Item::Macro(m) if self.macros.contains_key(&m.name) => {
@@ -2253,6 +2307,12 @@ impl Checker {
                 "kind",
                 &k.name,
                 k.variants.iter().flat_map(|v| &v.payload).collect(),
+            ),
+            Item::Actor(a) => (
+                a.private,
+                "actor",
+                &a.name,
+                a.handlers.iter().flat_map(|h| &h.params).collect(),
             ),
             Item::Macro(_) | Item::GlobalRegion(_) => return Ok(()),
         };
@@ -4432,6 +4492,10 @@ impl Checker {
                         .iter()
                         .map(|v| v.payload.iter().map(|f| f.ty.clone()).collect())
                         .collect(),
+                )),
+                Item::Actor(a) => types.push((
+                    a.name.as_str(),
+                    vec![a.fields.iter().map(|f| f.ty.clone()).collect()],
                 )),
                 Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
@@ -8162,7 +8226,7 @@ impl Checker {
             }
             ExprKind::Closure { lambda, .. } => vec![Own::Kept(lambda.clone())],
             ExprKind::Array(items) | ExprKind::Tuple(items) => all(&mut items.iter()),
-            ExprKind::Construct { args, .. } => all(&mut args.iter()),
+            ExprKind::Spawn { args, .. } | ExprKind::Construct { args, .. } => all(&mut args.iter()),
             ExprKind::StructInit { fields, .. } => {
                 all(&mut fields.iter().map(|field| &field.value))
             }
@@ -12420,6 +12484,10 @@ impl Checker {
                 args,
                 types,
             } => self.check_construct(kind, tag, args, types, span),
+            ExprKind::Spawn { actor, args, span } => {
+                let span = *span;
+                self.check_spawn(actor, args, span)
+            }
             ExprKind::New {
                 ty,
                 ty_span,
@@ -12654,8 +12722,15 @@ impl Checker {
                 let chan_ty = self.check_expr(arg0)?;
                 let elem_ty = match &chan_ty {
                     Type::Chan(inner) => inner.as_ref().clone(),
+                    Type::Actor(actor_ty) => {
+                        let actor_name = match actor_ty.as_ref() {
+                            Type::Named(name, _) => name.clone(),
+                            _ => "Unknown".to_string(),
+                        };
+                        Type::Named(format!("{}Msg", actor_name), None)
+                    }
                     Type::Unknown => Type::Unknown,
-                    _ => return err(arg0.span, format!("'send' takes a channel as its first argument, got {}", chan_ty)),
+                    _ => return err(arg0.span, format!("'send' takes a channel or actor as its first argument, got {}", chan_ty)),
                 };
                 let item_ty = self.check_expr(arg1)?;
                 if let Type::Own(payload) = &elem_ty {
@@ -12707,7 +12782,7 @@ impl Checker {
         if name == CLOSE && !self.tasks.contains_key(name) && args.len() == 1 {
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
-            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
+            if matches!(&chan_ty, Type::Chan(_) | Type::Actor(_) | Type::Unknown) {
                 return Ok(CallSetup::Checked(Type::Nothing));
             }
         }
@@ -13015,6 +13090,37 @@ impl Checker {
         Ok(ty)
     }
 
+    fn check_spawn(&mut self, actor_name: &str, args: &mut [Expr], span: Span) -> Result<Type> {
+        let full_name = self.in_module(actor_name);
+        let Some(actor) = self.actors.get(&full_name).cloned().or_else(|| self.actors.get(actor_name).cloned()) else {
+            return err(span, format!("'{}' is not an actor", actor_name));
+        };
+        let uninit_fields: Vec<&Field> = actor.fields.iter().filter(|f| f.default.is_none()).collect();
+        if uninit_fields.is_empty() {
+            if args.len() > actor.fields.len() {
+                return err(span, format!("actor '{}' takes at most {} arguments, got {}", actor_name, actor.fields.len(), args.len()));
+            }
+            for (arg, field) in args.iter_mut().zip(&actor.fields) {
+                let arg_ty = self.check_expr(arg)?;
+                if !fits(&arg_ty, &field.ty) && !arg_ty.unknown() {
+                    return err(arg.span, format!("expected {} for field '{}', got {}", field.ty, field.name, arg_ty));
+                }
+            }
+        } else {
+            if args.len() != uninit_fields.len() && args.len() != actor.fields.len() {
+                return err(span, format!("actor '{}' takes {} arguments, got {}", actor_name, uninit_fields.len(), args.len()));
+            }
+            let target_fields: Vec<&Field> = if args.len() == uninit_fields.len() { uninit_fields } else { actor.fields.iter().collect() };
+            for (arg, field) in args.iter_mut().zip(target_fields) {
+                let arg_ty = self.check_expr(arg)?;
+                if !fits(&arg_ty, &field.ty) && !arg_ty.unknown() {
+                    return err(arg.span, format!("expected {} for field '{}', got {}", field.ty, field.name, arg_ty));
+                }
+            }
+        }
+        Ok(Type::Actor(Box::new(Type::Named(actor.name.clone(), None))))
+    }
+
     fn check_construct(
         &mut self,
         kind: &str,
@@ -13023,6 +13129,32 @@ impl Checker {
         written: &mut [TypeArg],
         span: Span,
     ) -> Result<Type> {
+        if let Some(actor) = self.actors.get(kind).cloned().or_else(|| self.actors.get(&self.in_module(kind)).cloned()) {
+            let handler = actor
+                .handlers
+                .iter()
+                .find(|h| h.name == *tag)
+                .cloned()
+                .ok_or_else(|| Error::at(span, format!("actor '{}' has no message handler named '{}'", kind, tag)))?;
+            if args.len() != handler.params.len() {
+                return err(
+                    span,
+                    format!(
+                        "message '{}' expects {}, got {}",
+                        tag,
+                        count(handler.params.len(), "argument"),
+                        args.len()
+                    ),
+                );
+            }
+            for (arg, param) in args.iter_mut().zip(&handler.params) {
+                let ty = self.check_expr(arg)?;
+                if !fits(&ty, &param.ty) && !ty.unknown() {
+                    return err(arg.span, format!("expected {} for message argument '{}', got {}", param.ty, param.name, ty));
+                }
+            }
+            return Ok(Type::Named(format!("{}Msg", actor.name), None));
+        }
         let def = self
             .kinds
             .get(kind)
@@ -16933,6 +17065,16 @@ impl Checker {
                 "len" | "cap" => Ok(Type::Int),
                 _ => err(span, format!("channel has no field '{}'; write '.len' or '.cap'", field)),
             },
+            Type::Actor(actor_ty) => {
+                let name = match actor_ty.as_ref() {
+                    Type::Named(name, _) => name.as_str(),
+                    _ => "actor",
+                };
+                return err(
+                    span,
+                    format!("fields of actor '{}' are private and cannot be accessed from outside", name),
+                );
+            }
             Type::Own(inner) => self.field_type(inner, field, span),
             Type::Param(param) => self.pattern_field(param, field, span),
             Type::Applied(applied) => {
@@ -17499,7 +17641,7 @@ impl Checker {
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
             return Ok(());
         }
-        if matches!(ty, Type::Chan(_)) && matches!(name.as_str(), "send" | "recv" | "try_recv" | "close") {
+        if matches!(ty, Type::Chan(_) | Type::Actor(_)) && matches!(name.as_str(), "send" | "recv" | "try_recv" | "close") {
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             let ExprKind::MethodCall { value, mut args, .. } = taken else {
                 return Err(Error::internal_at(span, "a method call that is no longer one"));
@@ -21103,6 +21245,7 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
                 .flat_map(|v| &v.payload)
                 .map(|f| f.ty.clone())
                 .collect(),
+            Item::Actor(a) => a.fields.iter().map(|f| f.ty.clone()).collect(),
             Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => Vec::new(),
         }
     };
@@ -22148,7 +22291,8 @@ impl Checker {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
             }
-            ExprKind::Construct { args, .. }
+            ExprKind::Spawn { args, .. }
+            | ExprKind::Construct { args, .. }
             | ExprKind::Array(args)
             | ExprKind::Tuple(args)
             | ExprKind::Scan { args, .. }
@@ -24377,7 +24521,8 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
 
 fn piped_arg(call: &mut Expr) -> Option<&mut Expr> {
     match &mut call.kind {
-        ExprKind::Call { args, .. }
+        ExprKind::Spawn { args, .. }
+        | ExprKind::Call { args, .. }
         | ExprKind::MethodCall { args, .. }
         | ExprKind::Invoke { args, .. }
         | ExprKind::Construct { args, .. } => args
@@ -24402,7 +24547,8 @@ fn piped_name(call: &Expr) -> String {
 
 fn piped_position(call: &Expr) -> usize {
     match &call.kind {
-        ExprKind::Call { args, .. }
+        ExprKind::Spawn { args, .. }
+        | ExprKind::Call { args, .. }
         | ExprKind::MethodCall { args, .. }
         | ExprKind::Invoke { args, .. }
         | ExprKind::Construct { args, .. } => args
@@ -24931,7 +25077,8 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
             visit_expr(callee, f);
             each(args, f);
         }
-        ExprKind::Call { args, .. }
+        ExprKind::Spawn { args, .. }
+        | ExprKind::Call { args, .. }
         | ExprKind::Construct { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Tuple(args)

@@ -108,6 +108,11 @@
       line-height: 1.55;
     }
     pre code { background: none; padding: 0; color: var(--fg); }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
     .badge {
       display: inline-block;
       padding: 0.2rem 0.6rem;
@@ -248,13 +253,13 @@
       <p>
         Channels are allocated with the builtin primitive <code>chan_new&lt;T&gt;(capacity)</code> or via the standard library helper <code>channel&lt;T&gt;(capacity)</code> from <code>std/sync</code>:
       </p>
-      <pre><code>include std/sync
+      <pre><code><span class="keyword">include</span> std/sync
 
-task main()
-    ; Creates a bounded FIFO ring buffer holding up to 16 jobs
-    fixed queue = chan_new&lt;own Job&gt;(16)
-    show("queue capacity: ", queue.cap)
-fi</code></pre>
+<span class="keyword">task</span> main()
+    <span class="comment">; Creates a bounded FIFO ring buffer holding up to 16 jobs</span>
+    <span class="keyword">fixed</span> queue = chan_new&lt;<span class="keyword">own</span> Job&gt;(<span class="number">16</span>)
+    show(<span class="string">"queue capacity: "</span>, queue.cap)
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>
@@ -321,40 +326,40 @@ fi</code></pre>
 
       <h3>1. Use-After-Move Detection</h3>
       <p>Once a variable is passed with <code>own x</code>, any subsequent read of <code>x</code> is rejected at compile time:</p>
-      <pre><code>fixed q = chan_new&lt;own Packet&gt;(4)
-fixed p = Packet { id: 42, payload: "data" }
+      <pre><code><span class="keyword">fixed</span> q = chan_new&lt;<span class="keyword">own</span> Packet&gt;(<span class="number">4</span>)
+<span class="keyword">fixed</span> p = Packet { id: <span class="number">42</span>, payload: <span class="string">"data"</span> }
 
-send(q, own p)
-; Error: use of moved value 'p'; 'p' was moved with 'own p'
+send(q, <span class="keyword">own</span> p)
+<span class="comment">; Error: use of moved value 'p'; 'p' was moved with 'own p'</span>
 show(p.id)</code></pre>
 
       <h3>2. Double-Move Prevention</h3>
       <p>Attempting to move the same variable twice without reinitializing it is caught immediately:</p>
-      <pre><code>send(q, own p)
-; Error: use of moved value 'p'; 'p' was moved with 'own p'
-send(q, own p)</code></pre>
+      <pre><code>send(q, <span class="keyword">own</span> p)
+<span class="comment">; Error: use of moved value 'p'; 'p' was moved with 'own p'</span>
+send(q, <span class="keyword">own</span> p)</code></pre>
 
       <h3>3. Loop Move Protection</h3>
       <p>Moving a variable declared outside a loop inside the loop body is prohibited, preventing a use-after-move on iteration 2:</p>
-      <pre><code>fixed p = Packet { id: 1 }
-loop count &lt; 3
-    ; Error: cannot move 'p' inside a loop; 'p' was declared outside the loop
-    send(q, own p)
-fi</code></pre>
+      <pre><code><span class="keyword">fixed</span> p = Packet { id: <span class="number">1</span> }
+<span class="keyword">loop</span> count &lt; <span class="number">3</span>
+    <span class="comment">; Error: cannot move 'p' inside a loop; 'p' was declared outside the loop</span>
+    send(q, <span class="keyword">own</span> p)
+<span class="keyword">fi</span></code></pre>
 
       <h3>4. Reassignment Restores Usability</h3>
       <p>Assigning a new value to a mutable binding clears the moved state, making the variable available for use again:</p>
-      <pre><code>flex p = Packet { id: 1 }
-send(q, own p)   ; 'p' is moved
+      <pre><code><span class="keyword">flex</span> p = Packet { id: <span class="number">1</span> }
+send(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved</span>
 
-p = Packet { id: 2 }  ; 'p' is restored with a new value!
-show(p.id)             ; Completely valid! Prints 2
-send(q, own p)   ; 'p' is moved again</code></pre>
+p = Packet { id: <span class="number">2</span> }  <span class="comment">; 'p' is restored with a new value!</span>
+show(p.id)             <span class="comment">; Completely valid! Prints 2</span>
+send(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved again</span></code></pre>
 
       <h3>5. Non-Variable Move Rejection</h3>
       <p>Ownership transfer applies exclusively to named bindings, preventing ambiguous temporaries:</p>
-      <pre><code>; Error: cannot move non-variable expression with 'own'
-send(q, own Packet { id: 1 })</code></pre>
+      <pre><code><span class="comment">; Error: cannot move non-variable expression with 'own'</span>
+send(q, <span class="keyword">own</span> Packet { id: <span class="number">1</span> })</code></pre>
     </section>
 
     <section>
@@ -363,60 +368,60 @@ send(q, own Packet { id: 1 })</code></pre>
         The following complete program demonstrates a multi-stage producer-worker pipeline with typed channels, ownership transfers, and non-blocking polling:
       </p>
 
-      <pre><code>shape Job
+      <pre><code><span class="keyword">shape</span> Job
     id: int
     payload: text
     priority: int
-fi
+<span class="keyword">fi</span>
 
-shape Result
+<span class="keyword">shape</span> Result
     job_id: int
     status: text
     processed: bool
-fi
+<span class="keyword">fi</span>
 
-task process_job(j: own Job) -> Result
-    show("processing job #", j.id, " (", j.payload, ") with priority ", j.priority)
-    &lt;- Result { job_id: j.id, status: "completed", processed: true }
-fi
+<span class="keyword">task</span> process_job(j: <span class="keyword">own</span> Job) -&gt; Result
+    show(<span class="string">"processing job #"</span>, j.id, <span class="string">" ("</span>, j.payload, <span class="string">") with priority "</span>, j.priority)
+    &lt;- Result { job_id: j.id, status: <span class="string">"completed"</span>, processed: <span class="keyword">true</span> }
+<span class="keyword">fi</span>
 
-task main()
-    region r default
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
 
-    ; Bounded integer channel
-    fixed numbers = chan_new&lt;int&gt;(3)
-    numbers.send(100)
-    numbers.send(200)
-    show("queue len: ", numbers.len)
-    show("received: ", numbers.recv())
+    <span class="comment">; Bounded integer channel</span>
+    <span class="keyword">fixed</span> numbers = chan_new&lt;int&gt;(<span class="number">3</span>)
+    numbers.send(<span class="number">100</span>)
+    numbers.send(<span class="number">200</span>)
+    show(<span class="string">"queue len: "</span>, numbers.len)
+    show(<span class="string">"received: "</span>, numbers.recv())
     numbers.close()
 
-    ; Structured job queue with ownership transfer
-    fixed jobs = chan_new&lt;own Job&gt;(4)
-    fixed results = chan_new&lt;own Result&gt;(4)
+    <span class="comment">; Structured job queue with ownership transfer</span>
+    <span class="keyword">fixed</span> jobs = chan_new&lt;<span class="keyword">own</span> Job&gt;(<span class="number">4</span>)
+    <span class="keyword">fixed</span> results = chan_new&lt;<span class="keyword">own</span> Result&gt;(<span class="number">4</span>)
 
-    flex j1 = Job { id: 1, payload: "encode video", priority: 10 }
-    send(jobs, own j1)
+    <span class="keyword">flex</span> j1 = Job { id: <span class="number">1</span>, payload: <span class="string">"encode video"</span>, priority: <span class="number">10</span> }
+    send(jobs, <span class="keyword">own</span> j1)
 
-    flex j2 = Job { id: 2, payload: "generate thumbnail", priority: 5 }
-    send(jobs, own j2)
+    <span class="keyword">flex</span> j2 = Job { id: <span class="number">2</span>, payload: <span class="string">"generate thumbnail"</span>, priority: <span class="number">5</span> }
+    send(jobs, <span class="keyword">own</span> j2)
 
-    ; Drain and process
-    loop jobs.len &gt; 0
-        fixed job = jobs.recv()
-        fixed res = process_job(own job)
-        results.send(own res)
-    fi
+    <span class="comment">; Drain and process</span>
+    <span class="keyword">loop</span> jobs.len &gt; <span class="number">0</span>
+        <span class="keyword">fixed</span> job = jobs.recv()
+        <span class="keyword">fixed</span> res = process_job(<span class="keyword">own</span> job)
+        results.send(<span class="keyword">own</span> res)
+    <span class="keyword">fi</span>
 
-    ; Read results
-    loop results.len &gt; 0
-        fixed res = results.recv()
-        show("job #", res.job_id, " ", res.status)
-    fi
+    <span class="comment">; Read results</span>
+    <span class="keyword">loop</span> results.len &gt; <span class="number">0</span>
+        <span class="keyword">fixed</span> res = results.recv()
+        show(<span class="string">"job #"</span>, res.job_id, <span class="string">" "</span>, res.status)
+    <span class="keyword">fi</span>
 
     jobs.close()
     results.close()
-fi</code></pre>
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>

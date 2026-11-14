@@ -493,9 +493,9 @@ impl Parser {
 
     fn at_item_start(&self) -> bool {
         match self.peek() {
-            Token::Task | Token::Shape | Token::Kind | Token::Include => true,
+            Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Include => true,
             Token::Region => matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global"),
-            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind | Token::Actor)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1),
             _ => self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
@@ -588,13 +588,15 @@ impl Parser {
                 _ if self.at_native() => self.parse_native().map(Item::Task)?,
                 Token::Shape => self.parse_shape().map(Item::Shape)?,
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
+                Token::Actor => self.parse_actor().map(Item::Actor)?,
                 _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
-                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, pattern, type alias, or macro, or a shape's field")),
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, actor, pattern, type alias, or macro, or a shape's field")),
             };
             match &mut item {
                 Item::Task(t) => t.private = true,
                 Item::Shape(s) => s.private = true,
                 Item::Kind(k) => k.private = true,
+                Item::Actor(a) => a.private = true,
                 Item::Macro(m) => m.private = true,
                 Item::GlobalRegion(_) => unreachable!(),
             }
@@ -622,7 +624,8 @@ impl Parser {
             Token::Task => self.parse_task().map(Item::Task),
             Token::Shape => self.parse_shape().map(Item::Shape),
             Token::Kind => self.parse_kind().map(Item::Kind),
-            Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', or 'kind', got 'fi'; is there an extra 'fi' above it?")),
+            Token::Actor => self.parse_actor().map(Item::Actor),
+            Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', 'kind', or 'actor', got 'fi'; is there an extra 'fi' above it?")),
             Token::Ident(word)
                 if (word == "use" || word == "import")
                     && self.at_line_start()
@@ -1358,6 +1361,56 @@ impl Parser {
         Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, follows: Vec::new(), imitated: 0 })
     }
 
+    fn parse_actor(&mut self) -> Result<ActorDef> {
+        let opened = self.peek_span();
+        self.advance();
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        let mut fields: Vec<Field> = Vec::new();
+        if self.check(Token::LParen) {
+            fields.extend(self.parse_field_list(Slot::Param)?);
+        }
+        self.skip_newlines();
+        let mut handlers: Vec<ActorHandler> = Vec::new();
+        while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
+            self.skip_newlines();
+            if self.check(Token::Fi) || self.at_item_start() { break; }
+            if matches!(self.peek(), Token::Ident(word) if word == "on") {
+                self.advance();
+                let handler_opened = self.peek_span();
+                let handler_span = self.peek_span();
+                let handler_name = self.expect_ident()?;
+                let params = if self.check(Token::LParen) {
+                    self.parse_field_list(Slot::Param)?
+                } else {
+                    Vec::new()
+                };
+                self.skip_newlines();
+                let body = self.parse_block()?;
+                self.expect_fi("on", handler_opened)?;
+                handlers.push(ActorHandler {
+                    name: handler_name,
+                    params,
+                    body,
+                    span: handler_span,
+                });
+                self.skip_newlines();
+                continue;
+            }
+            let field = self.parse_field(Slot::Field)?;
+            fields.push(field);
+            self.skip_newlines();
+        }
+        self.expect_fi("actor", opened)?;
+        Ok(ActorDef {
+            name,
+            fields,
+            handlers,
+            span,
+            private: false,
+        })
+    }
+
     fn parse_after_colons(&mut self, what: &str, name: &str) -> Result<Vec<(Type, Span)>> {
         if !self.check(Token::Colon) {
             return Ok(Vec::new());
@@ -2071,6 +2124,15 @@ impl Parser {
             self.expect(Token::RBracket)?;
             return Ok(Type::Chan(Box::new(ty)));
         }
+        let is_actor = name == "Actor" || name.ends_with(".Actor");
+        if is_actor && self.check(Token::LBracket) {
+            self.advance();
+            self.enter()?;
+            let ty = self.parse_type_parts()?;
+            self.leave(1);
+            self.expect(Token::RBracket)?;
+            return Ok(Type::Actor(Box::new(ty)));
+        }
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
         }
@@ -2082,6 +2144,10 @@ impl Parser {
             if is_chan {
                 let inner = types.into_iter().next().unwrap_or(Type::Unknown);
                 return Ok(Type::Chan(Box::new(inner)));
+            }
+            if is_actor {
+                let inner = types.into_iter().next().unwrap_or(Type::Unknown);
+                return Ok(Type::Actor(Box::new(inner)));
             }
             return Ok(Type::Applied(Box::new(Applied { name, types, region: None })));
         }
@@ -3751,6 +3817,7 @@ impl Parser {
             )),
             Token::Interpolated(_) => self.parse_interpolated(span),
             Token::New => self.parse_new(),
+            Token::Spawn => self.parse_spawn(),
             Token::LBracket if self.at_kept() => self.parse_closure_lambda(),
             Token::LBracket => self.parse_array(),
             Token::LParen if self.at_full_lambda() => self.parse_lambda(),
@@ -4528,6 +4595,22 @@ impl Parser {
         let result = self.parse_new_inner();
         self.leave(1);
         result
+    }
+
+    fn parse_spawn(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        self.advance();
+        let actor = self.expect_ident()?;
+        self.expect(Token::LParen)?;
+        let mut args = Vec::new();
+        while !self.check(Token::RParen) && !self.is_at_end() {
+            args.push(self.parse_expr()?);
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+        Ok(Expr::new(ExprKind::Spawn { actor, args, span }, span))
     }
 
     fn tuple_type_follows(&self) -> bool {

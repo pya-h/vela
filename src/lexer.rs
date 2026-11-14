@@ -50,6 +50,8 @@ pub enum Token {
     Shared,
     Type,
     Own,
+    Actor,
+    Spawn,
     Ident(String),
     LParen,
     RParen,
@@ -141,6 +143,8 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("shared", Token::Shared),
     ("type", Token::Type),
     ("own", Token::Own),
+    ("actor", Token::Actor),
+    ("spawn", Token::Spawn),
 ];
 
 pub const ESCAPES: &[(char, char)] = &[
