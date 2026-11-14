@@ -62,6 +62,7 @@ pub struct Generator {
     replaced: Option<(*const Expr, String)>,
     piped: Vec<String>,
     kinds: HashMap<String, KindDef>,
+    actors: HashMap<String, ActorDef>,
     shapes: HashMap<String, ShapeDef>,
     copied_through: HashSet<String>,
     ret: Type,
@@ -122,6 +123,7 @@ impl Default for Generator {
             w: CWriter::default(),
             temp_counter: 0,
             kinds: HashMap::new(),
+            actors: HashMap::new(),
             shapes: HashMap::new(),
             copied_through: HashSet::new(),
             ret: Type::Nothing,
@@ -173,6 +175,9 @@ impl Generator {
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
                 Item::Shape(_) => {}
+                Item::Actor(a) => {
+                    self.actors.insert(a.name.clone(), a.clone());
+                }
                 Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) => {}
             }
         }
@@ -215,6 +220,10 @@ impl Generator {
                 self.w
                     .line(&format!("typedef struct {0} {0};", mangle(name)));
             }
+            if let Item::Actor(a) = item {
+                self.w
+                    .line(&format!("typedef struct {0} {0};", mangle(&format!("{}Msg", a.name))));
+            }
         }
         for ty in &used.compounds {
             self.w
@@ -232,6 +241,26 @@ impl Generator {
                 && k.types.is_empty()
             {
                 self.gen_tag_enum(k);
+            }
+            if let Item::Actor(a) = item {
+                let msg_kind = KindDef {
+                    name: format!("{}Msg", a.name),
+                    types: Vec::new(),
+                    given: Vec::new(),
+                    variants: a.handlers.iter().map(|h| Variant {
+                        tag: h.name.clone(),
+                        payload: h.params.clone(),
+                        span: h.span,
+                    }).collect(),
+                    follows: Vec::new(),
+                    imitates: Vec::new(),
+                    imitated: 0,
+                    private: a.private,
+                    span: a.span,
+                };
+                self.kinds.insert(msg_kind.name.clone(), msg_kind.clone());
+                self.gen_tag_enum(&msg_kind);
+                self.gen_kind(&msg_kind);
             }
         }
         for def in type_order(items, &used.compounds.list)? {
@@ -316,6 +345,23 @@ impl Generator {
                 ));
             }
         }
+        for item in items {
+            if let Item::Actor(a) = item {
+                let actor_name = c_name(&a.name);
+                let spawn_params: Vec<String> = a
+                    .fields
+                    .iter()
+                    .map(|f| format!("{} {}", c_type(&f.ty), c_ident(&f.name)))
+                    .collect();
+                let spawn_sig = if spawn_params.is_empty() {
+                    format!("static int64_t {}__spawn(void)", actor_name)
+                } else {
+                    format!("static int64_t {}__spawn({})", actor_name, spawn_params.join(", "))
+                };
+                self.w.line(&format!("static void* {}__loop(void*);", actor_name));
+                self.w.line(&format!("{};", spawn_sig));
+            }
+        }
         self.w.blank();
         self.adapted.clear();
         for name in &used.task_values {
@@ -370,6 +416,12 @@ impl Generator {
                         self.w.line(&format!("static {} {};", c_type(ty), c_ident(&bound.name)));
                     }
                 }
+            }
+        }
+
+        for item in items {
+            if let Item::Actor(a) = item {
+                self.gen_actor(a)?;
             }
         }
 
@@ -788,6 +840,100 @@ impl Generator {
             self.w.close_with(" data;");
         }
         self.w.close_with(";");
+    }
+
+    fn gen_actor(&mut self, a: &ActorDef) -> Result<()> {
+        let actor_name = c_name(&a.name);
+        let msg_struct = mangle(&format!("{}Msg", a.name));
+        let ctx_struct = format!("vela_actor__{}__ctx", actor_name);
+
+        // Context struct
+        self.w.open(&format!("typedef struct {}", ctx_struct));
+        self.w.line("int64_t mailbox;");
+        for field in &a.fields {
+            self.w.line(&format!("{} {};", c_type(&field.ty), c_ident(&field.name)));
+        }
+        self.w.close_with(&format!(" {};", ctx_struct));
+
+        // Thread loop function
+        self.ret = Type::Nothing;
+        self.results.clear();
+        self.pointers.clear();
+        self.hidden.clear();
+        self.task = format!("{}__loop", actor_name);
+
+        self.w.open(&format!("static void* {}__loop(void* vela__raw_ctx)", actor_name));
+        self.w.line(&format!("{}* vela__ctx = ({}*)vela__raw_ctx;", ctx_struct, ctx_struct));
+        self.w.line("int64_t mailbox = vela__ctx->mailbox;");
+        for field in &a.fields {
+            self.w.line(&format!(
+                "{} {} = vela__ctx->{};",
+                c_type(&field.ty),
+                c_ident(&field.name),
+                c_ident(&field.name)
+            ));
+        }
+        self.w.line("free(vela__ctx);");
+
+        self.w.line(&format!("{} msg;", msg_struct));
+        self.w.open("while (vela__rt__chan_recv(mailbox, &msg))");
+        self.w.open("switch (msg.tag)");
+        for handler in &a.handlers {
+            let tag_val = tag_value(&format!("{}Msg", a.name), &handler.name);
+            self.w.line(&format!("case {}:", tag_val));
+            self.w.open("");
+            for param in &handler.params {
+                self.w.line(&format!(
+                    "{} {} = msg.data.{}.{};",
+                    c_type(&param.ty),
+                    c_ident(&param.name),
+                    c_ident(&handler.name),
+                    c_ident(&param.name)
+                ));
+            }
+            for stmt in &handler.body {
+                self.gen_stmt(stmt)?;
+            }
+            self.w.line("break;");
+            self.w.close();
+        }
+        self.w.close(); // switch
+        self.w.close(); // while
+        self.w.line("return NULL;");
+        self.w.close(); // loop func
+
+        // Spawn function
+        let spawn_params: Vec<String> = a
+            .fields
+            .iter()
+            .map(|f| format!("{} {}", c_type(&f.ty), c_ident(&f.name)))
+            .collect();
+        let spawn_sig = if spawn_params.is_empty() {
+            format!("static int64_t {}__spawn(void)", actor_name)
+        } else {
+            format!("static int64_t {}__spawn({})", actor_name, spawn_params.join(", "))
+        };
+
+        self.w.open(&spawn_sig);
+        self.w.line(&format!("int64_t mailbox = vela__rt__chan_new(32, sizeof({}));", msg_struct));
+        self.w.line(&format!("{}* vela__ctx = ({}*)malloc(sizeof({}));", ctx_struct, ctx_struct, ctx_struct));
+        self.w.open("if (vela__ctx == NULL)");
+        self.w.line("vela__rt__out_of_memory();");
+        self.w.close();
+        self.w.line("vela__ctx->mailbox = mailbox;");
+        for field in &a.fields {
+            self.w.line(&format!("vela__ctx->{0} = {0};", c_ident(&field.name)));
+        }
+        self.w.line("pthread_t thread;");
+        self.w.open(&format!("if (pthread_create(&thread, NULL, {}__loop, vela__ctx) != 0)", actor_name));
+        self.w.line("free(vela__ctx);");
+        self.w.line("return -1;");
+        self.w.close();
+        self.w.line("pthread_detach(thread);");
+        self.w.line("return mailbox;");
+        self.w.close();
+
+        Ok(())
     }
 
     /// The struct of a `maybe T` (`has`, `value`), a `T ~ E` (`ok`, `value`,
@@ -4920,6 +5066,23 @@ impl Generator {
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::ToJson { value, region, .. } => self.gen_to_json(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
+            ExprKind::Spawn { actor, args, .. } => {
+                let actor_name = c_name(actor);
+                let actor_def = self.actors.get(actor).cloned().ok_or_else(|| {
+                    Error::internal_at(e.span, format!("actor '{}' not found in generator", actor))
+                })?;
+                let mut c_args = Vec::new();
+                for (i, field) in actor_def.fields.iter().enumerate() {
+                    if let Some(arg) = args.get(i) {
+                        c_args.push(self.gen_expr(arg)?);
+                    } else if let Some(default) = &field.default {
+                        c_args.push(self.gen_expr(default)?);
+                    } else {
+                        c_args.push("0".to_string());
+                    }
+                }
+                Ok(format!("{}__spawn({})", actor_name, c_args.join(", ")))
+            }
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
                 e.span,
                 format!("the method call '{}' reached code generation", name),
@@ -7006,6 +7169,9 @@ fn has_prelude(e: &Expr) -> bool {
             fields.iter().any(|field| has_prelude(&field.value))
                 || ordered(&fields.iter().map(|field| &field.value).collect::<Vec<_>>())
         }
+        ExprKind::Spawn { args, .. } => {
+            args.iter().any(has_prelude) || ordered(&args.iter().collect::<Vec<_>>())
+        }
         ExprKind::MethodCall { value, args, .. } => {
             has_prelude(value)
                 || args.iter().any(has_prelude)
@@ -7025,6 +7191,7 @@ fn made_here(e: &Expr) -> bool {
             | ExprKind::MethodCall { .. }
             | ExprKind::Invoke { .. }
             | ExprKind::StructInit { .. }
+            | ExprKind::Spawn { .. }
     )
 }
 
@@ -7320,6 +7487,21 @@ impl UsedTypes {
                                 used.note_text(error);
                             }
                         }
+                    }
+                }
+                Item::Actor(a) => {
+                    let msg_ty = Type::Named(format!("{}Msg", a.name), None);
+                    used.channels.insert(msg_ty.clone());
+                    used.add(&msg_ty);
+                    used.add(&Type::Maybe(Box::new(msg_ty.clone())));
+                    for field in &a.fields {
+                        used.add(&field.ty);
+                    }
+                    for handler in &a.handlers {
+                        for param in &handler.params {
+                            used.add(&param.ty);
+                        }
+                        used.block(&handler.body);
                     }
                 }
                 Item::Task(_) | Item::Macro(_) => {}
@@ -7906,6 +8088,14 @@ impl UsedTypes {
                 self.expr(items);
                 args.iter().for_each(|arg| self.expr(arg));
             }
+            ExprKind::Spawn { actor, args, .. } => {
+                let msg_ty = Type::Named(format!("{}Msg", actor), None);
+                self.channels.insert(msg_ty.clone());
+                self.add(&msg_ty);
+                for arg in args {
+                    self.expr(arg);
+                }
+            }
         }
     }
 }
@@ -8069,6 +8259,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
             };
             region || expr_reads(items, name) || args.iter().any(|arg| expr_reads(arg, name))
         }
+        ExprKind::Spawn { args, .. } => args.iter().any(|arg| expr_reads(arg, name)),
     }
 }
 

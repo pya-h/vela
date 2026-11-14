@@ -53,6 +53,7 @@ fn compile_c(source: &Path, exe: &Path, flags: &[&str]) -> Result<(), String> {
         .arg("-o")
         .arg(exe)
         .arg("-lm")
+        .arg("-lpthread")
         .output()
         .unwrap();
     if output.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&output.stderr).into_owned()) }

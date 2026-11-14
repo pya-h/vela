@@ -533,6 +533,11 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
+            ExprKind::Spawn { args, .. } => {
+                for arg in args {
+                    self.expr(arg, kinds);
+                }
+            }
         }
     }
 }

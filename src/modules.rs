@@ -2240,7 +2240,7 @@ impl Resolver<'_> {
             [first, member] => match self.modules.get(*first) {
                 Some(module) => self.member(first, module, member, at).map(Some),
                 None => match self.lookup(first, at, calls)? {
-                    Some(kind) if kind.what == What::Kind => {
+                    Some(kind) if matches!(kind.what, What::Kind | What::Actor) => {
                         self.variant(&kind, first, member, at).map(Some)
                     }
                     found => {
@@ -2433,7 +2433,7 @@ impl Resolver<'_> {
         {
             return Ok(self
                 .lookup(name, at, false)?
-                .filter(|entry| entry.what == What::Kind));
+                .filter(|entry| matches!(entry.what, What::Kind | What::Actor)));
         }
         Ok(None)
     }

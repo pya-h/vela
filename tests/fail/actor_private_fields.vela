@@ -1,0 +1,14 @@
+; error: 12:12: fields of actor 'Counter' are private and cannot be accessed from outside
+actor Counter
+    count: int = 0
+
+    on Increment()
+        count += 1
+    fi
+fi
+
+task main()
+    fixed c = spawn Counter()
+    show(c.count)
+fi
+

@@ -1,0 +1,40 @@
+; Actors & Mailbox Concurrency:
+; Actors encapsulate private mutable state in dedicated background threads,
+; processing sequential messages from their typed FIFO mailbox with zero lock contention.
+
+actor Counter(count: int)
+    on Increment(step: int)
+        count += step
+    fi
+
+    on Reset()
+        count = 0
+    fi
+
+    on Get(reply: Chan[int])
+        reply.send(count)
+    fi
+fi
+
+task main()
+    ; 1. Spawn actor with initial state
+    fixed counter = spawn Counter(10)
+
+    ; 2. Send messages asynchronously
+    counter.send(Counter.Increment(5))
+    send(counter, Counter.Increment(15))
+
+    ; 3. Request-response pattern with reply channel
+    fixed reply = chan_new<int>(1)
+    counter.send(Counter.Get(reply))
+    show("counter after increments: ", reply.recv())
+
+    ; 4. Reset state
+    counter.send(Counter.Reset())
+    counter.send(Counter.Get(reply))
+    show("counter after reset: ", reply.recv())
+
+    ; 5. Close mailbox to gracefully terminate actor thread
+    counter.close()
+fi
+

@@ -549,6 +549,7 @@ fn compile_c(
         .arg("-o")
         .arg(&output)
         .arg("-lm")
+        .arg("-lpthread")
         .output()
         .map_err(|error| BuildError::CompilerNotStarted {
             cc: program.to_string(),

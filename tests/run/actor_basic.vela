@@ -1,0 +1,27 @@
+; Basic actor definition, spawning, message sending, state update, reply channel, and close.
+
+actor Counter(count: int)
+
+    on Increment(step: int)
+        count += step
+    fi
+
+    on Get(reply: Chan[int])
+        reply.send(count)
+    fi
+fi
+
+task main()
+    fixed c = spawn Counter(10)
+    c.send(Counter.Increment(5))
+    send(c, Counter.Increment(15))
+
+    fixed reply = chan_new<int>(1)
+    c.send(Counter.Get(reply))
+
+    fixed res = reply.recv()
+    show("counter: ", res)
+
+    c.close()
+fi
+

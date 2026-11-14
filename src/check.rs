@@ -1740,7 +1740,24 @@ impl Checker {
                     if taken(&a.name, a.span) {
                         continue;
                     }
+                    let msg_kind = KindDef {
+                        name: format!("{}Msg", a.name),
+                        types: Vec::new(),
+                        given: Vec::new(),
+                        variants: a.handlers.iter().map(|h| Variant {
+                            tag: h.name.clone(),
+                            payload: h.params.clone(),
+                            span: h.span,
+                        }).collect(),
+                        follows: Vec::new(),
+                        imitates: Vec::new(),
+                        imitated: 0,
+                        private: a.private,
+                        span: a.span,
+                    };
+                    self.kinds.insert(msg_kind.name.clone(), msg_kind);
                     for handler in &a.handlers {
+                        let short = qualify(module_of(&a.name), &handler.name);
                         let full = format!("{}.{}", a.name, handler.name);
                         let variant = Variant {
                             tag: handler.name.clone(),
@@ -1751,6 +1768,7 @@ impl Checker {
                             kind: format!("{}Msg", a.name),
                             variant,
                         };
+                        self.variants.insert(short, info.clone());
                         self.variants.insert(full, info);
                     }
                     self.actors.insert(a.name.clone(), a.clone());
@@ -17070,10 +17088,10 @@ impl Checker {
                     Type::Named(name, _) => name.as_str(),
                     _ => "actor",
                 };
-                return err(
+                err(
                     span,
                     format!("fields of actor '{}' are private and cannot be accessed from outside", name),
-                );
+                )
             }
             Type::Own(inner) => self.field_type(inner, field, span),
             Type::Param(param) => self.pattern_field(param, field, span),
@@ -24738,7 +24756,7 @@ impl CallGraph {
                         }
                     }
                 }
-                Item::Kind(_) | Item::Macro(_) => {}
+                Item::Kind(_) | Item::Macro(_) | Item::Actor(_) => {}
             }
         }
         CallGraph {
