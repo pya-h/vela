@@ -1,0 +1,33 @@
+; Verifies that closing an actor mailbox drains all queued messages
+; across step batch boundaries (>16 items) without message loss.
+
+actor Accumulator
+    sum: int = 0
+
+    on Add(n: int)
+        sum += n
+    fi
+
+    on GetSum(reply: Chan[int])
+        reply.dispatch(sum)
+    fi
+fi
+
+task main()
+    fixed acc = spawn Accumulator()
+
+    ; Dispatch 20 items (more than the 16-message batch threshold)
+    each i in 0..20
+        acc.dispatch(Accumulator.Add(1))
+    fi
+
+    fixed reply = chan_new<int>(1)
+    acc.dispatch(Accumulator.GetSum(reply))
+
+    ; Immediately close actor while messages are still in flight/queue
+    acc.close()
+
+    fixed res = reply.wait_and_receive()
+    show("sum: ", res)
+fi
+

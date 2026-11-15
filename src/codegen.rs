@@ -966,7 +966,7 @@ impl Generator {
         self.w.line("vela__rt__chan* chan = vela__rt__chan_of(mailbox);");
         self.w.open("if (chan != NULL)");
         self.w.line("pthread_mutex_lock(&chan->lock);");
-        self.w.open("if (chan->count > 0 && !chan->closed)");
+        self.w.open("if (chan->count > 0)");
         self.w.line("pthread_mutex_unlock(&chan->lock);");
         self.w.line(&format!("vela__rt__sched_submit({}__step, vela__ctx);", actor_name));
         self.w.line("return;");
@@ -1101,6 +1101,9 @@ impl Generator {
                             }
                         }
                     }
+                }
+                if matches!(&base.kind, ExprKind::Field(..)) {
+                    self.gen_mutation_trigger(base)?;
                 }
             }
             ExprKind::Var(var_name) => {

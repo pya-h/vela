@@ -26502,6 +26502,23 @@ fn collect_block_mutations(block: &[Stmt], out: &mut HashSet<String>) {
             StmtKind::Block(body) => {
                 collect_block_mutations(body, out);
             }
+            StmtKind::Match(_, cases) => {
+                for case in cases {
+                    collect_block_mutations(&case.body, out);
+                }
+            }
+            StmtKind::Each(_, _, _, body, finally) => {
+                collect_block_mutations(body, out);
+                if let Some(b) = finally {
+                    collect_block_mutations(b, out);
+                }
+            }
+            StmtKind::Parted(parted) => {
+                collect_block_mutations(&parted.body, out);
+                if let Some(b) = &parted.finally {
+                    collect_block_mutations(b, out);
+                }
+            }
             StmtKind::Named(_, inner) => {
                 collect_block_mutations(std::slice::from_ref(&**inner), out);
             }
@@ -26522,6 +26539,8 @@ fn extract_place_mutation(place: &Expr, out: &mut HashSet<String>) {
                 out.insert(format!(".{}", field));
             } else if let ExprKind::Var(var) = &base.kind {
                 out.insert(format!("{}.{}", var, field));
+            } else {
+                extract_place_mutation(base, out);
             }
         }
         ExprKind::Var(name) => {

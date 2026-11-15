@@ -1,0 +1,48 @@
+  1 | ; Verifies that closing an actor mailbox drains all queued messages
+    | comment:; Verifies that closing an actor mailbox drains all queued messages
+  2 | ; across step batch boundaries (>16 items) without message loss.
+    | comment:; across step batch boundaries (>16 items) without message loss.
+  4 | actor Accumulator
+    | keyword:actor  variable:Accumulator
+  5 |     sum: int = 0
+    | variable:sum  punctuation::  type-builtin:int  operator:=  number:0
+  7 |     on Add(n: int)
+    | variable:on  task:Add  punctuation:(  variable:n  punctuation::  type-builtin:int  punctuation:)
+  8 |         sum += n
+    | variable:sum  operator:+=  variable:n
+  9 |     fi
+    | keyword:fi
+ 11 |     on GetSum(reply: Chan[int])
+    | variable:on  task:GetSum  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 12 |         reply.dispatch(sum)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:sum  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     fixed acc = spawn Accumulator()
+    | keyword:fixed  variable:acc  operator:=  keyword:spawn  task:Accumulator  punctuation:(  punctuation:)
+ 19 |     ; Dispatch 20 items (more than the 16-message batch threshold)
+    | comment:; Dispatch 20 items (more than the 16-message batch threshold)
+ 20 |     each i in 0..20
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:20
+ 21 |         acc.dispatch(Accumulator.Add(1))
+    | variable:acc  punctuation:.  field:dispatch  punctuation:(  variable:Accumulator  punctuation:.  field:Add  punctuation:(  number:1  punctuation:)  punctuation:)
+ 22 |     fi
+    | keyword:fi
+ 24 |     fixed reply = chan_new<int>(1)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 25 |     acc.dispatch(Accumulator.GetSum(reply))
+    | variable:acc  punctuation:.  field:dispatch  punctuation:(  variable:Accumulator  punctuation:.  field:GetSum  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 27 |     ; Immediately close actor while messages are still in flight/queue
+    | comment:; Immediately close actor while messages are still in flight/queue
+ 28 |     acc.close()
+    | variable:acc  punctuation:.  field:close  punctuation:(  punctuation:)
+ 30 |     fixed res = reply.wait_and_receive()
+    | keyword:fixed  variable:res  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 31 |     show("sum: ", res)
+    | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:res  punctuation:)
+ 32 | fi
+    | keyword:fi

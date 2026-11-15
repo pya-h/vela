@@ -318,15 +318,15 @@
     </section>
 
     <section>
-      <h2><span class="icon">⚙️</span> Under the Hood: ISO C11 Codegen</h2>
+      <h2><span class="icon">⚙️</span> Under the Hood: ISO C11 Codegen &amp; M:N Scheduler</h2>
       <p>
-        Vela compiles actors directly to efficient, standard ISO C11 with POSIX threads:
+        Vela compiles actors directly to efficient, standard ISO C11 multiplexed on an M:N green thread scheduler pool:
       </p>
       <ul>
-        <li><strong>Context Struct:</strong> A heap-allocated context struct (<code>vela_actor__Name__ctx</code>) transfers the mailbox handle and initial state parameters to the thread.</li>
-        <li><strong>Worker Loop:</strong> A <code>static void* Name__loop(void* raw_ctx)</code> function runs a <code>while (vela__rt__chan_recv(mailbox, &amp;msg))</code> loop.</li>
-        <li><strong>Message Tag Dispatch:</strong> The loop switches on <code>msg.tag</code>, extracts payload parameters from the tagged union, and executes the handler body.</li>
-        <li><strong>Automatic Detachment:</strong> <code>spawn</code> creates the thread via <code>pthread_create</code>, immediately calls <code>pthread_detach</code>, and returns the channel handle to the caller.</li>
+        <li><strong>Context Struct:</strong> A heap-allocated context struct (<code>vela_actor__Name__ctx</code>) stores the mailbox handle and mutable actor fields across step executions.</li>
+        <li><strong>Step Function:</strong> A <code>static void Name__step(void* raw_ctx)</code> function processes batches of up to 16 messages sequentially with <code>vela__rt__chan_try_recv</code>.</li>
+        <li><strong>Message Tag Dispatch:</strong> The step switches on <code>msg.tag</code>, extracts payload parameters from the tagged union, and executes the handler body.</li>
+        <li><strong>Auto-Parking &amp; Drain:</strong> If more messages remain in the queue, <code>Name__step</code> reschedules itself on the background pool. If the mailbox is empty, the actor parks with zero CPU overhead until a new message is dispatched. When closed and drained, the context is freed automatically.</li>
       </ul>
     </section>
 

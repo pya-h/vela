@@ -1,0 +1,70 @@
+  1 | ; Tests that mutations inside match, each, and nested fields are properly tracked by alters rules.
+    | comment:; Tests that mutations inside match, each, and nested fields are properly tracked by alters rules.
+  3 | kind Mode
+    | keyword:kind  type:Mode
+  4 |     Normal
+    | variant:Normal
+  5 |     Boosted
+    | variant:Boosted
+  6 | fi
+    | keyword:fi
+  8 | shape Stats
+    | keyword:shape  type:Stats
+  9 |     score: int = 0
+    | field:score  punctuation::  type-builtin:int  operator:=  number:0
+ 10 |     mode: Mode = Mode.Boosted
+    | field:mode  punctuation::  type:Mode  operator:=  type:Mode  punctuation:.  variant:Boosted
+ 11 | fi
+    | keyword:fi
+ 13 | shape Game
+    | keyword:shape  type:Game
+ 14 |     stats: Stats = Stats {}
+    | field:stats  punctuation::  type:Stats  operator:=  type:Stats  punctuation:{  punctuation:}
+ 15 |     level: int = 1
+    | field:level  punctuation::  type-builtin:int  operator:=  number:1
+ 16 |     over: bool = false
+    | field:over  punctuation::  type-builtin:bool  operator:=  keyword:false
+ 18 |     alters(.over) event check_over on .level auto
+    | method:alters  punctuation:(  punctuation:.  field:over  punctuation:)  keyword:event  variable:check_over  variable:on  punctuation:.  field:level  variable:auto
+ 19 |         when .level > 10
+    | keyword:when  punctuation:.  field:level  operator:>  number:10
+ 20 |             .over = true
+    | punctuation:.  field:over  operator:=  keyword:true
+ 21 |         fi
+    | keyword:fi
+ 22 |     fi
+    | keyword:fi
+ 24 |     alters(.level, .over) event on_score on .stats auto
+    | method:alters  punctuation:(  punctuation:.  field:level  punctuation:,  punctuation:.  field:over  punctuation:)  keyword:event  variable:on_score  variable:on  punctuation:.  field:stats  variable:auto
+ 25 |         match .stats.mode
+    | keyword:match  punctuation:.  field:stats  punctuation:.  field:mode
+ 26 |         case Mode.Boosted
+    | keyword:case  type:Mode  punctuation:.  variant:Boosted
+ 27 |             .level += 1
+    | punctuation:.  field:level  operator:+=  number:1
+ 28 |         case _
+    | keyword:case  keyword:_
+ 29 |             ; No-op
+    | comment:; No-op
+ 30 |         fi
+    | keyword:fi
+ 31 |     fi
+    | keyword:fi
+ 33 |     alters add_points(p: int)
+    | keyword:alters  method:add_points  punctuation:(  parameter:p  punctuation::  type-builtin:int  punctuation:)
+ 34 |         .stats.score += p
+    | punctuation:.  field:stats  punctuation:.  field:score  operator:+=  parameter:p
+ 35 |     fi
+    | keyword:fi
+ 36 | fi
+    | keyword:fi
+ 38 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 39 |     flex g = Game {}
+    | keyword:flex  variable:g  operator:=  type:Game  punctuation:{  punctuation:}
+ 40 |     g.add_points(100)
+    | variable:g  punctuation:.  method:add_points  punctuation:(  number:100  punctuation:)
+ 41 |     show("level: ", g.level)
+    | builtin-fn:show  punctuation:(  string:"level: "  punctuation:,  variable:g  punctuation:.  field:level  punctuation:)
+ 42 | fi
+    | keyword:fi

@@ -4399,8 +4399,6 @@ static inline void* vela__rt__sched_worker(void* arg) {
 
 static inline void vela__rt__sched_init_if_needed(void) {
     if (!vela__rt__global_sched_pool.initialized) {
-        pthread_mutex_init(&vela__rt__global_sched_pool.lock, NULL);
-        pthread_cond_init(&vela__rt__global_sched_pool.work_cond, NULL);
         vela__rt__global_sched_pool.running = true;
         size_t count = 4;
 #if defined(_SC_NPROCESSORS_ONLN)
@@ -4633,6 +4631,10 @@ static inline void vela__rt__chan_close(int64_t handle) {
     pthread_mutex_lock(&chan->lock);
     if (!chan->closed) {
         chan->closed = true;
+        if (chan->on_message != NULL && !chan->scheduled) {
+            chan->scheduled = true;
+            vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
+        }
         pthread_cond_broadcast(&chan->not_empty);
         pthread_cond_broadcast(&chan->not_full);
     }

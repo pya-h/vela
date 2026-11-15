@@ -1,0 +1,42 @@
+; Tests that mutations inside match, each, and nested fields are properly tracked by alters rules.
+
+kind Mode
+    Normal
+    Boosted
+fi
+
+shape Stats
+    score: int = 0
+    mode: Mode = Mode.Boosted
+fi
+
+shape Game
+    stats: Stats = Stats {}
+    level: int = 1
+    over: bool = false
+
+    alters(.over) event check_over on .level auto
+        when .level > 10
+            .over = true
+        fi
+    fi
+
+    alters(.level, .over) event on_score on .stats auto
+        match .stats.mode
+        case Mode.Boosted
+            .level += 1
+        case _
+            ; No-op
+        fi
+    fi
+
+    alters add_points(p: int)
+        .stats.score += p
+    fi
+fi
+
+task main()
+    flex g = Game {}
+    g.add_points(100)
+    show("level: ", g.level)
+fi
