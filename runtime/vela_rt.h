@@ -28,6 +28,8 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>
+#include <sched.h>
+#include <stdatomic.h>
 
 #if defined(__has_include)
 #  if __has_include(<dlfcn.h>)
@@ -4483,6 +4485,10 @@ typedef struct vela__rt__chan {
     void (*on_message)(void* ctx);
     void* actor_ctx;
     bool scheduled;
+    /* In-flight operations holding a pointer to this struct. chan_of returns
+       pinned (see below); chan_destroy waits for every pin before freeing, so
+       a handle copied anywhere stays safe to use. */
+    _Atomic size_t ops;
 } vela__rt__chan;
 
 typedef struct vela__rt__chan_slot {
@@ -4510,6 +4516,9 @@ static inline void vela__rt__chan_init_table_if_needed(void) {
     }
 }
 
+/* Returns the channel for a handle with an operation pin held, or NULL when
+   the handle is stale (its channel was destroyed). Every caller must drop the
+   pin with vela__rt__chan_unpin once it is done with the pointer. */
 static inline vela__rt__chan* vela__rt__chan_of(int64_t handle) {
     if (handle <= 0) return NULL;
     size_t index = (size_t)(handle & 0xffffffffu);
@@ -4518,12 +4527,17 @@ static inline vela__rt__chan* vela__rt__chan_of(int64_t handle) {
     pthread_mutex_lock(&vela__rt__global_chan_table.lock);
     if (index < vela__rt__global_chan_table.count) {
         vela__rt__chan_slot* slot = &vela__rt__global_chan_table.slots[index];
-        if (slot->generation == generation) {
+        if (slot->generation == generation && slot->chan != NULL) {
             chan = slot->chan;
+            atomic_fetch_add_explicit(&chan->ops, 1, memory_order_seq_cst);
         }
     }
     pthread_mutex_unlock(&vela__rt__global_chan_table.lock);
     return chan;
+}
+
+static inline void vela__rt__chan_unpin(vela__rt__chan* chan) {
+    atomic_fetch_sub_explicit(&chan->ops, 1, memory_order_seq_cst);
 }
 
 static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
@@ -4547,6 +4561,7 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     chan->on_message = NULL;
     chan->actor_ctx = NULL;
     chan->scheduled = false;
+    atomic_init(&chan->ops, 0);
     pthread_mutex_init(&chan->lock, NULL);
     pthread_cond_init(&chan->not_empty, NULL);
     pthread_cond_init(&chan->not_full, NULL);
@@ -4583,6 +4598,43 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     return handle;
 }
 
+/* Frees a channel: its slot is cleared first so new lookups fail at once, the
+   blocked senders and receivers are woken (they hold pins and exit false), and
+   then every in-flight operation is waited out before the memory goes. Handles
+   copied anywhere either pin before the clearing or fail the generation check
+   after it — no use-after-free either way. Destroying twice is a no-op. */
+static inline void vela__rt__chan_destroy(int64_t handle) {
+    if (handle <= 0) return;
+    size_t index = (size_t)(handle & 0xffffffffu);
+    uint32_t generation = (uint32_t)((uint64_t)handle >> 32);
+    vela__rt__chan* chan = NULL;
+    pthread_mutex_lock(&vela__rt__global_chan_table.lock);
+    if (index < vela__rt__global_chan_table.count) {
+        vela__rt__chan_slot* slot = &vela__rt__global_chan_table.slots[index];
+        if (slot->generation == generation && slot->chan != NULL) {
+            chan = slot->chan;
+            slot->chan = NULL;
+            slot->generation++;
+        }
+    }
+    pthread_mutex_unlock(&vela__rt__global_chan_table.lock);
+    if (chan == NULL) return;
+    pthread_mutex_lock(&chan->lock);
+    chan->closed = true;
+    chan->on_message = NULL;
+    pthread_cond_broadcast(&chan->not_empty);
+    pthread_cond_broadcast(&chan->not_full);
+    pthread_mutex_unlock(&chan->lock);
+    while (atomic_load_explicit(&chan->ops, memory_order_seq_cst) > 0) {
+        sched_yield();
+    }
+    pthread_cond_destroy(&chan->not_empty);
+    pthread_cond_destroy(&chan->not_full);
+    pthread_mutex_destroy(&chan->lock);
+    free(chan->buffer);
+    free(chan);
+}
+
 static inline void vela__rt__chan_attach_actor(int64_t handle, void (*on_message)(void* ctx), void* actor_ctx) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return;
@@ -4591,71 +4643,84 @@ static inline void vela__rt__chan_attach_actor(int64_t handle, void (*on_message
     chan->actor_ctx = actor_ctx;
     chan->scheduled = false;
     pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
 }
 
 static inline bool vela__rt__chan_send(int64_t handle, const void* item) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return false;
+    bool sent = false;
     pthread_mutex_lock(&chan->lock);
     while (chan->count == chan->cap && !chan->closed) {
         pthread_cond_wait(&chan->not_full, &chan->lock);
     }
-    if (chan->closed) {
-        pthread_mutex_unlock(&chan->lock);
-        return false;
+    if (!chan->closed) {
+        memcpy(chan->buffer + (chan->tail * chan->item_size), item, chan->item_size);
+        chan->tail = (chan->tail + 1) % chan->cap;
+        chan->count++;
+        pthread_cond_signal(&chan->not_empty);
+        if (chan->on_message != NULL && !chan->scheduled) {
+            chan->scheduled = true;
+            vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
+        }
+        sent = true;
     }
-    memcpy(chan->buffer + (chan->tail * chan->item_size), item, chan->item_size);
-    chan->tail = (chan->tail + 1) % chan->cap;
-    chan->count++;
-    pthread_cond_signal(&chan->not_empty);
-
-    if (chan->on_message != NULL && !chan->scheduled) {
-        chan->scheduled = true;
-        vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
-    }
-
     pthread_mutex_unlock(&chan->lock);
-    return true;
+    vela__rt__chan_unpin(chan);
+    return sent;
 }
 
 static inline bool vela__rt__chan_recv(int64_t handle, void* out_item) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return false;
+    bool got = false;
+    bool drained = false;
     pthread_mutex_lock(&chan->lock);
     while (chan->count == 0 && !chan->closed) {
         pthread_cond_wait(&chan->not_empty, &chan->lock);
     }
-    if (chan->count == 0 && chan->closed) {
-        pthread_mutex_unlock(&chan->lock);
-        return false;
+    if (chan->count > 0) {
+        memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
+        chan->head = (chan->head + 1) % chan->cap;
+        chan->count--;
+        pthread_cond_signal(&chan->not_full);
+        got = true;
+        drained = chan->closed && chan->count == 0;
     }
-    memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
-    chan->head = (chan->head + 1) % chan->cap;
-    chan->count--;
-    pthread_cond_signal(&chan->not_full);
     pthread_mutex_unlock(&chan->lock);
-    return true;
+    vela__rt__chan_unpin(chan);
+    if (drained) {
+        vela__rt__chan_destroy(handle);
+    }
+    return got;
 }
 
 static inline bool vela__rt__chan_try_recv(int64_t handle, void* out_item) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return false;
+    bool got = false;
+    bool drained = false;
     pthread_mutex_lock(&chan->lock);
-    if (chan->count == 0) {
-        pthread_mutex_unlock(&chan->lock);
-        return false;
+    if (chan->count > 0) {
+        memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
+        chan->head = (chan->head + 1) % chan->cap;
+        chan->count--;
+        pthread_cond_signal(&chan->not_full);
+        got = true;
+        drained = chan->closed && chan->count == 0;
     }
-    memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
-    chan->head = (chan->head + 1) % chan->cap;
-    chan->count--;
-    pthread_cond_signal(&chan->not_full);
     pthread_mutex_unlock(&chan->lock);
-    return true;
+    vela__rt__chan_unpin(chan);
+    if (drained) {
+        vela__rt__chan_destroy(handle);
+    }
+    return got;
 }
 
 static inline void vela__rt__chan_close(int64_t handle) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return;
+    bool empty = false;
     pthread_mutex_lock(&chan->lock);
     if (!chan->closed) {
         chan->closed = true;
@@ -4666,7 +4731,12 @@ static inline void vela__rt__chan_close(int64_t handle) {
         pthread_cond_broadcast(&chan->not_empty);
         pthread_cond_broadcast(&chan->not_full);
     }
+    empty = chan->count == 0;
     pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
+    if (empty) {
+        vela__rt__chan_destroy(handle);
+    }
 }
 
 static inline int64_t vela__rt__chan_len(int64_t handle) {
@@ -4675,14 +4745,27 @@ static inline int64_t vela__rt__chan_len(int64_t handle) {
     pthread_mutex_lock(&chan->lock);
     int64_t len = (int64_t)chan->count;
     pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
     return len;
 }
 
 static inline int64_t vela__rt__chan_cap(int64_t handle) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return 0;
-    return (int64_t)chan->cap;
+    int64_t cap = (int64_t)chan->cap;
+    vela__rt__chan_unpin(chan);
+    return cap;
+}
+
+/* Stops the worker pool: running steps finish, parked workers wake and exit.
+   Called at the end of main so no thread outlives the program. */
+static inline void vela__rt__sched_stop(void) {
+    pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+    vela__rt__global_sched_pool.running = false;
+    pthread_cond_broadcast(&vela__rt__global_sched_pool.work_cond);
+    pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
 
 #endif
+
 

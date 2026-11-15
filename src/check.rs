@@ -1792,11 +1792,7 @@ impl Checker {
                 }
                 Item::GlobalRegion(_) => {}
                 Item::Event(e) => {
-                    let key = match &e.owner {
-                        Some(owner) => format!("{}.{}", owner, e.name),
-                        None => e.name.clone(),
-                    };
-                    self.events.insert(key, e.clone());
+                    self.events.insert(event_id(e), e.clone());
                 }
             }
         }
@@ -2111,6 +2107,16 @@ impl Checker {
                 return err(event.span, "'auto' cannot be used on a shared event; shared events are always active");
             }
         }
+        if event.trigger == EventTrigger::Lifecycle(LifecycleKind::Init)
+            && event.owner.is_some()
+            && !event.shared
+            && !event.auto
+        {
+            return err(
+                event.span,
+                "an 'on init' event runs as the value is made, before anything can listen; mark it 'auto'",
+            );
+        }
         let old_scopes = std::mem::take(&mut self.scopes);
         let old_owner = self.current_owner.take();
         let old_method = self.current_method.take();
@@ -2166,19 +2172,70 @@ impl Checker {
         Ok(())
     }
 
+    /// An event declared inside a task: it watches the task's locals, is
+    /// checked in the scopes it can see (unlike an item event, which gets
+    /// fresh scopes), and only fires within that task while it runs.
+    fn check_intratask_event(&mut self, event: &mut EventDef) -> Result<()> {
+        if event.in_task.is_none() {
+            event.in_task = Some(self.current_task.clone());
+        }
+        if event.auto {
+            return err(
+                event.span,
+                "'auto' is only allowed on member events inside a shape; an event in a task is active while the task runs",
+            );
+        }
+        if event.shared {
+            return err(event.span, "'shared' goes before an event of a shape, not one in a task");
+        }
+        if let Some(cond) = &mut event.cond {
+            let mut curr = Some(cond);
+            while let Some(c) = curr {
+                let ty = self.check_expr(&mut c.value)?;
+                if !matches!(ty, Type::Bool | Type::Unknown) {
+                    self.record(Error::at(c.value.span, "an event 'when' condition must evaluate to a bool"));
+                }
+                curr = c.and.as_deref_mut();
+            }
+        }
+        self.check_block(&mut event.body)?;
+        // The enclosing task's locals the body uses are passed by pointer when
+        // the event runs: a C function can't see another function's locals.
+        // Collected after checking, when region arguments the checker added
+        // are part of the calls; the body's own declarations have left the
+        // scopes again, so only enclosing names resolve.
+        let mut used: Vec<String> = Vec::new();
+        if let Some(cond) = &event.cond {
+            for part in cond.parts() {
+                walk_expr(&part.value, &mut |e| collect_names_and_regions(e, &mut used));
+            }
+        }
+        walk_block(&event.body, &mut |e| collect_names_and_regions(e, &mut used));
+        used.sort();
+        used.dedup();
+        for name in used {
+            if name == THIS || name == SHOWN {
+                continue;
+            }
+            if let Some(info) = self
+                .scopes
+                .iter()
+                .rev()
+                .find_map(|scope| scope.names.get(&name))
+            {
+                event.captures.push((name, info.ty.clone()));
+            }
+        }
+        self.events.insert(event_id(event), event.clone());
+        Ok(())
+    }
+
     fn check_events_and_alters(&mut self) {
         if self.events.is_empty() {
             return;
         }
         let mut events: Vec<EventDef> = self.events.values().cloned().collect();
         events.sort_by(|a, b| (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name)));
-
-        fn event_id(e: &EventDef) -> String {
-            match &e.owner {
-                Some(owner) => format!("{}.{}", owner, e.name),
-                None => e.name.clone(),
-            }
-        }
 
         // 1. Collect direct mutations for each event
         let mut direct_mutations: HashMap<String, HashSet<String>> = HashMap::new();
@@ -2252,7 +2309,35 @@ impl Checker {
             adj.insert(event_id(e1), edges);
         }
 
-        // 4. Cycle detection
+        // 3b. A call in an event's body runs that task's interceptors: an edge
+        // to every before/after event of a called task, so a cycle that goes
+        // through a call (event -> task -> interceptor -> the watched field ->
+        // the event) is caught like any other.
+        for e1 in &events {
+            let mut calls: Vec<(String, String)> = Vec::new();
+            self.collect_block_calls(&e1.body, &mut calls);
+            let mut edges = adj.remove(&event_id(e1)).unwrap_or_default();
+            for (resolved, bare) in &calls {
+                for e2 in &events {
+                    let matched = match &e2.trigger {
+                        EventTrigger::BeforeTask(target) | EventTrigger::AfterTask(target) => {
+                            match target.strip_prefix('.') {
+                                Some(method) => {
+                                    resolved.ends_with(&format!("__{}", method)) || bare == method
+                                }
+                                None => unqualified(target) == unqualified(resolved),
+                            }
+                        }
+                        _ => false,
+                    };
+                    if matched {
+                        edges.push((event_id(e2), bare.clone()));
+                    }
+                }
+            }
+            adj.insert(event_id(e1), edges);
+        }
+
         let mut visited: HashMap<String, usize> = HashMap::new();
         let mut path: Vec<String> = Vec::new();
 
@@ -2400,6 +2485,39 @@ impl Checker {
                 }
             }
         }
+    }
+
+    /// Collects the tasks an event body calls: `(resolved task name, bare
+    /// name)`. Plain calls resolve through the task table; method calls take
+    /// the receiver's shape. Used to connect events to task interceptors in
+    /// the trigger graph.
+    fn collect_block_calls(&self, block: &[Stmt], out: &mut Vec<(String, String)>) {
+        walk_block(block, &mut |e| match &e.kind {
+            ExprKind::Call { name, .. } => {
+                if self.tasks.contains_key(name) {
+                    out.push((name.clone(), unqualified(name).to_string()));
+                } else {
+                    let full = self.in_module(name);
+                    if self.tasks.contains_key(&full) {
+                        out.push((full.clone(), unqualified(&full).to_string()));
+                    } else {
+                        out.push((name.clone(), name.clone()));
+                    }
+                }
+            }
+            ExprKind::MethodCall { value, name, .. } => match value.ty() {
+                Ok(Type::Named(shape, _)) => {
+                    let full = method_name(shape, name);
+                    if self.tasks.contains_key(&full) {
+                        out.push((full, name.clone()));
+                    } else {
+                        out.push((name.clone(), name.clone()));
+                    }
+                }
+                _ => out.push((name.clone(), name.clone())),
+            },
+            _ => {}
+        });
     }
 
     fn check_task_declaration(&mut self, t: &mut TaskDef) -> Result<()> {
@@ -7326,6 +7444,7 @@ impl Checker {
                 }
                 Ok(())
             }
+            StmtKind::Event(event) => self.check_intratask_event(event),
         }
     }
 
@@ -22231,6 +22350,16 @@ impl Checker {
                 }
             }
             StmtKind::Block(body) => self.substitute_block(body, given, made),
+            StmtKind::Event(e) => {
+                if let Some(cond) = &mut e.cond {
+                    let mut part = Some(cond);
+                    while let Some(c) = part {
+                        self.substitute_expr(&mut c.value, given, made)?;
+                        part = c.and.as_deref_mut();
+                    }
+                }
+                self.substitute_block(&mut e.body, given, made)
+            }
             StmtKind::Loop(cond, body, finally) => {
                 self.substitute_condition(cond, body, given, made)?;
                 self.substitute_block(body, given, made)?;
@@ -23867,6 +23996,14 @@ fn stmt_effects(
                 .for_each(|case| loop_effects(&case.body, names, inner, own, effects));
         }
         StmtKind::Block(block) => loop_effects(block, names, inner, own, effects),
+        StmtKind::Event(e) => {
+            if let Some(cond) = &e.cond {
+                for part in cond.parts() {
+                    expr_effects(&part.value, names, inner, own, effects);
+                }
+            }
+            loop_effects(&e.body, names, inner, own, effects);
+        }
         StmtKind::Turns(turns) => turns
             .iter()
             .for_each(|turn| loop_effects(turn, names, inner, own, effects)),
@@ -25497,6 +25634,13 @@ fn visit_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr) -> bool) {
             cases.iter().for_each(|case| visit_block(&case.body, f));
         }
         StmtKind::Break(_, Some(value)) => visit_expr(value, f),
+        StmtKind::Event(e) => {
+            e.cond
+                .iter()
+                .flat_map(|cond| cond.parts())
+                .for_each(|part| visit_expr(&part.value, f));
+            visit_block(&e.body, f);
+        }
         StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => {}
     }
 }
@@ -26675,18 +26819,102 @@ fn target_matches(declared: &str, mutated: &str, owner: Option<&str>) -> bool {
     false
 }
 
-fn trigger_matches(mutated: &str, e2: &EventDef) -> bool {
-    match &e2.trigger {
-        EventTrigger::Change(targets) => {
-            targets.iter().any(|t| target_matches(t, mutated, e2.owner.as_deref()))
+/// The names of the concrete regions a regional type holds (not `any`, not
+/// the program-lifetime `global`), used to capture the regions an in-task
+/// event's body works in.
+fn collect_type_regions(ty: &Type, out: &mut Vec<String>) {
+    let mut push = |r: &Option<String>| {
+        if let Some(r) = r
+            && r != ANY_REGION
+            && r != "global"
+        {
+            out.push(r.clone());
         }
-        EventTrigger::Lifecycle(LifecycleKind::Change) => {
-            if let Some(o) = &e2.owner {
-                mutated.starts_with('.') || mutated.starts_with(&format!("{}.", o))
-            } else {
-                false
+    };
+    match ty {
+        Type::Text(r) | Type::Ptr(_, r) | Type::Named(_, r) | Type::Slice(_, r) => push(r),
+        Type::Map(key, value, r) => {
+            push(r);
+            collect_type_regions(key, out);
+            collect_type_regions(value, out);
+        }
+        Type::Applied(applied) => {
+            push(&applied.region);
+            for given in &applied.types {
+                collect_type_regions(given, out);
             }
         }
+        Type::Maybe(inner) | Type::Range(inner) | Type::Chan(inner) | Type::Actor(inner)
+        | Type::Own(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
+            collect_type_regions(inner, out);
+        }
+        Type::Or(a, b) => {
+            collect_type_regions(a, out);
+            collect_type_regions(b, out);
+        }
+        Type::Tuple(items) | Type::Results(items) => {
+            items.iter().for_each(|item| collect_type_regions(item, out));
+        }
+        _ => {}
+    }
+}
+
+/// Collects the plain variables and the concrete regions an expression uses,
+/// for an in-task event's captures.
+fn collect_names_and_regions(e: &Expr, used: &mut Vec<String>) {
+    if let ExprKind::Var(name) = &e.kind {
+        used.push(name.clone());
+    }
+    if let Some(ty) = &e.ty {
+        collect_type_regions(ty, used);
+    }
+}
+
+fn event_id(e: &EventDef) -> String {
+    match (&e.owner, &e.in_task) {
+        (Some(owner), _) => format!("{}.{}", owner, e.name),
+        (None, Some(task)) => format!("{}#{}", task, e.name),
+        (None, None) => e.name.clone(),
+    }
+}
+
+fn trigger_matches(mutated: &str, e2: &EventDef) -> bool {
+    match &e2.trigger {
+        EventTrigger::Change(targets) => targets.iter().any(|t| {
+            if mutated.starts_with('.') {
+                // An instance-field write fires member events of the same
+                // shape that name the field through this ('.x') — never
+                // shared or outside events, and not bare-name targets.
+                e2.owner.is_some()
+                    && !e2.shared
+                    && t.starts_with('.')
+                    && target_matches(t, mutated, e2.owner.as_deref())
+            } else if mutated.contains('.') {
+                // A shared-field write ('Shape.x') fires the shape's shared
+                // events (the field named bare or qualified) and events
+                // outside any shape naming it qualified — never member events.
+                (e2.shared || e2.owner.is_none())
+                    && !t.starts_with('.')
+                    && target_matches(
+                        t,
+                        mutated,
+                        if e2.shared { e2.owner.as_deref() } else { None },
+                    )
+            } else {
+                // A plain variable write fires only events outside shapes
+                // watching that variable (and only bare-name targets).
+                e2.owner.is_none() && !t.contains('.') && target_matches(t, mutated, None)
+            }
+        }),
+        EventTrigger::Lifecycle(LifecycleKind::Change) => match &e2.owner {
+            // The member on-change runs for instance-field writes; the shared
+            // on-change for shared-field writes.
+            Some(o) if e2.shared => {
+                !mutated.starts_with('.') && mutated.starts_with(&format!("{}.", unqualified(o)))
+            }
+            Some(_) => mutated.starts_with('.'),
+            None => false,
+        },
         _ => false,
     }
 }

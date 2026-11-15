@@ -30,4 +30,7 @@ err bare dot
 err bare exponent
 sci 1e10: 1e+10
 sci -12.5e-3: -0.0125
+bigint: 12345678901234567890123
+bigint as_int: -1
+bigint roundtrip: 12345678901234567890123
 json tests complete

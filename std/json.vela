@@ -20,6 +20,8 @@ kind Json
     Null
     Bool(value: bool)
     Int(value: int)
+    ; An integer past int64, kept exactly as written; feed it to std/int512.
+    BigInt(digits: text)
     Float(value: float)
     Str(value: text)
     Array(items: [Json])
@@ -42,6 +44,13 @@ kind Json
     as_int() -> maybe int
         <- match .this
         case Int n = n
+        case _ = none
+        fi
+    fi
+
+    as_big_int() -> maybe text@this
+        <- match .this
+        case BigInt d = d
         case _ = none
         fi
     fi
@@ -292,10 +301,12 @@ task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
         }
         <- Float(f)
     else
-        fixed n = int(num_str) { failure _
-            <- fail JsonError.InvalidNumber(start)
-        }
-        <- Int(n)
+        when int(num_str) is { n }
+            <- Int(n)
+        else
+            ; An integer past int64 stays exact, as written.
+            <- BigInt(num_str)
+        fi
     fi
 fi
 
@@ -549,6 +560,7 @@ task stringify(val: Json@p, r: region default) -> text@r
     case Null = "null"
     case Bool b = when b "true" else "false" fi
     case Int n = "{n}" at r
+    case BigInt d = "{d}" at r
     ; JSON has no numbers for nan and the infinities, so they are null.
     case Float f = when f - f == f - f f.json(r) else "null" fi
     case Str s = escape_json_string(s, r)

@@ -320,6 +320,14 @@ impl Checked {
                     self.block(&case.body, kinds);
                 }
             }
+            StmtKind::Event(e) => {
+                if let Some(cond) = &e.cond {
+                    for part in cond.parts() {
+                        self.expr(&part.value, kinds);
+                    }
+                }
+                self.block(&e.body, kinds);
+            }
         }
     }
 

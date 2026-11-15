@@ -1792,6 +1792,9 @@ pub enum StmtKind {
     /// `check::Checker::each_of_group`).
     Turns(Vec<Block>),
     Match(Expr, Vec<Case>),
+    /// An event declared inside a task, watching the task's locals while it
+    /// runs (see `EventDef::in_task`).
+    Event(EventDef),
     Send(Vec<Expr>),
     SetResults(Vec<Binding>, Vec<Expr>),
     Region {
@@ -2667,6 +2670,13 @@ pub struct EventDef {
     pub auto: bool,
     pub shared: bool,
     pub private: bool,
+    /// The task the event is declared in, when it isn't a top-level item; its
+    /// name is unique per task, and it only fires within that task.
+    pub in_task: Option<String>,
+    /// For an in-task event, the enclosing task's locals its body uses, passed
+    /// by pointer when the event runs (a C function can't see another
+    /// function's locals).
+    pub captures: Vec<(String, Type)>,
     pub span: Span,
 }
 

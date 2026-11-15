@@ -107,13 +107,16 @@ pub struct Parser {
     in_generic: bool,
     send_after_header: Option<usize>,
     loop_values: bool,
+    /// Whether the block being read is a task's body, where an `event`
+    /// declaration is a statement, not the start of a new item.
+    in_task_body: bool,
 }
 
 const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside";
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
-        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false }
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false, in_task_body: false }
     }
 
     pub fn loop_values(&self) -> bool {
@@ -494,9 +497,14 @@ impl Parser {
 
     fn at_item_start(&self) -> bool {
         match self.peek() {
+            Token::Event if self.in_task_body => false,
             Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event | Token::Include => true,
             Token::Region => matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global"),
             Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1) || self.at_event_after(1),
+            _ if self.in_task_body => {
+                self.at_macro_after(0)
+                    || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0)))
+            }
             _ => self.at_event_after(0) || self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
@@ -864,8 +872,10 @@ impl Parser {
         }
         self.skip_newlines();
         let outer = std::mem::replace(&mut self.in_generic, !task.types.is_empty());
+        let outer_body = std::mem::replace(&mut self.in_task_body, true);
         task.body = self.parse_block()?;
         self.in_generic = outer;
+        self.in_task_body = outer_body;
         self.expect_fi("task", opened)?;
         Ok(task)
     }
@@ -1606,6 +1616,8 @@ impl Parser {
             auto,
             shared,
             private,
+            in_task: None,
+            captures: Vec::new(),
             span: opened,
         })
     }
@@ -2605,6 +2617,14 @@ impl Parser {
                 Ok(Stmt::new(StmtKind::Named(name, inner), stmt.span))
             }
             Token::Match => self.parse_match(),
+            Token::Event => {
+                let e = self.parse_event(None, false)?;
+                Ok(Stmt::new(StmtKind::Event(e), span))
+            }
+            _ if self.at_event_after(0) => {
+                let e = self.parse_event(None, false)?;
+                Ok(Stmt::new(StmtKind::Event(e), span))
+            }
             Token::Send => self.parse_send(),
             Token::Ident(name) if name == "send" => {
                 self.reject_old_send()?;

@@ -1,0 +1,36 @@
+; Tests events declared inside a task: they watch the task's locals while it
+; runs, capture them by pointer, respect alters, and fire only after their
+; declaration and only within their task.
+
+task main()
+    flex total = 0
+    flex changes = 0
+
+    alters(changes) event tally on total when total > 2
+        changes = changes + 1
+    fi
+
+    total = 1
+    show("after 1: ", changes)
+    total = 5
+    show("after 5: ", changes)
+    total = 9
+    show("after 9: ", changes)
+
+    region r
+    flex notes: [text]@r = new [text]() at r
+
+    alters(notes) event note on changes
+        notes.add("change {changes}" at r)
+    fi
+
+    changes = 20
+    show("notes: ", notes.len)
+    show("first: ", notes[0])
+fi
+
+task other()
+    flex total = 100
+    total = 200
+    show("other done")
+fi

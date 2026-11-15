@@ -180,7 +180,17 @@
     | keyword:fixed  variable:scineg  operator:=  task:parse  punctuation:(  string:"-12.5e-3"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
 111 |     show("sci -12.5e-3: ", scineg.as_float() { 0.0 })
     | builtin-fn:show  punctuation:(  string:"sci -12.5e-3: "  punctuation:,  variable:scineg  punctuation:.  method:as_float  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
-112 |     show("json tests complete")
+113 |     ; 9. Integers past int64 stay exact as written.
+    | comment:; 9. Integers past int64 stay exact as written.
+114 |     fixed big = parse("12345678901234567890123", r) { Json.Null }
+    | keyword:fixed  variable:big  operator:=  task:parse  punctuation:(  string:"12345678901234567890123"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+115 |     show("bigint: ", big.as_big_int() { "?" })
+    | builtin-fn:show  punctuation:(  string:"bigint: "  punctuation:,  variable:big  punctuation:.  method:as_big_int  punctuation:(  punctuation:)  punctuation:{  string:"?"  punctuation:}  punctuation:)
+116 |     show("bigint as_int: ", big.as_int() { -1 })
+    | builtin-fn:show  punctuation:(  string:"bigint as_int: "  punctuation:,  variable:big  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+117 |     show("bigint roundtrip: ", stringify(big, r))
+    | builtin-fn:show  punctuation:(  string:"bigint roundtrip: "  punctuation:,  task:stringify  punctuation:(  variable:big  punctuation:,  region:r  punctuation:)  punctuation:)
+118 |     show("json tests complete")
     | builtin-fn:show  punctuation:(  string:"json tests complete"  punctuation:)
-113 | fi
+119 | fi
     | keyword:fi

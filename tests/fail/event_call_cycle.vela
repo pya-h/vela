@@ -1,0 +1,18 @@
+; error: 13:13: unconditional event cycle detected: 'e1', which triggers 'e2', which triggers 'e1'; cycles must be guarded by 'when' conditions
+shape S
+    shared flex x: int = 0
+fi
+
+task save()
+fi
+
+alters(S.x) event e1 on S.x
+    save()
+fi
+
+alters(S.x) event e2 on after save
+    S.x = S.x + 1
+fi
+
+task main()
+fi

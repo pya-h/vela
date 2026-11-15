@@ -109,5 +109,11 @@ task main()
     show("sci 1e10: ", sci.as_float() { 0.0 })
     fixed scineg = parse("-12.5e-3", r) { Json.Null }
     show("sci -12.5e-3: ", scineg.as_float() { 0.0 })
+
+    ; 9. Integers past int64 stay exact as written.
+    fixed big = parse("12345678901234567890123", r) { Json.Null }
+    show("bigint: ", big.as_big_int() { "?" })
+    show("bigint as_int: ", big.as_int() { -1 })
+    show("bigint roundtrip: ", stringify(big, r))
     show("json tests complete")
 fi

@@ -2929,6 +2929,16 @@ impl Resolver<'_> {
                 values.iter_mut().try_for_each(|e| self.expr(e))
             }
             StmtKind::Break(_, Some(value)) => self.expr(value),
+            StmtKind::Event(e) => {
+                if let Some(cond) = &mut e.cond {
+                    let mut part = Some(cond);
+                    while let Some(c) = part {
+                        self.expr(&mut c.value)?;
+                        part = c.and.as_deref_mut();
+                    }
+                }
+                self.block(&mut e.body)
+            }
             StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
         }
     }

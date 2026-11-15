@@ -1,0 +1,16 @@
+made: 3
+born: ana
+peeked ana
+hp is 10
+peeked ana
+changed: ana hp=5
+peeked ana
+now 5
+watched: x=7
+shared on-change
+outside: x=7
+watched: x=8
+shared on-change
+outside: x=8
+done
+dropped: ana

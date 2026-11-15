@@ -1,0 +1,12 @@
+; error: 5:5: an 'on init' event runs as the value is made, before anything can listen; mark it 'auto'
+shape P
+    x: int = 0
+
+    event born on init
+        show("born")
+    fi
+fi
+
+task main()
+    flex p = P {}
+fi

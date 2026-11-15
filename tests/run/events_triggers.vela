@@ -1,0 +1,69 @@
+; Tests the event triggers wired to codegen: shared events, on init, on change,
+; on read, on drop, and top-level events watching a shape's shared field.
+
+shape Counter
+    shared flex made: int = 0
+
+    shared event counted on init
+        Counter.made = Counter.made + 1
+    fi
+fi
+
+shape Player
+    name: text = "?"
+    hp: int = 0
+
+    event born on init auto
+        show("born: ", .name)
+    fi
+
+    event any_change on change
+        fixed h = .hp
+        show("changed: ", .name, " hp=", h)
+    fi
+
+    event peek on read .hp
+        fixed seen = .name
+        show("peeked ", seen)
+    fi
+
+    event died on drop
+        show("dropped: ", .name)
+    fi
+fi
+
+shape S
+    shared flex x: int = 0
+
+    shared event watched on x
+        show("watched: x=", S.x)
+    fi
+
+    shared event shared_change on change
+        show("shared on-change")
+    fi
+fi
+
+event outside_watch on S.x
+    show("outside: x=", S.x)
+fi
+
+task main()
+    region r
+    flex c1 = Counter {}
+    flex c2 = Counter {}
+    flex c3 = Counter {}
+    show("made: ", Counter.made)
+
+    flex p = Player { name: "ana", hp: 10 }
+    p.listen("any_change", "peek", "died")
+    fixed first = p.hp
+    show("hp is ", first)
+    p.hp = 5
+    fixed second = p.hp
+    show("now ", second)
+
+    S.x = 7
+    S.x = 8
+    show("done")
+fi

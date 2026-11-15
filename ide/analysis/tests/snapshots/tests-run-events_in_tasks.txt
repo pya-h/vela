@@ -1,0 +1,58 @@
+  1 | ; Tests events declared inside a task: they watch the task's locals while it
+    | comment:; Tests events declared inside a task: they watch the task's locals while it
+  2 | ; runs, capture them by pointer, respect alters, and fire only after their
+    | comment:; runs, capture them by pointer, respect alters, and fire only after their
+  3 | ; declaration and only within their task.
+    | comment:; declaration and only within their task.
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     flex total = 0
+    | keyword:flex  variable:total  operator:=  number:0
+  7 |     flex changes = 0
+    | keyword:flex  variable:changes  operator:=  number:0
+  9 |     alters(changes) event tally on total when total > 2
+    | task:alters  punctuation:(  variable:changes  punctuation:)  keyword:event  variable:tally  variable:on  variable:total  keyword:when  variable:total  operator:>  number:2
+ 10 |         changes = changes + 1
+    | variable:changes  operator:=  variable:changes  operator:+  number:1
+ 11 |     fi
+    | keyword:fi
+ 13 |     total = 1
+    | variable:total  operator:=  number:1
+ 14 |     show("after 1: ", changes)
+    | builtin-fn:show  punctuation:(  string:"after 1: "  punctuation:,  variable:changes  punctuation:)
+ 15 |     total = 5
+    | variable:total  operator:=  number:5
+ 16 |     show("after 5: ", changes)
+    | builtin-fn:show  punctuation:(  string:"after 5: "  punctuation:,  variable:changes  punctuation:)
+ 17 |     total = 9
+    | variable:total  operator:=  number:9
+ 18 |     show("after 9: ", changes)
+    | builtin-fn:show  punctuation:(  string:"after 9: "  punctuation:,  variable:changes  punctuation:)
+ 20 |     region r
+    | keyword:region  region:r
+ 21 |     flex notes: [text]@r = new [text]() at r
+    | keyword:flex  variable:notes  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 23 |     alters(notes) event note on changes
+    | task:alters  punctuation:(  variable:notes  punctuation:)  keyword:event  variable:note  variable:on  variable:changes
+ 24 |         notes.add("change {changes}" at r)
+    | variable:notes  punctuation:.  field:add  punctuation:(  string:"change {  variable:changes  string:}"  keyword:at  region:r  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 27 |     changes = 20
+    | variable:changes  operator:=  number:20
+ 28 |     show("notes: ", notes.len)
+    | builtin-fn:show  punctuation:(  string:"notes: "  punctuation:,  variable:notes  punctuation:.  field:len  punctuation:)
+ 29 |     show("first: ", notes[0])
+    | builtin-fn:show  punctuation:(  string:"first: "  punctuation:,  variable:notes  punctuation:[  number:0  punctuation:]  punctuation:)
+ 30 | fi
+    | keyword:fi
+ 32 | task other()
+    | keyword:task  task:other  punctuation:(  punctuation:)
+ 33 |     flex total = 100
+    | keyword:flex  variable:total  operator:=  number:100
+ 34 |     total = 200
+    | variable:total  operator:=  number:200
+ 35 |     show("other done")
+    | builtin-fn:show  punctuation:(  string:"other done"  punctuation:)
+ 36 | fi
+    | keyword:fi

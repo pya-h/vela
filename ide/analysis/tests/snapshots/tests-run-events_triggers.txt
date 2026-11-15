@@ -1,0 +1,110 @@
+  1 | ; Tests the event triggers wired to codegen: shared events, on init, on change,
+    | comment:; Tests the event triggers wired to codegen: shared events, on init, on change,
+  2 | ; on read, on drop, and top-level events watching a shape's shared field.
+    | comment:; on read, on drop, and top-level events watching a shape's shared field.
+  4 | shape Counter
+    | keyword:shape  type:Counter
+  5 |     shared flex made: int = 0
+    | keyword:shared  keyword:flex  field:made  punctuation::  type-builtin:int  operator:=  number:0
+  7 |     shared event counted on init
+    | keyword:shared  keyword:event  variable:counted  variable:on  variable:init
+  8 |         Counter.made = Counter.made + 1
+    | type:Counter  punctuation:.  field:made  operator:=  type:Counter  punctuation:.  field:made  operator:+  number:1
+  9 |     fi
+    | keyword:fi
+ 10 | fi
+    | keyword:fi
+ 12 | shape Player
+    | keyword:shape  type:Player
+ 13 |     name: text = "?"
+    | field:name  punctuation::  type-builtin:text  operator:=  string:"?"
+ 14 |     hp: int = 0
+    | field:hp  punctuation::  type-builtin:int  operator:=  number:0
+ 16 |     event born on init auto
+    | keyword:event  variable:born  variable:on  variable:init  variable:auto
+ 17 |         show("born: ", .name)
+    | method:show  punctuation:(  string:"born: "  punctuation:,  punctuation:.  field:name  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 20 |     event any_change on change
+    | keyword:event  variable:any_change  variable:on  variable:change
+ 21 |         fixed h = .hp
+    | keyword:fixed  variable:h  operator:=  punctuation:.  field:hp
+ 22 |         show("changed: ", .name, " hp=", h)
+    | method:show  punctuation:(  string:"changed: "  punctuation:,  punctuation:.  field:name  punctuation:,  string:" hp="  punctuation:,  variable:h  punctuation:)
+ 23 |     fi
+    | keyword:fi
+ 25 |     event peek on read .hp
+    | keyword:event  variable:peek  variable:on  variable:read  punctuation:.  field:hp
+ 26 |         fixed seen = .name
+    | keyword:fixed  variable:seen  operator:=  punctuation:.  field:name
+ 27 |         show("peeked ", seen)
+    | method:show  punctuation:(  string:"peeked "  punctuation:,  variable:seen  punctuation:)
+ 28 |     fi
+    | keyword:fi
+ 30 |     event died on drop
+    | keyword:event  variable:died  variable:on  variable:drop
+ 31 |         show("dropped: ", .name)
+    | method:show  punctuation:(  string:"dropped: "  punctuation:,  punctuation:.  field:name  punctuation:)
+ 32 |     fi
+    | keyword:fi
+ 33 | fi
+    | keyword:fi
+ 35 | shape S
+    | keyword:shape  type:S
+ 36 |     shared flex x: int = 0
+    | keyword:shared  keyword:flex  field:x  punctuation::  type-builtin:int  operator:=  number:0
+ 38 |     shared event watched on x
+    | keyword:shared  keyword:event  variable:watched  variable:on  variable:x
+ 39 |         show("watched: x=", S.x)
+    | method:show  punctuation:(  string:"watched: x="  punctuation:,  type:S  punctuation:.  field:x  punctuation:)
+ 40 |     fi
+    | keyword:fi
+ 42 |     shared event shared_change on change
+    | keyword:shared  keyword:event  variable:shared_change  variable:on  variable:change
+ 43 |         show("shared on-change")
+    | method:show  punctuation:(  string:"shared on-change"  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 | fi
+    | keyword:fi
+ 47 | event outside_watch on S.x
+    | keyword:event  variable:outside_watch  variable:on  type:S  punctuation:.  field:x
+ 48 |     show("outside: x=", S.x)
+    | builtin-fn:show  punctuation:(  string:"outside: x="  punctuation:,  type:S  punctuation:.  field:x  punctuation:)
+ 49 | fi
+    | keyword:fi
+ 51 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 52 |     region r
+    | keyword:region  region:r
+ 53 |     flex c1 = Counter {}
+    | keyword:flex  variable:c1  operator:=  type:Counter  punctuation:{  punctuation:}
+ 54 |     flex c2 = Counter {}
+    | keyword:flex  variable:c2  operator:=  type:Counter  punctuation:{  punctuation:}
+ 55 |     flex c3 = Counter {}
+    | keyword:flex  variable:c3  operator:=  type:Counter  punctuation:{  punctuation:}
+ 56 |     show("made: ", Counter.made)
+    | builtin-fn:show  punctuation:(  string:"made: "  punctuation:,  type:Counter  punctuation:.  field:made  punctuation:)
+ 58 |     flex p = Player { name: "ana", hp: 10 }
+    | keyword:flex  variable:p  operator:=  type:Player  punctuation:{  field:name  punctuation::  string:"ana"  punctuation:,  field:hp  punctuation::  number:10  punctuation:}
+ 59 |     p.listen("any_change", "peek", "died")
+    | variable:p  punctuation:.  field:listen  punctuation:(  string:"any_change"  punctuation:,  string:"peek"  punctuation:,  string:"died"  punctuation:)
+ 60 |     fixed first = p.hp
+    | keyword:fixed  variable:first  operator:=  variable:p  punctuation:.  field:hp
+ 61 |     show("hp is ", first)
+    | builtin-fn:show  punctuation:(  string:"hp is "  punctuation:,  variable:first  punctuation:)
+ 62 |     p.hp = 5
+    | variable:p  punctuation:.  field:hp  operator:=  number:5
+ 63 |     fixed second = p.hp
+    | keyword:fixed  variable:second  operator:=  variable:p  punctuation:.  field:hp
+ 64 |     show("now ", second)
+    | builtin-fn:show  punctuation:(  string:"now "  punctuation:,  variable:second  punctuation:)
+ 66 |     S.x = 7
+    | type:S  punctuation:.  field:x  operator:=  number:7
+ 67 |     S.x = 8
+    | type:S  punctuation:.  field:x  operator:=  number:8
+ 68 |     show("done")
+    | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
+ 69 | fi
+    | keyword:fi
