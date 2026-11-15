@@ -318,6 +318,15 @@
           </tr>
         </tbody>
       </table>
+
+      <h3>Planned Idea: Channel Operator Shortcuts (<code>&lt;&lt;-</code> &amp; <code>-&gt;&gt;</code>)</h3>
+      <p>
+        Planned alongside multi-channel <code>select</code>: compact double-arrow operators that pair with Vela's return arrow (<code>&lt;-</code>) and match types/calls cleanly without shifting conflicts:
+      </p>
+      <ul>
+        <li><code>&lt;&lt;- ch</code> (and <code>case msg &lt;&lt;- ch</code> in <code>select</code>) as a shortcut for <code>wait_and_receive(ch)</code></li>
+        <li><code>value -&gt;&gt; ch</code> (including <code>own item -&gt;&gt; ch</code>) as a shortcut for <code>dispatch(ch, value)</code></li>
+      </ul>
     </section>
 
     <section>
