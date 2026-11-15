@@ -931,11 +931,19 @@ task serve_files(pattern: text, folder: text, prefix: text = "")
 fi
 
 ; A response holding the file at 'path', which is relative to where the program runs and can't
-; leave it: an absolute path or one with a .. part is refused, so a path taken from a request
-; can't reach other files.
+; leave it: an absolute path or one with a .. part is refused, and links are resolved and
+; confined to the program's folder, so a path taken from a request can't reach other files.
 task file_response(path: text@p, r: region default) -> Response@r ~ WebError@r
     when not validate_file_path(path)
         <- fail WebError.BadRequest("file_response takes a relative path with no .. part")
+    fi
+    fixed here: text@r = native_file_realpath(".", r)
+    fixed resolved: text@r = native_file_realpath(path, r)
+    when resolved.len == 0
+        <- fail WebError.RouteNotFound("{path}" at r)
+    fi
+    when resolved != here and cut(resolved, 0, here.len + 1) != "{here}/"
+        <- fail WebError.BadRequest("file_response can't follow a link outside the program's folder")
     fi
     flex f = File { path: path }
     when not f.exists()
@@ -2074,6 +2082,17 @@ task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: regio
     else
         "{folder}/{sub_path}" at r
     fi
+    ; Confinement through links: with symlinks resolved, the file must sit inside
+    ; the served folder (the request path alone can't tell, since a link inside
+    ; the folder can point out of it).
+    fixed served: text@r = native_file_realpath(when folder.len == 0 "." else folder fi, r)
+    fixed on_disk: text@r = native_file_realpath(disk_path, r)
+    when served.len == 0 or on_disk.len == 0
+        <- fail WebError.RouteNotFound(req.path)
+    fi
+    when on_disk != served and cut(on_disk, 0, served.len + 1) != "{served}/"
+        <- fail WebError.BadRequest("invalid path: a link escapes the served folder")
+    fi
     flex f = File { path: disk_path }
     when not f.exists()
         <- fail WebError.RouteNotFound(req.path)
@@ -2114,6 +2133,8 @@ priv native task native_url_well_formed(s: text@p) -> bool
 priv native task native_url_decode(s: text@p, plus: bool, into: region) -> text@into
 priv native task native_text_is_utf8(s: text@p) -> bool
 priv native task native_text_trim(s: text@p) -> text@p
+; The path with all symbolic links expanded, or empty text when it can't be resolved.
+priv native task native_file_realpath(path: text@p, into: region) -> text@into
 priv native task native_text_bytes(s: text@p, from: int, to: int) -> text@p
 priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool
 priv native task native_time_ms() -> int

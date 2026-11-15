@@ -1,0 +1,15 @@
+; error: 9:16: event 'e' mutates 'A.x' directly; add 'A.x' to alters list: 'alters(.y, A.x)'
+shape A
+    shared flex x: int = 0
+fi
+
+shape B
+    y: int = 0
+
+    alters(.y) event e on .y
+        A.x = 5
+    fi
+fi
+
+task main()
+fi

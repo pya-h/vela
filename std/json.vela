@@ -247,12 +247,20 @@ task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
     when pos < raw.len and raw[pos] == '-'
         pos++
     fi
+    ; Strict numbers (RFC 8259): no leading zeros ("01"), and at least one
+    ; digit after '.' and after 'e'/'E' with its optional sign.
+    when pos + 1 < raw.len and raw[pos] == '0' and raw[pos + 1] >= '0' and raw[pos + 1] <= '9'
+        <- fail JsonError.InvalidNumber(start)
+    fi
     loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
         pos++
     fi
     when pos < raw.len and raw[pos] == '.'
         is_float = true
         pos++
+        when pos >= raw.len or raw[pos] < '0' or raw[pos] > '9'
+            <- fail JsonError.InvalidNumber(start)
+        fi
         loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
             pos++
         fi
@@ -262,6 +270,9 @@ task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
         pos++
         when pos < raw.len and (raw[pos] == '+' or raw[pos] == '-')
             pos++
+        fi
+        when pos >= raw.len or raw[pos] < '0' or raw[pos] > '9'
+            <- fail JsonError.InvalidNumber(start)
         fi
         loop pos < raw.len and raw[pos] >= '0' and raw[pos] <= '9'
             pos++
@@ -273,7 +284,10 @@ task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
     fi
     fixed num_str = raw[start..end]
     when is_float
-        fixed f = float(num_str) { failure _
+        ; vela's float() reads plain decimals only, so the exponent is expanded
+        ; out first ("1.5e-3" becomes "0.0015").
+        fixed plain = plain_number(num_str, r)
+        fixed f = float(plain) { failure _
             <- fail JsonError.InvalidNumber(start)
         }
         <- Float(f)
@@ -282,6 +296,86 @@ task parse_number(raw: text@r, flex& pos: int, r: region default) -> Json@r ~ Js
             <- fail JsonError.InvalidNumber(start)
         }
         <- Int(n)
+    fi
+fi
+
+; A JSON number with its exponent expanded into the plain decimal form float()
+; reads. The net shift is clamped: a huge positive exponent still overflows at
+; the conversion, a huge negative one underflows toward 0.
+task plain_number(raw: text@p, r: region default) -> text@r
+    flex i = 0
+    flex neg = false
+    when i < raw.len and raw[i] == '-'
+        neg = true
+        i++
+    fi
+    fixed int_from = i
+    loop i < raw.len and raw[i] >= '0' and raw[i] <= '9'
+        i++
+    fi
+    flex int_part = raw[int_from..i]
+    flex frac_part: text@p = ""
+    when i < raw.len and raw[i] == '.'
+        i++
+        fixed frac_from = i
+        loop i < raw.len and raw[i] >= '0' and raw[i] <= '9'
+            i++
+        fi
+        frac_part = raw[frac_from..i]
+    fi
+    flex exp = 0
+    when i < raw.len and (raw[i] == 'e' or raw[i] == 'E')
+        i++
+        flex exp_neg = false
+        when i < raw.len and (raw[i] == '+' or raw[i] == '-')
+            exp_neg = raw[i] == '-'
+            i++
+        fi
+        loop i < raw.len and raw[i] >= '0' and raw[i] <= '9'
+            when exp < 1000000
+                exp = exp * 10 + (raw[i] - '0')
+            fi
+            i++
+        fi
+        when exp_neg
+            exp = 0 - exp
+        fi
+    fi
+    flex digits: text@r = "{int_part}{frac_part}" at r
+    flex first = 0
+    loop first < digits.len - 1 and digits[first] == '0'
+        first++
+    fi
+    digits = digits[first..digits.len]
+    flex shift = exp - frac_part.len
+    flex body: text@r = ""
+    when shift >= 0
+        when shift > 400
+            shift = 400
+        fi
+        body = "{digits}" at r
+        each z in 0..shift
+            body = "{body}0" at r
+        fi
+    else
+        flex point = digits.len + shift
+        when point > 0
+            body = "{digits[0..point]}.{digits[point..digits.len]}" at r
+        else
+            when point < -400
+                point = -400
+            fi
+            body = "0."
+            each z in 0..(0 - point)
+                body = "{body}0" at r
+            fi
+            body = "{body}{digits}" at r
+        fi
+    fi
+    <- when neg
+        "-{body}" at r
+    else
+        body
     fi
 fi
 

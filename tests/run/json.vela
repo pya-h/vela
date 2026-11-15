@@ -89,5 +89,25 @@ task main()
     fixed resp = json(doc.str(r), r)
     show("resp status: ", resp.status)
     show("resp content-type: ", resp.headers[#"content-type"] { "" })
+
+    ; 7. Strict numbers (RFC 8259): no leading zeros, digits after '.' and 'e'.
+    parse("01", r) { failure e
+        show("err leading zero")
+        Json.Null
+    }
+    parse("1.", r) { failure e
+        show("err bare dot")
+        Json.Null
+    }
+    parse("1e", r) { failure e
+        show("err bare exponent")
+        Json.Null
+    }
+
+    ; 8. Exponent floats expand into plain decimals.
+    fixed sci = parse("1e10", r) { Json.Null }
+    show("sci 1e10: ", sci.as_float() { 0.0 })
+    fixed scineg = parse("-12.5e-3", r) { Json.Null }
+    show("sci -12.5e-3: ", scineg.as_float() { 0.0 })
     show("json tests complete")
 fi

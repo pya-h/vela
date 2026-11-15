@@ -247,7 +247,7 @@
         </div>
         <div class="card">
           <h4>Region Transfer: <code>Chan[own region]</code></h4>
-          <p>Transfers an entire allocated region across tasks in \(O(1)\) zero-copy time without copying individual elements.</p>
+          <p>Planned, not built yet: transferring an entire allocated region across tasks in \(O(1)\) zero-copy time. Today the compiler refuses <code>own work</code> with a clear error, naming <code>new T(…) at work</code> as the way to allocate inside it.</p>
         </div>
       </div>
 

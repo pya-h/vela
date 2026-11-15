@@ -2193,12 +2193,23 @@ impl Checker {
             if let Some(muts) = direct_mutations.get(&event_id(event)) {
                 for m in muts {
                     if m.contains('.') && !m.starts_with('.') && event.owner.is_some() {
-                        continue;
+                        // A write to the shape's own shared field through its name
+                        // ("Counter.made = ..." inside Counter) is the event's own;
+                        // anything else qualified ("A.x = ...") needs alters.
+                        let own_shared = m
+                            .split_once('.')
+                            .is_some_and(|(base, _)| Some(base) == event.owner.as_deref());
+                        if own_shared {
+                            continue;
+                        }
                     }
                     if !event.alters.iter().any(|a| target_matches(a, m, event.owner.as_deref())) {
                         let target_display = if let Some(owner) = &event.owner {
                             if let Some(stripped) = m.strip_prefix('.') {
                                 format!("{}.{}", owner, stripped)
+                            } else if m.contains('.') {
+                                // Already qualified through a shape name (A.x).
+                                m.clone()
                             } else {
                                 format!("{}.{}", owner, m)
                             }
@@ -2337,12 +2348,24 @@ impl Checker {
                 if let Some(downstream_muts) = direct_mutations.get(&curr_id) {
                     for m in downstream_muts {
                         if m.contains('.') && !m.starts_with('.') && curr_ev.owner.is_some() {
-                            continue;
+                            // The downstream event writing its own shape's shared field
+                            // is the same event family's own state; it only becomes a
+                            // root obligation when the root lives in another shape.
+                            let own_shared = m
+                                .split_once('.')
+                                .is_some_and(|(base, _)| Some(base) == curr_ev.owner.as_deref())
+                                && root.owner.as_deref() == curr_ev.owner.as_deref();
+                            if own_shared {
+                                continue;
+                            }
                         }
                         if !root.alters.iter().any(|a| target_matches(a, m, root.owner.as_deref())) {
                             let target_display = if let Some(owner) = &curr_ev.owner {
                                 if let Some(stripped) = m.strip_prefix('.') {
                                     format!("{}.{}", owner, stripped)
+                                } else if m.contains('.') {
+                                    // Already qualified through a shape name (A.x).
+                                    m.clone()
                                 } else {
                                     format!("{}.{}", owner, m)
                                 }
@@ -13049,6 +13072,29 @@ impl Checker {
                     _ => return err(arg0.span, format!("'{}' takes a channel or actor as its first argument, got {}", name, chan_ty)),
                 };
                 let item_ty = self.check_expr(arg1)?;
+                // A payload holding a sender's regional memory (text@r, a shape with
+                // text, a slice) would dangle for the receiver once that region
+                // closes; only lasting data (or an owned lasting value) may cross.
+                let payload_ty = match &elem_ty {
+                    Type::Own(inner) => inner.as_ref(),
+                    other => other,
+                };
+                let sent_ty = match &item_ty {
+                    Type::Own(inner) => inner.as_ref(),
+                    other => other,
+                };
+                if !payload_ty.unknown()
+                    && !sent_ty.unknown()
+                    && !fits_regions(sent_ty, payload_ty)
+                {
+                    return err(
+                        arg1.span,
+                        format!(
+                            "cannot send a value holding '{}' region memory on a channel carrying {}; the receiver can outlive the sender's region",
+                            sent_ty, elem_ty
+                        ),
+                    );
+                }
                 if let Type::Own(payload) = &elem_ty {
                     if !matches!(arg1.kind, ExprKind::Own(_)) {
                         return err(
@@ -13435,6 +13481,15 @@ impl Checker {
             }
             for (arg, field) in args.iter_mut().zip(&actor.fields) {
                 let arg_ty = self.check_expr(arg)?;
+                if !field.ty.unknown() && !arg_ty.unknown() && !fits_regions(&arg_ty, &field.ty) {
+                    return err(
+                        arg.span,
+                        format!(
+                            "cannot give a value holding '{}' region memory to actor field '{}'; the actor can outlive the sender's region",
+                            arg_ty, field.name
+                        ),
+                    );
+                }
                 if !fits(&arg_ty, &field.ty) && !arg_ty.unknown() {
                     return err(arg.span, format!("expected {} for field '{}', got {}", field.ty, field.name, arg_ty));
                 }
@@ -13446,6 +13501,15 @@ impl Checker {
             let target_fields: Vec<&Field> = if args.len() == uninit_fields.len() { uninit_fields } else { actor.fields.iter().collect() };
             for (arg, field) in args.iter_mut().zip(target_fields) {
                 let arg_ty = self.check_expr(arg)?;
+                if !field.ty.unknown() && !arg_ty.unknown() && !fits_regions(&arg_ty, &field.ty) {
+                    return err(
+                        arg.span,
+                        format!(
+                            "cannot give a value holding '{}' region memory to actor field '{}'; the actor can outlive the sender's region",
+                            arg_ty, field.name
+                        ),
+                    );
+                }
                 if !fits(&arg_ty, &field.ty) && !arg_ty.unknown() {
                     return err(arg.span, format!("expected {} for field '{}', got {}", field.ty, field.name, arg_ty));
                 }
@@ -13482,6 +13546,18 @@ impl Checker {
             }
             for (arg, param) in args.iter_mut().zip(&handler.params) {
                 let ty = self.check_expr(arg)?;
+                // Like a channel payload, a message argument holding the sender's
+                // regional memory would dangle once the actor reads it past the
+                // sender's region; only lasting data may cross (see 'dispatch').
+                if !param.ty.unknown() && !ty.unknown() && !fits_regions(&ty, &param.ty) {
+                    return err(
+                        arg.span,
+                        format!(
+                            "cannot send a value holding '{}' region memory as message argument '{}'; the actor can outlive the sender's region",
+                            ty, param.name
+                        ),
+                    );
+                }
                 if !fits(&ty, &param.ty) && !ty.unknown() {
                     return err(arg.span, format!("expected {} for message argument '{}', got {}", param.ty, param.name, ty));
                 }
@@ -13533,6 +13609,25 @@ impl Checker {
             }
             let mut values: Vec<&mut Expr> = args.iter_mut().collect();
             let region = self.check_fields_of_value(&mut values, &variant.payload, None)?;
+            if let Some(base) = kind.strip_suffix("Msg")
+                && self.actors.contains_key(base)
+            {
+                // A message argument holding the sender's regional memory would
+                // dangle once the actor reads it past the sender's region; only
+                // lasting data may cross (see the 'dispatch' check).
+                for (arg, field) in args.iter().zip(&variant.payload) {
+                    let ty = arg.ty()?;
+                    if !field.ty.unknown() && !ty.unknown() && !fits_regions(ty, &field.ty) {
+                        return err(
+                            arg.span,
+                            format!(
+                                "cannot send a value holding '{}' region memory as message argument '{}'; the actor can outlive the sender's region",
+                                ty, field.name
+                            ),
+                        );
+                    }
+                }
+            }
             return Ok(Type::Named(
                 kind.to_string(),
                 self.region_of_value(kind, region),
@@ -26545,6 +26640,9 @@ fn extract_place_mutation(place: &Expr, out: &mut HashSet<String>) {
         }
         ExprKind::Var(name) => {
             out.insert(name.clone());
+        }
+        ExprKind::Shared { shape, field } => {
+            out.insert(format!("{}.{}", shape, field));
         }
         ExprKind::Lookup(base, _) | ExprKind::Index(base, _) => {
             extract_place_mutation(base, out);

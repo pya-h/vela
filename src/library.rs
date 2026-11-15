@@ -74,6 +74,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/web.native_text_find", "vela__rt__web_text_find"),
     ("std/web.native_text_lower", "vela__rt__web_text_lower"),
     ("std/web.native_text_trim", "vela__rt__web_text_trim"),
+    ("std/web.native_file_realpath", "vela__rt__web_file_realpath"),
     ("std/web.native_text_bytes", "vela__rt__web_text_bytes"),
     ("std/web.native_socket_stash", "vela__rt__web_socket_stash"),
     ("std/web.native_socket_stashed", "vela__rt__web_socket_stashed"),

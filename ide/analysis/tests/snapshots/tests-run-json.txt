@@ -144,7 +144,43 @@
     | builtin-fn:show  punctuation:(  string:"resp status: "  punctuation:,  variable:resp  punctuation:.  field:status  punctuation:)
  91 |     show("resp content-type: ", resp.headers[#"content-type"] { "" })
     | builtin-fn:show  punctuation:(  string:"resp content-type: "  punctuation:,  variable:resp  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"content-type"  punctuation:]  punctuation:{  string:""  punctuation:}  punctuation:)
- 92 |     show("json tests complete")
+ 93 |     ; 7. Strict numbers (RFC 8259): no leading zeros, digits after '.' and 'e'.
+    | comment:; 7. Strict numbers (RFC 8259): no leading zeros, digits after '.' and 'e'.
+ 94 |     parse("01", r) { failure e
+    | task:parse  punctuation:(  string:"01"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 95 |         show("err leading zero")
+    | builtin-fn:show  punctuation:(  string:"err leading zero"  punctuation:)
+ 96 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+ 97 |     }
+    | punctuation:}
+ 98 |     parse("1.", r) { failure e
+    | task:parse  punctuation:(  string:"1."  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 99 |         show("err bare dot")
+    | builtin-fn:show  punctuation:(  string:"err bare dot"  punctuation:)
+100 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+101 |     }
+    | punctuation:}
+102 |     parse("1e", r) { failure e
+    | task:parse  punctuation:(  string:"1e"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+103 |         show("err bare exponent")
+    | builtin-fn:show  punctuation:(  string:"err bare exponent"  punctuation:)
+104 |         Json.Null
+    | type:Json  punctuation:.  variant:Null
+105 |     }
+    | punctuation:}
+107 |     ; 8. Exponent floats expand into plain decimals.
+    | comment:; 8. Exponent floats expand into plain decimals.
+108 |     fixed sci = parse("1e10", r) { Json.Null }
+    | keyword:fixed  variable:sci  operator:=  task:parse  punctuation:(  string:"1e10"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+109 |     show("sci 1e10: ", sci.as_float() { 0.0 })
+    | builtin-fn:show  punctuation:(  string:"sci 1e10: "  punctuation:,  variable:sci  punctuation:.  method:as_float  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+110 |     fixed scineg = parse("-12.5e-3", r) { Json.Null }
+    | keyword:fixed  variable:scineg  operator:=  task:parse  punctuation:(  string:"-12.5e-3"  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+111 |     show("sci -12.5e-3: ", scineg.as_float() { 0.0 })
+    | builtin-fn:show  punctuation:(  string:"sci -12.5e-3: "  punctuation:,  variable:scineg  punctuation:.  method:as_float  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+112 |     show("json tests complete")
     | builtin-fn:show  punctuation:(  string:"json tests complete"  punctuation:)
- 93 | fi
+113 | fi
     | keyword:fi

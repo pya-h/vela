@@ -3259,6 +3259,34 @@ static inline vela__rt__text vela__rt__web_text_trim(vela__rt__text s) {
     return (vela__rt__text){ s.bytes + start, end - start };
 }
 
+/* Resolves a path with all symbolic links expanded (realpath); empty text when
+   the path doesn't exist or can't be resolved. Used to confine file serving:
+   a request path that links outside the served folder then fails the check. */
+static inline vela__rt__text vela__rt__web_file_realpath(vela__rt__text path, vela__rt__region* into) {
+#if defined(_WIN32)
+    (void)path;
+    (void)into;
+    return (vela__rt__text){ "", 0 };
+#else
+    if (path.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* copy = (char*)malloc((size_t)path.len + 1);
+    if (copy == NULL) {
+        vela__rt__out_of_memory();
+    }
+    memcpy(copy, path.bytes, (size_t)path.len);
+    copy[path.len] = '\0';
+    char buffer[4096];
+    char* resolved = realpath(copy, buffer);
+    free(copy);
+    if (resolved == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    return vela__rt__text_in(into, resolved, strlen(resolved));
+#endif
+}
+
 static inline int vela__rt__web_hex_digit(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;

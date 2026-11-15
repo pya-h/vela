@@ -1,0 +1,11 @@
+; error: 7:20: cannot send a value holding 'text@r' region memory on a channel carrying text; the receiver can outlive the sender's region
+task main()
+    fixed c = chan_new<text>(2)
+    loop 1 == 1
+        region r
+        fixed msg = "hello".str(r)
+        c.dispatch(msg)
+        break
+    fi
+    show(c.wait_and_receive())
+fi

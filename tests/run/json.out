@@ -25,4 +25,9 @@ err unterminated: unexpected end
 err invalid number
 resp status: 200
 resp content-type: application/json; charset=utf-8
+err leading zero
+err bare dot
+err bare exponent
+sci 1e10: 1e+10
+sci -12.5e-3: -0.0125
 json tests complete
