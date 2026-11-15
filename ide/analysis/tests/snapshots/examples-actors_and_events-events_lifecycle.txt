@@ -1,0 +1,130 @@
+  1 | ; Lifecycle, read, method-hook, shared, and in-task events working together:
+    | comment:; Lifecycle, read, method-hook, shared, and in-task events working together:
+  2 | ; - `shared event ... on init` / `on drop` tracks live instances automatically
+    | comment:; - `shared event ... on init` / `on drop` tracks live instances automatically
+  3 | ; - `on read .token` audits sensitive reads without re-triggering inside itself
+    | comment:; - `on read .token` audits sensitive reads without re-triggering inside itself
+  4 | ; - `before` / `after` hooks run around method calls (auto and `.listen(...)` gated)
+    | comment:; - `before` / `after` hooks run around method calls (auto and `.listen(...)` gated)
+  5 | ; - top-level `event ... on Session.alerts` watches a shared field across the program
+    | comment:; - top-level `event ... on Session.alerts` watches a shared field across the program
+  6 | ; - an in-task `event` tracks local spikes within a single task
+    | comment:; - an in-task `event` tracks local spikes within a single task
+  8 | shape Session
+    | keyword:shape  type:Session
+  9 |     id: text
+    | field:id  punctuation::  type-builtin:text
+ 10 |     token: text
+    | field:token  punctuation::  type-builtin:text
+ 11 |     reads: int = 0
+    | field:reads  punctuation::  type-builtin:int  operator:=  number:0
+ 13 |     shared flex active: int = 0
+    | keyword:shared  keyword:flex  field:active  punctuation::  type-builtin:int  operator:=  number:0
+ 14 |     shared flex alerts: int = 0
+    | keyword:shared  keyword:flex  field:alerts  punctuation::  type-builtin:int  operator:=  number:0
+ 16 |     shared event opened on init
+    | keyword:shared  keyword:event  variable:opened  variable:on  variable:init
+ 17 |         Session.active = Session.active + 1
+    | type:Session  punctuation:.  field:active  operator:=  type:Session  punctuation:.  field:active  operator:+  number:1
+ 18 |     fi
+    | keyword:fi
+ 20 |     shared event closed on drop
+    | keyword:shared  keyword:event  variable:closed  variable:on  variable:drop
+ 21 |         Session.active = Session.active - 1
+    | type:Session  punctuation:.  field:active  operator:=  type:Session  punctuation:.  field:active  operator:-  number:1
+ 22 |     fi
+    | keyword:fi
+ 24 |     alters(.reads) event audit_token on read .token auto
+    | task:alters  punctuation:(  punctuation:.  field:reads  punctuation:)  keyword:event  variable:audit_token  variable:on  variable:read  punctuation:.  field:token  variable:auto
+ 25 |         .reads = .reads + 1
+    | punctuation:.  field:reads  operator:=  punctuation:.  field:reads  operator:+  number:1
+ 26 |         show("[audit] token read on ", .id, " (#", .reads, ")")
+    | builtin-fn:show  punctuation:(  string:"[audit] token read on "  punctuation:,  punctuation:.  field:id  punctuation:,  string:" (#"  punctuation:,  punctuation:.  field:reads  punctuation:,  string:")"  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 29 |     event trace_run before .process
+    | keyword:event  variable:trace_run  variable:before  punctuation:.  field:process
+ 30 |         show("[trace] starting ", .id)
+    | builtin-fn:show  punctuation:(  string:"[trace] starting "  punctuation:,  punctuation:.  field:id  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 33 |     event finish_run after .process auto
+    | keyword:event  variable:finish_run  variable:after  punctuation:.  field:process  variable:auto
+ 34 |         show("[trace] finished ", .id)
+    | builtin-fn:show  punctuation:(  string:"[trace] finished "  punctuation:,  punctuation:.  field:id  punctuation:)
+ 35 |     fi
+    | keyword:fi
+ 37 |     alters process(load: int) -> int
+    | variable:alters  task:process  punctuation:(  variable:load  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 38 |         when load > 80
+    | keyword:when  variable:load  operator:>  number:80
+ 39 |             Session.alerts = Session.alerts + 1
+    | type:Session  punctuation:.  field:alerts  operator:=  type:Session  punctuation:.  field:alerts  operator:+  number:1
+ 40 |             <- -1
+    | keyword:<-  operator:-  number:1
+ 41 |         fi
+    | keyword:fi
+ 42 |         <- load * 2
+    | keyword:<-  variable:load  operator:*  number:2
+ 43 |     fi
+    | keyword:fi
+ 44 | fi
+    | keyword:fi
+ 46 | event on_alert on Session.alerts
+    | keyword:event  variable:on_alert  variable:on  type:Session  punctuation:.  field:alerts
+ 47 |     show("[alert] total alerts now ", Session.alerts)
+    | builtin-fn:show  punctuation:(  string:"[alert] total alerts now "  punctuation:,  type:Session  punctuation:.  field:alerts  punctuation:)
+ 48 | fi
+    | keyword:fi
+ 50 | task monitor_batch()
+    | keyword:task  task:monitor_batch  punctuation:(  punctuation:)
+ 51 |     flex peak = 0
+    | keyword:flex  variable:peak  operator:=  number:0
+ 52 |     flex load = 0
+    | keyword:flex  variable:load  operator:=  number:0
+ 54 |     alters(peak) event track_peak on load when load > peak
+    | task:alters  punctuation:(  variable:peak  punctuation:)  keyword:event  variable:track_peak  variable:on  variable:load  keyword:when  variable:load  operator:>  variable:peak
+ 55 |         peak = load
+    | variable:peak  operator:=  variable:load
+ 56 |     fi
+    | keyword:fi
+ 58 |     load = 30
+    | variable:load  operator:=  number:30
+ 59 |     load = 95
+    | variable:load  operator:=  number:95
+ 60 |     load = 60
+    | variable:load  operator:=  number:60
+ 61 |     show("batch peak=", peak)
+    | builtin-fn:show  punctuation:(  string:"batch peak="  punctuation:,  variable:peak  punctuation:)
+ 62 | fi
+    | keyword:fi
+ 64 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 65 |     when true
+    | keyword:when  keyword:true
+ 66 |         flex s1 = Session { id: "alpha", token: "tok-1" }
+    | keyword:flex  variable:s1  operator:=  type:Session  punctuation:{  field:id  punctuation::  string:"alpha"  punctuation:,  field:token  punctuation::  string:"tok-1"  punctuation:}
+ 67 |         flex s2 = Session { id: "beta", token: "tok-2" }
+    | keyword:flex  variable:s2  operator:=  type:Session  punctuation:{  field:id  punctuation::  string:"beta"  punctuation:,  field:token  punctuation::  string:"tok-2"  punctuation:}
+ 68 |         show("active inside=", Session.active)
+    | builtin-fn:show  punctuation:(  string:"active inside="  punctuation:,  type:Session  punctuation:.  field:active  punctuation:)
+ 70 |         fixed tok = s1.token
+    | keyword:fixed  variable:tok  operator:=  variable:s1  punctuation:.  field:token
+ 71 |         show("got ", tok, " after ", s1.reads, " read")
+    | builtin-fn:show  punctuation:(  string:"got "  punctuation:,  variable:tok  punctuation:,  string:" after "  punctuation:,  variable:s1  punctuation:.  field:reads  punctuation:,  string:" read"  punctuation:)
+ 73 |         s1.listen("trace_run")
+    | variable:s1  punctuation:.  field:listen  punctuation:(  string:"trace_run"  punctuation:)
+ 74 |         fixed r1 = s1.process(40)
+    | keyword:fixed  variable:r1  operator:=  variable:s1  punctuation:.  field:process  punctuation:(  number:40  punctuation:)
+ 75 |         fixed r2 = s2.process(90)
+    | keyword:fixed  variable:r2  operator:=  variable:s2  punctuation:.  field:process  punctuation:(  number:90  punctuation:)
+ 76 |         show("results=", r1, ", ", r2)
+    | builtin-fn:show  punctuation:(  string:"results="  punctuation:,  variable:r1  punctuation:,  string:", "  punctuation:,  variable:r2  punctuation:)
+ 77 |     fi
+    | keyword:fi
+ 79 |     show("active after block=", Session.active)
+    | builtin-fn:show  punctuation:(  string:"active after block="  punctuation:,  type:Session  punctuation:.  field:active  punctuation:)
+ 80 |     monitor_batch()
+    | task:monitor_batch  punctuation:(  punctuation:)
+ 81 | fi
+    | keyword:fi

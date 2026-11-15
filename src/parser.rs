@@ -2597,34 +2597,16 @@ impl Parser {
             Token::Bind => self.parse_binding(Mode::Bind),
             Token::Hold => self.parse_binding(Mode::Hold),
             Token::When => self.parse_when(),
-            Token::Loop | Token::Endless | Token::Each => {
-                let stmt = match self.peek() {
-                    Token::Loop => self.parse_loop()?,
-                    Token::Each => self.parse_each()?,
-                    _ => self.parse_endless()?,
-                };
-                self.loop_with_plan_b(stmt, None, span)
-            }
+            Token::Loop | Token::Endless | Token::Each => self.parse_loop_stmt(span),
             Token::Block => self.parse_plain_block(),
             Token::Break | Token::Continue => self.parse_jump(),
             Token::Finally => Err(Error::at(span, "'finally' belongs at the end of a loop, before 'fi'")),
             Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
-                let stmt = self.parse_named_loop()?;
-                let StmtKind::Named(name, inner) = stmt.kind else { return Ok(stmt) };
-                if self.check(Token::LBrace) {
-                    return self.loop_with_plan_b(*inner, Some((name, span)), span);
-                }
-                Ok(Stmt::new(StmtKind::Named(name, inner), stmt.span))
+                self.parse_named_stmt(span)
             }
             Token::Match => self.parse_match(),
-            Token::Event => {
-                let e = self.parse_event(None, false)?;
-                Ok(Stmt::new(StmtKind::Event(e), span))
-            }
-            _ if self.at_event_after(0) => {
-                let e = self.parse_event(None, false)?;
-                Ok(Stmt::new(StmtKind::Event(e), span))
-            }
+            Token::Event => self.parse_event_stmt(span),
+            _ if self.at_event_after(0) => self.parse_event_stmt(span),
             Token::Send => self.parse_send(),
             Token::Ident(name) if name == "send" => {
                 self.reject_old_send()?;
@@ -2638,6 +2620,35 @@ impl Parser {
             ),
             _ => self.parse_simple_stmt(span),
         }
+    }
+
+    // Outlined from `parse_stmt` to keep recursive statement stack frames small under `MAX_NESTING`.
+    #[inline(never)]
+    fn parse_loop_stmt(&mut self, span: Span) -> Result<Stmt> {
+        let stmt = match self.peek() {
+            Token::Loop => self.parse_loop()?,
+            Token::Each => self.parse_each()?,
+            _ => self.parse_endless()?,
+        };
+        self.loop_with_plan_b(stmt, None, span)
+    }
+
+    // Outlined from `parse_stmt` to keep recursive statement stack frames small under `MAX_NESTING`.
+    #[inline(never)]
+    fn parse_named_stmt(&mut self, span: Span) -> Result<Stmt> {
+        let stmt = self.parse_named_loop()?;
+        let StmtKind::Named(name, inner) = stmt.kind else { return Ok(stmt) };
+        if self.check(Token::LBrace) {
+            return self.loop_with_plan_b(*inner, Some((name, span)), span);
+        }
+        Ok(Stmt::new(StmtKind::Named(name, inner), stmt.span))
+    }
+
+    // Outlined from `parse_stmt` to keep recursive statement stack frames small under `MAX_NESTING`.
+    #[inline(never)]
+    fn parse_event_stmt(&mut self, span: Span) -> Result<Stmt> {
+        let e = self.parse_event(None, false)?;
+        Ok(Stmt::new(StmtKind::Event(Box::new(e)), span))
     }
 
     fn loop_with_plan_b(&mut self, stmt: Stmt, name: Option<(String, Span)>, span: Span) -> Result<Stmt> {

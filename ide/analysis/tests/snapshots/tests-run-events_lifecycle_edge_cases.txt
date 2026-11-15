@@ -1,0 +1,268 @@
+  1 | ; Regression tests for lifecycle/read/before/after/in-task event edge cases:
+    | comment:; Regression tests for lifecycle/read/before/after/in-task event edge cases:
+  2 | ; - on read on rvalue return, fixed& parameter, and hidden (>64B) parameter
+    | comment:; - on read on rvalue return, fixed& parameter, and hidden (>64B) parameter
+  3 | ; - shared event ... on drop without any member drop event
+    | comment:; - shared event ... on drop without any member drop event
+  4 | ; - on drop running on loop break and continue
+    | comment:; - on drop running on loop break and continue
+  5 | ; - before / after hooks (member auto, member listen-gated, and shared) including on <-
+    | comment:; - before / after hooks (member auto, member listen-gated, and shared) including on <-
+  6 | ; - duplicate in-task event names across branches, capturing flex& and fixed& params
+    | comment:; - duplicate in-task event names across branches, capturing flex& and fixed& params
+  7 | ; - identical local names across different tasks stay isolated
+    | comment:; - identical local names across different tasks stay isolated
+  9 | shape Small
+    | keyword:shape  type:Small
+ 10 |     hp: int = 0
+    | field:hp  punctuation::  type-builtin:int  operator:=  number:0
+ 12 |     event saw on read .hp auto
+    | keyword:event  variable:saw  variable:on  variable:read  punctuation:.  field:hp  variable:auto
+ 13 |         show("small saw ", .hp)
+    | method:show  punctuation:(  string:"small saw "  punctuation:,  punctuation:.  field:hp  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | shape Big
+    | keyword:shape  type:Big
+ 18 |     pad: [int#10] = [0#10]
+    | field:pad  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:10  punctuation:]  operator:=  punctuation:[  number:0  punctuation:#  number:10  punctuation:]
+ 19 |     hp: int = 0
+    | field:hp  punctuation::  type-builtin:int  operator:=  number:0
+ 21 |     event saw on read .hp auto
+    | keyword:event  variable:saw  variable:on  variable:read  punctuation:.  field:hp  variable:auto
+ 22 |         show("big saw ", .hp)
+    | method:show  punctuation:(  string:"big saw "  punctuation:,  punctuation:.  field:hp  punctuation:)
+ 23 |     fi
+    | keyword:fi
+ 24 | fi
+    | keyword:fi
+ 26 | task make_small(n: int) -> Small
+    | keyword:task  task:make_small  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Small
+ 27 |     <- Small { hp: n }
+    | keyword:<-  type:Small  punctuation:{  field:hp  punctuation::  parameter:n  punctuation:}
+ 28 | fi
+    | keyword:fi
+ 30 | task inspect_small(fixed& s: Small) -> int
+    | keyword:task  task:inspect_small  punctuation:(  keyword:fixed  keyword:&  parameter:s  punctuation::  type:Small  punctuation:)  operator:->  type-builtin:int
+ 31 |     <- s.hp
+    | keyword:<-  parameter:s  punctuation:.  field:hp
+ 32 | fi
+    | keyword:fi
+ 34 | task inspect_big(fixed b: Big) -> int
+    | keyword:task  task:inspect_big  punctuation:(  keyword:fixed  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 35 |     <- b.hp
+    | keyword:<-  parameter:b  punctuation:.  field:hp
+ 36 | fi
+    | keyword:fi
+ 38 | shape SharedDrop
+    | keyword:shape  type:SharedDrop
+ 39 |     tag: int = 0
+    | field:tag  punctuation::  type-builtin:int  operator:=  number:0
+ 40 |     shared flex dropped: int = 0
+    | keyword:shared  keyword:flex  field:dropped  punctuation::  type-builtin:int  operator:=  number:0
+ 42 |     shared event count_drop on drop
+    | keyword:shared  keyword:event  variable:count_drop  variable:on  variable:drop
+ 43 |         SharedDrop.dropped = SharedDrop.dropped + 1
+    | type:SharedDrop  punctuation:.  field:dropped  operator:=  type:SharedDrop  punctuation:.  field:dropped  operator:+  number:1
+ 44 |     fi
+    | keyword:fi
+ 45 | fi
+    | keyword:fi
+ 47 | shape ScopedItem
+    | keyword:shape  type:ScopedItem
+ 48 |     id: int = 0
+    | field:id  punctuation::  type-builtin:int  operator:=  number:0
+ 50 |     event bye on drop auto
+    | keyword:event  variable:bye  variable:on  variable:drop  variable:auto
+ 51 |         show("drop item ", .id)
+    | method:show  punctuation:(  string:"drop item "  punctuation:,  punctuation:.  field:id  punctuation:)
+ 52 |     fi
+    | keyword:fi
+ 53 | fi
+    | keyword:fi
+ 55 | shape Worker
+    | keyword:shape  type:Worker
+ 56 |     id: int = 0
+    | field:id  punctuation::  type-builtin:int  operator:=  number:0
+ 57 |     shared flex traces: int = 0
+    | keyword:shared  keyword:flex  field:traces  punctuation::  type-builtin:int  operator:=  number:0
+ 59 |     event guard before .compute
+    | keyword:event  variable:guard  variable:before  punctuation:.  field:compute
+ 60 |         show("listen guard ", .id)
+    | method:show  punctuation:(  string:"listen guard "  punctuation:,  punctuation:.  field:id  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 63 |     event finish after .compute auto
+    | keyword:event  variable:finish  variable:after  punctuation:.  field:compute  variable:auto
+ 64 |         show("auto after ", .id)
+    | method:show  punctuation:(  string:"auto after "  punctuation:,  punctuation:.  field:id  punctuation:)
+ 65 |     fi
+    | keyword:fi
+ 67 |     shared event enter_shared before .compute
+    | keyword:shared  keyword:event  variable:enter_shared  variable:before  punctuation:.  field:compute
+ 68 |         Worker.traces = Worker.traces + 1
+    | type:Worker  punctuation:.  field:traces  operator:=  type:Worker  punctuation:.  field:traces  operator:+  number:1
+ 69 |     fi
+    | keyword:fi
+ 71 |     shared event exit_shared after .compute
+    | keyword:shared  keyword:event  variable:exit_shared  variable:after  punctuation:.  field:compute
+ 72 |         Worker.traces = Worker.traces + 10
+    | type:Worker  punctuation:.  field:traces  operator:=  type:Worker  punctuation:.  field:traces  operator:+  number:10
+ 73 |     fi
+    | keyword:fi
+ 75 |     compute(n: int) -> int
+    | task:compute  punctuation:(  variable:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 76 |         when n < 0
+    | keyword:when  variable:n  operator:<  number:0
+ 77 |             <- -1
+    | keyword:<-  operator:-  number:1
+ 78 |         fi
+    | keyword:fi
+ 79 |         <- n + .id
+    | keyword:<-  variable:n  operator:+  punctuation:.  field:id
+ 80 |     fi
+    | keyword:fi
+ 81 | fi
+    | keyword:fi
+ 83 | task track_refs(flex& acc: int, fixed& step: int, which: bool)
+    | keyword:task  task:track_refs  punctuation:(  keyword:flex  keyword:&  parameter:acc  punctuation::  type-builtin:int  punctuation:,  keyword:fixed  keyword:&  parameter:step  punctuation::  type-builtin:int  punctuation:,  parameter:which  punctuation::  type-builtin:bool  punctuation:)
+ 84 |     flex sig = 0
+    | keyword:flex  variable:sig  operator:=  number:0
+ 85 |     when which
+    | keyword:when  parameter:which
+ 86 |         alters(acc) event bump on sig
+    | task:alters  punctuation:(  parameter:acc  punctuation:)  keyword:event  variable:bump  variable:on  variable:sig
+ 87 |             acc = acc + step
+    | parameter:acc  operator:=  parameter:acc  operator:+  parameter:step
+ 88 |         fi
+    | keyword:fi
+ 89 |         sig = 1
+    | variable:sig  operator:=  number:1
+ 90 |     else
+    | keyword:else
+ 91 |         alters(acc) event bump on sig
+    | task:alters  punctuation:(  parameter:acc  punctuation:)  keyword:event  variable:bump  variable:on  variable:sig
+ 92 |             acc = acc + step * 2
+    | parameter:acc  operator:=  parameter:acc  operator:+  parameter:step  operator:*  number:2
+ 93 |         fi
+    | keyword:fi
+ 94 |         sig = 1
+    | variable:sig  operator:=  number:1
+ 95 |     fi
+    | keyword:fi
+ 96 | fi
+    | keyword:fi
+ 98 | task isolated_a()
+    | keyword:task  task:isolated_a  punctuation:(  punctuation:)
+ 99 |     flex x = 1
+    | keyword:flex  variable:x  operator:=  number:1
+100 |     flex y = 0
+    | keyword:flex  variable:y  operator:=  number:0
+101 |     alters(y) event watch on x
+    | task:alters  punctuation:(  variable:y  punctuation:)  keyword:event  variable:watch  variable:on  variable:x
+102 |         y = y + 100
+    | variable:y  operator:=  variable:y  operator:+  number:100
+103 |     fi
+    | keyword:fi
+104 |     x = 2
+    | variable:x  operator:=  number:2
+105 |     show("a y=", y)
+    | builtin-fn:show  punctuation:(  string:"a y="  punctuation:,  variable:y  punctuation:)
+106 | fi
+    | keyword:fi
+108 | task isolated_b()
+    | keyword:task  task:isolated_b  punctuation:(  punctuation:)
+109 |     flex x = 10
+    | keyword:flex  variable:x  operator:=  number:10
+110 |     x = 20
+    | variable:x  operator:=  number:20
+111 |     show("b x=", x)
+    | builtin-fn:show  punctuation:(  string:"b x="  punctuation:,  variable:x  punctuation:)
+112 | fi
+    | keyword:fi
+114 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+115 |     fixed r_val = make_small(42).hp
+    | keyword:fixed  variable:r_val  operator:=  task:make_small  punctuation:(  number:42  punctuation:)  punctuation:.  field:hp
+116 |     show("rvalue=", r_val)
+    | builtin-fn:show  punctuation:(  string:"rvalue="  punctuation:,  variable:r_val  punctuation:)
+117 |     fixed sm = Small { hp: 15 }
+    | keyword:fixed  variable:sm  operator:=  type:Small  punctuation:{  field:hp  punctuation::  number:15  punctuation:}
+118 |     fixed f_val = inspect_small(&sm)
+    | keyword:fixed  variable:f_val  operator:=  task:inspect_small  punctuation:(  operator:&  variable:sm  punctuation:)
+119 |     show("fixedref=", f_val)
+    | builtin-fn:show  punctuation:(  string:"fixedref="  punctuation:,  variable:f_val  punctuation:)
+120 |     fixed bg = Big { hp: 77 }
+    | keyword:fixed  variable:bg  operator:=  type:Big  punctuation:{  field:hp  punctuation::  number:77  punctuation:}
+121 |     fixed h_val = inspect_big(bg)
+    | keyword:fixed  variable:h_val  operator:=  task:inspect_big  punctuation:(  variable:bg  punctuation:)
+122 |     show("hidden=", h_val)
+    | builtin-fn:show  punctuation:(  string:"hidden="  punctuation:,  variable:h_val  punctuation:)
+124 |     when true
+    | keyword:when  keyword:true
+125 |         fixed d1 = SharedDrop { tag: 1 }
+    | keyword:fixed  variable:d1  operator:=  type:SharedDrop  punctuation:{  field:tag  punctuation::  number:1  punctuation:}
+126 |         fixed d2 = SharedDrop { tag: 2 }
+    | keyword:fixed  variable:d2  operator:=  type:SharedDrop  punctuation:{  field:tag  punctuation::  number:2  punctuation:}
+127 |         show("inside ", d1.tag, " ", d2.tag)
+    | builtin-fn:show  punctuation:(  string:"inside "  punctuation:,  variable:d1  punctuation:.  field:tag  punctuation:,  string:" "  punctuation:,  variable:d2  punctuation:.  field:tag  punctuation:)
+128 |     fi
+    | keyword:fi
+129 |     show("shared dropped=", SharedDrop.dropped)
+    | builtin-fn:show  punctuation:(  string:"shared dropped="  punctuation:,  type:SharedDrop  punctuation:.  field:dropped  punctuation:)
+131 |     each i in 0..3
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
+132 |         fixed s = ScopedItem { id: i }
+    | keyword:fixed  variable:s  operator:=  type:ScopedItem  punctuation:{  field:id  punctuation::  variable:i  punctuation:}
+133 |         show("loop ", s.id)
+    | builtin-fn:show  punctuation:(  string:"loop "  punctuation:,  variable:s  punctuation:.  field:id  punctuation:)
+134 |         when i == 0
+    | keyword:when  variable:i  operator:==  number:0
+135 |             continue
+    | keyword:continue
+136 |         fi
+    | keyword:fi
+137 |         when i == 1
+    | keyword:when  variable:i  operator:==  number:1
+138 |             break
+    | keyword:break
+139 |         fi
+    | keyword:fi
+140 |     fi
+    | keyword:fi
+142 |     flex w1 = Worker { id: 5 }
+    | keyword:flex  variable:w1  operator:=  type:Worker  punctuation:{  field:id  punctuation::  number:5  punctuation:}
+143 |     fixed w1_res = w1.compute(-2)
+    | keyword:fixed  variable:w1_res  operator:=  variable:w1  punctuation:.  field:compute  punctuation:(  operator:-  number:2  punctuation:)
+144 |     show("w1=", w1_res)
+    | builtin-fn:show  punctuation:(  string:"w1="  punctuation:,  variable:w1_res  punctuation:)
+145 |     flex w2 = Worker { id: 9 }
+    | keyword:flex  variable:w2  operator:=  type:Worker  punctuation:{  field:id  punctuation::  number:9  punctuation:}
+146 |     w2.listen("guard")
+    | variable:w2  punctuation:.  field:listen  punctuation:(  string:"guard"  punctuation:)
+147 |     fixed w2_res = w2.compute(3)
+    | keyword:fixed  variable:w2_res  operator:=  variable:w2  punctuation:.  field:compute  punctuation:(  number:3  punctuation:)
+148 |     show("w2=", w2_res)
+    | builtin-fn:show  punctuation:(  string:"w2="  punctuation:,  variable:w2_res  punctuation:)
+149 |     show("traces=", Worker.traces)
+    | builtin-fn:show  punctuation:(  string:"traces="  punctuation:,  type:Worker  punctuation:.  field:traces  punctuation:)
+151 |     flex a1 = 1
+    | keyword:flex  variable:a1  operator:=  number:1
+152 |     fixed s1 = 10
+    | keyword:fixed  variable:s1  operator:=  number:10
+153 |     track_refs(&a1, &s1, true)
+    | task:track_refs  punctuation:(  operator:&  variable:a1  punctuation:,  operator:&  variable:s1  punctuation:,  keyword:true  punctuation:)
+154 |     flex a2 = 1
+    | keyword:flex  variable:a2  operator:=  number:1
+155 |     track_refs(&a2, &s1, false)
+    | task:track_refs  punctuation:(  operator:&  variable:a2  punctuation:,  operator:&  variable:s1  punctuation:,  keyword:false  punctuation:)
+156 |     show("refs=", a1, " ", a2)
+    | builtin-fn:show  punctuation:(  string:"refs="  punctuation:,  variable:a1  punctuation:,  string:" "  punctuation:,  variable:a2  punctuation:)
+158 |     isolated_a()
+    | task:isolated_a  punctuation:(  punctuation:)
+159 |     isolated_b()
+    | task:isolated_b  punctuation:(  punctuation:)
+160 | fi
+    | keyword:fi

@@ -90,7 +90,7 @@ shape Int512::Numeric<Int512>
         <- native_from_uint64(n)
     fi
 
-    shared parse(s: text) -> Int512 ~ ParseError
+    shared parse(s: text@p) -> Int512 ~ ParseError
         <- int512_parse(s)
     fi
 fi
@@ -108,7 +108,7 @@ task int512_from_uint64(n: uint64) -> Int512
 fi
 
 ; Accepts optional sign and `0x` / `0o` / `0b` prefixes.
-task int512_parse(s: text) -> Int512 ~ ParseError
+task int512_parse(s: text@p) -> Int512 ~ ParseError
     fixed status = native_parse_status(s)
     when status == 1
         <- fail ParseError.NotANumber
@@ -118,7 +118,7 @@ task int512_parse(s: text) -> Int512 ~ ParseError
     <- native_parse_value(s)
 fi
 
-task int512_from_text(s: text) -> Int512 ~ ParseError
+task int512_from_text(s: text@p) -> Int512 ~ ParseError
     <- int512_parse(s)
 fi
 

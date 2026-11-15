@@ -1,0 +1,46 @@
+  1 | ; Standalone `std/json` usage: parsing nested objects and arrays, preserving
+    | comment:; Standalone `std/json` usage: parsing nested objects and arrays, preserving
+  2 | ; integers beyond 64 bits verbatim via `Json.BigInt`, doing exact arithmetic on
+    | comment:; integers beyond 64 bits verbatim via `Json.BigInt`, doing exact arithmetic on
+  3 | ; them with `std/int512`, and serializing a response tree back to JSON text.
+    | comment:; them with `std/int512`, and serializing a response tree back to JSON text.
+  5 | include std/json { Json, parse, stringify }
+    | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:,  task:parse  punctuation:,  task:stringify  punctuation:}
+  6 | include std/int512 { Int512 }
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:}
+  8 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  9 |     region r default
+    | keyword:region  region:r  keyword:default
+ 10 |     fixed raw = "\{\"service\": \"ledger\", \"scale\": 1.5e2, \"active\": true, \"tags\": [\"v1\", \"fast\"], \"snowflake\": 1844674407370955161700001\}"
+    | keyword:fixed  variable:raw  operator:=  string:"  escape:\{  escape:\"  string:service  escape:\"  string::   escape:\"  string:ledger  escape:\"  string:,   escape:\"  string:scale  escape:\"  string:: 1.5e2,   escape:\"  string:active  escape:\"  string:: true,   escape:\"  string:tags  escape:\"  string:: [  escape:\"  string:v1  escape:\"  string:,   escape:\"  string:fast  escape:\"  string:],   escape:\"  string:snowflake  escape:\"  string:: 1844674407370955161700001  escape:\}  string:"
+ 11 |     fixed doc = parse(raw, r) { Json.Null }
+    | keyword:fixed  variable:doc  operator:=  task:parse  punctuation:(  variable:raw  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+ 13 |     fixed service = doc.get("service") { Json.Null }.as_text() { "" }
+    | keyword:fixed  variable:service  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"service"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}
+ 14 |     fixed scale = doc.get("scale") { Json.Null }.as_float() { 0.0 }
+    | keyword:fixed  variable:scale  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"scale"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_float  punctuation:(  punctuation:)  punctuation:{  number:0.0  punctuation:}
+ 15 |     fixed first_tag = doc.get("tags") { Json.Null }.item(0) { Json.Null }.as_text() { "" }
+    | keyword:fixed  variable:first_tag  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"tags"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:item  punctuation:(  number:0  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_text  punctuation:(  punctuation:)  punctuation:{  string:""  punctuation:}
+ 16 |     fixed big_digits = doc.get("snowflake") { Json.Null }.as_big_int() { "0" }
+    | keyword:fixed  variable:big_digits  operator:=  variable:doc  punctuation:.  method:get  punctuation:(  string:"snowflake"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_big_int  punctuation:(  punctuation:)  punctuation:{  string:"0"  punctuation:}
+ 18 |     fixed big_num = Int512.parse(big_digits) { Int512.zero() }
+    | keyword:fixed  variable:big_num  operator:=  type:Int512  punctuation:.  method:parse  punctuation:(  variable:big_digits  punctuation:)  punctuation:{  type:Int512  punctuation:.  method:zero  punctuation:(  punctuation:)  punctuation:}
+ 19 |     fixed next_id = big_num + Int512.one()
+    | keyword:fixed  variable:next_id  operator:=  variable:big_num  operator:+  type:Int512  punctuation:.  method:one  punctuation:(  punctuation:)
+ 21 |     show("service=", service, " scale=", scale, " tag=", first_tag)
+    | builtin-fn:show  punctuation:(  string:"service="  punctuation:,  variable:service  punctuation:,  string:" scale="  punctuation:,  variable:scale  punctuation:,  string:" tag="  punctuation:,  variable:first_tag  punctuation:)
+ 22 |     show("exact next id=", next_id.str(r))
+    | builtin-fn:show  punctuation:(  string:"exact next id="  punctuation:,  variable:next_id  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 24 |     flex out: [text: Json]@r = new [text: Json]() at r
+    | keyword:flex  variable:out  punctuation::  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 25 |     out["service"] = Json.Str(service)
+    | variable:out  punctuation:[  string:"service"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  variable:service  punctuation:)
+ 26 |     out["next_snowflake"] = Json.BigInt(next_id.str(r))
+    | variable:out  punctuation:[  string:"next_snowflake"  punctuation:]  operator:=  type:Json  punctuation:.  variant:BigInt  punctuation:(  variable:next_id  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 27 |     out["active"] = Json.Bool(true)
+    | variable:out  punctuation:[  string:"active"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Bool  punctuation:(  keyword:true  punctuation:)
+ 28 |     show("json=", stringify(Json.Object(out), r))
+    | builtin-fn:show  punctuation:(  string:"json="  punctuation:,  task:stringify  punctuation:(  type:Json  punctuation:.  variant:Object  punctuation:(  variable:out  punctuation:)  punctuation:,  region:r  punctuation:)  punctuation:)
+ 29 | fi
+    | keyword:fi

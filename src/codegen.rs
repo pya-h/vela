@@ -97,6 +97,12 @@ pub struct Generator {
     /// In-task events whose declaration the generation has passed: they fire
     /// until the block that declares them ends.
     active_events: HashSet<String>,
+    /// Variables and parameters whose C type is `const`-qualified.
+    const_vars: HashSet<String>,
+    /// Enclosing task identity while generating its body (`None` in events).
+    current_task_name: Option<String>,
+    current_task_owner: Option<String>,
+    current_task_has_this: bool,
 }
 
 #[derive(Clone)]
@@ -167,6 +173,10 @@ impl Default for Generator {
             renames: HashMap::new(),
             event_keys: HashMap::new(),
             active_events: HashSet::new(),
+            const_vars: HashSet::new(),
+            current_task_name: None,
+            current_task_owner: None,
+            current_task_has_this: false,
         }
     }
 }
@@ -474,20 +484,7 @@ impl Generator {
                     mangle(e.owner.as_deref().unwrap_or_default())
                 ));
             } else {
-                let params = e
-                    .captures
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (name, ty))| {
-                        if matches!(ty, Type::Region) {
-                            format!("vela__rt__region* {}", c_ident(name))
-                        } else {
-                            format!("{}* vela__cap_{}", c_type(ty), i)
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let params = if params.is_empty() { "void".to_string() } else { params };
+                let params = Self::capture_params(&e.captures);
                 self.w.line(&format!("static void {}({});", Self::event_fn_name(&e), params));
             }
         }
@@ -566,6 +563,7 @@ impl Generator {
                     self.w.line(&format!("{}();", Self::event_fn_name(&ev)));
                 }
             }
+            self.w.line("vela__rt__sched_stop();");
             self.w.line("return 0;");
             self.w.close();
         }
@@ -1076,6 +1074,10 @@ impl Generator {
         self.ret = Type::Nothing;
         self.task = e.name.clone();
         self.current_event = Some(Self::event_key(e));
+        self.current_task_name = None;
+        self.current_task_owner = None;
+        self.current_task_has_this = false;
+        self.const_vars.clear();
         self.regions.clear();
         self.loops.clear();
         self.results.clear();
@@ -1084,7 +1086,7 @@ impl Generator {
         self.active_events.clear();
         // An in-task event takes its captured locals by pointer: regions as
         // the pointer itself (they are arrays), everything else by address.
-        for (i, (name, ty)) in e.captures.iter().enumerate() {
+        for (i, (name, ty, read_only)) in e.captures.iter().enumerate() {
             // Regions keep their own C name: the body emits the name where a
             // pointer-decay is expected, and the parameter is that pointer.
             let param = if matches!(ty, Type::Region) {
@@ -1094,29 +1096,16 @@ impl Generator {
             };
             self.renames
                 .insert(name.clone(), (param, matches!(ty, Type::Region)));
+            if *read_only {
+                self.const_vars.insert(name.clone());
+            }
         }
-        let capture_params: Vec<String> = e
-            .captures
-            .iter()
-            .enumerate()
-            .map(|(i, (name, ty))| {
-                if matches!(ty, Type::Region) {
-                    format!("vela__rt__region* {}", c_ident(name))
-                } else {
-                    format!("{}* vela__cap_{}", c_type(ty), i)
-                }
-            })
-            .collect();
         if is_member && let Some(shape) = &e.owner {
             self.pointers = [THIS.to_string()].into_iter().collect();
             self.w.open(&format!("static void {}(struct {}* vela__this)", Self::event_fn_name(e), mangle(shape)));
         } else {
             self.pointers.clear();
-            let params = if capture_params.is_empty() {
-                "void".to_string()
-            } else {
-                capture_params.join(", ")
-            };
+            let params = Self::capture_params(&e.captures);
             self.w
                 .open(&format!("static void {}({})", Self::event_fn_name(e), params));
         }
@@ -1252,14 +1241,17 @@ impl Generator {
     fn gen_drop_hooks(&mut self, name: &str, shape: &str) -> Result<()> {
         self.gen_member_hook(shape, &format!("&({})", c_ident(name)), &format!("({})", c_ident(name)), |ev| {
             ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop)
-        })
+        })?;
+        self.gen_shared_hook(shape, |ev| {
+            ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop)
+        });
+        Ok(())
     }
 
-    /// Whether a shape has any member drop events (worth tracking its vars).
+    /// Whether a shape has any drop events (member or shared).
     fn has_drop_events(&self, shape: &str) -> bool {
         self.events.values().any(|e| {
-            !e.shared
-                && self.event_belongs_to(e.owner.as_deref(), shape)
+            self.event_belongs_to(e.owner.as_deref(), shape)
                 && e.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop)
         })
     }
@@ -1366,8 +1358,10 @@ impl Generator {
                     let args: Vec<String> = ev
                         .captures
                         .iter()
-                        .map(|(name, ty)| {
-                            if matches!(ty, Type::Region) {
+                        .map(|(name, ty, _)| {
+                            if let Some((param, _)) = self.renames.get(name) {
+                                param.clone()
+                            } else if matches!(ty, Type::Region) || self.pointers.contains(name) {
                                 c_ident(name)
                             } else {
                                 format!("&{}", c_ident(name))
@@ -3461,29 +3455,29 @@ impl Generator {
             .map(|p| p.name.clone())
             .collect();
         self.pointers.extend(self.hidden.iter().cloned());
+        self.const_vars = t
+            .params
+            .iter()
+            .filter(|p| {
+                self.hidden.contains(&p.name)
+                    || p.passing == Passing::FixedRef
+                    || (p.passing == Passing::BindRef
+                        && !has_contents(&p.ty, &|name| self.shapes.contains_key(name)))
+            })
+            .map(|p| p.name.clone())
+            .collect();
         self.regions.clear();
         self.loops.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         self.task = shown_name(&t.name);
+        self.current_task_name = Some(t.name.clone());
+        self.current_task_owner = t.owner.as_ref().map(|o| o.name.clone());
+        self.current_task_has_this = t.params.iter().any(|p| p.name == THIS);
         self.w.open(&signature(t, alters, &hidden, &|name| {
             self.shapes.contains_key(name)
         }));
-        for ev in self.sorted_events() {
-            if let EventTrigger::BeforeTask(target) = &ev.trigger {
-                let matches = target == &t.name
-                    || target.strip_prefix('.').is_some_and(|clean| {
-                        t.owner.as_ref().is_some_and(|o| o.name == clean || t.name.ends_with(&format!("__{}", clean)))
-                    });
-                if matches {
-                    if let Some(owner) = &ev.owner && !ev.shared {
-                        self.w.line(&format!("{}__{}(vela__this);", mangle(owner), mangle(&ev.name)));
-                    } else {
-                        self.w.line(&format!("{}();", mangle(&ev.name)));
-                    }
-                }
-            }
-        }
         if t.native {
+            self.gen_task_hooks(true);
             let function = crate::library::native(&t.name).ok_or_else(|| {
                 Error::internal_at(
                     t.span,
@@ -3569,26 +3563,13 @@ impl Generator {
                     .line(&format!("{} {} = {{0}};", c_type(ty), c_ident(name)));
             }
         }
+        self.gen_task_hooks(true);
         if is_startup(&t.name) {
             self.gen_startup(t)?;
         } else {
             self.gen_block(&t.body)?;
         }
-        for ev in self.sorted_events() {
-            if let EventTrigger::AfterTask(target) = &ev.trigger {
-                let matches = target == &t.name
-                    || target.strip_prefix('.').is_some_and(|clean| {
-                        t.owner.as_ref().is_some_and(|o| o.name == clean || t.name.ends_with(&format!("__{}", clean)))
-                    });
-                if matches {
-                    if let Some(owner) = &ev.owner && !ev.shared {
-                        self.w.line(&format!("{}__{}(vela__this);", mangle(owner), mangle(&ev.name)));
-                    } else {
-                        self.w.line(&format!("{}();", mangle(&ev.name)));
-                    }
-                }
-            }
-        }
+        self.gen_task_hooks(false);
         match &t.ret {
             Type::Nothing => self.w.line("return;"),
             Type::Or(value, _) if **value == Type::Nothing => {
@@ -3605,7 +3586,91 @@ impl Generator {
         }
         self.w.close();
         self.results.clear();
+        self.current_task_name = None;
+        self.current_task_owner = None;
+        self.current_task_has_this = false;
+        self.const_vars.clear();
         Ok(())
+    }
+
+    fn matching_task_hooks(&self, before: bool) -> Vec<EventDef> {
+        let Some(task_name) = self.current_task_name.as_deref() else {
+            return Vec::new();
+        };
+        if self.events.is_empty() {
+            return Vec::new();
+        }
+        let task_shape = task_name.rsplit_once("__on__").map(|(s, _)| s);
+        self.sorted_events()
+            .into_iter()
+            .filter(|ev| {
+                if ev.in_task.is_some() {
+                    return false;
+                }
+                let target = match (&ev.trigger, before) {
+                    (EventTrigger::BeforeTask(target), true) => target,
+                    (EventTrigger::AfterTask(target), false) => target,
+                    _ => return false,
+                };
+                let matches = target == task_name
+                    || task_shape
+                        .zip(self.current_task_owner.as_deref())
+                        .is_some_and(|(s, m)| {
+                            target == &format!("{}.{}", unqualified(s), m)
+                                || target == &format!("{}.{}", s, m)
+                        })
+                    || target.strip_prefix('.').is_some_and(|clean| {
+                        self.current_task_owner.as_deref().is_some_and(|method| {
+                            ev.owner.as_deref().is_none_or(|eo| {
+                                task_shape.is_some_and(|ts| unqualified(eo) == unqualified(ts))
+                            }) && (method == clean
+                                || task_name.ends_with(&format!(".{}", clean))
+                                || task_name.ends_with(&format!("__{}", clean)))
+                        })
+                    });
+                matches && (ev.shared || ev.owner.is_none() || self.current_task_has_this)
+            })
+            .collect()
+    }
+
+    fn gen_task_hooks(&mut self, before: bool) {
+        let hooks = self.matching_task_hooks(before);
+        if hooks.is_empty() {
+            return;
+        }
+        let mut const_copy: Option<String> = None;
+        for ev in hooks {
+            if let Some(owner) = &ev.owner && !ev.shared {
+                let (addr, place) = if self.const_vars.contains(THIS) {
+                    let tmp = const_copy.get_or_insert_with(|| {
+                        let tmp = self.fresh_temp("hook");
+                        self.w
+                            .line(&format!("struct {} {} = *vela__this;", mangle(owner), tmp));
+                        tmp
+                    });
+                    (format!("&{}", tmp), tmp.clone())
+                } else if self.pointers.contains(THIS) {
+                    ("vela__this".to_string(), "(*vela__this)".to_string())
+                } else {
+                    ("&vela__this".to_string(), "vela__this".to_string())
+                };
+                let fn_name = Self::event_fn_name(&ev);
+                if ev.auto {
+                    self.w.line(&format!("{}({});", fn_name, addr));
+                } else if let Some(idx) = self
+                    .listenable_event_names(owner)
+                    .iter()
+                    .position(|n| n == &ev.name)
+                {
+                    self.w.line(&format!(
+                        "if (({}).vela__events__ & (1u << {})) {{ {}({}); }}",
+                        place, idx, fn_name, addr
+                    ));
+                }
+            } else {
+                self.w.line(&format!("{}();", Self::event_fn_name(&ev)));
+            }
+        }
     }
 
     fn gen_startup(&mut self, t: &TaskDef) -> Result<()> {
@@ -3851,11 +3916,7 @@ impl Generator {
                 c_type(&giving.ty),
                 given
             ));
-            let open: Vec<String> = self.regions.iter().skip(depth).flatten().cloned().collect();
-            for region in open.iter().rev() {
-                self.w
-                    .line(&format!("vela__rt__region_free({});", c_ident(region)));
-            }
+            self.drop_and_free_from(depth)?;
             let Some(innermost) = self.loops.last_mut() else {
                 return Err(Error::internal_at(
                     body.first().map_or(Span::default(), |s| s.span),
@@ -4131,11 +4192,7 @@ impl Generator {
                 "a 'break' or a 'continue' with no loop around it",
             ));
         };
-        let open: Vec<String> = self.regions.iter().skip(depth).flatten().cloned().collect();
-        for region in open.iter().rev() {
-            self.w
-                .line(&format!("vela__rt__region_free({});", c_ident(region)));
-        }
+        self.drop_and_free_from(depth)?;
         let Some(target) = found.and_then(|at| self.loops.get_mut(at)) else {
             return Err(Error::internal_at(span, "a loop gone"));
         };
@@ -4147,6 +4204,22 @@ impl Generator {
             target.next.clone()
         };
         self.w.line(&format!("goto {};", label));
+        Ok(())
+    }
+
+    fn drop_and_free_from(&mut self, depth: usize) -> Result<()> {
+        let drop_blocks: Vec<Vec<(String, String)>> =
+            self.block_vars.iter().skip(depth).cloned().collect();
+        for vars in drop_blocks.iter().rev() {
+            for (name, shape) in vars.iter().rev() {
+                self.gen_drop_hooks(name, shape)?;
+            }
+        }
+        let open: Vec<String> = self.regions.iter().skip(depth).flatten().cloned().collect();
+        for region in open.iter().rev() {
+            self.w
+                .line(&format!("vela__rt__region_free({});", c_ident(region)));
+        }
         Ok(())
     }
 
@@ -4166,6 +4239,7 @@ impl Generator {
             {
                 for bound in names {
                     self.pointers.remove(&bound.name);
+                    self.const_vars.remove(&bound.name);
                 }
             }
         }
@@ -4299,6 +4373,11 @@ impl Generator {
                         address
                     ));
                     self.pointers.insert(bound.name.clone());
+                    if read_only {
+                        self.const_vars.insert(bound.name.clone());
+                    } else {
+                        self.const_vars.remove(&bound.name);
+                    }
                 } else {
                     return Err(Error::internal_at(
                         stmt.span,
@@ -4728,16 +4807,20 @@ impl Generator {
                     if !expr.is_empty() {
                         self.w.line(&format!("{};", expr));
                     }
+                    self.gen_task_hooks(false);
                     self.free_all_regions();
                     self.w.line("return;");
                     return Ok(());
                 }
-                if self.regions.iter().all(Vec::is_empty) {
+                if self.regions.iter().all(Vec::is_empty)
+                    && self.matching_task_hooks(false).is_empty()
+                {
                     self.w.line(&format!("return {};", expr));
                 } else {
                     let result = self.fresh_temp("result");
                     self.w
                         .line(&format!("{} {} = {};", c_type(&self.ret), result, expr));
+                    self.gen_task_hooks(false);
                     self.free_all_regions();
                     self.w.line(&format!("return {};", result));
                 }
@@ -6039,16 +6122,40 @@ impl Generator {
         Ok(item)
     }
 
+    /// Formats the C parameter list for a top-level, shared, or in-task event.
+    fn capture_params(captures: &[(String, Type, bool)]) -> String {
+        if captures.is_empty() {
+            return "void".to_string();
+        }
+        captures
+            .iter()
+            .enumerate()
+            .map(|(i, (name, ty, read_only))| {
+                if matches!(ty, Type::Region) {
+                    format!("vela__rt__region* {}", c_ident(name))
+                } else if *read_only {
+                    format!("{} const* vela__cap_{}", c_type(ty), i)
+                } else {
+                    format!("{}* vela__cap_{}", c_type(ty), i)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     /// The C function name of an event: `Shape__name` for member events,
     /// `Shape__shared__name` for shared ones (plain `name` was ambiguous with
-    /// top-level and other shapes' events), `name` for top-level events.
+    /// top-level and other shapes' events), `task__name__line_col` for in-task
+    /// events, and `name` for top-level events.
     fn event_fn_name(e: &EventDef) -> String {
         match (e.owner.as_deref(), e.in_task.as_deref()) {
             (Some(owner), _) if e.shared => {
                 format!("{}__shared__{}", mangle(owner), mangle(&e.name))
             }
             (Some(owner), _) => format!("{}__{}", mangle(owner), mangle(&e.name)),
-            (None, Some(task)) => format!("{}__{}", mangle(task), mangle(&e.name)),
+            (None, Some(task)) => {
+                format!("{}__{}__{}_{}", mangle(task), mangle(&e.name), e.span.line, e.span.col)
+            }
             (None, None) => mangle(&e.name),
         }
     }
@@ -6058,7 +6165,7 @@ impl Generator {
     fn event_key(e: &EventDef) -> String {
         match (&e.owner, &e.in_task) {
             (Some(owner), _) => format!("{}.{}", owner, e.name),
-            (None, Some(task)) => format!("{}#{}", task, e.name),
+            (None, Some(task)) => format!("{}#{}@{}:{}", task, e.name, e.span.line, e.span.col),
             (None, None) => e.name.clone(),
         }
     }
@@ -6070,6 +6177,22 @@ impl Generator {
             Some((param, true)) => param.clone(),
             Some((param, false)) => format!("(*{})", param),
             None => c_ident(name),
+        }
+    }
+
+    fn is_c_lvalue_gen(e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Var(_) | ExprKind::Deref(_) | ExprKind::Shared { .. } => true,
+            ExprKind::Field(inner, _) => Self::is_c_lvalue_gen(inner),
+            _ => false,
+        }
+    }
+
+    fn is_const_base(&self, e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Var(name) => self.const_vars.contains(name),
+            ExprKind::Field(inner, _) => self.is_const_base(inner),
+            _ => false,
         }
     }
 
@@ -6108,7 +6231,60 @@ impl Generator {
                             _ => false,
                         }
                     };
-                    self.gen_member_hook(shape, &format!("&({})", parenthesized(&b)), &format!("({})", parenthesized(&b)), filter)?;
+                    let any_member = self.events.values().any(|ev| {
+                        self.event_belongs_to(ev.owner.as_deref(), shape)
+                            && !ev.shared
+                            && filter(ev)
+                    });
+                    let any_shared = self.events.values().any(|ev| {
+                        self.event_belongs_to(ev.owner.as_deref(), shape)
+                            && ev.shared
+                            && filter(ev)
+                    });
+                    if any_member || any_shared {
+                        if !Self::is_c_lvalue_gen(base) || (any_member && self.is_const_base(base)) {
+                            let tmp = self.fresh_temp("read");
+                            self.w.line(&format!("struct {} {} = {};", mangle(shape), tmp, b));
+                            if any_member {
+                                self.gen_member_hook(shape, &format!("&{}", tmp), &tmp, filter)?;
+                            }
+                            if any_shared {
+                                self.gen_shared_hook(shape, filter);
+                            }
+                            return Ok(format!("{}.{}", tmp, c_ident(field)));
+                        } else if !matches!(base.kind, ExprKind::Var(_)) {
+                            let ptr = self.fresh_temp("read");
+                            self.w.line(&format!(
+                                "struct {}* {} = &({});",
+                                mangle(shape),
+                                ptr,
+                                b
+                            ));
+                            if any_member {
+                                self.gen_member_hook(
+                                    shape,
+                                    &ptr,
+                                    &format!("(*{})", ptr),
+                                    filter,
+                                )?;
+                            }
+                            if any_shared {
+                                self.gen_shared_hook(shape, filter);
+                            }
+                            return Ok(format!("{}->{}", ptr, c_ident(field)));
+                        }
+                        if any_member {
+                            self.gen_member_hook(
+                                shape,
+                                &format!("&({})", parenthesized(&b)),
+                                &format!("({})", parenthesized(&b)),
+                                filter,
+                            )?;
+                        }
+                        if any_shared {
+                            self.gen_shared_hook(shape, filter);
+                        }
+                    }
                 }
                 Ok(format!("({}).{}", parenthesized(&b), c_ident(field)))
             }
@@ -9528,7 +9704,7 @@ fn int_constant(e: &Expr) -> Option<String> {
 /// The events declared anywhere inside a task's body, which belong to that
 /// task however deeply they are nested.
 fn events_in_task(block: &[Stmt]) -> Vec<&EventDef> {
-    let mut out = Vec::new();
+    let mut out: Vec<&EventDef> = Vec::new();
     for stmt in block {
         match &stmt.kind {
             StmtKind::Event(e) => out.push(e),

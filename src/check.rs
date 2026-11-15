@@ -2223,7 +2223,21 @@ impl Checker {
                 .rev()
                 .find_map(|scope| scope.names.get(&name))
             {
-                event.captures.push((name, info.ty.clone()));
+                let has_inner = has_contents(&info.ty, &|n| self.shapes.contains_key(n));
+                let hidden = info.param
+                    && info.passing == Passing::Copy
+                    && info.ty != Type::Region
+                    && codegen::hidden_by_size(self.size_of(&info.ty));
+                let ref_const = match info.passing {
+                    Passing::FixedRef => true,
+                    Passing::BindRef => !has_inner,
+                    Passing::FlexRef => false,
+                    Passing::Copy | Passing::Flex | Passing::Fixed | Passing::Bind => {
+                        info.refers.is_some() && !info.mode.can_change_contents(has_inner)
+                    }
+                };
+                let read_only = info.ty != Type::Region && (hidden || ref_const);
+                event.captures.push((name, info.ty.clone(), read_only));
             }
         }
         self.events.insert(event_id(event), event.clone());
@@ -2298,6 +2312,9 @@ impl Checker {
                 for m in muts {
                     for e2 in &events {
                         if m.starts_with('.') && e1.owner != e2.owner {
+                            continue;
+                        }
+                        if !m.contains('.') && e2.in_task.is_some() && e1.in_task != e2.in_task {
                             continue;
                         }
                         if trigger_matches(m, e2) {
@@ -26873,7 +26890,7 @@ fn collect_names_and_regions(e: &Expr, used: &mut Vec<String>) {
 fn event_id(e: &EventDef) -> String {
     match (&e.owner, &e.in_task) {
         (Some(owner), _) => format!("{}.{}", owner, e.name),
-        (None, Some(task)) => format!("{}#{}", task, e.name),
+        (None, Some(task)) => format!("{}#{}@{}:{}", task, e.name, e.span.line, e.span.col),
         (None, None) => e.name.clone(),
     }
 }

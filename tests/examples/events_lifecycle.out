@@ -1,0 +1,10 @@
+active inside=2
+[audit] token read on alpha (#1)
+got tok-1 after 1 read
+[trace] starting alpha
+[trace] finished alpha
+[alert] total alerts now 1
+[trace] finished beta
+results=80, -1
+active after block=0
+batch peak=95

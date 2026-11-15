@@ -1,0 +1,3 @@
+service=ledger scale=150 tag=v1
+exact next id=1844674407370955161700002
+json={"service":"ledger","next_snowflake":1844674407370955161700002,"active":true}

@@ -1793,8 +1793,9 @@ pub enum StmtKind {
     Turns(Vec<Block>),
     Match(Expr, Vec<Case>),
     /// An event declared inside a task, watching the task's locals while it
-    /// runs (see `EventDef::in_task`).
-    Event(EventDef),
+    /// runs (see `EventDef::in_task`). Boxed to keep `StmtKind` compact so
+    /// deeply nested statements cannot blow the stack.
+    Event(Box<EventDef>),
     Send(Vec<Expr>),
     SetResults(Vec<Binding>, Vec<Expr>),
     Region {
@@ -2675,8 +2676,8 @@ pub struct EventDef {
     pub in_task: Option<String>,
     /// For an in-task event, the enclosing task's locals its body uses, passed
     /// by pointer when the event runs (a C function can't see another
-    /// function's locals).
-    pub captures: Vec<(String, Type)>,
+    /// function's locals), along with whether the C place is `const`.
+    pub captures: Vec<(String, Type, bool)>,
     pub span: Span,
 }
 

@@ -1,0 +1,160 @@
+; Regression tests for lifecycle/read/before/after/in-task event edge cases:
+; - on read on rvalue return, fixed& parameter, and hidden (>64B) parameter
+; - shared event ... on drop without any member drop event
+; - on drop running on loop break and continue
+; - before / after hooks (member auto, member listen-gated, and shared) including on <-
+; - duplicate in-task event names across branches, capturing flex& and fixed& params
+; - identical local names across different tasks stay isolated
+
+shape Small
+    hp: int = 0
+
+    event saw on read .hp auto
+        show("small saw ", .hp)
+    fi
+fi
+
+shape Big
+    pad: [int#10] = [0#10]
+    hp: int = 0
+
+    event saw on read .hp auto
+        show("big saw ", .hp)
+    fi
+fi
+
+task make_small(n: int) -> Small
+    <- Small { hp: n }
+fi
+
+task inspect_small(fixed& s: Small) -> int
+    <- s.hp
+fi
+
+task inspect_big(fixed b: Big) -> int
+    <- b.hp
+fi
+
+shape SharedDrop
+    tag: int = 0
+    shared flex dropped: int = 0
+
+    shared event count_drop on drop
+        SharedDrop.dropped = SharedDrop.dropped + 1
+    fi
+fi
+
+shape ScopedItem
+    id: int = 0
+
+    event bye on drop auto
+        show("drop item ", .id)
+    fi
+fi
+
+shape Worker
+    id: int = 0
+    shared flex traces: int = 0
+
+    event guard before .compute
+        show("listen guard ", .id)
+    fi
+
+    event finish after .compute auto
+        show("auto after ", .id)
+    fi
+
+    shared event enter_shared before .compute
+        Worker.traces = Worker.traces + 1
+    fi
+
+    shared event exit_shared after .compute
+        Worker.traces = Worker.traces + 10
+    fi
+
+    compute(n: int) -> int
+        when n < 0
+            <- -1
+        fi
+        <- n + .id
+    fi
+fi
+
+task track_refs(flex& acc: int, fixed& step: int, which: bool)
+    flex sig = 0
+    when which
+        alters(acc) event bump on sig
+            acc = acc + step
+        fi
+        sig = 1
+    else
+        alters(acc) event bump on sig
+            acc = acc + step * 2
+        fi
+        sig = 1
+    fi
+fi
+
+task isolated_a()
+    flex x = 1
+    flex y = 0
+    alters(y) event watch on x
+        y = y + 100
+    fi
+    x = 2
+    show("a y=", y)
+fi
+
+task isolated_b()
+    flex x = 10
+    x = 20
+    show("b x=", x)
+fi
+
+task main()
+    fixed r_val = make_small(42).hp
+    show("rvalue=", r_val)
+    fixed sm = Small { hp: 15 }
+    fixed f_val = inspect_small(&sm)
+    show("fixedref=", f_val)
+    fixed bg = Big { hp: 77 }
+    fixed h_val = inspect_big(bg)
+    show("hidden=", h_val)
+
+    when true
+        fixed d1 = SharedDrop { tag: 1 }
+        fixed d2 = SharedDrop { tag: 2 }
+        show("inside ", d1.tag, " ", d2.tag)
+    fi
+    show("shared dropped=", SharedDrop.dropped)
+
+    each i in 0..3
+        fixed s = ScopedItem { id: i }
+        show("loop ", s.id)
+        when i == 0
+            continue
+        fi
+        when i == 1
+            break
+        fi
+    fi
+
+    flex w1 = Worker { id: 5 }
+    fixed w1_res = w1.compute(-2)
+    show("w1=", w1_res)
+    flex w2 = Worker { id: 9 }
+    w2.listen("guard")
+    fixed w2_res = w2.compute(3)
+    show("w2=", w2_res)
+    show("traces=", Worker.traces)
+
+    flex a1 = 1
+    fixed s1 = 10
+    track_refs(&a1, &s1, true)
+    flex a2 = 1
+    track_refs(&a2, &s1, false)
+    show("refs=", a1, " ", a2)
+
+    isolated_a()
+    isolated_b()
+fi

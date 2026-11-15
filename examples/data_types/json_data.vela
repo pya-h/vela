@@ -1,0 +1,30 @@
+; Standalone `std/json` usage: parsing nested objects and arrays, preserving
+; integers beyond 64 bits verbatim via `Json.BigInt`, doing exact arithmetic on
+; them with `std/int512`, and serializing a response tree back to JSON text.
+
+include std/json { Json, parse, stringify }
+include std/int512 { Int512 }
+
+task main()
+    region r default
+    fixed raw = "\{\"service\": \"ledger\", \"scale\": 1.5e2, \"active\": true, \"tags\": [\"v1\", \"fast\"], \"snowflake\": 1844674407370955161700001\}"
+    fixed doc = parse(raw, r) { Json.Null }
+
+    fixed service = doc.get("service") { Json.Null }.as_text() { "" }
+    fixed scale = doc.get("scale") { Json.Null }.as_float() { 0.0 }
+    fixed first_tag = doc.get("tags") { Json.Null }.item(0) { Json.Null }.as_text() { "" }
+    fixed big_digits = doc.get("snowflake") { Json.Null }.as_big_int() { "0" }
+
+    fixed big_num = Int512.parse(big_digits) { Int512.zero() }
+    fixed next_id = big_num + Int512.one()
+
+    show("service=", service, " scale=", scale, " tag=", first_tag)
+    show("exact next id=", next_id.str(r))
+
+    flex out: [text: Json]@r = new [text: Json]() at r
+    out["service"] = Json.Str(service)
+    out["next_snowflake"] = Json.BigInt(next_id.str(r))
+    out["active"] = Json.Bool(true)
+    show("json=", stringify(Json.Object(out), r))
+fi
+

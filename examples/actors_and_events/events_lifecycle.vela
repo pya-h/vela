@@ -1,0 +1,81 @@
+; Lifecycle, read, method-hook, shared, and in-task events working together:
+; - `shared event ... on init` / `on drop` tracks live instances automatically
+; - `on read .token` audits sensitive reads without re-triggering inside itself
+; - `before` / `after` hooks run around method calls (auto and `.listen(...)` gated)
+; - top-level `event ... on Session.alerts` watches a shared field across the program
+; - an in-task `event` tracks local spikes within a single task
+
+shape Session
+    id: text
+    token: text
+    reads: int = 0
+
+    shared flex active: int = 0
+    shared flex alerts: int = 0
+
+    shared event opened on init
+        Session.active = Session.active + 1
+    fi
+
+    shared event closed on drop
+        Session.active = Session.active - 1
+    fi
+
+    alters(.reads) event audit_token on read .token auto
+        .reads = .reads + 1
+        show("[audit] token read on ", .id, " (#", .reads, ")")
+    fi
+
+    event trace_run before .process
+        show("[trace] starting ", .id)
+    fi
+
+    event finish_run after .process auto
+        show("[trace] finished ", .id)
+    fi
+
+    alters process(load: int) -> int
+        when load > 80
+            Session.alerts = Session.alerts + 1
+            <- -1
+        fi
+        <- load * 2
+    fi
+fi
+
+event on_alert on Session.alerts
+    show("[alert] total alerts now ", Session.alerts)
+fi
+
+task monitor_batch()
+    flex peak = 0
+    flex load = 0
+
+    alters(peak) event track_peak on load when load > peak
+        peak = load
+    fi
+
+    load = 30
+    load = 95
+    load = 60
+    show("batch peak=", peak)
+fi
+
+task main()
+    when true
+        flex s1 = Session { id: "alpha", token: "tok-1" }
+        flex s2 = Session { id: "beta", token: "tok-2" }
+        show("active inside=", Session.active)
+
+        fixed tok = s1.token
+        show("got ", tok, " after ", s1.reads, " read")
+
+        s1.listen("trace_run")
+        fixed r1 = s1.process(40)
+        fixed r2 = s2.process(90)
+        show("results=", r1, ", ", r2)
+    fi
+
+    show("active after block=", Session.active)
+    monitor_batch()
+fi

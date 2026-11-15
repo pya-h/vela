@@ -1,0 +1,21 @@
+small saw 42
+rvalue=42
+small saw 15
+fixedref=15
+big saw 77
+hidden=77
+inside 1 2
+shared dropped=2
+loop 0
+drop item 0
+loop 1
+drop item 1
+auto after 5
+w1=-1
+listen guard 9
+auto after 9
+w2=12
+traces=22
+refs=11 21
+a y=100
+b x=20

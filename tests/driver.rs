@@ -197,6 +197,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("unpacked names", format!("task main()\n    fixed {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
         ("unpacked places", format!("task main()\n    {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
         ("nested lambdas", program(format!("{}1{}", "(x: int) -> int <- ".repeat(deep), " fi".repeat(deep)))),
+        ("nested events", format!("task main()\n{}fi\n", "event e on x\n".repeat(deep) + &"fi\n".repeat(deep))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);

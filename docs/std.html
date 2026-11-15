@@ -503,9 +503,9 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
 <span class="keyword">fi</span></pre>
       <table>
         <tr><th>Name</th><th>Role</th></tr>
-        <tr><td><code>Json</code></td><td>Kind representing JSON values: <code>Null</code>, <code>Bool(b)</code>, <code>Int(n)</code>, <code>Float(f)</code>, <code>Str(s)</code>, <code>Array(items)</code>, <code>Object(props)</code></td></tr>
+        <tr><td><code>Json</code></td><td>Kind representing JSON values: <code>Null</code>, <code>Bool(b)</code>, <code>Int(n)</code>, <code>BigInt(digits)</code>, <code>Float(f)</code>, <code>Str(s)</code>, <code>Array(items)</code>, <code>Object(props)</code>. Integers outside signed 64-bit range stay exact as <code>BigInt</code> digits and serialize verbatim.</td></tr>
         <tr><td><code>Json.is_null()</code></td><td>Returns <code>true</code> if the value is <code>Null</code></td></tr>
-        <tr><td><code>Json.as_bool()</code>, <code>as_int()</code>, <code>as_float()</code>, <code>as_text()</code></td><td>Unwraps primitive values into <code>maybe T</code></td></tr>
+        <tr><td><code>Json.as_bool()</code>, <code>as_int()</code>, <code>as_big_int()</code>, <code>as_float()</code>, <code>as_text()</code></td><td>Unwraps primitive values into <code>maybe T</code> (<code>as_big_int()</code> returns exact decimal <code>text@this</code>, ready for <code>Int512.parse</code>)</td></tr>
         <tr><td><code>Json.get(key)</code></td><td>Looks up a property in an object, returning <code>maybe Json@this</code></td></tr>
         <tr><td><code>Json.item(idx)</code></td><td>Retrieves an element from an array by index, returning <code>maybe Json@this</code></td></tr>
         <tr><td><code>Json.str(r)</code></td><td>Serializes the JSON tree to text in region <code>r</code></td></tr>

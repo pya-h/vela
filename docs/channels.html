@@ -290,7 +290,7 @@
             <td><code>wait_and_receive(c)</code></td>
             <td><code>c.wait_and_receive()</code></td>
             <td><code>T</code></td>
-            <td>Blocks if the buffer is empty until a message arrives. Returns the received payload.</td>
+            <td>Blocks if the buffer is empty until a message arrives, returning the received payload. Traps if the channel is closed and drained (use <code>receive(c)</code> to check non-blockingly and handle closure safely).</td>
           </tr>
           <tr>
             <td><code>receive(c)</code></td>

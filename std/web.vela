@@ -2090,7 +2090,8 @@ task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: regio
     when served.len == 0 or on_disk.len == 0
         <- fail WebError.RouteNotFound(req.path)
     fi
-    when on_disk != served and cut(on_disk, 0, served.len + 1) != "{served}/"
+    fixed inside = when served == "/" on_disk != "/" else on_disk == served or cut(on_disk, 0, served.len + 1) == "{served}/" fi
+    when not inside
         <- fail WebError.BadRequest("invalid path: a link escapes the served folder")
     fi
     flex f = File { path: disk_path }
