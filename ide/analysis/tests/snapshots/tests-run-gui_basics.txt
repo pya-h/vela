@@ -1,0 +1,132 @@
+  1 | ; Tests std/gui foundation: geometry, colors, window, canvas rasterization, and per-frame event dispatch.
+    | comment:; Tests std/gui foundation: geometry, colors, window, canvas rasterization, and per-frame event dispatch.
+  2 | include std/gui { Window, GuiEvent, Point, Rect, Color }
+    | keyword:include  module:std  operator:/  module:gui  punctuation:{  type:Window  punctuation:,  type:GuiEvent  punctuation:,  type:Point  punctuation:,  type:Rect  punctuation:,  type:Color  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     ; 1. Geometry tests
+    | comment:; 1. Geometry tests
+  6 |     fixed r1 = Rect { x: 10, y: 10, width: 50, height: 50 }
+    | keyword:fixed  variable:r1  operator:=  type:Rect  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:10  punctuation:,  field:width  punctuation::  number:50  punctuation:,  field:height  punctuation::  number:50  punctuation:}
+  7 |     fixed p_in = Point { x: 20, y: 30 }
+    | keyword:fixed  variable:p_in  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:20  punctuation:,  field:y  punctuation::  number:30  punctuation:}
+  8 |     fixed p_out = Point { x: 80, y: 90 }
+    | keyword:fixed  variable:p_out  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:80  punctuation:,  field:y  punctuation::  number:90  punctuation:}
+  9 |     show("contains inside: ", r1.contains(p_in))
+    | builtin-fn:show  punctuation:(  string:"contains inside: "  punctuation:,  variable:r1  punctuation:.  method:contains  punctuation:(  variable:p_in  punctuation:)  punctuation:)
+ 10 |     show("contains outside: ", r1.contains(p_out))
+    | builtin-fn:show  punctuation:(  string:"contains outside: "  punctuation:,  variable:r1  punctuation:.  method:contains  punctuation:(  variable:p_out  punctuation:)  punctuation:)
+ 12 |     fixed r2 = Rect { x: 30, y: 30, width: 40, height: 40 }
+    | keyword:fixed  variable:r2  operator:=  type:Rect  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:30  punctuation:,  field:width  punctuation::  number:40  punctuation:,  field:height  punctuation::  number:40  punctuation:}
+ 13 |     fixed r3 = Rect { x: 100, y: 100, width: 20, height: 20 }
+    | keyword:fixed  variable:r3  operator:=  type:Rect  punctuation:{  field:x  punctuation::  number:100  punctuation:,  field:y  punctuation::  number:100  punctuation:,  field:width  punctuation::  number:20  punctuation:,  field:height  punctuation::  number:20  punctuation:}
+ 14 |     show("intersects overlapping: ", r1.intersects(r2))
+    | builtin-fn:show  punctuation:(  string:"intersects overlapping: "  punctuation:,  variable:r1  punctuation:.  method:intersects  punctuation:(  variable:r2  punctuation:)  punctuation:)
+ 15 |     show("intersects separated: ", r1.intersects(r3))
+    | builtin-fn:show  punctuation:(  string:"intersects separated: "  punctuation:,  variable:r1  punctuation:.  method:intersects  punctuation:(  variable:r3  punctuation:)  punctuation:)
+ 17 |     ; 2. Color tests
+    | comment:; 2. Color tests
+ 18 |     fixed c1 = Color.rgb(255, 128, 64)
+    | keyword:fixed  variable:c1  operator:=  type:Color  punctuation:.  method:rgb  punctuation:(  number:255  punctuation:,  number:128  punctuation:,  number:64  punctuation:)
+ 19 |     show("color rgb: ", c1.r, " ", c1.g, " ", c1.b, " ", c1.a)
+    | builtin-fn:show  punctuation:(  string:"color rgb: "  punctuation:,  variable:c1  punctuation:.  field:r  punctuation:,  string:" "  punctuation:,  variable:c1  punctuation:.  field:g  punctuation:,  string:" "  punctuation:,  variable:c1  punctuation:.  field:b  punctuation:,  string:" "  punctuation:,  variable:c1  punctuation:.  field:a  punctuation:)
+ 20 |     fixed c2 = Color.hex(0xFF8040)
+    | keyword:fixed  variable:c2  operator:=  type:Color  punctuation:.  method:hex  punctuation:(  number:0xFF8040  punctuation:)
+ 21 |     show("color hex: ", c2.r, " ", c2.g, " ", c2.b, " ", c2.a)
+    | builtin-fn:show  punctuation:(  string:"color hex: "  punctuation:,  variable:c2  punctuation:.  field:r  punctuation:,  string:" "  punctuation:,  variable:c2  punctuation:.  field:g  punctuation:,  string:" "  punctuation:,  variable:c2  punctuation:.  field:b  punctuation:,  string:" "  punctuation:,  variable:c2  punctuation:.  field:a  punctuation:)
+ 23 |     ; 3. Window & Canvas rasterization
+    | comment:; 3. Window & Canvas rasterization
+ 24 |     flex win = Window.open("Test Window", 160, 120) { failure _
+    | keyword:flex  variable:win  operator:=  type:Window  punctuation:.  method:open  punctuation:(  string:"Test Window"  punctuation:,  number:160  punctuation:,  number:120  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 25 |         show("failed to open window")
+    | builtin-fn:show  punctuation:(  string:"failed to open window"  punctuation:)
+ 26 |         <-
+    | keyword:<-
+ 27 |     }
+    | punctuation:}
+ 28 |     show("window open: ", win.is_open)
+    | builtin-fn:show  punctuation:(  string:"window open: "  punctuation:,  variable:win  punctuation:.  field:is_open  punctuation:)
+ 30 |     fixed canvas = win.canvas()
+    | keyword:fixed  variable:canvas  operator:=  variable:win  punctuation:.  method:canvas  punctuation:(  punctuation:)
+ 31 |     canvas.clear(Color.black())
+    | variable:canvas  punctuation:.  method:clear  punctuation:(  type:Color  punctuation:.  method:black  punctuation:(  punctuation:)  punctuation:)
+ 33 |     ; Test pixel drawing and readback
+    | comment:; Test pixel drawing and readback
+ 34 |     canvas.draw_pixel(10, 10, Color.red())
+    | variable:canvas  punctuation:.  method:draw_pixel  punctuation:(  number:10  punctuation:,  number:10  punctuation:,  type:Color  punctuation:.  method:red  punctuation:(  punctuation:)  punctuation:)
+ 35 |     fixed px1 = canvas.pixel_at(10, 10)
+    | keyword:fixed  variable:px1  operator:=  variable:canvas  punctuation:.  method:pixel_at  punctuation:(  number:10  punctuation:,  number:10  punctuation:)
+ 36 |     show("pixel at (10,10): ", px1.r, " ", px1.g, " ", px1.b)
+    | builtin-fn:show  punctuation:(  string:"pixel at (10,10): "  punctuation:,  variable:px1  punctuation:.  field:r  punctuation:,  string:" "  punctuation:,  variable:px1  punctuation:.  field:g  punctuation:,  string:" "  punctuation:,  variable:px1  punctuation:.  field:b  punctuation:)
+ 38 |     ; Test fill_rect and readback
+    | comment:; Test fill_rect and readback
+ 39 |     canvas.fill_rect(Rect { x: 20, y: 20, width: 10, height: 10 }, Color.green())
+    | variable:canvas  punctuation:.  method:fill_rect  punctuation:(  type:Rect  punctuation:{  field:x  punctuation::  number:20  punctuation:,  field:y  punctuation::  number:20  punctuation:,  field:width  punctuation::  number:10  punctuation:,  field:height  punctuation::  number:10  punctuation:}  punctuation:,  type:Color  punctuation:.  method:green  punctuation:(  punctuation:)  punctuation:)
+ 40 |     fixed px2 = canvas.pixel_at(25, 25)
+    | keyword:fixed  variable:px2  operator:=  variable:canvas  punctuation:.  method:pixel_at  punctuation:(  number:25  punctuation:,  number:25  punctuation:)
+ 41 |     show("fill_rect pixel: ", px2.r, " ", px2.g, " ", px2.b)
+    | builtin-fn:show  punctuation:(  string:"fill_rect pixel: "  punctuation:,  variable:px2  punctuation:.  field:r  punctuation:,  string:" "  punctuation:,  variable:px2  punctuation:.  field:g  punctuation:,  string:" "  punctuation:,  variable:px2  punctuation:.  field:b  punctuation:)
+ 43 |     ; Test draw_line
+    | comment:; Test draw_line
+ 44 |     canvas.draw_line(0, 0, 10, 0, Color.blue())
+    | variable:canvas  punctuation:.  method:draw_line  punctuation:(  number:0  punctuation:,  number:0  punctuation:,  number:10  punctuation:,  number:0  punctuation:,  type:Color  punctuation:.  method:blue  punctuation:(  punctuation:)  punctuation:)
+ 45 |     fixed px3 = canvas.pixel_at(5, 0)
+    | keyword:fixed  variable:px3  operator:=  variable:canvas  punctuation:.  method:pixel_at  punctuation:(  number:5  punctuation:,  number:0  punctuation:)
+ 46 |     show("draw_line pixel: ", px3.r, " ", px3.g, " ", px3.b)
+    | builtin-fn:show  punctuation:(  string:"draw_line pixel: "  punctuation:,  variable:px3  punctuation:.  field:r  punctuation:,  string:" "  punctuation:,  variable:px3  punctuation:.  field:g  punctuation:,  string:" "  punctuation:,  variable:px3  punctuation:.  field:b  punctuation:)
+ 48 |     ; Test draw_text
+    | comment:; Test draw_text
+ 49 |     canvas.draw_text("Vela", Point { x: 50, y: 50 }, Color.white())
+    | variable:canvas  punctuation:.  method:draw_text  punctuation:(  string:"Vela"  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:50  punctuation:,  field:y  punctuation::  number:50  punctuation:}  punctuation:,  type:Color  punctuation:.  method:white  punctuation:(  punctuation:)  punctuation:)
+ 51 |     ; Test PPM export
+    | comment:; Test PPM export
+ 52 |     region export_r default
+    | keyword:region  region:export_r  keyword:default
+ 53 |     fixed ppm = canvas.export_ppm(export_r)
+    | keyword:fixed  variable:ppm  operator:=  variable:canvas  punctuation:.  method:export_ppm  punctuation:(  region:export_r  punctuation:)
+ 54 |     show("ppm exported: ", ppm.len > 0)
+    | builtin-fn:show  punctuation:(  string:"ppm exported: "  punctuation:,  variable:ppm  punctuation:.  field:len  operator:>  number:0  punctuation:)
+ 55 |     show("ppm header P6: ", ppm.len >= 3 and ppm[0] == 'P' and ppm[1] == '6')
+    | builtin-fn:show  punctuation:(  string:"ppm header P6: "  punctuation:,  variable:ppm  punctuation:.  field:len  operator:>=  number:3  keyword:and  variable:ppm  punctuation:[  number:0  punctuation:]  operator:==  string:'P'  keyword:and  variable:ppm  punctuation:[  number:1  punctuation:]  operator:==  string:'6'  punctuation:)
+ 57 |     ; 4. Event queue and frame loop simulation
+    | comment:; 4. Event queue and frame loop simulation
+ 58 |     win.push_event(1, 42, 84, 1) ; MouseDown
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:42  punctuation:,  number:84  punctuation:,  number:1  punctuation:)  comment:; MouseDown
+ 59 |     win.push_event(7)            ; CloseRequested
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:7  punctuation:)  comment:; CloseRequested
+ 61 |     loop win.is_open
+    | keyword:loop  variable:win  punctuation:.  field:is_open
+ 62 |         region frame default
+    | keyword:region  region:frame  keyword:default
+ 63 |         fixed ev = win.poll_event()
+    | keyword:fixed  variable:ev  operator:=  variable:win  punctuation:.  method:poll_event  punctuation:(  punctuation:)
+ 64 |         match ev
+    | keyword:match  variable:ev
+ 65 |         case GuiEvent.Redraw
+    | keyword:case  type:GuiEvent  punctuation:.  variant:Redraw
+ 66 |             show("event: redraw")
+    | builtin-fn:show  punctuation:(  string:"event: redraw"  punctuation:)
+ 67 |         case GuiEvent.MouseDown x y btn
+    | keyword:case  type:GuiEvent  punctuation:.  variant:MouseDown  variable:x  variable:y  variable:btn
+ 68 |             show("event: mouse_down at (", x, ", ", y, ") button=", btn)
+    | builtin-fn:show  punctuation:(  string:"event: mouse_down at ("  punctuation:,  variable:x  punctuation:,  string:", "  punctuation:,  variable:y  punctuation:,  string:") button="  punctuation:,  variable:btn  punctuation:)
+ 69 |         case GuiEvent.CloseRequested
+    | keyword:case  type:GuiEvent  punctuation:.  variant:CloseRequested
+ 70 |             show("event: close_requested")
+    | builtin-fn:show  punctuation:(  string:"event: close_requested"  punctuation:)
+ 71 |             win.close()
+    | variable:win  punctuation:.  field:close  punctuation:(  punctuation:)
+ 72 |             break
+    | keyword:break
+ 73 |         case _
+    | keyword:case  keyword:_
+ 74 |             show("event: other")
+    | builtin-fn:show  punctuation:(  string:"event: other"  punctuation:)
+ 75 |         fi
+    | keyword:fi
+ 76 |     fi
+    | keyword:fi
+ 78 |     show("window closed: ", not win.is_open)
+    | builtin-fn:show  punctuation:(  string:"window closed: "  punctuation:,  keyword:not  variable:win  punctuation:.  field:is_open  punctuation:)
+ 79 | fi
+    | keyword:fi

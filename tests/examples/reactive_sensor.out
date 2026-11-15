@@ -1,0 +1,6 @@
+Setting normal temperature...
+Simulating thermal surge...
+[Monitor Alert #1] Overheat detected at Server Room A: 88C
+[Monitor Alert #2] Overheat detected at Server Room A: 94C
+Monitor incidents: 2, peak: 94C
+Recorded incidents: 2

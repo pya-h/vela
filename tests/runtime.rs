@@ -31,13 +31,36 @@ fn scratch_dir(suite: &str) -> PathBuf {
 }
 
 fn files(dir: &str, extension: &str) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = fs::read_dir(root().join(dir))
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == extension))
-        .collect();
-    files.sort();
-    files
+    if dir == "examples" {
+        fn collect(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
+            let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .collect();
+            entries.sort();
+            for path in entries {
+                if path.is_dir() {
+                    if path.file_name().is_some_and(|n| n != "shop") {
+                        collect(&path, ext, out);
+                    }
+                } else if path.extension().is_some_and(|e| e == ext) {
+                    out.push(path);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        collect(&root().join(dir), extension, &mut files);
+        files.sort();
+        files
+    } else {
+        let mut files: Vec<PathBuf> = fs::read_dir(root().join(dir))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|ext| ext == extension))
+            .collect();
+        files.sort();
+        files
+    }
 }
 
 fn stem(path: &Path) -> String {

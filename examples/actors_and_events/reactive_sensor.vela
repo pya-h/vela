@@ -1,0 +1,52 @@
+; Demonstrates bridging Events with Actors:
+; - Sensor shape defines local fields and reactive mutation hooks
+; - A high-temperature event detects anomalies and dispatches directly into an Actor's mailbox
+; - The Monitor Actor isolates alert processing and maintains incident logs
+
+actor Monitor(incident_count: int, max_temp: int)
+
+    on Alert(temp: int, location: text)
+        incident_count += 1
+        when temp > max_temp
+            max_temp = temp
+        fi
+        show("[Monitor Alert #", incident_count, "] Overheat detected at ", location, ": ", temp, "C")
+    fi
+
+    on GetStats(reply: Chan[int])
+        show("Monitor incidents: ", incident_count, ", peak: ", max_temp, "C")
+        reply.dispatch(incident_count)
+    fi
+fi
+
+shape Thermometer
+    location: text
+    temperature: int
+    alert_chan: Actor[Monitor]
+
+    ; Reactive event triggered when temperature changes
+    event on_temp_change on .temperature auto
+        when .temperature > 75
+            .alert_chan.dispatch(Monitor.Alert(.temperature, .location))
+        fi
+    fi
+fi
+
+task main()
+    fixed mon = spawn Monitor(0, 0)
+    flex t1 = Thermometer { location: "Server Room A", temperature: 22, alert_chan: mon }
+
+    show("Setting normal temperature...")
+    t1.temperature = 45
+
+    show("Simulating thermal surge...")
+    t1.temperature = 88
+    t1.temperature = 94
+
+    fixed stats = chan_new<int>(1)
+    mon.dispatch(Monitor.GetStats(stats))
+    fixed incidents = stats.wait_and_receive()
+    show("Recorded incidents: ", incidents)
+
+    mon.close()
+fi

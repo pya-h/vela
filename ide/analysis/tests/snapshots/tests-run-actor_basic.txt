@@ -1,0 +1,38 @@
+  1 | ; Basic actor definition, spawning, message sending, state update, reply channel, and close.
+    | comment:; Basic actor definition, spawning, message sending, state update, reply channel, and close.
+  3 | actor Counter(count: int)
+    | keyword:actor  task:Counter  punctuation:(  variable:count  punctuation::  type-builtin:int  punctuation:)
+  5 |     on Increment(step: int)
+    | variable:on  task:Increment  punctuation:(  variable:step  punctuation::  type-builtin:int  punctuation:)
+  6 |         count += step
+    | variable:count  operator:+=  variable:step
+  7 |     fi
+    | keyword:fi
+  9 |     on Get(reply: Chan[int])
+    | variable:on  task:Get  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 10 |         reply.dispatch(count)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:count  punctuation:)
+ 11 |     fi
+    | keyword:fi
+ 12 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     fixed c = spawn Counter(10)
+    | keyword:fixed  variable:c  operator:=  keyword:spawn  task:Counter  punctuation:(  number:10  punctuation:)
+ 16 |     c.dispatch(Counter.Increment(5))
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Increment  punctuation:(  number:5  punctuation:)  punctuation:)
+ 17 |     dispatch(c, Counter.Increment(15))
+    | task:dispatch  punctuation:(  variable:c  punctuation:,  variable:Counter  punctuation:.  field:Increment  punctuation:(  number:15  punctuation:)  punctuation:)
+ 19 |     fixed reply = chan_new<int>(1)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 20 |     c.dispatch(Counter.Get(reply))
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Get  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 22 |     fixed res = reply.wait_and_receive()
+    | keyword:fixed  variable:res  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 23 |     show("counter: ", res)
+    | builtin-fn:show  punctuation:(  string:"counter: "  punctuation:,  variable:res  punctuation:)
+ 25 |     c.close()
+    | variable:c  punctuation:.  field:close  punctuation:(  punctuation:)
+ 26 | fi
+    | keyword:fi

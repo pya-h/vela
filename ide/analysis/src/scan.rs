@@ -1039,6 +1039,8 @@ impl<'a> Tokens<'a> {
     fn ident(&self, p: usize) -> Option<&'a str> {
         match self.token(p) {
             Some(Token::Ident(name)) => Some(name),
+            Some(Token::Own) => Some("own"),
+            Some(Token::Event) => Some("event"),
             _ => None,
         }
     }
@@ -2251,6 +2253,33 @@ impl<'a> Classifier<'a> {
                 Token::Tilde => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = was_after_type;
+                }
+                Token::Own
+                    if declaring_now.is_some()
+                        || matches!(
+                            tokens.token(p + 1),
+                            Some(
+                                Token::RParen
+                                    | Token::RBracket
+                                    | Token::RBrace
+                                    | Token::Comma
+                                    | Token::Newline
+                                    | Token::Eof
+                                    | Token::Assign
+                            )
+                        ) =>
+                {
+                    let (class, symbol) = self.identifier(
+                        p,
+                        "own",
+                        was_type,
+                        declaring_now,
+                        in_task_header,
+                        in_pattern,
+                        &braces,
+                    );
+                    self.push(range, class, symbol);
+                    after_type = was_type;
                 }
                 keyword => {
                     self.push(range, TokenClass::Keyword, None);

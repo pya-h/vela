@@ -1,0 +1,140 @@
+  1 | ; An interactive counter application built with std/gui.
+    | comment:; An interactive counter application built with std/gui.
+  2 | ; Demonstrates per-frame region discipline, rich styled widgets (Button, Label, ProgressBar, Style),
+    | comment:; Demonstrates per-frame region discipline, rich styled widgets (Button, Label, ProgressBar, Style),
+  3 | ; and software canvas rendering with event dispatching.
+    | comment:; and software canvas rendering with event dispatching.
+  4 | include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, Label, ProgressBar, is_interactive }
+    | keyword:include  module:std  operator:/  module:gui  punctuation:{  type:Window  punctuation:,  type:Canvas  punctuation:,  type:GuiEvent  punctuation:,  type:Point  punctuation:,  type:Rect  punctuation:,  type:Color  punctuation:,  type:Style  punctuation:,  type:Button  punctuation:,  type:Label  punctuation:,  type:ProgressBar  punctuation:,  task:is_interactive  punctuation:}
+  6 | task draw_scene(canvas: Canvas, flex& win: Window, count: int, btn_inc: Button, btn_dec: Button, btn_rst: Button, progress: ProgressBar, title_label: Label, r: region default)
+    | keyword:task  task:draw_scene  punctuation:(  parameter:canvas  punctuation::  type:Canvas  punctuation:,  keyword:flex  keyword:&  parameter:win  punctuation::  type:Window  punctuation:,  parameter:count  punctuation::  type-builtin:int  punctuation:,  parameter:btn_inc  punctuation::  type:Button  punctuation:,  parameter:btn_dec  punctuation::  type:Button  punctuation:,  parameter:btn_rst  punctuation::  type:Button  punctuation:,  parameter:progress  punctuation::  type:ProgressBar  punctuation:,  parameter:title_label  punctuation::  type:Label  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+  7 |     canvas.clear(Color.hex(0x0F172A))
+    | parameter:canvas  punctuation:.  method:clear  punctuation:(  type:Color  punctuation:.  method:hex  punctuation:(  number:0x0F172A  punctuation:)  punctuation:)
+  9 |     title_label.draw(canvas)
+    | parameter:title_label  punctuation:.  method:draw  punctuation:(  parameter:canvas  punctuation:)
+ 10 |     canvas.draw_text("Current count: {count}" at r, Point { x: 30, y: 55 }, Color.hex(0x38BDF8))
+    | parameter:canvas  punctuation:.  method:draw_text  punctuation:(  string:"Current count: {  parameter:count  string:}"  keyword:at  region:r  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:55  punctuation:}  punctuation:,  type:Color  punctuation:.  method:hex  punctuation:(  number:0x38BDF8  punctuation:)  punctuation:)
+ 12 |     ; Draw progress bar reflecting count percentage (0 - 100%)
+    | comment:; Draw progress bar reflecting count percentage (0 - 100%)
+ 13 |     progress.draw(canvas)
+    | parameter:progress  punctuation:.  field:draw  punctuation:(  parameter:canvas  punctuation:)
+ 15 |     ; Draw styled action buttons
+    | comment:; Draw styled action buttons
+ 16 |     btn_inc.draw(canvas, Point { x: 0, y: 0 }, false)
+    | parameter:btn_inc  punctuation:.  method:draw  punctuation:(  parameter:canvas  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  keyword:false  punctuation:)
+ 17 |     btn_dec.draw(canvas, Point { x: 0, y: 0 }, false)
+    | parameter:btn_dec  punctuation:.  method:draw  punctuation:(  parameter:canvas  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  keyword:false  punctuation:)
+ 18 |     btn_rst.draw(canvas, Point { x: 0, y: 0 }, false)
+    | parameter:btn_rst  punctuation:.  method:draw  punctuation:(  parameter:canvas  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  keyword:false  punctuation:)
+ 20 |     win.present()
+    | parameter:win  punctuation:.  field:present  punctuation:(  punctuation:)
+ 21 | fi
+    | keyword:fi
+ 23 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 24 |     flex win = Window.open("Rich GUI Counter", 340, 220) { failure _
+    | keyword:flex  variable:win  operator:=  type:Window  punctuation:.  method:open  punctuation:(  string:"Rich GUI Counter"  punctuation:,  number:340  punctuation:,  number:220  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 25 |         show("failed opening window")
+    | builtin-fn:show  punctuation:(  string:"failed opening window"  punctuation:)
+ 26 |         <-
+    | keyword:<-
+ 27 |     }
+    | punctuation:}
+ 29 |     fixed title_label = Label { pos: Point { x: 30, y: 25 }, text: "Vela Modern Counter", color: Color.white() }
+    | keyword:fixed  variable:title_label  operator:=  type:Label  punctuation:{  field:pos  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:25  punctuation:}  punctuation:,  field:text  punctuation::  string:"Vela Modern Counter"  punctuation:,  field:color  punctuation::  type:Color  punctuation:.  method:white  punctuation:(  punctuation:)  punctuation:}
+ 31 |     fixed btn_inc = Button { rect: Rect { x: 30, y: 130, width: 85, height: 36 }, label: "+ Add", style: Style.success() }
+    | keyword:fixed  variable:btn_inc  operator:=  type:Button  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:130  punctuation:,  field:width  punctuation::  number:85  punctuation:,  field:height  punctuation::  number:36  punctuation:}  punctuation:,  field:label  punctuation::  string:"+ Add"  punctuation:,  field:style  punctuation::  type:Style  punctuation:.  method:success  punctuation:(  punctuation:)  punctuation:}
+ 32 |     fixed btn_dec = Button { rect: Rect { x: 125, y: 130, width: 85, height: 36 }, label: "- Sub", style: Style.primary() }
+    | keyword:fixed  variable:btn_dec  operator:=  type:Button  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:125  punctuation:,  field:y  punctuation::  number:130  punctuation:,  field:width  punctuation::  number:85  punctuation:,  field:height  punctuation::  number:36  punctuation:}  punctuation:,  field:label  punctuation::  string:"- Sub"  punctuation:,  field:style  punctuation::  type:Style  punctuation:.  method:primary  punctuation:(  punctuation:)  punctuation:}
+ 33 |     fixed btn_rst = Button { rect: Rect { x: 220, y: 130, width: 85, height: 36 }, label: "Reset", style: Style.danger() }
+    | keyword:fixed  variable:btn_rst  operator:=  type:Button  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:220  punctuation:,  field:y  punctuation::  number:130  punctuation:,  field:width  punctuation::  number:85  punctuation:,  field:height  punctuation::  number:36  punctuation:}  punctuation:,  field:label  punctuation::  string:"Reset"  punctuation:,  field:style  punctuation::  type:Style  punctuation:.  method:danger  punctuation:(  punctuation:)  punctuation:}
+ 35 |     flex progress = ProgressBar { rect: Rect { x: 30, y: 85, width: 275, height: 18 }, fill_color: Color.hex(0x10B981) }
+    | keyword:flex  variable:progress  operator:=  type:ProgressBar  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:30  punctuation:,  field:y  punctuation::  number:85  punctuation:,  field:width  punctuation::  number:275  punctuation:,  field:height  punctuation::  number:18  punctuation:}  punctuation:,  field:fill_color  punctuation::  type:Color  punctuation:.  method:hex  punctuation:(  number:0x10B981  punctuation:)  punctuation:}
+ 37 |     flex count = 0
+    | keyword:flex  variable:count  operator:=  number:0
+ 38 |     fixed canvas = win.canvas()
+    | keyword:fixed  variable:canvas  operator:=  variable:win  punctuation:.  method:canvas  punctuation:(  punctuation:)
+ 40 |     ; Simulate user clicks on buttons when running in automated headless testing
+    | comment:; Simulate user clicks on buttons when running in automated headless testing
+ 41 |     when not is_interactive()
+    | keyword:when  keyword:not  task:is_interactive  punctuation:(  punctuation:)
+ 42 |         win.push_event(1, 50, 140, 1)   ; click "+ Add"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:50  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; click "+ Add"
+ 43 |         win.push_event(1, 50, 140, 1)   ; click "+ Add"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:50  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; click "+ Add"
+ 44 |         win.push_event(1, 50, 140, 1)   ; click "+ Add"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:50  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; click "+ Add"
+ 45 |         win.push_event(1, 145, 140, 1)  ; click "- Sub"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:145  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; click "- Sub"
+ 46 |         win.push_event(1, 240, 140, 1)  ; click "Reset"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:240  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; click "Reset"
+ 47 |         win.push_event(7)               ; CloseRequested
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:7  punctuation:)  comment:; CloseRequested
+ 48 |     fi
+    | keyword:fi
+ 50 |     loop win.is_open
+    | keyword:loop  variable:win  punctuation:.  field:is_open
+ 51 |         region frame default
+    | keyword:region  region:frame  keyword:default
+ 52 |         fixed ev = win.poll_event()
+    | keyword:fixed  variable:ev  operator:=  variable:win  punctuation:.  method:poll_event  punctuation:(  punctuation:)
+ 53 |         match ev
+    | keyword:match  variable:ev
+ 54 |         case GuiEvent.Redraw
+    | keyword:case  type:GuiEvent  punctuation:.  variant:Redraw
+ 55 |             progress.set_value(count * 20)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  variable:count  operator:*  number:20  punctuation:)
+ 56 |             draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+    | task:draw_scene  punctuation:(  variable:canvas  punctuation:,  operator:&  variable:win  punctuation:,  variable:count  punctuation:,  variable:btn_inc  punctuation:,  variable:btn_dec  punctuation:,  variable:btn_rst  punctuation:,  variable:progress  punctuation:,  variable:title_label  punctuation:,  region:frame  punctuation:)
+ 57 |         case GuiEvent.MouseDown x y btn
+    | keyword:case  type:GuiEvent  punctuation:.  variant:MouseDown  variable:x  variable:y  variable:btn
+ 58 |             fixed click_pos = Point { x: x, y: y }
+    | keyword:fixed  variable:click_pos  operator:=  type:Point  punctuation:{  field:x  punctuation::  variable:x  punctuation:,  field:y  punctuation::  variable:y  punctuation:}
+ 59 |             when btn_inc.rect.contains(click_pos)
+    | keyword:when  variable:btn_inc  punctuation:.  field:rect  punctuation:.  method:contains  punctuation:(  variable:click_pos  punctuation:)
+ 60 |                 count++
+    | variable:count  operator:++
+ 61 |                 progress.set_value(count * 20)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  variable:count  operator:*  number:20  punctuation:)
+ 62 |                 show("count incremented: ", count, " (progress: ", progress.value, "%)")
+    | builtin-fn:show  punctuation:(  string:"count incremented: "  punctuation:,  variable:count  punctuation:,  string:" (progress: "  punctuation:,  variable:progress  punctuation:.  field:value  punctuation:,  string:"%)"  punctuation:)
+ 63 |                 draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+    | task:draw_scene  punctuation:(  variable:canvas  punctuation:,  operator:&  variable:win  punctuation:,  variable:count  punctuation:,  variable:btn_inc  punctuation:,  variable:btn_dec  punctuation:,  variable:btn_rst  punctuation:,  variable:progress  punctuation:,  variable:title_label  punctuation:,  region:frame  punctuation:)
+ 64 |             else when btn_dec.rect.contains(click_pos)
+    | keyword:else  keyword:when  variable:btn_dec  punctuation:.  field:rect  punctuation:.  method:contains  punctuation:(  variable:click_pos  punctuation:)
+ 65 |                 count--
+    | variable:count  operator:--
+ 66 |                 progress.set_value(count * 20)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  variable:count  operator:*  number:20  punctuation:)
+ 67 |                 show("count decremented: ", count, " (progress: ", progress.value, "%)")
+    | builtin-fn:show  punctuation:(  string:"count decremented: "  punctuation:,  variable:count  punctuation:,  string:" (progress: "  punctuation:,  variable:progress  punctuation:.  field:value  punctuation:,  string:"%)"  punctuation:)
+ 68 |                 draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+    | task:draw_scene  punctuation:(  variable:canvas  punctuation:,  operator:&  variable:win  punctuation:,  variable:count  punctuation:,  variable:btn_inc  punctuation:,  variable:btn_dec  punctuation:,  variable:btn_rst  punctuation:,  variable:progress  punctuation:,  variable:title_label  punctuation:,  region:frame  punctuation:)
+ 69 |             else when btn_rst.rect.contains(click_pos)
+    | keyword:else  keyword:when  variable:btn_rst  punctuation:.  field:rect  punctuation:.  method:contains  punctuation:(  variable:click_pos  punctuation:)
+ 70 |                 count = 0
+    | variable:count  operator:=  number:0
+ 71 |                 progress.set_value(0)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  number:0  punctuation:)
+ 72 |                 show("count reset: ", count, " (progress: ", progress.value, "%)")
+    | builtin-fn:show  punctuation:(  string:"count reset: "  punctuation:,  variable:count  punctuation:,  string:" (progress: "  punctuation:,  variable:progress  punctuation:.  field:value  punctuation:,  string:"%)"  punctuation:)
+ 73 |                 draw_scene(canvas, &win, count, btn_inc, btn_dec, btn_rst, progress, title_label, frame)
+    | task:draw_scene  punctuation:(  variable:canvas  punctuation:,  operator:&  variable:win  punctuation:,  variable:count  punctuation:,  variable:btn_inc  punctuation:,  variable:btn_dec  punctuation:,  variable:btn_rst  punctuation:,  variable:progress  punctuation:,  variable:title_label  punctuation:,  region:frame  punctuation:)
+ 74 |             fi
+    | keyword:fi
+ 75 |         case GuiEvent.CloseRequested
+    | keyword:case  type:GuiEvent  punctuation:.  variant:CloseRequested
+ 76 |             win.close()
+    | variable:win  punctuation:.  field:close  punctuation:(  punctuation:)
+ 77 |             show("counter app closed; final count: ", count)
+    | builtin-fn:show  punctuation:(  string:"counter app closed; final count: "  punctuation:,  variable:count  punctuation:)
+ 78 |             break
+    | keyword:break
+ 79 |         case _
+    | keyword:case  keyword:_
+ 80 |         fi
+    | keyword:fi
+ 81 |     fi
+    | keyword:fi
+ 82 | fi
+    | keyword:fi

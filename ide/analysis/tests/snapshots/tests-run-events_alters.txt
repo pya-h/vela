@@ -1,0 +1,100 @@
+  1 | ; Tests the event system: lifecycle hooks, task interceptors, auto events,
+    | comment:; Tests the event system: lifecycle hooks, task interceptors, auto events,
+  2 | ; manual listener registration with .listen(), direct alters, and transitive indirect alters.
+    | comment:; manual listener registration with .listen(), direct alters, and transitive indirect alters.
+  4 | shape Player
+    | keyword:shape  type:Player
+  5 |     hp: int
+    | field:hp  punctuation::  type-builtin:int
+  6 |     shield: int
+    | field:shield  punctuation::  type-builtin:int
+  7 |     alive: bool
+    | field:alive  punctuation::  type-builtin:bool
+  9 |     event auto_ping on .hp auto
+    | keyword:event  variable:auto_ping  variable:on  punctuation:.  field:hp  variable:auto
+ 10 |         show("auto_ping: hp is ", .hp)
+    | method:show  punctuation:(  string:"auto_ping: hp is "  punctuation:,  punctuation:.  field:hp  punctuation:)
+ 11 |     fi
+    | keyword:fi
+ 13 |     alters(.alive) event check_death on .shield auto
+    | method:alters  punctuation:(  punctuation:.  field:alive  punctuation:)  keyword:event  variable:check_death  variable:on  punctuation:.  field:shield  variable:auto
+ 14 |         when .shield <= 0 and .hp <= 0
+    | keyword:when  punctuation:.  field:shield  operator:<=  number:0  keyword:and  punctuation:.  field:hp  operator:<=  number:0
+ 15 |             .alive = false
+    | punctuation:.  field:alive  operator:=  keyword:false
+ 16 |             show("player died!")
+    | builtin-fn:show  punctuation:(  string:"player died!"  punctuation:)
+ 17 |         fi
+    | keyword:fi
+ 18 |     fi
+    | keyword:fi
+ 20 |     alters(.shield, .alive) event absorb on .hp
+    | method:alters  punctuation:(  punctuation:.  field:shield  punctuation:,  punctuation:.  field:alive  punctuation:)  keyword:event  variable:absorb  variable:on  punctuation:.  field:hp
+ 21 |         when .shield > 0
+    | keyword:when  punctuation:.  field:shield  operator:>  number:0
+ 22 |             .shield -= 5
+    | punctuation:.  field:shield  operator:-=  number:5
+ 23 |             show("absorb: shield is ", .shield)
+    | builtin-fn:show  punctuation:(  string:"absorb: shield is "  punctuation:,  punctuation:.  field:shield  punctuation:)
+ 24 |         fi
+    | keyword:fi
+ 25 |     fi
+    | keyword:fi
+ 27 |     event manual_ping on .shield
+    | keyword:event  variable:manual_ping  variable:on  punctuation:.  field:shield
+ 28 |         show("manual_ping: shield is ", .shield)
+    | method:show  punctuation:(  string:"manual_ping: shield is "  punctuation:,  punctuation:.  field:shield  punctuation:)
+ 29 |     fi
+    | keyword:fi
+ 30 | fi
+    | keyword:fi
+ 32 | task heal()
+    | keyword:task  task:heal  punctuation:(  punctuation:)
+ 33 |     show("healing...")
+    | builtin-fn:show  punctuation:(  string:"healing..."  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | event before_heal on before heal
+    | keyword:event  variable:before_heal  variable:on  variable:before  task:heal
+ 37 |     show("interceptor: before heal")
+    | builtin-fn:show  punctuation:(  string:"interceptor: before heal"  punctuation:)
+ 38 | fi
+    | keyword:fi
+ 40 | event after_heal on after heal
+    | keyword:event  variable:after_heal  variable:on  variable:after  task:heal
+ 41 |     show("interceptor: after heal")
+    | builtin-fn:show  punctuation:(  string:"interceptor: after heal"  punctuation:)
+ 42 | fi
+    | keyword:fi
+ 44 | event on_start on start
+    | keyword:event  variable:on_start  variable:on  variable:start
+ 45 |     show("lifecycle: start")
+    | builtin-fn:show  punctuation:(  string:"lifecycle: start"  punctuation:)
+ 46 | fi
+    | keyword:fi
+ 48 | event on_end on end
+    | keyword:event  variable:on_end  variable:on  variable:end
+ 49 |     show("lifecycle: end")
+    | builtin-fn:show  punctuation:(  string:"lifecycle: end"  punctuation:)
+ 50 | fi
+    | keyword:fi
+ 52 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 53 |     flex p = Player { hp: 10, shield: 5, alive: true }
+    | keyword:flex  variable:p  operator:=  type:Player  punctuation:{  field:hp  punctuation::  number:10  punctuation:,  field:shield  punctuation::  number:5  punctuation:,  field:alive  punctuation::  keyword:true  punctuation:}
+ 55 |     ; Before listening to absorb: only auto_ping runs
+    | comment:; Before listening to absorb: only auto_ping runs
+ 56 |     p.hp = 5
+    | variable:p  punctuation:.  field:hp  operator:=  number:5
+ 58 |     ; Listen to both absorb and manual_ping
+    | comment:; Listen to both absorb and manual_ping
+ 59 |     p.listen("absorb", "manual_ping")
+    | variable:p  punctuation:.  field:listen  punctuation:(  string:"absorb"  punctuation:,  string:"manual_ping"  punctuation:)
+ 61 |     ; Now absorb runs -> shield becomes 0 -> check_death (auto) and manual_ping run!
+    | comment:; Now absorb runs -> shield becomes 0 -> check_death (auto) and manual_ping run!
+ 62 |     p.hp = -1
+    | variable:p  punctuation:.  field:hp  operator:=  operator:-  number:1
+ 64 |     heal()
+    | task:heal  punctuation:(  punctuation:)
+ 65 | fi
+    | keyword:fi

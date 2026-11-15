@@ -1,0 +1,118 @@
+  1 | ; Channels & Ownership Transfer: thread-safe bounded message passing
+    | comment:; Channels & Ownership Transfer: thread-safe bounded message passing
+  2 | ; where values transferred with 'own' have single ownership, preventing
+    | comment:; where values transferred with 'own' have single ownership, preventing
+  3 | ; data races by design.
+    | comment:; data races by design.
+  5 | shape Job
+    | keyword:shape  type:Job
+  6 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  7 |     payload: text
+    | field:payload  punctuation::  type-builtin:text
+  8 |     priority: int
+    | field:priority  punctuation::  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | shape Result
+    | keyword:shape  type:Result
+ 12 |     job_id: int
+    | field:job_id  punctuation::  type-builtin:int
+ 13 |     status: text
+    | field:status  punctuation::  type-builtin:text
+ 14 |     processed: bool
+    | field:processed  punctuation::  type-builtin:bool
+ 15 | fi
+    | keyword:fi
+ 17 | task process_job(j: own Job) -> Result
+    | keyword:task  task:process_job  punctuation:(  parameter:j  punctuation::  keyword:own  type:Job  punctuation:)  operator:->  type:Result
+ 18 |     show("processing job #", j.id, " (", j.payload, ") with priority ", j.priority)
+    | builtin-fn:show  punctuation:(  string:"processing job #"  punctuation:,  parameter:j  punctuation:.  field:id  punctuation:,  string:" ("  punctuation:,  parameter:j  punctuation:.  field:payload  punctuation:,  string:") with priority "  punctuation:,  parameter:j  punctuation:.  field:priority  punctuation:)
+ 19 |     <- Result { job_id: j.id, status: "completed", processed: true }
+    | keyword:<-  type:Result  punctuation:{  field:job_id  punctuation::  parameter:j  punctuation:.  field:id  punctuation:,  field:status  punctuation::  string:"completed"  punctuation:,  field:processed  punctuation::  keyword:true  punctuation:}
+ 20 | fi
+    | keyword:fi
+ 22 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 23 |     region r default
+    | keyword:region  region:r  keyword:default
+ 25 |     ; 1. Bounded integer channel
+    | comment:; 1. Bounded integer channel
+ 26 |     fixed numbers = chan_new<int>(3)
+    | keyword:fixed  variable:numbers  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:3  punctuation:)
+ 27 |     show("numbers capacity: ", numbers.cap)
+    | builtin-fn:show  punctuation:(  string:"numbers capacity: "  punctuation:,  variable:numbers  punctuation:.  field:cap  punctuation:)
+ 29 |     numbers.dispatch(100)
+    | variable:numbers  punctuation:.  field:dispatch  punctuation:(  number:100  punctuation:)
+ 30 |     numbers.dispatch(200)
+    | variable:numbers  punctuation:.  field:dispatch  punctuation:(  number:200  punctuation:)
+ 31 |     show("numbers in queue: ", numbers.len)
+    | builtin-fn:show  punctuation:(  string:"numbers in queue: "  punctuation:,  variable:numbers  punctuation:.  field:len  punctuation:)
+ 33 |     show("received: ", numbers.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"received: "  punctuation:,  variable:numbers  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 34 |     show("received: ", numbers.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"received: "  punctuation:,  variable:numbers  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 35 |     show("queue after receives: ", numbers.len)
+    | builtin-fn:show  punctuation:(  string:"queue after receives: "  punctuation:,  variable:numbers  punctuation:.  field:len  punctuation:)
+ 37 |     ; Non-blocking receive on empty channel
+    | comment:; Non-blocking receive on empty channel
+ 38 |     show("receive on empty: ", numbers.receive())
+    | builtin-fn:show  punctuation:(  string:"receive on empty: "  punctuation:,  variable:numbers  punctuation:.  field:receive  punctuation:(  punctuation:)  punctuation:)
+ 40 |     numbers.dispatch(300)
+    | variable:numbers  punctuation:.  field:dispatch  punctuation:(  number:300  punctuation:)
+ 41 |     show("receive with item: ", numbers.receive())
+    | builtin-fn:show  punctuation:(  string:"receive with item: "  punctuation:,  variable:numbers  punctuation:.  field:receive  punctuation:(  punctuation:)  punctuation:)
+ 42 |     numbers.close()
+    | variable:numbers  punctuation:.  field:close  punctuation:(  punctuation:)
+ 44 |     ; 2. Structured message channel with ownership transfer
+    | comment:; 2. Structured message channel with ownership transfer
+ 45 |     fixed jobs = chan_new<own Job>(4)
+    | keyword:fixed  variable:jobs  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Job  punctuation:>  punctuation:(  number:4  punctuation:)
+ 46 |     fixed results = chan_new<own Result>(4)
+    | keyword:fixed  variable:results  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Result  punctuation:>  punctuation:(  number:4  punctuation:)
+ 48 |     ; Enqueue jobs with ownership transfer
+    | comment:; Enqueue jobs with ownership transfer
+ 49 |     flex j1 = Job { id: 1, payload: "encode video", priority: 10 }
+    | keyword:flex  variable:j1  operator:=  type:Job  punctuation:{  field:id  punctuation::  number:1  punctuation:,  field:payload  punctuation::  string:"encode video"  punctuation:,  field:priority  punctuation::  number:10  punctuation:}
+ 50 |     dispatch(jobs, own j1)
+    | task:dispatch  punctuation:(  variable:jobs  punctuation:,  keyword:own  variable:j1  punctuation:)
+ 51 |     ; 'j1' is now moved and cannot be read here
+    | comment:; 'j1' is now moved and cannot be read here
+ 53 |     flex j2 = Job { id: 2, payload: "generate thumbnail", priority: 5 }
+    | keyword:flex  variable:j2  operator:=  type:Job  punctuation:{  field:id  punctuation::  number:2  punctuation:,  field:payload  punctuation::  string:"generate thumbnail"  punctuation:,  field:priority  punctuation::  number:5  punctuation:}
+ 54 |     dispatch(jobs, own j2)
+    | task:dispatch  punctuation:(  variable:jobs  punctuation:,  keyword:own  variable:j2  punctuation:)
+ 56 |     flex j3 = Job { id: 3, payload: "sync metadata", priority: 1 }
+    | keyword:flex  variable:j3  operator:=  type:Job  punctuation:{  field:id  punctuation::  number:3  punctuation:,  field:payload  punctuation::  string:"sync metadata"  punctuation:,  field:priority  punctuation::  number:1  punctuation:}
+ 57 |     dispatch(jobs, own j3)
+    | task:dispatch  punctuation:(  variable:jobs  punctuation:,  keyword:own  variable:j3  punctuation:)
+ 59 |     show("jobs queued: ", jobs.len)
+    | builtin-fn:show  punctuation:(  string:"jobs queued: "  punctuation:,  variable:jobs  punctuation:.  field:len  punctuation:)
+ 61 |     ; Process queued jobs
+    | comment:; Process queued jobs
+ 62 |     loop jobs.len > 0
+    | keyword:loop  variable:jobs  punctuation:.  field:len  operator:>  number:0
+ 63 |         fixed job = jobs.wait_and_receive()
+    | keyword:fixed  variable:job  operator:=  variable:jobs  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 64 |         fixed res = process_job(own job)
+    | keyword:fixed  variable:res  operator:=  task:process_job  punctuation:(  keyword:own  variable:job  punctuation:)
+ 65 |         results.dispatch(own res)
+    | variable:results  punctuation:.  field:dispatch  punctuation:(  keyword:own  variable:res  punctuation:)
+ 66 |     fi
+    | keyword:fi
+ 68 |     show("results queued: ", results.len)
+    | builtin-fn:show  punctuation:(  string:"results queued: "  punctuation:,  variable:results  punctuation:.  field:len  punctuation:)
+ 69 |     loop results.len > 0
+    | keyword:loop  variable:results  punctuation:.  field:len  operator:>  number:0
+ 70 |         fixed res = results.wait_and_receive()
+    | keyword:fixed  variable:res  operator:=  variable:results  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 71 |         show("job #", res.job_id, " ", res.status)
+    | builtin-fn:show  punctuation:(  string:"job #"  punctuation:,  variable:res  punctuation:.  field:job_id  punctuation:,  string:" "  punctuation:,  variable:res  punctuation:.  field:status  punctuation:)
+ 72 |     fi
+    | keyword:fi
+ 74 |     jobs.close()
+    | variable:jobs  punctuation:.  field:close  punctuation:(  punctuation:)
+ 75 |     results.close()
+    | variable:results  punctuation:.  field:close  punctuation:(  punctuation:)
+ 76 | fi
+    | keyword:fi

@@ -9,11 +9,24 @@ use vela::lexer::{self, KEYWORDS, LexKind, LexToken, Lexer, Piece, Token, highli
 
 fn vela_files(dir: &str) -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(dir);
-    let mut files: Vec<PathBuf> = fs::read_dir(&dir)
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "vela"))
-        .collect();
+    fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+        let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n != "shop") {
+                    collect(&path, out);
+                }
+            } else if path.extension().is_some_and(|ext| ext == "vela") {
+                out.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    collect(&dir, &mut files);
     files.sort();
     files
 }

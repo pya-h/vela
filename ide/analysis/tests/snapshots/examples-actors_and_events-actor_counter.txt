@@ -1,0 +1,62 @@
+  1 | ; Actors & Mailbox Concurrency:
+    | comment:; Actors & Mailbox Concurrency:
+  2 | ; Actors encapsulate private mutable state in dedicated background threads,
+    | comment:; Actors encapsulate private mutable state in dedicated background threads,
+  3 | ; processing sequential messages from their typed FIFO mailbox with zero lock contention.
+    | comment:; processing sequential messages from their typed FIFO mailbox with zero lock contention.
+  5 | actor Counter(count: int)
+    | keyword:actor  task:Counter  punctuation:(  variable:count  punctuation::  type-builtin:int  punctuation:)
+  6 |     on Increment(step: int)
+    | variable:on  task:Increment  punctuation:(  variable:step  punctuation::  type-builtin:int  punctuation:)
+  7 |         count += step
+    | variable:count  operator:+=  variable:step
+  8 |     fi
+    | keyword:fi
+ 10 |     on Reset()
+    | variable:on  task:Reset  punctuation:(  punctuation:)
+ 11 |         count = 0
+    | variable:count  operator:=  number:0
+ 12 |     fi
+    | keyword:fi
+ 14 |     on Get(reply: Chan[int])
+    | variable:on  task:Get  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 15 |         reply.dispatch(count)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:count  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     ; 1. Spawn actor with initial state
+    | comment:; 1. Spawn actor with initial state
+ 21 |     fixed counter = spawn Counter(10)
+    | keyword:fixed  variable:counter  operator:=  keyword:spawn  task:Counter  punctuation:(  number:10  punctuation:)
+ 23 |     ; 2. Send messages asynchronously
+    | comment:; 2. Send messages asynchronously
+ 24 |     counter.dispatch(Counter.Increment(5))
+    | variable:counter  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Increment  punctuation:(  number:5  punctuation:)  punctuation:)
+ 25 |     dispatch(counter, Counter.Increment(15))
+    | task:dispatch  punctuation:(  variable:counter  punctuation:,  variable:Counter  punctuation:.  field:Increment  punctuation:(  number:15  punctuation:)  punctuation:)
+ 27 |     ; 3. Request-response pattern with reply channel
+    | comment:; 3. Request-response pattern with reply channel
+ 28 |     fixed reply = chan_new<int>(1)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 29 |     counter.dispatch(Counter.Get(reply))
+    | variable:counter  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Get  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 30 |     show("counter after increments: ", reply.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"counter after increments: "  punctuation:,  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 32 |     ; 4. Reset state
+    | comment:; 4. Reset state
+ 33 |     counter.dispatch(Counter.Reset())
+    | variable:counter  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Reset  punctuation:(  punctuation:)  punctuation:)
+ 34 |     counter.dispatch(Counter.Get(reply))
+    | variable:counter  punctuation:.  field:dispatch  punctuation:(  variable:Counter  punctuation:.  field:Get  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 35 |     show("counter after reset: ", reply.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"counter after reset: "  punctuation:,  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 37 |     ; 5. Close mailbox to gracefully terminate actor thread
+    | comment:; 5. Close mailbox to gracefully terminate actor thread
+ 38 |     counter.close()
+    | variable:counter  punctuation:.  field:close  punctuation:(  punctuation:)
+ 39 | fi
+    | keyword:fi

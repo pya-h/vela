@@ -1,0 +1,19 @@
+=== Combat Simulation Started ===
+[Event] Preparing combat arena before round
+--- Round Begins ---
+Knight hp is now 15
+--- Round Ends ---
+[Event] Round concluded
+[Event] Preparing combat arena before round
+--- Round Begins ---
+Knight hp is now 0
+Knight shield absorbed impact! Shield is 10
+Knight reflected kinetic energy back at attacker!
+--- Round Ends ---
+[Event] Round concluded
+Knight hp is now 0
+Knight has been defeated in combat!
+Knight shield absorbed impact! Shield is 0
+Knight reflected kinetic energy back at attacker!
+Final status: Knight alive=false
+=== Combat Simulation Ended ===

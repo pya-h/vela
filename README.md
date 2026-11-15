@@ -169,11 +169,11 @@ cargo build --release
 
 ```sh
 # Compile and run an example
-./target/release/vela examples/hello.vela -o hello
+./target/release/vela examples/basics/hello.vela -o hello
 ./hello
 
 # Inspect generated C11 code
-./target/release/vela examples/hello.vela --emit-c
+./target/release/vela examples/basics/hello.vela --emit-c
 ```
 
 ### Compiler CLI Flags

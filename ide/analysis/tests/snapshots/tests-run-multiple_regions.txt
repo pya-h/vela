@@ -1,0 +1,22 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     region r1, r2, r3
+    | keyword:region  region:r1  punctuation:,  region:r2  punctuation:,  region:r3
+  3 |     fixed a = [1, 2, 3, ...] at r1
+    | keyword:fixed  variable:a  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r1
+  4 |     fixed b = [4, 5, 6, ...] at r2
+    | keyword:fixed  variable:b  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r2
+  5 |     fixed c = [7, 8, 9, ...] at r3
+    | keyword:fixed  variable:c  operator:=  punctuation:[  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r3
+  6 |     show(a[0] + b[1] + c[2])
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:[  number:0  punctuation:]  operator:+  variable:b  punctuation:[  number:1  punctuation:]  operator:+  variable:c  punctuation:[  number:2  punctuation:]  punctuation:)
+  8 |     region d default, extra
+    | keyword:region  region:d  keyword:default  punctuation:,  region:extra
+  9 |     fixed s = [10, 20, ...]
+    | keyword:fixed  variable:s  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  keyword:...  punctuation:]
+ 10 |     fixed e = [30, ...] at extra
+    | keyword:fixed  variable:e  operator:=  punctuation:[  number:30  punctuation:,  keyword:...  punctuation:]  keyword:at  region:extra
+ 11 |     show(s[0] + s[1] + e[0])
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:[  number:0  punctuation:]  operator:+  variable:s  punctuation:[  number:1  punctuation:]  operator:+  variable:e  punctuation:[  number:0  punctuation:]  punctuation:)
+ 12 | fi
+    | keyword:fi

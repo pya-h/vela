@@ -3,8 +3,8 @@ numbers in queue: 2
 received: 100
 received: 200
 queue after receives: 0
-try_recv on empty: none
-try_recv with item: { 300 }
+receive on empty: none
+receive with item: { 300 }
 jobs queued: 3
 processing job #1 (encode video) with priority 10
 processing job #2 (generate thumbnail) with priority 5

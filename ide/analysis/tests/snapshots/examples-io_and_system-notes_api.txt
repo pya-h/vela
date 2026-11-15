@@ -4,8 +4,8 @@
     | comment:; serialization, call-time middleware for token authorization, and plan-B
   3 | ; fallbacks for query and path parameters.
     | comment:; fallbacks for query and path parameters.
-  4 | include std/web { Request, Response, WebError, Method, DefaultRouter, status, json, text_response, get, post, delete }
-    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:DefaultRouter  punctuation:,  task:status  punctuation:,  task:json  punctuation:,  task:text_response  punctuation:,  task:get  punctuation:,  task:post  punctuation:,  task:delete  punctuation:}
+  4 | include std/web { Request, Response, WebError, Method, DefaultRouter, status, json, text_response, get, post, delete, serve, is_interactive }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  type:Method  punctuation:,  type:DefaultRouter  punctuation:,  task:status  punctuation:,  task:json  punctuation:,  task:text_response  punctuation:,  task:get  punctuation:,  task:post  punctuation:,  task:delete  punctuation:,  task:serve  punctuation:,  task:is_interactive  punctuation:}
   5 | include std/json { Json, parse, stringify }
     | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:,  task:parse  punctuation:,  task:stringify  punctuation:}
   7 | shape Note
@@ -268,5 +268,15 @@
     | comment:; 6. Fetching missing note yields 404
 152 |     dispatch(Method.Get, "/notes/99", "", "", r)
     | task:dispatch  punctuation:(  type:Method  punctuation:.  variant:Get  punctuation:,  string:"/notes/99"  punctuation:,  string:""  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
-153 | fi
+154 |     ; 7. Continue listening for live HTTP requests until stopped manually
+    | comment:; 7. Continue listening for live HTTP requests until stopped manually
+155 |     when is_interactive()
+    | keyword:when  task:is_interactive  punctuation:(  punctuation:)
+156 |         show("Server listening on http://127.0.0.1:8080 (press Ctrl+C to stop) ...")
+    | builtin-fn:show  punctuation:(  string:"Server listening on http://127.0.0.1:8080 (press Ctrl+C to stop) ..."  punctuation:)
+157 |         serve("127.0.0.1:8080") { failure _ }
+    | task:serve  punctuation:(  string:"127.0.0.1:8080"  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+158 |     fi
+    | keyword:fi
+159 | fi
     | keyword:fi

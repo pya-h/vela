@@ -1,0 +1,130 @@
+  1 | ; Demonstrates Vela's reactive event system:
+    | comment:; Demonstrates Vela's reactive event system:
+  2 | ; - Shape member events with automatic and manual listeners
+    | comment:; - Shape member events with automatic and manual listeners
+  3 | ; - Direct and indirect alters tracking
+    | comment:; - Direct and indirect alters tracking
+  4 | ; - Terminating guarded conditions
+    | comment:; - Terminating guarded conditions
+  5 | ; - Task interceptors (before / after) and program lifecycle hooks
+    | comment:; - Task interceptors (before / after) and program lifecycle hooks
+  7 | shape Combatant
+    | keyword:shape  type:Combatant
+  8 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  9 |     hp: int
+    | field:hp  punctuation::  type-builtin:int
+ 10 |     shield: int
+    | field:shield  punctuation::  type-builtin:int
+ 11 |     alive: bool
+    | field:alive  punctuation::  type-builtin:bool
+ 13 |     ; Auto event: runs whenever .hp changes on any instance
+    | comment:; Auto event: runs whenever .hp changes on any instance
+ 14 |     event on_hp_change on .hp auto
+    | keyword:event  variable:on_hp_change  variable:on  punctuation:.  field:hp  variable:auto
+ 15 |         show(.name, " hp is now ", .hp)
+    | method:show  punctuation:(  punctuation:.  field:name  punctuation:,  string:" hp is now "  punctuation:,  punctuation:.  field:hp  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 18 |     ; Auto event with alters and guarded when condition
+    | comment:; Auto event with alters and guarded when condition
+ 19 |     alters(.alive) event check_defeat on .shield auto
+    | method:alters  punctuation:(  punctuation:.  field:alive  punctuation:)  keyword:event  variable:check_defeat  variable:on  punctuation:.  field:shield  variable:auto
+ 20 |         when .shield <= 0 and .hp <= 0 and .alive
+    | keyword:when  punctuation:.  field:shield  operator:<=  number:0  keyword:and  punctuation:.  field:hp  operator:<=  number:0  keyword:and  punctuation:.  field:alive
+ 21 |             .alive = false
+    | punctuation:.  field:alive  operator:=  keyword:false
+ 22 |             show(.name, " has been defeated in combat!")
+    | builtin-fn:show  punctuation:(  punctuation:.  field:name  punctuation:,  string:" has been defeated in combat!"  punctuation:)
+ 23 |         fi
+    | keyword:fi
+ 24 |     fi
+    | keyword:fi
+ 26 |     ; Cascading event: mutating .shield triggers check_defeat;
+    | comment:; Cascading event: mutating .shield triggers check_defeat;
+ 27 |     ; therefore, both .shield and .alive must be declared in alters
+    | comment:; therefore, both .shield and .alive must be declared in alters
+ 28 |     alters(.shield, .alive) event absorb on .hp
+    | method:alters  punctuation:(  punctuation:.  field:shield  punctuation:,  punctuation:.  field:alive  punctuation:)  keyword:event  variable:absorb  variable:on  punctuation:.  field:hp
+ 29 |         when .shield > 0
+    | keyword:when  punctuation:.  field:shield  operator:>  number:0
+ 30 |             fixed absorbed = 10
+    | keyword:fixed  variable:absorbed  operator:=  number:10
+ 31 |             .shield -= absorbed
+    | punctuation:.  field:shield  operator:-=  variable:absorbed
+ 32 |             show(.name, " shield absorbed impact! Shield is ", .shield)
+    | builtin-fn:show  punctuation:(  punctuation:.  field:name  punctuation:,  string:" shield absorbed impact! Shield is "  punctuation:,  punctuation:.  field:shield  punctuation:)
+ 33 |         fi
+    | keyword:fi
+ 34 |     fi
+    | keyword:fi
+ 36 |     ; Dormant event: only runs when explicitly attached via .listen()
+    | comment:; Dormant event: only runs when explicitly attached via .listen()
+ 37 |     event buff_reflect on .hp
+    | keyword:event  variable:buff_reflect  variable:on  punctuation:.  field:hp
+ 38 |         show(.name, " reflected kinetic energy back at attacker!")
+    | method:show  punctuation:(  punctuation:.  field:name  punctuation:,  string:" reflected kinetic energy back at attacker!"  punctuation:)
+ 39 |     fi
+    | keyword:fi
+ 40 | fi
+    | keyword:fi
+ 42 | task battle_round(flex& hero: Combatant)
+    | keyword:task  task:battle_round  punctuation:(  keyword:flex  keyword:&  parameter:hero  punctuation::  type:Combatant  punctuation:)
+ 43 |     show("--- Round Begins ---")
+    | builtin-fn:show  punctuation:(  string:"--- Round Begins ---"  punctuation:)
+ 44 |     hero.hp -= 15
+    | parameter:hero  punctuation:.  field:hp  operator:-=  number:15
+ 45 |     show("--- Round Ends ---")
+    | builtin-fn:show  punctuation:(  string:"--- Round Ends ---"  punctuation:)
+ 46 | fi
+    | keyword:fi
+ 48 | event before_round on before battle_round
+    | keyword:event  variable:before_round  variable:on  variable:before  task:battle_round
+ 49 |     show("[Event] Preparing combat arena before round")
+    | builtin-fn:show  punctuation:(  string:"[Event] Preparing combat arena before round"  punctuation:)
+ 50 | fi
+    | keyword:fi
+ 52 | event after_round on after battle_round
+    | keyword:event  variable:after_round  variable:on  variable:after  task:battle_round
+ 53 |     show("[Event] Round concluded")
+    | builtin-fn:show  punctuation:(  string:"[Event] Round concluded"  punctuation:)
+ 54 | fi
+    | keyword:fi
+ 56 | event startup on start
+    | keyword:event  variable:startup  variable:on  variable:start
+ 57 |     show("=== Combat Simulation Started ===")
+    | builtin-fn:show  punctuation:(  string:"=== Combat Simulation Started ==="  punctuation:)
+ 58 | fi
+    | keyword:fi
+ 60 | event shutdown on end
+    | keyword:event  variable:shutdown  variable:on  variable:end
+ 61 |     show("=== Combat Simulation Ended ===")
+    | builtin-fn:show  punctuation:(  string:"=== Combat Simulation Ended ==="  punctuation:)
+ 62 | fi
+    | keyword:fi
+ 64 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 65 |     flex knight = Combatant { name: "Knight", hp: 30, shield: 20, alive: true }
+    | keyword:flex  variable:knight  operator:=  type:Combatant  punctuation:{  field:name  punctuation::  string:"Knight"  punctuation:,  field:hp  punctuation::  number:30  punctuation:,  field:shield  punctuation::  number:20  punctuation:,  field:alive  punctuation::  keyword:true  punctuation:}
+ 67 |     ; Round 1: knight has not listened to buff_reflect or absorb yet,
+    | comment:; Round 1: knight has not listened to buff_reflect or absorb yet,
+ 68 |     ; but auto events (on_hp_change) execute automatically!
+    | comment:; but auto events (on_hp_change) execute automatically!
+ 69 |     battle_round(&knight)
+    | task:battle_round  punctuation:(  operator:&  variable:knight  punctuation:)
+ 71 |     ; Knight enables absorb and buff_reflect listeners
+    | comment:; Knight enables absorb and buff_reflect listeners
+ 72 |     knight.listen("absorb", "buff_reflect")
+    | variable:knight  punctuation:.  field:listen  punctuation:(  string:"absorb"  punctuation:,  string:"buff_reflect"  punctuation:)
+ 74 |     ; Round 2: absorb triggers, mutating .shield, and buff_reflect fires
+    | comment:; Round 2: absorb triggers, mutating .shield, and buff_reflect fires
+ 75 |     battle_round(&knight)
+    | task:battle_round  punctuation:(  operator:&  variable:knight  punctuation:)
+ 77 |     ; Round 3: lethal blow depletes shield and hp, triggering check_defeat (alive -> false)
+    | comment:; Round 3: lethal blow depletes shield and hp, triggering check_defeat (alive -> false)
+ 78 |     knight.hp = 0
+    | variable:knight  punctuation:.  field:hp  operator:=  number:0
+ 79 |     show("Final status: ", knight.name, " alive=", knight.alive)
+    | builtin-fn:show  punctuation:(  string:"Final status: "  punctuation:,  variable:knight  punctuation:.  field:name  punctuation:,  string:" alive="  punctuation:,  variable:knight  punctuation:.  field:alive  punctuation:)
+ 80 | fi
+    | keyword:fi

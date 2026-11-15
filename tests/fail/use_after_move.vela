@@ -7,6 +7,6 @@ fi
 task main()
     fixed q = chan_new<own Packet>(2)
     fixed p = Packet { id: 1 }
-    send(q, own p)
+    dispatch(q, own p)
     show(p.id)
 fi

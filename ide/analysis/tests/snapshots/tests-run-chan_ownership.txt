@@ -1,0 +1,66 @@
+  1 | ; Channels transfer ownership of messages between concurrent tasks.
+    | comment:; Channels transfer ownership of messages between concurrent tasks.
+  2 | ; Builtin operations: chan_new, dispatch, wait_and_receive, receive, close, .len, .cap
+    | comment:; Builtin operations: chan_new, dispatch, wait_and_receive, receive, close, .len, .cap
+  4 | shape Packet
+    | keyword:shape  type:Packet
+  5 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  6 |     tag: text
+    | field:tag  punctuation::  type-builtin:text
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     region r default
+    | keyword:region  region:r  keyword:default
+ 11 |     fixed c = chan_new<int>(4)
+    | keyword:fixed  variable:c  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 12 |     show("cap: ", c.cap)
+    | builtin-fn:show  punctuation:(  string:"cap: "  punctuation:,  variable:c  punctuation:.  field:cap  punctuation:)
+ 13 |     show("initial len: ", c.len)
+    | builtin-fn:show  punctuation:(  string:"initial len: "  punctuation:,  variable:c  punctuation:.  field:len  punctuation:)
+ 15 |     show("dispatch 10: ", c.dispatch(10))
+    | builtin-fn:show  punctuation:(  string:"dispatch 10: "  punctuation:,  variable:c  punctuation:.  field:dispatch  punctuation:(  number:10  punctuation:)  punctuation:)
+ 16 |     show("dispatch 20: ", c.dispatch(20))
+    | builtin-fn:show  punctuation:(  string:"dispatch 20: "  punctuation:,  variable:c  punctuation:.  field:dispatch  punctuation:(  number:20  punctuation:)  punctuation:)
+ 17 |     show("len after 2: ", c.len)
+    | builtin-fn:show  punctuation:(  string:"len after 2: "  punctuation:,  variable:c  punctuation:.  field:len  punctuation:)
+ 19 |     show("wait_and_receive 1: ", c.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"wait_and_receive 1: "  punctuation:,  variable:c  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 20 |     show("wait_and_receive 2: ", c.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"wait_and_receive 2: "  punctuation:,  variable:c  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 21 |     show("len after wait_and_receive: ", c.len)
+    | builtin-fn:show  punctuation:(  string:"len after wait_and_receive: "  punctuation:,  variable:c  punctuation:.  field:len  punctuation:)
+ 23 |     show("dispatch 30: ", c.dispatch(30))
+    | builtin-fn:show  punctuation:(  string:"dispatch 30: "  punctuation:,  variable:c  punctuation:.  field:dispatch  punctuation:(  number:30  punctuation:)  punctuation:)
+ 24 |     show("receive: ", c.receive())
+    | builtin-fn:show  punctuation:(  string:"receive: "  punctuation:,  variable:c  punctuation:.  field:receive  punctuation:(  punctuation:)  punctuation:)
+ 25 |     show("receive empty: ", c.receive())
+    | builtin-fn:show  punctuation:(  string:"receive empty: "  punctuation:,  variable:c  punctuation:.  field:receive  punctuation:(  punctuation:)  punctuation:)
+ 27 |     c.close()
+    | variable:c  punctuation:.  field:close  punctuation:(  punctuation:)
+ 29 |     fixed q = chan_new<own Packet>(2)
+    | keyword:fixed  variable:q  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Packet  punctuation:>  punctuation:(  number:2  punctuation:)
+ 30 |     flex p = Packet { id: 101, tag: "hello" }
+    | keyword:flex  variable:p  operator:=  type:Packet  punctuation:{  field:id  punctuation::  number:101  punctuation:,  field:tag  punctuation::  string:"hello"  punctuation:}
+ 31 |     dispatch(q, own p)
+    | task:dispatch  punctuation:(  variable:q  punctuation:,  keyword:own  variable:p  punctuation:)
+ 33 |     p = Packet { id: 102, tag: "world" }
+    | variable:p  operator:=  type:Packet  punctuation:{  field:id  punctuation::  number:102  punctuation:,  field:tag  punctuation::  string:"world"  punctuation:}
+ 34 |     show("reassigned p.id: ", p.id)
+    | builtin-fn:show  punctuation:(  string:"reassigned p.id: "  punctuation:,  variable:p  punctuation:.  field:id  punctuation:)
+ 35 |     dispatch(q, own p)
+    | task:dispatch  punctuation:(  variable:q  punctuation:,  keyword:own  variable:p  punctuation:)
+ 37 |     fixed r1 = q.wait_and_receive()
+    | keyword:fixed  variable:r1  operator:=  variable:q  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 38 |     show("received r1 id: ", r1.id, " tag: ", r1.tag)
+    | builtin-fn:show  punctuation:(  string:"received r1 id: "  punctuation:,  variable:r1  punctuation:.  field:id  punctuation:,  string:" tag: "  punctuation:,  variable:r1  punctuation:.  field:tag  punctuation:)
+ 39 |     fixed r2 = q.wait_and_receive()
+    | keyword:fixed  variable:r2  operator:=  variable:q  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 40 |     show("received r2 id: ", r2.id, " tag: ", r2.tag)
+    | builtin-fn:show  punctuation:(  string:"received r2 id: "  punctuation:,  variable:r2  punctuation:.  field:id  punctuation:,  string:" tag: "  punctuation:,  variable:r2  punctuation:.  field:tag  punctuation:)
+ 41 |     q.close()
+    | variable:q  punctuation:.  field:close  punctuation:(  punctuation:)
+ 42 | fi
+    | keyword:fi

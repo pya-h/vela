@@ -13024,9 +13024,9 @@ impl Checker {
             }
             return Ok(CallSetup::Checked(Type::Chan(Box::new(elem_ty))));
         }
-        if name == SEND {
+        if name == DISPATCH || name == "send" {
             if self.tasks.contains_key(name) {
-                // User defined a task named "send", let it fall through to regular task call
+                // User defined a task named "dispatch" or "send", let it fall through to regular task call
             } else if args.len() == 2 {
                 let Some((arg0, rest)) = args.split_first_mut() else { unreachable!() };
                 let Some(arg1) = rest.first_mut() else { unreachable!() };
@@ -13041,7 +13041,7 @@ impl Checker {
                         Type::Named(format!("{}Msg", actor_name), None)
                     }
                     Type::Unknown => Type::Unknown,
-                    _ => return err(arg0.span, format!("'send' takes a channel or actor as its first argument, got {}", chan_ty)),
+                    _ => return err(arg0.span, format!("'dispatch' takes a channel or actor as its first argument, got {}", chan_ty)),
                 };
                 let item_ty = self.check_expr(arg1)?;
                 if let Type::Own(payload) = &elem_ty {
@@ -13060,7 +13060,7 @@ impl Checker {
                 return Ok(CallSetup::Checked(Type::Bool));
             }
         }
-        if name == RECV && !self.tasks.contains_key(name) && args.len() == 1 {
+        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve") && !self.tasks.contains_key(name) && args.len() == 1 {
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
             if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
@@ -13075,7 +13075,7 @@ impl Checker {
                 return Ok(CallSetup::Checked(ret_ty));
             }
         }
-        if name == TRY_RECV && !self.tasks.contains_key(name) && args.len() == 1 {
+        if (name == RECEIVE || name == "try_recv" || name == "recieve") && !self.tasks.contains_key(name) && args.len() == 1 {
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
             if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
@@ -18002,7 +18002,20 @@ impl Checker {
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
             return Ok(());
         }
-        if matches!(ty, Type::Chan(_) | Type::Actor(_)) && matches!(name.as_str(), "send" | "recv" | "try_recv" | "close") {
+        if matches!(ty, Type::Chan(_) | Type::Actor(_))
+            && matches!(
+                name.as_str(),
+                "dispatch"
+                    | "send"
+                    | "wait_and_receive"
+                    | "recv"
+                    | "wait_and_recieve"
+                    | "receive"
+                    | "try_recv"
+                    | "recieve"
+                    | "close"
+            )
+        {
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             let ExprKind::MethodCall { value, mut args, .. } = taken else {
                 return Err(Error::internal_at(span, "a method call that is no longer one"));

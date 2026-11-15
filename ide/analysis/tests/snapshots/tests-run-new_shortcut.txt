@@ -1,0 +1,34 @@
+  1 | shape Point
+    | keyword:shape  type:Point
+  2 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  3 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  4 | fi
+    | keyword:fi
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     region r default
+    | keyword:region  region:r  keyword:default
+  9 |     bind x: ^int := 42
+    | keyword:bind  variable:x  punctuation::  operator:^  type-builtin:int  operator::=  number:42
+ 10 |     show(x^)
+    | builtin-fn:show  punctuation:(  variable:x  operator:^  punctuation:)
+ 12 |     flex s := [1, 2, 3]
+    | keyword:flex  variable:s  operator::=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 13 |     show(s[0] + s[1] + s[2])
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:[  number:0  punctuation:]  operator:+  variable:s  punctuation:[  number:1  punctuation:]  operator:+  variable:s  punctuation:[  number:2  punctuation:]  punctuation:)
+ 15 |     flex m := ["a": 10, "b": 20]
+    | keyword:flex  variable:m  operator::=  punctuation:[  string:"a"  punctuation::  number:10  punctuation:,  string:"b"  punctuation::  number:20  punctuation:]
+ 16 |     show(m["a"] + m["b"])
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:[  string:"a"  punctuation:]  operator:+  variable:m  punctuation:[  string:"b"  punctuation:]  punctuation:)
+ 18 |     fixed p: ^Point := Point { x: 100, y: 200 }
+    | keyword:fixed  variable:p  punctuation::  operator:^  type:Point  operator::=  type:Point  punctuation:{  field:x  punctuation::  number:100  punctuation:,  field:y  punctuation::  number:200  punctuation:}
+ 19 |     show(p^.x + p^.y)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  operator:+  variable:p  operator:^  punctuation:.  field:y  punctuation:)
+ 21 |     hold h: ^int := 99
+    | keyword:hold  variable:h  punctuation::  operator:^  type-builtin:int  operator::=  number:99
+ 22 |     show(h^)
+    | builtin-fn:show  punctuation:(  variable:h  operator:^  punctuation:)
+ 23 | fi
+    | keyword:fi

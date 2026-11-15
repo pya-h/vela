@@ -3,9 +3,9 @@
 ; Channels transfer ownership of messages between concurrent tasks.
 ; Builtin channel primitives:
 ;   - chan_new<T>(capacity: int) -> Chan[T]
-;   - send(c: Chan[T], item: own T) -> bool
-;   - recv(c: Chan[T]) -> T
-;   - try_recv(c: Chan[T]) -> maybe T
+;   - dispatch(c: Chan[T], item: own T) -> bool
+;   - wait_and_receive(c: Chan[T]) -> T
+;   - receive(c: Chan[T]) -> maybe T
 ;   - close(c: Chan[T]) -> nothing
 
 task channel<T>(capacity: int) -> Chan[T]

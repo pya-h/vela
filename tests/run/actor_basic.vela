@@ -7,19 +7,19 @@ actor Counter(count: int)
     fi
 
     on Get(reply: Chan[int])
-        reply.send(count)
+        reply.dispatch(count)
     fi
 fi
 
 task main()
     fixed c = spawn Counter(10)
-    c.send(Counter.Increment(5))
-    send(c, Counter.Increment(15))
+    c.dispatch(Counter.Increment(5))
+    dispatch(c, Counter.Increment(15))
 
     fixed reply = chan_new<int>(1)
-    c.send(Counter.Get(reply))
+    c.dispatch(Counter.Get(reply))
 
-    fixed res = reply.recv()
+    fixed res = reply.wait_and_receive()
     show("counter: ", res)
 
     c.close()

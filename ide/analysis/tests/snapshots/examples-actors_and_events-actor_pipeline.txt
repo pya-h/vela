@@ -1,0 +1,84 @@
+  1 | ; A concurrent data processing pipeline demonstrating Actor composition:
+    | comment:; A concurrent data processing pipeline demonstrating Actor composition:
+  2 | ; - Worker actors process compute batches concurrently
+    | comment:; - Worker actors process compute batches concurrently
+  3 | ; - Processed totals are forwarded to an Aggregator actor
+    | comment:; - Processed totals are forwarded to an Aggregator actor
+  4 | ; - Channels coordinate async requests and reply with final statistics
+    | comment:; - Channels coordinate async requests and reply with final statistics
+  6 | actor Aggregator(total_jobs: int, total_units: int)
+    | keyword:actor  task:Aggregator  punctuation:(  variable:total_jobs  punctuation::  type-builtin:int  punctuation:,  variable:total_units  punctuation::  type-builtin:int  punctuation:)
+  8 |     on Record(units: int)
+    | variable:on  task:Record  punctuation:(  variable:units  punctuation::  type-builtin:int  punctuation:)
+  9 |         total_jobs += 1
+    | variable:total_jobs  operator:+=  number:1
+ 10 |         total_units += units
+    | variable:total_units  operator:+=  variable:units
+ 11 |     fi
+    | keyword:fi
+ 13 |     on Summary(reply: Chan[int])
+    | variable:on  task:Summary  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 14 |         show("Aggregator summary: jobs=", total_jobs, " units=", total_units)
+    | builtin-fn:show  punctuation:(  string:"Aggregator summary: jobs="  punctuation:,  variable:total_jobs  punctuation:,  string:" units="  punctuation:,  variable:total_units  punctuation:)
+ 15 |         reply.dispatch(total_units)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:total_units  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 | fi
+    | keyword:fi
+ 19 | actor Worker(id: int, processed: int, aggregator: Actor[Aggregator])
+    | keyword:actor  task:Worker  punctuation:(  variable:id  punctuation::  type-builtin:int  punctuation:,  variable:processed  punctuation::  type-builtin:int  punctuation:,  variable:aggregator  punctuation::  type:Actor  punctuation:[  variable:Aggregator  punctuation:]  punctuation:)
+ 21 |     on Compute(batch_size: int, multiplier: int, reply: Chan[int])
+    | variable:on  task:Compute  punctuation:(  variable:batch_size  punctuation::  type-builtin:int  punctuation:,  variable:multiplier  punctuation::  type-builtin:int  punctuation:,  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 22 |         processed += 1
+    | variable:processed  operator:+=  number:1
+ 23 |         fixed output = batch_size * multiplier
+    | keyword:fixed  variable:output  operator:=  variable:batch_size  operator:*  variable:multiplier
+ 24 |         aggregator.dispatch(Aggregator.Record(output))
+    | variable:aggregator  punctuation:.  field:dispatch  punctuation:(  variable:Aggregator  punctuation:.  field:Record  punctuation:(  variable:output  punctuation:)  punctuation:)
+ 25 |         reply.dispatch(output)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:output  punctuation:)
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     fixed agg = spawn Aggregator(0, 0)
+    | keyword:fixed  variable:agg  operator:=  keyword:spawn  task:Aggregator  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
+ 31 |     fixed w1 = spawn Worker(1, 0, agg)
+    | keyword:fixed  variable:w1  operator:=  keyword:spawn  task:Worker  punctuation:(  number:1  punctuation:,  number:0  punctuation:,  variable:agg  punctuation:)
+ 32 |     fixed w2 = spawn Worker(2, 0, agg)
+    | keyword:fixed  variable:w2  operator:=  keyword:spawn  task:Worker  punctuation:(  number:2  punctuation:,  number:0  punctuation:,  variable:agg  punctuation:)
+ 34 |     fixed r1 = chan_new<int>(1)
+    | keyword:fixed  variable:r1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 35 |     fixed r2 = chan_new<int>(1)
+    | keyword:fixed  variable:r2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 37 |     w1.dispatch(Worker.Compute(10, 3, r1))
+    | variable:w1  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:10  punctuation:,  number:3  punctuation:,  variable:r1  punctuation:)  punctuation:)
+ 38 |     fixed res1 = r1.wait_and_receive()
+    | keyword:fixed  variable:res1  operator:=  variable:r1  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 39 |     show("Worker 1 completed batch: output=", res1)
+    | builtin-fn:show  punctuation:(  string:"Worker 1 completed batch: output="  punctuation:,  variable:res1  punctuation:)
+ 41 |     w2.dispatch(Worker.Compute(25, 4, r2))
+    | variable:w2  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:25  punctuation:,  number:4  punctuation:,  variable:r2  punctuation:)  punctuation:)
+ 42 |     fixed res2 = r2.wait_and_receive()
+    | keyword:fixed  variable:res2  operator:=  variable:r2  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 43 |     show("Worker 2 completed batch: output=", res2)
+    | builtin-fn:show  punctuation:(  string:"Worker 2 completed batch: output="  punctuation:,  variable:res2  punctuation:)
+ 45 |     fixed summary_chan = chan_new<int>(1)
+    | keyword:fixed  variable:summary_chan  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 46 |     agg.dispatch(Aggregator.Summary(summary_chan))
+    | variable:agg  punctuation:.  field:dispatch  punctuation:(  variable:Aggregator  punctuation:.  field:Summary  punctuation:(  variable:summary_chan  punctuation:)  punctuation:)
+ 47 |     fixed total = summary_chan.wait_and_receive()
+    | keyword:fixed  variable:total  operator:=  variable:summary_chan  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 48 |     show("Final pipeline total: ", total)
+    | builtin-fn:show  punctuation:(  string:"Final pipeline total: "  punctuation:,  variable:total  punctuation:)
+ 50 |     w1.close()
+    | variable:w1  punctuation:.  field:close  punctuation:(  punctuation:)
+ 51 |     w2.close()
+    | variable:w2  punctuation:.  field:close  punctuation:(  punctuation:)
+ 52 |     agg.close()
+    | variable:agg  punctuation:.  field:close  punctuation:(  punctuation:)
+ 53 | fi
+    | keyword:fi

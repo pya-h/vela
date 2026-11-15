@@ -193,7 +193,9 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html" class="active">Channels</a>
+      <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
+      <a href="data-races.html">Data Races</a>
       <a href="std.html">Standard Library</a>
       <a href="web.html">Web</a>
       <a href="gui.html">GUI</a>
@@ -241,7 +243,7 @@
         </div>
         <div class="card">
           <h4>Owned Channels: <code>Chan[own Shape]</code></h4>
-          <p>Carries structured shapes or resources with ownership handoff. Sending requires the <code>own</code> keyword (e.g. <code>send(c, own item)</code>).</p>
+          <p>Carries structured shapes or resources with ownership handoff. Dispatching requires the <code>own</code> keyword (e.g. <code>dispatch(c, own item)</code>).</p>
         </div>
         <div class="card">
           <h4>Region Transfer: <code>Chan[own region]</code></h4>
@@ -279,20 +281,20 @@
         </thead>
         <tbody>
           <tr>
-            <td><code>send(c, item)</code></td>
-            <td><code>c.send(item)</code></td>
+            <td><code>dispatch(c, item)</code></td>
+            <td><code>c.dispatch(item)</code></td>
             <td><code>bool</code></td>
             <td>Blocks if the buffer is full until space is freed. Returns <code>true</code> on success, or <code>false</code> if the channel is closed.</td>
           </tr>
           <tr>
-            <td><code>recv(c)</code></td>
-            <td><code>c.recv()</code></td>
+            <td><code>wait_and_receive(c)</code></td>
+            <td><code>c.wait_and_receive()</code></td>
             <td><code>T</code></td>
             <td>Blocks if the buffer is empty until a message arrives. Returns the received payload.</td>
           </tr>
           <tr>
-            <td><code>try_recv(c)</code></td>
-            <td><code>c.try_recv()</code></td>
+            <td><code>receive(c)</code></td>
+            <td><code>c.receive()</code></td>
             <td><code>maybe T</code></td>
             <td>Non-blocking receive. Returns <code>{ value }</code> if a message is immediately available, or <code>none</code> if empty.</td>
           </tr>
@@ -329,37 +331,37 @@
       <pre><code><span class="keyword">fixed</span> q = chan_new&lt;<span class="keyword">own</span> Packet&gt;(<span class="number">4</span>)
 <span class="keyword">fixed</span> p = Packet { id: <span class="number">42</span>, payload: <span class="string">"data"</span> }
 
-send(q, <span class="keyword">own</span> p)
+dispatch(q, <span class="keyword">own</span> p)
 <span class="comment">; Error: use of moved value 'p'; 'p' was moved with 'own p'</span>
 show(p.id)</code></pre>
 
       <h3>2. Double-Move Prevention</h3>
       <p>Attempting to move the same variable twice without reinitializing it is caught immediately:</p>
-      <pre><code>send(q, <span class="keyword">own</span> p)
+      <pre><code>dispatch(q, <span class="keyword">own</span> p)
 <span class="comment">; Error: use of moved value 'p'; 'p' was moved with 'own p'</span>
-send(q, <span class="keyword">own</span> p)</code></pre>
+dispatch(q, <span class="keyword">own</span> p)</code></pre>
 
       <h3>3. Loop Move Protection</h3>
       <p>Moving a variable declared outside a loop inside the loop body is prohibited, preventing a use-after-move on iteration 2:</p>
       <pre><code><span class="keyword">fixed</span> p = Packet { id: <span class="number">1</span> }
 <span class="keyword">loop</span> count &lt; <span class="number">3</span>
     <span class="comment">; Error: cannot move 'p' inside a loop; 'p' was declared outside the loop</span>
-    send(q, <span class="keyword">own</span> p)
+    dispatch(q, <span class="keyword">own</span> p)
 <span class="keyword">fi</span></code></pre>
 
       <h3>4. Reassignment Restores Usability</h3>
       <p>Assigning a new value to a mutable binding clears the moved state, making the variable available for use again:</p>
       <pre><code><span class="keyword">flex</span> p = Packet { id: <span class="number">1</span> }
-send(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved</span>
+dispatch(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved</span>
 
 p = Packet { id: <span class="number">2</span> }  <span class="comment">; 'p' is restored with a new value!</span>
 show(p.id)             <span class="comment">; Completely valid! Prints 2</span>
-send(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved again</span></code></pre>
+dispatch(q, <span class="keyword">own</span> p)   <span class="comment">; 'p' is moved again</span></code></pre>
 
       <h3>5. Non-Variable Move Rejection</h3>
       <p>Ownership transfer applies exclusively to named bindings, preventing ambiguous temporaries:</p>
       <pre><code><span class="comment">; Error: cannot move non-variable expression with 'own'</span>
-send(q, <span class="keyword">own</span> Packet { id: <span class="number">1</span> })</code></pre>
+dispatch(q, <span class="keyword">own</span> Packet { id: <span class="number">1</span> })</code></pre>
     </section>
 
     <section>
@@ -390,10 +392,10 @@ send(q, <span class="keyword">own</span> Packet { id: <span class="number">1</sp
 
     <span class="comment">; Bounded integer channel</span>
     <span class="keyword">fixed</span> numbers = chan_new&lt;int&gt;(<span class="number">3</span>)
-    numbers.send(<span class="number">100</span>)
-    numbers.send(<span class="number">200</span>)
+    numbers.dispatch(<span class="number">100</span>)
+    numbers.dispatch(<span class="number">200</span>)
     show(<span class="string">"queue len: "</span>, numbers.len)
-    show(<span class="string">"received: "</span>, numbers.recv())
+    show(<span class="string">"received: "</span>, numbers.wait_and_receive())
     numbers.close()
 
     <span class="comment">; Structured job queue with ownership transfer</span>
@@ -401,21 +403,21 @@ send(q, <span class="keyword">own</span> Packet { id: <span class="number">1</sp
     <span class="keyword">fixed</span> results = chan_new&lt;<span class="keyword">own</span> Result&gt;(<span class="number">4</span>)
 
     <span class="keyword">flex</span> j1 = Job { id: <span class="number">1</span>, payload: <span class="string">"encode video"</span>, priority: <span class="number">10</span> }
-    send(jobs, <span class="keyword">own</span> j1)
+    dispatch(jobs, <span class="keyword">own</span> j1)
 
     <span class="keyword">flex</span> j2 = Job { id: <span class="number">2</span>, payload: <span class="string">"generate thumbnail"</span>, priority: <span class="number">5</span> }
-    send(jobs, <span class="keyword">own</span> j2)
+    dispatch(jobs, <span class="keyword">own</span> j2)
 
     <span class="comment">; Drain and process</span>
     <span class="keyword">loop</span> jobs.len &gt; <span class="number">0</span>
-        <span class="keyword">fixed</span> job = jobs.recv()
+        <span class="keyword">fixed</span> job = jobs.wait_and_receive()
         <span class="keyword">fixed</span> res = process_job(<span class="keyword">own</span> job)
-        results.send(<span class="keyword">own</span> res)
+        results.dispatch(<span class="keyword">own</span> res)
     <span class="keyword">fi</span>
 
     <span class="comment">; Read results</span>
     <span class="keyword">loop</span> results.len &gt; <span class="number">0</span>
-        <span class="keyword">fixed</span> res = results.recv()
+        <span class="keyword">fixed</span> res = results.wait_and_receive()
         show(<span class="string">"job #"</span>, res.job_id, <span class="string">" "</span>, res.status)
     <span class="keyword">fi</span>
 
@@ -433,7 +435,7 @@ send(q, <span class="keyword">own</span> Packet { id: <span class="number">1</sp
         <li><strong>Ring Buffer:</strong> Each channel maintains a circular FIFO memory buffer with <code>head</code>, <code>tail</code>, and <code>count</code> tracking.</li>
         <li><strong>POSIX Synchronization:</strong> Thread safety is ensured via <code>pthread_mutex_t</code> and two condition variables: <code>not_empty</code> (waking blocked receivers) and <code>not_full</code> (waking blocked senders).</li>
         <li><strong>Handle Table:</strong> Channel references are passed as 64-bit integer handles (<code>vela__chan_t</code>) indexed into a generation-checked slot table. This eliminates dangling pointer segfaults and ensures zero-cost value passing.</li>
-        <li><strong>Typed Code Generation:</strong> The Vela code generator automatically synthesizes static inline helpers such as <code>vela__chan_send__*</code> and <code>vela__chan_recv__*</code> tailored to each carried type, avoiding runtime boxing or dynamic type dispatch.</li>
+        <li><strong>Typed Code Generation:</strong> The Vela code generator automatically synthesizes static inline helpers such as <code>vela__chan_dispatch__*</code> and <code>vela__chan_wait_and_receive__*</code> tailored to each carried type, avoiding runtime boxing or dynamic type dispatch.</li>
       </ul>
     </section>
   </main>

@@ -922,6 +922,7 @@ impl Generator {
                 c_ident(&field.name),
                 c_ident(&field.name)
             ));
+            self.w.line(&format!("(void){};", c_ident(&field.name)));
         }
         self.w.line("free(vela__ctx);");
 
@@ -940,6 +941,7 @@ impl Generator {
                     c_ident(&handler.name),
                     c_ident(&param.name)
                 ));
+                self.w.line(&format!("(void){};", c_ident(&param.name)));
             }
             for stmt in &handler.body {
                 self.gen_stmt(stmt)?;
@@ -1838,16 +1840,17 @@ impl Generator {
     fn gen_channel_helpers(&mut self, used: &UsedTypes) {
         for ty in &used.channels {
             let (ctype, word) = (c_type(ty), type_word(ty));
-            // send
+            // dispatch
             self.w.open(&format!(
-                "VELA__RT__MAYBE_UNUSED static inline bool vela__chan_send__{}(vela__chan_t handle, {} item)",
+                "VELA__RT__MAYBE_UNUSED static inline bool vela__chan_dispatch__{}(vela__chan_t handle, {} item)",
                 word, ctype
             ));
             self.w.line("return vela__rt__chan_send(handle, &item);");
             self.w.close();
-            // recv
+            self.w.line(&format!("#define vela__chan_send__{} vela__chan_dispatch__{}", word, word));
+            // wait_and_receive
             self.w.open(&format!(
-                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_recv__{}(vela__chan_t handle)",
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_wait_and_receive__{}(vela__chan_t handle)",
                 ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
@@ -1855,11 +1858,12 @@ impl Generator {
             self.w.line("vela__rt__chan_recv(handle, &item);");
             self.w.line("return item;");
             self.w.close();
-            // try_recv
+            self.w.line(&format!("#define vela__chan_recv__{} vela__chan_wait_and_receive__{}", word, word));
+            // receive
             let maybe_ty = Type::Maybe(Box::new(ty.clone()));
             let maybe_ctype = c_type(&maybe_ty);
             self.w.open(&format!(
-                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_try_recv__{}(vela__chan_t handle)",
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_receive__{}(vela__chan_t handle)",
                 maybe_ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
@@ -1874,6 +1878,7 @@ impl Generator {
                 ));
             }
             self.w.close();
+            self.w.line(&format!("#define vela__chan_try_recv__{} vela__chan_receive__{}", word, word));
         }
     }
 
@@ -5256,28 +5261,31 @@ impl Generator {
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::ToJson { value, region, .. } => self.gen_to_json(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
-            ExprKind::Spawn { actor, args, .. } => {
-                let actor_name = c_name(actor);
-                let actor_def = self.actors.get(actor).cloned().ok_or_else(|| {
-                    Error::internal_at(e.span, format!("actor '{}' not found in generator", actor))
-                })?;
-                let mut c_args = Vec::new();
-                for (i, field) in actor_def.fields.iter().enumerate() {
-                    if let Some(arg) = args.get(i) {
-                        c_args.push(self.gen_expr(arg)?);
-                    } else if let Some(default) = &field.default {
-                        c_args.push(self.gen_expr(default)?);
-                    } else {
-                        c_args.push("0".to_string());
-                    }
-                }
-                Ok(format!("{}__spawn({})", actor_name, c_args.join(", ")))
-            }
+            ExprKind::Spawn { actor, args, .. } => self.gen_spawn(e, actor, args),
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(
                 e.span,
                 format!("the method call '{}' reached code generation", name),
             )),
         }
+    }
+
+    #[inline(never)]
+    fn gen_spawn(&mut self, e: &Expr, actor: &str, args: &[Expr]) -> Result<String> {
+        let actor_name = c_name(actor);
+        let actor_def = self.actors.get(actor).cloned().ok_or_else(|| {
+            Error::internal_at(e.span, format!("actor '{}' not found in generator", actor))
+        })?;
+        let mut c_args = Vec::new();
+        for (i, field) in actor_def.fields.iter().enumerate() {
+            if let Some(arg) = args.get(i) {
+                c_args.push(self.gen_expr(arg)?);
+            } else if let Some(default) = &field.default {
+                c_args.push(self.gen_expr(default)?);
+            } else {
+                c_args.push("0".to_string());
+            }
+        }
+        Ok(format!("{}__spawn({})", actor_name, c_args.join(", ")))
     }
 
     fn gen_join(&mut self, e: &Expr, parts: &[Expr], region: &str) -> Result<String> {
@@ -5719,6 +5727,126 @@ impl Generator {
         Ok(format!("{}({})", item_helper("fill", e.ty()?), value))
     }
 
+    #[inline(never)]
+    fn gen_event_listen(&mut self, name: &str, args: &[Expr]) -> Result<String> {
+        let Some((shape_name, _)) = name.split_once("__event_listen") else { unreachable!() };
+        let Some(receiver) = args.first() else { unreachable!() };
+        let place = self.gen_place(receiver)?;
+
+        let mut listenable_events: Vec<String> = self
+            .events
+            .values()
+            .filter(|e| {
+                (e.owner.as_deref() == Some(shape_name)
+                    || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(shape_name)))
+                    && !e.shared
+                    && !e.auto
+            })
+            .map(|e| e.name.clone())
+            .collect();
+        listenable_events.sort();
+
+        let mask = if args.len() == 1 {
+            if listenable_events.is_empty() {
+                0u32
+            } else {
+                (1u32 << listenable_events.len()) - 1
+            }
+        } else {
+            let mut m = 0u32;
+            for arg in args.iter().skip(1) {
+                if let ExprKind::TextLit(ev_name) = &arg.kind
+                    && let Some(idx) = listenable_events.iter().position(|n| n == ev_name)
+                {
+                    m |= 1u32 << idx;
+                }
+            }
+            m
+        };
+
+        Ok(format!("(({}).vela__events__ |= {}u, (void)0)", place, mask))
+    }
+
+    #[inline(never)]
+    fn gen_channel_call(&mut self, e: &Expr, name: &str, args: &[Expr]) -> Result<Option<String>> {
+        if name == CHAN_NEW {
+            let Some(arg0) = args.first() else {
+                return Err(Error::internal_at(e.span, "chan_new called without capacity"));
+            };
+            let cap = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = e.ty()? else {
+                return Err(Error::internal_at(e.span, "chan_new did not return Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(Some(format!("vela__rt__chan_new({}, (int64_t)sizeof({}))", cap, c_type(payload))));
+        }
+        if (name == DISPATCH || name == "send")
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
+        {
+            let Some((_, rest)) = args.split_first() else {
+                return Err(Error::internal_at(e.span, "dispatch called without channel"));
+            };
+            let Some(arg1) = rest.first() else {
+                return Err(Error::internal_at(e.span, "dispatch called without item"));
+            };
+            let chan = self.gen_expr(arg0)?;
+            let item = self.gen_expr(arg1)?;
+            let payload_type = match arg0.ty()? {
+                Type::Chan(inner) => match inner.as_ref() {
+                    Type::Own(p) => p.as_ref().clone(),
+                    other => other.clone(),
+                },
+                Type::Actor(actor_ty) => match actor_ty.as_ref() {
+                    Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
+                    _ => Type::Unknown,
+                },
+                _ => return Err(Error::internal_at(e.span, "dispatch on non-Chan/Actor")),
+            };
+            return Ok(Some(format!("vela__chan_dispatch__{}({}, {})", type_word(&payload_type), chan, item)));
+        }
+        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve")
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "wait_and_receive on non-Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(Some(format!("vela__chan_wait_and_receive__{}({})", type_word(payload), chan)));
+        }
+        if (name == RECEIVE || name == "try_recv" || name == "recieve")
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            let Type::Chan(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "receive on non-Chan"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(Some(format!("vela__chan_receive__{}({})", type_word(payload), chan)));
+        }
+        if name == CLOSE
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            return Ok(Some(format!("vela__rt__chan_close({})", chan)));
+        }
+        Ok(None)
+    }
+
+    #[inline(never)]
     fn gen_call(
         &mut self,
         e: &Expr,
@@ -5733,159 +5861,57 @@ impl Generator {
             return self.gen_number_cast(e, &into, args);
         }
         if name.ends_with("__event_listen") {
-            let Some((shape_name, _)) = name.split_once("__event_listen") else { unreachable!() };
-            let Some(receiver) = args.first() else { unreachable!() };
-            let place = self.gen_place(receiver)?;
-
-            let mut listenable_events: Vec<String> = self
-                .events
-                .values()
-                .filter(|e| {
-                    (e.owner.as_deref() == Some(shape_name)
-                        || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(shape_name)))
-                        && !e.shared
-                        && !e.auto
-                })
-                .map(|e| e.name.clone())
-                .collect();
-            listenable_events.sort();
-
-            let mask = if args.len() == 1 {
-                if listenable_events.is_empty() {
-                    0u32
-                } else {
-                    (1u32 << listenable_events.len()) - 1
-                }
-            } else {
-                let mut m = 0u32;
-                for arg in args.iter().skip(1) {
-                    if let ExprKind::TextLit(ev_name) = &arg.kind
-                        && let Some(idx) = listenable_events.iter().position(|n| n == ev_name)
-                    {
-                        m |= 1u32 << idx;
-                    }
-                }
-                m
-            };
-
-            return Ok(format!("(({}).vela__events__ |= {}u, (void)0)", place, mask));
+            return self.gen_event_listen(name, args);
         }
-        if name == CHAN_NEW {
-            let Some(arg0) = args.first() else {
-                return Err(Error::internal_at(e.span, "chan_new called without capacity"));
-            };
-            let cap = self.gen_expr(arg0)?;
-            let Type::Chan(inner) = e.ty()? else {
-                return Err(Error::internal_at(e.span, "chan_new did not return Chan"));
-            };
-            let payload = match inner.as_ref() {
-                Type::Own(p) => p.as_ref(),
-                other => other,
-            };
-            return Ok(format!("vela__rt__chan_new({}, (int64_t)sizeof({}))", cap, c_type(payload)));
+        if let Some(chan_call) = self.gen_channel_call(e, name, args)? {
+            return Ok(chan_call);
         }
-        if name == SEND
-            && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
-        {
-            let Some((_, rest)) = args.split_first() else {
-                return Err(Error::internal_at(e.span, "send called without channel"));
-            };
-            let Some(arg1) = rest.first() else {
-                return Err(Error::internal_at(e.span, "send called without item"));
-            };
-            let chan = self.gen_expr(arg0)?;
-            let item = self.gen_expr(arg1)?;
-            let payload_type = match arg0.ty()? {
-                Type::Chan(inner) => match inner.as_ref() {
-                    Type::Own(p) => p.as_ref().clone(),
-                    other => other.clone(),
-                },
-                Type::Actor(actor_ty) => match actor_ty.as_ref() {
-                    Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
-                    _ => Type::Unknown,
-                },
-                _ => return Err(Error::internal_at(e.span, "send on non-Chan/Actor")),
-            };
-            return Ok(format!("vela__chan_send__{}({}, {})", type_word(&payload_type), chan, item));
-        }
-        if name == RECV
-            && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_)))
-        {
-            let chan = self.gen_expr(arg0)?;
-            let Type::Chan(inner) = arg0.ty()? else {
-                return Err(Error::internal_at(e.span, "recv on non-Chan"));
-            };
-            let payload = match inner.as_ref() {
-                Type::Own(p) => p.as_ref(),
-                other => other,
-            };
-            return Ok(format!("vela__chan_recv__{}({})", type_word(payload), chan));
-        }
-        if name == TRY_RECV
-            && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_)))
-        {
-            let chan = self.gen_expr(arg0)?;
-            let Type::Chan(inner) = arg0.ty()? else {
-                return Err(Error::internal_at(e.span, "try_recv on non-Chan"));
-            };
-            let payload = match inner.as_ref() {
-                Type::Own(p) => p.as_ref(),
-                other => other,
-            };
-            return Ok(format!("vela__chan_try_recv__{}({})", type_word(payload), chan));
-        }
-        if name == CLOSE
-            && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
-        {
-            let chan = self.gen_expr(arg0)?;
-            return Ok(format!("vela__rt__chan_close({})", chan));
-        }
-        let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
-        let called = instance_name(name, &given);
-        // Resolve `alters` receiver place before evaluating arguments unless all trailing arguments are pure.
-        let (first, rest) = match args.split_first() {
-            // A value made here, `xs.map(f).collect(r)`, is kept in a C array
-            // of one, whose name is the address the method changes it at.
-            Some((value, rest)) if self.altering.contains(&called) && made_here(value) => {
-                let made = self.gen_expr(value)?;
-                (
-                    Some(format!("({}[1]){{ {} }}", c_type(value.ty()?), made)),
-                    rest,
-                )
-            }
-            Some((value, rest)) if self.altering.contains(&called) => {
-                let quiet = rest
-                    .iter()
-                    .all(|arg| changes_nothing(arg) && !has_prelude(arg));
-                (
-                    Some(if quiet {
-                        self.gen_address(value)?
-                    } else {
-                        self.gen_receiver(value)?
-                    }),
-                    rest,
-                )
-            }
-            _ => (None, args),
-        };
-        let rest: Vec<&Expr> = rest.iter().collect();
-        let offset = usize::from(first.is_some());
-        let hidden: Vec<bool> = (0..rest.len())
-            .map(|i| {
-                self.hidden_of(&called)
-                    .get(i + offset)
-                    .copied()
-                    .unwrap_or(false)
-            })
-            .collect();
-        let mut values = if hidden.contains(&true) {
-            self.gen_hidden_operands(&rest, &hidden, first.is_none())?
+        let called = if types.is_empty() {
+            name.to_string()
         } else {
-            self.gen_operands(&rest)?
+            let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
+            instance_name(name, &given)
+        };
+        // Resolve `alters` receiver place before evaluating arguments unless all trailing arguments are pure.
+        let (first, rest) = if self.altering.contains(&called) {
+            match args.split_first() {
+                Some((value, rest)) if made_here(value) => {
+                    let made = self.gen_expr(value)?;
+                    (
+                        Some(format!("({}[1]){{ {} }}", c_type(value.ty()?), made)),
+                        rest,
+                    )
+                }
+                Some((value, rest)) => {
+                    let quiet = rest
+                        .iter()
+                        .all(|arg| changes_nothing(arg) && !has_prelude(arg));
+                    (
+                        Some(if quiet {
+                            self.gen_address(value)?
+                        } else {
+                            self.gen_receiver(value)?
+                        }),
+                        rest,
+                    )
+                }
+                None => (None, args),
+            }
+        } else {
+            (None, args)
+        };
+        let offset = usize::from(first.is_some());
+        let hidden_params = self.hidden_of(&called);
+        let has_hidden = !hidden_params.is_empty()
+            && (0..rest.len()).any(|i| hidden_params.get(i + offset).copied().unwrap_or(false));
+        let rest_refs: Vec<&Expr> = rest.iter().collect();
+        let mut values = if has_hidden {
+            let hidden: Vec<bool> = (0..rest.len())
+                .map(|i| hidden_params.get(i + offset).copied().unwrap_or(false))
+                .collect();
+            self.gen_hidden_operands(&rest_refs, &hidden, first.is_none())?
+        } else {
+            self.gen_operands(&rest_refs)?
         };
         if let Some(first) = first {
             values.insert(0, first);

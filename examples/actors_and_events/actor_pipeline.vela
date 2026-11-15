@@ -1,0 +1,53 @@
+; A concurrent data processing pipeline demonstrating Actor composition:
+; - Worker actors process compute batches concurrently
+; - Processed totals are forwarded to an Aggregator actor
+; - Channels coordinate async requests and reply with final statistics
+
+actor Aggregator(total_jobs: int, total_units: int)
+
+    on Record(units: int)
+        total_jobs += 1
+        total_units += units
+    fi
+
+    on Summary(reply: Chan[int])
+        show("Aggregator summary: jobs=", total_jobs, " units=", total_units)
+        reply.dispatch(total_units)
+    fi
+fi
+
+actor Worker(id: int, processed: int, aggregator: Actor[Aggregator])
+
+    on Compute(batch_size: int, multiplier: int, reply: Chan[int])
+        processed += 1
+        fixed output = batch_size * multiplier
+        aggregator.dispatch(Aggregator.Record(output))
+        reply.dispatch(output)
+    fi
+fi
+
+task main()
+    fixed agg = spawn Aggregator(0, 0)
+    fixed w1 = spawn Worker(1, 0, agg)
+    fixed w2 = spawn Worker(2, 0, agg)
+
+    fixed r1 = chan_new<int>(1)
+    fixed r2 = chan_new<int>(1)
+
+    w1.dispatch(Worker.Compute(10, 3, r1))
+    fixed res1 = r1.wait_and_receive()
+    show("Worker 1 completed batch: output=", res1)
+
+    w2.dispatch(Worker.Compute(25, 4, r2))
+    fixed res2 = r2.wait_and_receive()
+    show("Worker 2 completed batch: output=", res2)
+
+    fixed summary_chan = chan_new<int>(1)
+    agg.dispatch(Aggregator.Summary(summary_chan))
+    fixed total = summary_chan.wait_and_receive()
+    show("Final pipeline total: ", total)
+
+    w1.close()
+    w2.close()
+    agg.close()
+fi

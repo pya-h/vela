@@ -1,0 +1,4 @@
+Worker 1 completed batch: output=30
+Worker 2 completed batch: output=100
+Aggregator summary: jobs=2 units=130
+Final pipeline total: 130

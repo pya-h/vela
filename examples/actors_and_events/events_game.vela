@@ -1,0 +1,80 @@
+; Demonstrates Vela's reactive event system:
+; - Shape member events with automatic and manual listeners
+; - Direct and indirect alters tracking
+; - Terminating guarded conditions
+; - Task interceptors (before / after) and program lifecycle hooks
+
+shape Combatant
+    name: text
+    hp: int
+    shield: int
+    alive: bool
+
+    ; Auto event: runs whenever .hp changes on any instance
+    event on_hp_change on .hp auto
+        show(.name, " hp is now ", .hp)
+    fi
+
+    ; Auto event with alters and guarded when condition
+    alters(.alive) event check_defeat on .shield auto
+        when .shield <= 0 and .hp <= 0 and .alive
+            .alive = false
+            show(.name, " has been defeated in combat!")
+        fi
+    fi
+
+    ; Cascading event: mutating .shield triggers check_defeat;
+    ; therefore, both .shield and .alive must be declared in alters
+    alters(.shield, .alive) event absorb on .hp
+        when .shield > 0
+            fixed absorbed = 10
+            .shield -= absorbed
+            show(.name, " shield absorbed impact! Shield is ", .shield)
+        fi
+    fi
+
+    ; Dormant event: only runs when explicitly attached via .listen()
+    event buff_reflect on .hp
+        show(.name, " reflected kinetic energy back at attacker!")
+    fi
+fi
+
+task battle_round(flex& hero: Combatant)
+    show("--- Round Begins ---")
+    hero.hp -= 15
+    show("--- Round Ends ---")
+fi
+
+event before_round on before battle_round
+    show("[Event] Preparing combat arena before round")
+fi
+
+event after_round on after battle_round
+    show("[Event] Round concluded")
+fi
+
+event startup on start
+    show("=== Combat Simulation Started ===")
+fi
+
+event shutdown on end
+    show("=== Combat Simulation Ended ===")
+fi
+
+task main()
+    flex knight = Combatant { name: "Knight", hp: 30, shield: 20, alive: true }
+
+    ; Round 1: knight has not listened to buff_reflect or absorb yet,
+    ; but auto events (on_hp_change) execute automatically!
+    battle_round(&knight)
+
+    ; Knight enables absorb and buff_reflect listeners
+    knight.listen("absorb", "buff_reflect")
+
+    ; Round 2: absorb triggers, mutating .shield, and buff_reflect fires
+    battle_round(&knight)
+
+    ; Round 3: lethal blow depletes shield and hp, triggering check_defeat (alive -> false)
+    knight.hp = 0
+    show("Final status: ", knight.name, " alive=", knight.alive)
+fi

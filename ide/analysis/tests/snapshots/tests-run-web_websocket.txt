@@ -1,0 +1,238 @@
+  1 | ; Tests RFC 6455 WebSockets in std/web: handshake, masking, frame encoding/decoding, text, ping, and close.
+    | comment:; Tests RFC 6455 WebSockets in std/web: handshake, masking, frame encoding/decoding, text, ping, and close.
+  2 | include std/web { Socket, WebSocket, WebSocketMessage, Request, Method, ws_upgrade, ws_accept, text_find }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:WebSocket  punctuation:,  type:WebSocketMessage  punctuation:,  type:Request  punctuation:,  type:Method  punctuation:,  task:ws_upgrade  punctuation:,  task:ws_accept  punctuation:,  task:text_find  punctuation:}
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     region r default
+    | keyword:region  region:r  keyword:default
+  6 |     ; 1. Verify RFC 6455 §1.3 handshake accept key calculation
+    | comment:; 1. Verify RFC 6455 §1.3 handshake accept key calculation
+  7 |     fixed resp = ws_upgrade("dGhlIHNhbXBsZSBub25jZQ==", r)
+    | keyword:fixed  variable:resp  operator:=  task:ws_upgrade  punctuation:(  string:"dGhlIHNhbXBsZSBub25jZQ=="  punctuation:,  region:r  punctuation:)
+  8 |     fixed accept = when resp.headers[#"Sec-WebSocket-Accept"] is {a} a else "missing" fi
+    | keyword:fixed  variable:accept  operator:=  keyword:when  variable:resp  punctuation:.  field:headers  punctuation:[  punctuation:#  string:"Sec-WebSocket-Accept"  punctuation:]  keyword:is  punctuation:{  variable:a  punctuation:}  variable:a  keyword:else  string:"missing"  keyword:fi
+  9 |     show("accept_key: ", accept)
+    | builtin-fn:show  punctuation:(  string:"accept_key: "  punctuation:,  variable:accept  punctuation:)
+ 11 |     ; 2. Verify Request.is_websocket_upgrade
+    | comment:; 2. Verify Request.is_websocket_upgrade
+ 12 |     flex hdrs = new [text: text]() at r
+    | keyword:flex  variable:hdrs  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 13 |     hdrs["upgrade"] = "websocket"
+    | variable:hdrs  punctuation:[  string:"upgrade"  punctuation:]  operator:=  string:"websocket"
+ 14 |     hdrs["connection"] = "Upgrade"
+    | variable:hdrs  punctuation:[  string:"connection"  punctuation:]  operator:=  string:"Upgrade"
+ 15 |     hdrs["sec-websocket-key"] = "dGhlIHNhbXBsZSBub25jZQ=="
+    | variable:hdrs  punctuation:[  string:"sec-websocket-key"  punctuation:]  operator:=  string:"dGhlIHNhbXBsZSBub25jZQ=="
+ 16 |     fixed ws_req = Request { method: Method.Get, path: "/chat", raw_query: "", headers: hdrs, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:ws_req  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/chat"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  variable:hdrs  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 17 |     show("is_upgrade: ", ws_req.is_websocket_upgrade())
+    | builtin-fn:show  punctuation:(  string:"is_upgrade: "  punctuation:,  variable:ws_req  punctuation:.  method:is_websocket_upgrade  punctuation:(  punctuation:)  punctuation:)
+ 19 |     flex plain_hdrs = new [text: text]() at r
+    | keyword:flex  variable:plain_hdrs  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 20 |     plain_hdrs["accept"] = "text/html"
+    | variable:plain_hdrs  punctuation:[  string:"accept"  punctuation:]  operator:=  string:"text/html"
+ 21 |     fixed http_req = Request { method: Method.Get, path: "/", raw_query: "", headers: plain_hdrs, body_data: "", params: new [text: text]() at r }
+    | keyword:fixed  variable:http_req  operator:=  type:Request  punctuation:{  field:method  punctuation::  type:Method  punctuation:.  variant:Get  punctuation:,  field:path  punctuation::  string:"/"  punctuation:,  field:raw_query  punctuation::  string:""  punctuation:,  field:headers  punctuation::  variable:plain_hdrs  punctuation:,  field:body_data  punctuation::  string:""  punctuation:,  field:params  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation::  variable:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+ 22 |     show("is_plain_upgrade: ", http_req.is_websocket_upgrade())
+    | builtin-fn:show  punctuation:(  string:"is_plain_upgrade: "  punctuation:,  variable:http_req  punctuation:.  method:is_websocket_upgrade  punctuation:(  punctuation:)  punctuation:)
+ 24 |     ; 3. Setup loopback WebSocket connection
+    | comment:; 3. Setup loopback WebSocket connection
+ 25 |     flex server = Socket.open(r) { failure _
+    | keyword:flex  variable:server  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 26 |         show("server open failed")
+    | builtin-fn:show  punctuation:(  string:"server open failed"  punctuation:)
+ 27 |         <-
+    | keyword:<-
+ 28 |     }
+    | punctuation:}
+ 29 |     server.bind_to("127.0.0.1", 18098) { failure _
+    | variable:server  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18098  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 30 |         show("bind failed")
+    | builtin-fn:show  punctuation:(  string:"bind failed"  punctuation:)
+ 31 |         <-
+    | keyword:<-
+ 32 |     }
+    | punctuation:}
+ 33 |     server.listen(16) { failure _
+    | variable:server  punctuation:.  method:listen  punctuation:(  number:16  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 34 |         show("listen failed")
+    | builtin-fn:show  punctuation:(  string:"listen failed"  punctuation:)
+ 35 |         <-
+    | keyword:<-
+ 36 |     }
+    | punctuation:}
+ 38 |     fixed client_sock = Socket.open(r) { failure _
+    | keyword:fixed  variable:client_sock  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 39 |         show("client open failed")
+    | builtin-fn:show  punctuation:(  string:"client open failed"  punctuation:)
+ 40 |         <-
+    | keyword:<-
+ 41 |     }
+    | punctuation:}
+ 42 |     client_sock.connect("127.0.0.1", 18098) { failure _
+    | variable:client_sock  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18098  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 43 |         show("connect failed")
+    | builtin-fn:show  punctuation:(  string:"connect failed"  punctuation:)
+ 44 |         <-
+    | keyword:<-
+ 45 |     }
+    | punctuation:}
+ 47 |     fixed accepted_sock = server.accept(r) { failure _
+    | keyword:fixed  variable:accepted_sock  operator:=  variable:server  punctuation:.  method:accept  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 48 |         show("accept failed")
+    | builtin-fn:show  punctuation:(  string:"accept failed"  punctuation:)
+ 49 |         <-
+    | keyword:<-
+ 50 |     }
+    | punctuation:}
+ 52 |     ; Upgrade accepted connection into WebSocket
+    | comment:; Upgrade accepted connection into WebSocket
+ 53 |     flex server_ws = ws_accept(ws_req, accepted_sock, r) { failure _
+    | keyword:flex  variable:server_ws  operator:=  task:ws_accept  punctuation:(  variable:ws_req  punctuation:,  variable:accepted_sock  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 54 |         show("ws_accept failed")
+    | builtin-fn:show  punctuation:(  string:"ws_accept failed"  punctuation:)
+ 55 |         <-
+    | keyword:<-
+ 56 |     }
+    | punctuation:}
+ 58 |     ; Client reads the 101 response from server
+    | comment:; Client reads the 101 response from server
+ 59 |     fixed srv_reply = client_sock.read(256, r) { failure _
+    | keyword:fixed  variable:srv_reply  operator:=  variable:client_sock  punctuation:.  method:read  punctuation:(  number:256  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 60 |         show("client handshake read failed")
+    | builtin-fn:show  punctuation:(  string:"client handshake read failed"  punctuation:)
+ 61 |         <-
+    | keyword:<-
+ 62 |     }
+    | punctuation:}
+ 63 |     show("handshake 101: ", text_find(srv_reply, "101 Switching Protocols", 0) >= 0)
+    | builtin-fn:show  punctuation:(  string:"handshake 101: "  punctuation:,  task:text_find  punctuation:(  variable:srv_reply  punctuation:,  string:"101 Switching Protocols"  punctuation:,  number:0  punctuation:)  operator:>=  number:0  punctuation:)
+ 65 |     flex client_ws = WebSocket { sock: client_sock, is_client: true, closed: false }
+    | keyword:flex  variable:client_ws  operator:=  type:WebSocket  punctuation:{  field:sock  punctuation::  variable:client_sock  punctuation:,  field:is_client  punctuation::  keyword:true  punctuation:,  field:closed  punctuation::  keyword:false  punctuation:}
+ 67 |     ; 4. Send client text message (masked)
+    | comment:; 4. Send client text message (masked)
+ 68 |     client_ws.send_text("Hello WebSocket!", r) { failure _
+    | variable:client_ws  punctuation:.  method:send_text  punctuation:(  string:"Hello WebSocket!"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 69 |         show("send_text failed")
+    | builtin-fn:show  punctuation:(  string:"send_text failed"  punctuation:)
+ 70 |         <-
+    | keyword:<-
+ 71 |     }
+    | punctuation:}
+ 73 |     fixed msg1 = server_ws.recv(r) { failure _
+    | keyword:fixed  variable:msg1  operator:=  variable:server_ws  punctuation:.  method:recv  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 74 |         show("recv text failed")
+    | builtin-fn:show  punctuation:(  string:"recv text failed"  punctuation:)
+ 75 |         <-
+    | keyword:<-
+ 76 |     }
+    | punctuation:}
+ 77 |     match msg1
+    | keyword:match  variable:msg1
+ 78 |     case WebSocketMessage.Text payload
+    | keyword:case  type:WebSocketMessage  punctuation:.  variant:Text  variable:payload
+ 79 |         show("server got text: ", payload)
+    | builtin-fn:show  punctuation:(  string:"server got text: "  punctuation:,  variable:payload  punctuation:)
+ 80 |     case _
+    | keyword:case  keyword:_
+ 81 |         show("server got unexpected message")
+    | builtin-fn:show  punctuation:(  string:"server got unexpected message"  punctuation:)
+ 82 |     fi
+    | keyword:fi
+ 84 |     ; 5. Send server text reply (unmasked)
+    | comment:; 5. Send server text reply (unmasked)
+ 85 |     server_ws.send_text("Welcome from server!", r) { failure _
+    | variable:server_ws  punctuation:.  method:send_text  punctuation:(  string:"Welcome from server!"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 86 |         show("server send_text failed")
+    | builtin-fn:show  punctuation:(  string:"server send_text failed"  punctuation:)
+ 87 |         <-
+    | keyword:<-
+ 88 |     }
+    | punctuation:}
+ 90 |     fixed msg2 = client_ws.recv(r) { failure _
+    | keyword:fixed  variable:msg2  operator:=  variable:client_ws  punctuation:.  method:recv  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 91 |         show("client recv text failed")
+    | builtin-fn:show  punctuation:(  string:"client recv text failed"  punctuation:)
+ 92 |         <-
+    | keyword:<-
+ 93 |     }
+    | punctuation:}
+ 94 |     match msg2
+    | keyword:match  variable:msg2
+ 95 |     case WebSocketMessage.Text payload
+    | keyword:case  type:WebSocketMessage  punctuation:.  variant:Text  variable:payload
+ 96 |         show("client got text: ", payload)
+    | builtin-fn:show  punctuation:(  string:"client got text: "  punctuation:,  variable:payload  punctuation:)
+ 97 |     case _
+    | keyword:case  keyword:_
+ 98 |         show("client got unexpected message")
+    | builtin-fn:show  punctuation:(  string:"client got unexpected message"  punctuation:)
+ 99 |     fi
+    | keyword:fi
+101 |     ; 6. Ping frame
+    | comment:; 6. Ping frame
+102 |     client_ws.ping("ping-123", r) { failure _
+    | variable:client_ws  punctuation:.  method:ping  punctuation:(  string:"ping-123"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+103 |         show("ping failed")
+    | builtin-fn:show  punctuation:(  string:"ping failed"  punctuation:)
+104 |         <-
+    | keyword:<-
+105 |     }
+    | punctuation:}
+107 |     fixed msg3 = server_ws.recv(r) { failure _
+    | keyword:fixed  variable:msg3  operator:=  variable:server_ws  punctuation:.  method:recv  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+108 |         show("recv ping failed")
+    | builtin-fn:show  punctuation:(  string:"recv ping failed"  punctuation:)
+109 |         <-
+    | keyword:<-
+110 |     }
+    | punctuation:}
+111 |     match msg3
+    | keyword:match  variable:msg3
+112 |     case WebSocketMessage.Ping payload
+    | keyword:case  type:WebSocketMessage  punctuation:.  variant:Ping  variable:payload
+113 |         show("server got ping: ", payload)
+    | builtin-fn:show  punctuation:(  string:"server got ping: "  punctuation:,  variable:payload  punctuation:)
+114 |     case _
+    | keyword:case  keyword:_
+115 |         show("server got unexpected ping message")
+    | builtin-fn:show  punctuation:(  string:"server got unexpected ping message"  punctuation:)
+116 |     fi
+    | keyword:fi
+118 |     ; 7. Close frame
+    | comment:; 7. Close frame
+119 |     client_ws.close(1000, "done", r) { failure _
+    | variable:client_ws  punctuation:.  method:close  punctuation:(  number:1000  punctuation:,  string:"done"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+120 |         show("close failed")
+    | builtin-fn:show  punctuation:(  string:"close failed"  punctuation:)
+121 |         <-
+    | keyword:<-
+122 |     }
+    | punctuation:}
+124 |     fixed msg4 = server_ws.recv(r) { failure _
+    | keyword:fixed  variable:msg4  operator:=  variable:server_ws  punctuation:.  method:recv  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+125 |         show("recv close failed")
+    | builtin-fn:show  punctuation:(  string:"recv close failed"  punctuation:)
+126 |         <-
+    | keyword:<-
+127 |     }
+    | punctuation:}
+128 |     match msg4
+    | keyword:match  variable:msg4
+129 |     case WebSocketMessage.Close code reason
+    | keyword:case  type:WebSocketMessage  punctuation:.  variant:Close  variable:code  variable:reason
+130 |         show("server got close: code=", code, " reason=", reason)
+    | builtin-fn:show  punctuation:(  string:"server got close: code="  punctuation:,  variable:code  punctuation:,  string:" reason="  punctuation:,  variable:reason  punctuation:)
+131 |     case _
+    | keyword:case  keyword:_
+132 |         show("server got unexpected close message")
+    | builtin-fn:show  punctuation:(  string:"server got unexpected close message"  punctuation:)
+133 |     fi
+    | keyword:fi
+135 |     server_ws.close(1000, "bye", r) { failure _ }
+    | variable:server_ws  punctuation:.  method:close  punctuation:(  number:1000  punctuation:,  string:"bye"  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+136 |     server.close() { failure _ }
+    | variable:server  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+137 | fi
+    | keyword:fi

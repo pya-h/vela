@@ -19,7 +19,7 @@
  13 |     y: int
     | field:y  punctuation::  type-builtin:int
  15 |     own() -> text
-    | method:own  punctuation:(  punctuation:)  operator:->  type-builtin:text
+    | keyword:own  punctuation:(  punctuation:)  operator:->  type-builtin:text
  16 |         <- .type
     | keyword:<-  punctuation:.  keyword:type
  17 |     fi
@@ -123,7 +123,7 @@
  73 |     ; Inside a method, `.type` is the type of the value it is called on.
     | comment:; Inside a method, `.type` is the type of the value it is called on.
  74 |     show(p.own(), " ", p.inside(), " ", p.of_x())
-    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:own  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:inside  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:of_x  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  keyword:own  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:inside  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:of_x  punctuation:(  punctuation:)  punctuation:)
  75 |     ; The value itself is never worked out, as C's sizeof.
     | comment:; The value itself is never worked out, as C's sizeof.
  76 |     show(count().type)

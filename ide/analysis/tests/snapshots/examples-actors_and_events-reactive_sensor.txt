@@ -1,0 +1,84 @@
+  1 | ; Demonstrates bridging Events with Actors:
+    | comment:; Demonstrates bridging Events with Actors:
+  2 | ; - Sensor shape defines local fields and reactive mutation hooks
+    | comment:; - Sensor shape defines local fields and reactive mutation hooks
+  3 | ; - A high-temperature event detects anomalies and dispatches directly into an Actor's mailbox
+    | comment:; - A high-temperature event detects anomalies and dispatches directly into an Actor's mailbox
+  4 | ; - The Monitor Actor isolates alert processing and maintains incident logs
+    | comment:; - The Monitor Actor isolates alert processing and maintains incident logs
+  6 | actor Monitor(incident_count: int, max_temp: int)
+    | keyword:actor  task:Monitor  punctuation:(  variable:incident_count  punctuation::  type-builtin:int  punctuation:,  variable:max_temp  punctuation::  type-builtin:int  punctuation:)
+  8 |     on Alert(temp: int, location: text)
+    | variable:on  task:Alert  punctuation:(  variable:temp  punctuation::  type-builtin:int  punctuation:,  variable:location  punctuation::  type-builtin:text  punctuation:)
+  9 |         incident_count += 1
+    | variable:incident_count  operator:+=  number:1
+ 10 |         when temp > max_temp
+    | keyword:when  variable:temp  operator:>  variable:max_temp
+ 11 |             max_temp = temp
+    | variable:max_temp  operator:=  variable:temp
+ 12 |         fi
+    | keyword:fi
+ 13 |         show("[Monitor Alert #", incident_count, "] Overheat detected at ", location, ": ", temp, "C")
+    | builtin-fn:show  punctuation:(  string:"[Monitor Alert #"  punctuation:,  variable:incident_count  punctuation:,  string:"] Overheat detected at "  punctuation:,  variable:location  punctuation:,  string:": "  punctuation:,  variable:temp  punctuation:,  string:"C"  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 16 |     on GetStats(reply: Chan[int])
+    | variable:on  task:GetStats  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 17 |         show("Monitor incidents: ", incident_count, ", peak: ", max_temp, "C")
+    | builtin-fn:show  punctuation:(  string:"Monitor incidents: "  punctuation:,  variable:incident_count  punctuation:,  string:", peak: "  punctuation:,  variable:max_temp  punctuation:,  string:"C"  punctuation:)
+ 18 |         reply.dispatch(incident_count)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:incident_count  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | shape Thermometer
+    | keyword:shape  type:Thermometer
+ 23 |     location: text
+    | field:location  punctuation::  type-builtin:text
+ 24 |     temperature: int
+    | field:temperature  punctuation::  type-builtin:int
+ 25 |     alert_chan: Actor[Monitor]
+    | field:alert_chan  punctuation::  type:Actor  punctuation:[  variable:Monitor  punctuation:]
+ 27 |     ; Reactive event triggered when temperature changes
+    | comment:; Reactive event triggered when temperature changes
+ 28 |     event on_temp_change on .temperature auto
+    | keyword:event  variable:on_temp_change  variable:on  punctuation:.  field:temperature  variable:auto
+ 29 |         when .temperature > 75
+    | keyword:when  punctuation:.  field:temperature  operator:>  number:75
+ 30 |             .alert_chan.dispatch(Monitor.Alert(.temperature, .location))
+    | punctuation:.  field:alert_chan  punctuation:.  field:dispatch  punctuation:(  variable:Monitor  punctuation:.  field:Alert  punctuation:(  punctuation:.  field:temperature  punctuation:,  punctuation:.  field:location  punctuation:)  punctuation:)
+ 31 |         fi
+    | keyword:fi
+ 32 |     fi
+    | keyword:fi
+ 33 | fi
+    | keyword:fi
+ 35 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 36 |     fixed mon = spawn Monitor(0, 0)
+    | keyword:fixed  variable:mon  operator:=  keyword:spawn  task:Monitor  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
+ 37 |     flex t1 = Thermometer { location: "Server Room A", temperature: 22, alert_chan: mon }
+    | keyword:flex  variable:t1  operator:=  type:Thermometer  punctuation:{  field:location  punctuation::  string:"Server Room A"  punctuation:,  field:temperature  punctuation::  number:22  punctuation:,  field:alert_chan  punctuation::  variable:mon  punctuation:}
+ 39 |     show("Setting normal temperature...")
+    | builtin-fn:show  punctuation:(  string:"Setting normal temperature..."  punctuation:)
+ 40 |     t1.temperature = 45
+    | variable:t1  punctuation:.  field:temperature  operator:=  number:45
+ 42 |     show("Simulating thermal surge...")
+    | builtin-fn:show  punctuation:(  string:"Simulating thermal surge..."  punctuation:)
+ 43 |     t1.temperature = 88
+    | variable:t1  punctuation:.  field:temperature  operator:=  number:88
+ 44 |     t1.temperature = 94
+    | variable:t1  punctuation:.  field:temperature  operator:=  number:94
+ 46 |     fixed stats = chan_new<int>(1)
+    | keyword:fixed  variable:stats  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 47 |     mon.dispatch(Monitor.GetStats(stats))
+    | variable:mon  punctuation:.  field:dispatch  punctuation:(  variable:Monitor  punctuation:.  field:GetStats  punctuation:(  variable:stats  punctuation:)  punctuation:)
+ 48 |     fixed incidents = stats.wait_and_receive()
+    | keyword:fixed  variable:incidents  operator:=  variable:stats  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 49 |     show("Recorded incidents: ", incidents)
+    | builtin-fn:show  punctuation:(  string:"Recorded incidents: "  punctuation:,  variable:incidents  punctuation:)
+ 51 |     mon.close()
+    | variable:mon  punctuation:.  field:close  punctuation:(  punctuation:)
+ 52 | fi
+    | keyword:fi

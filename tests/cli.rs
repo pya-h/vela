@@ -13,7 +13,26 @@ fn stderr(out: &Output) -> String {
 }
 
 fn example(name: &str) -> String {
-    format!("{}/examples/{}.vela", env!("CARGO_MANIFEST_DIR"), name)
+    fn find(dir: &std::path::Path, name: &str) -> Option<String> {
+        let entries = std::fs::read_dir(dir).ok()?;
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|e| e.path());
+        for entry in entries {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(found) = find(&path, name) {
+                    return Some(found);
+                }
+            } else if path.file_stem().and_then(|s| s.to_str()) == Some(name)
+                && path.extension().and_then(|s| s.to_str()) == Some("vela")
+            {
+                return Some(path.to_str().unwrap().to_string());
+            }
+        }
+        None
+    }
+    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
+    find(&root, name).unwrap_or_else(|| format!("{}/examples/{}.vela", env!("CARGO_MANIFEST_DIR"), name))
 }
 
 #[test]
