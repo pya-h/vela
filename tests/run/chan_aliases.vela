@@ -1,0 +1,67 @@
+; Comprehensive test for channel and actor communication primitives,
+; testing both canonical (dispatch, wait_and_receive, receive) and aliased forms
+; (send, recv, try_recv, recieve, wait_and_recieve) in both function and method syntax.
+
+actor EchoActor(count: int)
+    on Ping(val: int, reply: Chan[int])
+        count = count + 1
+        dispatch(reply, val * 2)
+    fi
+fi
+
+task main()
+    fixed c = chan_new<int>(8)
+
+    ; 1. Canonical function syntax
+    show("dispatch fn: ", dispatch(c, 10))
+    show("wait_and_receive fn: ", wait_and_receive(c))
+
+    ; 2. Canonical method syntax
+    show("dispatch method: ", c.dispatch(20))
+    show("wait_and_receive method: ", c.wait_and_receive())
+
+    ; 3. Canonical receive (try)
+    show("receive empty: ", receive(c))
+    c.dispatch(30)
+    show("receive non-empty fn: ", receive(c))
+    c.dispatch(40)
+    show("receive non-empty method: ", c.receive())
+
+    ; 4. Aliases: send and recv
+    show("send fn: ", send(c, 50))
+    show("recv fn: ", recv(c))
+    show("send method: ", c.send(60))
+    show("recv method: ", c.recv())
+
+    ; 5. Aliases: try_recv and typo tolerances
+    show("try_recv empty: ", try_recv(c))
+    c.send(70)
+    show("try_recv fn: ", try_recv(c))
+    c.send(80)
+    show("try_recv method: ", c.try_recv())
+
+    c.dispatch(90)
+    show("recieve typo fn: ", recieve(c))
+    c.dispatch(100)
+    show("recieve typo method: ", c.recieve())
+
+    c.dispatch(110)
+    show("wait_and_recieve typo fn: ", wait_and_recieve(c))
+    c.dispatch(120)
+    show("wait_and_recieve typo method: ", c.wait_and_recieve())
+
+    c.close()
+
+    ; 6. Actor communication with dispatch and send
+    fixed echo = spawn EchoActor(0)
+    fixed reply = chan_new<int>(2)
+
+    dispatch(echo, EchoActor.Ping(21, reply))
+    show("actor reply 1: ", wait_and_receive(reply))
+
+    echo.send(EchoActor.Ping(50, reply))
+    show("actor reply 2: ", reply.wait_and_receive())
+
+    echo.close()
+    reply.close()
+fi

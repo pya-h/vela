@@ -282,7 +282,13 @@ pub(crate) fn complete(
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token) {
         let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
-        let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
+        let base = dot
+            .checked_sub(1)
+            .and_then(|q| exact.type_ending_at(q))
+            .map(|ty| match ty {
+                Type::Own(inner) => *inner,
+                other => other,
+            });
         let members = |slice: bool, through_pointer: bool| {
             let prefix = if through_pointer { "^." } else { "" };
             let mut items = vec![CompletionItem {
@@ -486,6 +492,80 @@ pub(crate) fn complete(
             }
             Some(Type::Slice(..)) => {
                 return (with_copy(members(true, false), false), word_start, byte);
+            }
+            Some(Type::Chan(_)) => {
+                let items = vec![
+                    CompletionItem {
+                        label: "dispatch".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "dispatch(item) -> bool".to_string(),
+                        apply: None,
+                        snippet: Some("dispatch(${item})".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "wait_and_receive".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "wait_and_receive() -> T".to_string(),
+                        apply: None,
+                        snippet: Some("wait_and_receive()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "receive".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "receive() -> maybe T".to_string(),
+                        apply: None,
+                        snippet: Some("receive()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "close".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "close()".to_string(),
+                        apply: None,
+                        snippet: Some("close()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "len".to_string(),
+                        kind: CompletionKind::Field,
+                        detail: "int, number of queued items".to_string(),
+                        apply: None,
+                        snippet: None,
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "cap".to_string(),
+                        kind: CompletionKind::Field,
+                        detail: "int, maximum capacity".to_string(),
+                        apply: None,
+                        snippet: None,
+                        boost: LOCAL,
+                    },
+                ];
+                return (with_copy(items, false), word_start, byte);
+            }
+            Some(Type::Actor(_)) => {
+                let items = vec![
+                    CompletionItem {
+                        label: "dispatch".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "dispatch(msg) -> bool".to_string(),
+                        apply: None,
+                        snippet: Some("dispatch(${msg})".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "close".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "close()".to_string(),
+                        apply: None,
+                        snippet: Some("close()".to_string()),
+                        boost: LOCAL,
+                    },
+                ];
+                return (with_copy(items, false), word_start, byte);
             }
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (
@@ -2424,6 +2504,8 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("kind"),
         keyword("priv"),
         keyword("include"),
+        keyword("actor"),
+        keyword("event"),
         snippet(
             "include",
             "include another file of the program",
@@ -2444,6 +2526,16 @@ fn item_level_items() -> Vec<CompletionItem> {
             "kind",
             "a kind with a variant",
             "kind ${Name}\n\t${Variant}\nfi",
+        ),
+        snippet(
+            "actor",
+            "an actor with private state and handlers",
+            "actor ${Name}\n\t${}\nfi",
+        ),
+        snippet(
+            "event",
+            "an event hook",
+            "event ${name} on ${trigger}\n\t${}\nfi",
         ),
         snippet(
             "macro",

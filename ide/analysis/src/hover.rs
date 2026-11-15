@@ -185,6 +185,26 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "x.type: text",
         "The type of the value as code writes it, without regions: [int#3], [float], ^Point, Box<int>. The compiler knows it, so the value itself is never worked out; in a task that takes types, it is the type each use gives. 'type' is a reserved word, so nothing else takes the name.",
     ),
+    (
+        "actor",
+        "actor Name ... on Message ... fi",
+        "Declares an actor with private encapsulated state and message handlers. Spawned with 'spawn Name(...)', an actor processes incoming messages sequentially in its own execution thread without shared-memory locks.",
+    ),
+    (
+        "spawn",
+        "spawn ActorName(args...)",
+        "Instantiates and spawns an actor instance into the runtime, starting its sequential message loop and returning a typed channel handle.",
+    ),
+    (
+        "event",
+        "alters(target) event name on trigger [when cond] [auto]",
+        "Declares a reactive event hook. Events can observe field mutations, field reads, task entry/exit (before/after), or lifecycle triggers.",
+    ),
+    (
+        "own",
+        "own value or Chan[own T]",
+        "Ownership transfer capability. Sending an 'own T' message across a channel invalidates the sender's binding (move semantics), ensuring race-free concurrency without locks.",
+    ),
 ];
 
 const THIS_REGION_DOC: &str = "The region the value this method is called on lives in. The method may send what the value holds there and take values in it, but can't allocate in it, since nothing gives a method the region.";
@@ -274,6 +294,38 @@ fn hover_token(
         (TokenClass::Field, None) if text == "del" => (
             "del(index) or del()".to_string(),
             "Takes the item at the index out of a slice, or the last item, and gives it. The items after it move down.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "dispatch" || text == "send" => (
+            "dispatch(item) -> bool".to_string(),
+            "Sends an item into the channel or actor mailbox. If the channel is bounded and full, blocks until capacity is available.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "wait_and_receive" || text == "recv" || text == "wait_and_recieve" => (
+            "wait_and_receive() -> T".to_string(),
+            "Blocks until an item is available in the channel and receives it, transferring ownership to the caller.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "receive" || text == "try_recv" || text == "recieve" => (
+            "receive() -> maybe T".to_string(),
+            "Non-blocking attempt to receive an item from the channel. Returns { item } if available, or none if empty.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "close" => (
+            "close()".to_string(),
+            "Closes the channel or actor mailbox. Closed channels wake up all waiting receivers and reject further dispatches.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "cap" => (
+            "cap: int".to_string(),
+            "The maximum number of items the channel can buffer.".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "dispatch" || text == "send" => (
+            "task dispatch(c: Chan[T], item: own T) -> bool".to_string(),
+            "Sends an item into the channel or actor mailbox. Blocks if bounded capacity is full.".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "wait_and_receive" || text == "recv" || text == "wait_and_recieve" => (
+            "task wait_and_receive(c: Chan[T]) -> T".to_string(),
+            "Blocks until an item is available in the channel and receives it, transferring ownership to the caller.".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "receive" || text == "try_recv" || text == "recieve" => (
+            "task receive(c: Chan[T]) -> maybe T".to_string(),
+            "Non-blocking attempt to receive an item from the channel. Returns { item } if available, or none if empty.".to_string(),
         ),
         (_, Some(id)) => {
             let (code, doc) = describe(k, id)?;

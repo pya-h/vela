@@ -53,6 +53,9 @@ fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
                 .collect(),
             region: applied.region.clone(),
         })),
+        Type::Chan(inner) => Type::Chan(Box::new(as_written(inner, made))),
+        Type::Actor(inner) => Type::Actor(Box::new(as_written(inner, made))),
+        Type::Own(inner) => Type::Own(Box::new(as_written(inner, made))),
         other => other.clone(),
     }
 }

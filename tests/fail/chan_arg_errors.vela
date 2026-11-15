@@ -1,0 +1,6 @@
+; error: 4:5: 'dispatch' takes 2 arguments (channel/actor and item), got 1
+task main()
+    fixed c = chan_new<int>(1)
+    dispatch(c)
+fi
+

@@ -13024,10 +13024,15 @@ impl Checker {
             }
             return Ok(CallSetup::Checked(Type::Chan(Box::new(elem_ty))));
         }
-        if name == DISPATCH || name == "send" {
+        if name == DISPATCH || (name == "send" && args.len() == 2) {
             if self.tasks.contains_key(name) {
                 // User defined a task named "dispatch" or "send", let it fall through to regular task call
-            } else if args.len() == 2 {
+            } else if args.len() != 2 {
+                return err(
+                    span,
+                    format!("'{}' takes 2 arguments (channel/actor and item), got {}", name, args.len()),
+                );
+            } else {
                 let Some((arg0, rest)) = args.split_first_mut() else { unreachable!() };
                 let Some(arg1) = rest.first_mut() else { unreachable!() };
                 let chan_ty = self.check_expr(arg0)?;
@@ -13041,7 +13046,7 @@ impl Checker {
                         Type::Named(format!("{}Msg", actor_name), None)
                     }
                     Type::Unknown => Type::Unknown,
-                    _ => return err(arg0.span, format!("'dispatch' takes a channel or actor as its first argument, got {}", chan_ty)),
+                    _ => return err(arg0.span, format!("'{}' takes a channel or actor as its first argument, got {}", name, chan_ty)),
                 };
                 let item_ty = self.check_expr(arg1)?;
                 if let Type::Own(payload) = &elem_ty {
@@ -13060,42 +13065,59 @@ impl Checker {
                 return Ok(CallSetup::Checked(Type::Bool));
             }
         }
-        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve") && !self.tasks.contains_key(name) && args.len() == 1 {
+        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve") && !self.tasks.contains_key(name) {
+            if args.len() != 1 {
+                return err(
+                    span,
+                    format!("'{}' takes 1 argument (channel), got {}", name, args.len()),
+                );
+            }
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
-            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
-                let elem_ty = match &chan_ty {
-                    Type::Chan(inner) => inner.as_ref().clone(),
-                    _ => Type::Unknown,
-                };
-                let ret_ty = match elem_ty {
-                    Type::Own(payload) => *payload,
-                    other => other,
-                };
-                return Ok(CallSetup::Checked(ret_ty));
-            }
+            let elem_ty = match &chan_ty {
+                Type::Chan(inner) => inner.as_ref().clone(),
+                Type::Unknown => Type::Unknown,
+                _ => return err(arg0.span, format!("'{}' takes a channel as its argument, got {}", name, chan_ty)),
+            };
+            let ret_ty = match elem_ty {
+                Type::Own(payload) => *payload,
+                other => other,
+            };
+            return Ok(CallSetup::Checked(ret_ty));
         }
-        if (name == RECEIVE || name == "try_recv" || name == "recieve") && !self.tasks.contains_key(name) && args.len() == 1 {
+        if (name == RECEIVE || name == "try_recv" || name == "recieve") && !self.tasks.contains_key(name) {
+            if args.len() != 1 {
+                return err(
+                    span,
+                    format!("'{}' takes 1 argument (channel), got {}", name, args.len()),
+                );
+            }
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
-            if matches!(&chan_ty, Type::Chan(_) | Type::Unknown) {
-                let elem_ty = match &chan_ty {
-                    Type::Chan(inner) => inner.as_ref().clone(),
-                    _ => Type::Unknown,
-                };
-                let item_ty = match elem_ty {
-                    Type::Own(payload) => *payload,
-                    other => other,
-                };
-                return Ok(CallSetup::Checked(Type::Maybe(Box::new(item_ty))));
-            }
+            let elem_ty = match &chan_ty {
+                Type::Chan(inner) => inner.as_ref().clone(),
+                Type::Unknown => Type::Unknown,
+                _ => return err(arg0.span, format!("'{}' takes a channel as its argument, got {}", name, chan_ty)),
+            };
+            let item_ty = match elem_ty {
+                Type::Own(payload) => *payload,
+                other => other,
+            };
+            return Ok(CallSetup::Checked(Type::Maybe(Box::new(item_ty))));
         }
-        if name == CLOSE && !self.tasks.contains_key(name) && args.len() == 1 {
+        if name == CLOSE && !self.tasks.contains_key(name) {
+            if args.len() != 1 {
+                return err(
+                    span,
+                    format!("'close' takes 1 argument (channel or actor), got {}", args.len()),
+                );
+            }
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
-            if matches!(&chan_ty, Type::Chan(_) | Type::Actor(_) | Type::Unknown) {
-                return Ok(CallSetup::Checked(Type::Nothing));
+            if !matches!(&chan_ty, Type::Chan(_) | Type::Actor(_) | Type::Unknown) {
+                return err(arg0.span, format!("'close' takes a channel or actor as its argument, got {}", chan_ty));
             }
+            return Ok(CallSetup::Checked(Type::Nothing));
         }
         if let Some(into) = number_cast(name) {
             return self
@@ -18002,7 +18024,11 @@ impl Checker {
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
             return Ok(());
         }
-        if matches!(ty, Type::Chan(_) | Type::Actor(_))
+        let unwrap_own = match &ty {
+            Type::Own(inner) => inner.as_ref(),
+            other => other,
+        };
+        if matches!(unwrap_own, Type::Chan(_) | Type::Actor(_))
             && matches!(
                 name.as_str(),
                 "dispatch"

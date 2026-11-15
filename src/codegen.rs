@@ -5749,6 +5749,8 @@ impl Generator {
         let mask = if args.len() == 1 {
             if listenable_events.is_empty() {
                 0u32
+            } else if listenable_events.len() >= 32 {
+                u32::MAX
             } else {
                 (1u32 << listenable_events.len()) - 1
             }

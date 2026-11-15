@@ -1,0 +1,21 @@
+dispatch fn: true
+wait_and_receive fn: 10
+dispatch method: true
+wait_and_receive method: 20
+receive empty: none
+receive non-empty fn: { 30 }
+receive non-empty method: { 40 }
+send fn: true
+recv fn: 50
+send method: true
+recv method: 60
+try_recv empty: none
+try_recv fn: { 70 }
+try_recv method: { 80 }
+recieve typo fn: { 90 }
+recieve typo method: { 100 }
+wait_and_recieve typo fn: 110
+wait_and_recieve typo method: 120
+actor reply 1: 42
+actor reply 2: 100
+
