@@ -659,6 +659,239 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       </section>
 
       <section>
+        <h2 id="gui">std/gui</h2>
+        <p>
+          Foundational 2D software canvas rasterization, native X11 window
+          presentation, styling themes, interactive widgets, and per-frame
+          region discipline. Brought in with
+          <code
+            >include std/gui {Window, Canvas, GuiEvent, Point, Size, Rect,
+            Color, Style, Button, Label, TextBox, ListBox, CheckBox,
+            ProgressBar, ImageView, MessageBox, InputBox, VBox, HBox,
+            is_interactive}</code
+          >
+          or <code>include std/gui =&gt; gui</code>. See also the comprehensive
+          guide in <a href="gui.html">docs/gui.html</a>.
+        </p>
+        <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) { <span class="keyword">failure</span> _ &lt;- }
+    <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 120, width: 90, height: 36 }, label: <span class="string">"Action"</span>, style: Style.primary() }
+    <span class="keyword">fixed</span> canvas = win.canvas()
+
+    <span class="keyword">loop</span> win.is_open
+        <span class="keyword">region</span> frame <span class="keyword">default</span>
+        <span class="keyword">fixed</span> ev = win.poll_event()
+        <span class="keyword">match</span> ev
+        <span class="keyword">case</span> GuiEvent.Redraw
+            canvas.clear(Color.hex(0x0F172A))
+            btn.draw(canvas, Point { x: 0, y: 0 }, false)
+            win.present()
+        <span class="keyword">case</span> GuiEvent.CloseRequested
+            win.close()
+            <span class="keyword">break</span>
+        <span class="keyword">case</span> _
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+          </tr>
+          <tr>
+            <td><code>Point</code></td>
+            <td>2D coordinate: <code>Point { x: int, y: int }</code></td>
+          </tr>
+          <tr>
+            <td><code>Size</code></td>
+            <td>Dimensions: <code>Size { width: int, height: int }</code></td>
+          </tr>
+          <tr>
+            <td><code>Rect</code></td>
+            <td>
+              2D bounding box: <code>Rect { x, y, width, height }</code>, with
+              <code>.contains(point)</code> and
+              <code>.intersects(other_rect)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Color</code></td>
+            <td>
+              RGBA color: <code>Color { r, g, b, a }</code>,
+              <code>Color.rgb(r, g, b)</code>,
+              <code>Color.rgba(r, g, b, a)</code>,
+              <code>Color.hex(0xRRGGBB)</code>, and built-in palettes
+              (<code>.black()</code>, <code>.white()</code>,
+              <code>.red()</code>, <code>.green()</code>, <code>.blue()</code>,
+              <code>.gray()</code>, <code>.transparent()</code>)
+            </td>
+          </tr>
+          <tr>
+            <td><code>Style</code></td>
+            <td>
+              Unified styling theme shape: presets <code>Style.default()</code>,
+              <code>.primary()</code>, <code>.secondary()</code>,
+              <code>.success()</code>, <code>.danger()</code>,
+              <code>.dark()</code>, <code>.light()</code>, and fluent modifiers
+              <code>.with_bg(c)</code>, <code>.with_fg(c)</code>,
+              <code>.with_border(c, width)</code>, <code>.with_padding(p)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Window</code></td>
+            <td>
+              Window context: <code>Window.open(title, width, height)</code>,
+              <code>.canvas()</code>, <code>.poll_event()</code>,
+              <code>.push_event(type, a1, a2, a3)</code>,
+              <code>.present()</code>, <code>.close()</code>,
+              <code>.is_open</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Canvas</code></td>
+            <td>
+              Software rasterization drawing context:
+              <code>.clear(color)</code>, <code>.draw_pixel(x, y, color)</code>,
+              <code>.pixel_at(x, y)</code>,
+              <code>.fill_rect(rect, color)</code>,
+              <code>.draw_rect(rect, color)</code>,
+              <code>.draw_line(x1, y1, x2, y2, color)</code>,
+              <code>.draw_text(msg, pos, color)</code>,
+              <code>.export_ppm(r)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>GuiEvent</code></td>
+            <td>
+              Event kind: <code>MouseDown(x, y, btn)</code>,
+              <code>MouseUp(x, y, btn)</code>, <code>MouseMove(x, y)</code>,
+              <code>KeyDown(key, mods)</code>, <code>KeyUp(key, mods)</code>,
+              <code>Resize(w, h)</code>, <code>CloseRequested</code>,
+              <code>Redraw</code>, <code>None</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Button</code></td>
+            <td>
+              Interactive widget: <code>Button { rect, label, style }</code>,
+              <code>.draw(canvas, mouse_pos, is_down)</code>,
+              <code>.clicked(pos)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Label</code></td>
+            <td>
+              Text widget: <code>Label { pos, text, color, bg }</code>,
+              <code>.draw(canvas)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>TextBox</code></td>
+            <td>
+              Single-line input widget:
+              <code>TextBox { rect, text, placeholder, style }</code>,
+              <code>.set_text(t)</code>, <code>.clear()</code>,
+              <code>.handle_click(pos)</code>,
+              <code>.handle_key(key, mods)</code>, <code>.draw(canvas)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>ListBox</code></td>
+            <td>
+              Selectable list:
+              <code>ListBox { rect, item_height, style }</code>,
+              <code>.add_item(t)</code>, <code>.clear()</code>,
+              <code>.select(idx)</code>, <code>.selected_item()</code>,
+              <code>.handle_click(pos)</code>,
+              <code>.draw(canvas, mouse_pos)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>CheckBox</code></td>
+            <td>
+              Toggle box: <code>CheckBox { rect, label, checked, style }</code>,
+              <code>.toggle()</code>, <code>.handle_click(pos)</code>,
+              <code>.clicked(pos)</code>, <code>.draw(canvas, mouse_pos)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>ProgressBar</code></td>
+            <td>
+              Progress indicator:
+              <code>ProgressBar { rect, value, fill_color, style }</code>,
+              <code>.set_value(v)</code> (0..100), <code>.draw(canvas)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>ImageView</code></td>
+            <td>
+              Graphic frame: <code>ImageView { rect, border_color }</code>,
+              <code>.draw_checkerboard(canvas, cell_size)</code>,
+              <code>.draw_frame(canvas, bg)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>MessageBox</code></td>
+            <td>
+              Modal alert overlay: <code>MessageBox { style }</code>,
+              <code>.show_modal(title, message)</code>, <code>.dismiss()</code>,
+              <code>.handle_click(pos)</code>,
+              <code>.draw(canvas, win_w, win_h, mouse_pos, is_down)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>InputBox</code></td>
+            <td>
+              Modal prompt overlay: <code>InputBox { style }</code>,
+              <code>.show_modal(title, prompt, default)</code>,
+              <code>.dismiss()</code>, <code>.value()</code>,
+              <code>.handle_click(pos)</code>,
+              <code>.handle_key(key, mods)</code>, <code>.draw(...)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>VBox</code>, <code>HBox</code></td>
+            <td>
+              Linear layout flow calculators:
+              <code>VBox.new(x, y, width, spacing)</code>,
+              <code>HBox.new(x, y, height, spacing)</code>,
+              <code>.next(size)</code>, <code>.reset()</code>
+            </td>
+          </tr>
+        </table>
+        <ul>
+          <li>
+            <strong>Per-frame arena discipline.</strong> Interactive frame loops
+            allocate all temporary drawing buffers, glyph records, and event
+            handlers inside a dedicated per-frame region (<code
+              >region frame default</code
+            >). At the end of every frame iteration, all frame data is instantly
+            reclaimed in $O(1)$ time with zero garbage collection overhead.
+          </li>
+          <li>
+            <strong>Embedded 8x8 bitmap font.</strong>
+            <code>canvas.draw_text</code> renders ASCII text directly into the
+            frame buffer without requiring external font files or system
+            rasterization dependencies.
+          </li>
+          <li>
+            <strong>Portable testing and PPM export.</strong>
+            <code>canvas.export_ppm(r)</code> outputs standard binary PPM
+            images, and <code>win.push_event(...)</code> enables 100%
+            deterministic, headless GUI testing in CI environments.
+          </li>
+          <li>
+            <strong>Desktop window presentation.</strong> Automatically presents
+            native desktop windows using dynamic X11 linking when a display
+            server is present, falling back cleanly to headless mode when
+            running in headless CI or without a display.
+          </li>
+        </ul>
+      </section>
+
+      <section>
         <h2 id="int512">std/int512</h2>
         <p>
           512-bit signed integers in two's complement, <code>Int512</code>.
@@ -758,6 +991,85 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
               parses text (decimal, or base prefix <code>0x</code>,
               <code>0o</code>, <code>0b</code>); gives
               <code>Int512 ~ ParseError</code>
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h2 id="json">std/json</h2>
+        <p>
+          JSON parsing, serialization, and tree manipulation. Brought in with
+          <code>include std/json {Json, JsonError, parse, stringify}</code>.
+        </p>
+        <pre><span class="keyword">include</span> std/json {Json, parse, stringify}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> raw = <span class="string">"\{&quot;name&quot;: &quot;Vela&quot;, &quot;stars&quot;: 100, &quot;active&quot;: true\}"</span>
+    <span class="keyword">fixed</span> doc = parse(raw, r) { Json.Null }
+    <span class="keyword">fixed</span> name = doc.get(<span class="string">"name"</span>) { Json.Null }.as_text() { <span class="string">""</span> }
+    <span class="keyword">fixed</span> stars = doc.get(<span class="string">"stars"</span>) { Json.Null }.as_int() { 0 }
+    show(name, <span class="string">" has "</span>, stars, <span class="string">" stars"</span>)
+    show(<span class="string">"json: "</span>, doc.str(r))
+<span class="keyword">fi</span></pre>
+        <table>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+          </tr>
+          <tr>
+            <td><code>Json</code></td>
+            <td>
+              Kind representing JSON values: <code>Null</code>,
+              <code>Bool(b)</code>, <code>Int(n)</code>, <code>Float(f)</code>,
+              <code>Str(s)</code>, <code>Array(items)</code>,
+              <code>Object(props)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Json.is_null()</code></td>
+            <td>Returns <code>true</code> if the value is <code>Null</code></td>
+          </tr>
+          <tr>
+            <td>
+              <code>Json.as_bool()</code>, <code>as_int()</code>,
+              <code>as_float()</code>, <code>as_text()</code>
+            </td>
+            <td>Unwraps primitive values into <code>maybe T</code></td>
+          </tr>
+          <tr>
+            <td><code>Json.get(key)</code></td>
+            <td>
+              Looks up a property in an object, returning
+              <code>maybe Json@this</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Json.item(idx)</code></td>
+            <td>
+              Retrieves an element from an array by index, returning
+              <code>maybe Json@this</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Json.str(r)</code></td>
+            <td>Serializes the JSON tree to text in region <code>r</code></td>
+          </tr>
+          <tr>
+            <td><code>parse(raw, r)</code></td>
+            <td>
+              Parses a JSON string into <code>Json@r ~ JsonError@r</code>,
+              strictly: an unknown escape such as <code>\q</code> fails with
+              <code>InvalidEscape</code>, and a control character written raw in
+              a string with <code>UnexpectedToken</code>;
+              <code>\uXXXX</code> escapes, pairs included, are decoded
+            </td>
+          </tr>
+          <tr>
+            <td><code>stringify(val, r)</code></td>
+            <td>
+              Serializes a <code>Json@p</code> value into JSON formatted text
             </td>
           </tr>
         </table>
@@ -988,8 +1300,10 @@ $(auth)
               HTTP request: <code>.method</code>, <code>.path</code>,
               <code>.raw_query</code>, <code>.headers</code>,
               <code>.body_data</code>, <code>.header(name)</code>,
-              <code>.query(name)</code>, <code>.param(name)</code>,
-              <code>.body()</code>
+              <code>.query(name, r)</code>, <code>.param(name)</code>,
+              <code>.body()</code>; <code>.path</code> is decoded from
+              <code>%XX</code> escapes, and <code>.query</code> decodes them and
+              <code>+</code> in its key and value
             </td>
           </tr>
           <tr>
@@ -997,9 +1311,10 @@ $(auth)
             <td>
               HTTP response: <code>Response.text(body, r)</code>,
               <code>Response.html(body, r)</code>,
+              <code>Response.json(body, r)</code>,
               <code>Response.with_status(code, r)</code>,
               <code>Response.redirect(to, r)</code>, <code>.header(k, v)</code>,
-              <code>.set_body(v)</code>
+              <code>.status_code(code)</code>, <code>.set_body(v)</code>
             </td>
           </tr>
           <tr>
@@ -1009,7 +1324,8 @@ $(auth)
               <code>BadRequest(why)</code>, <code>PayloadTooLarge</code>,
               <code>RouteNotFound(where)</code>,
               <code>MethodNotAllowed(method, path)</code>,
-              <code>Unauthorized(why)</code>, <code>ServerFailed(why)</code>
+              <code>Unauthorized(why)</code>, <code>ServerFailed(why)</code>,
+              <code>BadResponse(why)</code> (a reply that isn't HTTP)
             </td>
           </tr>
           <tr>
@@ -1020,19 +1336,192 @@ $(auth)
             </td>
           </tr>
           <tr>
+            <td><code>$on_error, on_error(handler)</code></td>
+            <td>
+              Custom error handler decorator for <code>DefaultRouter</code> or
+              programmatic <code>router.on_error(handler)</code> /
+              <code>server.on_error(handler)</code> accepting
+              <code
+                >(err: WebError@r, req: Request@r, r: region default) -&gt;
+                Response@r</code
+              >
+            </td>
+          </tr>
+          <tr>
             <td><code>Router</code></td>
             <td>
               Programmatic router shape: <code>Router.new()</code>,
               <code>.get(pattern, h)</code>, <code>.post(pattern, h)</code>,
+              <code>.on_error(h)</code>,
               <code>.enroll(method_code, pattern, h)</code>,
               <code>.route(req, r)</code>
             </td>
           </tr>
           <tr>
+            <td><code>Server</code></td>
+            <td>
+              Configurable server shape: <code>Server.new(addr)</code>,
+              <code>.timeouts(read_ms, idle_ms)</code>,
+              <code>.body_limit(bytes)</code>, <code>.keep_alive(bool)</code>,
+              <code>.on_error(h)</code>, <code>.serve(handler)</code>,
+              <code>Server.stop()</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>Poll</code></td>
+            <td>
+              Descriptor readiness table: <code>Poll.clear()</code>,
+              <code>Poll.watch(sock, events)</code>,
+              <code>Poll.unwatch(sock)</code>,
+              <code>Poll.wait(timeout_ms)</code>,
+              <code>Poll.is_readable(sock)</code>,
+              <code>Poll.is_writable(sock)</code>
+            </td>
+          </tr>
+          <tr>
             <td><code>serve(addr, handler)</code></td>
             <td>
-              Listens on TCP address and handles incoming HTTP requests
-              sequentially (or with event loop)
+              Listens on TCP address and drives the non-blocking event loop
+              dispatching incoming requests
+            </td>
+          </tr>
+          <tr>
+            <td><code>Client</code></td>
+            <td>
+              Configurable HTTP client: <code>Client.new(timeout_ms)</code>,
+              <code>.timeout(ms)</code>, <code>.get(url, r)</code>,
+              <code>.post(url, body, ct, r)</code>,
+              <code>.post_json(url, body, r)</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>fetch(url, r)</code></td>
+            <td>
+              Performs an HTTP GET request and parses response into
+              <code>Response@r ~ WebError@r</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>fetch_post(url, body, ct, r)</code>,
+              <code>fetch_json(url, body, r)</code>
+            </td>
+            <td>
+              Performs an HTTP POST request and parses response into
+              <code>Response@r ~ WebError@r</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>FileServer</code></td>
+            <td>
+              Configurable static file server shape:
+              <code>FileServer.new(folder, prefix)</code>,
+              <code>.serve(req, r)</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>serve_files(pattern, folder, prefix)</code>,
+              <code>files(folder, req, prefix, r)</code>
+            </td>
+            <td>
+              Serves static files with path confinement discipline (rejecting
+              <code>..</code>, backslashes, colons, control chars, and empty
+              segments) and MIME mapping
+            </td>
+          </tr>
+          <tr>
+            <td><code>file_response(path, r)</code></td>
+            <td>
+              Reads a single file into <code>Response@r</code> with automatic
+              MIME detection; the path is relative, with no
+              <code>..</code> part, so it can't leave the folder the program
+              runs in, and an absolute one fails with <code>BadRequest</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>parse_response(raw, r)</code></td>
+            <td>
+              Parses an HTTP reply into <code>Response@r ~ WebError@r</code>,
+              failing with <code>BadResponse</code> when the status line is
+              missing, doesn't start with <code>HTTP/</code>, or has no status
+              from 100 to 599, or the headers never end
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>Response.stream(chunks, r)</code>,
+              <code>Response.sse(chunks, r)</code>
+            </td>
+            <td>
+              Constructs HTTP/1.1 chunked transfer responses or Server-Sent
+              Events (SSE)
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>sse_event(data, event, id, r)</code>,
+              <code>sse_msg(event, data, r)</code>
+            </td>
+            <td>
+              Formats compliant SSE stream messages (<code
+                >event: ...\ndata: ...\n\n</code
+              >)
+            </td>
+          </tr>
+          <tr>
+            <td><code>req.body_lines(r)</code></td>
+            <td>
+              Parses request body line-by-line into a region-scoped slice
+              <code>[text]@r</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>WebSocket</code></td>
+            <td>
+              RFC 6455 WebSocket handle: <code>.send_text(msg, r)</code>,
+              <code>.send_binary(data, r)</code>, <code>.ping(data, r)</code>,
+              <code>.pong(data, r)</code>, <code>.close(code, reason, r)</code>,
+              <code>.recv(into)</code>, <code>.is_open()</code>
+            </td>
+          </tr>
+          <tr>
+            <td><code>WebSocketMessage</code></td>
+            <td>
+              Typed message kind: <code>Text(payload)</code>,
+              <code>Binary(payload)</code>, <code>Close(code, reason)</code>,
+              <code>Ping(payload)</code>, <code>Pong(payload)</code>,
+              <code>None</code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>ws_upgrade(client_key, r)</code>,
+              <code>ws_accept(req, client, r)</code>
+            </td>
+            <td>
+              Performs RFC 6455 WebSocket handshake and produces HTTP 101
+              Switching Protocols response
+            </td>
+          </tr>
+          <tr>
+            <td><code>ws_connect(url, r)</code></td>
+            <td>
+              Connects to a WebSocket server URL
+              (<code>ws://host:port/path</code>) and completes client handshake
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>router.ws(pattern, handler)</code>,
+              <code>ws(pattern, handler)</code>
+            </td>
+            <td>
+              Enrolls a persistent WebSocket route handler
+              <code
+                >(ws: WebSocket@r, req: Request@r, r: region default) -&gt;
+                nothing</code
+              >
             </td>
           </tr>
         </table>
@@ -1056,6 +1545,68 @@ $(auth)
             <code>$(auth, logged)</code> wrap handlers at call time,
             intercepting requests and short-circuiting on failure with typed
             errors such as <code>WebError.Unauthorized</code>.
+          </li>
+          <li>
+            <strong>Custom error handling.</strong> Decorator
+            <code>$on_error</code> or <code>router.on_error(handler)</code> /
+            <code>server.on_error(handler)</code> intercepts route errors and
+            connection failures, receiving both the typed
+            <code>WebError@r</code> and <code>Request@r</code> context to return
+            structured JSON or custom HTML error pages (e.g. 404, 401, 405,
+            500).
+          </li>
+          <li>
+            <strong>Event loop, keep-alive, and timeouts.</strong> The
+            single-threaded event loop multiplexes connections using
+            non-blocking I/O. HTTP/1.1 connections remain persistent by default;
+            idle sockets past <code>idle_timeout_ms</code> are swept, stalled
+            partial reads past <code>read_timeout_ms</code> are closed with 408
+            Request Timeout, and <code>Server.stop()</code> shuts down
+            gracefully. The loop never waits on one client: a request still
+            arriving waits in its socket's own buffer, and a response the client
+            can't take yet waits in the socket's queue and goes out as the
+            client reads, so a client that stops reading holds up nobody and is
+            dropped after <code>idle_timeout_ms</code>. Both buffers live
+            outside any region and go with the socket, so a long-running server
+            holds only what its open connections still need.
+            <code>send_response</code> and <code>send_error_response</code>, for
+            a socket of your own, wait until the response is out, up to 5
+            seconds without progress.
+          </li>
+          <li>
+            <strong>HTTP client and URL parsing.</strong>
+            <code>fetch(url)</code> and <code>Client</code> parse URLs
+            (<code>http://host:port/path</code>), establish non-blocking TCP
+            connections, issue compliant HTTP/1.1 requests, and parse response
+            headers and bodies into <code>Response@r</code>.
+          </li>
+          <li>
+            <strong>Static files and path confinement.</strong>
+            <code>serve_files(pattern, folder, prefix)</code> and
+            <code>FileServer</code> serve directory contents with automatic MIME
+            type mapping (<code>.html</code>, <code>.css</code>,
+            <code>.js</code>, <code>.json</code>, <code>.txt</code>,
+            <code>.png</code>, <code>.svg</code>, etc.). Request paths are
+            decoded from <code>%XX</code> escapes first, and a
+            <code>%</code> that starts no escape, or escapes that don't decode
+            to UTF-8, make a 400. Traversal attacks (<code>..</code>,
+            <code>%2e%2e</code>, <code>a/../../b</code>), absolute paths,
+            backslashes, colons, and null bytes are rejected upfront with 400
+            Bad Request, confining file reads strictly within the target folder.
+          </li>
+          <li>
+            <strong>Chunked streaming and Server-Sent Events.</strong>
+            <code>Response.stream(chunks)</code> streams response chunks via
+            HTTP/1.1 <code>Transfer-Encoding: chunked</code>.
+            <code>Response.sse(events)</code> formats Server-Sent Events with
+            <code>Content-Type: text/event-stream</code>.
+            <code>parse_response</code> and <code>Client</code> automatically
+            decode chunked streams.
+          </li>
+          <li>
+            <strong>Request body lines.</strong>
+            <code>req.body_lines(r)</code> parses request payload lines into a
+            slice without manual line-splitting logic.
           </li>
         </ul>
       </section>

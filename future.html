@@ -3720,10 +3720,41 @@ fi</code></pre>
           parameter, or one declared before the variable, is refused. Built: see
           <a href="index.html#kept-lambdas">Lambdas that keep what they use</a>.
         </p>
+        <p id="lambda-fields">
+          <strong>Held in a field.</strong>
+          <span class="badge b-done">Done</span> A field holds a lambda that
+          keeps what it uses as <code>f: [@this](int) -&gt; int</code>, kept in
+          the region of the value holding it, which a value in no region fills
+          with a plain task only. The iterators of
+          <code>std/collections</code> hold their makers' lambdas so. Built: see
+          <a href="index.html#lambda-fields">In a field</a>.
+        </p>
+        <p id="changing-lambda-fields">
+          <strong>Changing lambdas in a field.</strong>
+          <span class="badge b-done">Done</span> Of the three ways weighed (a
+          <code>[bind @r]</code> that keeps only twofold copies, a shape holding
+          a changing lambda held alone, and copying the lambda's block with the
+          value), the author chose the first two together, 2026-11-11. A
+          <code>[bind @r]</code> lambda now changes only what its copies share,
+          a slice's items, a map, what a pointer points to, and only reads its
+          own copy of anything else, so it is copied freely and a field holds it
+          as <code>[bind @this]</code>; one that changes a shape or array copy
+          of its own is a <code>[flex @r]</code> lambda. A shape with a
+          <code>[flex @this]</code> field, or a field of such a shape, is held
+          as the lambda is: in a <code>flex</code> variable, given as a place,
+          never copied, and its lambda is called where it is, through a place
+          that changes. A variant holds none, since a <code>match</code> copies
+          values out. Nothing is paid at runtime. Built: see
+          <a href="index.html#changing-lambda-fields"
+            >A field that changes things</a
+          >. The third way, copying the block, stays open for a held value that
+          should become a plain one, such as an iterator of
+          <code>std/collections</code> made with a counting lambda, which today
+          holds only <code>[@this]</code> ones.
+        </p>
         <p>
           <strong>Later, maybe.</strong> Fields and array items of a variable
-          kept as places, <code>[flex&amp; p.x, @r]</code>; a lambda that keeps
-          what it uses held in a field of a shape or kind; compared, or copied
+          kept as places, <code>[flex&amp; p.x, @r]</code>; compared, or copied
           into another region with what it keeps; a rule for
           <code>add</code> and <code>del</code> on a slice the lambda keeps a
           copy of, which today it refuses (a slice kept as a place grows), since

@@ -476,9 +476,21 @@ block shared type break continue endless fixed flex
 finally</pre
         >
         <p>
-          <code>hold</code> is reserved with no use yet: writing it is an error.
-          Where a variable's word goes, the message names the one to write,
-          <code>flex</code>.
+          A variable is declared with one of four words:
+          <code>fixed</code> (immutable binding), <code>flex</code> (mutable
+          place and contents), <code>bind</code> (place cannot be reassigned,
+          contents may change), or <code>hold</code> (place can be reassigned as
+          a whole, contents cannot be changed).
+        </p>
+        <p>
+          Variable initialization can use <code>=</code> for ordinary values or
+          <code>:=</code> as a shortcut to allocate in the block's active
+          <a href="#default-region">default region</a>. <code>:=</code> is valid
+          only on declarations (never on reassignment). It accepts unambiguous
+          slice literals (<code>flex s := [1, 2, 3]</code>) and map literals
+          (<code>flex m := ["a": 1]</code>), or explicit pointer type
+          annotations (<code>bind x: ^int := 4</code>). Ambiguous scalar
+          assignments without a pointer type are rejected at compile time.
         </p>
         <p>
           <code>show</code>, <code>scan</code>, and the builtin types
@@ -871,8 +883,9 @@ finally</pre
               <code>[flex @r](…) … fi</code>, <code>[bind @r](…) … fi</code>
             </td>
             <td>
-              such a lambda that changes its copies, or only their contents,
-              held in a <code>flex</code> variable and never copied
+              such a lambda that changes its copies, held in a
+              <code>flex</code> variable and never copied, or only what its
+              copies share, copied freely
             </td>
           </tr>
           <tr>
@@ -988,6 +1001,16 @@ finally</pre
             <td>
               a value as text in region <code>r</code> (see
               <a href="#str">Values as text</a>)
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>x.json() at r</code>, <code>x.json(r)</code>,
+              <code>to_json(x, r)</code>
+            </td>
+            <td>
+              a value as JSON text in region <code>r</code> (see
+              <a href="#json">Values as JSON</a>)
             </td>
           </tr>
           <tr>
@@ -1966,12 +1989,14 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
         <h3>Bindings</h3>
         <p>
           <code>fixed</code> creates an immutable binding.
-          <code>flex</code> creates a mutable variable. <code>bind</code>
-          creates a name bound to one value: it can never be assigned as a
-          whole, but its contents may change. Written
-          <code>fixed&amp;</code>, <code>flex&amp;</code> or
-          <code>bind&amp;</code>, each is another name for a place instead (see
-          <a href="#references">References</a>).
+          <code>flex</code> creates a mutable variable.
+          <code>bind</code> creates a name bound to one value: it can never be
+          assigned as a whole, but its contents may change. <code>hold</code>
+          creates a variable that can be reassigned as a whole, but its contents
+          cannot be changed. Written
+          <code>fixed&amp;</code>, <code>flex&amp;</code>,
+          <code>bind&amp;</code>, or <code>hold&amp;</code>, each is another
+          name for a place instead (see <a href="#references">References</a>).
         </p>
         <pre><span class="keyword">fixed</span> pi = 3.14
 <span class="keyword">flex</span> count = 0
@@ -1979,7 +2004,10 @@ count = count + 1
 <span class="keyword">flex</span> total: float = 0.0     <span class="comment">; the type can be written out</span>
 <span class="keyword">bind</span> scores = [<span class="number">0</span>, <span class="number">0</span>, ...] <span class="keyword">at</span> r
 scores[<span class="number">0</span>] = <span class="number">10</span>              <span class="comment">; the slice's items may change</span>
-<span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span></pre>
+<span class="comment">; scores = other           ; error: a 'bind' name stays bound to one value</span>
+<span class="keyword">hold</span> origin = Point { x: 0, y: 0 }
+origin = Point { x: 10, y: 20 }  <span class="comment">; ok: reassigned by whole</span>
+<span class="comment">; origin.x = 5              ; error: cannot assign to a field of 'hold' variable</span></pre>
         <p id="bind">
           <strong>What a <code>bind</code> name allows.</strong> Its contents
           change; it is never assigned as a whole:
@@ -3067,6 +3095,35 @@ show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyw
     show(<span class="string">"p = "</span>, p)                            <span class="comment">; the same line, with no region to name</span>
     show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment">; error: '+' joins text, but this value is int; turn it into text first …</span>
 <span class="keyword">fi</span></pre>
+        <p id="json">
+          <strong>Values as JSON.</strong> <code>x.json() at r</code> (or
+          <code>x.json(r)</code>, <code>x.json()@r</code>, or
+          <code>to_json(x, r)</code> in <code>std/json</code>) turns a value
+          into standard RFC 8259 JSON text in region <code>r</code>. Numbers,
+          booleans, and characters format according to JSON rules; text strings
+          and characters are escaped and quoted with standard JSON escapes
+          (<code>\"</code>, <code>\\</code>, <code>\n</code>, <code>\t</code>,
+          <code>\r</code>), and the other control characters as
+          <code>\u00XX</code>. A float is written with the fewest digits that
+          read back as the same number, <code>0.30000000000000004</code>, and
+          <code>nan</code> and the infinities, which JSON has no numbers for, as
+          <code>null</code>. A key of a map that isn't text is written as text,
+          <code>{"1":"one"}</code>. A pointer, a task, and a lambda have no JSON
+          form, so a value holding one is an error, unless the shape holding it
+          has its own <code>json</code> method. Arrays and slices serialize as
+          <code>[v1,v2,…]</code>, and <code>maybe</code> serializes as
+          <code>null</code> when <code>none</code> or as its inner value. Map
+          literals serialize directly as JSON objects,
+          <code>{"key":val,…}</code>, and shapes serialize their public fields
+          directly as JSON objects (omitting <code>priv</code> fields). A shape
+          or kind can also define its own
+          <code>json(r: region) -&gt; text@r</code> method. In server
+          development, <code>std/web</code> provides
+          <code>json_of(value, r)</code> and <code>json_map(map, r)</code> to
+          return an HTTP <code>Response</code> with
+          <code>application/json; charset=utf-8</code> directly without manual
+          string interpolation.
+        </p>
         <p id="interpolation">
           <strong>Text holding values.</strong> A value in braces inside text,
           <code>"n = {n}" at r</code>, is turned into text as
@@ -5208,18 +5265,24 @@ fi</code></pre>
           expected, never the other way.
         </p>
         <p id="lambda-bind">
-          <strong>Changing only their contents.</strong>
-          <code>[bind @r]</code> changes the contents of its copies, an item, a
-          field, what a pointer points to, but never assigns one as a whole, as
-          a <code>bind</code> name does; a copy with no contents, a number say,
-          it only reads. It is held as a <code>[flex @r]</code> lambda is, never
-          copied, since a copy would share the copies it changes, and it can't
-          keep a copy of what a fixed name owns. A <code>[@r]</code> lambda goes
-          where a <code>[bind @r]</code> is expected, and a
-          <code>[bind @r]</code> one where a <code>[flex @r]</code> is, never
-          the other way. Whether one that changes only what a twofold copy
-          names, which every copy shares anyway, may be copied is left for later
-          (see <a href="safety.html#bind-lambdas">safety</a>).
+          <strong>Changing only what copies share.</strong>
+          <code>[bind @r]</code> changes only what every copy of it shares: the
+          items of a slice it keeps a copy of, a map, what a pointer points to.
+          It never assigns a copy as a whole, as a <code>bind</code> name
+          doesn't, and its own copy of anything else, a number, a shape, an
+          array, it only reads; one that changes those is a
+          <code>[flex @r]</code> lambda, and a <code>[bind @r]</code> one that
+          tries is told so. Since a copy of it would change only what the first
+          one changes, it is copied as a slice is: bound with
+          <code>fixed</code>, given as a value, held in a field, kept by another
+          lambda. Calling it changes what it shares, as
+          <code>xs[0] = 1</code> changes a slice's items, so it is called
+          through a <code>flex</code> or <code>bind</code> name, never a
+          <code>fixed</code> one, and it can't keep a copy of what a fixed name
+          owns. A <code>[@r]</code> lambda goes where a
+          <code>[bind @r]</code> is expected, and a <code>[bind @r]</code> one
+          where a <code>[flex @r]</code> is, never the other way (see
+          <a href="safety.html#bind-lambdas">safety</a>).
         </p>
         <p>
           <strong>Plain tasks and these.</strong> A task, a task value, or a
@@ -5231,11 +5294,62 @@ fi</code></pre>
           <code>fixed kept: [@r](int) -&gt; int = plain</code>). A lambda that
           keeps what it uses never goes where a plain task's type is expected:
           that type names no region, so the value could outlive <code>r</code>.
-          Such a lambda isn't compared, copied with <code>copy</code>, held in a
-          field of a shape or kind, or given as a wrapper's own value yet. A
-          stop inside any lambda says where it is,
-          <code>at 6:39 in a lambda</code>.
+          Such a lambda isn't compared, copied with <code>copy</code>, or given
+          as a wrapper's own value yet. A stop inside any lambda says where it
+          is, <code>at 6:39 in a lambda</code>.
         </p>
+        <p id="lambda-fields">
+          <strong>In a field.</strong> A field holds one as
+          <code>f: [@this](int) -&gt; int</code>: <code>this</code> is the
+          region of the value holding it, so the lambda keeps what it uses
+          there, and the value names that region, as a value holding text in a
+          region does,
+          <code>fixed op: Op@r = Op { f: [@r] n -&gt; n * k }</code>, called as
+          <code>op.f(3)</code>. A value in no region holds only a plain task or
+          lambda there, as a text field of one holds lasting text, and a plain
+          <code>(int) -&gt; int</code> field stays plain. A shared field, which
+          lives in no value, holds a task value instead. The iterators of
+          <a href="#iterators">std/collections</a>
+          hold what their makers are given this way.
+        </p>
+        <p id="changing-lambda-fields">
+          <strong>A field that changes things.</strong> A field holds a
+          <code>[bind @this](…)</code> lambda as it holds a
+          <code>[@this]</code> one, since it changes only what its copies share,
+          and the value holding it is copied as any other; it is called through
+          a value that changes, <code>flex t</code> or <code>bind t</code>, as
+          <code>t.put(2)</code>. A <code>[flex @this](…)</code> lambda changes
+          its own copies, so a shape holding one, in a field or in a shape of a
+          field, is held as such a lambda is: in a <code>flex</code> variable,
+          given as a place, <code>flex&amp; c: Counter@r</code>, or, to read it,
+          <code>fixed&amp; c</code>, made by a task that sends it, and never
+          copied, bound with <code>fixed</code>, or held in a tuple, a slice, a
+          <code>maybe</code>, or another value's variant. Its fields are read
+          and its methods called where it is, <code>c.start</code>,
+          <code>c.peek()</code>; its lambda is called there,
+          <code>c.next()</code>, never taken out, and only through a place that
+          changes, so a method calling it is <code>alters</code>. A variant
+          holds none, since a <code>match</code> takes its values out as copies.
+        </p>
+        <pre><code>shape Counter
+    start: int
+    next: [flex @this]() -&gt; int
+fi
+
+task counter(start: int, r: region) -&gt; Counter@r
+    flex n = start
+    &lt;- Counter { start: start, next: [flex @r]() -&gt; int
+        n = n + 1
+        &lt;- n
+    fi }
+fi
+
+task main()
+    region r
+    flex c = counter(10, r)
+    show(c.next(), " ", c.next())                 ; 11 12
+fi</code></pre>
+        <p></p>
         <p>
           <strong>Keeping a variable as a place.</strong> A variable named in
           the list beside the region is kept as the variable itself, not a copy:
@@ -7007,7 +7121,10 @@ save(500) {
           <code>collect(r)</code> gathers what is left into a slice in
           <code>r</code>; <code>fold</code>, <code>find</code>,
           <code>all</code>, and <code>any</code> read what is left and give one
-          value.
+          value. Each takes a plain lambda or one that keeps what it uses,
+          <code>xs.map([@r] n -&gt; n * k)</code>; a maker holds it in a field
+          (see <a href="#lambda-fields">In a field</a>), so the iterator it
+          makes lives in that lambda's region.
         </p>
         <p>
           Reading an item advances the iterator, so a consumer is
@@ -7029,11 +7146,11 @@ save(500) {
           A shape or kind following a pattern whose methods are named
           <code>plus</code>, <code>minus</code>, <code>times</code>,
           <code>div</code>, <code>rem</code>, <code>neg</code>, or
-          <code>cmp</code> answers the operator each names:
-          <code>a + b</code> is read as <code>a.plus(b)</code>,
-          <code>a * b</code> as <code>a.times(b)</code>, <code>-a</code> as
-          <code>a.neg()</code>, and a comparison <code>a &lt; b</code>,
-          <code>a &lt;= b</code>, <code>a &gt; b</code>,
+          <code>cmp</code> &mdash; or defining them directly as shape methods
+          &mdash; answers the operator each names: <code>a + b</code> is read as
+          <code>a.plus(b)</code>, <code>a * b</code> as <code>a.times(b)</code>,
+          <code>-a</code> as <code>a.neg()</code>, and a comparison
+          <code>a &lt; b</code>, <code>a &lt;= b</code>, <code>a &gt; b</code>,
           <code>a &gt;= b</code> as <code>a.cmp(b)</code> read beside 0. Both
           operands are the one type; beside a value of another type the
           operation is refused, and the message names the method to call
@@ -7048,6 +7165,18 @@ save(500) {
           not answered this way. What an operator does is the method's own:
           <code>Int512</code>'s trap on overflow and on division by zero, for
           instance, is kept by <code>+</code> and <code>/</code>.
+        </p>
+        <p>
+          Fixed arrays and slices answer built-in collection operators:
+          <code>[T#N] + [T#M]</code> joins arrays on the stack into
+          <code>[T#(N+M)]</code>, and <code>arr * K</code> repeats an array
+          <code>K</code> times at compile time into <code>[T#(N*K)]</code>.
+          Slices join with <code>xs + ys at r</code> (or
+          <code>xs + ys</code> when a default region is in scope) to produce a
+          new slice in the destination region. Adding an item with
+          <code>xs + item</code> appends, <code>item + xs</code> prepends, and
+          in-place joins are written as <code>xs += ys</code> or
+          <code>xs += item</code>.
         </p>
 
         <h3 id="type-of">The type of a value</h3>
@@ -7122,8 +7251,9 @@ save(500) {
           <ul>
             <li>
               <code>region r</code> declares a region;
-              <code>new T(v) at r</code> (or <code>new@r T(v)</code>) copies a
-              value into it.
+              <code>region r1, r2, ...</code> declares multiple regions on one
+              line; <code>new T(v) at r</code> (or <code>new@r T(v)</code>)
+              copies a value into it.
             </li>
             <li>
               A pointer into <code>r</code> has type <code>^T@r</code>, and a
@@ -7143,6 +7273,11 @@ save(500) {
               makes <code>r</code> the block's
               <a href="#default-region">default region</a>: what allocates there
               needs no <code>at r</code>.
+            </li>
+            <li>
+              <code>:=</code> on variable definitions allocates directly into
+              the block's default region (e.g. <code>bind x: ^int := 4</code>,
+              <code>flex s := [1, 2, 3]</code>).
             </li>
             <li>
               A pointer is never stored in a different region than the one its
@@ -7269,6 +7404,30 @@ show(next^)                                <span class="comment">; error: this p
           the region is freed, so a value replaced in a long-lived region (a
           <code>flex</code> pointer given a new <code>new</code>) keeps the old
           one's memory until then.
+        </p>
+
+        <h3 id="region-global">Static data: region global(N)</h3>
+        <p>
+          For programs requiring bounded static memory that lives for the
+          program's entire duration, the main program file may declare a static
+          global region with an exact byte capacity:
+        </p>
+        <pre><span class="keyword">region</span> global(1024)
+    <span class="keyword">fixed</span> base: int = 100
+    <span class="keyword">flex</span> counter: int = 0
+    <span class="keyword">bind</span> multiplier: int = 2
+    <span class="keyword">hold</span> state: State = State { active: true }
+<span class="keyword">fi</span></pre>
+        <p>
+          Variables defined in <code>region global</code> are allocated in the
+          static data segment and live for the entire program. Dynamic
+          allocations may also be made into <code>global</code> (via
+          <code>new T(val) at global</code>), and tasks can take
+          <code>global</code> wherever a region is expected. Dynamic allocations
+          that exceed the declared byte capacity trap at runtime with an
+          allocation error. Variables in <code>region global</code> cannot hold
+          dynamically growing collections (slices or maps) or pointers into
+          shorter-lived local regions.
         </p>
 
         <h3>Tasks and regions</h3>
@@ -8396,8 +8555,10 @@ show(area(square))             <span class="comment">; error: unknown task 'area
             <a href="#lambdas">Lambdas</a>). One that keeps what it uses,
             <code>[@r]</code>, keeps copies in one region, keeps a variable as a
             place only where that region is declared after it (never a field or
-            an item), and isn't compared, copied, held in a field, or given as a
-            wrapper's value (see
+            an item), isn't compared, copied, or given as a wrapper's value, and
+            a field holds one as <code>[@this](…)</code>,
+            <code>[bind @this](…)</code>, or <code>[flex @this](…)</code>, which
+            makes the value holding it held, never copied (see
             <a href="#kept-lambdas">Lambdas that keep what they use</a>).
           </li>
           <li>

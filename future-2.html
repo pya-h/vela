@@ -1629,9 +1629,9 @@ fixed is_less = a &lt; b          ; Rewritten or dispatched to a.cmp(b) &lt; 0</
           <pre>
 task worker(input: Chan[own Job], output: Chan[own Result])
     endless
-        fixed job = recv(input)
+        fixed job = input.wait_and_receive()
         fixed result = process(job)
-        send(output, result)
+        output.dispatch(result)
     fi
 fi</pre
           >
@@ -1643,7 +1643,12 @@ fi</pre
           <p>
             With regions, a message could also carry a whole region: every
             pointer into it names it, so once it is sent, the sender has nothing
-            left that points there.
+            left that points there. Channels support
+            <code>dispatch(c, v)</code> / <code>c.dispatch(v)</code>,
+            <code>wait_and_receive(c)</code> /
+            <code>c.wait_and_receive()</code>, non-blocking
+            <code>receive(c)</code> / <code>c.receive()</code>, and
+            <code>close(c)</code> / <code>c.close()</code>.
           </p>
           <div class="note">
             <strong>Why it's cool:</strong> this is Go's channels plus Rust's
@@ -1653,34 +1658,49 @@ fi</pre
         </div>
 
         <div class="option">
-          <h3><span aria-hidden="true">🧵</span> Actor-Style Tasks</h3>
+          <h3>
+            <span aria-hidden="true">🧵</span> Actor-Style Tasks &amp; M:N
+            Scheduler
+          </h3>
           <p>
             A task can be spawned as an actor with its own mailbox. The actor
             owns its state; messages are handled sequentially. No locks, no
-            shared mutable state.
+            shared mutable state. Lightweight actors run on an M:N green thread
+            scheduler pool in the runtime.
           </p>
           <pre>
-actor Counter
-    flex count = 0
+actor Counter(count: int = 0)
 
-    on Increment
-        count = count + 1
+    on Increment(step: int)
+        count += step
     fi
 
     on Get(reply: Chan[int])
-        send(reply, count)
+        reply.dispatch(count)
     fi
+fi
+
+task main()
+    fixed c = spawn Counter(0)
+    c.dispatch(Counter.Increment(5))
+    fixed reply = chan_new&lt;int&gt;(1)
+    c.dispatch(Counter.Get(reply))
+    fixed res = reply.wait_and_receive()
+    show("count: ", res)
+    c.close()
 fi</pre
           >
           <p>
             The <code>actor</code>/<code>fi</code> syntax is just a task with a
             built-in message loop. The compiler guarantees that the actor's
-            state is only touched inside its own <code>on</code> handlers.
+            state is private and only touched inside its own
+            <code>on</code> handlers. The M:N scheduler automatically
+            multiplexes thousands of actors across background worker threads.
           </p>
           <div class="note">
             <strong>Why it's cool:</strong> actors give Vela a concurrency model
-            that is both simple and safe, with no risk of deadlocks or data
-            races on actor state.
+            that is both simple and safe, with zero locks needed inside user
+            actor code and no risk of deadlocks or data races on actor state.
           </div>
         </div>
       </section>
