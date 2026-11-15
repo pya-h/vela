@@ -374,7 +374,7 @@ impl Generator {
                 } else {
                     format!("static int64_t {}__spawn({})", actor_name, spawn_params.join(", "))
                 };
-                self.w.line(&format!("static void* {}__loop(void*);", actor_name));
+                self.w.line(&format!("static void {}__step(void*);", actor_name));
                 self.w.line(&format!("{};", spawn_sig));
             }
         }
@@ -905,14 +905,14 @@ impl Generator {
         }
         self.w.close_with(&format!(" {};", ctx_struct));
 
-        // Thread loop function
+        // Worker step function
         self.ret = Type::Nothing;
         self.results.clear();
         self.pointers.clear();
         self.hidden.clear();
-        self.task = format!("{}__loop", actor_name);
+        self.task = format!("{}__step", actor_name);
 
-        self.w.open(&format!("static void* {}__loop(void* vela__raw_ctx)", actor_name));
+        self.w.open(&format!("static void {}__step(void* vela__raw_ctx)", actor_name));
         self.w.line(&format!("{}* vela__ctx = ({}*)vela__raw_ctx;", ctx_struct, ctx_struct));
         self.w.line("int64_t mailbox = vela__ctx->mailbox;");
         for field in &a.fields {
@@ -924,10 +924,11 @@ impl Generator {
             ));
             self.w.line(&format!("(void){};", c_ident(&field.name)));
         }
-        self.w.line("free(vela__ctx);");
 
         self.w.line(&format!("{} msg;", msg_struct));
-        self.w.open("while (vela__rt__chan_recv(mailbox, &msg))");
+        self.w.line("size_t vela__limit = 16;");
+        self.w.open("while (vela__limit > 0 && vela__rt__chan_try_recv(mailbox, &msg))");
+        self.w.line("vela__limit--;");
         self.w.open("switch (msg.tag)");
         for handler in &a.handlers {
             let tag_val = tag_value(&format!("{}Msg", a.name), &handler.name);
@@ -951,8 +952,35 @@ impl Generator {
         }
         self.w.close(); // switch
         self.w.close(); // while
-        self.w.line("return NULL;");
-        self.w.close(); // loop func
+
+        // Persist updated fields back to context
+        for field in &a.fields {
+            self.w.line(&format!(
+                "vela__ctx->{} = {};",
+                c_ident(&field.name),
+                c_ident(&field.name)
+            ));
+        }
+
+        // Reschedule if more messages remain, or park/free
+        self.w.line("vela__rt__chan* chan = vela__rt__chan_of(mailbox);");
+        self.w.open("if (chan != NULL)");
+        self.w.line("pthread_mutex_lock(&chan->lock);");
+        self.w.open("if (chan->count > 0 && !chan->closed)");
+        self.w.line("pthread_mutex_unlock(&chan->lock);");
+        self.w.line(&format!("vela__rt__sched_submit({}__step, vela__ctx);", actor_name));
+        self.w.line("return;");
+        self.w.close();
+        self.w.open("if (chan->closed && chan->count == 0)");
+        self.w.line("pthread_mutex_unlock(&chan->lock);");
+        self.w.line("free(vela__ctx);");
+        self.w.line("return;");
+        self.w.close();
+        self.w.line("chan->scheduled = false;");
+        self.w.line("pthread_mutex_unlock(&chan->lock);");
+        self.w.close();
+
+        self.w.close(); // step func
 
         // Spawn function
         let spawn_params: Vec<String> = a
@@ -976,12 +1004,7 @@ impl Generator {
         for field in &a.fields {
             self.w.line(&format!("vela__ctx->{0} = {0};", c_ident(&field.name)));
         }
-        self.w.line("pthread_t thread;");
-        self.w.open(&format!("if (pthread_create(&thread, NULL, {}__loop, vela__ctx) != 0)", actor_name));
-        self.w.line("free(vela__ctx);");
-        self.w.line("return -1;");
-        self.w.close();
-        self.w.line("pthread_detach(thread);");
+        self.w.line(&format!("vela__rt__chan_attach_actor(mailbox, {}__step, vela__ctx);", actor_name));
         self.w.line("return mailbox;");
         self.w.close();
 

@@ -4344,6 +4344,105 @@ static inline vela__rt__text vela__rt__gui_canvas_export_ppm(int64_t handle, vel
 
 typedef int64_t vela__chan_t;
 
+/* ========================================================================= */
+/* M:N Task Scheduler & Worker Pool                                          */
+/* ========================================================================= */
+
+typedef struct vela__rt__sched_task {
+    void (*fn)(void* arg);
+    void* arg;
+    struct vela__rt__sched_task* next;
+} vela__rt__sched_task;
+
+typedef struct vela__rt__sched_pool {
+    bool initialized;
+    bool running;
+    size_t num_threads;
+    pthread_t* threads;
+    vela__rt__sched_task* head;
+    vela__rt__sched_task* tail;
+    pthread_mutex_t lock;
+    pthread_cond_t work_cond;
+} vela__rt__sched_pool;
+
+static vela__rt__sched_pool vela__rt__global_sched_pool = {
+    false, false, 0, NULL, NULL, NULL, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER
+};
+
+static inline void* vela__rt__sched_worker(void* arg) {
+    (void)arg;
+    while (1) {
+        pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+        while (vela__rt__global_sched_pool.running && vela__rt__global_sched_pool.head == NULL) {
+            pthread_cond_wait(&vela__rt__global_sched_pool.work_cond, &vela__rt__global_sched_pool.lock);
+        }
+        if (!vela__rt__global_sched_pool.running && vela__rt__global_sched_pool.head == NULL) {
+            pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+            break;
+        }
+        vela__rt__sched_task* task = vela__rt__global_sched_pool.head;
+        if (task != NULL) {
+            vela__rt__global_sched_pool.head = task->next;
+            if (vela__rt__global_sched_pool.head == NULL) {
+                vela__rt__global_sched_pool.tail = NULL;
+            }
+        }
+        pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+
+        if (task != NULL) {
+            task->fn(task->arg);
+            free(task);
+        }
+    }
+    return NULL;
+}
+
+static inline void vela__rt__sched_init_if_needed(void) {
+    if (!vela__rt__global_sched_pool.initialized) {
+        pthread_mutex_init(&vela__rt__global_sched_pool.lock, NULL);
+        pthread_cond_init(&vela__rt__global_sched_pool.work_cond, NULL);
+        vela__rt__global_sched_pool.running = true;
+        size_t count = 4;
+#if defined(_SC_NPROCESSORS_ONLN)
+        long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+        if (nprocs > 0 && nprocs < 32) count = (size_t)nprocs;
+#endif
+        vela__rt__global_sched_pool.num_threads = count;
+        vela__rt__global_sched_pool.threads = (pthread_t*)malloc(count * sizeof(pthread_t));
+        if (vela__rt__global_sched_pool.threads != NULL) {
+            for (size_t i = 0; i < count; i++) {
+                if (pthread_create(&vela__rt__global_sched_pool.threads[i], NULL, vela__rt__sched_worker, NULL) == 0) {
+                    pthread_detach(vela__rt__global_sched_pool.threads[i]);
+                }
+            }
+        }
+        vela__rt__global_sched_pool.initialized = true;
+    }
+}
+
+static inline void vela__rt__sched_submit(void (*fn)(void* arg), void* arg) {
+    if (fn == NULL) return;
+    pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+    vela__rt__sched_init_if_needed();
+    vela__rt__sched_task* task = (vela__rt__sched_task*)malloc(sizeof(vela__rt__sched_task));
+    if (task == NULL) {
+        pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+        vela__rt__out_of_memory();
+    }
+    task->fn = fn;
+    task->arg = arg;
+    task->next = NULL;
+    if (vela__rt__global_sched_pool.tail == NULL) {
+        vela__rt__global_sched_pool.head = task;
+        vela__rt__global_sched_pool.tail = task;
+    } else {
+        vela__rt__global_sched_pool.tail->next = task;
+        vela__rt__global_sched_pool.tail = task;
+    }
+    pthread_cond_signal(&vela__rt__global_sched_pool.work_cond);
+    pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+}
+
 typedef struct vela__rt__chan {
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
@@ -4355,6 +4454,9 @@ typedef struct vela__rt__chan {
     size_t head;
     size_t tail;
     bool closed;
+    void (*on_message)(void* ctx);
+    void* actor_ctx;
+    bool scheduled;
 } vela__rt__chan;
 
 typedef struct vela__rt__chan_slot {
@@ -4416,6 +4518,9 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     chan->head = 0;
     chan->tail = 0;
     chan->closed = false;
+    chan->on_message = NULL;
+    chan->actor_ctx = NULL;
+    chan->scheduled = false;
     pthread_mutex_init(&chan->lock, NULL);
     pthread_cond_init(&chan->not_empty, NULL);
     pthread_cond_init(&chan->not_full, NULL);
@@ -4452,6 +4557,16 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     return handle;
 }
 
+static inline void vela__rt__chan_attach_actor(int64_t handle, void (*on_message)(void* ctx), void* actor_ctx) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    pthread_mutex_lock(&chan->lock);
+    chan->on_message = on_message;
+    chan->actor_ctx = actor_ctx;
+    chan->scheduled = false;
+    pthread_mutex_unlock(&chan->lock);
+}
+
 static inline bool vela__rt__chan_send(int64_t handle, const void* item) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) return false;
@@ -4467,6 +4582,12 @@ static inline bool vela__rt__chan_send(int64_t handle, const void* item) {
     chan->tail = (chan->tail + 1) % chan->cap;
     chan->count++;
     pthread_cond_signal(&chan->not_empty);
+
+    if (chan->on_message != NULL && !chan->scheduled) {
+        chan->scheduled = true;
+        vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
+    }
+
     pthread_mutex_unlock(&chan->lock);
     return true;
 }

@@ -433,7 +433,7 @@ add 'Player.alive' to its alters list: 'alters(.shield, .alive)'</code></pre>
         </p>
         <ul>
           <li><strong>Risk: Unbounded dynamic listeners across compilation units.</strong> If arbitrary external listeners could attach dynamically at runtime, static transitive reachability could become undecidable across separate compilation units.
-          <br><em>Solution:</em> The Indirect Alters Rule is statically checked across all events declared within the shape, module, and <code>auto</code> scopes. For decoupled, cross-component or cross-thread notifications, developers use asynchronous <strong>Actor channels</strong> (<code>send(actor, Msg)</code>), which transfer immutable or owned values without cascading synchronous mutations.</li>
+          <br><em>Solution:</em> The Indirect Alters Rule is statically checked across all events declared within the shape, module, and <code>auto</code> scopes. For decoupled, cross-component or cross-thread notifications, developers use asynchronous <strong>Actor channels</strong> (<code>actor.dispatch(Msg)</code> or <code>dispatch(actor, Msg)</code>), which transfer immutable or owned values without cascading synchronous mutations.</li>
           <li><strong>Risk: Mutual recursion cycles (A triggers B, B triggers A).</strong>
           <br><em>Solution:</em> Event cycles are strictly prohibited by default. They are permitted <em>only</em> if every step in the cycle is guarded by a terminating <code>when &lt;condition&gt;</code> guard, and both events declare the shared set of altered targets (e.g., <code>alters(X, Y)</code>).</li>
         </ul>

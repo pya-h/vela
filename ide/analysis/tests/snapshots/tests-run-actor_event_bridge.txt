@@ -1,0 +1,66 @@
+  1 | ; Tests Actor-Event convergence: shape event automatically dispatches
+    | comment:; Tests Actor-Event convergence: shape event automatically dispatches
+  2 | ; reactive notifications into an Actor mailbox channel.
+    | comment:; reactive notifications into an Actor mailbox channel.
+  4 | actor AuditLogger(prefix: text)
+    | keyword:actor  task:AuditLogger  punctuation:(  variable:prefix  punctuation::  type-builtin:text  punctuation:)
+  5 |     count: int = 0
+    | variable:count  punctuation::  type-builtin:int  operator:=  number:0
+  7 |     on Log(val: int)
+    | variable:on  task:Log  punctuation:(  variable:val  punctuation::  type-builtin:int  punctuation:)
+  8 |         count += 1
+    | variable:count  operator:+=  number:1
+  9 |         show(prefix, ": logged ", val, " (count=", count, ")")
+    | builtin-fn:show  punctuation:(  variable:prefix  punctuation:,  string:": logged "  punctuation:,  variable:val  punctuation:,  string:" (count="  punctuation:,  variable:count  punctuation:,  string:")"  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 12 |     on GetCount(reply: Chan[int])
+    | variable:on  task:GetCount  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 13 |         reply.dispatch(count)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:count  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | shape BankAccount
+    | keyword:shape  type:BankAccount
+ 18 |     balance: int = 0
+    | field:balance  punctuation::  type-builtin:int  operator:=  number:0
+ 19 |     audit: Actor[AuditLogger]
+    | field:audit  punctuation::  type:Actor  punctuation:[  variable:AuditLogger  punctuation:]
+ 21 |     event on_balance_change on .balance auto
+    | keyword:event  variable:on_balance_change  variable:on  punctuation:.  field:balance  variable:auto
+ 22 |         .audit.dispatch(AuditLogger.Log(.balance))
+    | punctuation:.  field:audit  punctuation:.  field:dispatch  punctuation:(  variable:AuditLogger  punctuation:.  field:Log  punctuation:(  punctuation:.  field:balance  punctuation:)  punctuation:)
+ 23 |     fi
+    | keyword:fi
+ 25 |     alters deposit(amount: int)
+    | variable:alters  task:deposit  punctuation:(  variable:amount  punctuation::  type-builtin:int  punctuation:)
+ 26 |         .balance += amount
+    | punctuation:.  field:balance  operator:+=  variable:amount
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     fixed audit = spawn AuditLogger("AUDIT")
+    | keyword:fixed  variable:audit  operator:=  keyword:spawn  task:AuditLogger  punctuation:(  string:"AUDIT"  punctuation:)
+ 32 |     flex acc = BankAccount { balance: 0, audit: audit }
+    | keyword:flex  variable:acc  operator:=  type:BankAccount  punctuation:{  field:balance  punctuation::  number:0  punctuation:,  field:audit  punctuation::  variable:audit  punctuation:}
+ 34 |     acc.deposit(100)
+    | variable:acc  punctuation:.  field:deposit  punctuation:(  number:100  punctuation:)
+ 35 |     acc.deposit(250)
+    | variable:acc  punctuation:.  field:deposit  punctuation:(  number:250  punctuation:)
+ 37 |     fixed reply = chan_new<int>(1)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 38 |     audit.dispatch(AuditLogger.GetCount(reply))
+    | variable:audit  punctuation:.  field:dispatch  punctuation:(  variable:AuditLogger  punctuation:.  field:GetCount  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 39 |     fixed total = reply.wait_and_receive()
+    | keyword:fixed  variable:total  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 40 |     show("final audit count: ", total)
+    | builtin-fn:show  punctuation:(  string:"final audit count: "  punctuation:,  variable:total  punctuation:)
+ 42 |     audit.close()
+    | variable:audit  punctuation:.  field:close  punctuation:(  punctuation:)
+ 43 | fi
+    | keyword:fi

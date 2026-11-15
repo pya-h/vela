@@ -1,0 +1,106 @@
+  1 | ; Comprehensive test for channel and actor communication primitives,
+    | comment:; Comprehensive test for channel and actor communication primitives,
+  2 | ; testing both canonical (dispatch, wait_and_receive, receive) and aliased forms
+    | comment:; testing both canonical (dispatch, wait_and_receive, receive) and aliased forms
+  3 | ; (send, recv, try_recv, recieve, wait_and_recieve) in both function and method syntax.
+    | comment:; (send, recv, try_recv, recieve, wait_and_recieve) in both function and method syntax.
+  5 | actor EchoActor(count: int)
+    | keyword:actor  task:EchoActor  punctuation:(  variable:count  punctuation::  type-builtin:int  punctuation:)
+  6 |     on Ping(val: int, reply: Chan[int])
+    | variable:on  task:Ping  punctuation:(  variable:val  punctuation::  type-builtin:int  punctuation:,  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+  7 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+  8 |         dispatch(reply, val * 2)
+    | task:dispatch  punctuation:(  variable:reply  punctuation:,  variable:val  operator:*  number:2  punctuation:)
+  9 |     fi
+    | keyword:fi
+ 10 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     fixed c = chan_new<int>(8)
+    | keyword:fixed  variable:c  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:8  punctuation:)
+ 15 |     ; 1. Canonical function syntax
+    | comment:; 1. Canonical function syntax
+ 16 |     show("dispatch fn: ", dispatch(c, 10))
+    | builtin-fn:show  punctuation:(  string:"dispatch fn: "  punctuation:,  task:dispatch  punctuation:(  variable:c  punctuation:,  number:10  punctuation:)  punctuation:)
+ 17 |     show("wait_and_receive fn: ", wait_and_receive(c))
+    | builtin-fn:show  punctuation:(  string:"wait_and_receive fn: "  punctuation:,  task:wait_and_receive  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 19 |     ; 2. Canonical method syntax
+    | comment:; 2. Canonical method syntax
+ 20 |     show("dispatch method: ", c.dispatch(20))
+    | builtin-fn:show  punctuation:(  string:"dispatch method: "  punctuation:,  variable:c  punctuation:.  field:dispatch  punctuation:(  number:20  punctuation:)  punctuation:)
+ 21 |     show("wait_and_receive method: ", c.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"wait_and_receive method: "  punctuation:,  variable:c  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 23 |     ; 3. Canonical receive (try)
+    | comment:; 3. Canonical receive (try)
+ 24 |     show("receive empty: ", receive(c))
+    | builtin-fn:show  punctuation:(  string:"receive empty: "  punctuation:,  task:receive  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 25 |     c.dispatch(30)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:30  punctuation:)
+ 26 |     show("receive non-empty fn: ", receive(c))
+    | builtin-fn:show  punctuation:(  string:"receive non-empty fn: "  punctuation:,  task:receive  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 27 |     c.dispatch(40)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:40  punctuation:)
+ 28 |     show("receive non-empty method: ", c.receive())
+    | builtin-fn:show  punctuation:(  string:"receive non-empty method: "  punctuation:,  variable:c  punctuation:.  field:receive  punctuation:(  punctuation:)  punctuation:)
+ 30 |     ; 4. Aliases: send and recv
+    | comment:; 4. Aliases: send and recv
+ 31 |     show("send fn: ", send(c, 50))
+    | builtin-fn:show  punctuation:(  string:"send fn: "  punctuation:,  task:send  punctuation:(  variable:c  punctuation:,  number:50  punctuation:)  punctuation:)
+ 32 |     show("recv fn: ", recv(c))
+    | builtin-fn:show  punctuation:(  string:"recv fn: "  punctuation:,  task:recv  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 33 |     show("send method: ", c.send(60))
+    | builtin-fn:show  punctuation:(  string:"send method: "  punctuation:,  variable:c  punctuation:.  field:send  punctuation:(  number:60  punctuation:)  punctuation:)
+ 34 |     show("recv method: ", c.recv())
+    | builtin-fn:show  punctuation:(  string:"recv method: "  punctuation:,  variable:c  punctuation:.  field:recv  punctuation:(  punctuation:)  punctuation:)
+ 36 |     ; 5. Aliases: try_recv and typo tolerances
+    | comment:; 5. Aliases: try_recv and typo tolerances
+ 37 |     show("try_recv empty: ", try_recv(c))
+    | builtin-fn:show  punctuation:(  string:"try_recv empty: "  punctuation:,  task:try_recv  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 38 |     c.send(70)
+    | variable:c  punctuation:.  field:send  punctuation:(  number:70  punctuation:)
+ 39 |     show("try_recv fn: ", try_recv(c))
+    | builtin-fn:show  punctuation:(  string:"try_recv fn: "  punctuation:,  task:try_recv  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 40 |     c.send(80)
+    | variable:c  punctuation:.  field:send  punctuation:(  number:80  punctuation:)
+ 41 |     show("try_recv method: ", c.try_recv())
+    | builtin-fn:show  punctuation:(  string:"try_recv method: "  punctuation:,  variable:c  punctuation:.  field:try_recv  punctuation:(  punctuation:)  punctuation:)
+ 43 |     c.dispatch(90)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:90  punctuation:)
+ 44 |     show("recieve typo fn: ", recieve(c))
+    | builtin-fn:show  punctuation:(  string:"recieve typo fn: "  punctuation:,  task:recieve  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 45 |     c.dispatch(100)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:100  punctuation:)
+ 46 |     show("recieve typo method: ", c.recieve())
+    | builtin-fn:show  punctuation:(  string:"recieve typo method: "  punctuation:,  variable:c  punctuation:.  field:recieve  punctuation:(  punctuation:)  punctuation:)
+ 48 |     c.dispatch(110)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:110  punctuation:)
+ 49 |     show("wait_and_recieve typo fn: ", wait_and_recieve(c))
+    | builtin-fn:show  punctuation:(  string:"wait_and_recieve typo fn: "  punctuation:,  task:wait_and_recieve  punctuation:(  variable:c  punctuation:)  punctuation:)
+ 50 |     c.dispatch(120)
+    | variable:c  punctuation:.  field:dispatch  punctuation:(  number:120  punctuation:)
+ 51 |     show("wait_and_recieve typo method: ", c.wait_and_recieve())
+    | builtin-fn:show  punctuation:(  string:"wait_and_recieve typo method: "  punctuation:,  variable:c  punctuation:.  field:wait_and_recieve  punctuation:(  punctuation:)  punctuation:)
+ 53 |     c.close()
+    | variable:c  punctuation:.  field:close  punctuation:(  punctuation:)
+ 55 |     ; 6. Actor communication with dispatch and send
+    | comment:; 6. Actor communication with dispatch and send
+ 56 |     fixed echo = spawn EchoActor(0)
+    | keyword:fixed  variable:echo  operator:=  keyword:spawn  task:EchoActor  punctuation:(  number:0  punctuation:)
+ 57 |     fixed reply = chan_new<int>(2)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:2  punctuation:)
+ 59 |     dispatch(echo, EchoActor.Ping(21, reply))
+    | task:dispatch  punctuation:(  variable:echo  punctuation:,  variable:EchoActor  punctuation:.  field:Ping  punctuation:(  number:21  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 60 |     show("actor reply 1: ", wait_and_receive(reply))
+    | builtin-fn:show  punctuation:(  string:"actor reply 1: "  punctuation:,  task:wait_and_receive  punctuation:(  variable:reply  punctuation:)  punctuation:)
+ 62 |     echo.send(EchoActor.Ping(50, reply))
+    | variable:echo  punctuation:.  field:send  punctuation:(  variable:EchoActor  punctuation:.  field:Ping  punctuation:(  number:50  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 63 |     show("actor reply 2: ", reply.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"actor reply 2: "  punctuation:,  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+ 65 |     echo.close()
+    | variable:echo  punctuation:.  field:close  punctuation:(  punctuation:)
+ 66 |     reply.close()
+    | variable:reply  punctuation:.  field:close  punctuation:(  punctuation:)
+ 67 | fi
+    | keyword:fi

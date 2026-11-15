@@ -1,0 +1,43 @@
+; Tests Actor-Event convergence: shape event automatically dispatches
+; reactive notifications into an Actor mailbox channel.
+
+actor AuditLogger(prefix: text)
+    count: int = 0
+
+    on Log(val: int)
+        count += 1
+        show(prefix, ": logged ", val, " (count=", count, ")")
+    fi
+
+    on GetCount(reply: Chan[int])
+        reply.dispatch(count)
+    fi
+fi
+
+shape BankAccount
+    balance: int = 0
+    audit: Actor[AuditLogger]
+
+    event on_balance_change on .balance auto
+        .audit.dispatch(AuditLogger.Log(.balance))
+    fi
+
+    alters deposit(amount: int)
+        .balance += amount
+    fi
+fi
+
+task main()
+    fixed audit = spawn AuditLogger("AUDIT")
+    flex acc = BankAccount { balance: 0, audit: audit }
+
+    acc.deposit(100)
+    acc.deposit(250)
+
+    fixed reply = chan_new<int>(1)
+    audit.dispatch(AuditLogger.GetCount(reply))
+    fixed total = reply.wait_and_receive()
+    show("final audit count: ", total)
+
+    audit.close()
+fi

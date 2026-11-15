@@ -1,0 +1,88 @@
+  1 | ; Stress test and concurrency verification for the M:N Actor Scheduler.
+    | comment:; Stress test and concurrency verification for the M:N Actor Scheduler.
+  2 | ; Multiplexes multiple actors across the background worker pool.
+    | comment:; Multiplexes multiple actors across the background worker pool.
+  4 | actor Worker(id: int)
+    | keyword:actor  task:Worker  punctuation:(  variable:id  punctuation::  type-builtin:int  punctuation:)
+  5 |     jobs: int = 0
+    | variable:jobs  punctuation::  type-builtin:int  operator:=  number:0
+  7 |     on Compute(val: int, reply: Chan[int])
+    | variable:on  task:Compute  punctuation:(  variable:val  punctuation::  type-builtin:int  punctuation:,  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+  8 |         jobs += 1
+    | variable:jobs  operator:+=  number:1
+  9 |         reply.dispatch(val * id)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:val  operator:*  variable:id  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 12 |     on Stats(reply: Chan[int])
+    | variable:on  task:Stats  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 13 |         reply.dispatch(jobs)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:jobs  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     fixed w1 = spawn Worker(2)
+    | keyword:fixed  variable:w1  operator:=  keyword:spawn  task:Worker  punctuation:(  number:2  punctuation:)
+ 19 |     fixed w2 = spawn Worker(3)
+    | keyword:fixed  variable:w2  operator:=  keyword:spawn  task:Worker  punctuation:(  number:3  punctuation:)
+ 20 |     fixed w3 = spawn Worker(5)
+    | keyword:fixed  variable:w3  operator:=  keyword:spawn  task:Worker  punctuation:(  number:5  punctuation:)
+ 21 |     fixed w4 = spawn Worker(7)
+    | keyword:fixed  variable:w4  operator:=  keyword:spawn  task:Worker  punctuation:(  number:7  punctuation:)
+ 23 |     fixed reply = chan_new<int>(8)
+    | keyword:fixed  variable:reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:8  punctuation:)
+ 25 |     w1.dispatch(Worker.Compute(10, reply))
+    | variable:w1  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:10  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 26 |     w2.dispatch(Worker.Compute(10, reply))
+    | variable:w2  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:10  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 27 |     w3.dispatch(Worker.Compute(10, reply))
+    | variable:w3  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:10  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 28 |     w4.dispatch(Worker.Compute(10, reply))
+    | variable:w4  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Compute  punctuation:(  number:10  punctuation:,  variable:reply  punctuation:)  punctuation:)
+ 30 |     fixed r1 = reply.wait_and_receive()
+    | keyword:fixed  variable:r1  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 31 |     fixed r2 = reply.wait_and_receive()
+    | keyword:fixed  variable:r2  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 32 |     fixed r3 = reply.wait_and_receive()
+    | keyword:fixed  variable:r3  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 33 |     fixed r4 = reply.wait_and_receive()
+    | keyword:fixed  variable:r4  operator:=  variable:reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 35 |     fixed total = r1 + r2 + r3 + r4
+    | keyword:fixed  variable:total  operator:=  variable:r1  operator:+  variable:r2  operator:+  variable:r3  operator:+  variable:r4
+ 36 |     show("total: ", total)
+    | builtin-fn:show  punctuation:(  string:"total: "  punctuation:,  variable:total  punctuation:)
+ 38 |     fixed stats_reply = chan_new<int>(4)
+    | keyword:fixed  variable:stats_reply  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 39 |     w1.dispatch(Worker.Stats(stats_reply))
+    | variable:w1  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Stats  punctuation:(  variable:stats_reply  punctuation:)  punctuation:)
+ 40 |     w2.dispatch(Worker.Stats(stats_reply))
+    | variable:w2  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Stats  punctuation:(  variable:stats_reply  punctuation:)  punctuation:)
+ 41 |     w3.dispatch(Worker.Stats(stats_reply))
+    | variable:w3  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Stats  punctuation:(  variable:stats_reply  punctuation:)  punctuation:)
+ 42 |     w4.dispatch(Worker.Stats(stats_reply))
+    | variable:w4  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Stats  punctuation:(  variable:stats_reply  punctuation:)  punctuation:)
+ 44 |     fixed s1 = stats_reply.wait_and_receive()
+    | keyword:fixed  variable:s1  operator:=  variable:stats_reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 45 |     fixed s2 = stats_reply.wait_and_receive()
+    | keyword:fixed  variable:s2  operator:=  variable:stats_reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 46 |     fixed s3 = stats_reply.wait_and_receive()
+    | keyword:fixed  variable:s3  operator:=  variable:stats_reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 47 |     fixed s4 = stats_reply.wait_and_receive()
+    | keyword:fixed  variable:s4  operator:=  variable:stats_reply  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 49 |     fixed total_jobs = s1 + s2 + s3 + s4
+    | keyword:fixed  variable:total_jobs  operator:=  variable:s1  operator:+  variable:s2  operator:+  variable:s3  operator:+  variable:s4
+ 50 |     show("jobs: ", total_jobs)
+    | builtin-fn:show  punctuation:(  string:"jobs: "  punctuation:,  variable:total_jobs  punctuation:)
+ 52 |     w1.close()
+    | variable:w1  punctuation:.  field:close  punctuation:(  punctuation:)
+ 53 |     w2.close()
+    | variable:w2  punctuation:.  field:close  punctuation:(  punctuation:)
+ 54 |     w3.close()
+    | variable:w3  punctuation:.  field:close  punctuation:(  punctuation:)
+ 55 |     w4.close()
+    | variable:w4  punctuation:.  field:close  punctuation:(  punctuation:)
+ 56 | fi
+    | keyword:fi

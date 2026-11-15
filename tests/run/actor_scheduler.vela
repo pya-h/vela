@@ -1,0 +1,56 @@
+; Stress test and concurrency verification for the M:N Actor Scheduler.
+; Multiplexes multiple actors across the background worker pool.
+
+actor Worker(id: int)
+    jobs: int = 0
+
+    on Compute(val: int, reply: Chan[int])
+        jobs += 1
+        reply.dispatch(val * id)
+    fi
+
+    on Stats(reply: Chan[int])
+        reply.dispatch(jobs)
+    fi
+fi
+
+task main()
+    fixed w1 = spawn Worker(2)
+    fixed w2 = spawn Worker(3)
+    fixed w3 = spawn Worker(5)
+    fixed w4 = spawn Worker(7)
+
+    fixed reply = chan_new<int>(8)
+
+    w1.dispatch(Worker.Compute(10, reply))
+    w2.dispatch(Worker.Compute(10, reply))
+    w3.dispatch(Worker.Compute(10, reply))
+    w4.dispatch(Worker.Compute(10, reply))
+
+    fixed r1 = reply.wait_and_receive()
+    fixed r2 = reply.wait_and_receive()
+    fixed r3 = reply.wait_and_receive()
+    fixed r4 = reply.wait_and_receive()
+
+    fixed total = r1 + r2 + r3 + r4
+    show("total: ", total)
+
+    fixed stats_reply = chan_new<int>(4)
+    w1.dispatch(Worker.Stats(stats_reply))
+    w2.dispatch(Worker.Stats(stats_reply))
+    w3.dispatch(Worker.Stats(stats_reply))
+    w4.dispatch(Worker.Stats(stats_reply))
+
+    fixed s1 = stats_reply.wait_and_receive()
+    fixed s2 = stats_reply.wait_and_receive()
+    fixed s3 = stats_reply.wait_and_receive()
+    fixed s4 = stats_reply.wait_and_receive()
+
+    fixed total_jobs = s1 + s2 + s3 + s4
+    show("jobs: ", total_jobs)
+
+    w1.close()
+    w2.close()
+    w3.close()
+    w4.close()
+fi
