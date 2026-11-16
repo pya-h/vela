@@ -1,0 +1,6 @@
+; error: 5:14: '->>' cannot be chained without parentheses; parenthesize or write separate statements
+task main()
+    fixed c1 = chan_new<int>(1)
+    fixed c2 = chan_new<int>(1)
+    1 ->> c1 ->> c2
+fi

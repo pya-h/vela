@@ -271,11 +271,11 @@ fn hover_token(
         ),
         (TokenClass::Operator, _) if text == "<<-" => (
             "<<- ch or case msg <<- ch".to_string(),
-            "Channel receive operator: receives a message from channel ch (blocks until an item arrives, or matches ready arms in a 'select' block).".to_string(),
+            "Channel receive operator: blocking shortcut for wait_and_receive(ch), or a receive arm inside a 'select' block.".to_string(),
         ),
         (TokenClass::Operator, _) if text == "->>" => (
             "value ->> ch or case [own] value ->> ch".to_string(),
-            "Channel send operator: sends value into channel ch, transferring ownership when written with 'own'.".to_string(),
+            "Channel/actor send operator: shortcut for dispatch(ch, value) returning bool (supporting 'own' moves), or a send arm inside a 'select' block.".to_string(),
         ),
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;

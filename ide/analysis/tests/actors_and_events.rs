@@ -277,4 +277,47 @@ fi
     assert!(!offered_ow.contains(&"otherwise".to_string()));
 }
 
+#[test]
+fn standalone_channel_arrow_types_and_hover() {
+    let source = "\
+shape Job
+    id: int
+fi
+
+task main()
+    fixed jobs = chan_new<own Job>(2)
+    fixed ok = 42 ->> chan_new<int>(1)
+    fixed job = <<- jobs
+    show(ok, job.id)
+fi
+";
+    let analysis = Analysis::new(source);
+    assert!(
+        analysis.diagnostics().iter().all(|d| d.severity != Severity::Error),
+        "unexpected errors: {:?}",
+        analysis.diagnostics()
+    );
+    let (code_ok, _) = hover(source, "ok,");
+    assert_eq!(code_ok, "fixed ok: bool");
+    let (code_job, _) = hover(source, "job.id");
+    assert_eq!(code_job, "fixed job: Job");
+    let (code_recv, _) = hover(source, "<<- jobs");
+    assert!(code_recv.contains("<<-"));
+    let (code_send, _) = hover(source, "->> chan_new");
+    assert!(code_send.contains("->>"));
+
+    let dot = "\
+shape Job
+    id: int
+fi
+
+task main()
+    fixed jobs = chan_new<own Job>(2)
+    fixed job = <<- jobs
+    job.@@
+fi
+";
+    assert!(labels(dot).contains(&"id".to_string()));
+}
+
 

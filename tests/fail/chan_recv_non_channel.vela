@@ -1,0 +1,6 @@
+; error: 3:19: '<<-' requires a channel, got int
+task main()
+    fixed x = <<- 42
+    show(x)
+fi
+

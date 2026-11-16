@@ -1,0 +1,128 @@
+  1 | shape Job
+    | keyword:shape  type:Job
+  2 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  3 |     label: text
+    | field:label  punctuation::  type-builtin:text
+  4 | fi
+    | keyword:fi
+  6 | actor Accumulator(total: int)
+    | keyword:actor  task:Accumulator  punctuation:(  variable:total  punctuation::  type-builtin:int  punctuation:)
+  7 |     on Add(n: int)
+    | variable:on  task:Add  punctuation:(  variable:n  punctuation::  type-builtin:int  punctuation:)
+  8 |         total += n
+    | variable:total  operator:+=  variable:n
+  9 |     fi
+    | keyword:fi
+ 11 |     on Fetch(reply: Chan[int])
+    | variable:on  task:Fetch  punctuation:(  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 12 |         total ->> reply
+    | variable:total  operator:->>  variable:reply
+ 13 |     fi
+    | keyword:fi
+ 14 | fi
+    | keyword:fi
+ 16 | task add_ten(n: int) -> int
+    | keyword:task  task:add_ten  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 17 |     <- n + 10
+    | keyword:<-  parameter:n  operator:+  number:10
+ 18 | fi
+    | keyword:fi
+ 20 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 21 |     fixed c1 = chan_new<int>(4)
+    | keyword:fixed  variable:c1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 22 |     fixed c2 = chan_new<int>(4)
+    | keyword:fixed  variable:c2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 24 |     ; 1. Arithmetic and pipe bind tighter than ->>
+    | comment:; 1. Arithmetic and pipe bind tighter than ->>
+ 25 |     10 + 20 ->> c1
+    | number:10  operator:+  number:20  operator:->>  variable:c1
+ 26 |     5 |> add_ten() ->> c2
+    | number:5  operator:|>  task:add_ten  punctuation:(  punctuation:)  operator:->>  variable:c2
+ 27 |     fixed sent_ok = 42 ->> c1
+    | keyword:fixed  variable:sent_ok  operator:=  number:42  operator:->>  variable:c1
+ 28 |     show("sent: ", sent_ok)
+    | builtin-fn:show  punctuation:(  string:"sent: "  punctuation:,  variable:sent_ok  punctuation:)
+ 30 |     ; 2. Prefix <<- arithmetic and direct forward <<- c1 ->> c2
+    | comment:; 2. Prefix <<- arithmetic and direct forward <<- c1 ->> c2
+ 31 |     fixed sum = <<- c1 + <<- c2
+    | keyword:fixed  variable:sum  operator:=  operator:<<-  variable:c1  operator:+  operator:<<-  variable:c2
+ 32 |     show("sum: ", sum)
+    | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:sum  punctuation:)
+ 33 |     <<- c1 ->> c2
+    | operator:<<-  variable:c1  operator:->>  variable:c2
+ 34 |     show("forwarded: ", <<- c2)
+    | builtin-fn:show  punctuation:(  string:"forwarded: "  punctuation:,  operator:<<-  variable:c2  punctuation:)
+ 36 |     ; 3. Condition precedence: ->> binds tighter than 'and'/'or'
+    | comment:; 3. Condition precedence: ->> binds tighter than 'and'/'or'
+ 37 |     fixed bool_ch = chan_new<bool>(2)
+    | keyword:fixed  variable:bool_ch  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:bool  punctuation:>  punctuation:(  number:2  punctuation:)
+ 38 |     fixed ready = true
+    | keyword:fixed  variable:ready  operator:=  keyword:true
+ 39 |     when ready and (sum == 45) ->> bool_ch
+    | keyword:when  variable:ready  keyword:and  punctuation:(  variable:sum  operator:==  number:45  punctuation:)  operator:->>  variable:bool_ch
+ 40 |         show("bool sent: ", <<- bool_ch)
+    | builtin-fn:show  punctuation:(  string:"bool sent: "  punctuation:,  operator:<<-  variable:bool_ch  punctuation:)
+ 41 |     fi
+    | keyword:fi
+ 43 |     ; 4. `own` transfer with ->> and unwrap with <<-
+    | comment:; 4. `own` transfer with ->> and unwrap with <<-
+ 44 |     fixed jobs = chan_new<own Job>(2)
+    | keyword:fixed  variable:jobs  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Job  punctuation:>  punctuation:(  number:2  punctuation:)
+ 45 |     flex j = Job { id: 7, label: "ok" }
+    | keyword:flex  variable:j  operator:=  type:Job  punctuation:{  field:id  punctuation::  number:7  punctuation:,  field:label  punctuation::  string:"ok"  punctuation:}
+ 46 |     own j ->> jobs
+    | keyword:own  variable:j  operator:->>  variable:jobs
+ 47 |     fixed got = <<- jobs
+    | keyword:fixed  variable:got  operator:=  operator:<<-  variable:jobs
+ 48 |     show("job: ", got.id, ":", got.label)
+    | builtin-fn:show  punctuation:(  string:"job: "  punctuation:,  variable:got  punctuation:.  field:id  punctuation:,  string:":"  punctuation:,  variable:got  punctuation:.  field:label  punctuation:)
+ 50 |     ; 5. Actor messages with ->> and barrier wait with <<-
+    | comment:; 5. Actor messages with ->> and barrier wait with <<-
+ 51 |     fixed acc = spawn Accumulator(100)
+    | keyword:fixed  variable:acc  operator:=  keyword:spawn  task:Accumulator  punctuation:(  number:100  punctuation:)
+ 52 |     Accumulator.Add(23) ->> acc
+    | variable:Accumulator  punctuation:.  field:Add  punctuation:(  number:23  punctuation:)  operator:->>  variable:acc
+ 53 |     Accumulator.Fetch(c1) ->> acc
+    | variable:Accumulator  punctuation:.  field:Fetch  punctuation:(  variable:c1  punctuation:)  operator:->>  variable:acc
+ 54 |     show("actor: ", <<- c1)
+    | builtin-fn:show  punctuation:(  string:"actor: "  punctuation:,  operator:<<-  variable:c1  punctuation:)
+ 56 |     fixed done = chan_new<int>(1)
+    | keyword:fixed  variable:done  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 57 |     1 ->> done
+    | number:1  operator:->>  variable:done
+ 58 |     <<- done
+    | operator:<<-  variable:done
+ 60 |     ; 6. Closed channel send returns false; select with LHS expressions works cleanly
+    | comment:; 6. Closed channel send returns false; select with LHS expressions works cleanly
+ 61 |     c1.close()
+    | variable:c1  punctuation:.  field:close  punctuation:(  punctuation:)
+ 62 |     fixed closed_ok = 99 ->> c1
+    | keyword:fixed  variable:closed_ok  operator:=  number:99  operator:->>  variable:c1
+ 63 |     show("closed send: ", closed_ok)
+    | builtin-fn:show  punctuation:(  string:"closed send: "  punctuation:,  variable:closed_ok  punctuation:)
+ 64 |     select
+    | keyword:select
+ 65 |         case 1 + 2 ->> c2
+    | keyword:case  number:1  operator:+  number:2  operator:->>  variable:c2
+ 66 |             show("select send: ", <<- c2)
+    | builtin-fn:show  punctuation:(  string:"select send: "  punctuation:,  operator:<<-  variable:c2  punctuation:)
+ 67 |         otherwise
+    | keyword:otherwise
+ 68 |             show("unexpected")
+    | builtin-fn:show  punctuation:(  string:"unexpected"  punctuation:)
+ 69 |     fi
+    | keyword:fi
+ 71 |     c2.close()
+    | variable:c2  punctuation:.  field:close  punctuation:(  punctuation:)
+ 72 |     bool_ch.close()
+    | variable:bool_ch  punctuation:.  field:close  punctuation:(  punctuation:)
+ 73 |     jobs.close()
+    | variable:jobs  punctuation:.  field:close  punctuation:(  punctuation:)
+ 74 |     done.close()
+    | variable:done  punctuation:.  field:close  punctuation:(  punctuation:)
+ 75 |     acc.close()
+    | variable:acc  punctuation:.  field:close  punctuation:(  punctuation:)
+ 76 | fi
+    | keyword:fi

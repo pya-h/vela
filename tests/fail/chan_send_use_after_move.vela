@@ -1,0 +1,11 @@
+; error: 10:10: use of moved value 'b'; 'b' was moved with 'own b'
+shape Box
+    v: int
+fi
+
+task main()
+    fixed ch = chan_new<own Box>(1)
+    flex b = Box { v: 7 }
+    own b ->> ch
+    show(b.v)
+fi

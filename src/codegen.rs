@@ -5841,6 +5841,15 @@ impl Generator {
             )),
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Own(inner) => self.gen_expr(inner),
+            ExprKind::ChanRecv(chan) => {
+                let c = self.gen_expr(chan)?;
+                self.gen_chan_wait_and_receive(chan.ty()?, &c, e.span)
+            }
+            ExprKind::ChanSend(value, chan) => {
+                let item = self.gen_expr(value)?;
+                let target = self.gen_expr(chan)?;
+                self.gen_chan_dispatch(chan.ty()?, &target, &item, e.span)
+            }
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::Widen(inner) => self.gen_widen(e, inner),
             ExprKind::Pipe(call) => self.gen_pipe(e, call),
@@ -6550,32 +6559,14 @@ impl Generator {
             };
             let chan = self.gen_expr(arg0)?;
             let item = self.gen_expr(arg1)?;
-            let payload_type = match arg0.ty()? {
-                Type::Chan(inner) => match inner.as_ref() {
-                    Type::Own(p) => p.as_ref().clone(),
-                    other => other.clone(),
-                },
-                Type::Actor(actor_ty) => match actor_ty.as_ref() {
-                    Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
-                    _ => Type::Unknown,
-                },
-                _ => return Err(Error::internal_at(e.span, "dispatch on non-Chan/Actor")),
-            };
-            return Ok(Some(format!("vela__chan_dispatch__{}({}, {})", type_word(&payload_type), chan, item)));
+            return Ok(Some(self.gen_chan_dispatch(arg0.ty()?, &chan, &item, e.span)?));
         }
         if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve")
             && let Some(arg0) = args.first()
             && matches!(arg0.ty(), Ok(Type::Chan(_)))
         {
             let chan = self.gen_expr(arg0)?;
-            let Type::Chan(inner) = arg0.ty()? else {
-                return Err(Error::internal_at(e.span, "wait_and_receive on non-Chan"));
-            };
-            let payload = match inner.as_ref() {
-                Type::Own(p) => p.as_ref(),
-                other => other,
-            };
-            return Ok(Some(format!("vela__chan_wait_and_receive__{}({})", type_word(payload), chan)));
+            return Ok(Some(self.gen_chan_wait_and_receive(arg0.ty()?, &chan, e.span)?));
         }
         if (name == RECEIVE || name == "try_recv" || name == "recieve")
             && let Some(arg0) = args.first()
@@ -6599,6 +6590,47 @@ impl Generator {
             return Ok(Some(format!("vela__rt__chan_close({})", chan)));
         }
         Ok(None)
+    }
+
+    fn gen_chan_dispatch(
+        &self,
+        target_ty: &Type,
+        target: &str,
+        item: &str,
+        span: Span,
+    ) -> Result<String> {
+        let payload_type = match target_ty {
+            Type::Chan(inner) => match inner.as_ref() {
+                Type::Own(p) => p.as_ref().clone(),
+                other => other.clone(),
+            },
+            Type::Actor(actor_ty) => match actor_ty.as_ref() {
+                Type::Named(name, _) => Type::Named(format!("{}Msg", name), None),
+                _ => Type::Unknown,
+            },
+            _ => return Err(Error::internal_at(span, "dispatch on non-Chan/Actor")),
+        };
+        Ok(format!(
+            "vela__chan_dispatch__{}({}, {})",
+            type_word(&payload_type),
+            target,
+            item
+        ))
+    }
+
+    fn gen_chan_wait_and_receive(&self, chan_ty: &Type, chan: &str, span: Span) -> Result<String> {
+        let Type::Chan(inner) = chan_ty else {
+            return Err(Error::internal_at(span, "wait_and_receive on non-Chan"));
+        };
+        let payload = match inner.as_ref() {
+            Type::Own(p) => p.as_ref(),
+            other => other,
+        };
+        Ok(format!(
+            "vela__chan_wait_and_receive__{}({})",
+            type_word(payload),
+            chan
+        ))
     }
 
     #[inline(never)]
@@ -8139,6 +8171,7 @@ fn has_prelude(e: &Expr) -> bool {
         }
         ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
+        | ExprKind::ChanRecv(inner)
         | ExprKind::Deref(inner)
         | ExprKind::Ref(inner)
         | ExprKind::New { value: inner, .. }
@@ -8162,6 +8195,7 @@ fn has_prelude(e: &Expr) -> bool {
         }
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
+        | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => {
@@ -8201,6 +8235,7 @@ fn made_here(e: &Expr) -> bool {
             | ExprKind::Invoke { .. }
             | ExprKind::StructInit { .. }
             | ExprKind::Spawn { .. }
+            | ExprKind::ChanRecv(_)
     )
 }
 
@@ -8860,7 +8895,7 @@ impl UsedTypes {
             | ExprKind::RegionAfter(_)
             | ExprKind::Shared { .. }
             | ExprKind::TypeOf(_) => {}
-            ExprKind::Spread(inner) => self.expr(inner),
+            ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) => self.expr(inner),
             ExprKind::TaskValue(name) | ExprKind::Closure { lambda: name, .. } => {
                 if !self.task_values.contains(name) {
                     self.task_values.push(name.clone());
@@ -9032,7 +9067,7 @@ impl UsedTypes {
                 self.expr(a);
                 self.expr(b);
             }
-            ExprKind::Range(a, b) => {
+            ExprKind::Range(a, b) | ExprKind::ChanSend(a, b) => {
                 self.expr(a);
                 self.expr(b);
             }
@@ -9266,6 +9301,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         }
         ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
+        | ExprKind::ChanRecv(inner)
         | ExprKind::Deref(inner)
         | ExprKind::Ref(inner)
         | ExprKind::Fail(inner)
@@ -9276,6 +9312,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Piped(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
+        | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => expr_reads(a, name) || expr_reads(b, name),
@@ -9484,6 +9521,7 @@ fn changes_nothing(e: &Expr) -> bool {
         | ExprKind::Widen(inner) => changes_nothing(inner),
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
+        | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),

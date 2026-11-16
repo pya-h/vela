@@ -282,13 +282,13 @@
         <tbody>
           <tr>
             <td><code>dispatch(c, item)</code></td>
-            <td><code>c.dispatch(item)</code></td>
+            <td><code>c.dispatch(item)</code><br><code>item -&gt;&gt; c</code></td>
             <td><code>bool</code></td>
             <td>Blocks if the buffer is full until space is freed. Returns <code>true</code> on success, or <code>false</code> if the channel is closed.</td>
           </tr>
           <tr>
             <td><code>wait_and_receive(c)</code></td>
-            <td><code>c.wait_and_receive()</code></td>
+            <td><code>c.wait_and_receive()</code><br><code>&lt;&lt;- c</code></td>
             <td><code>T</code></td>
             <td>Blocks if the buffer is empty until a message arrives, returning the received payload. Traps if the channel is closed and drained (use <code>receive(c)</code> to check non-blockingly and handle closure safely).</td>
           </tr>
@@ -318,6 +318,20 @@
           </tr>
         </tbody>
       </table>
+
+      <h3>Operator Shortcuts: <code>-&gt;&gt;</code> and <code>&lt;&lt;-</code></h3>
+      <p>
+        Outside <code>select</code>, <code>value -&gt;&gt; c</code> is a direct shorthand for <code>dispatch(c, value)</code> (returning <code>bool</code>, and working with both channels and actors), and <code>&lt;&lt;- c</code> is a blocking prefix shorthand for <code>wait_and_receive(c)</code> (non-blocking <code>receive(c)</code> stays a method/task call):
+      </p>
+      <pre><code><span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> ch = chan_new&lt;int&gt;(<span class="number">4</span>)
+    <span class="number">10</span> + <span class="number">20</span> -&gt;&gt; ch
+    <span class="keyword">fixed</span> sent = <span class="number">42</span> -&gt;&gt; ch
+    <span class="keyword">fixed</span> a = &lt;&lt;- ch
+    <span class="keyword">fixed</span> b = &lt;&lt;- ch
+    show(sent, <span class="string">" "</span>, a + b)
+    ch.close()
+<span class="keyword">fi</span></code></pre>
 
       <h3>Multi-Channel <code>select</code> Statement &amp; Expression</h3>
       <p>

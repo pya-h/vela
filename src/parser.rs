@@ -3292,7 +3292,7 @@ impl Parser {
             let chan = self.parse_expr()?;
             return Ok(SelectArmKind::Recv { mode, name, name_span, chan });
         }
-        let value = self.parse_expr()?;
+        let value = self.parse_expr_no_send()?;
         if !self.match_token(Token::ChanSend) {
             return Err(Error::at(
                 self.peek_span(),
@@ -3617,6 +3617,13 @@ impl Parser {
         Ok(expr)
     }
 
+    fn parse_expr_no_send(&mut self) -> Result<Expr> {
+        self.enter()?;
+        let expr = self.parse_binary_with(1, false)?;
+        self.leave(1);
+        Ok(expr)
+    }
+
     fn parse_condition(&mut self) -> Result<Condition> {
         const AND_PRECEDENCE: u8 = 2;
         let mut parts = Vec::new();
@@ -3693,42 +3700,53 @@ impl Parser {
         Some(match token {
             Token::Or => (BinaryOp::Or, 1),
             Token::And => (BinaryOp::And, 2),
-            Token::Eq => (BinaryOp::Eq, 3),
-            Token::Ne => (BinaryOp::Ne, 3),
-            Token::Similar => (BinaryOp::Similar, 3),
-            Token::NotSimilar => (BinaryOp::NotSimilar, 3),
-            Token::Lt => (BinaryOp::Lt, 4),
-            Token::Gt => (BinaryOp::Gt, 4),
-            Token::Le => (BinaryOp::Le, 4),
-            Token::Ge => (BinaryOp::Ge, 4),
+            Token::Eq => (BinaryOp::Eq, 4),
+            Token::Ne => (BinaryOp::Ne, 4),
+            Token::Similar => (BinaryOp::Similar, 4),
+            Token::NotSimilar => (BinaryOp::NotSimilar, 4),
+            Token::Lt => (BinaryOp::Lt, 5),
+            Token::Gt => (BinaryOp::Gt, 5),
+            Token::Le => (BinaryOp::Le, 5),
+            Token::Ge => (BinaryOp::Ge, 5),
             Token::Plus => (BinaryOp::Add, Self::ADD_PRECEDENCE),
             Token::Minus => (BinaryOp::Sub, Self::ADD_PRECEDENCE),
-            Token::Star => (BinaryOp::Mul, 8),
-            Token::Slash => (BinaryOp::Div, 8),
-            Token::Percent => (BinaryOp::Mod, 8),
+            Token::Star => (BinaryOp::Mul, 9),
+            Token::Slash => (BinaryOp::Div, 9),
+            Token::Percent => (BinaryOp::Mod, 9),
             Token::Power => (BinaryOp::Pow, Self::POWER_PRECEDENCE),
             _ => return None,
         })
     }
 
-    const PIPE_PRECEDENCE: u8 = 5;
+    const CHAN_SEND_PRECEDENCE: u8 = 3;
 
-    const RANGE_PRECEDENCE: u8 = 6;
+    const PIPE_PRECEDENCE: u8 = 6;
 
-    const POWER_PRECEDENCE: u8 = 9;
+    const RANGE_PRECEDENCE: u8 = 7;
 
-    const ADD_PRECEDENCE: u8 = 7;
+    const POWER_PRECEDENCE: u8 = 10;
+
+    const ADD_PRECEDENCE: u8 = 8;
 
     /// Precedence climbing keeps expression stack depth bounded under `MAX_NESTING`.
     fn parse_binary(&mut self, min: u8) -> Result<Expr> {
+        self.parse_binary_with(min, true)
+    }
+
+    fn parse_binary_with(&mut self, min: u8, allow_send: bool) -> Result<Expr> {
         let left = self.parse_unary()?;
-        self.parse_operators(left, min)
+        self.parse_operators_with(left, min, allow_send)
+    }
+
+    fn parse_operators(&mut self, left: Expr, min: u8) -> Result<Expr> {
+        self.parse_operators_with(left, min, true)
     }
 
     // Outlined from `parse_binary` to minimize recursive stack frame size under `MAX_NESTING`.
-    fn parse_operators(&mut self, mut left: Expr, min: u8) -> Result<Expr> {
+    fn parse_operators_with(&mut self, mut left: Expr, min: u8, allow_send: bool) -> Result<Expr> {
         let mut levels = 0;
         let mut ranged = false;
+        let mut sent = false;
         loop {
             if self.check(Token::Parts) {
                 return Err(Error::at(self.peek_span(), PARTS_AS_OR));
@@ -3769,9 +3787,25 @@ impl Parser {
                 self.enter_operator()?;
                 levels += 1;
                 self.advance();
-                let right = self.parse_binary(Self::RANGE_PRECEDENCE + 1)?;
+                let right = self.parse_binary_with(Self::RANGE_PRECEDENCE + 1, allow_send)?;
                 left = Expr::new(ExprKind::Range(Box::new(left), Box::new(right)), span);
                 ranged = true;
+                continue;
+            }
+            if allow_send && self.check(Token::ChanSend) && min <= Self::CHAN_SEND_PRECEDENCE {
+                if sent {
+                    self.leave_operators(levels);
+                    return Err(Error::at(
+                        span,
+                        "'->>' cannot be chained without parentheses; parenthesize or write separate statements",
+                    ));
+                }
+                self.enter_operator()?;
+                levels += 1;
+                self.advance();
+                let right = self.parse_binary_with(Self::CHAN_SEND_PRECEDENCE + 1, allow_send)?;
+                left = Expr::new(ExprKind::ChanSend(Box::new(left), Box::new(right)), span);
+                sent = true;
                 continue;
             }
             let Some((op, precedence)) = Self::binary_op(self.peek()) else { break };
@@ -3785,7 +3819,7 @@ impl Parser {
             levels += 1;
             self.advance();
             let next = if op == BinaryOp::Pow { precedence } else { precedence + 1 };
-            let right = self.parse_binary(next)?;
+            let right = self.parse_binary_with(next, allow_send)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
         }
         self.leave_operators(levels);
@@ -3994,7 +4028,7 @@ impl Parser {
         if self.check(Token::Failure) {
             return Err(Error::at(self.peek_span(), FAIL_MAKES));
         }
-        if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not | Token::Amp) {
+        if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not | Token::Amp | Token::ChanRecv) {
             return self.parse_prefixed();
         }
         if self.check(Token::Own) {
@@ -4009,6 +4043,7 @@ impl Parser {
                         | Token::Minus
                         | Token::Not
                         | Token::Fail
+                        | Token::ChanRecv
                         | Token::New
                         | Token::Int(_)
                         | Token::Float(_)
@@ -4046,6 +4081,12 @@ impl Parser {
             let val = self.parse_operand()?;
             self.leave(1);
             return Ok(Expr::new(ExprKind::Own(Box::new(val)), span));
+        }
+        if self.match_token(Token::ChanRecv) {
+            self.enter()?;
+            let chan = self.parse_operand()?;
+            self.leave(1);
+            return Ok(Expr::new(ExprKind::ChanRecv(Box::new(chan)), span));
         }
         let op = if self.match_token(Token::Minus) {
             UnaryOp::Neg

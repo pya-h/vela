@@ -7773,7 +7773,11 @@ impl Checker {
             ExprKind::Scan { .. } if matches!(e.ty, Some(Type::Or(..))) => {
                 err(e.span, ignored_error(SCAN))
             }
-            ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
+            ExprKind::Call { .. }
+            | ExprKind::Edit { .. }
+            | ExprKind::Scan { .. }
+            | ExprKind::ChanRecv(..)
+            | ExprKind::ChanSend(..) => Ok(()),
             ExprKind::MethodCall { .. } => Ok(()),
             ExprKind::PlanB { value, .. }
                 if e.ty == Some(Type::Nothing)
@@ -9475,6 +9479,60 @@ impl Checker {
                 ),
             ),
         }
+    }
+
+    fn chan_send_elem_type(
+        &self,
+        chan_ty: &Type,
+        span: Span,
+        bad: impl FnOnce(&Type) -> String,
+    ) -> Result<Type> {
+        match chan_ty {
+            Type::Chan(inner) => Ok(inner.as_ref().clone()),
+            Type::Actor(actor_ty) => {
+                let actor_name = match actor_ty.as_ref() {
+                    Type::Named(name, _) => name.clone(),
+                    _ => "Unknown".to_string(),
+                };
+                Ok(Type::Named(format!("{}Msg", actor_name), None))
+            }
+            Type::Unknown => Ok(Type::Unknown),
+            _ => err(span, bad(chan_ty)),
+        }
+    }
+
+    fn chan_recv_elem_type(
+        &self,
+        chan_ty: &Type,
+        span: Span,
+        bad: impl FnOnce(&Type) -> String,
+    ) -> Result<Type> {
+        let elem_ty = match chan_ty {
+            Type::Chan(inner) => inner.as_ref().clone(),
+            Type::Unknown => Type::Unknown,
+            _ => return err(span, bad(chan_ty)),
+        };
+        Ok(match elem_ty {
+            Type::Own(payload) => *payload,
+            other => other,
+        })
+    }
+
+    fn check_chan_recv_shortcut(&mut self, chan: &mut Expr) -> Result<Type> {
+        let chan_ty = self.check_expr(chan)?;
+        self.chan_recv_elem_type(&chan_ty, chan.span, |got| {
+            format!("'<<-' requires a channel, got {}", got)
+        })
+    }
+
+    fn check_chan_send_shortcut(&mut self, value: &mut Expr, target: &mut Expr) -> Result<Type> {
+        let chan_ty = self.check_expr(target)?;
+        let elem_ty = self.chan_send_elem_type(&chan_ty, target.span, |got| {
+            format!("'->>' requires a channel or actor on the right, got {}", got)
+        })?;
+        let item_ty = self.check_expr(value)?;
+        self.check_chan_send_value(value, &elem_ty, &item_ty)?;
+        Ok(Type::Bool)
     }
 
     fn check_chan_send_value(&self, value: &Expr, elem_ty: &Type, item_ty: &Type) -> Result<()> {
@@ -13226,6 +13284,8 @@ impl Checker {
                 "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'",
             ),
             ExprKind::Own(inner) => self.check_own(inner, span),
+            ExprKind::ChanRecv(chan) => self.check_chan_recv_shortcut(chan),
+            ExprKind::ChanSend(value, target) => self.check_chan_send_shortcut(value, target),
             ExprKind::Fail(error) => self.check_fail(error),
             ExprKind::PlanB { value, error, body } => {
                 self.check_plan_b(span, value, error.as_ref(), body)
@@ -13435,18 +13495,9 @@ impl Checker {
                 let Some((arg0, rest)) = args.split_first_mut() else { unreachable!() };
                 let Some(arg1) = rest.first_mut() else { unreachable!() };
                 let chan_ty = self.check_expr(arg0)?;
-                let elem_ty = match &chan_ty {
-                    Type::Chan(inner) => inner.as_ref().clone(),
-                    Type::Actor(actor_ty) => {
-                        let actor_name = match actor_ty.as_ref() {
-                            Type::Named(name, _) => name.clone(),
-                            _ => "Unknown".to_string(),
-                        };
-                        Type::Named(format!("{}Msg", actor_name), None)
-                    }
-                    Type::Unknown => Type::Unknown,
-                    _ => return err(arg0.span, format!("'{}' takes a channel or actor as its first argument, got {}", name, chan_ty)),
-                };
+                let elem_ty = self.chan_send_elem_type(&chan_ty, arg0.span, |got| {
+                    format!("'{}' takes a channel or actor as its first argument, got {}", name, got)
+                })?;
                 let item_ty = self.check_expr(arg1)?;
                 // A payload holding a sender's regional memory (text@r, a shape with
                 // text, a slice) would dangle for the receiver once that region
@@ -13464,15 +13515,9 @@ impl Checker {
             }
             let Some(arg0) = args.first_mut() else { unreachable!() };
             let chan_ty = self.check_expr(arg0)?;
-            let elem_ty = match &chan_ty {
-                Type::Chan(inner) => inner.as_ref().clone(),
-                Type::Unknown => Type::Unknown,
-                _ => return err(arg0.span, format!("'{}' takes a channel as its argument, got {}", name, chan_ty)),
-            };
-            let ret_ty = match elem_ty {
-                Type::Own(payload) => *payload,
-                other => other,
-            };
+            let ret_ty = self.chan_recv_elem_type(&chan_ty, arg0.span, |got| {
+                format!("'{}' takes a channel as its argument, got {}", name, got)
+            })?;
             return Ok(CallSetup::Checked(ret_ty));
         }
         if (name == RECEIVE || name == "try_recv" || name == "recieve") && !self.tasks.contains_key(name) {
@@ -22924,8 +22969,13 @@ impl Checker {
         match &mut e.kind {
             ExprKind::Spread(inner)
             | ExprKind::Kept { value: inner, .. }
-            | ExprKind::Own(inner) => {
+            | ExprKind::Own(inner)
+            | ExprKind::ChanRecv(inner) => {
                 self.substitute_expr(inner, given, made)
+            }
+            ExprKind::ChanSend(value, chan) => {
+                self.substitute_expr(value, given, made)?;
+                self.substitute_expr(chan, given, made)
             }
             ExprKind::Closure { .. } => Ok(()),
             ExprKind::Call { name, types, args } => {
@@ -25995,9 +26045,11 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
         | ExprKind::Copy { value, .. }
         | ExprKind::Shortcut { value, .. }
         | ExprKind::ToText { value, .. }
-        | ExprKind::ToJson { value, .. } => visit_expr(value, f),
+        | ExprKind::ToJson { value, .. }
+        | ExprKind::ChanRecv(value) => visit_expr(value, f),
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
+        | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => {

@@ -1,0 +1,77 @@
+shape Job
+    id: int
+    label: text
+fi
+
+actor Accumulator(total: int)
+    on Add(n: int)
+        total += n
+    fi
+
+    on Fetch(reply: Chan[int])
+        total ->> reply
+    fi
+fi
+
+task add_ten(n: int) -> int
+    <- n + 10
+fi
+
+task main()
+    fixed c1 = chan_new<int>(4)
+    fixed c2 = chan_new<int>(4)
+
+    ; 1. Arithmetic and pipe bind tighter than ->>
+    10 + 20 ->> c1
+    5 |> add_ten() ->> c2
+    fixed sent_ok = 42 ->> c1
+    show("sent: ", sent_ok)
+
+    ; 2. Prefix <<- arithmetic and direct forward <<- c1 ->> c2
+    fixed sum = <<- c1 + <<- c2
+    show("sum: ", sum)
+    <<- c1 ->> c2
+    show("forwarded: ", <<- c2)
+
+    ; 3. Condition precedence: ->> binds tighter than 'and'/'or'
+    fixed bool_ch = chan_new<bool>(2)
+    fixed ready = true
+    when ready and (sum == 45) ->> bool_ch
+        show("bool sent: ", <<- bool_ch)
+    fi
+
+    ; 4. `own` transfer with ->> and unwrap with <<-
+    fixed jobs = chan_new<own Job>(2)
+    flex j = Job { id: 7, label: "ok" }
+    own j ->> jobs
+    fixed got = <<- jobs
+    show("job: ", got.id, ":", got.label)
+
+    ; 5. Actor messages with ->> and barrier wait with <<-
+    fixed acc = spawn Accumulator(100)
+    Accumulator.Add(23) ->> acc
+    Accumulator.Fetch(c1) ->> acc
+    show("actor: ", <<- c1)
+
+    fixed done = chan_new<int>(1)
+    1 ->> done
+    <<- done
+
+    ; 6. Closed channel send returns false; select with LHS expressions works cleanly
+    c1.close()
+    fixed closed_ok = 99 ->> c1
+    show("closed send: ", closed_ok)
+    select
+        case 1 + 2 ->> c2
+            show("select send: ", <<- c2)
+        otherwise
+            show("unexpected")
+    fi
+
+    c2.close()
+    bool_ch.close()
+    jobs.close()
+    done.close()
+    acc.close()
+fi
+

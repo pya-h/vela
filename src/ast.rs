@@ -1583,6 +1583,10 @@ pub enum ExprKind {
     Deref(Box<Expr>),
     Ref(Box<Expr>),
     Own(Box<Expr>),
+    /// Blocking channel receive shorthand: `<<- ch`.
+    ChanRecv(Box<Expr>),
+    /// Channel or actor send shorthand: `value ->> target`.
+    ChanSend(Box<Expr>, Box<Expr>),
     Shared {
         shape: String,
         field: String,

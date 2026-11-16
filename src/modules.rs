@@ -3092,6 +3092,7 @@ impl Resolver<'_> {
             | ExprKind::Deref(base)
             | ExprKind::Ref(base)
             | ExprKind::Own(base)
+            | ExprKind::ChanRecv(base)
             | ExprKind::Unary(_, base)
             | ExprKind::Fail(base)
             | ExprKind::Wrap(base)
@@ -3100,6 +3101,7 @@ impl Resolver<'_> {
             | ExprKind::Piped(base) => self.expr(base),
             ExprKind::Index(a, b)
             | ExprKind::Lookup(a, b)
+            | ExprKind::ChanSend(a, b)
             | ExprKind::Binary(_, a, b)
             | ExprKind::Range(a, b)
             | ExprKind::Repeat { value: a, count: b } => {

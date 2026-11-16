@@ -1,0 +1,10 @@
+; error: 9:5: expected 'own' value for channel payload of type 'own Box'; write 'own ...'
+shape Box
+    v: int
+fi
+
+task main()
+    fixed ch = chan_new<own Box>(1)
+    fixed b = Box { v: 1 }
+    b ->> ch
+fi

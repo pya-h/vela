@@ -589,10 +589,7 @@ impl<'a> Knowledge<'a> {
             .unwrap_or(line_end)
             .checked_sub(1)?;
         match self.span_type(chan_start, chan_end, depth + 1)? {
-            Type::Chan(inner) => Some(match *inner {
-                Type::Own(p) => *p,
-                other => other,
-            }),
+            Type::Chan(inner) => Some(chan_payload_type(*inner)),
             _ => None,
         }
     }
@@ -953,7 +950,8 @@ impl<'a> Knowledge<'a> {
                 | Token::Ge
                 | Token::And
                 | Token::Or
-                | Token::Not => {
+                | Token::Not
+                | Token::ChanSend => {
                     return Some(Type::Bool);
                 }
                 Token::Range => return None,
@@ -972,6 +970,14 @@ impl<'a> Knowledge<'a> {
             expect_operand = false;
         }
         if operand_ends.is_empty() {
+            if self.token(first) == Some(&Token::ChanRecv) && first < last {
+                if let Some(ty) = self.start(first).and_then(|s| self.checked.exprs.get(&(s.line, s.col))).cloned() {
+                    return Some(ty);
+                }
+                if let Some(Type::Chan(inner)) = self.span_type(first + 1, last, depth + 1) {
+                    return Some(chan_payload_type(*inner));
+                }
+            }
             return self.expression_type(last, depth);
         }
         operand_ends.push(last);
@@ -1803,5 +1809,12 @@ pub(crate) fn without_default(ty: &str) -> &str {
     match ty.split_whitespace().collect::<Vec<_>>()[..] {
         ["region", word] if word == vela::ast::DEFAULT => "region",
         _ => ty.trim(),
+    }
+}
+
+fn chan_payload_type(ty: Type) -> Type {
+    match ty {
+        Type::Own(inner) => *inner,
+        other => other,
     }
 }

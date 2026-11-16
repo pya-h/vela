@@ -1,0 +1,7 @@
+; trap: wait_and_receive on a closed, drained channel at wait_and_receive
+task main()
+    fixed ch = chan_new<int>(1)
+    ch.close()
+    fixed x = <<- ch
+    show(x)
+fi

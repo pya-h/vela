@@ -1,0 +1,4 @@
+; error: 3:12: '->>' requires a channel or actor on the right, got int
+task main()
+    10 ->> 42
+fi

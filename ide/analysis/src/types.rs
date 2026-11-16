@@ -478,12 +478,14 @@ impl Checked {
                 }
             }
             ExprKind::Unary(_, inner)
+            | ExprKind::ChanRecv(inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
             | ExprKind::New { value: inner, .. }
             | ExprKind::Shortcut { value: inner, .. } => self.expr(inner, kinds),
             ExprKind::Index(a, b)
             | ExprKind::Lookup(a, b)
+            | ExprKind::ChanSend(a, b)
             | ExprKind::Binary(_, a, b)
             | ExprKind::Range(a, b)
             | ExprKind::Repeat { value: a, count: b } => {

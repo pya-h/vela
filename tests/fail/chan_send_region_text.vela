@@ -1,0 +1,7 @@
+; error: 6:5: cannot send a value holding 'text@r' region memory on a channel carrying text; the receiver can outlive the sender's region
+task main()
+    region r default
+    fixed ch = chan_new<text>(1)
+    fixed msg = "hello " + "world" at r
+    msg ->> ch
+fi
