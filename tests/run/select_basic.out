@@ -1,0 +1,13 @@
+empty: otherwise
+value select: 84
+full: kept 99:payload
+alt recv: 99:payload
+sent open
+open recv: 7
+drained blocker: 1
+timeout fired
+open c2: 304
+c1 closed detected
+all closed otherwise
+actor otherwise: -1
+actor woke select: 808

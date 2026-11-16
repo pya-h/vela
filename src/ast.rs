@@ -1792,6 +1792,7 @@ pub enum StmtKind {
     /// `check::Checker::each_of_group`).
     Turns(Vec<Block>),
     Match(Expr, Vec<Case>),
+    Select(Box<SelectStmt>),
     /// An event declared inside a task, watching the task's locals while it
     /// runs (see `EventDef::in_task`). Boxed to keep `StmtKind` compact so
     /// deeply nested statements cannot blow the stack.
@@ -1936,6 +1937,40 @@ pub struct WhenArm {
 pub struct Case {
     pub pattern: Pattern,
     pub body: Block,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectStmt {
+    pub arms: Vec<SelectArm>,
+    pub otherwise: Option<Block>,
+    pub otherwise_span: Option<Span>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectArm {
+    pub kind: SelectArmKind,
+    pub body: Block,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum SelectArmKind {
+    Recv {
+        mode: Mode,
+        name: String,
+        name_span: Span,
+        chan: Expr,
+    },
+    RecvNone {
+        chan: Expr,
+    },
+    Send {
+        value: Expr,
+        chan: Expr,
+    },
+    After {
+        ms: Expr,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,8 @@
+; error: 4:20: timeout duration in 'select' cannot be negative
+task main()
+    select
+        case after -5
+            show("bad")
+    fi
+fi
+

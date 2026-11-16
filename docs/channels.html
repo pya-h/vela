@@ -319,14 +319,32 @@
         </tbody>
       </table>
 
-      <h3>Planned Idea: Channel Operator Shortcuts (<code>&lt;&lt;-</code> &amp; <code>-&gt;&gt;</code>)</h3>
+      <h3>Multi-Channel <code>select</code> Statement &amp; Expression</h3>
       <p>
-        Planned alongside multi-channel <code>select</code>: compact double-arrow operators that pair with Vela's return arrow (<code>&lt;-</code>) and match types/calls cleanly without shifting conflicts:
+        Vela lets a task wait on multiple channels simultaneously using a contextual <code>select ... otherwise ... fi</code> block with double-arrow operators (<code>&lt;&lt;-</code> for receive, <code>-&gt;&gt;</code> for send):
       </p>
       <ul>
-        <li><code>&lt;&lt;- ch</code> (and <code>case msg &lt;&lt;- ch</code> in <code>select</code>) as a shortcut for <code>wait_and_receive(ch)</code></li>
-        <li><code>value -&gt;&gt; ch</code> (including <code>own item -&gt;&gt; ch</code>) as a shortcut for <code>dispatch(ch, value)</code></li>
+        <li><code>case msg &lt;&lt;- ch</code> (or <code>case flex msg &lt;&lt;- ch</code>, <code>case bind msg &lt;&lt;- ch</code>): waits until an item can be received from <code>ch</code>. Closed+drained channels are automatically skipped while other arms stay open.</li>
+        <li><code>case none &lt;&lt;- ch</code>: triggers explicitly when <code>ch</code> is closed and drained (<code>tokio::select!</code> semantics).</li>
+        <li><code>case val -&gt;&gt; ch</code> (or <code>case own val -&gt;&gt; ch</code>): waits until buffer capacity is available to send into <code>ch</code>. With <code>own</code>, per-arm move checking ensures unchosen arms do not consume variables for other arms.</li>
+        <li><code>case after ms</code>: fires if no channel arm becomes ready within <code>ms</code> milliseconds.</li>
+        <li><code>otherwise</code>: non-blocking fallback branch &mdash; runs immediately when no channel arm is currently ready (including when all channels are closed, instead of blocking or trapping). Because it never blocks, <code>select</code> with <code>otherwise</code> is allowed inside <code>actor</code> <code>on</code> handlers, whereas blocking <code>select</code> (without <code>otherwise</code>) is rejected inside actor handlers.</li>
       </ul>
+      <p>Both statement and value-producing forms (<code>case ... = ...</code> / <code>otherwise = ...</code>) are supported:</p>
+      <pre><code><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> fast = chan_new&lt;int&gt;(<span class="number">2</span>)
+    <span class="keyword">fixed</span> slow = chan_new&lt;text&gt;(<span class="number">2</span>)
+    fast.dispatch(<span class="number">42</span>)
+    slow.close()
+
+    <span class="keyword">fixed</span> label = select
+    <span class="keyword">case</span> n &lt;&lt;- fast = <span class="string">"fast={n}"</span>
+    <span class="keyword">case</span> none &lt;&lt;- slow = <span class="string">"slow-closed"</span>
+    <span class="keyword">case</span> after <span class="number">50</span> = <span class="string">"timeout"</span>
+    <span class="keyword">fi</span>
+    show(label)
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>

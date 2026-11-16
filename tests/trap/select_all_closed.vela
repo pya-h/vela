@@ -1,0 +1,14 @@
+; trap: all channels in select are closed at select
+task main()
+    fixed c1 = chan_new<int>(1)
+    fixed c2 = chan_new<int>(1)
+    c1.close()
+    c2.close()
+    select
+        case _ <<- c1
+            show("one")
+        case _ <<- c2
+            show("two")
+    fi
+fi
+

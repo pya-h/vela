@@ -2925,6 +2925,25 @@ impl Resolver<'_> {
                     .iter_mut()
                     .try_for_each(|case| self.block(&mut case.body))
             }
+            StmtKind::Select(sel) => {
+                for arm in &mut sel.arms {
+                    match &mut arm.kind {
+                        SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                            self.expr(chan)?;
+                        }
+                        SelectArmKind::Send { value, chan } => {
+                            self.expr(value)?;
+                            self.expr(chan)?;
+                        }
+                        SelectArmKind::After { ms } => self.expr(ms)?,
+                    }
+                    self.block(&mut arm.body)?;
+                }
+                if let Some(ow) = &mut sel.otherwise {
+                    self.block(ow)?;
+                }
+                Ok(())
+            }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter_mut().try_for_each(|e| self.expr(e))
             }

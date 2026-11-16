@@ -1,0 +1,8 @@
+; error: 4:20: '<<-' takes a channel, got int
+task main()
+    select
+        case v <<- 123
+            show(v)
+    fi
+fi
+

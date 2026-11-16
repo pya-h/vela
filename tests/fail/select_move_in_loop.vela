@@ -1,0 +1,19 @@
+; error: 13:18: cannot move 'p' inside a loop; 'p' was declared outside the loop
+shape Boxed
+    v: int
+fi
+
+task main()
+    fixed ch = chan_new<own Boxed>(2)
+    fixed p = Boxed { v: 5 }
+    flex i = 0
+    loop i < 2
+        i += 1
+        select
+            case own p ->> ch
+                show("moved")
+            otherwise
+                show("nope")
+        fi
+    fi
+fi

@@ -92,21 +92,25 @@ export function closesBrace(line: string): boolean {
 
 const ITEMS = ["task", "shape", "kind"];
 
-const VALUE_OPENERS = ["match", "when", "loop", "each", "endless"];
+const VALUE_OPENERS = ["match", "when", "loop", "each", "endless", "select"];
 
 /**
  * Block keyword opened and left unclosed on `line`, or null.
  * `else when` continues an existing chain so only one `fi` closes it.
  */
 export function opener(line: string, words: BlockWords): string | null {
-  const found: string[] = code(line).match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+  const clean = code(line);
+  const found: string[] = clean.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
   const word = (i: number) => found[i] ?? "";
-  const opens = (i: number) => words.blockOpeners.includes(word(i)) && !(word(i) === "when" && word(i - 1) === "else");
+  const opens = (i: number) =>
+    words.blockOpeners.includes(word(i)) &&
+    !(word(i) === "when" && word(i - 1) === "else") &&
+    !(word(i) === "select" && /\bselect\s*\(/.test(clean));
   const first = firstWord(line, words.blockModifiers);
   let at = -1;
-  if (first !== null && words.blockOpeners.includes(first)) {
+  if (first !== null && words.blockOpeners.includes(first) && !(first === "select" && /\bselect\s*\(/.test(clean))) {
     at = found.indexOf(first);
-  } else if (/^\s*[A-Za-z_][A-Za-z0-9_]*\s*=>\s*[A-Za-z_]/.test(code(line)) && opens(1)) {
+  } else if (/^\s*[A-Za-z_][A-Za-z0-9_]*\s*=>\s*[A-Za-z_]/.test(clean) && opens(1)) {
     at = 1;
   } else {
     for (let i = 1; i < found.length; i++) {

@@ -1,0 +1,240 @@
+  1 | shape Packet
+    | keyword:shape  type:Packet
+  2 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  3 |     tag: text
+    | field:tag  punctuation::  type-builtin:text
+  4 | fi
+    | keyword:fi
+  6 | actor Responder
+    | keyword:actor  variable:Responder
+  7 |     on Ping(delay_val: int, ch: Chan[int])
+    | variable:on  task:Ping  punctuation:(  variable:delay_val  punctuation::  type-builtin:int  punctuation:,  variable:ch  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+  8 |         ch.dispatch(delay_val)
+    | variable:ch  punctuation:.  field:dispatch  punctuation:(  variable:delay_val  punctuation:)
+  9 |     fi
+    | keyword:fi
+ 11 |     on PollNonBlocking(ch: Chan[int], done: Chan[int])
+    | variable:on  task:PollNonBlocking  punctuation:(  variable:ch  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  variable:done  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 12 |         select
+    | keyword:select
+ 13 |             case v <<- ch
+    | keyword:case  variable:v  operator:<<-  variable:ch
+ 14 |                 done.dispatch(v)
+    | variable:done  punctuation:.  field:dispatch  punctuation:(  variable:v  punctuation:)
+ 15 |             otherwise
+    | keyword:otherwise
+ 16 |                 done.dispatch(-1)
+    | variable:done  punctuation:.  field:dispatch  punctuation:(  operator:-  number:1  punctuation:)
+ 17 |         fi
+    | keyword:fi
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     fixed c1 = chan_new<int>(4)
+    | keyword:fixed  variable:c1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 23 |     fixed c2 = chan_new<int>(4)
+    | keyword:fixed  variable:c2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:4  punctuation:)
+ 25 |     ; 1. Non-blocking otherwise when all channels empty
+    | comment:; 1. Non-blocking otherwise when all channels empty
+ 26 |     select
+    | keyword:select
+ 27 |         case a <<- c1
+    | keyword:case  variable:a  operator:<<-  variable:c1
+ 28 |             show("unexpected a: ", a)
+    | builtin-fn:show  punctuation:(  string:"unexpected a: "  punctuation:,  variable:a  punctuation:)
+ 29 |         case b <<- c2
+    | keyword:case  variable:b  operator:<<-  variable:c2
+ 30 |             show("unexpected b: ", b)
+    | builtin-fn:show  punctuation:(  string:"unexpected b: "  punctuation:,  variable:b  punctuation:)
+ 31 |         otherwise
+    | keyword:otherwise
+ 32 |             show("empty: otherwise")
+    | builtin-fn:show  punctuation:(  string:"empty: otherwise"  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 35 |     ; 2. Ready receive + value-mode select
+    | comment:; 2. Ready receive + value-mode select
+ 36 |     c1.dispatch(42)
+    | variable:c1  punctuation:.  field:dispatch  punctuation:(  number:42  punctuation:)
+ 37 |     fixed picked = select
+    | keyword:fixed  variable:picked  operator:=  keyword:select
+ 38 |         case v <<- c1 = v * 2
+    | keyword:case  variable:v  operator:<<-  variable:c1  operator:=  variable:v  operator:*  number:2
+ 39 |         case _ <<- c2 = 0
+    | keyword:case  keyword:_  operator:<<-  variable:c2  operator:=  number:0
+ 40 |         otherwise = -1
+    | keyword:otherwise  operator:=  operator:-  number:1
+ 41 |     fi
+    | keyword:fi
+ 42 |     show("value select: ", picked)
+    | builtin-fn:show  punctuation:(  string:"value select: "  punctuation:,  variable:picked  punctuation:)
+ 44 |     ; 3. Send arm with `own` + otherwise retains variable when full
+    | comment:; 3. Send arm with `own` + otherwise retains variable when full
+ 45 |     fixed q_full = chan_new<own Packet>(1)
+    | keyword:fixed  variable:q_full  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Packet  punctuation:>  punctuation:(  number:1  punctuation:)
+ 46 |     fixed q_alt = chan_new<own Packet>(1)
+    | keyword:fixed  variable:q_alt  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Packet  punctuation:>  punctuation:(  number:1  punctuation:)
+ 47 |     fixed blocker = Packet { id: 1, tag: "block" }
+    | keyword:fixed  variable:blocker  operator:=  type:Packet  punctuation:{  field:id  punctuation::  number:1  punctuation:,  field:tag  punctuation::  string:"block"  punctuation:}
+ 48 |     q_full.dispatch(own blocker)
+    | variable:q_full  punctuation:.  field:dispatch  punctuation:(  keyword:own  variable:blocker  punctuation:)
+ 50 |     flex pkg = Packet { id: 99, tag: "payload" }
+    | keyword:flex  variable:pkg  operator:=  type:Packet  punctuation:{  field:id  punctuation::  number:99  punctuation:,  field:tag  punctuation::  string:"payload"  punctuation:}
+ 51 |     select
+    | keyword:select
+ 52 |         case own pkg ->> q_full
+    | keyword:case  keyword:own  variable:pkg  operator:->>  variable:q_full
+ 53 |             show("unexpected send")
+    | builtin-fn:show  punctuation:(  string:"unexpected send"  punctuation:)
+ 54 |         otherwise
+    | keyword:otherwise
+ 55 |             show("full: kept ", pkg.id, ":", pkg.tag)
+    | builtin-fn:show  punctuation:(  string:"full: kept "  punctuation:,  variable:pkg  punctuation:.  field:id  punctuation:,  string:":"  punctuation:,  variable:pkg  punctuation:.  field:tag  punctuation:)
+ 56 |             q_alt.dispatch(own pkg)
+    | variable:q_alt  punctuation:.  field:dispatch  punctuation:(  keyword:own  variable:pkg  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 58 |     fixed got_alt = q_alt.wait_and_receive()
+    | keyword:fixed  variable:got_alt  operator:=  variable:q_alt  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 59 |     show("alt recv: ", got_alt.id, ":", got_alt.tag)
+    | builtin-fn:show  punctuation:(  string:"alt recv: "  punctuation:,  variable:got_alt  punctuation:.  field:id  punctuation:,  string:":"  punctuation:,  variable:got_alt  punctuation:.  field:tag  punctuation:)
+ 60 |     q_alt.close()
+    | variable:q_alt  punctuation:.  field:close  punctuation:(  punctuation:)
+ 62 |     ; 4. Mutual send arms moving the same `own` variable
+    | comment:; 4. Mutual send arms moving the same `own` variable
+ 63 |     flex p2 = Packet { id: 7, tag: "seven" }
+    | keyword:flex  variable:p2  operator:=  type:Packet  punctuation:{  field:id  punctuation::  number:7  punctuation:,  field:tag  punctuation::  string:"seven"  punctuation:}
+ 64 |     fixed q_open = chan_new<own Packet>(1)
+    | keyword:fixed  variable:q_open  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:Packet  punctuation:>  punctuation:(  number:1  punctuation:)
+ 65 |     select
+    | keyword:select
+ 66 |         case own p2 ->> q_full
+    | keyword:case  keyword:own  variable:p2  operator:->>  variable:q_full
+ 67 |             show("sent full")
+    | builtin-fn:show  punctuation:(  string:"sent full"  punctuation:)
+ 68 |         case own p2 ->> q_open
+    | keyword:case  keyword:own  variable:p2  operator:->>  variable:q_open
+ 69 |             show("sent open")
+    | builtin-fn:show  punctuation:(  string:"sent open"  punctuation:)
+ 70 |     fi
+    | keyword:fi
+ 71 |     fixed got_open = q_open.wait_and_receive()
+    | keyword:fixed  variable:got_open  operator:=  variable:q_open  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 72 |     show("open recv: ", got_open.id)
+    | builtin-fn:show  punctuation:(  string:"open recv: "  punctuation:,  variable:got_open  punctuation:.  field:id  punctuation:)
+ 73 |     q_open.close()
+    | variable:q_open  punctuation:.  field:close  punctuation:(  punctuation:)
+ 74 |     fixed drained_b = q_full.wait_and_receive()
+    | keyword:fixed  variable:drained_b  operator:=  variable:q_full  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 75 |     show("drained blocker: ", drained_b.id)
+    | builtin-fn:show  punctuation:(  string:"drained blocker: "  punctuation:,  variable:drained_b  punctuation:.  field:id  punctuation:)
+ 76 |     q_full.close()
+    | variable:q_full  punctuation:.  field:close  punctuation:(  punctuation:)
+ 78 |     ; 5. Timeout arm
+    | comment:; 5. Timeout arm
+ 79 |     select
+    | keyword:select
+ 80 |         case v <<- c2
+    | keyword:case  variable:v  operator:<<-  variable:c2
+ 81 |             show("unexpected: ", v)
+    | builtin-fn:show  punctuation:(  string:"unexpected: "  punctuation:,  variable:v  punctuation:)
+ 82 |         case after 15
+    | keyword:case  keyword:after  number:15
+ 83 |             show("timeout fired")
+    | builtin-fn:show  punctuation:(  string:"timeout fired"  punctuation:)
+ 84 |     fi
+    | keyword:fi
+ 86 |     ; 6. Closed channel skipped when open arm exists, plus explicit `none <<- ch`
+    | comment:; 6. Closed channel skipped when open arm exists, plus explicit `none <<- ch`
+ 87 |     c1.close()
+    | variable:c1  punctuation:.  field:close  punctuation:(  punctuation:)
+ 88 |     c2.dispatch(303)
+    | variable:c2  punctuation:.  field:dispatch  punctuation:(  number:303  punctuation:)
+ 89 |     select
+    | keyword:select
+ 90 |         case _ <<- c1
+    | keyword:case  keyword:_  operator:<<-  variable:c1
+ 91 |             show("should skip closed c1")
+    | builtin-fn:show  punctuation:(  string:"should skip closed c1"  punctuation:)
+ 92 |         case flex x <<- c2
+    | keyword:case  keyword:flex  variable:x  operator:<<-  variable:c2
+ 93 |             x += 1
+    | variable:x  operator:+=  number:1
+ 94 |             show("open c2: ", x)
+    | builtin-fn:show  punctuation:(  string:"open c2: "  punctuation:,  variable:x  punctuation:)
+ 95 |     fi
+    | keyword:fi
+ 97 |     select
+    | keyword:select
+ 98 |         case v <<- c2
+    | keyword:case  variable:v  operator:<<-  variable:c2
+ 99 |             show("unexpected c2: ", v)
+    | builtin-fn:show  punctuation:(  string:"unexpected c2: "  punctuation:,  variable:v  punctuation:)
+100 |         case none <<- c1
+    | keyword:case  keyword:none  operator:<<-  variable:c1
+101 |             show("c1 closed detected")
+    | builtin-fn:show  punctuation:(  string:"c1 closed detected"  punctuation:)
+102 |         case after 500
+    | keyword:case  keyword:after  number:500
+103 |             show("unexpected timeout")
+    | builtin-fn:show  punctuation:(  string:"unexpected timeout"  punctuation:)
+104 |     fi
+    | keyword:fi
+106 |     ; 7. All closed falls through to otherwise
+    | comment:; 7. All closed falls through to otherwise
+107 |     c2.close()
+    | variable:c2  punctuation:.  field:close  punctuation:(  punctuation:)
+108 |     select
+    | keyword:select
+109 |         case _ <<- c1
+    | keyword:case  keyword:_  operator:<<-  variable:c1
+110 |             show("closed 1")
+    | builtin-fn:show  punctuation:(  string:"closed 1"  punctuation:)
+111 |         case _ <<- c2
+    | keyword:case  keyword:_  operator:<<-  variable:c2
+112 |             show("closed 2")
+    | builtin-fn:show  punctuation:(  string:"closed 2"  punctuation:)
+113 |         otherwise
+    | keyword:otherwise
+114 |             show("all closed otherwise")
+    | builtin-fn:show  punctuation:(  string:"all closed otherwise"  punctuation:)
+115 |     fi
+    | keyword:fi
+117 |     ; 8. Actor wakes blocked select + non-blocking select inside actor
+    | comment:; 8. Actor wakes blocked select + non-blocking select inside actor
+118 |     fixed inbox = chan_new<int>(2)
+    | keyword:fixed  variable:inbox  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:2  punctuation:)
+119 |     fixed done = chan_new<int>(2)
+    | keyword:fixed  variable:done  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:2  punctuation:)
+120 |     fixed worker = spawn Responder()
+    | keyword:fixed  variable:worker  operator:=  keyword:spawn  task:Responder  punctuation:(  punctuation:)
+121 |     worker.dispatch(Responder.PollNonBlocking(inbox, done))
+    | variable:worker  punctuation:.  field:dispatch  punctuation:(  variable:Responder  punctuation:.  field:PollNonBlocking  punctuation:(  variable:inbox  punctuation:,  variable:done  punctuation:)  punctuation:)
+122 |     show("actor otherwise: ", done.wait_and_receive())
+    | builtin-fn:show  punctuation:(  string:"actor otherwise: "  punctuation:,  variable:done  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)  punctuation:)
+124 |     worker.dispatch(Responder.Ping(808, inbox))
+    | variable:worker  punctuation:.  field:dispatch  punctuation:(  variable:Responder  punctuation:.  field:Ping  punctuation:(  number:808  punctuation:,  variable:inbox  punctuation:)  punctuation:)
+125 |     select
+    | keyword:select
+126 |         case msg <<- inbox
+    | keyword:case  variable:msg  operator:<<-  variable:inbox
+127 |             show("actor woke select: ", msg)
+    | builtin-fn:show  punctuation:(  string:"actor woke select: "  punctuation:,  variable:msg  punctuation:)
+128 |         case after 2000
+    | keyword:case  keyword:after  number:2000
+129 |             show("actor timeout")
+    | builtin-fn:show  punctuation:(  string:"actor timeout"  punctuation:)
+130 |     fi
+    | keyword:fi
+132 |     worker.close()
+    | variable:worker  punctuation:.  field:close  punctuation:(  punctuation:)
+133 |     inbox.close()
+    | variable:inbox  punctuation:.  field:close  punctuation:(  punctuation:)
+134 |     done.close()
+    | variable:done  punctuation:.  field:close  punctuation:(  punctuation:)
+135 | fi
+    | keyword:fi

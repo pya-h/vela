@@ -436,10 +436,11 @@ impl Parser {
         if self.at_pattern_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_PATTERN));
         }
-        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace) {
+        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             let hint = match self.peek() {
                 Token::Else if opener == "task" => " (or an 'else' without its 'when')",
-                Token::Case if opener == "task" => " (or a 'case' outside a 'match')",
+                Token::Case if opener == "task" => " (or a 'case' outside a 'match' or 'select')",
+                Token::Otherwise if opener == "task" => " (or an 'otherwise' outside a 'select')",
                 Token::Finally if opener == "task" => " (or a 'finally' outside a loop)",
                 _ => "",
             };
@@ -700,6 +701,7 @@ impl Parser {
                         | Token::Region
                         | Token::Else
                         | Token::Case
+                        | Token::Otherwise
                         | Token::Break
                         | Token::Continue
                 );
@@ -2576,7 +2578,7 @@ impl Parser {
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
-            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::Finally | Token::RBrace);
+            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace);
             if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek()) {
                 break;
             }
@@ -2605,6 +2607,8 @@ impl Parser {
                 self.parse_named_stmt(span)
             }
             Token::Match => self.parse_match(),
+            _ if self.at_select() => self.parse_select(),
+            Token::Otherwise => Err(Error::at(span, "'otherwise' belongs at the end of a 'select', before 'fi'")),
             Token::Event => self.parse_event_stmt(span),
             _ if self.at_event_after(0) => self.parse_event_stmt(span),
             Token::Send => self.parse_send(),
@@ -2660,7 +2664,7 @@ impl Parser {
         }
         let value = self.loop_value(stmt, name, false, span);
         let value = self.parse_suffixes(value, false)?;
-        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             return Err(self.unexpected("the end of the line after the loop's plan B"));
         }
         Ok(Stmt::new(StmtKind::Expr(value), span))
@@ -2691,7 +2695,7 @@ impl Parser {
                 "++" | "--" => Expr::new(ExprKind::IntLit(1), at),
                 _ => self.parse_expr()?,
             };
-            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
+            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
                 return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
             }
             return Ok(Stmt::new(StmtKind::Step { target: expr, op, value, symbol, at }, span));
@@ -2978,7 +2982,7 @@ impl Parser {
         } else {
             None
         };
-        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             let what = if stop { "stops" } else { "goes on with" };
             let example = name.as_ref().map_or("outer", |(name, _)| name.as_str());
             let given = if stop { ", and the value it gives after '=', as in 'break = v'" } else { "" };
@@ -3192,6 +3196,150 @@ impl Parser {
         let range = self.parse_expr()?;
         let (body, finally) = self.parse_loop_body("each", opened)?;
         Ok(Stmt::new(StmtKind::Each(name, second, range, body, finally), span))
+    }
+
+    fn at_select(&self) -> bool {
+        let Token::Ident(name) = self.peek() else { return false };
+        if name != "select" {
+            return false;
+        }
+        let mut ahead = 1;
+        while self.tokens.get(self.pos + ahead) == Some(&Token::Newline) {
+            ahead += 1;
+        }
+        matches!(
+            self.tokens.get(self.pos + ahead),
+            Some(Token::Case | Token::Otherwise | Token::Fi)
+        )
+    }
+
+    #[inline(never)]
+    fn parse_select(&mut self) -> Result<Stmt> {
+        let span = self.peek_span();
+        self.advance();
+        if !matches!(
+            self.peek(),
+            Token::Newline | Token::Fi | Token::Case | Token::Otherwise | Token::Eof
+        ) {
+            return Err(self.unexpected("the end of the line after 'select'"));
+        }
+        self.skip_newlines();
+        let mut arms = Vec::new();
+        while !self.check(Token::Fi)
+            && !self.check(Token::Otherwise)
+            && !self.is_at_end()
+            && !self.at_item_start()
+        {
+            self.skip_newlines();
+            if self.check(Token::Fi) || self.check(Token::Otherwise) || self.at_item_start() {
+                break;
+            }
+            self.reject_stray_end()?;
+            let arm_span = self.peek_span();
+            self.expect(Token::Case)?;
+            let kind = self.parse_select_arm_kind()?;
+            let body = self.parse_select_body()?;
+            arms.push(SelectArm { kind, body, span: arm_span });
+        }
+        let mut otherwise = None;
+        let mut otherwise_span = None;
+        if self.check(Token::Otherwise) {
+            let ow_span = self.peek_span();
+            self.advance();
+            let body = self.parse_select_body()?;
+            otherwise = Some(body);
+            otherwise_span = Some(ow_span);
+            self.skip_newlines();
+            if self.check(Token::Otherwise) {
+                return Err(Error::at(self.peek_span(), "duplicate 'otherwise' in 'select'"));
+            }
+            if self.check(Token::Case) {
+                return Err(Error::at(
+                    self.peek_span(),
+                    "'otherwise' must be the last branch of 'select', after every 'case'",
+                ));
+            }
+        }
+        self.expect_fi("select", span)?;
+        Ok(Stmt::new(
+            StmtKind::Select(Box::new(SelectStmt {
+                arms,
+                otherwise,
+                otherwise_span,
+            })),
+            span,
+        ))
+    }
+
+    fn parse_select_arm_kind(&mut self) -> Result<SelectArmKind> {
+        if matches!(self.peek(), Token::Ident(word) if word == "after")
+            && self.tokens.get(self.pos + 1) != Some(&Token::ChanSend)
+        {
+            self.advance();
+            let ms = self.parse_expr()?;
+            return Ok(SelectArmKind::After { ms });
+        }
+        if self.check(Token::None) && self.tokens.get(self.pos + 1) == Some(&Token::ChanRecv) {
+            self.advance();
+            self.advance();
+            let chan = self.parse_expr()?;
+            return Ok(SelectArmKind::RecvNone { chan });
+        }
+        if let Some((mode, name, name_span, advance)) = self.match_select_recv_head() {
+            for _ in 0..advance {
+                self.advance();
+            }
+            let chan = self.parse_expr()?;
+            return Ok(SelectArmKind::Recv { mode, name, name_span, chan });
+        }
+        let value = self.parse_expr()?;
+        if !self.match_token(Token::ChanSend) {
+            return Err(Error::at(
+                self.peek_span(),
+                "a select 'case' expects 'name <<- chan', 'none <<- chan', 'value ->> chan', or 'after ms'",
+            ));
+        }
+        let chan = self.parse_expr()?;
+        Ok(SelectArmKind::Send { value, chan })
+    }
+
+    fn match_select_recv_head(&self) -> Option<(Mode, String, Span, usize)> {
+        let (mode, offset) = match self.peek() {
+            Token::Fixed => (Mode::Fixed, 1),
+            Token::Flex => (Mode::Flex, 1),
+            Token::Bind => (Mode::Bind, 1),
+            _ => (Mode::Fixed, 0),
+        };
+        let tok = self.tokens.get(self.pos + offset)?;
+        if self.tokens.get(self.pos + offset + 1) != Some(&Token::ChanRecv) {
+            return None;
+        }
+        let name = match tok {
+            Token::Ident(name) => name.clone(),
+            Token::Underscore => DISCARD.to_string(),
+            _ => return None,
+        };
+        let span = self.spans.get(self.pos + offset).copied().unwrap_or_default();
+        Some((mode, name, span, offset + 2))
+    }
+
+    fn parse_select_body(&mut self) -> Result<Block> {
+        if self.match_token(Token::Assign) {
+            let value = self.parse_expr()?;
+            let value_span = value.span;
+            return Ok(vec![Stmt::new(StmtKind::Expr(value), value_span)]);
+        }
+        if !matches!(
+            self.peek(),
+            Token::Newline | Token::Fi | Token::Case | Token::Otherwise | Token::Eof
+        ) {
+            if self.check(Token::Send) {
+                return Err(self.misplaced_send());
+            }
+            return Err(self.unexpected("the end of the line"));
+        }
+        self.skip_newlines();
+        self.parse_block_until(&[Token::Case, Token::Otherwise, Token::Fi])
     }
 
     fn parse_match(&mut self) -> Result<Stmt> {
@@ -3428,7 +3576,7 @@ impl Parser {
             return Err(self.misplaced_send());
         }
         self.advance();
-        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::Finally | Token::RBrace) || self.is_at_end() {
+        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
             let values = self.parse_value_list()?;
@@ -4054,6 +4202,7 @@ impl Parser {
             Token::LParen if self.at_shortcut_lambda() => self.parse_shortcut_lambda_parens(None, span),
             Token::LParen => self.parse_parenthesized(),
             Token::Match | Token::When => self.parse_choice(span),
+            _ if self.at_select() => self.parse_choice(span),
             Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
             Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
                 let name = (name.clone(), span);
@@ -4104,7 +4253,13 @@ impl Parser {
 
     fn parse_choice(&mut self, span: Span) -> Result<Expr> {
         self.enter()?;
-        let chosen = if self.check(Token::Match) { self.parse_match()? } else { self.parse_when()? };
+        let chosen = if self.check(Token::Match) {
+            self.parse_match()?
+        } else if self.check(Token::When) {
+            self.parse_when()?
+        } else {
+            self.parse_select()?
+        };
         self.leave(1);
         Ok(Expr::new(ExprKind::Choice(Box::new(chosen)), span))
     }
@@ -4804,7 +4959,7 @@ impl Parser {
         } else {
             None
         };
-        let body = self.parse_block_until(&[Token::RBrace, Token::Fi, Token::Else, Token::Case])?;
+        let body = self.parse_block_until(&[Token::RBrace, Token::Fi, Token::Else, Token::Case, Token::Otherwise])?;
         if !self.match_token(Token::RBrace) {
             return Err(Error::at(
                 self.peek_span(),

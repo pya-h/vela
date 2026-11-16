@@ -57,10 +57,10 @@ const KEYWORD: i32 = 0;
 const LOOP_PARTS_SNIPPET: &str = "loop flex ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
 
 const STATEMENT_KEYWORDS: &[&str] = &[
-    "fixed", "flex", "when", "loop", "endless", "each", "block", "match", "region", "actor",
+    "fixed", "flex", "when", "loop", "endless", "each", "block", "match", "select", "region", "actor",
 ];
 const VALUE_KEYWORDS: &[&str] = &[
-    "true", "false", "none", "not", "new", "fail", "match", "when", "spawn",
+    "true", "false", "none", "not", "new", "fail", "match", "when", "select", "spawn",
 ];
 
 pub(crate) fn complete(
@@ -782,13 +782,28 @@ pub(crate) fn complete(
     let gives_value =
         prev.is_some_and(|q| (k.line_start(q)..=q).any(|p| k.token(p) == Some(&Token::Assign)));
     if first_token == Some(&Token::Case) && !gives_value {
-        if prev_token != Some(&Token::Case) {
-            return (Vec::new(), word_start, byte);
+        if blocks.last() == Some(&Block::Select) {
+            if prev_token == Some(&Token::Case) {
+                let mut items = vec![
+                    keyword("after"),
+                    keyword("none"),
+                    keyword("own"),
+                    keyword("fixed"),
+                    keyword("flex"),
+                    keyword("bind"),
+                ];
+                items.extend(expression_items(&k, word_start));
+                return (items, word_start, byte);
+            }
+        } else {
+            if prev_token != Some(&Token::Case) {
+                return (Vec::new(), word_start, byte);
+            }
+            let items = prev
+                .map(|case| case_items(source, scan, context, &k, case))
+                .unwrap_or_default();
+            return (items, word_start, byte);
         }
-        let items = prev
-            .map(|case| case_items(source, scan, context, &k, case))
-            .unwrap_or_default();
-        return (items, word_start, byte);
     }
 
     if let Some(q) = prev
@@ -1395,6 +1410,7 @@ enum Block {
     Method,
     When,
     Match,
+    Select,
     Loop,
     EachSource,
     Lambda,
@@ -1512,6 +1528,7 @@ fn open_blocks_at(k: &Knowledge, byte: usize) -> Vec<(Block, usize)> {
             Some(Token::Ident(_)) if k.declares_method(q) => blocks.push((Block::Method, q)),
             Some(Token::When) => blocks.push((Block::When, q)),
             Some(Token::Match) => blocks.push((Block::Match, q)),
+            Some(Token::Ident(_)) if k.starts_select(q) => blocks.push((Block::Select, q)),
             Some(Token::Loop | Token::Endless) => blocks.push((Block::Loop, q)),
             Some(Token::Each) => blocks.push((Block::EachSource, q)),
             Some(Token::Block) => blocks.push((Block::Other, q)),
@@ -1761,6 +1778,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
                 | Token::Block
                 | Token::Match,
             ) => depth += 1,
+            Some(Token::Ident(_)) if k.starts_select(q) => depth += 1,
             Some(Token::Fi) if depth == 0 => break,
             Some(Token::Fi) => depth -= 1,
             Some(Token::Case) if depth == 0 && q != case => {
@@ -2555,7 +2573,13 @@ fn item_level_items() -> Vec<CompletionItem> {
     ]
 }
 
-fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> {
+#[derive(PartialEq)]
+enum BlockWord<'k> {
+    Token(&'k Token),
+    Select,
+}
+
+fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<BlockWord<'k>> {
     let mut depth = 0usize;
     let mut q = k.last_before(byte)?;
     loop {
@@ -2570,14 +2594,24 @@ fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> 
                 | Token::Match),
             ) => {
                 if depth == 0 {
-                    return Some(token);
+                    return Some(BlockWord::Token(token));
                 }
                 depth -= 1;
             }
-            Some(token @ (Token::Else | Token::Case | Token::Finally)) if depth == 0 => {
-                return Some(token);
+            Some(Token::Ident(_)) if k.starts_select(q) => {
+                if depth == 0 {
+                    return Some(BlockWord::Select);
+                }
+                depth -= 1;
             }
-            Some(token @ (Token::Task | Token::Shape | Token::Kind)) => return Some(token),
+            Some(token @ (Token::Else | Token::Otherwise | Token::Case | Token::Finally))
+                if depth == 0 =>
+            {
+                return Some(BlockWord::Token(token));
+            }
+            Some(token @ (Token::Task | Token::Shape | Token::Kind)) => {
+                return Some(BlockWord::Token(token));
+            }
             _ => {}
         }
         q = q.checked_sub(1)?;
@@ -2591,8 +2625,11 @@ fn statement_items(
     names_error: bool,
 ) -> Vec<CompletionItem> {
     let innermost = innermost_block_word(k, byte);
-    if blocks.last() == Some(&Block::Match) && innermost == Some(&Token::Match) {
+    if blocks.last() == Some(&Block::Match) && innermost == Some(BlockWord::Token(&Token::Match)) {
         return vec![keyword("case")];
+    }
+    if blocks.last() == Some(&Block::Select) && innermost == Some(BlockWord::Select) {
+        return vec![keyword("case"), keyword("otherwise")];
     }
     let mut items: Vec<CompletionItem> = STATEMENT_KEYWORDS
         .iter()
@@ -2609,10 +2646,20 @@ fn statement_items(
     // Plan B blocks close with `}`, not `fi`.
     match blocks.last() {
         Some(Block::PlanB) => {}
-        Some(Block::When) if innermost == Some(&Token::Else) => items.push(keyword("fi")),
+        Some(Block::When) if innermost == Some(BlockWord::Token(&Token::Else)) => {
+            items.push(keyword("fi"))
+        }
         Some(Block::When) => items.extend([keyword("fi"), keyword("else")]),
         Some(Block::Match) => items.extend([keyword("fi"), keyword("case")]),
-        Some(Block::Loop) if innermost == Some(&Token::Finally) => items.push(keyword("fi")),
+        Some(Block::Select) if innermost == Some(BlockWord::Token(&Token::Otherwise)) => {
+            items.push(keyword("fi"))
+        }
+        Some(Block::Select) => {
+            items.extend([keyword("fi"), keyword("case"), keyword("otherwise")])
+        }
+        Some(Block::Loop) if innermost == Some(BlockWord::Token(&Token::Finally)) => {
+            items.push(keyword("fi"))
+        }
         Some(Block::Loop) => items.extend([keyword("fi"), keyword("finally")]),
         _ => items.push(keyword("fi")),
     }
@@ -2669,6 +2716,11 @@ fn statement_items(
             "match",
             "a match on a kind",
             "match ${value}\ncase ${Variant}\n\t${}\nfi",
+        ),
+        snippet(
+            "select",
+            "wait on multiple channels",
+            "select\ncase ${msg} <<- ${ch}\n\t${}\notherwise\n\t${}\nfi",
         ),
     ]);
     for (id, symbol) in visible_locals(k, byte) {

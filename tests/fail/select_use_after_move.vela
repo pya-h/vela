@@ -1,0 +1,17 @@
+; error: 16:10: use of moved value 'p'; 'p' was moved with 'own p'
+shape Boxed
+    v: int
+fi
+
+task main()
+    fixed ch1 = chan_new<own Boxed>(1)
+    fixed ch2 = chan_new<int>(1)
+    fixed p = Boxed { v: 1 }
+    select
+        case own p ->> ch1
+            show("sent")
+        case _ <<- ch2
+            show("other")
+    fi
+    show(p.v)
+fi

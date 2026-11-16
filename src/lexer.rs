@@ -33,6 +33,7 @@ pub enum Token {
     In,
     Match,
     Case,
+    Otherwise,
     New,
     Region,
     And,
@@ -69,6 +70,8 @@ pub enum Token {
     Dot,
     Arrow,
     FatArrow,
+    ChanRecv,
+    ChanSend,
     Parts,
     Pipe(usize),
     Range,
@@ -125,6 +128,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("at", Token::At),
     ("match", Token::Match),
     ("case", Token::Case),
+    ("otherwise", Token::Otherwise),
     ("new", Token::New),
     ("region", Token::Region),
     ("and", Token::And),
@@ -229,6 +233,8 @@ impl Token {
             Token::Dot => ".",
             Token::Arrow => "->",
             Token::FatArrow => "=>",
+            Token::ChanRecv => "<<-",
+            Token::ChanSend => "->>",
             Token::Parts => "||",
             Token::Send => "<-",
             Token::Range => "..",
@@ -617,7 +623,11 @@ impl Lexer {
             }
             '+' => Token::Plus,
             '-' => {
-                if self.peek() == '>' {
+                if self.peek() == '>' && self.peek2() == '>' {
+                    self.advance();
+                    self.advance();
+                    Token::ChanSend
+                } else if self.peek() == '>' {
                     self.advance();
                     Token::Arrow
                 } else if self.peek() == '-' {
@@ -711,7 +721,11 @@ impl Lexer {
                 }
             }
             '<' => {
-                if self.peek() == '=' {
+                if self.peek() == '<' && self.peek2() == '-' {
+                    self.advance();
+                    self.advance();
+                    Token::ChanRecv
+                } else if self.peek() == '=' {
                     self.advance();
                     Token::Le
                 } else if self.peek() == '-' {
@@ -759,9 +773,9 @@ impl Lexer {
         if s.contains("__") {
             return invalid(loc, format!("'{}': names cannot contain '__'", s));
         }
-        // Every keyword is 2-8 lowercase ASCII letters.
+        // Every keyword is 2-9 lowercase ASCII letters.
         let could_be_keyword =
-            (2..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
+            (2..=9).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
         let token = KEYWORDS
             .iter()
             .filter(|_| could_be_keyword)

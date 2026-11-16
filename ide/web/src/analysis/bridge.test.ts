@@ -322,9 +322,9 @@ describe("VelaAnalysis", () => {
     expect(language.keywords).toEqual(expect.arrayContaining(["task", "fi", "fixed", "flex", "none"]));
     // Reserved with no use yet, so colored as keywords too.
     expect(language.keywords).toEqual(expect.arrayContaining(["bind", "hold"]));
-    expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "endless", "each", "block", "match"]);
+    expect(language.blockOpeners).toEqual(["task", "shape", "kind", "actor", "event", "when", "loop", "endless", "each", "block", "match", "select"]);
     expect(language.blockModifiers).toEqual(["priv"]);
-    expect(language.branchKeywords).toEqual(["else", "case", "finally"]);
+    expect(language.branchKeywords).toEqual(["else", "otherwise", "case", "finally"]);
     expect(language.builtinTypes).toEqual(["int", "int64", "int32", "int16", "int8", "uint", "uint64", "uint32", "uint16", "uint8", "unit", "float", "float64", "float32", "bool", "text", "char", "nothing"]);
     expect(language.lineComment).toBe(";");
   });
@@ -384,7 +384,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("frees its memory after every request", () => {
-    const source = readFileSync(join(examples, "todo.vela"), "utf8");
+    const source = readFileSync(join(examples, "general/todo.vela"), "utf8");
     const memory = (analysis as unknown as { exports: { memory: WebAssembly.Memory } }).exports.memory;
     for (let i = 0; i < 50; i++) analysis.file(source);
     const settled = memory.buffer.byteLength;

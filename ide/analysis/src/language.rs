@@ -2,9 +2,9 @@ use serde::Serialize;
 use vela::ast::{ALTERS, BUILTIN_TASKS, BUILTIN_TYPES};
 use vela::lexer::KEYWORDS;
 
-pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "actor", "event", "when", "loop", "endless", "each", "block", "match"];
+pub const BLOCK_OPENERS: &[&str] = &["task", "shape", "kind", "actor", "event", "when", "loop", "endless", "each", "block", "match", "select"];
 pub const BLOCK_MODIFIERS: &[&str] = &["priv"];
-pub const BRANCH_KEYWORDS: &[&str] = &["else", "case", "finally"];
+pub const BRANCH_KEYWORDS: &[&str] = &["else", "otherwise", "case", "finally"];
 pub const BLOCK_CLOSER: &str = "fi";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -46,9 +46,12 @@ mod tests {
 
     #[test]
     fn block_words_are_keywords() {
+        const CONTEXTUAL_BLOCK_WORDS: &[&str] = &["select"];
         let keywords = language().keywords;
         for word in BLOCK_OPENERS.iter().chain(BLOCK_MODIFIERS).chain(BRANCH_KEYWORDS).chain([&BLOCK_CLOSER]) {
-            assert!(keywords.contains(word), "{:?} is not a keyword", word);
+            if !CONTEXTUAL_BLOCK_WORDS.contains(word) {
+                assert!(keywords.contains(word), "{:?} is not a keyword", word);
+            }
         }
     }
 
@@ -66,6 +69,7 @@ mod tests {
             "task t()\n    each i in 0..1\n    fi\nfi\n",
             "task t()\n    block\n    fi\nfi\n",
             "kind K\n    A\nfi\ntask t(k: K)\n    match k\n    case A\n    fi\nfi\n",
+            "task t()\n    select\n    otherwise\n    fi\nfi\n",
         ];
         for modifier in BLOCK_MODIFIERS {
             assert!(vela::driver::front_end(&format!("{} task t()\nfi\n", modifier)).is_ok());

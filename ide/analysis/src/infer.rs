@@ -84,6 +84,27 @@ impl<'a> Knowledge<'a> {
         self.lexed(q).is_some_and(|t| self.scan.lambdas.contains(&t.range.start))
     }
 
+    pub fn starts_select(&self, q: usize) -> bool {
+        self.ident(q) == Some("select")
+            && self.token_before(q) != Some(&Token::Dot)
+            && matches!(self.token(q + 1), Some(Token::Newline | Token::Eof) | None)
+            && (q == self.line_start(q)
+                || matches!(
+                    self.token_before(q),
+                    Some(
+                        Token::Assign
+                            | Token::ColonAssign
+                            | Token::Send
+                            | Token::PlusAssign
+                            | Token::MinusAssign
+                            | Token::StarAssign
+                            | Token::SlashAssign
+                            | Token::PercentAssign
+                            | Token::PowerAssign
+                    )
+                ))
+    }
+
     fn start(&self, q: usize) -> Option<Span> {
         self.lexed(q).map(|t| t.start)
     }
@@ -199,6 +220,7 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, Some(LOOP_NAME)) => None,
             (SymbolKind::Variable, Some("each")) => self.each_type(id, depth + 1),
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
+            (SymbolKind::Variable, Some("select")) => self.select_recv_type(id, depth + 1),
             (SymbolKind::Variable, Some("failure")) => self.plan_b_error_type(id, depth + 1),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Macro, _) => self.macro_type(symbol, depth),
@@ -554,12 +576,39 @@ impl<'a> Knowledge<'a> {
         }
     }
 
+    fn select_recv_type(&self, id: usize, depth: usize) -> Option<Type> {
+        let symbol = self.symbol(id)?;
+        let name = self.at_byte(symbol.name_range.start)?;
+        if self.token(name + 1) != Some(&Token::ChanRecv) {
+            return None;
+        }
+        let chan_start = name + 2;
+        let line_end = self.line_end(name);
+        let chan_end = (chan_start..line_end)
+            .find(|&q| self.token(q) == Some(&Token::Assign))
+            .unwrap_or(line_end)
+            .checked_sub(1)?;
+        match self.span_type(chan_start, chan_end, depth + 1)? {
+            Type::Chan(inner) => Some(match *inner {
+                Type::Own(p) => *p,
+                other => other,
+            }),
+            _ => None,
+        }
+    }
+
     pub fn enclosing_match(&self, case: usize) -> Option<usize> {
         let mut depth = 0usize;
         for q in (0..case).rev() {
             match self.token(q) {
                 Some(Token::Fi) => depth += 1,
                 Some(Token::When | Token::Loop | Token::Endless | Token::Each | Token::Block) if depth > 0 => depth -= 1,
+                Some(Token::Ident(_)) if self.starts_select(q) => {
+                    if depth == 0 {
+                        return None;
+                    }
+                    depth -= 1;
+                }
                 Some(Token::Match) if depth == 0 => return Some(q),
                 Some(Token::Match) => depth -= 1,
                 Some(Token::Task | Token::Shape | Token::Kind) => return None,

@@ -1,0 +1,135 @@
+shape Packet
+    id: int
+    tag: text
+fi
+
+actor Responder
+    on Ping(delay_val: int, ch: Chan[int])
+        ch.dispatch(delay_val)
+    fi
+
+    on PollNonBlocking(ch: Chan[int], done: Chan[int])
+        select
+            case v <<- ch
+                done.dispatch(v)
+            otherwise
+                done.dispatch(-1)
+        fi
+    fi
+fi
+
+task main()
+    fixed c1 = chan_new<int>(4)
+    fixed c2 = chan_new<int>(4)
+
+    ; 1. Non-blocking otherwise when all channels empty
+    select
+        case a <<- c1
+            show("unexpected a: ", a)
+        case b <<- c2
+            show("unexpected b: ", b)
+        otherwise
+            show("empty: otherwise")
+    fi
+
+    ; 2. Ready receive + value-mode select
+    c1.dispatch(42)
+    fixed picked = select
+        case v <<- c1 = v * 2
+        case _ <<- c2 = 0
+        otherwise = -1
+    fi
+    show("value select: ", picked)
+
+    ; 3. Send arm with `own` + otherwise retains variable when full
+    fixed q_full = chan_new<own Packet>(1)
+    fixed q_alt = chan_new<own Packet>(1)
+    fixed blocker = Packet { id: 1, tag: "block" }
+    q_full.dispatch(own blocker)
+
+    flex pkg = Packet { id: 99, tag: "payload" }
+    select
+        case own pkg ->> q_full
+            show("unexpected send")
+        otherwise
+            show("full: kept ", pkg.id, ":", pkg.tag)
+            q_alt.dispatch(own pkg)
+    fi
+    fixed got_alt = q_alt.wait_and_receive()
+    show("alt recv: ", got_alt.id, ":", got_alt.tag)
+    q_alt.close()
+
+    ; 4. Mutual send arms moving the same `own` variable
+    flex p2 = Packet { id: 7, tag: "seven" }
+    fixed q_open = chan_new<own Packet>(1)
+    select
+        case own p2 ->> q_full
+            show("sent full")
+        case own p2 ->> q_open
+            show("sent open")
+    fi
+    fixed got_open = q_open.wait_and_receive()
+    show("open recv: ", got_open.id)
+    q_open.close()
+    fixed drained_b = q_full.wait_and_receive()
+    show("drained blocker: ", drained_b.id)
+    q_full.close()
+
+    ; 5. Timeout arm
+    select
+        case v <<- c2
+            show("unexpected: ", v)
+        case after 15
+            show("timeout fired")
+    fi
+
+    ; 6. Closed channel skipped when open arm exists, plus explicit `none <<- ch`
+    c1.close()
+    c2.dispatch(303)
+    select
+        case _ <<- c1
+            show("should skip closed c1")
+        case flex x <<- c2
+            x += 1
+            show("open c2: ", x)
+    fi
+
+    select
+        case v <<- c2
+            show("unexpected c2: ", v)
+        case none <<- c1
+            show("c1 closed detected")
+        case after 500
+            show("unexpected timeout")
+    fi
+
+    ; 7. All closed falls through to otherwise
+    c2.close()
+    select
+        case _ <<- c1
+            show("closed 1")
+        case _ <<- c2
+            show("closed 2")
+        otherwise
+            show("all closed otherwise")
+    fi
+
+    ; 8. Actor wakes blocked select + non-blocking select inside actor
+    fixed inbox = chan_new<int>(2)
+    fixed done = chan_new<int>(2)
+    fixed worker = spawn Responder()
+    worker.dispatch(Responder.PollNonBlocking(inbox, done))
+    show("actor otherwise: ", done.wait_and_receive())
+
+    worker.dispatch(Responder.Ping(808, inbox))
+    select
+        case msg <<- inbox
+            show("actor woke select: ", msg)
+        case after 2000
+            show("actor timeout")
+    fi
+
+    worker.close()
+    inbox.close()
+    done.close()
+fi

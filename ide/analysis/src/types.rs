@@ -3,8 +3,8 @@ use std::io;
 use std::path::Path;
 
 use vela::ast::{
-    Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, Span,
-    Stmt, StmtKind, THIS, Target, Type, TypedForm, method_parts,
+    Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES,
+    SelectArmKind, Span, Stmt, StmtKind, THIS, Target, Type, TypedForm, method_parts,
 };
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
@@ -318,6 +318,34 @@ impl Checked {
                 for case in cases {
                     self.pattern(subject.ty.as_ref(), &case.pattern, kinds);
                     self.block(&case.body, kinds);
+                }
+            }
+            StmtKind::Select(sel) => {
+                for arm in &sel.arms {
+                    match &arm.kind {
+                        SelectArmKind::Recv { name, name_span, chan, .. } => {
+                            self.expr(chan, kinds);
+                            if name != "_"
+                                && let Some(Type::Chan(inner)) = chan.ty.as_ref()
+                            {
+                                let item_ty = match inner.as_ref() {
+                                    Type::Own(p) => p.as_ref().clone(),
+                                    other => other.clone(),
+                                };
+                                self.declare(*name_span, item_ty);
+                            }
+                        }
+                        SelectArmKind::RecvNone { chan } => self.expr(chan, kinds),
+                        SelectArmKind::Send { value, chan } => {
+                            self.expr(value, kinds);
+                            self.expr(chan, kinds);
+                        }
+                        SelectArmKind::After { ms } => self.expr(ms, kinds),
+                    }
+                    self.block(&arm.body, kinds);
+                }
+                if let Some(ow) = &sel.otherwise {
+                    self.block(ow, kinds);
                 }
             }
             StmtKind::Event(e) => {

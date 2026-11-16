@@ -1,0 +1,140 @@
+  1 | ; Multi-channel `select`: waiting across receives, bounded sends,
+    | comment:; Multi-channel `select`: waiting across receives, bounded sends,
+  2 | ; channel close detection (`none <<- ch`), timeouts (`after ms`),
+    | comment:; channel close detection (`none <<- ch`), timeouts (`after ms`),
+  3 | ; non-blocking `otherwise` fallbacks, and value-producing select expressions.
+    | comment:; non-blocking `otherwise` fallbacks, and value-producing select expressions.
+  5 | shape TaskItem
+    | keyword:shape  type:TaskItem
+  6 |     id: int
+    | field:id  punctuation::  type-builtin:int
+  7 |     label: text
+    | field:label  punctuation::  type-builtin:text
+  8 | fi
+    | keyword:fi
+ 10 | actor Worker(offset: int)
+    | keyword:actor  task:Worker  punctuation:(  variable:offset  punctuation::  type-builtin:int  punctuation:)
+ 11 |     on Process(item: own TaskItem, reply: Chan[int])
+    | variable:on  task:Process  punctuation:(  variable:item  punctuation::  keyword:own  type:TaskItem  punctuation:,  variable:reply  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)
+ 12 |         show("processing: ", item.label)
+    | builtin-fn:show  punctuation:(  string:"processing: "  punctuation:,  variable:item  punctuation:.  field:label  punctuation:)
+ 13 |         reply.dispatch(offset + item.id)
+    | variable:reply  punctuation:.  field:dispatch  punctuation:(  variable:offset  operator:+  variable:item  punctuation:.  field:id  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     region r default
+    | keyword:region  region:r  keyword:default
+ 20 |     fixed worker = spawn Worker(100)
+    | keyword:fixed  variable:worker  operator:=  keyword:spawn  task:Worker  punctuation:(  number:100  punctuation:)
+ 21 |     fixed jobs = chan_new<own TaskItem>(1)
+    | keyword:fixed  variable:jobs  operator:=  builtin-fn:chan_new  punctuation:<  keyword:own  type:TaskItem  punctuation:>  punctuation:(  number:1  punctuation:)
+ 22 |     fixed done = chan_new<int>(2)
+    | keyword:fixed  variable:done  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:2  punctuation:)
+ 23 |     fixed control = chan_new<text>(2)
+    | keyword:fixed  variable:control  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:2  punctuation:)
+ 25 |     ; 1. Non-blocking bounded send via `select` (`jobs` has cap 1 and is empty)
+    | comment:; 1. Non-blocking bounded send via `select` (`jobs` has cap 1 and is empty)
+ 26 |     fixed first = TaskItem { id: 7, label: "index" }
+    | keyword:fixed  variable:first  operator:=  type:TaskItem  punctuation:{  field:id  punctuation::  number:7  punctuation:,  field:label  punctuation::  string:"index"  punctuation:}
+ 27 |     fixed sent_status = select
+    | keyword:fixed  variable:sent_status  operator:=  keyword:select
+ 28 |     case own first ->> jobs = "queued #1"
+    | keyword:case  keyword:own  variable:first  operator:->>  variable:jobs  operator:=  string:"queued #1"
+ 29 |     case msg <<- control = "control:" + msg
+    | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"control:"  operator:+  variable:msg
+ 30 |     otherwise = "busy"
+    | keyword:otherwise  operator:=  string:"busy"
+ 31 |     fi
+    | keyword:fi
+ 32 |     show(sent_status)
+    | builtin-fn:show  punctuation:(  variable:sent_status  punctuation:)
+ 34 |     ; Now `jobs` is full; `otherwise` runs immediately without moving `second`
+    | comment:; Now `jobs` is full; `otherwise` runs immediately without moving `second`
+ 35 |     flex second = TaskItem { id: 8, label: "extra" }
+    | keyword:flex  variable:second  operator:=  type:TaskItem  punctuation:{  field:id  punctuation::  number:8  punctuation:,  field:label  punctuation::  string:"extra"  punctuation:}
+ 36 |     select
+    | keyword:select
+ 37 |     case own second ->> jobs
+    | keyword:case  keyword:own  variable:second  operator:->>  variable:jobs
+ 38 |         show("unexpected enqueue")
+    | builtin-fn:show  punctuation:(  string:"unexpected enqueue"  punctuation:)
+ 39 |     otherwise
+    | keyword:otherwise
+ 40 |         show("full: kept item #", second.id)
+    | builtin-fn:show  punctuation:(  string:"full: kept item #"  punctuation:,  variable:second  punctuation:.  field:id  punctuation:)
+ 41 |     fi
+    | keyword:fi
+ 43 |     ; Forward pending job to the actor so `jobs` drains
+    | comment:; Forward pending job to the actor so `jobs` drains
+ 44 |     fixed pending = jobs.wait_and_receive()
+    | keyword:fixed  variable:pending  operator:=  variable:jobs  punctuation:.  field:wait_and_receive  punctuation:(  punctuation:)
+ 45 |     worker.dispatch(Worker.Process(own pending, done))
+    | variable:worker  punctuation:.  field:dispatch  punctuation:(  variable:Worker  punctuation:.  field:Process  punctuation:(  keyword:own  variable:pending  punctuation:,  variable:done  punctuation:)  punctuation:)
+ 47 |     ; 2. Wait for the worker reply via blocking value-giving `select` with timeout
+    | comment:; 2. Wait for the worker reply via blocking value-giving `select` with timeout
+ 48 |     fixed reply = select
+    | keyword:fixed  variable:reply  operator:=  keyword:select
+ 49 |     case code <<- done = "reply={code}"
+    | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"reply={  variable:code  string:}"
+ 50 |     case after 5000 = "timed out waiting for worker"
+    | keyword:case  keyword:after  number:5000  operator:=  string:"timed out waiting for worker"
+ 51 |     fi
+    | keyword:fi
+ 52 |     show(reply)
+    | builtin-fn:show  punctuation:(  variable:reply  punctuation:)
+ 54 |     ; 3. Timeout arm (`case after ms`) when open channels are idle
+    | comment:; 3. Timeout arm (`case after ms`) when open channels are idle
+ 55 |     fixed wait_status = select
+    | keyword:fixed  variable:wait_status  operator:=  keyword:select
+ 56 |     case code <<- done = "unexpected:{code}"
+    | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"unexpected:{  variable:code  string:}"
+ 57 |     case msg <<- control = "unexpected:" + msg
+    | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"unexpected:"  operator:+  variable:msg
+ 58 |     case after 5 = "idle timeout"
+    | keyword:case  keyword:after  number:5  operator:=  string:"idle timeout"
+ 59 |     fi
+    | keyword:fi
+ 60 |     show("wait: ", wait_status)
+    | builtin-fn:show  punctuation:(  string:"wait: "  punctuation:,  variable:wait_status  punctuation:)
+ 62 |     ; 4. Closed detection (`case none <<- ch`) skips empty open `done`
+    | comment:; 4. Closed detection (`case none <<- ch`) skips empty open `done`
+ 63 |     control.close()
+    | variable:control  punctuation:.  field:close  punctuation:(  punctuation:)
+ 64 |     select
+    | keyword:select
+ 65 |     case code <<- done
+    | keyword:case  variable:code  operator:<<-  variable:done
+ 66 |         show("done: ", code)
+    | builtin-fn:show  punctuation:(  string:"done: "  punctuation:,  variable:code  punctuation:)
+ 67 |     case none <<- control
+    | keyword:case  keyword:none  operator:<<-  variable:control
+ 68 |         show("control closed cleanly")
+    | builtin-fn:show  punctuation:(  string:"control closed cleanly"  punctuation:)
+ 69 |     fi
+    | keyword:fi
+ 71 |     ; Once all channels are closed, `otherwise` runs immediately instead of trapping
+    | comment:; Once all channels are closed, `otherwise` runs immediately instead of trapping
+ 72 |     done.close()
+    | variable:done  punctuation:.  field:close  punctuation:(  punctuation:)
+ 73 |     fixed final_state = select
+    | keyword:fixed  variable:final_state  operator:=  keyword:select
+ 74 |     case code <<- done = "code:{code}"
+    | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"code:{  variable:code  string:}"
+ 75 |     case msg <<- control = "ctrl:" + msg
+    | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"ctrl:"  operator:+  variable:msg
+ 76 |     otherwise = "all channels closed"
+    | keyword:otherwise  operator:=  string:"all channels closed"
+ 77 |     fi
+    | keyword:fi
+ 78 |     show("final: ", final_state)
+    | builtin-fn:show  punctuation:(  string:"final: "  punctuation:,  variable:final_state  punctuation:)
+ 80 |     jobs.close()
+    | variable:jobs  punctuation:.  field:close  punctuation:(  punctuation:)
+ 81 |     worker.close()
+    | variable:worker  punctuation:.  field:close  punctuation:(  punctuation:)
+ 82 | fi
+    | keyword:fi

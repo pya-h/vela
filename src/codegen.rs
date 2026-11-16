@@ -293,6 +293,7 @@ impl Generator {
         for ty in &used.tasks {
             self.gen_task_type(ty);
         }
+        let mut actor_msgs = Vec::new();
         for item in items {
             if let Item::Kind(k) = item
                 && k.types.is_empty()
@@ -317,13 +318,13 @@ impl Generator {
                 };
                 self.kinds.insert(msg_kind.name.clone(), msg_kind.clone());
                 self.gen_tag_enum(&msg_kind);
-                self.gen_kind(&msg_kind);
+                actor_msgs.push(msg_kind);
             }
         }
-        for def in type_order(items, &used.compounds.list)? {
+        for def in type_order(items, &actor_msgs, &used.compounds.list)? {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
-                TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
+                TypeDef::Item(Item::Kind(k)) | TypeDef::ActorMsg(k) => self.gen_kind(k),
                 TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
@@ -3796,9 +3797,10 @@ impl Generator {
         match &stmt.kind {
             StmtKind::When(arms, else_b) => self.gen_when(arms, else_b.as_deref(), into),
             StmtKind::Match(subject, cases) => self.gen_match(subject, cases, into),
+            StmtKind::Select(sel) => self.gen_select(sel, into),
             _ => Err(Error::internal_at(
                 stmt.span,
-                "a statement that is not a 'when' or a 'match' used as a value",
+                "a statement that is not a 'when', 'match', or 'select' used as a value",
             )),
         }
     }
@@ -4786,6 +4788,7 @@ impl Generator {
                 self.leave_loop();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases, None)?,
+            StmtKind::Select(sel) => self.gen_select(sel, None)?,
             StmtKind::Send(values) if values.is_empty() => {
                 let results = (!self.results.is_empty()).then(|| self.current_results());
                 self.free_all_regions();
@@ -5333,6 +5336,165 @@ impl Generator {
         if needs_temp {
             self.w.close();
         }
+        Ok(())
+    }
+
+    fn select_chan_elem_type(chan_ty: &Type) -> Result<Type> {
+        match chan_ty {
+            Type::Chan(inner) => Ok(match inner.as_ref() {
+                Type::Own(p) => p.as_ref().clone(),
+                other => other.clone(),
+            }),
+            Type::Actor(actor_ty) => {
+                let name = match actor_ty.as_ref() {
+                    Type::Named(n, _) => n.clone(),
+                    _ => "Unknown".to_string(),
+                };
+                Ok(Type::Named(format!("{}Msg", name), None))
+            }
+            other => Err(Error::internal(format!(
+                "select expected channel or actor, got {}",
+                other
+            ))),
+        }
+    }
+
+    fn gen_select(&mut self, sel: &SelectStmt, into: Option<&str>) -> Result<()> {
+        self.w.open("");
+        struct RtArm<'a> {
+            arm: &'a SelectArm,
+            handle: String,
+            op: &'static str,
+            item_ptr: String,
+            recv_slot: Option<(String, String, Type)>,
+        }
+        let mut rt_entries: Vec<RtArm<'_>> = Vec::new();
+        let mut has_timeout = false;
+        let mut timeout_ms = "0".to_string();
+        let mut timeout_arm: Option<&SelectArm> = None;
+
+        for arm in &sel.arms {
+            match &arm.kind {
+                SelectArmKind::Recv { name, chan, .. } => {
+                    let elem_ty = Self::select_chan_elem_type(chan.ty()?)?;
+                    let ctype = c_type(&elem_ty);
+                    let buf = self.fresh_temp("sel_recv");
+                    self.w.line(&format!("{} {};", ctype, buf));
+                    self.w.line(&format!("memset(&{}, 0, sizeof({}));", buf, buf));
+                    let handle = self.gen_expr(chan)?;
+                    rt_entries.push(RtArm {
+                        arm,
+                        handle,
+                        op: "VELA__RT__SELECT_RECV",
+                        item_ptr: format!("&{}", buf),
+                        recv_slot: Some((name.clone(), buf, elem_ty)),
+                    });
+                }
+                SelectArmKind::RecvNone { chan } => {
+                    let handle = self.gen_expr(chan)?;
+                    rt_entries.push(RtArm {
+                        arm,
+                        handle,
+                        op: "VELA__RT__SELECT_RECV_NONE",
+                        item_ptr: "NULL".to_string(),
+                        recv_slot: None,
+                    });
+                }
+                SelectArmKind::Send { value, chan } => {
+                    let elem_ty = Self::select_chan_elem_type(chan.ty()?)?;
+                    let ctype = c_type(&elem_ty);
+                    let val = self.gen_expr(value)?;
+                    let buf = self.fresh_temp("sel_send");
+                    self.w.line(&format!("{} {} = {};", ctype, buf, val));
+                    let handle = self.gen_expr(chan)?;
+                    rt_entries.push(RtArm {
+                        arm,
+                        handle,
+                        op: "VELA__RT__SELECT_SEND",
+                        item_ptr: format!("&{}", buf),
+                        recv_slot: None,
+                    });
+                }
+                SelectArmKind::After { ms } => {
+                    let val = self.gen_expr(ms)?;
+                    let ms_var = self.fresh_temp("sel_ms");
+                    self.w
+                        .line(&format!("int64_t {} = (int64_t)({});", ms_var, val));
+                    self.w.open(&format!("if ({} < 0)", ms_var));
+                    self.w
+                        .line("vela__rt__int_trap(\"negative timeout in select\", \"select\");");
+                    self.w.close();
+                    has_timeout = true;
+                    timeout_ms = ms_var;
+                    timeout_arm = Some(arm);
+                }
+            }
+        }
+
+        let winner = self.fresh_temp("sel_win");
+        let has_ow = if sel.otherwise.is_some() { "true" } else { "false" };
+        let has_to = if has_timeout { "true" } else { "false" };
+        if rt_entries.is_empty() {
+            self.w.line(&format!(
+                "int64_t {} = vela__rt__chan_select(NULL, 0, {}, {}, {});",
+                winner, has_ow, has_to, timeout_ms
+            ));
+        } else {
+            let arr = self.fresh_temp("sel_arms");
+            let inits: Vec<String> = rt_entries
+                .iter()
+                .map(|entry| format!("{{ {}, {}, {} }}", entry.handle, entry.op, entry.item_ptr))
+                .collect();
+            self.w.line(&format!(
+                "vela__rt__select_arm {}[{}] = {{ {} }};",
+                arr,
+                rt_entries.len(),
+                inits.join(", ")
+            ));
+            self.w.line(&format!(
+                "int64_t {} = vela__rt__chan_select({}, {}, {}, {}, {});",
+                winner,
+                arr,
+                rt_entries.len(),
+                has_ow,
+                has_to,
+                timeout_ms
+            ));
+        }
+
+        self.w.open(&format!("switch ({})", winner));
+        for (rt_idx, entry) in rt_entries.iter().enumerate() {
+            self.w.open(&format!("case {}:", rt_idx));
+            if let Some((name, buf, ty)) = &entry.recv_slot
+                && name != DISCARD
+            {
+                self.w
+                    .line(&format!("{} {} = {};", c_type(ty), c_ident(name), buf));
+                self.use_if_unread(name, &entry.arm.body);
+            }
+            self.gen_branch_block(&entry.arm.body, into)?;
+            self.w.line("break;");
+            self.w.close();
+        }
+        if let Some(t_arm) = timeout_arm {
+            self.w.open("case VELA__RT__SELECT_TIMEOUT:");
+            self.gen_branch_block(&t_arm.body, into)?;
+            self.w.line("break;");
+            self.w.close();
+        }
+        if let Some(ow) = &sel.otherwise {
+            self.w.open("case VELA__RT__SELECT_OTHERWISE:");
+            self.gen_branch_block(ow, into)?;
+            self.w.line("break;");
+            self.w.close();
+        }
+        self.w.open("default:");
+        self.w
+            .line("vela__rt__int_trap(\"all channels in select are closed\", \"select\");");
+        self.w.line("break;");
+        self.w.close();
+        self.w.close();
+        self.w.close();
         Ok(())
     }
 
@@ -8629,6 +8791,24 @@ impl UsedTypes {
                     self.expr(subject);
                     cases.iter().for_each(|case| self.block(&case.body));
                 }
+                StmtKind::Select(sel) => {
+                    for arm in &sel.arms {
+                        match &arm.kind {
+                            SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                                self.expr(chan)
+                            }
+                            SelectArmKind::Send { value, chan } => {
+                                self.expr(value);
+                                self.expr(chan);
+                            }
+                            SelectArmKind::After { ms } => self.expr(ms),
+                        }
+                        self.block(&arm.body);
+                    }
+                    if let Some(ow) = &sel.otherwise {
+                        self.block(ow);
+                    }
+                }
             }
         }
     }
@@ -9016,6 +9196,18 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Match(subject, cases) => {
             expr(subject) || cases.iter().any(|case| body(&case.body))
         }
+        StmtKind::Select(sel) => {
+            sel.arms.iter().any(|arm| {
+                let head = match &arm.kind {
+                    SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                        expr(chan)
+                    }
+                    SelectArmKind::Send { value, chan } => expr(value) || expr(chan),
+                    SelectArmKind::After { ms } => expr(ms),
+                };
+                head || body(&arm.body)
+            }) || sel.otherwise.as_ref().is_some_and(body)
+        }
     }
 }
 
@@ -9145,6 +9337,7 @@ fn type_name(item: &Item) -> Option<&str> {
 
 enum TypeDef<'a> {
     Item(&'a Item),
+    ActorMsg(&'a KindDef),
     Compound(&'a Type),
 }
 
@@ -9162,7 +9355,7 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     }
 }
 
-fn type_order<'a>(items: &'a [Item], compounds: &'a [Type]) -> Result<Vec<TypeDef<'a>>> {
+fn type_order<'a>(items: &'a [Item], actor_msgs: &'a [KindDef], compounds: &'a [Type]) -> Result<Vec<TypeDef<'a>>> {
     let mut by_name: HashMap<String, TypeDef<'a>> = HashMap::new();
     let mut names = Vec::new();
     for item in items {
@@ -9170,6 +9363,11 @@ fn type_order<'a>(items: &'a [Item], compounds: &'a [Type]) -> Result<Vec<TypeDe
             names.push(mangle(name));
             by_name.insert(mangle(name), TypeDef::Item(item));
         }
+    }
+    for k in actor_msgs {
+        let name = mangle(&k.name);
+        names.push(name.clone());
+        by_name.insert(name, TypeDef::ActorMsg(k));
     }
     for ty in compounds {
         names.push(compound_name(ty));
@@ -9230,6 +9428,14 @@ fn visit_type<'a>(
     }
 }
 
+fn kind_value_dependencies(k: &KindDef) -> Vec<String> {
+    k.variants
+        .iter()
+        .flat_map(|v| &v.payload)
+        .flat_map(|f| value_dependencies(&f.ty))
+        .collect()
+}
+
 fn dependencies_of(def: &TypeDef) -> Vec<String> {
     match def {
         TypeDef::Item(Item::Shape(s)) => s
@@ -9237,12 +9443,8 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             .iter()
             .flat_map(|f| value_dependencies(&f.ty))
             .collect(),
-        TypeDef::Item(Item::Kind(k)) => k
-            .variants
-            .iter()
-            .flat_map(|v| &v.payload)
-            .flat_map(|f| value_dependencies(&f.ty))
-            .collect(),
+        TypeDef::Item(Item::Kind(k)) => kind_value_dependencies(k),
+        TypeDef::ActorMsg(k) => kind_value_dependencies(k),
         TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value)
@@ -9733,6 +9935,14 @@ fn events_in_task(block: &[Stmt]) -> Vec<&EventDef> {
             StmtKind::Match(_, cases) => {
                 for case in cases {
                     out.extend(events_in_task(&case.body));
+                }
+            }
+            StmtKind::Select(sel) => {
+                for arm in &sel.arms {
+                    out.extend(events_in_task(&arm.body));
+                }
+                if let Some(ow) = &sel.otherwise {
+                    out.extend(events_in_task(ow));
                 }
             }
             StmtKind::Named(_, inner) => out.extend(events_in_task(std::slice::from_ref(&**inner))),

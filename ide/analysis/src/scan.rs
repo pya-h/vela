@@ -1045,6 +1045,27 @@ impl<'a> Tokens<'a> {
         }
     }
 
+    fn starts_select(&self, p: usize) -> bool {
+        self.ident(p) == Some("select")
+            && self.before(p) != Some(&Token::Dot)
+            && matches!(self.token(p + 1), Some(Token::Newline | Token::Eof) | None)
+            && (self.starts_line(p)
+                || matches!(
+                    self.before(p),
+                    Some(
+                        Token::Assign
+                            | Token::ColonAssign
+                            | Token::Send
+                            | Token::PlusAssign
+                            | Token::MinusAssign
+                            | Token::StarAssign
+                            | Token::SlashAssign
+                            | Token::PercentAssign
+                            | Token::PowerAssign
+                    )
+                ))
+    }
+
     fn starts_member(&self, p: usize) -> bool {
         self.starts_line(p) || (self.before(p) == Some(&Token::Priv) && self.starts_line(p - 1))
     }
@@ -1559,6 +1580,9 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             | Token::Each
             | Token::Block
             | Token::Match => blocks.push(Block::Inner),
+            Token::Ident(name) if name == "select" && tokens.starts_select(p) => {
+                blocks.push(Block::Inner);
+            }
             Token::LParen if !header && tokens.starts_lambda(p) => {
                 blocks.push(Block::Inner);
                 parens += 1;
@@ -1712,6 +1736,7 @@ enum ScopeKind {
     When,
     Other,
     Match,
+    Select,
     Case,
     PlanB,
 }
@@ -1766,6 +1791,7 @@ impl<'a> Classifier<'a> {
         let mut loop_name: Option<(usize, usize)> = None;
         let mut in_task_header = false;
         let mut in_pattern = false;
+        let mut in_select_case = false;
         let mut headers_open = 0usize;
         let mut plan_b_head = false;
         let mut after_type = false;
@@ -1843,6 +1869,7 @@ impl<'a> Classifier<'a> {
                     in_include_names = false;
                     in_task_header = false;
                     in_pattern = false;
+                    in_select_case = false;
                     in_results = false;
                     declaring_list = None;
                     loop_start = false;
@@ -1964,6 +1991,18 @@ impl<'a> Classifier<'a> {
                 {
                     self.push(range, TokenClass::Keyword, None);
                 }
+                Token::Ident(word) if word == "select" && tokens.starts_select(p) => {
+                    self.push(range, TokenClass::Keyword, None);
+                    self.open(ScopeKind::Select);
+                }
+                Token::Ident(word)
+                    if in_select_case
+                        && word == "after"
+                        && tokens.before(p) == Some(&Token::Case) =>
+                {
+                    self.push(range, TokenClass::Keyword, None);
+                    in_select_case = false;
+                }
                 Token::Ident(_)
                     if !in_include
                         && tokens.token(p + 1) == Some(&Token::FatArrow)
@@ -2021,6 +2060,14 @@ impl<'a> Classifier<'a> {
                         }
                         let declaring_now = match tokens.token(p + 1) {
                             Some(Token::Colon) if in_results && was_type => Some("result"),
+                            Some(Token::ChanRecv)
+                                if in_select_case
+                                    && tokens.before(p) != Some(&Token::Dot)
+                                    && (declaring_now.is_some()
+                                        || tokens.before(p) == Some(&Token::Case)) =>
+                            {
+                                Some("select")
+                            }
                             _ => declaring_now,
                         };
                         let (class, symbol) = self.identifier(
@@ -2239,11 +2286,17 @@ impl<'a> Classifier<'a> {
                 | Token::Ge
                 | Token::Assign
                 | Token::ColonAssign
-                | Token::Range => {
+                | Token::Range
+                | Token::ChanRecv
+                | Token::ChanSend => {
                     self.push(range, TokenClass::Operator, None);
-                    if *token == Token::Assign || *token == Token::ColonAssign {
+                    if matches!(
+                        token,
+                        Token::Assign | Token::ColonAssign | Token::ChanRecv | Token::ChanSend
+                    ) {
                         declaring_list = None;
                         in_pattern = false;
+                        in_select_case = false;
                     }
                 }
                 Token::Maybe => {
@@ -2362,8 +2415,30 @@ impl<'a> Classifier<'a> {
                             {
                                 self.close_scope(at);
                             }
+                            let in_select = self
+                                .scopes
+                                .iter()
+                                .rev()
+                                .find(|s| matches!(s.kind, ScopeKind::Match | ScopeKind::Select))
+                                .is_some_and(|s| s.kind == ScopeKind::Select);
                             self.open(ScopeKind::Case);
-                            in_pattern = true;
+                            if in_select {
+                                in_select_case = true;
+                            } else {
+                                in_pattern = true;
+                            }
+                        }
+                        Token::Otherwise => {
+                            self.close_plan_b(at, &mut braces);
+                            if self
+                                .scopes
+                                .last()
+                                .is_some_and(|s| s.kind == ScopeKind::Case)
+                            {
+                                self.close_scope(at);
+                            }
+                            in_pattern = false;
+                            in_select_case = false;
                         }
                         Token::Fi => {
                             self.close_plan_b(at, &mut braces);
@@ -2919,8 +2994,8 @@ impl<'a> Classifier<'a> {
         let name = tokens.ident(p).unwrap_or_default().to_string();
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
-        // `case` bindings enter scope immediately for same-line arms like `case Ok v = v * 2`.
-        if intro == Some("case") {
+        // `case` and `select` receive bindings enter scope immediately for same-line arms.
+        if matches!(intro, Some("case" | "select")) {
             let visible = range.end..tokens.source.len();
             self.symbols.push(Symbol {
                 name,

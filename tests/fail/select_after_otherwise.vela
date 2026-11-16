@@ -1,0 +1,10 @@
+; error: 7:9: 'otherwise' must be the last branch of 'select', after every 'case'
+task main()
+    fixed c = chan_new<int>(1)
+    select
+        otherwise
+            show("first")
+        case _ <<- c
+            show("after")
+    fi
+fi

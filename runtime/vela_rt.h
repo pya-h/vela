@@ -4471,6 +4471,17 @@ static inline void vela__rt__sched_submit(void (*fn)(void* arg), void* arg) {
     pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
 
+typedef struct vela__rt__select_waiter {
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    bool signaled;
+} vela__rt__select_waiter;
+
+typedef struct vela__rt__select_node {
+    vela__rt__select_waiter* waiter;
+    struct vela__rt__select_node* next;
+} vela__rt__select_node;
+
 typedef struct vela__rt__chan {
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
@@ -4485,6 +4496,7 @@ typedef struct vela__rt__chan {
     void (*on_message)(void* ctx);
     void* actor_ctx;
     bool scheduled;
+    vela__rt__select_node* waiters;
     /* In-flight operations holding a pointer to this struct. chan_of returns
        pinned (see below); chan_destroy waits for every pin before freeing, so
        a handle copied anywhere stays safe to use. */
@@ -4540,6 +4552,15 @@ static inline void vela__rt__chan_unpin(vela__rt__chan* chan) {
     atomic_fetch_sub_explicit(&chan->ops, 1, memory_order_seq_cst);
 }
 
+static inline void vela__rt__chan_wake_waiters_locked(vela__rt__chan* chan) {
+    for (vela__rt__select_node* n = chan->waiters; n != NULL; n = n->next) {
+        pthread_mutex_lock(&n->waiter->lock);
+        n->waiter->signaled = true;
+        pthread_cond_signal(&n->waiter->cond);
+        pthread_mutex_unlock(&n->waiter->lock);
+    }
+}
+
 static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     size_t cap = cap_in > 0 ? (size_t)cap_in : 1;
     size_t item_size = item_size_in > 0 ? (size_t)item_size_in : 1;
@@ -4561,6 +4582,7 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     chan->on_message = NULL;
     chan->actor_ctx = NULL;
     chan->scheduled = false;
+    chan->waiters = NULL;
     atomic_init(&chan->ops, 0);
     pthread_mutex_init(&chan->lock, NULL);
     pthread_cond_init(&chan->not_empty, NULL);
@@ -4603,6 +4625,29 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
    then every in-flight operation is waited out before the memory goes. Handles
    copied anywhere either pin before the clearing or fail the generation check
    after it — no use-after-free either way. Destroying twice is a no-op. */
+static inline void vela__rt__chan_push_locked(vela__rt__chan* chan, const void* item) {
+    memcpy(chan->buffer + (chan->tail * chan->item_size), item, chan->item_size);
+    chan->tail = (chan->tail + 1) % chan->cap;
+    chan->count++;
+    pthread_cond_signal(&chan->not_empty);
+    if (chan->on_message != NULL && !chan->scheduled) {
+        chan->scheduled = true;
+        vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
+    }
+    vela__rt__chan_wake_waiters_locked(chan);
+}
+
+static inline void vela__rt__chan_pop_locked(vela__rt__chan* chan, void* out_item, bool* out_drained) {
+    if (out_item != NULL) {
+        memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
+    }
+    chan->head = (chan->head + 1) % chan->cap;
+    chan->count--;
+    pthread_cond_signal(&chan->not_full);
+    vela__rt__chan_wake_waiters_locked(chan);
+    *out_drained = chan->closed && chan->count == 0;
+}
+
 static inline void vela__rt__chan_destroy(int64_t handle) {
     if (handle <= 0) return;
     size_t index = (size_t)(handle & 0xffffffffu);
@@ -4624,6 +4669,7 @@ static inline void vela__rt__chan_destroy(int64_t handle) {
     chan->on_message = NULL;
     pthread_cond_broadcast(&chan->not_empty);
     pthread_cond_broadcast(&chan->not_full);
+    vela__rt__chan_wake_waiters_locked(chan);
     pthread_mutex_unlock(&chan->lock);
     while (atomic_load_explicit(&chan->ops, memory_order_seq_cst) > 0) {
         sched_yield();
@@ -4655,14 +4701,7 @@ static inline bool vela__rt__chan_send(int64_t handle, const void* item) {
         pthread_cond_wait(&chan->not_full, &chan->lock);
     }
     if (!chan->closed) {
-        memcpy(chan->buffer + (chan->tail * chan->item_size), item, chan->item_size);
-        chan->tail = (chan->tail + 1) % chan->cap;
-        chan->count++;
-        pthread_cond_signal(&chan->not_empty);
-        if (chan->on_message != NULL && !chan->scheduled) {
-            chan->scheduled = true;
-            vela__rt__sched_submit(chan->on_message, chan->actor_ctx);
-        }
+        vela__rt__chan_push_locked(chan, item);
         sent = true;
     }
     pthread_mutex_unlock(&chan->lock);
@@ -4680,12 +4719,8 @@ static inline bool vela__rt__chan_recv(int64_t handle, void* out_item) {
         pthread_cond_wait(&chan->not_empty, &chan->lock);
     }
     if (chan->count > 0) {
-        memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
-        chan->head = (chan->head + 1) % chan->cap;
-        chan->count--;
-        pthread_cond_signal(&chan->not_full);
+        vela__rt__chan_pop_locked(chan, out_item, &drained);
         got = true;
-        drained = chan->closed && chan->count == 0;
     }
     pthread_mutex_unlock(&chan->lock);
     vela__rt__chan_unpin(chan);
@@ -4702,12 +4737,8 @@ static inline bool vela__rt__chan_try_recv(int64_t handle, void* out_item) {
     bool drained = false;
     pthread_mutex_lock(&chan->lock);
     if (chan->count > 0) {
-        memcpy(out_item, chan->buffer + (chan->head * chan->item_size), chan->item_size);
-        chan->head = (chan->head + 1) % chan->cap;
-        chan->count--;
-        pthread_cond_signal(&chan->not_full);
+        vela__rt__chan_pop_locked(chan, out_item, &drained);
         got = true;
-        drained = chan->closed && chan->count == 0;
     }
     pthread_mutex_unlock(&chan->lock);
     vela__rt__chan_unpin(chan);
@@ -4730,6 +4761,7 @@ static inline void vela__rt__chan_close(int64_t handle) {
         }
         pthread_cond_broadcast(&chan->not_empty);
         pthread_cond_broadcast(&chan->not_full);
+        vela__rt__chan_wake_waiters_locked(chan);
     }
     empty = chan->count == 0;
     pthread_mutex_unlock(&chan->lock);
@@ -4737,6 +4769,318 @@ static inline void vela__rt__chan_close(int64_t handle) {
     if (empty) {
         vela__rt__chan_destroy(handle);
     }
+}
+
+typedef enum vela__rt__select_op {
+    VELA__RT__SELECT_RECV = 0,
+    VELA__RT__SELECT_RECV_NONE = 1,
+    VELA__RT__SELECT_SEND = 2
+} vela__rt__select_op;
+
+typedef struct vela__rt__select_arm {
+    int64_t handle;
+    vela__rt__select_op op;
+    void* item_ptr;
+} vela__rt__select_arm;
+
+#define VELA__RT__SELECT_TIMEOUT (-1)
+#define VELA__RT__SELECT_OTHERWISE (-2)
+#define VELA__RT__SELECT_ALL_CLOSED (-3)
+#define VELA__RT__SELECT_STACK_CAP 16
+
+static _Atomic size_t vela__rt__select_rr = 0;
+
+static inline bool vela__rt__select_try_arm(
+    vela__rt__chan* chan,
+    const vela__rt__select_arm* arm,
+    bool* out_closed,
+    bool* out_drained
+) {
+    *out_closed = false;
+    *out_drained = false;
+    if (chan == NULL) {
+        *out_closed = true;
+        return arm->op == VELA__RT__SELECT_RECV_NONE;
+    }
+    bool ready = false;
+    pthread_mutex_lock(&chan->lock);
+    switch (arm->op) {
+        case VELA__RT__SELECT_RECV:
+            if (chan->count > 0) {
+                vela__rt__chan_pop_locked(chan, arm->item_ptr, out_drained);
+                ready = true;
+            } else if (chan->closed) {
+                *out_closed = true;
+            }
+            break;
+        case VELA__RT__SELECT_RECV_NONE:
+            if (chan->closed && chan->count == 0) {
+                ready = true;
+            }
+            break;
+        case VELA__RT__SELECT_SEND:
+            if (chan->closed) {
+                *out_closed = true;
+            } else if (chan->count < chan->cap) {
+                vela__rt__chan_push_locked(chan, arm->item_ptr);
+                ready = true;
+            }
+            break;
+    }
+    pthread_mutex_unlock(&chan->lock);
+    return ready;
+}
+
+static inline int64_t vela__rt__select_probe_all(
+    const vela__rt__select_arm* arms,
+    vela__rt__chan* const* pins,
+    size_t arm_count,
+    size_t start,
+    size_t* out_active,
+    int64_t* out_destroy_handle
+) {
+    size_t active = 0;
+    for (size_t k = 0; k < arm_count; k++) {
+        size_t idx = (start + k) % arm_count;
+        bool closed = false;
+        bool drained = false;
+        if (vela__rt__select_try_arm(pins[idx], &arms[idx], &closed, &drained)) {
+            if (drained) {
+                *out_destroy_handle = arms[idx].handle;
+            }
+            return (int64_t)idx;
+        }
+        if (!closed) {
+            active++;
+        }
+    }
+    *out_active = active;
+    return -1;
+}
+
+static inline void vela__rt__select_add_ms(struct timespec* ts, int64_t timeout_ms) {
+    if (timeout_ms <= 0) return;
+    int64_t sec = timeout_ms / 1000;
+    int64_t nsec = (timeout_ms % 1000) * 1000000L;
+    ts->tv_sec += (time_t)sec;
+    ts->tv_nsec += (long)nsec;
+    if (ts->tv_nsec >= 1000000000L) {
+        ts->tv_sec += 1;
+        ts->tv_nsec -= 1000000000L;
+    }
+}
+
+static inline bool vela__rt__select_deadline_passed(clockid_t clk, const struct timespec* deadline) {
+    struct timespec now;
+    if (clock_gettime(clk, &now) != 0) return false;
+    return now.tv_sec > deadline->tv_sec
+        || (now.tv_sec == deadline->tv_sec && now.tv_nsec >= deadline->tv_nsec);
+}
+
+static inline void vela__rt__select_init_waiter(vela__rt__select_waiter* w, bool timed, clockid_t* out_clk) {
+    pthread_mutex_init(&w->lock, NULL);
+    w->signaled = false;
+    *out_clk = CLOCK_REALTIME;
+#if defined(CLOCK_MONOTONIC)
+    if (timed) {
+        pthread_condattr_t attr;
+        if (pthread_condattr_init(&attr) == 0) {
+            if (pthread_condattr_setclock(&attr, CLOCK_MONOTONIC) == 0
+                && pthread_cond_init(&w->cond, &attr) == 0) {
+                pthread_condattr_destroy(&attr);
+                *out_clk = CLOCK_MONOTONIC;
+                return;
+            }
+            pthread_condattr_destroy(&attr);
+        }
+    }
+#else
+    (void)timed;
+#endif
+    pthread_cond_init(&w->cond, NULL);
+}
+
+static inline void vela__rt__select_unsubscribe(
+    vela__rt__chan* const* unique_chans,
+    vela__rt__select_node* nodes,
+    size_t unique_count
+) {
+    for (size_t i = 0; i < unique_count; i++) {
+        vela__rt__chan* chan = unique_chans[i];
+        pthread_mutex_lock(&chan->lock);
+        vela__rt__select_node** cur = &chan->waiters;
+        while (*cur != NULL) {
+            if (*cur == &nodes[i]) {
+                *cur = nodes[i].next;
+                break;
+            }
+            cur = &(*cur)->next;
+        }
+        pthread_mutex_unlock(&chan->lock);
+    }
+}
+
+static inline int64_t vela__rt__chan_select(
+    const vela__rt__select_arm* arms,
+    size_t arm_count,
+    bool has_otherwise,
+    bool has_timeout,
+    int64_t timeout_ms
+) {
+    if (arm_count == 0) {
+        if (has_otherwise) return VELA__RT__SELECT_OTHERWISE;
+        if (has_timeout) {
+            if (timeout_ms > 0) {
+                struct timespec req;
+                req.tv_sec = (time_t)(timeout_ms / 1000);
+                req.tv_nsec = (long)((timeout_ms % 1000) * 1000000L);
+                nanosleep(&req, NULL);
+            }
+            return VELA__RT__SELECT_TIMEOUT;
+        }
+        return VELA__RT__SELECT_ALL_CLOSED;
+    }
+
+    vela__rt__chan* stack_pins[VELA__RT__SELECT_STACK_CAP];
+    vela__rt__chan* stack_unique[VELA__RT__SELECT_STACK_CAP];
+    vela__rt__select_node stack_nodes[VELA__RT__SELECT_STACK_CAP];
+
+    vela__rt__chan** pins = stack_pins;
+    vela__rt__chan** unique_chans = stack_unique;
+    vela__rt__select_node* nodes = stack_nodes;
+    if (arm_count > VELA__RT__SELECT_STACK_CAP) {
+        pins = (vela__rt__chan**)malloc(arm_count * sizeof(vela__rt__chan*));
+        unique_chans = (vela__rt__chan**)malloc(arm_count * sizeof(vela__rt__chan*));
+        nodes = (vela__rt__select_node*)malloc(arm_count * sizeof(vela__rt__select_node));
+        if (pins == NULL || unique_chans == NULL || nodes == NULL) {
+            free(pins);
+            free(unique_chans);
+            free(nodes);
+            vela__rt__out_of_memory();
+        }
+    }
+
+    /* Pin each distinct live channel once (deduplicated) so chan_destroy waits
+       for us and unpin cannot undercount/double-drop when arms share a handle. */
+    size_t unique_count = 0;
+    for (size_t i = 0; i < arm_count; i++) {
+        vela__rt__chan* existing = NULL;
+        for (size_t j = 0; j < i; j++) {
+            if (arms[j].handle == arms[i].handle) {
+                existing = pins[j];
+                break;
+            }
+        }
+        if (existing != NULL) {
+            pins[i] = existing;
+        } else {
+            pins[i] = vela__rt__chan_of(arms[i].handle);
+            if (pins[i] != NULL) {
+                unique_chans[unique_count++] = pins[i];
+            }
+        }
+    }
+
+    size_t rr = atomic_fetch_add_explicit(&vela__rt__select_rr, 1, memory_order_relaxed);
+    size_t active = 0;
+    int64_t destroy_handle = 0;
+    int64_t winner = vela__rt__select_probe_all(arms, pins, arm_count, rr % arm_count, &active, &destroy_handle);
+
+    if (winner >= 0) {
+        goto cleanup_pins;
+    }
+    if (has_otherwise) {
+        winner = VELA__RT__SELECT_OTHERWISE;
+        goto cleanup_pins;
+    }
+    if (has_timeout && timeout_ms <= 0) {
+        winner = VELA__RT__SELECT_TIMEOUT;
+        goto cleanup_pins;
+    }
+    if (active == 0 && !has_timeout) {
+        winner = VELA__RT__SELECT_ALL_CLOSED;
+        goto cleanup_pins;
+    }
+
+    vela__rt__select_waiter waiter;
+    clockid_t clk = CLOCK_REALTIME;
+    vela__rt__select_init_waiter(&waiter, has_timeout, &clk);
+    struct timespec deadline;
+    if (has_timeout) {
+        clock_gettime(clk, &deadline);
+        vela__rt__select_add_ms(&deadline, timeout_ms);
+    }
+
+    for (size_t i = 0; i < unique_count; i++) {
+        nodes[i].waiter = &waiter;
+        pthread_mutex_lock(&unique_chans[i]->lock);
+        nodes[i].next = unique_chans[i]->waiters;
+        unique_chans[i]->waiters = &nodes[i];
+        pthread_mutex_unlock(&unique_chans[i]->lock);
+    }
+
+    for (;;) {
+        pthread_mutex_lock(&waiter.lock);
+        waiter.signaled = false;
+        pthread_mutex_unlock(&waiter.lock);
+
+        rr++;
+        winner = vela__rt__select_probe_all(arms, pins, arm_count, rr % arm_count, &active, &destroy_handle);
+        if (winner >= 0) {
+            break;
+        }
+        if (active == 0 && !has_timeout) {
+            winner = VELA__RT__SELECT_ALL_CLOSED;
+            break;
+        }
+        if (has_timeout && vela__rt__select_deadline_passed(clk, &deadline)) {
+            winner = VELA__RT__SELECT_TIMEOUT;
+            break;
+        }
+
+        bool timed_out = false;
+        pthread_mutex_lock(&waiter.lock);
+        while (!waiter.signaled) {
+            if (has_timeout) {
+                int rc = pthread_cond_timedwait(&waiter.cond, &waiter.lock, &deadline);
+                if (rc == ETIMEDOUT) {
+                    timed_out = true;
+                    break;
+                }
+            } else {
+                pthread_cond_wait(&waiter.cond, &waiter.lock);
+            }
+        }
+        pthread_mutex_unlock(&waiter.lock);
+
+        if (timed_out) {
+            /* Final non-blocking check avoids losing a simultaneous wakeup+timeout. */
+            rr++;
+            winner = vela__rt__select_probe_all(arms, pins, arm_count, rr % arm_count, &active, &destroy_handle);
+            if (winner < 0) {
+                winner = VELA__RT__SELECT_TIMEOUT;
+            }
+            break;
+        }
+    }
+
+    vela__rt__select_unsubscribe(unique_chans, nodes, unique_count);
+    pthread_cond_destroy(&waiter.cond);
+    pthread_mutex_destroy(&waiter.lock);
+
+cleanup_pins:
+    for (size_t i = 0; i < unique_count; i++) {
+        vela__rt__chan_unpin(unique_chans[i]);
+    }
+    if (arm_count > VELA__RT__SELECT_STACK_CAP) {
+        free(pins);
+        free(unique_chans);
+        free(nodes);
+    }
+    if (destroy_handle > 0) {
+        vela__rt__chan_destroy(destroy_handle);
+    }
+    return winner;
 }
 
 static inline int64_t vela__rt__chan_len(int64_t handle) {

@@ -274,7 +274,16 @@
           </p>
         </div>
         <div class="mini-card">
-          <h4>4. Compile-Time Boundary Safety</h4>
+          <h4>4. Multi-Channel <code>select</code> &amp; Timeouts</h4>
+          <p>
+            Contextual <code>select ... case ... otherwise ... fi</code> blocks wait atomically on multiple
+            receives (<code>case msg &lt;&lt;- ch</code>), closed detection (<code>case none &lt;&lt;- ch</code>),
+            bounded sends (<code>case [own] v -&gt;&gt; ch</code>), and <code>case after ms</code> timeouts without
+            lock-inversion deadlocks.
+          </p>
+        </div>
+        <div class="mini-card">
+          <h4>5. Compile-Time Boundary Safety</h4>
           <p>
             Linear <code>own T</code> move checking stops use-after-move and shared aliasing bugs before C is emitted,
             and regional values (<code>@r</code>) are rejected at channel and actor boundaries so memory never outlives its region.
@@ -344,30 +353,7 @@
 
       <div class="card">
         <h3>
-          <span>3. No Multi-Channel <code>select</code> Statement</span>
-          <span class="badge b-amber">Deferred</span>
-        </h3>
-        <div class="tag-row">
-          Missing primitives: blocking simultaneously on whichever of N channels receives first, timeout arms
-        </div>
-        <p>
-          Vela lets you block on <em>one</em> channel (<code>wait_and_receive(c)</code>) or immediately inspect any number
-          of channels without blocking (<code>receive(c)</code>), but there is no built-in <code>select</code> block that
-          sleeps on several independent channels at once and wakes when any single one becomes ready.
-        </p>
-        <p>
-          <strong>Why we didn't implement this yet:</strong>
-        </p>
-        <ul>
-          <li><strong>POSIX condition variables guard one channel at a time:</strong> Each <code>Chan[T]</code> currently synchronizes via its own <code>pthread_mutex_t</code> and <code>pthread_cond_t</code>. Waking a single thread from whichever of N unrelated locks changes first cannot be done with plain <code>pthread_cond_wait</code> alone — it requires registering multi-channel waiter nodes (or OS eventfds/pipes) and carefully ordering multi-channel locks to prevent lock-inversion bugs.</li>
-          <li><strong>Fan-in Actors handle most cases cleanly:</strong> Instead of waiting on three separate channels from one thread, multiple producers can dispatch tagged variants (via a <code>kind</code>) into one shared <code>Chan[Msg]</code> or directly into one coordinator <strong>Actor</strong>'s mailbox, achieving multi-source dispatch with zero extra runtime machinery.</li>
-          <li><strong>Planned syntax:</strong> A contextual <code>select ... otherwise ... fi</code> block with Go-inspired, Vela-safe double-arrow operators (<code>case msg &lt;&lt;- ch</code>, <code>case own item -&gt;&gt; ch</code>, and <code>case after ms</code> timeouts) plus standalone <code>&lt;&lt;- ch</code> / <code>val -&gt;&gt; ch</code> shorthand ideas — see <a href="channels.html">Channels</a>.</li>
-        </ul>
-      </div>
-
-      <div class="card">
-        <h3>
-          <span>4. No Whole-Region Cross-Thread Transfer (<code>Chan[own region]</code>)</span>
+          <span>3. No Whole-Region Cross-Thread Transfer (<code>Chan[own region]</code>)</span>
           <span class="badge b-amber">Deferred (Safety Guarded)</span>
         </h3>
         <div class="tag-row">
@@ -389,7 +375,7 @@
 
       <div class="card">
         <h3>
-          <span>5. No Data-Parallel Loops (<code>parallel each</code>)</span>
+          <span>4. No Data-Parallel Loops (<code>parallel each</code>)</span>
           <span class="badge b-amber">Deferred</span>
         </h3>
         <div class="tag-row">
@@ -410,7 +396,7 @@
 
       <div class="card">
         <h3>
-          <span>6. <code>shared flex</code> Fields Are Not Thread-Synchronized</span>
+          <span>5. <code>shared flex</code> Fields Are Not Thread-Synchronized</span>
           <span class="badge b-pink">Design Caveat</span>
         </h3>
         <div class="tag-row">
@@ -458,8 +444,8 @@
           </tr>
           <tr>
             <td><code>select</code> across N channels</td>
-            <td>Single fan-in <code>kind Msg</code> channel/actor, or <code>receive()</code> loop</td>
-            <td>Multiple producers send different variants of one <code>kind</code> into one queue processed sequentially.</td>
+            <td><code>select ... case x &lt;&lt;- ch ... otherwise ... fi</code></td>
+            <td>Built-in multi-channel <code>select</code> waits atomically on receives, bounded sends, channel close (<code>none &lt;&lt;- ch</code>), and <code>after ms</code> timeouts.</td>
           </tr>
           <tr>
             <td><code>async fn</code> request/response</td>

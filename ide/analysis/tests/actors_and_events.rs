@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
-use vela_analysis::{Analysis, LineIndex, Severity};
+use vela_analysis::{Analysis, LineIndex, Severity, TokenClass};
 
 fn labels(marked: &str) -> Vec<String> {
     let at = marked.find("@@").expect("a @@ marker");
@@ -163,4 +163,118 @@ fi
         diags
     );
 }
+
+fn token_class(source: &str, needle: &str) -> TokenClass {
+    let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+    let u16 = LineIndex::new(source).utf16_of(byte);
+    Analysis::new(source)
+        .tokens()
+        .into_iter()
+        .find(|t| t.from == u16)
+        .unwrap_or_else(|| panic!("no token at {:?}", needle))
+        .class
+}
+
+#[test]
+fn select_tokens_and_hovers() {
+    let source = "\
+task select(x: int) -> int
+    <- x + 1
+fi
+
+task main()
+    fixed c1 = chan_new<int>(2)
+    fixed c2 = chan_new<own int>(2)
+    fixed item = 42
+    fixed ok = select(1)
+    select
+    case msg <<- c1
+        show(msg)
+    case none <<- c1
+        show(0)
+    case own item ->> c2
+        show(ok)
+    case after 10
+        show(1)
+    otherwise
+        show(2)
+    fi
+fi
+";
+    assert_eq!(token_class(source, "select(x"), TokenClass::Task);
+    assert_eq!(token_class(source, "select(1)"), TokenClass::Task);
+    assert_eq!(token_class(source, "select\n"), TokenClass::Keyword);
+    assert_eq!(token_class(source, "msg <<-"), TokenClass::Variable);
+    assert_eq!(token_class(source, "<<- c1"), TokenClass::Operator);
+    assert_eq!(token_class(source, "->> c2"), TokenClass::Operator);
+    assert_eq!(token_class(source, "after 10"), TokenClass::Keyword);
+    assert_eq!(token_class(source, "otherwise"), TokenClass::Keyword);
+
+    let (code_sel, _) = hover(source, "select\n");
+    assert!(code_sel.contains("select"));
+    let (code_ow, _) = hover(source, "otherwise");
+    assert!(code_ow.contains("otherwise"));
+    let (code_after, _) = hover(source, "after 10");
+    assert!(code_after.contains("after"));
+    let (code_recv, _) = hover(source, "<<- c1");
+    assert!(code_recv.contains("<<-"));
+    let (code_send, _) = hover(source, "->> c2");
+    assert!(code_send.contains("->>"));
+    let (code_msg, _) = hover(source, "msg)");
+    assert_eq!(code_msg, "fixed msg: int");
+}
+
+#[test]
+fn select_completions() {
+    let start = "\
+task main()
+    select
+    @@
+    fi
+fi
+";
+    let offered_start = labels(start);
+    assert!(offered_start.contains(&"case".to_string()));
+    assert!(offered_start.contains(&"otherwise".to_string()));
+    assert!(!offered_start.contains(&"else".to_string()));
+
+    let arm = "\
+task main()
+    fixed c1 = chan_new<int>(2)
+    select
+    case @@
+    fi
+fi
+";
+    let offered_arm = labels(arm);
+    assert!(offered_arm.contains(&"after".to_string()));
+    assert!(offered_arm.contains(&"none".to_string()));
+    assert!(offered_arm.contains(&"own".to_string()));
+    assert!(offered_arm.contains(&"c1".to_string()));
+
+    let chan = "\
+task main()
+    fixed c1 = chan_new<int>(2)
+    select
+    case msg <<- @@
+    fi
+fi
+";
+    assert!(labels(chan).contains(&"c1".to_string()));
+
+    let after_ow = "\
+task main()
+    select
+    otherwise
+        show(1)
+    @@
+    fi
+fi
+";
+    let offered_ow = labels(after_ow);
+    assert!(offered_ow.contains(&"fi".to_string()));
+    assert!(!offered_ow.contains(&"case".to_string()));
+    assert!(!offered_ow.contains(&"otherwise".to_string()));
+}
+
 

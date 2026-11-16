@@ -1,0 +1,19 @@
+; error: 4:9: blocking 'select' without 'otherwise' cannot be used inside an actor handler; add an 'otherwise' arm or run 'select' in a task
+actor Blocker
+    on Wait(ch: Chan[int])
+        select
+            case v <<- ch
+                show(v)
+        fi
+    fi
+fi
+
+task main()
+    fixed c = chan_new<int>(1)
+    select
+        case v <<- c
+            show(v)
+        otherwise
+            show("ok")
+    fi
+fi

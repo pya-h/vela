@@ -205,6 +205,21 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "own value or Chan[own T]",
         "Ownership transfer capability. Sending an 'own T' message across a channel invalidates the sender's binding (move semantics), ensuring race-free concurrency without locks.",
     ),
+    (
+        "select",
+        "select ... case ... otherwise ... fi",
+        "Waits simultaneously on multiple channel operations (receive 'case msg <<- ch', closed 'case none <<- ch', send 'case value ->> ch', and timeout 'case after ms'). Adding 'otherwise' makes 'select' non-blocking (usable inside actor handlers).",
+    ),
+    (
+        "otherwise",
+        "otherwise",
+        "Non-blocking fallback arm in a 'select' block, run immediately when no channel arm is ready (or when all monitored channels are closed).",
+    ),
+    (
+        "after",
+        "case after ms",
+        "Timeout arm in a 'select' block that fires if no channel operation becomes ready within ms milliseconds.",
+    ),
 ];
 
 const THIS_REGION_DOC: &str = "The region the value this method is called on lives in. The method may send what the value holds there and take values in it, but can't allocate in it, since nothing gives a method the region.";
@@ -253,6 +268,14 @@ fn hover_token(
         (TokenClass::Operator, _) if text == "~" => (
             "T ~ E".to_string(),
             "A T when it succeeds, or an error E when it fails. Read it with match, is, or a plan B: x { fallback }. Only a task's own error, never a maybe or the value type again.".to_string(),
+        ),
+        (TokenClass::Operator, _) if text == "<<-" => (
+            "<<- ch or case msg <<- ch".to_string(),
+            "Channel receive operator: receives a message from channel ch (blocks until an item arrives, or matches ready arms in a 'select' block).".to_string(),
+        ),
+        (TokenClass::Operator, _) if text == "->>" => (
+            "value ->> ch or case [own] value ->> ch".to_string(),
+            "Channel send operator: sends value into channel ch, transferring ownership when written with 'own'.".to_string(),
         ),
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
@@ -587,6 +610,18 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let variant = case.and_then(|q| k.ident(k.pattern_variant_at(q)));
                 let doc = variant.map_or_else(|| "Bound by a case.".to_string(), |v| format!("Bound by case {}.", v));
                 pattern_name(k, name, &typed(&symbol.name), &doc)
+            }
+            Some("select") => {
+                let name = k.at_byte(symbol.name_range.start)?;
+                let kind_word = match k.token_before(name) {
+                    Some(vela::lexer::Token::Flex) => "flex",
+                    Some(vela::lexer::Token::Bind) => "bind",
+                    _ => "fixed",
+                };
+                (
+                    format!("{} {}", kind_word, typed(&symbol.name)),
+                    "Received from a channel in a select arm.".to_string(),
+                )
             }
             Some("is") => {
                 let name = k.at_byte(symbol.name_range.start)?;

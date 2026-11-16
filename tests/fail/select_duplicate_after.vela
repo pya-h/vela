@@ -1,0 +1,12 @@
+; error: 9:9: duplicate 'case after' timeout in 'select'; at most one timeout arm is allowed
+task main()
+    fixed ch = chan_new<int>(1)
+    select
+        case _ <<- ch
+            show("got")
+        case after 10
+            show("t1")
+        case after 20
+            show("t2")
+    fi
+fi

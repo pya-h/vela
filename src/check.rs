@@ -353,6 +353,11 @@ const MATCH_BRANCHES: Branches = Branches {
     each: "case",
     optional: false,
 };
+const SELECT_BRANCHES: Branches = Branches {
+    of: "select",
+    each: "case",
+    optional: false,
+};
 const WHEN_BRANCHES: Branches = Branches {
     of: "when",
     each: "branch",
@@ -7364,6 +7369,7 @@ impl Checker {
                 }
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
+            StmtKind::Select(sel) => self.check_select(span, sel, None).map(|_| ()),
             StmtKind::Send(values) => {
                 if let Some(what) = self.at_start {
                     return err(
@@ -7597,6 +7603,15 @@ impl Checker {
             StmtKind::Match(_, cases) => cases
                 .iter_mut()
                 .try_for_each(|case| self.settle_value(&mut case.body, settled)),
+            StmtKind::Select(sel) => {
+                sel.arms
+                    .iter_mut()
+                    .try_for_each(|arm| self.settle_value(&mut arm.body, settled))?;
+                if let Some(ow) = &mut sel.otherwise {
+                    self.settle_value(ow, settled)?;
+                }
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -7869,9 +7884,10 @@ impl Checker {
             StmtKind::Match(subject, cases) => {
                 self.check_match(span, subject, cases, Some(MATCH_BRANCHES))
             }
+            StmtKind::Select(sel) => self.check_select(span, sel, Some(SELECT_BRANCHES)),
             _ => Err(Error::internal_at(
                 span,
-                "a statement that is not a 'when' or a 'match' used as a value",
+                "a statement that is not a 'when', 'match', or 'select' used as a value",
             )),
         }
     }
@@ -9435,6 +9451,230 @@ impl Checker {
             }
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
+    }
+
+    fn select_chan_elem(&mut self, expr: &mut Expr, op: &str, allow_actor: bool) -> Result<Type> {
+        let ty = self.check_expr(expr)?;
+        match &ty {
+            Type::Chan(inner) => Ok(inner.as_ref().clone()),
+            Type::Actor(actor_ty) if allow_actor => {
+                let actor_name = match actor_ty.as_ref() {
+                    Type::Named(name, _) => name.clone(),
+                    _ => "Unknown".to_string(),
+                };
+                Ok(Type::Named(format!("{}Msg", actor_name), None))
+            }
+            Type::Unknown => Ok(Type::Unknown),
+            _ => err(
+                expr.span,
+                format!(
+                    "'{}' takes a channel{}, got {}",
+                    op,
+                    if allow_actor { " or actor" } else { "" },
+                    ty
+                ),
+            ),
+        }
+    }
+
+    fn check_chan_send_value(&self, value: &Expr, elem_ty: &Type, item_ty: &Type) -> Result<()> {
+        let payload_ty = match elem_ty {
+            Type::Own(inner) => inner.as_ref(),
+            other => other,
+        };
+        let sent_ty = match item_ty {
+            Type::Own(inner) => inner.as_ref(),
+            other => other,
+        };
+        if !payload_ty.unknown() && !sent_ty.unknown() && !fits_regions(sent_ty, payload_ty) {
+            return err(
+                value.span,
+                format!(
+                    "cannot send a value holding '{}' region memory on a channel carrying {}; the receiver can outlive the sender's region",
+                    sent_ty, elem_ty
+                ),
+            );
+        }
+        if let Type::Own(payload) = elem_ty {
+            if !matches!(value.kind, ExprKind::Own(_)) {
+                return err(
+                    value.span,
+                    format!(
+                        "expected 'own' value for channel payload of type '{}'; write 'own ...'",
+                        elem_ty
+                    ),
+                );
+            }
+            if !fits(item_ty, payload) && !item_ty.unknown() {
+                return err(
+                    value.span,
+                    format!("cannot send value of type {} on channel carrying {}", item_ty, payload),
+                );
+            }
+        } else if !elem_ty.unknown() && !fits(item_ty, elem_ty) && !item_ty.unknown() {
+            return err(
+                value.span,
+                format!("cannot send value of type {} on channel carrying {}", item_ty, elem_ty),
+            );
+        }
+        Ok(())
+    }
+
+    fn reject_inline_select_expr(&self, body: &[Stmt], header_line: usize) -> Result<()> {
+        if let [Stmt { kind: StmtKind::Expr(value), .. }] = body
+            && value.span.line == header_line
+        {
+            return err(
+                value.span,
+                "a case gives a value with '=' only where the select is one itself, as in 'fixed name = select …'; the cases of a select on its own hold statements, written on the lines below it",
+            );
+        }
+        Ok(())
+    }
+
+    fn check_select(
+        &mut self,
+        span: Span,
+        sel: &mut SelectStmt,
+        gives: Option<Branches>,
+    ) -> Result<Option<Type>> {
+        if sel.arms.is_empty() && sel.otherwise.is_none() {
+            return err(span, "'select' needs at least one 'case' or 'otherwise' branch");
+        }
+        if self.in_actor.is_some() && sel.otherwise.is_none() {
+            return err(
+                span,
+                "blocking 'select' without 'otherwise' cannot be used inside an actor handler; add an 'otherwise' arm or run 'select' in a task",
+            );
+        }
+
+        let mut seen_after = false;
+        let mut arm_meta: Vec<Option<Type>> = Vec::with_capacity(sel.arms.len());
+        for arm in &mut sel.arms {
+            match &mut arm.kind {
+                SelectArmKind::Recv { chan, .. } => {
+                    let elem_ty = self.select_chan_elem(chan, "<<-", false)?;
+                    let bound_ty = match elem_ty {
+                        Type::Own(payload) => *payload,
+                        other => other,
+                    };
+                    arm_meta.push(Some(bound_ty));
+                }
+                SelectArmKind::RecvNone { chan } => {
+                    self.select_chan_elem(chan, "none <<-", false)?;
+                    arm_meta.push(None);
+                }
+                SelectArmKind::Send { value, chan } => {
+                    let elem_ty = self.select_chan_elem(chan, "->>", true)?;
+                    if !matches!(value.kind, ExprKind::Own(_)) {
+                        let item_ty = self.check_expr(value)?;
+                        self.check_chan_send_value(value, &elem_ty, &item_ty)?;
+                    }
+                    arm_meta.push(Some(elem_ty));
+                }
+                SelectArmKind::After { ms } => {
+                    if seen_after {
+                        return err(
+                            arm.span,
+                            "duplicate 'case after' timeout in 'select'; at most one timeout arm is allowed",
+                        );
+                    }
+                    seen_after = true;
+                    let ms_ty = self.check_expr(ms)?;
+                    if ms_ty != Type::Int && !ms_ty.unknown() {
+                        return err(
+                            ms.span,
+                            format!("'case after' expects timeout milliseconds of type int, got {}", ms_ty),
+                        );
+                    }
+                    if matches!(ms.kind, ExprKind::Unary(UnaryOp::Neg, _))
+                        || matches!(ms.kind, ExprKind::IntLit(n) if n < 0)
+                    {
+                        return err(ms.span, "timeout duration in 'select' cannot be negative");
+                    }
+                    arm_meta.push(None);
+                }
+            }
+        }
+
+        let entry_unset = self.unset.clone();
+        let entry_moved = self.moved.clone();
+        let mut all_moved = entry_moved.clone();
+        let mut branches = Vec::new();
+        let mut given = Vec::new();
+
+        for (i, (arm, meta)) in sel.arms.iter_mut().zip(arm_meta).enumerate() {
+            self.moved = entry_moved.clone();
+            if let SelectArmKind::Send { value, .. } = &mut arm.kind
+                && matches!(value.kind, ExprKind::Own(_))
+            {
+                let item_ty = self.check_expr(value)?;
+                if let Some(elem_ty) = &meta {
+                    self.check_chan_send_value(value, elem_ty, &item_ty)?;
+                }
+            }
+            let bindings: Vec<Declared> = match (&arm.kind, meta) {
+                (SelectArmKind::Recv { mode, name, name_span, .. }, Some(ty))
+                    if name != DISCARD =>
+                {
+                    vec![(name.clone(), *name_span, ty, *mode)]
+                }
+                _ => Vec::new(),
+            };
+            match gives {
+                Some(words) => {
+                    let found = self.check_value_block(bindings, &mut arm.body, arm.span, words);
+                    let value = self.note_branch(found, arm.span);
+                    given.extend(value.map(|(ty, at)| (i, ty, at)));
+                }
+                None => {
+                    self.reject_inline_select_expr(&arm.body, arm.span.line)?;
+                    self.check_block_with(bindings, &mut arm.body)?;
+                }
+            }
+            all_moved.extend(self.moved.iter().cloned());
+            branches.push(self.branch_state(&arm.body, &entry_unset));
+        }
+
+        if let Some(ow) = &mut sel.otherwise {
+            self.moved = entry_moved;
+            let ow_span = sel.otherwise_span.unwrap_or(span);
+            match gives {
+                Some(words) => {
+                    let found = self.check_value_block(Vec::new(), ow, ow_span, words);
+                    let value = self.note_branch(found, ow_span);
+                    given.extend(value.map(|(ty, at)| (sel.arms.len(), ty, at)));
+                }
+                None => {
+                    self.reject_inline_select_expr(ow, ow_span.line)?;
+                    self.check_scoped_block(ow)?;
+                }
+            }
+            all_moved.extend(self.moved.iter().cloned());
+            branches.push(self.branch_state(ow, &entry_unset));
+        }
+
+        self.moved = all_moved;
+        self.join_branches(entry_unset, branches);
+        let Some(words) = gives else { return Ok(None) };
+        let Some(settled) = self.settle_branches(span, &given, words)? else {
+            return Ok(None);
+        };
+        let settled = self.made_kinds(settled, span)?;
+        for (i, _, _) in given
+            .iter()
+            .filter(|(_, ty, _)| !ty.unknown() && *ty != settled)
+        {
+            if let Some(arm) = sel.arms.get_mut(*i) {
+                self.settle_value(&mut arm.body, &settled)?;
+            } else if *i == sel.arms.len()
+                && let Some(ow) = &mut sel.otherwise
+            {
+                self.settle_value(ow, &settled)?;
+            }
+        }
+        self.escaping_region(span, &given, &settled, words)?;
+        Ok(Some(settled))
     }
 
     fn check_match(
@@ -13211,39 +13451,7 @@ impl Checker {
                 // A payload holding a sender's regional memory (text@r, a shape with
                 // text, a slice) would dangle for the receiver once that region
                 // closes; only lasting data (or an owned lasting value) may cross.
-                let payload_ty = match &elem_ty {
-                    Type::Own(inner) => inner.as_ref(),
-                    other => other,
-                };
-                let sent_ty = match &item_ty {
-                    Type::Own(inner) => inner.as_ref(),
-                    other => other,
-                };
-                if !payload_ty.unknown()
-                    && !sent_ty.unknown()
-                    && !fits_regions(sent_ty, payload_ty)
-                {
-                    return err(
-                        arg1.span,
-                        format!(
-                            "cannot send a value holding '{}' region memory on a channel carrying {}; the receiver can outlive the sender's region",
-                            sent_ty, elem_ty
-                        ),
-                    );
-                }
-                if let Type::Own(payload) = &elem_ty {
-                    if !matches!(arg1.kind, ExprKind::Own(_)) {
-                        return err(
-                            arg1.span,
-                            format!("expected 'own' value for channel payload of type '{}'; write 'own ...'", elem_ty),
-                        );
-                    }
-                    if !fits(&item_ty, payload) && !item_ty.unknown() {
-                        return err(arg1.span, format!("cannot send value of type {} on channel carrying {}", item_ty, payload));
-                    }
-                } else if !elem_ty.unknown() && !fits(&item_ty, &elem_ty) && !item_ty.unknown() {
-                    return err(arg1.span, format!("cannot send value of type {} on channel carrying {}", item_ty, elem_ty));
-                }
+                self.check_chan_send_value(arg1, &elem_ty, &item_ty)?;
                 return Ok(CallSetup::Checked(Type::Bool));
             }
         }
@@ -22001,7 +22209,10 @@ fn task_fits(actual: &TaskType, expected: &TaskType) -> bool {
 }
 
 pub fn gives_value(stmt: &Stmt) -> bool {
-    matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, Some(_)))
+    matches!(
+        &stmt.kind,
+        StmtKind::Match(..) | StmtKind::When(_, Some(_)) | StmtKind::Select(_)
+    )
 }
 
 fn fits(from: &Type, to: &Type) -> bool {
@@ -22416,6 +22627,24 @@ impl Checker {
                 cases
                     .iter_mut()
                     .try_for_each(|case| self.substitute_block(&mut case.body, given, made))
+            }
+            StmtKind::Select(sel) => {
+                for arm in &mut sel.arms {
+                    match &mut arm.kind {
+                        SelectArmKind::Recv { chan, .. }
+                        | SelectArmKind::RecvNone { chan } => self.substitute_expr(chan, given, made)?,
+                        SelectArmKind::Send { value, chan } => {
+                            self.substitute_expr(value, given, made)?;
+                            self.substitute_expr(chan, given, made)?;
+                        }
+                        SelectArmKind::After { ms } => self.substitute_expr(ms, given, made)?,
+                    }
+                    self.substitute_block(&mut arm.body, given, made)?;
+                }
+                if let Some(ow) = &mut sel.otherwise {
+                    self.substitute_block(ow, given, made)?;
+                }
+                Ok(())
             }
         }
     }
@@ -23778,6 +24007,11 @@ fn always_sends(block: &Block) -> bool {
             else_block.as_ref().is_some_and(always_sends)
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
+        StmtKind::Select(sel) => {
+            (!sel.arms.is_empty() || sel.otherwise.is_some())
+                && sel.arms.iter().all(|arm| always_sends(&arm.body))
+                && sel.otherwise.as_ref().is_none_or(always_sends)
+        }
         StmtKind::Block(body) => always_sends(body),
         StmtKind::Named(name, inner) => never_finishes(inner, Some(name)),
         StmtKind::Loop(..) | StmtKind::Parted(_) => never_finishes(stmt, None),
@@ -24012,6 +24246,24 @@ fn stmt_effects(
                 .iter()
                 .for_each(|case| loop_effects(&case.body, names, inner, own, effects));
         }
+        StmtKind::Select(sel) => {
+            for arm in &sel.arms {
+                match &arm.kind {
+                    SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                        expr_effects(chan, names, inner, own, effects)
+                    }
+                    SelectArmKind::Send { value, chan } => {
+                        expr_effects(value, names, inner, own, effects);
+                        expr_effects(chan, names, inner, own, effects);
+                    }
+                    SelectArmKind::After { ms } => expr_effects(ms, names, inner, own, effects),
+                }
+                loop_effects(&arm.body, names, inner, own, effects);
+            }
+            if let Some(ow) = &sel.otherwise {
+                loop_effects(ow, names, inner, own, effects);
+            }
+        }
         StmtKind::Block(block) => loop_effects(block, names, inner, own, effects),
         StmtKind::Event(e) => {
             if let Some(cond) = &e.cond {
@@ -24199,6 +24451,11 @@ fn always_leaves(block: &[Stmt]) -> bool {
                 .is_some_and(|block| always_leaves(block))
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_leaves(&case.body)),
+        StmtKind::Select(sel) => {
+            (!sel.arms.is_empty() || sel.otherwise.is_some())
+                && sel.arms.iter().all(|arm| always_leaves(&arm.body))
+                && sel.otherwise.as_ref().is_none_or(|b| always_leaves(b))
+        }
         StmtKind::Block(body) => always_leaves(body),
         _ => false,
     })
@@ -25650,6 +25907,24 @@ fn visit_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr) -> bool) {
             visit_expr(subject, f);
             cases.iter().for_each(|case| visit_block(&case.body, f));
         }
+        StmtKind::Select(sel) => {
+            for arm in &sel.arms {
+                match &arm.kind {
+                    SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                        visit_expr(chan, f)
+                    }
+                    SelectArmKind::Send { value, chan } => {
+                        visit_expr(value, f);
+                        visit_expr(chan, f);
+                    }
+                    SelectArmKind::After { ms } => visit_expr(ms, f),
+                }
+                visit_block(&arm.body, f);
+            }
+            if let Some(ow) = &sel.otherwise {
+                visit_block(ow, f);
+            }
+        }
         StmtKind::Break(_, Some(value)) => visit_expr(value, f),
         StmtKind::Event(e) => {
             e.cond
@@ -25911,6 +26186,10 @@ fn break_values<'a>(stmt: &'a Stmt, values: &mut Vec<&'a Expr>) {
             blocks.extend(else_block.iter().map(Vec::as_slice));
         }
         StmtKind::Match(_, cases) => blocks.extend(cases.iter().map(|case| case.body.as_slice())),
+        StmtKind::Select(sel) => {
+            blocks.extend(sel.arms.iter().map(|arm| arm.body.as_slice()));
+            blocks.extend(sel.otherwise.iter().map(Vec::as_slice));
+        }
         StmtKind::Block(body) => blocks.push(body),
         StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => blocks.extend(
             [Some(body), finally.as_ref()]
@@ -26080,6 +26359,14 @@ fn last_values<'a>(block: &'a [Stmt], values: &mut Vec<&'a Expr>) {
         Some(StmtKind::Match(_, cases)) => cases
             .iter()
             .for_each(|case| last_values(&case.body, values)),
+        Some(StmtKind::Select(sel)) => {
+            sel.arms
+                .iter()
+                .for_each(|arm| last_values(&arm.body, values));
+            if let Some(ow) = &sel.otherwise {
+                last_values(ow, values);
+            }
+        }
         _ => {}
     }
 }
@@ -26097,6 +26384,14 @@ fn last_values_mut(block: &mut [Stmt], f: &mut dyn FnMut(&mut Expr)) {
         Some(StmtKind::Match(_, cases)) => cases
             .iter_mut()
             .for_each(|case| last_values_mut(&mut case.body, f)),
+        Some(StmtKind::Select(sel)) => {
+            sel.arms
+                .iter_mut()
+                .for_each(|arm| last_values_mut(&mut arm.body, f));
+            if let Some(ow) = &mut sel.otherwise {
+                last_values_mut(ow, f);
+            }
+        }
         _ => {}
     }
 }
@@ -26761,6 +27056,14 @@ fn collect_block_mutations(block: &[Stmt], out: &mut HashSet<String>) {
             StmtKind::Match(_, cases) => {
                 for case in cases {
                     collect_block_mutations(&case.body, out);
+                }
+            }
+            StmtKind::Select(sel) => {
+                for arm in &sel.arms {
+                    collect_block_mutations(&arm.body, out);
+                }
+                if let Some(ow) = &sel.otherwise {
+                    collect_block_mutations(ow, out);
                 }
             }
             StmtKind::Each(_, _, _, body, finally) => {
