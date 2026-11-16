@@ -239,21 +239,58 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
     <header>
-      <nav class="top-nav">
+      <nav class="top-nav" aria-label="Vela documentation">
         <a href="index.html">Guide</a>
         <a href="regions.html">Regions</a>
         <a href="safety.html">Safety</a>
-        <a href="channels.html" class="active">Channels</a>
+        <a href="channels.html" class="active" aria-current="page">Channels</a>
         <a href="actors.html">Actors</a>
         <a href="events.html">Events</a>
-        <a href="data-races.html">Data Races</a>
-        <a href="std.html">Standard Library</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
         <a href="web.html">Web</a>
         <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html">Review</a>
       </nav>
       <h1>Channels &amp; Ownership</h1>
       <p class="tagline">
@@ -373,7 +410,9 @@
           <tbody>
             <tr>
               <td><code>dispatch(c, item)</code></td>
-              <td><code>c.dispatch(item)</code></td>
+              <td>
+                <code>c.dispatch(item)</code><br /><code>item -&gt;&gt; c</code>
+              </td>
               <td><code>bool</code></td>
               <td>
                 Blocks if the buffer is full until space is freed. Returns
@@ -383,11 +422,15 @@
             </tr>
             <tr>
               <td><code>wait_and_receive(c)</code></td>
-              <td><code>c.wait_and_receive()</code></td>
+              <td>
+                <code>c.wait_and_receive()</code><br /><code>&lt;&lt;- c</code>
+              </td>
               <td><code>T</code></td>
               <td>
-                Blocks if the buffer is empty until a message arrives. Returns
-                the received payload.
+                Blocks if the buffer is empty until a message arrives, returning
+                the received payload. Traps if the channel is closed and drained
+                (use <code>receive(c)</code> to check non-blockingly and handle
+                closure safely).
               </td>
             </tr>
             <tr>
@@ -405,7 +448,12 @@
               <td><code>nothing</code></td>
               <td>
                 Closes the channel. Subsequent receives drain existing items;
-                subsequent sends fail gracefully.
+                subsequent sends fail gracefully. See
+                <a href="channel-lifecycle.html"
+                  >Channel Lifecycle &amp; Explicit Closing</a
+                >
+                for why <code>.close()</code> is explicit rather than
+                region-tied.
               </td>
             </tr>
             <tr>
@@ -427,6 +475,87 @@
             </tr>
           </tbody>
         </table>
+
+        <h3>
+          Operator Shortcuts: <code>-&gt;&gt;</code> and <code>&lt;&lt;-</code>
+        </h3>
+        <p>
+          Outside <code>select</code>, <code>value -&gt;&gt; c</code> is a
+          direct shorthand for <code>dispatch(c, value)</code> (returning
+          <code>bool</code>, and working with both channels and actors), and
+          <code>&lt;&lt;- c</code> is a blocking prefix shorthand for
+          <code>wait_and_receive(c)</code> (non-blocking
+          <code>receive(c)</code> stays a method/task call):
+        </p>
+        <pre><code><span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> ch = chan_new&lt;int&gt;(<span class="number">4</span>)
+    <span class="number">10</span> + <span class="number">20</span> -&gt;&gt; ch
+    <span class="keyword">fixed</span> sent = <span class="number">42</span> -&gt;&gt; ch
+    <span class="keyword">fixed</span> a = &lt;&lt;- ch
+    <span class="keyword">fixed</span> b = &lt;&lt;- ch
+    show(sent, <span class="string">" "</span>, a + b)
+    ch.close()
+<span class="keyword">fi</span></code></pre>
+
+        <h3>Multi-Channel <code>select</code> Statement &amp; Expression</h3>
+        <p>
+          Vela lets a task wait on multiple channels simultaneously using a
+          contextual <code>select ... otherwise ... fi</code> block with
+          double-arrow operators (<code>&lt;&lt;-</code> for receive,
+          <code>-&gt;&gt;</code> for send):
+        </p>
+        <ul>
+          <li>
+            <code>case msg &lt;&lt;- ch</code> (or
+            <code>case flex msg &lt;&lt;- ch</code>,
+            <code>case bind msg &lt;&lt;- ch</code>): waits until an item can be
+            received from <code>ch</code>. Closed+drained channels are
+            automatically skipped while other arms stay open.
+          </li>
+          <li>
+            <code>case none &lt;&lt;- ch</code>: triggers explicitly when
+            <code>ch</code> is closed and drained (<code>tokio::select!</code>
+            semantics).
+          </li>
+          <li>
+            <code>case val -&gt;&gt; ch</code> (or
+            <code>case own val -&gt;&gt; ch</code>): waits until buffer capacity
+            is available to send into <code>ch</code>. With <code>own</code>,
+            per-arm move checking ensures unchosen arms do not consume variables
+            for other arms.
+          </li>
+          <li>
+            <code>case after ms</code>: fires if no channel arm becomes ready
+            within <code>ms</code> milliseconds.
+          </li>
+          <li>
+            <code>otherwise</code>: non-blocking fallback branch &mdash; runs
+            immediately when no channel arm is currently ready (including when
+            all channels are closed, instead of blocking or trapping). Because
+            it never blocks, <code>select</code> with <code>otherwise</code> is
+            allowed inside <code>actor</code> <code>on</code> handlers, whereas
+            blocking <code>select</code> (without <code>otherwise</code>) is
+            rejected inside actor handlers.
+          </li>
+        </ul>
+        <p>
+          Both statement and value-producing forms (<code>case ... = ...</code>
+          / <code>otherwise = ...</code>) are supported:
+        </p>
+        <pre><code><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> fast = chan_new&lt;int&gt;(<span class="number">2</span>)
+    <span class="keyword">fixed</span> slow = chan_new&lt;text&gt;(<span class="number">2</span>)
+    fast.dispatch(<span class="number">42</span>)
+    slow.close()
+
+    <span class="keyword">fixed</span> label = select
+    <span class="keyword">case</span> n &lt;&lt;- fast = <span class="string">"fast={n}"</span>
+    <span class="keyword">case</span> none &lt;&lt;- slow = <span class="string">"slow-closed"</span>
+    <span class="keyword">case</span> after <span class="number">50</span> = <span class="string">"timeout"</span>
+    <span class="keyword">fi</span>
+    show(label)
+<span class="keyword">fi</span></code></pre>
       </section>
 
       <section>

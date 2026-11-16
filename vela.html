@@ -159,6 +159,36 @@
         color: var(--muted);
         border-top: 1px solid var(--border);
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
@@ -167,18 +197,23 @@
       <p class="tagline">
         A minimal, safe, fast systems language with a fresh face.
       </p>
-      <nav class="doc-nav" aria-label="Vela documentation">
-        <a href="index.html" aria-current="page">Language</a>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html" class="active" aria-current="page">Guide</a>
         <a href="regions.html">Regions</a>
+        <a href="safety.html">Safety</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
         <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
         <a href="ide.html">Studio</a>
         <a href="comparison.html">Comparison</a>
         <a href="future.html">Future</a>
-        <a href="future-2.html">Future (Kimi)</a>
-        <a href="safety.html">Safety</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="events.html">Events</a>
         <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
         <a href="review.html">Review</a>
       </nav>
     </header>
@@ -3328,8 +3363,11 @@ m = Meter { label: "gate" }     <span class="comment">; ok: a whole new value, w
             <a href="std.html#files"><code>File</code></a
             >. Numbers, <code>bool</code>, text written in the program, arrays,
             tuples, <code>maybe</code>, kinds, and shapes of those are all fine.
-            (See <a href="future.html#static-region">a static region</a> for an
-            idea that would lift this.)
+            (See
+            <a href="future.html#global-region-extras"
+              ><code>global</code> region extensions</a
+            >
+            for an idea that would lift this.)
           </li>
           <li>
             A shape that takes types has no shared fields yet (see
@@ -4710,7 +4748,7 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
             that it does. And a pattern is no type of a value: a slice of
             different shapes that follow one, called through it as it runs, is
             an idea for later (see
-            <a href="future-2.html#pattern-values"
+            <a href="future.html#pattern-values"
               >Patterns as the types of values</a
             >).
           </li>
@@ -4769,7 +4807,9 @@ fi</code></pre>
           never meet. A macro is a value, not a place: <code>P = 3.0</code> and
           <code>&amp;P</code> are errors. Macros that take values, as C's
           <code>#define MAX(a, b)</code> does, are an idea for later (see
-          <a href="future.html#macro-tasks">Macros that take values</a>).
+          <a href="future.html#comptime"
+            >Macros with Args &amp; <code>comptime</code></a
+          >).
         </p>
 
         <h3 id="type-aliases">Type aliases</h3>
@@ -5601,7 +5641,7 @@ fi</code></pre>
             <strong>No region.</strong> A value living in a region (joined text,
             a slice, a pointer, or a value holding one) waits for a region that
             lasts as long as the program (see
-            <a href="future.html#start-values">Future Directions</a>).
+            <a href="future.html#global-region-extras">Future Directions</a>).
           </li>
         </ul>
         <pre><code>task describe(n: int) -&gt; text
@@ -5784,7 +5824,7 @@ fi</code></pre>
           <code>read</code> field it could change. A method takes no startup
           decorator, and a method of a shape that takes types takes no wrappers
           yet, as a task taking types doesn't (see
-          <a href="future.html#decorators">Future Directions</a>).
+          <a href="future.html#generics-lambdas-extras">Future Directions</a>).
         </p>
 
         <h3 id="type-groups">Type groups</h3>
@@ -8448,8 +8488,8 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
 show(geometry.pi())            <span class="comment">; error: 'pi' is private to module 'geometry'</span>
 show(area(square))             <span class="comment">; error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
         <p>
-          <code>examples/shop.vela</code> is a program in three files. In the
-          generated C, a module's names are prefixed with its path
+          <code>examples/modules/shop.vela</code> is a program in three files.
+          In the generated C, a module's names are prefixed with its path
           (<code>vela_shapes__1__geometry__0__area</code>), so every module's
           names stay apart.
         </p>
@@ -8460,20 +8500,27 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           <code>include std/files {File}</code>. It is read from the compiler,
           never from the disk, so a folder of the program's own can't be named
           <code>std</code>, and <code>std</code> is no reserved word: a variable
-          may still be called so. It has five modules:
+          may still be called so. It has nine built-in modules:
           <a href="std.html#collections"><code>std/collections</code></a
-          >, <code>map</code>, <code>filter</code>, <code>fold</code> and more
-          over a slice's items;
+          >, <code>map</code>, <code>filter</code>, <code>fold</code> and lazy
+          iterators over a slice's items;
           <a href="std.html#files"><code>std/files</code></a
-          >, files on the disk;
+          >, files on the disk; <a href="std.html#gui"><code>std/gui</code></a
+          >, 2D canvas, themes, widgets, and X11 windows;
           <a href="std.html#int512"><code>std/int512</code></a
-          >, 512-bit integers;
+          >, 512-bit integers; <a href="std.html#json"><code>std/json</code></a
+          >, strict JSON parsing and serialization;
           <a href="std.html#loops"><code>std/loops</code></a
-          >, what a loop that gives a value fails with; and
+          >, what a loop that gives a value fails with;
           <a href="std.html#math"><code>std/math</code></a
           >, with <code>math.P</code>, <code>math.e</code>, powers,
-          trigonometry, <code>exp</code>, and <code>log</code>. What the library
-          has, and how it is made, is in <a href="std.html">Vela Library</a>.
+          trigonometry, <code>exp</code>, and <code>log</code>;
+          <a href="std.html#sync"><code>std/sync</code></a
+          >, bounded channel helpers; and
+          <a href="std.html#web"><code>std/web</code></a
+          >, non-blocking HTTP/1.1 servers, routers, SSE, and WebSockets. What
+          the library has, and how it is made, is in
+          <a href="std.html">Vela Library</a>.
         </p>
         <pre><span class="keyword">include</span> std/files {File}
 
@@ -8498,6 +8545,45 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         show(fib(i))
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
+      </section>
+
+      <section id="concurrency-overview">
+        <h2>Concurrency, Actors &amp; Events</h2>
+        <p>
+          Vela ships message-passing concurrency and reactive hooks without
+          shared-memory data races:
+        </p>
+        <ul>
+          <li>
+            <strong>Bounded Channels &amp; Linear Ownership:</strong>
+            <code>Chan[T]</code> and <code>Chan[own T]</code> transfer values
+            safely across tasks using <code>dispatch</code> /
+            <code>wait_and_receive</code> / <code>receive</code> /
+            <code>close</code> or the arrow shortcuts
+            <code>val -&gt;&gt; ch</code> and <code>&lt;&lt;- ch</code>, plus
+            multi-channel
+            <code>select ... case ... otherwise ... fi</code> multiplexing. See
+            <a href="channels.html">Channels &amp; Ownership</a>.
+          </li>
+          <li>
+            <strong>Isolated Actors:</strong> Encapsulated
+            <code>actor</code> declarations with private state,
+            <code>on Msg(...)</code> handlers, <code>spawn</code>, and an M:N
+            worker-pool scheduler. See <a href="actors.html">Actors</a> and
+            <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>.
+          </li>
+          <li>
+            <strong>Reactive Events:</strong> Compile-time-verified
+            <code>event</code> hooks on field mutations (<code>on</code>), reads
+            (<code>on read</code>), call interception
+            (<code>before</code>/<code>after</code>), and lifecycle (<code
+              >on init</code
+            >, <code>on drop</code>, <code>on start</code>, <code>on end</code>)
+            guarded by transitive <code>alters(...)</code> contracts and guarded
+            cycle termination. See <a href="events.html">Vela Events</a> and
+            <a href="safety.html#data-races">Safety &amp; Race Guarantees</a>.
+          </li>
+        </ul>
       </section>
 
       <section>

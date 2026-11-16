@@ -1,0 +1,2076 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — Commitments, Promises &amp; Async/Await Design</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --accent-warn: #fbbf24;
+        --accent-bad: #f87171;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 25%,
+            rgba(56, 189, 248, 0.16) 0%,
+            transparent 42%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(167, 139, 250, 0.14) 0%,
+            transparent 42%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.2rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin: 1rem auto 0;
+        font-size: 1.18rem;
+        color: var(--muted);
+        max-width: 760px;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2.5rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 1.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h2 .icon {
+        font-size: 1.4rem;
+      }
+      h3 {
+        margin-top: 2.15rem;
+        color: var(--accent);
+        font-size: 1.32rem;
+      }
+      h4 {
+        margin-top: 1.4rem;
+        color: var(--accent-3);
+        font-size: 1.08rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+      }
+      .keyword {
+        color: #f472b6;
+      }
+      .type {
+        color: #38bdf8;
+      }
+      .string {
+        color: #4ade80;
+      }
+      .comment {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .number {
+        color: #fbbf24;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.22rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0.15rem;
+      }
+      .b-blue {
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .b-green {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--accent-3);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+      .b-amber {
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--accent-warn);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+      }
+      .b-pink {
+        background: rgba(244, 114, 182, 0.15);
+        color: var(--accent-4);
+        border: 1px solid rgba(244, 114, 182, 0.3);
+      }
+      .b-red {
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--accent-bad);
+        border: 1px solid rgba(248, 113, 113, 0.35);
+      }
+      .b-purple {
+        background: rgba(167, 139, 250, 0.15);
+        color: var(--accent-2);
+        border: 1px solid rgba(167, 139, 250, 0.35);
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .warn {
+        background: rgba(251, 191, 36, 0.08);
+        border-left: 4px solid var(--accent-warn);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .danger {
+        background: rgba(248, 113, 113, 0.08);
+        border-left: 4px solid var(--accent-bad);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .good {
+        background: rgba(52, 211, 153, 0.08);
+        border-left: 4px solid var(--accent-3);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.35rem 1.5rem;
+        margin: 1.5rem 0;
+      }
+      .card h3 {
+        margin-top: 0;
+        margin-bottom: 0.65rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .mini-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.15rem;
+      }
+      .mini-card h4 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.5rem 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--card-bg);
+        color: var(--accent);
+      }
+      tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      ul,
+      ol {
+        padding-left: 1.35rem;
+      }
+      li {
+        margin: 0.45rem 0;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 3rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
+        <a href="regions.html">Regions</a>
+        <a href="safety.html">Safety</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html" class="active" aria-current="page"
+          >Commitments</a
+        >
+        <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html">Review</a>
+      </nav>
+      <h1>Commitments &amp; Async/Await</h1>
+      <p class="tagline">
+        Design analysis of Vela's await-by-default async model: colorless tasks,
+        <code>Commitment[T]</code>, <code>doing</code> +
+        <code>&lt;&lt;-</code> + <code>select</code>, call pipes
+        (<code>|&gt;</code>) &amp; <code>.then</code> continuations, safety
+        boundaries with regions, syntax alternatives, and colored comparisons.
+      </p>
+      <div style="margin-top: 1.5rem">
+        <span class="badge b-amber">Design Proposal</span>
+        <span class="badge b-green"
+          >Selected Direction: Enhanced Colorless Model</span
+        >
+        <span class="badge b-blue">Await by Default</span>
+        <span class="badge b-purple">Safety &amp; Tradeoffs</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="warn">
+        <strong>Status Notice:</strong> This document captures and evaluates a
+        <em>proposed</em> async/await and <code>Commitment</code> design for
+        Vela. Nothing described below as <code>Commitment</code>,
+        <code>doing</code>, or async continuations is implemented in the
+        compiler yet. For concurrency primitives available today, see
+        <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>,
+        <a href="channels.html">Channels</a>, and
+        <a href="actors.html">Actors</a>.
+      </div>
+
+      <section
+        class="card"
+        id="selected-direction"
+        style="border-color: rgba(52, 211, 153, 0.45)"
+      >
+        <h3>
+          <span>Selected Architectural Direction (Finalized Syntax)</span>
+          <span class="badge b-green">Current Choice</span>
+        </h3>
+        <p>
+          Before diving into the step-by-step evaluation from the original draft
+          to all alternatives, the <strong>selected approach so far</strong> is
+          the <strong>Enhanced Colorless Commitment Model</strong> using the
+          prefix <strong><code>doing</code></strong> verb:
+        </p>
+        <ul>
+          <li>
+            <strong>Colorless tasks &amp; await-by-default:</strong> Regular
+            tasks never need an <code>async</code> keyword; plain calls run and
+            await automatically, paying zero runtime overhead on sequential
+            code.
+          </li>
+          <li>
+            <strong
+              >Explicit concurrency with prefix <code>doing</code>:</strong
+            >
+            Writing <code>doing task_name(...)</code> launches the task
+            concurrently and returns a single-shot
+            <code>Commitment[T]</code> (or <code>Commitment[T ~ E]</code>) bound
+            by structured concurrency to its lexical block ("doing a task"
+            &mdash; in progress, not finished yet).
+          </li>
+          <li>
+            <strong>Unified waiting &amp; racing:</strong> Wait via
+            <code>&lt;&lt;- c</code> (with Plan B error handling, including
+            parenthesis-free <code>&lt;&lt;- c { ... }</code>), inspect
+            non-blockingly via <code>c.poll() -&gt; maybe T</code>, or race
+            commitments and timeouts inside existing
+            <a href="channels.html"><code>select</code></a
+            >.
+          </li>
+          <li>
+            <strong
+              >Continuations via <code>|&gt;</code> pipes (+ optional
+              <code>=&gt;</code> / <code>.then</code>):</strong
+            >
+            Post-settlement transforms work seamlessly with Vela call pipes
+            (both background <code>doing (call() |&gt; step())</code> and
+            caller-side <code>(&lt;&lt;- c) |&gt; step()</code>).
+          </li>
+        </ul>
+        <pre><code><span class="keyword">fixed</span> cfg = load_config()?                              <span class="comment">; Config (awaited automatically)</span>
+<span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                     <span class="comment">; Commitment[User ~ HttpError]</span>
+<span class="keyword">fixed</span> c_name = <span class="keyword">doing</span> (fetch_user(id) |&gt; format_name())  <span class="comment">; Commitment[text ~ HttpError] (.then via pipe)</span>
+
+<span class="keyword">fixed</span> user = &lt;&lt;- c_user { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }         <span class="comment">; User (unwrapped with Plan B)</span>
+
+<span class="keyword">fixed</span> c_visits = <span class="keyword">doing</span> count_visits(id)                 <span class="comment">; Commitment[int] (cannot fail)</span>
+<span class="keyword">fixed</span> report = <span class="keyword">select</span>                                     <span class="comment">; text</span>
+<span class="keyword">case</span> n &lt;&lt;- c_visits = <span class="string">"{n} visits"</span>                       <span class="comment">; n: int</span>
+<span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"timeout"</span>                                 <span class="comment">; c_visits is cancelled &amp; joined</span>
+<span class="keyword">fi</span></code></pre>
+        <p style="margin-bottom: 0">
+          The rest of this page walks through how the original draft evolved
+          into this design, answers key engineering questions, compares syntax
+          options, solves <code>.then</code> chaining, and contrasts a colored
+          alternative in full.
+        </p>
+      </section>
+
+      <section id="original-draft">
+        <h2>
+          <span class="icon">📜</span> 1. The Proposed Commitment Model
+          (Original Draft)
+        </h2>
+        <p>
+          Most mainstream languages with <code>async</code>/<code>await</code>
+          (JavaScript, TypeScript, Python, C#, Rust) flip the ergonomic default:
+          calling an async function returns a lazy or detached
+          <code>Promise</code>/<code>Future</code>, and the caller must
+          explicitly write <code>await</code> at every call site to obtain the
+          value. Forgetting <code>await</code> is a notorious source of silent
+          bugs, dropped errors, and type mismatches.
+        </p>
+        <p>
+          Your original draft inverted that default around three core rules:
+        </p>
+
+        <div class="grid">
+          <div class="mini-card">
+            <h4>1. No <code>async</code> Function Color</h4>
+            <p>
+              Tasks never declare an <code>async</code> modifier. Callers decide
+              whether to wait immediately or launch concurrently.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>2. Await Forced by Default</h4>
+            <p>
+              Calling a promising task blocks/suspends until completion and
+              yields the resolved value <code>T</code> directly &mdash;
+              impossible to forget <code>await</code>.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>3. Opt-In Deferral via <code>=&gt;</code></h4>
+            <p>
+              Using <code>=&gt; { ... } { ... }</code> launches fire-and-forget
+              / deferred execution with inline <code>then</code> and optional
+              <code>plan B</code> error handling, binding a handle
+              <code>y</code>.
+            </p>
+          </div>
+        </div>
+
+        <h3>Sketch of the Original Draft Syntax</h3>
+        <pre><code><span class="comment">; 1. Default call: awaited automatically (x has type T, not Commitment[T])</span>
+<span class="keyword">bind</span> x = callPromisingTask()
+
+<span class="comment">; 2. Deferred / fire-and-forget call with '=&gt;' (then) and optional Plan B (catch)</span>
+<span class="keyword">bind</span> y = callPromisingFunc() =&gt; {
+    <span class="comment">; Continuation executed when the commitment settles</span>
+} {
+    <span class="comment">; Optional Plan B: executed if rejected. If omitted, y holds a rejected handle.</span>
+}
+
+<span class="comment">; 3. Manual inspection of the handle y</span>
+<span class="keyword">loop</span> y.is_not_resolved_yet()
+    <span class="comment">; work while waiting</span>
+<span class="keyword">fi</span>
+<span class="keyword">fixed</span> val = y.resolved_value</code></pre>
+      </section>
+
+      <section id="naming">
+        <h2>
+          <span class="icon">🏷️</span> 2. Naming: <code>Commitment</code> vs.
+          <code>Promise</code> vs. <code>async/await</code>
+        </h2>
+        <p>
+          Should this concept be named <strong>Commitment</strong>,
+          <strong>Promise</strong>, or <strong>async/await</strong>?
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Mental Model &amp; Fit with Vela</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong><code>Commitment[T]</code></strong>
+              </td>
+              <td>
+                Signals an active, bound obligation rather than a passive
+                callback container. Because a plain call immediately fulfills
+                the commitment unless explicitly deferred, the name matches
+                Vela's anti-forgetting philosophy and gives Vela its own clean
+                vocabulary (like <code>shape</code>, <code>kind</code>,
+                <code>task</code>, <code>region</code>).
+              </td>
+              <td><span class="badge b-green">Best Vela Fit</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>Promise[T]</code></strong>
+              </td>
+              <td>
+                Immediately recognizable to developers from
+                JavaScript/TypeScript, C++ (<code>std::promise</code>), and
+                Scala. Slightly mismatched if a call without modifiers never
+                returns a <code>Promise</code> by default.
+              </td>
+              <td><span class="badge b-blue">Best Familiarity</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>async</code> / <code>await</code></strong>
+              </td>
+              <td>
+                Implies coloring functions with <code>async</code> and prefixing
+                every call with <code>await</code>. Since the colorless model
+                removes both keywords from normal code, calling the syntax
+                <code>async/await</code> would contradict the design.
+              </td>
+              <td><span class="badge b-amber">Misleading Term</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          <strong>Recommendation:</strong> Keep
+          <strong><code>Commitment[T]</code></strong> as the official Vela
+          type/feature name (with states <em>pending</em>, <em>fulfilled</em>,
+          and <em>failed</em>), while cross-referencing
+          <em>Promise / async-await</em> in documentation so newcomers map the
+          concept instantaneously.
+        </div>
+      </section>
+
+      <section id="coloring-costs">
+        <h2>
+          <span class="icon">🧠</span> 3. Alignment with Vela &amp; Performance
+          Cost of Dropping Function Coloring
+        </h2>
+
+        <h3>Is It Logical and In Sync with Vela?</h3>
+        <p>
+          <strong>Yes in spirit, refined in syntax.</strong> Two halves of your
+          intuition fit Vela extraordinarily well:
+        </p>
+        <ul>
+          <li>
+            <strong>Making waiting the safe default:</strong> Vela refuses
+            implicit null pointers, ignored errors (<code>T ~ E</code>), and
+            unannotated mutation (<code>alters</code>, <code>flex&amp;</code>).
+            Requiring opt-in syntax to launch background work instead of opt-in
+            <code>await</code> follows the exact same "safe by default, explicit
+            at the sharp edge" rule.
+          </li>
+          <li>
+            <strong>Avoiding function coloring:</strong> Vela's
+            <code>task</code> system avoids splitting standard libraries into
+            duplicate <code>sync</code> and <code>async</code> APIs.
+          </li>
+        </ul>
+
+        <h3>
+          Does the Enhanced Colorless Model Still Have Performance or
+          Compile-Time Cost?
+        </h3>
+        <p>
+          <strong>Important honest answer:</strong> Making tasks colorless does
+          <em>not</em> magically erase the underlying implementation tradeoff
+          &mdash; even in the enhanced <code>doing</code> model, dropping
+          <code>async</code> function signatures leaves two possible C11
+          compilation strategies, each with specific costs:
+        </p>
+
+        <div class="card">
+          <h3>
+            Implementation Path A: Stackful Coroutines / M:N Scheduler Fibers
+          </h3>
+          <span class="badge b-blue">Matches Vela's Runtime Best</span>
+          <ul>
+            <li>
+              <strong>Sequential fast path = 0 cost:</strong> A normal call
+              (<code>fetch_user(id)</code> without <code>doing</code>) compiles
+              to a direct C11 function call on the current fiber/thread stack.
+              Zero heap frame, zero scheduler queue push, zero context switch.
+            </li>
+            <li>
+              <strong
+                >Deferred path (<code>doing</code>) = fiber allocation
+                cost:</strong
+              >
+              Each concurrent <code>doing</code> launch allocates a fiber stack
+              (or worker task + virtual/segmented stack) and a small
+              <code>Commitment</code> cell, then runs normal C11 code inside
+              that stack. Any blocking wait deeper down its call graph yields
+              cooperatively without needing <code>async</code> signatures
+              anywhere.
+            </li>
+            <li>
+              <strong>C FFI / blocking syscall caveat:</strong> If any deep task
+              invokes a raw blocking OS call (e.g., synchronous POSIX file I/O
+              or X11 event waits without runtime-managed polling), that fiber
+              temporarily pins its OS worker thread unless offloaded to a
+              blocking thread pool or routed through non-blocking
+              <code>Poll</code>.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            Implementation Path B: Stackless State Machines Without
+            <code>async</code>
+          </h3>
+          <span class="badge b-amber">High Compile-Time Cost</span>
+          <ul>
+            <li>
+              Without <code>async</code> markers in task types, generating
+              Rust-like C11 state machines requires
+              <strong>whole-program call-graph suspension analysis</strong>
+              during compilation to discover which tasks can transitively call
+              <code>&lt;&lt;-</code> or yield.
+            </li>
+            <li>
+              <strong>Compile-time &amp; modularity costs:</strong> Hurts
+              separate/incremental C compilation, complicates task function
+              pointers <code>(int) -&gt; int</code> (an indirect call might or
+              might not suspend!), or forces every task conservatively into a
+              heap-allocated state frame &mdash; hurting tight numeric loops.
+            </li>
+          </ul>
+        </div>
+
+        <div class="good">
+          <strong>Bottom Line on Cost:</strong> Under Path A (direct C calls by
+          default + fibers spawned only at <code>doing</code> /
+          <code>spawn</code>),
+          <strong
+            >dropping coloring adds zero runtime cost to normal synchronous
+            code</strong
+          >, only a modest per-<code>doing</code> fiber allocation +
+          context-switch cost when you explicitly branch concurrently, and
+          negligible compile-time cost.
+        </div>
+      </section>
+
+      <section id="draft-pros-cons">
+        <h2>
+          <span class="icon">⚖️</span> 4. Pros &amp; Cons of the Initial Draft
+        </h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Strengths (Pros)</th>
+              <th>Weaknesses (Cons)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Zero forgotten awaits:</strong> Normal calls always
+                produce <code>T</code>, eliminating an entire bug class common
+                in JS/Python.
+              </td>
+              <td>
+                <strong>Keyword/syntax friction:</strong>
+                <code>bind</code> already means an un-reassignable mutable
+                binding in Vela; <code>=&gt;</code> already starts named
+                loops/blocks and module aliases; <code>{ ... }</code> already
+                means Plan B.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>No "function coloring" split:</strong> Standard
+                libraries (<code>std/collections</code>, helpers) do not need
+                duplicate sync and async APIs.
+              </td>
+              <td>
+                <strong>Dual callback + handle confusion:</strong> Mixing
+                <code>=&gt; { then }</code> callbacks with returning a handle
+                <code>y</code> blurs what type <code>y</code> has and when the
+                continuation executes.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Structured fan-out friendly:</strong> With the right
+                deferred handle, spawning multiple concurrent calls stays
+                concise.
+              </td>
+              <td>
+                <strong>Busy-loop polling trap:</strong>
+                <code>loop y.is_not_resolved_yet()</code> burns CPU (or starves
+                cooperative fibers) unless it parks cleanly.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Fits Vela's <code>T ~ E</code> errors:</strong>
+                Rejections don't need exceptions; they map onto Vela's existing
+                failure channel.
+              </td>
+              <td>
+                <strong
+                  >Unsafe as written for regions &amp;
+                  <code>flex&amp;</code>:</strong
+                >
+                Detached fire-and-forget calls break lexical region lifetimes
+                and aliasing rules (Section 5).
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="safety-audit">
+        <h2>
+          <span class="icon">🚨</span> 5. Safety Audit: 5 Real Safety Holes in
+          the Initial Draft
+        </h2>
+        <p>
+          If implemented literally as sketched, the initial draft introduces
+          compile-time-breaking soundness holes against Vela's
+          <a href="regions.html">region memory model</a> and
+          <a href="safety.html">data-race guarantees</a>:
+        </p>
+
+        <div class="danger">
+          <h3>
+            Hazard 1: Escaping <code>region r</code> &amp; Dangling
+            <code>^T@r</code> Pointers
+          </h3>
+          <p>
+            Suppose a task takes a caller region pointer:
+            <code
+              >task load(cfg: ^Config@r, out_r: region) -&gt; text@out_r</code
+            >. When awaited by default, <code>region r</code> stays alive until
+            <code>load</code> returns &mdash; 100% safe.
+            <strong>If launched detached with <code>=&gt;</code></strong
+            >, the caller continues immediately, exits the block declaring
+            <code>region r</code>, and frees <code>r</code> while the background
+            commitment still reads <code>cfg^</code> &rarr;
+            <strong>Use-After-Free crash</strong>.
+          </p>
+        </div>
+
+        <div class="danger">
+          <h3>
+            Hazard 2: <code>flex&amp;</code> References Across Threads &rarr;
+            Data Races
+          </h3>
+          <p>
+            If a deferred commitment captures or receives
+            <code>&amp;counter</code> while the caller continues running and
+            also modifies or reads <code>counter</code>, two worker threads
+            touch the same memory simultaneously &rarr;
+            <strong>data race</strong>.
+          </p>
+        </div>
+
+        <div class="danger">
+          <h3>
+            Hazard 3: Unsafe Callback Capture in <code>=&gt; { ... }</code>
+          </h3>
+          <p>
+            An inline callback block running concurrently on a worker thread
+            cannot safely touch caller stack variables or caller
+            <code>@r</code> values after the caller exits or mutates them unless
+            captured explicitly with Vela's closure rules (<code>[@r]</code> /
+            moved <code>own</code> values).
+          </p>
+        </div>
+
+        <div class="danger">
+          <h3>
+            Hazard 4: Unchecked <code>y.resolved_value</code> &amp; Busy-Spin
+            Loops
+          </h3>
+          <p>
+            Direct field access before settlement breaks compile-time
+            exhaustiveness (<code>maybe T</code> / <code>T ~ E</code>), and
+            polling loops like <code>loop y.is_not_resolved_yet()</code> burn
+            100% CPU and can deadlock M:N cooperative worker pools.
+          </p>
+        </div>
+
+        <div class="danger">
+          <h3>
+            Hazard 5: Unawaited Fire-and-Forget Error Swallowing &amp; Resource
+            Leaks
+          </h3>
+          <p>
+            If optional <code>plan B</code> is omitted on an abandoned handle, a
+            <code>T ~ E</code> failure disappears silently &mdash; violating
+            Vela's rule that failures cannot be ignored &mdash; and background
+            sockets/files can leak past scope shutdown.
+          </p>
+        </div>
+      </section>
+
+      <section id="enhanced-model">
+        <h2>
+          <span class="icon">🛡️</span> 6. A Safer, Cleaner Vela-Native Model
+          (Enhanced &amp; Selected)
+        </h2>
+        <p>
+          We preserve every goal &mdash; colorless tasks, forced await by
+          default, concise opt-in concurrency, and clean handling of
+          success/failure &mdash; while guaranteeing
+          <strong>100% memory and data-race safety</strong> by unifying
+          Commitments with <a href="channels.html">Channels</a>,
+          <code>select</code>, and structured concurrency:
+        </p>
+
+        <h3>Four Core Safety &amp; Ergonomic Rules</h3>
+        <ol>
+          <li>
+            <strong>Send-boundary safety at <code>doing</code>:</strong> Normal
+            awaited calls accept any <code>^T@r</code>, <code>flex&amp;</code>,
+            and <code>region</code>. When launching with <code>doing</code>,
+            arguments must pass Vela's concurrency boundary (no escaping
+            <code>flex&amp;</code> aliases; either <code>own</code>/lasting
+            values or strictly bounded inside an inner structured scope whose
+            regions outlive it).
+          </li>
+          <li>
+            <strong
+              >Explicit call deferral returning
+              <code>Commitment[T]</code>:</strong
+            >
+            Prefixing <code>doing</code> spawns concurrent execution cleanly
+            without overloading <code>bind</code> or <code>=&gt;</code>.
+          </li>
+          <li>
+            <strong>Structured lexical scope cleanup:</strong> Any
+            <code>Commitment[T]</code> created in a block that exits early
+            (<code>fail</code>, <code>&lt;-</code>, <code>break</code>) receives
+            cooperative cancellation and is automatically joined before the
+            block's <code>region</code> allocations are freed. (Immortal daemons
+            use <a href="actors.html"><code>spawn Actor(...)</code></a
+            >.)
+          </li>
+          <li>
+            <strong>Proper inspection &amp; racing:</strong> Wait with
+            <code>&lt;&lt;- c</code> (returns <code>T</code> or
+            <code>T ~ E</code>), check without blocking via
+            <code>c.poll()</code> (returns <code>maybe T</code> /
+            <code>maybe (T ~ E)</code>), or race inside
+            <code>select ... case after ms ... fi</code>.
+          </li>
+        </ol>
+
+        <h3>Annotated Example: Concurrent Fetch &amp; Error Propagation</h3>
+        <pre><code><span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
+    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?               <span class="comment">; HttpResponse (awaited automatically)</span>
+    <span class="keyword">&lt;-</span> parse_user(resp)?
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> load_dashboard(id: int) -&gt; Dashboard ~ HttpError
+    <span class="comment">; 1. Default synchronous path: awaited immediately (0 fiber overhead)</span>
+    <span class="keyword">fixed</span> config = load_config()?                         <span class="comment">; Config</span>
+
+    <span class="comment">; 2. Explicit concurrent launch: returns Commitment handles immediately</span>
+    <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                   <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_orders = <span class="keyword">doing</span> fetch_orders(id)               <span class="comment">; Commitment[[Order]]</span>
+
+    <span class="comment">; 3. Join &amp; handle errors via '&lt;&lt;-' and Plan B</span>
+    <span class="keyword">fixed</span> user = &lt;&lt;- c_user { <span class="keyword">failure</span> err                 <span class="comment">; User (unwrapped after Plan B handles HttpError)</span>
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err
+    }                                                     <span class="comment">; Note: if fetch_user fails above, c_orders auto-cancels &amp; joins at fi!</span>
+    <span class="keyword">fixed</span> orders = &lt;&lt;- c_orders                           <span class="comment">; [Order]</span>
+
+    <span class="keyword">&lt;-</span> Dashboard { config: config, user: user, orders: orders }
+<span class="keyword">fi</span></code></pre>
+
+        <h3>
+          Annotated Example: Racing Commitments with Timeout via
+          <code>select</code>
+        </h3>
+        <pre><code><span class="keyword">fixed</span> primary = <span class="keyword">doing</span> query_mirror(<span class="string">"us-east"</span>)             <span class="comment">; Commitment[text]</span>
+<span class="keyword">fixed</span> backup = <span class="keyword">doing</span> query_mirror(<span class="string">"eu-west"</span>)              <span class="comment">; Commitment[text]</span>
+
+<span class="keyword">fixed</span> fastest = <span class="keyword">select</span>                                    <span class="comment">; text</span>
+<span class="keyword">case</span> data &lt;&lt;- primary = data                              <span class="comment">; data: text (losing commitment auto-cancels)</span>
+<span class="keyword">case</span> data &lt;&lt;- backup = data                               <span class="comment">; data: text</span>
+<span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"mirror timeout"</span>
+<span class="keyword">fi</span></code></pre>
+      </section>
+
+      <section id="deep-dive-qa">
+        <h2>
+          <span class="icon">💬</span> 7. Design Q&amp;A: Channels, Expressions,
+          Parentheses &amp; Feature Completeness
+        </h2>
+
+        <div class="card">
+          <h3>
+            <span
+              >Q1. Does <code>doing func()</code> become a <code>Chan[T]</code>,
+              or stay a <code>Commitment[T]</code>?</span
+            >
+            <span class="badge b-blue">Runtime Design</span>
+          </h3>
+          <p>
+            <strong
+              >It stays a distinct <code>Commitment[T]</code> &mdash; not a
+              <code>Chan[T]</code></strong
+            >
+            &mdash; though both plug into the same <code>&lt;&lt;-</code> and
+            <code>select</code> protocol.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th><code>Chan[T]</code> (Multi-Message Pipe)</th>
+                <th><code>Commitment[T]</code> (Single-Shot Future)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Cardinality</strong></td>
+                <td>0, 1, or N messages over time (stream/queue).</td>
+                <td>
+                  Exactly 1 settled result (value <code>T</code> or error
+                  <code>E</code>) + cancellation state.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Waiting &amp; Polling</strong></td>
+                <td>
+                  <code>&lt;&lt;- ch</code> returns <code>maybe T</code> (<code
+                    >none</code
+                  >
+                  means closed).
+                </td>
+                <td>
+                  <code>&lt;&lt;- c</code> returns <code>T</code> (or
+                  <code>T ~ E</code>); <code>c.poll()</code> returns
+                  <code>maybe T</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Closing &amp; Memory</strong></td>
+                <td>
+                  Requires explicit
+                  <a href="channel-lifecycle.html"><code>.close()</code></a> so
+                  producers can stop sending while consumers drain.
+                </td>
+                <td>
+                  Automatically closes on settlement and cleans up automatically
+                  at structured scope exit &mdash; zero manual
+                  <code>.close()</code> needed!
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Runtime Link</strong></td>
+                <td colspan="2">
+                  Both implement the internal waiter queue interface in
+                  <code>runtime/vela_rt.h</code>, so <code>select</code> can mix
+                  <code>case msg &lt;&lt;- ch</code>,
+                  <code>case res &lt;&lt;- commitment</code>, and
+                  <code>case after ms</code> in one atomic block.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >Q2. Can we use fire-and-forget / <code>&lt;&lt;-</code> in the
+              middle of expressions?</span
+            >
+            <span class="badge b-purple">Expression Semantics</span>
+          </h3>
+          <p>Consider your two snippets:</p>
+          <pre><code><span class="comment">; Snippet A (without 'doing')</span>
+<span class="keyword">fixed</span> r1 = (&lt;&lt;- task_call()) { ... }
+
+<span class="comment">; Snippet B (explicit 'doing' inside '&lt;&lt;-')</span>
+<span class="keyword">fixed</span> r2 = (&lt;&lt;- (<span class="keyword">doing</span> task_call())) { ... }</code></pre>
+          <ul>
+            <li>
+              <strong>Why Snippet A doesn't work as fire-and-forget:</strong>
+              <code>&lt;&lt;-</code> means <em>await the result right here</em>,
+              and <code>task_call()</code> without <code>doing</code> already
+              awaits and returns <code>T</code> (not a commitment). So
+              <code>&lt;&lt;- task_call()</code> wouldn't defer anything; it is
+              simply a redundant type error unless
+              <code>task_call()</code> itself returned a
+              <code>Commitment[T]</code> or <code>Chan[T]</code>.
+            </li>
+            <li>
+              <strong
+                >Could <code>&lt;&lt;-</code> on a direct call be redefined to
+                mean "launch"?</strong
+              >
+              Not safely. (1) It would flip the operator's meaning:
+              <code>fixed v = &lt;&lt;- ch</code> gives a value, while
+              <code>fixed v = &lt;&lt;- f()</code> would give a pending handle.
+              (2) It is ambiguous when <code>f()</code> legitimately returns a
+              channel (e.g. a <code>make_feed()</code> factory): is
+              <code>&lt;&lt;- make_feed()</code> "receive from the returned
+              channel" or "launch <code>make_feed</code>"? (3) A
+              <code>fixed</code> variable cannot later change from a handle into
+              its value, so "the result dispatches into the variable when it
+              arrives" still means the variable's type is
+              <code>Commitment[T]</code>. Keeping launch on
+              <code>doing</code> and waiting on <code>&lt;&lt;-</code> avoids
+              all three problems.
+            </li>
+            <li>
+              <strong
+                >Snippet B works anywhere in expressions, with one
+                nuance:</strong
+              >
+              <code>(&lt;&lt;- (doing task_call())) { ... }</code> is valid in
+              any sub-expression (e.g., inside arguments, arrays, math),
+              <em>except</em> launching <code>doing</code> and immediately
+              wrapping it in <code>&lt;&lt;-</code> waits on that very same line
+              &mdash; giving no overlap unless another commitment was already
+              running!
+            </li>
+            <li>
+              <strong
+                >Where inline expressions shine for real parallelism:</strong
+              >
+              Starting sibling commitments first and awaiting them inside any
+              expression:
+            </li>
+          </ul>
+          <pre><code><span class="comment">; Launch concurrently, then resolve inside one composite expression</span>
+<span class="keyword">fixed</span> c_a = <span class="keyword">doing</span> fetch_price(<span class="string">"ETH"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
+<span class="keyword">fixed</span> c_b = <span class="keyword">doing</span> fetch_price(<span class="string">"BTC"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
+<span class="keyword">fixed</span> total = ((&lt;&lt;- c_a) { <span class="number">0.0</span> }) + ((&lt;&lt;- c_b) { <span class="number">0.0</span> })   <span class="comment">; float</span>
+
+<span class="comment">; Or pass launched Commitments straight into a multi-arg gather helper:</span>
+<span class="keyword">fixed</span> pair = await_both(<span class="keyword">doing</span> fetch_price(<span class="string">"ETH"</span>), <span class="keyword">doing</span> fetch_price(<span class="string">"BTC"</span>))</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >Q3. Can we drop parentheses around
+              <code>(&lt;&lt;- c_user) { failure err ... }</code>?</span
+            >
+            <span class="badge b-amber">Parser Grammar</span>
+          </h3>
+          <pre><code><span class="comment">; Desired clean form (no outer parentheses):</span>
+<span class="keyword">fixed</span> user = &lt;&lt;- c_user { <span class="keyword">failure</span> err
+    <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err
+}</code></pre>
+          <p>
+            <strong
+              >Can this work cleanly? Yes, with a deliberate precedence
+              adjustment in <code>src/parser.rs</code>!</strong
+            >
+          </p>
+          <ul>
+            <li>
+              <strong>How Vela's parser behaves today:</strong> Inside
+              <code>parse_prefixed()</code>, prefix <code>&lt;&lt;-</code> calls
+              <code>parse_operand()</code> &rarr; <code>parse_suffixes()</code>,
+              which greedily consumes trailing <code>{ ... }</code> as a Plan B
+              on the channel/handle expression itself! So without a parser
+              tweak, <code>&lt;&lt;- c_user { ... }</code> would currently parse
+              as <code>&lt;&lt;- (c_user { ... })</code> &mdash; attaching Plan
+              B to <code>c_user</code> rather than the awaited value.
+            </li>
+            <li>
+              <strong>The clean fix:</strong> Adjust
+              <code>Token::ChanRecv</code> (<code>&lt;&lt;-</code>) parsing so
+              its operand consumes member accesses (<code>.field</code>),
+              indexing (<code>[i]</code>), calls (<code>(args)</code>), and
+              deref (<code>^</code>), <em>stopping before</em> Plan B
+              <code>{ ... }</code>. That lets trailing <code>{ ... }</code> wrap
+              the outer <code>(&lt;&lt;- c_user)</code> expression
+              automatically!
+            </li>
+            <li>
+              <strong>Tiny edge case:</strong> In the rare case where someone
+              stores channels in a fallible lookup (<code>channels[#0]</code>
+              returning <code>maybe Chan[T]</code>) and wants Plan B on the
+              lookup before receiving, they just keep explicit inner
+              parentheses: <code>&lt;&lt;- (channels[#0] { default_ch })</code>.
+              For the 99% case (<code>&lt;&lt;- c_user { failure err ... }</code
+              >), no parentheses are needed.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >Q4. Does This Enhanced Model Cover Everything Promises &amp;
+              Async/Await Do in Other Languages?</span
+            >
+            <span class="badge b-green">Feature Audit</span>
+          </h3>
+          <table>
+            <thead>
+              <tr>
+                <th>JS / Rust / Python Capability</th>
+                <th>Enhanced Vela Equivalent</th>
+                <th>Status / Extra Needed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>await promise</code></td>
+                <td>
+                  Default plain call <code>fetch()</code> (or
+                  <code>&lt;&lt;- c</code> on a handle)
+                </td>
+                <td><span class="badge b-green">100% Covered</span></td>
+              </tr>
+              <tr>
+                <td>Background task + join later</td>
+                <td>
+                  <code>fixed c = doing fetch()</code> ...
+                  <code>&lt;&lt;- c</code>
+                </td>
+                <td><span class="badge b-green">100% Covered</span></td>
+              </tr>
+              <tr>
+                <td><code>Promise.all([a, b])</code> (fixed arity)</td>
+                <td>
+                  Launch N <code>doing</code> handles, await all via
+                  <code>&lt;&lt;-</code>
+                </td>
+                <td><span class="badge b-green">Covered</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <code>Promise.race</code> &amp; <code>tokio::select!</code> +
+                  timeout
+                </td>
+                <td>
+                  <code
+                    >select case x &lt;&lt;- c1 ... case after ms ... fi</code
+                  >
+                </td>
+                <td><span class="badge b-green">100% Covered</span></td>
+              </tr>
+              <tr>
+                <td><code>try/catch</code> / <code>Result</code> rejections</td>
+                <td>
+                  <code>Commitment[T ~ E]</code> + Plan B /
+                  <code>?</code> propagation
+                </td>
+                <td><span class="badge b-green">100% Covered</span></td>
+              </tr>
+              <tr>
+                <td>Structured cancellation / abort</td>
+                <td>
+                  Auto-cancel on <code>select</code> loss or early block exit
+                </td>
+                <td><span class="badge b-green">Better than JS</span></td>
+              </tr>
+              <tr>
+                <td>
+                  Dynamic array fan-out
+                  (<code>Promise.all(urls.map(...))</code>,
+                  <code>Promise.any(slice)</code>)
+                </td>
+                <td>
+                  <code>await_all(cs)</code> waits in a loop; dynamic N-way race
+                  needs a stdlib helper (<code>select_any(cs)</code>) because
+                  syntax <code>select</code> has fixed arms
+                </td>
+                <td><span class="badge b-amber">Needs Stdlib Helper</span></td>
+              </tr>
+              <tr>
+                <td>Async Streams / Generators (<code>for await</code>)</td>
+                <td>
+                  Vela <a href="channels.html"><code>Chan[T]</code></a> streams
+                  cleanly cover multi-value async producers
+                </td>
+                <td><span class="badge b-green">Covered by Chan[T]</span></td>
+              </tr>
+              <tr>
+                <td>Detached background daemons outliving caller</td>
+                <td>
+                  <a href="actors.html"><code>spawn Actor(...)</code></a>
+                  (explicit mailbox lifetime instead of leaked promises)
+                </td>
+                <td><span class="badge b-green">Safer in Vela</span></td>
+              </tr>
+              <tr>
+                <td><code>.then(...)</code> / pipeline chaining</td>
+                <td>
+                  Solved via call pipes <code>|&gt;</code> &amp; optional
+                  continuations (see Section 8!)
+                </td>
+                <td><span class="badge b-blue">See Section 8</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="then-and-pipes">
+        <h2>
+          <span class="icon">⛓️</span> 8. Solving
+          <code>.then</code> Continuations: Combining <code>=&gt;</code> and
+          Call Pipes (<code>|&gt;</code>)
+        </h2>
+        <p>
+          With <code>doing</code> and <code>&lt;&lt;-</code> alone, error
+          handling (<code>catch</code> / Plan B) is effortless, whereas chained
+          post-settlement transformations (<strong><code>.then()</code></strong
+          >) need a clear story. Let's analyze combining your
+          <code>=&gt;</code> fire-and-forget style, Vela's native
+          <strong>Call Pipes (<code>|&gt;</code>)</strong>, and
+          <strong>lambdas/closures</strong>. (Snippets below write
+          <code>&lt;&lt;- c { ... }</code> without outer parentheses, which
+          assumes the parser change from Q3.)
+        </p>
+
+        <h3>
+          Approach A: Hybrid <code>=&gt; { then } { plan b }</code> Combined
+          with <code>&lt;&lt;-</code>
+        </h3>
+        <p>
+          Allowing <code>func() =&gt; { ... } { ... }</code> to return a
+          <code>Commitment</code> handle that can still be awaited later with
+          <code>&lt;&lt;- x</code>:
+        </p>
+        <pre><code><span class="comment">; Combined style with explicit value binder + Plan B</span>
+<span class="keyword">fixed</span> x = fetch_user(id) =&gt; (u) {
+    log_audit(u.id)
+    u.display_name                  <span class="comment">; maps Commitment[User] -&gt; Commitment[text]</span>
+} { <span class="keyword">failure</span> err
+    <span class="string">"Guest ({err})"</span>                 <span class="comment">; fallback value if fetch_user fails</span>
+}                                   <span class="comment">; x has type Commitment[text]</span>
+
+<span class="comment">; ... other concurrent work ...</span>
+<span class="keyword">fixed</span> name = &lt;&lt;- x                  <span class="comment">; text (already transformed or Plan B fallback)</span>
+
+<span class="comment">; Or separate the catch to await time:</span>
+<span class="keyword">fixed</span> c_raw = fetch_user(id) =&gt; (u) { normalize(u) }   <span class="comment">; Commitment[User ~ HttpError]</span>
+<span class="keyword">fixed</span> user = &lt;&lt;- c_raw { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }</code></pre>
+        <ul>
+          <li>
+            <strong
+              >Notice why binding <code>(u)</code> (or similar) is
+              required:</strong
+            >
+            Without a parameter/binder, a raw <code>=&gt; { ... }</code> block
+            cannot name the resolved value produced by
+            <code>fetch_user(id)</code>!
+          </li>
+          <li>
+            <strong
+              >Costs &amp; grammar tradeoffs of
+              <code>=&gt; { ... } { ... }</code>:</strong
+            >
+            <ul>
+              <li>
+                <em>Lexer/Parser token overload:</em> <code>=&gt;</code> already
+                denotes module aliases (<code>include x =&gt; y</code>),
+                <code>alias Name =&gt; Type</code>, and labeled loops/blocks
+                (<code>outer =&gt; loop ... fi</code>). After a closing call
+                <code>)</code> it is technically unambiguous to parse, though
+                two unrelated constructs share one symbol.
+              </li>
+              <li>
+                <em>Dual meaning of <code>{ ... }</code>:</em> Elsewhere in
+                Vela, <code>expr { ... }</code> always means
+                <em>Plan B fallback</em>. With
+                <code>func() =&gt; { A } { B }</code>, the first
+                <code>{ A }</code> means <em>success</em> and only the second
+                <code>{ B }</code> means <em>Plan B failure</em> &mdash; even if
+                recognizable, omitting <code>{ B }</code> leaves
+                <code>=&gt; { A }</code> looking suspiciously like a Plan B
+                block.
+              </li>
+              <li>
+                <em>Async capture rule:</em> Because <code>{ A }</code> runs
+                inside the background commitment before <code>&lt;&lt;-</code>,
+                any variables it reads from outside must follow safe capture
+                rules (immutable copies/<code>[@r]</code> inside structured
+                scope, no dangling stack <code>flex&amp;</code>).
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <h3>
+          Approach B: Vela Call Pipes (<code>|&gt;</code>) &mdash; Two Seamless
+          Modes
+        </h3>
+        <p>
+          Vela already has
+          <a href="index.html#pipes"
+            >Call Pipes (<code>|&gt;</code>, <code>|&gt;&gt;</code>)</a
+          >
+          that pass values forward step by step, short-circuit
+          <code>T ~ E</code> errors automatically, and let a single trailing
+          <code>{ ... }</code> Plan B handle failures for the whole pipeline!
+          Pipes solve <code>.then</code> in
+          <strong>two complementary ways</strong>:
+        </p>
+
+        <div class="grid">
+          <div class="card" style="margin: 0">
+            <h4>
+              Mode B1: Pipe on Await (<code>(&lt;&lt;- x) |&gt; ...</code>)
+            </h4>
+            <p>
+              Runs transforms on the <strong>caller's thread</strong> right when
+              awaiting <code>x</code>. Zero closure capture complexity; can
+              freely touch local caller state and local regions <code>r</code>!
+            </p>
+            <pre
+              style="margin-bottom: 0"
+            ><code><span class="keyword">fixed</span> x = <span class="keyword">doing</span> fetch_raw(url)    <span class="comment">; Commitment[text ~ HttpError]</span>
+<span class="comment">; ... do other work ...</span>
+<span class="keyword">fixed</span> y = (&lt;&lt;- x)
+    |&gt; parse_user() at r          <span class="comment">; runs only if fetch_raw succeeded</span>
+    |&gt; format_badge() at r { <span class="keyword">failure</span> e
+        <span class="string">"Error: {e}"</span>              <span class="comment">; Plan B catches ANY step in the pipe!</span>
+    }                             <span class="comment">; y: text@r</span></code></pre>
+          </div>
+
+          <div class="card" style="margin: 0">
+            <h4>
+              Mode B2: Background Piped Commitment (<code
+                >doing (call |&gt; ...)</code
+              >)
+            </h4>
+            <p>
+              Runs the entire <code>.then</code> chain on the
+              <strong>background worker</strong> before settling
+              <code>c</code> &mdash; so waiting callers receive the final
+              transformed type cleanly!
+            </p>
+            <pre
+              style="margin-bottom: 0"
+            ><code><span class="keyword">fixed</span> c = <span class="keyword">doing</span> (
+    fetch_raw(url)
+    |&gt; parse_user()
+    |&gt; save_cache()
+)                                 <span class="comment">; Commitment[CacheReceipt ~ AppError]</span>
+
+<span class="comment">; Other branches race or await the finished pipeline:</span>
+<span class="keyword">fixed</span> receipt = &lt;&lt;- c { <span class="keyword">failure</span> e
+    <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e
+}                                 <span class="comment">; CacheReceipt</span></code></pre>
+          </div>
+        </div>
+
+        <h3>
+          Extra Example: Using Closures &amp; Lambdas in Pipe-Based
+          <code>.then</code> Chains
+        </h3>
+        <p>
+          In Vela today (<code>src/parser.rs</code>), <code>|&gt;</code> expects
+          a <em>call</em> after it (not a bare un-called lambda literal like
+          <code>val |&gt; (x -&gt; x + 1)</code>), while functions in
+          <code>std/collections</code> take one-line lambdas or
+          <code>[@r]</code> closures as arguments (e.g.,
+          <code
+            >nums |&gt; filter(n -&gt; n &gt; 2) |&gt; map(n -&gt; n * 10)</code
+          >). Supporting inline transforms with closures works cleanly through
+          either a tiny combinator (<code>then(lambda)</code>) or optional
+          direct lambda-pipe sugar:
+        </p>
+        <pre><code><span class="keyword">task</span> process_profile(r: region, prefix: text@r, user_id: int) -&gt; text@r ~ HttpError
+    <span class="comment">; Launch concurrent work first</span>
+    <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(user_id)              <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_prefs = <span class="keyword">doing</span> fetch_prefs(user_id)            <span class="comment">; Commitment[Prefs ~ HttpError]</span>
+
+    <span class="keyword">fixed</span> prefs = (&lt;&lt;- c_prefs) { Prefs.defaults() }      <span class="comment">; Prefs (fallback on failure)</span>
+
+    <span class="comment">; Pattern 1 (pipe style via a higher-order helper 'then(value, f)' + kept closures [@r]):</span>
+    <span class="comment">; '|&gt;' passes the value as then's first argument; each [@r] lambda safely reads 'prefix' and 'prefs'.</span>
+    <span class="keyword">fixed</span> label = (&lt;&lt;- c_user)                           <span class="comment">; User ~ HttpError flows into the pipe</span>
+        |&gt; then([@r] u -&gt; u.full_name)                    <span class="comment">; runs only on success: text</span>
+        |&gt; then([@r] full -&gt; <span class="string">"{prefix}: {full} ({prefs.theme})"</span>) { <span class="keyword">failure</span> err
+            <span class="string">"{prefix}: Anonymous ({err})"</span>                  <span class="comment">; one Plan B for the whole chain</span>
+        }                                                 <span class="comment">; label: text@r</span>
+
+    <span class="comment">; Pattern 2 (if Commitment also gets .then/.recover methods for background chaining):</span>
+    <span class="keyword">fixed</span> c_raw = <span class="keyword">doing</span> fetch_user(user_id)                                   <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_name = c_raw.then((u: User) -&gt; text &lt;- u.full_name <span class="keyword">fi</span>)            <span class="comment">; Commitment[text ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_badge = c_name.recover((err: HttpError) -&gt; text &lt;- <span class="string">"Guest"</span> <span class="keyword">fi</span>)   <span class="comment">; Commitment[text] (error handled in bg)</span>
+    <span class="comment">; plain lambdas capture nothing, so they are always safe to run on a worker thread</span>
+
+    <span class="keyword">fixed</span> badge = &lt;&lt;- c_badge                             <span class="comment">; text</span>
+    <span class="keyword">&lt;-</span> label
+<span class="keyword">fi</span></code></pre>
+
+        <h3>
+          Pros &amp; Cons of Call Pipes vs. Inline Continuations &mdash; Can We
+          Support Both?
+        </h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Dimension</th>
+              <th>Call Pipes (<code>|&gt;</code> + <code>doing</code>)</th>
+              <th>
+                Method Combinators (<code>.then()</code>) /
+                <code>=&gt; (v) { ... }</code>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Access to resolved value</strong></td>
+              <td>
+                Direct &mdash; piped value becomes argument 1
+                (<code>|&gt;</code>) or 2 (<code>|&gt;&gt;</code>), and works
+                directly with named tasks or lambdas via
+                <code>then(v -&gt; ...)</code>.
+              </td>
+              <td>
+                Requires binding a parameter (<code>.then(v -&gt; ...)</code> or
+                <code>=&gt; (v) { ... }</code>).
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Failure propagation</strong></td>
+              <td>
+                Already built into Vela! First <code>T ~ E</code> stops the pipe
+                chain; one trailing Plan B handles every step.
+              </td>
+              <td>
+                Needs separate <code>.recover()</code> or second
+                <code>{ plan b }</code> block.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Background vs. foreground</strong></td>
+              <td>
+                Crystal clear by syntax: <code>doing (f() |&gt; g())</code> runs
+                in background; <code>(&lt;&lt;- c) |&gt; g()</code> runs on
+                caller.
+              </td>
+              <td>
+                Always schedules inside the background commitment (must enforce
+                strict closure capture isolation).
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Can Vela allow both?</strong></td>
+              <td colspan="2">
+                <strong
+                  >Yes &mdash; and they complement each other cleanly!</strong
+                >
+                Call pipes handle linear transform pipelines without inventing
+                new operators; adding <code>.then(fn)</code> /
+                <code>.recover(fn)</code> methods on
+                <code>Commitment[T]</code> (or lightweight
+                <code>=&gt; (v) { ... }</code> if desired) covers JS-style
+                fluent background callbacks while keeping capture rules
+                statically checked.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="syntax-alternatives">
+        <h2>
+          <span class="icon">🎨</span> 9. Syntax Alternatives Registry (Future
+          Reference)
+        </h2>
+        <p>
+          So we don't lose any brainstormed forms while finalizing grammar, here
+          is how each call-site syntax candidate behaves in Vela's parser:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Candidate Syntax</th>
+              <th>Example</th>
+              <th>Parser Conflict Check &amp; Ergonomic Assessment</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong
+                  >Prefix <code>-ing</code> verb:
+                  <code>doing func()</code></strong
+                >
+                <span class="badge b-green">Selected Default</span>
+              </td>
+              <td>
+                <code
+                  >fixed c = doing fetch(id)<br />fixed c2 = doing
+                  obj.save()</code
+                >
+              </td>
+              <td>
+                Unreserved in <code>src/lexer.rs</code>; can be contextual so
+                existing identifiers named <code>doing</code> stay valid. Pairs
+                directly with Vela's <code>task</code> ("doing a task" = in
+                progress, not awaited yet), warns the reader
+                <em>before</em> arguments, composes cleanly with
+                <code>doing build(r) at r</code>, and avoids postfix precedence
+                clashes with <code>{ plan b }</code>. <br /><em
+                  >Other <code>-ing</code> verbs considered:</em
+                >
+                <code>running</code> (sounds like a status check),
+                <code>pending</code> (describes a passive state),
+                <code>starting</code> / <code>spawning</code> (overlaps mentally
+                with <code>spawn Actor</code>), <code>working</code> (too
+                vague). <code>doing</code> is the crispest opposite of awaiting.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Postfix <code>later</code></strong>
+                <span class="badge b-blue">Top Alternative</span>
+              </td>
+              <td><code>fixed c = fetch(id) later</code></td>
+              <td>
+                Can also be contextual (like <code>select</code>). Reads
+                naturally left-to-right ("call <code>fetch</code>, later"),
+                though postfix placement requires careful precedence rules with
+                trailing <code>at r</code> and <code>{ plan b }</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong
+                  >Prefix <code>later</code> / <code>fork</code> /
+                  <code>async</code></strong
+                >
+                <span class="badge b-blue">Strong Contender</span>
+              </td>
+              <td>
+                <code
+                  >fixed c = later fetch(id)<br />fixed c = fork fetch(id)</code
+                >
+              </td>
+              <td>
+                Notice: prefix warns the reader <em>before</em> arguments are
+                parsed ("non-blocking ahead!"), avoids clashes with postfix
+                <code>at r</code> / Plan B <code>{ ... }</code>, and makes
+                nested calls unmistakable (<code>(later fetch(a))</code>). Note
+                <code>later</code>/<code>fork</code>/<code>start</code>/<code
+                  >async</code
+                >
+                are not currently reserved keywords in
+                <code>src/lexer.rs</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Prefix dot <code>later.func()</code></strong>
+              </td>
+              <td><code>fixed c = later.fetch(id)</code></td>
+              <td>
+                <span class="badge b-amber">High Confusion</span> Looks
+                identical to module/shape/value field access (<code>later</code>
+                reads like an imported namespace!). Also awkward on method
+                calls: <code>later.user.save()</code> looks like a field on
+                <code>later</code>, not a method on <code>user</code>.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Pre-arg dot <code>func.later()</code></strong>
+              </td>
+              <td><code>fixed c = fetch.later(id)</code></td>
+              <td>
+                <span class="badge b-red">Ambiguous</span> Breaks visual
+                association with normal <code>fetch(id)</code> and clashes with
+                method/module lookups if a shape actually defines a
+                <code>later</code> method.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong
+                  >Post-call dot <code>func().later()</code> /
+                  <code>.latered</code></strong
+                >
+              </td>
+              <td>
+                <code
+                  >fixed c = fetch(id).later()<br />fixed c =
+                  fetch(id).latered</code
+                >
+              </td>
+              <td>
+                <span class="badge b-amber">Semantic Trap</span> Because bare
+                <code>fetch(id)</code> means
+                <em>await synchronously and return <code>T</code></em
+                >, writing <code>fetch(id).later()</code> looks like running
+                <code>fetch</code> synchronously first and then calling a
+                <code>.later()</code> method on the returned value
+                <code>T</code>!
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Postfix ellipsis <code>func() ...</code></strong>
+              </td>
+              <td><code>fixed c = fetch(id) ...</code></td>
+              <td>
+                <span class="badge b-red">Token Overload Risk</span> Checked in
+                <code>src/lexer.rs</code> &amp; <code>src/parser.rs</code>:
+                <code>Token::Ellipsis</code> (<code>...</code>) is already used
+                for type groups (<code>P...</code>), argument splats
+                (<code>f(args...)</code>), and open-ended slice literals (<code
+                  >[1, 2, ...] at r</code
+                >). Overloading <code>...</code> after a call visually blurs
+                multi-line continuation and varargs.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Bar fence <code>| func() |</code></strong>
+              </td>
+              <td><code>fixed c = | fetch(id) |</code></td>
+              <td>
+                <span class="badge b-amber">Possible, With Lexer Traps</span> A
+                single <code>|</code> is free today (<code>src/lexer.rs</code>
+                rejects it and asks for <code>or</code>), and the "separate
+                lane" look is short and memorable. But: (1) <code>||</code> is
+                already a token (loop parts), so <code>| | f() | |</code> or
+                <code>|f()||</code> mis-lexes; (2) <code>|&gt;</code> is the
+                pipe, so <code>|c|&gt;0</code> lexes as a pipe; (3) the same
+                symbol opens and closes, so nesting needs parentheses; (4)
+                Rust/Ruby readers see closure parameters, and math readers see
+                absolute value; (5) it uses up <code>|</code>, which
+                <a href="future.html#bitwise">bitwise operations</a> list as a
+                candidate; (6) it isn't searchable the way a word is, and Vela
+                prefers words (<code>and</code>, <code>or</code>,
+                <code>otherwise</code>).
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Prefix sigil <code>~&gt; func()</code></strong>
+              </td>
+              <td><code>fixed c = ~&gt; fetch(id)</code></td>
+              <td>
+                Matches Vela's arrow aesthetic (<code>&lt;&lt;-</code>,
+                <code>-&gt;&gt;</code>, <code>~</code>). Easy to scan visually,
+                though adding yet another arrow symbol alongside
+                <code>-&gt;</code>, <code>=&gt;</code>, <code>&lt;-</code>,
+                <code>&lt;&lt;-</code>, <code>-&gt;&gt;</code> can make dense
+                code symbol-heavy.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Alternatives for the Other Parts of the Model</h3>
+        <p>
+          The launch keyword isn't the only open choice. These are the
+          candidates for waiting, chaining, catching, and inspecting, with the
+          current pick first in each row:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Current Pick</th>
+              <th>Alternatives Kept on Record</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Wait for a handle</strong></td>
+              <td><code>&lt;&lt;- c</code></td>
+              <td>
+                <code>c.wait()</code>, <code>await c</code>,
+                <code>wait_and_receive(c)</code>
+              </td>
+              <td>
+                <code>&lt;&lt;-</code> reuses channel syntax and works in
+                <code>select</code>; <code>c.wait()</code> is a natural method
+                spelling to offer next to it (the way channels have both
+                <code>wait_and_receive</code> and <code>&lt;&lt;-</code>).
+                <code>await</code> would be a new keyword.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Check without blocking</strong></td>
+              <td><code>c.poll() -&gt; maybe T</code></td>
+              <td>
+                <code>c.ready</code> (bool) + <code>c.poll()</code>,
+                <code>receive(c)</code>
+              </td>
+              <td>
+                Never a bare <code>c.value</code> field: a pending or failed
+                handle has no value to read.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>.then</code> on the caller</strong>
+              </td>
+              <td><code>(&lt;&lt;- c) |&gt; step()</code></td>
+              <td>
+                <code>&lt;&lt;- c |&gt; step()</code> (no parentheses, if
+                <code>&lt;&lt;-</code> binds tighter than <code>|&gt;</code>)
+              </td>
+              <td>
+                Uses existing pipe rules, including one Plan B for the whole
+                chain.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong><code>.then</code> in the background</strong>
+              </td>
+              <td><code>doing (f() |&gt; step())</code></td>
+              <td>
+                <code>(f() |&gt; step()) later</code>,
+                <code>f() =&gt; (v) { ... }</code>,
+                <code>f() =&gt; { it ... }</code>, <code>c.then(fn)</code>
+              </td>
+              <td>
+                An implicit <code>it</code> saves naming the value but adds a
+                magic name; an explicit <code>(v)</code> binder is clearer.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Catch</strong></td>
+              <td>
+                Plan B at the wait: <code>&lt;&lt;- c { failure e ... }</code>
+              </td>
+              <td>
+                Second block on <code>=&gt;</code>:
+                <code>f() =&gt; (v) { ... } { failure e ... }</code>;
+                <code>c.recover(fn)</code>
+              </td>
+              <td>
+                Catching at the wait keeps the background task free of caller
+                state.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Cancel</strong></td>
+              <td>
+                Automatic (losing <code>select</code> arm, early scope exit)
+              </td>
+              <td>
+                <code>c.cancel()</code>, a <code>cancelled()</code> check inside
+                the task
+              </td>
+              <td>
+                Manual cancel is a useful addition; the automatic version
+                guarantees nothing is left running.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="colored-alternative">
+        <h2>
+          <span class="icon">🎨</span> 10. Colored Alternative Model &amp; Other
+          Async Designs
+        </h2>
+        <p>
+          Even though our selected path keeps tasks <strong>colorless</strong>,
+          what happens if Vela intentionally chose
+          <strong>colored tasks</strong> (requiring <code>async</code> or an
+          explicit <code>Commitment[T]</code> signature) or another structured
+          concurrency primitive instead? Below are the concrete alternatives for
+          comparison.
+        </p>
+
+        <div class="card">
+          <h3>
+            Alternative 1: Colored Tasks (<code>async task</code> and/or
+            <code>-&gt; Commitment[T]</code> Signature)
+          </h3>
+          <span class="badge b-amber"
+            >Stackless Friendly, Colored Libraries</span
+          >
+          <p>
+            In this design, you keep
+            <strong>await-by-default at every call site</strong> (so callers
+            still cannot forget <code>await</code>!), but require any
+            suspendable task to mark itself explicitly in its declaration
+            &mdash; either via an <code>async</code> modifier, an explicit
+            <code>Commitment[T]</code> return type, or both:
+          </p>
+          <pre><code><span class="comment">; Style A: 'async task' marker + await-by-default at call sites</span>
+<span class="keyword">async</span> <span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
+    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?     <span class="comment">; awaited automatically (compiler knows http_get is async)</span>
+    <span class="keyword">&lt;-</span> parse_user(resp)?
+<span class="keyword">fi</span>
+
+<span class="comment">; Style B: Return-type coloring ('-&gt; Commitment[T]') without an extra keyword</span>
+<span class="keyword">task</span> fetch_orders(id: int) -&gt; Commitment[[Order]]
+    <span class="keyword">&lt;-</span> db_query(<span class="string">"orders"</span>, id)                 <span class="comment">; body sends [Order]; the signature marks the task as suspendable</span>
+<span class="keyword">fi</span>                                           <span class="comment">; plain call still auto-awaits to [Order]; 'doing' gives the handle</span>
+
+<span class="keyword">async</span> <span class="keyword">task</span> dashboard(id: int) -&gt; Dashboard ~ HttpError
+    <span class="keyword">fixed</span> user = fetch_user(id)?              <span class="comment">; auto-awaited!</span>
+    <span class="keyword">fixed</span> c_orders = <span class="keyword">doing</span> fetch_orders(id)   <span class="comment">; explicit concurrency: Commitment[[Order]]</span>
+    <span class="keyword">fixed</span> orders = &lt;&lt;- c_orders               <span class="comment">; [Order]</span>
+    <span class="keyword">&lt;-</span> Dashboard { user: user, orders: orders }
+<span class="keyword">fi</span></code></pre>
+          <ul>
+            <li>
+              <strong>What improves under coloring:</strong> The compiler knows
+              locally per-signature which tasks may suspend, making
+              <strong>zero-allocation stackless C11 state machines</strong>
+              feasible with fast separate compilation, zero hidden fiber stacks,
+              and an explicit visual signal telling callers "this call may
+              block/yield on I/O".
+            </li>
+            <li>
+              <strong
+                >Why it is less appealing than our selected colorless
+                model:</strong
+              >
+              Re-introduces the classic <em>"red vs. blue function"</em> split:
+              higher-order utilities like <code>map</code>, wrappers, and
+              <code>pattern</code> methods must either duplicate sync/async
+              signatures or introduce polymorphic effect generics
+              (<code>async?</code>), bloating Vela's clean type system.
+            </li>
+          </ul>
+        </div>
+
+        <div class="grid">
+          <div class="mini-card">
+            <h4>
+              Alternative 2: Pure Structured Nursery Block (<code
+                >concurrent ... fi</code
+              >)
+            </h4>
+            <p>
+              Instead of first-class <code>Commitment[T]</code> values, only a
+              lexical block allows concurrent bindings:
+            </p>
+            <pre
+              style="font-size: 0.82rem; padding: 0.85rem"
+            ><code><span class="keyword">concurrent</span>
+    <span class="keyword">fixed</span> user = fetch_user(id)?
+    <span class="keyword">fixed</span> orders = fetch_orders(id)?
+<span class="keyword">fi</span>  <span class="comment">; guaranteed joined here</span></code></pre>
+            <p style="margin-bottom: 0">
+              <strong>Verdict:</strong> Maximally simple and eliminates dangling
+              handles altogether, but cannot express <code>select</code> racing,
+              conditional awaiting, or storing handles in structs/slices.
+            </p>
+          </div>
+
+          <div class="mini-card">
+            <h4>Alternative 3: Explicit Channel Request/Reply Helper</h4>
+            <p>
+              No new syntax at all: add a tiny stdlib/compiler helper spawning a
+              fiber onto a 1-slot
+              <a href="channels.html"><code>Chan[T]</code></a> and returning a
+              one-shot reply channel, using existing <code>&lt;&lt;-</code> and
+              <code>select</code>.
+            </p>
+            <p style="margin-bottom: 0">
+              <strong>Verdict:</strong> Minimal implementation effort today,
+              though callers must manage channel lifecycle/closing rules
+              manually unless wrapped in a single-shot auto-reclaimed type.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>
+            Alternative 4: Classic Explicit <code>async</code> + Explicit
+            <code>await</code> (Rust / JS Style)
+          </h3>
+          <p>
+            Calling an <code>async task</code> returns a lazy
+            <code>Commitment[T]</code>, and every call needs an explicit
+            <code>await</code> prefix/suffix. Included in the final table below
+            as an industry baseline &mdash; though it gives up your core goal of
+            preventing forgotten awaits.
+          </p>
+        </div>
+      </section>
+
+      <section id="final-comparison">
+        <h2>
+          <span class="icon">📊</span> 11. Final Comparison Matrix Across All
+          Models
+        </h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Task Coloring</th>
+              <th>Default Call</th>
+              <th>Concurrency Launch &amp; Chaining</th>
+              <th>C11 Runtime Mechanism</th>
+              <th>Region &amp; Race Safety</th>
+              <th>Fit with Vela</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Enhanced Colorless Model</strong><br /><span
+                  class="badge b-green"
+                  >Selected</span
+                >
+              </td>
+              <td>None (colorless)</td>
+              <td>Auto-awaited (0 overhead fast path)</td>
+              <td>
+                <code>doing call()</code> + <code>&lt;&lt;-</code> +
+                <code>select</code> + <code>|&gt;</code> pipes (+ optional
+                <code>.then</code>)
+              </td>
+              <td>Direct C call normally; M:N fiber per <code>doing</code></td>
+              <td>Send-boundary checks + structured scope cancel/join</td>
+              <td><span class="badge b-green">Best Overall</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Original Draft</strong><br /><span class="badge b-amber"
+                  >Superseded</span
+                >
+              </td>
+              <td>None (colorless)</td>
+              <td>Auto-awaited</td>
+              <td>
+                <code>bind y = call() =&gt; { then } { catch }</code> + spin
+                loop
+              </td>
+              <td>Implicit fiber + callback spawn</td>
+              <td>
+                Unsafe on <code>@r</code>, <code>flex&amp;</code>, callback
+                capture, spin CPU
+              </td>
+              <td><span class="badge b-amber">Needs Guards</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Colored Await-by-Default</strong><br /><span
+                  class="badge b-purple"
+                  >Alt 1</span
+                >
+              </td>
+              <td><code>async task</code> or <code>Commitment[T]</code></td>
+              <td>Auto-awaited inside <code>async</code></td>
+              <td>
+                <code>doing call()</code> + <code>&lt;&lt;-</code> /
+                <code>select</code>
+              </td>
+              <td>Stackless C11 state machines (no hidden fiber stack)</td>
+              <td>Strong statically; splits stdlib &amp; task types in two</td>
+              <td>
+                <span class="badge b-blue">Good if Stackless Required</span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Structured Block Only</strong><br /><span
+                  class="badge b-blue"
+                  >Alt 2</span
+                >
+              </td>
+              <td>Optional / None</td>
+              <td>Sequential outside <code>concurrent</code></td>
+              <td><code>concurrent ... fi</code> block only</td>
+              <td>Scope fork-join on worker pool</td>
+              <td>
+                Trivially race/leak-free; cannot express
+                <code>select</code> races
+              </td>
+              <td><span class="badge b-amber">Too Restrictive Alone</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Classic Rust/JS Async</strong><br /><span
+                  class="badge b-red"
+                  >Baseline</span
+                >
+              </td>
+              <td><code>async task</code></td>
+              <td>Returns lazy future/promise</td>
+              <td>
+                Mandatory <code>await</code> + <code>join!</code>/<code
+                  >select!</code
+                >
+              </td>
+              <td>Stackless state machines + executor</td>
+              <td>
+                Safe, but allows forgotten awaits &amp; splits sync/async
+                ecosystems
+              </td>
+              <td><span class="badge b-red">Anti-Goal for Vela</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Actors + Channels Today</strong><br /><span
+                  class="badge b-green"
+                  >Shipped</span
+                >
+              </td>
+              <td><code>actor</code> vs <code>task</code></td>
+              <td>Synchronous <code>task</code> call</td>
+              <td>
+                <code>spawn Actor(...)</code>, <code>Chan[T]</code>,
+                <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code>,
+                <code>select</code>
+              </td>
+              <td>OS thread pool + bounded mutex/condvar queues</td>
+              <td>
+                100% shipped and covered by tests today (explicit
+                <code>.close()</code> on channels)
+              </td>
+              <td><span class="badge b-green">Ships Today</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="good">
+          <strong>Summary Recommendation:</strong> Keep the
+          <strong>Enhanced Colorless Commitment Model</strong> (<code
+            >doing call()</code
+          >
+          + <code>Commitment[T ~ E]</code> + <code>&lt;&lt;-</code> +
+          <code>select</code> + structured scope join +
+          <code>|&gt;</code> pipes, plus parenthesis-free
+          <code>&lt;&lt;- c { failure e ... }</code> and optional
+          <code>.then()</code>/<code>=&gt; (v) { ... }</code> sugar) as Vela's
+          target design. It preserves the zero-cost sequential fast path, avoids
+          function coloring, integrates directly with channels and
+          <code>select</code>, and satisfies Vela's region and data-race
+          guarantees cleanly.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Vela — Commitment &amp; Async/Await Design Evaluation. See
+        <a href="concurrency.html">Concurrency &amp; Design Boundaries</a> and
+        <a href="channel-lifecycle.html">Channel Lifecycle</a> for current
+        concurrency semantics.
+      </p>
+    </footer>
+  </body>
+</html>

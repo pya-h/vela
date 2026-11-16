@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — Channel Lifecycle: Close, Free &amp; Regions</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --accent-warn: #fbbf24;
+        --accent-bad: #f87171;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 25%,
+            rgba(56, 189, 248, 0.16) 0%,
+            transparent 42%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(52, 211, 153, 0.12) 0%,
+            transparent 42%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.15rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent), var(--accent-3));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin: 1rem auto 0;
+        font-size: 1.18rem;
+        color: var(--muted);
+        max-width: 740px;
+      }
+      main {
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 2.5rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 1.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h3 {
+        margin-top: 2.1rem;
+        color: var(--accent);
+        font-size: 1.32rem;
+      }
+      h4 {
+        margin: 1.25rem 0 0.45rem;
+        color: var(--accent-3);
+        font-size: 1.06rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+      }
+      .keyword {
+        color: #f472b6;
+      }
+      .type {
+        color: #38bdf8;
+      }
+      .string {
+        color: #4ade80;
+      }
+      .comment {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .number {
+        color: #fbbf24;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.22rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0.15rem;
+      }
+      .b-blue {
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .b-green {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--accent-3);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+      .b-amber {
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--accent-warn);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+      }
+      .b-red {
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--accent-bad);
+        border: 1px solid rgba(248, 113, 113, 0.35);
+      }
+      .b-purple {
+        background: rgba(167, 139, 250, 0.15);
+        color: var(--accent-2);
+        border: 1px solid rgba(167, 139, 250, 0.35);
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .warn {
+        background: rgba(251, 191, 36, 0.08);
+        border-left: 4px solid var(--accent-warn);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .good {
+        background: rgba(52, 211, 153, 0.08);
+        border-left: 4px solid var(--accent-3);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .card,
+      .mini-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.4rem;
+        margin: 1.25rem 0;
+      }
+      .mini-card {
+        margin: 0;
+      }
+      .mini-card h4 {
+        margin-top: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.5rem 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--card-bg);
+        color: var(--accent);
+      }
+      tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      ul,
+      ol {
+        padding-left: 1.35rem;
+      }
+      li {
+        margin: 0.45rem 0;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 3rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
+        <a href="regions.html">Regions</a>
+        <a href="safety.html">Safety</a>
+        <a href="channels.html" class="active">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html">Review</a>
+      </nav>
+      <h1>Channel Lifecycle: Close, Free &amp; Regions</h1>
+      <p class="tagline">
+        Why Vela requires explicit <code>.close()</code> on channels instead of
+        tying them to lexical <code>region</code> exit, the exact distinction
+        between closing and freeing, and alternatives to prevent forgotten
+        channel leaks.
+      </p>
+      <div style="margin-top: 1.5rem">
+        <span class="badge b-blue">Runtime Architecture</span>
+        <span class="badge b-green">Close vs. Free</span>
+        <span class="badge b-amber">Leak Risk Analysis</span>
+        <span class="badge b-purple">Design Alternatives</span>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2>
+          <span aria-hidden="true">🔀</span> 1. Closing vs. Freeing: Two
+          Completely Different Steps
+        </h2>
+        <p>
+          It is easy to assume <code>ch.close()</code> immediately calls
+          <code>free()</code> on the channel &mdash; similar to freeing a region
+          at <code>fi</code>. In Vela's C runtime
+          (<code>runtime/vela_rt.h</code>), <strong>closing</strong> and
+          <strong>freeing</strong> are two separate lifecycle phases on purpose:
+        </p>
+
+        <div class="grid">
+          <div class="mini-card">
+            <h4>Phase A: Closing (<code>vela__rt__chan_close</code>)</h4>
+            <p>
+              <strong
+                >A coordination / half-close protocol signal ("no more
+                writes").</strong
+              >
+            </p>
+            <ul>
+              <li>
+                Sets <code>chan-&gt;closed = true</code> under
+                <code>chan-&gt;lock</code>.
+              </li>
+              <li>
+                Wakes all blocked senders, blocked receivers, and active
+                <code>select</code> waiters (<code>not_empty</code>,
+                <code>not_full</code>,
+                <code>vela__rt__chan_wake_waiters_locked</code>), and schedules
+                any attached actor so it observes closure.
+              </li>
+              <li>
+                <strong>Does NOT discard unread buffered items!</strong>
+                Receivers can keep draining queued messages after close via
+                <code>receive()</code>, <code>&lt;&lt;-</code>, or
+                <code>select</code>.
+              </li>
+            </ul>
+          </div>
+
+          <div class="mini-card">
+            <h4>Phase B: Freeing (<code>vela__rt__chan_destroy</code>)</h4>
+            <p>
+              <strong>Actual memory, mutex, and table-slot teardown.</strong>
+            </p>
+            <ul>
+              <li>
+                Triggered only once the channel is <em>both</em> closed
+                <strong>and empty</strong> (<code>chan-&gt;count == 0</code>),
+                either inside <code>close()</code> if empty or by the final
+                draining read inside <code>recv</code> / <code>try_recv</code> /
+                <code>select</code>.
+              </li>
+              <li>
+                Clears the slot in <code>vela__rt__global_chan_table</code> and
+                increments <code>slot-&gt;generation</code> so any copied
+                <code>int64_t</code> handle fails lookup safely afterward (no
+                UAF).
+              </li>
+              <li>
+                Spins briefly while in-flight pinned operations finish (<code
+                  >chan-&gt;ops == 0</code
+                >), destroys mutex/condvars, and calls
+                <code>free(chan-&gt;buffer)</code> and <code>free(chan)</code>.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Key takeaway:</strong> Closing means
+          <em>"stop accepting sends and broadcast EOF once drained."</em>
+          Freeing means
+          <em
+            >"all queued data is gone and zero threads still pin the struct
+            &mdash; reclaim heap memory now."</em
+          >
+          You cannot safely free a channel the instant the producer closes it if
+          consumers are still reading buffered messages!
+        </div>
+      </section>
+
+      <section>
+        <h2>
+          <span aria-hidden="true">🧭</span> 2. Why Regions Do Not Close or Free
+          Channels Automatically
+        </h2>
+        <p>
+          Vela <a href="regions.html">regions</a> close and free allocations
+          automatically at lexical block exit. Why don't channels live inside a
+          <code>region r</code> and auto-close when <code>r</code> ends? Because
+          regions and channels solve opposite lifetime problems:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Property</th>
+              <th>Lexical <code>region r</code></th>
+              <th>Concurrent <code>Chan[T]</code></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Thread ownership</strong></td>
+              <td>
+                Thread-local to one active execution stack; pointers carry
+                <code>@r</code> so they can never cross threads.
+              </td>
+              <td>
+                Shared concurrently across producers, consumers, spawned actors,
+                and <code>select</code> calls;
+                <code>Chan[T]</code> intentionally has no <code>@r</code>.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Lifetime shape</strong></td>
+              <td>
+                Strictly lexical: dies at the declaring block's <code>fi</code>.
+              </td>
+              <td>
+                Dynamic &amp; cross-scope: routinely returned from helpers,
+                stored inside reply messages, or handed to long-lived actors.
+              </td>
+            </tr>
+            <tr>
+              <td><strong>Teardown rule</strong></td>
+              <td>Instant bulk wipe when execution leaves the block.</td>
+              <td>
+                Two-phase drain: producer closes &rarr; consumers drain
+                remaining items &rarr; final reader destroys buffer once
+                <code>ops == 0</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>
+          Concrete Failure If Channels Tied to Creator's <code>region</code>
+        </h3>
+        <pre><code><span class="keyword">task</span> start_pipeline() -&gt; Chan[int]
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> ch = chan_new&lt;int&gt;(<span class="number">8</span>)
+    <span class="keyword">fixed</span> w = spawn Worker(ch)    <span class="comment">; another thread now holds ch</span>
+    <span class="keyword">&lt;-</span> ch                         <span class="comment">; if 'region r' auto-closed ch here, Worker's channel dies on return!</span>
+<span class="keyword">fi</span></code></pre>
+        <p>
+          Even inside a single function with <code>region r</code>, a local
+          channel could only auto-close safely if it never escaped to another
+          task or actor &mdash; defeating the main purpose of channels. And
+          unlike a single-threaded
+          <a href="std.html#file-regions"><code>File</code></a> (which belongs
+          to one region and returns <code>FileError.NotOpen</code> once that
+          region exits), closing or freeing a channel mid-flight while another
+          thread is still draining buffered items would cause lost messages or
+          synchronization races.
+        </p>
+        <p>
+          This is also why Go, Rust (explicit <code>close</code>/drop), and
+          Erlang do not tie channel lifetimes to lexical arenas:
+          <strong
+            >closing a channel is a semantic protocol decision ("the producer is
+            done"), whereas memory reclamation waits for the last drained
+            consumer</strong
+          >.
+        </p>
+      </section>
+
+      <section>
+        <h2>
+          <span aria-hidden="true">⚖️</span> 3. Pros &amp; Cons of Explicit
+          <code>.close()</code>
+        </h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Pros of Vela's Current Design</th>
+              <th>Cons of Vela's Current Design</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Zero handle refcount overhead:</strong> Handles are
+                plain <code>int64_t</code> values packed with a slot index +
+                generation, passed freely across threads without atomic
+                increment/decrement traffic on every copy.
+              </td>
+              <td>
+                <strong>Easy to leak on early returns:</strong> If a loop or
+                server allocates per-request channels (<code>chan_new</code>)
+                and exits early via <code>&lt;-</code>, <code>fail</code>, or
+                <code>break</code> without calling <code>.close()</code>, the C
+                heap allocation, buffer, mutex, condvars, and table slot stay
+                alive until process exit.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Safe double-close &amp; stale handles:</strong>
+                Destroying twice is a no-op, and stale copied handles fail
+                generation lookup cleanly with zero use-after-free.
+              </td>
+              <td>
+                <strong>Protocol deadlock if omitted:</strong> When a producer
+                forgets <code>.close()</code>, consumers waiting on
+                <code>&lt;&lt;- ch</code> or <code>select</code> without a
+                timeout wait indefinitely instead of observing closed state.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Clean close + drain semantics:</strong> Buffered items
+                remain readable after <code>close()</code>; only when empty does
+                teardown free the runtime node.
+              </td>
+              <td>
+                <strong>Manual audit burden:</strong> Every code path that
+                creates short-lived reply channels must manually remember
+                <code>.close()</code>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>
+          <span aria-hidden="true">🔍</span> 4. Is Forgetting
+          <code>.close()</code> Actually As Problematic As It Sounds?
+        </h2>
+        <p>
+          <strong
+            >Honest answer: only in certain patterns &mdash; it is much less
+            scary in Go-style long-lived pipelines, and genuinely dangerous in
+            per-request loops.</strong
+          >
+        </p>
+
+        <div class="grid">
+          <div class="card">
+            <h4>
+              <span class="badge b-green">Low Risk</span> Long-Lived App /
+              Worker Channels
+            </h4>
+            <p>
+              If your program creates 3 work queues or spawns 10 actors once in
+              <code>main</code>, omitting <code>.close()</code> when exiting
+              usually costs almost nothing: the OS reclaims process heap memory
+              and kernel resources immediately on exit (just as Go programs
+              often leave immortal worker channels unclosed until shutdown).
+            </p>
+            <p>
+              <em>Caveat:</em> strict AddressSanitizer / LeakSanitizer test runs
+              (<code>cargo test</code>) and library code that runs repeatedly in
+              one process <strong>do</strong> expect channels to be closed and
+              drained cleanly so LSan sees zero leaked allocations.
+            </p>
+          </div>
+
+          <div class="card">
+            <h4>
+              <span class="badge b-red">High Risk</span> Dynamic Per-Request
+              Channels &amp; Shutdown Loops
+            </h4>
+            <p>
+              In an HTTP server or actor system that calls
+              <code>fixed reply = chan_new&lt;Resp&gt;(1)</code> on every
+              incoming request:
+            </p>
+            <ul>
+              <li>
+                Forgetting <code>reply.close()</code> on even <em>one</em> error
+                branch leaks a <code>vela__rt__chan</code> struct, ring buffer,
+                <code>pthread_mutex_t</code>, 2 <code>pthread_cond_t</code>s,
+                and a slot in <code>vela__rt__global_chan_table</code> on every
+                failed request.
+              </li>
+              <li>
+                Forgetting to close an input feed channel hangs consumer loops
+                waiting on <code>&lt;&lt;- ch</code>.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>
+          <span aria-hidden="true">🛠️</span> 5. Alternatives to Guarantee
+          Channels Are Never Forgotten
+        </h2>
+        <p>
+          If manual <code>.close()</code> feels too error-prone as Vela programs
+          grow, five clean designs exist (ordered from lightest to strongest
+          compiler guarantees):
+        </p>
+
+        <div class="card">
+          <h3>
+            1. Lexical <code>defer ch.close()</code>
+            <span class="badge b-green">Best Immediate Fit</span>
+          </h3>
+          <p>
+            Adding a <code>defer</code> statement (already proposed in
+            <a href="future.html#defer-guards">Future Directions</a>) solves
+            per-request leaks immediately without changing channel handle
+            semantics:
+          </p>
+          <pre><code><span class="comment">; Conceptual future syntax: closes on EVERY exit path (normal return, ?, break, fail)</span>
+<span class="keyword">task</span> query_actor(acc: Actor[Account]) -&gt; int ~ TimeoutError
+    <span class="keyword">fixed</span> reply = chan_new&lt;int&gt;(<span class="number">1</span>)
+    <span class="keyword">defer</span> reply.close()
+    GetBalance(reply) -&gt;&gt; acc
+    <span class="keyword">&lt;-</span> &lt;&lt;- reply
+<span class="keyword">fi</span></code></pre>
+          <p>
+            <strong>Why it works well:</strong> The developer still chooses
+            <em>where</em> closing happens (no premature close when returning a
+            channel from a factory helper), while preventing leaked reply
+            channels on error paths.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            2. Split Endpoints: <code>Sender[T]</code> +
+            <code>Receiver[T]</code> with Auto-Drop
+            <span class="badge b-blue">Strongest Design</span>
+          </h3>
+          <p>
+            Splitting creation into paired handles (like Rust's
+            <code>std::sync::mpsc</code> or crossbeam) solves both closing
+            <em>and</em> freeing automatically:
+          </p>
+          <ul>
+            <li>
+              Each <code>Sender[T]</code> holds an atomic sender refcount; when
+              the <strong>final <code>Sender[T]</code></strong> goes out of
+              scope (or is explicitly dropped), the channel automatically marks
+              itself <code>closed = true</code> and wakes receivers.
+            </li>
+            <li>
+              Each <code>Receiver[T]</code> holds a receiver refcount; when the
+              final receiver drops (or once closed &amp; drained), the channel
+              frees its buffer.
+            </li>
+          </ul>
+          <p>
+            <strong>Tradeoff:</strong> Requires explicit lifetime/drop
+            destructors on channel handles and splitting one type into two
+            (<code>Sender[T]</code>, <code>Receiver[T]</code>), adding surface
+            complexity that Vela avoided in v1.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            3. Scoped Region Channels (<code>chan_new&lt;T&gt;(cap) at r</code>)
+            <span class="badge b-amber">Opt-In Local Channels</span>
+          </h3>
+          <p>
+            Only safe if the type system restricts the handle
+            (<code>Chan[T]@r</code>) so it cannot escape <code>r</code> &mdash;
+            meaning an actor or helper spawned inside an inner structured
+            concurrency block that finishes before <code>r</code> closes
+            <em>could</em> use it safely, while global/escaped threads could
+            not. Works best paired with
+            <a href="commitment.html">structured concurrency scopes</a>.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            4. Reference-Counted Handle Copies (Implicit Drop Free)
+            <span class="badge b-purple">GC-Like Lifecycle</span>
+          </h3>
+          <p>
+            Tracking how many copies of a <code>Chan[T]</code> handle exist
+            across all stacks/structs and calling destroy when total handle refs
+            hit zero prevents memory leaks even without <code>.close()</code>.
+          </p>
+          <p>
+            <strong>Downside:</strong> Does <em>not</em> distinguish producer
+            handles from consumer handles cleanly (a waiting consumer still
+            holds a reference!), and adds atomic refcount updates whenever
+            handles are copied or leave scope.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>
+            5. Debug / Guard Mode Leak Diagnostics (<code>vela --guard</code>)
+            <span class="badge b-blue">Zero Language Change</span>
+          </h3>
+          <p>
+            Keep current semantics in release builds, and record creation source
+            locations (<code>file:line</code>) in
+            <code>vela__rt__global_chan_table</code> under a guard/debug flag.
+            At process exit, report any slots still open (<code
+              >channel created at server.vela:42 was never closed</code
+            >), turning silent leaks into instant actionable feedback.
+          </p>
+        </div>
+
+        <div class="good">
+          <strong>Practical Summary Today:</strong> For global/main pipelines,
+          keep channels explicit and call <code>.close()</code> during shutdown.
+          For short-lived reply channels, always pair <code>chan_new</code> and
+          <code>.close()</code> on every path cleanly &mdash; and if Vela adds
+          <code>defer</code> in a future release,
+          <code>defer reply.close()</code> closes the remaining ergonomic gap
+          with minimal language complexity.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Vela — Explicit Channel Lifecycle &amp; Region Boundaries. See also
+        <a href="channels.html">Channels</a> and
+        <a href="regions.html">Regions</a>.
+      </p>
+    </footer>
+  </body>
+</html>

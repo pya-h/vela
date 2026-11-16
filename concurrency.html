@@ -1,0 +1,753 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vela — Concurrency &amp; Design Boundaries</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --bg-2: #111827;
+        --fg: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --accent-2: #a78bfa;
+        --accent-3: #34d399;
+        --accent-4: #f472b6;
+        --accent-warn: #fbbf24;
+        --code-bg: #1e293b;
+        --card-bg: #151c2c;
+        --border: #334155;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.65;
+      }
+      header {
+        padding: 5rem 1rem 4rem;
+        text-align: center;
+        background:
+          radial-gradient(
+            circle at 20% 30%,
+            rgba(56, 189, 248, 0.14) 0%,
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 80% 70%,
+            rgba(251, 191, 36, 0.12) 0%,
+            transparent 40%
+          ),
+          var(--bg-2);
+        border-bottom: 1px solid var(--border);
+      }
+      nav.top-nav {
+        max-width: 960px;
+        margin: 0 auto 2rem;
+        display: flex;
+        justify-content: center;
+        gap: 1.4rem;
+        flex-wrap: wrap;
+      }
+      nav.top-nav a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: color 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active {
+        color: var(--accent);
+      }
+      h1 {
+        margin: 0;
+        font-size: 3.3rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, var(--accent), var(--accent-3));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .tagline {
+        margin: 1rem auto 0;
+        font-size: 1.2rem;
+        color: var(--muted);
+        max-width: 720px;
+      }
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 2.5rem 1rem 5rem;
+      }
+      h2 {
+        margin-top: 4rem;
+        font-size: 1.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.5rem;
+      }
+      h2 .icon {
+        font-size: 1.4rem;
+      }
+      h3 {
+        margin-top: 2.25rem;
+        color: var(--accent);
+        font-size: 1.35rem;
+      }
+      p {
+        margin: 1rem 0;
+      }
+      code {
+        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+        background: var(--code-bg);
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.35rem;
+        color: var(--accent);
+        font-size: 0.9rem;
+      }
+      pre {
+        background: var(--code-bg);
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        line-height: 1.55;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+        color: var(--fg);
+      }
+      .keyword {
+        color: #f472b6;
+      }
+      .type {
+        color: #38bdf8;
+      }
+      .string {
+        color: #4ade80;
+      }
+      .comment {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .number {
+        color: #fbbf24;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin: 0.15rem;
+      }
+      .b-blue {
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+      }
+      .b-green {
+        background: rgba(52, 211, 153, 0.15);
+        color: var(--accent-3);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+      .b-amber {
+        background: rgba(251, 191, 36, 0.15);
+        color: var(--accent-warn);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+      }
+      .b-pink {
+        background: rgba(244, 114, 182, 0.15);
+        color: var(--accent-4);
+        border: 1px solid rgba(244, 114, 182, 0.3);
+      }
+      .note {
+        background: rgba(56, 189, 248, 0.08);
+        border-left: 4px solid var(--accent);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .warn {
+        background: rgba(251, 191, 36, 0.08);
+        border-left: 4px solid var(--accent-warn);
+        padding: 1rem 1.25rem;
+        border-radius: 0 0.5rem 0.5rem 0;
+        margin: 1.5rem 0;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.35rem 1.5rem;
+        margin: 1.5rem 0;
+      }
+      .card h3 {
+        margin-top: 0;
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .tag-row {
+        margin-top: 0.4rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .mini-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1.15rem;
+      }
+      .mini-card h4 {
+        margin: 0 0 0.45rem;
+        color: var(--accent-3);
+        font-size: 1.05rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1.5rem 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--card-bg);
+        color: var(--accent);
+      }
+      tr:nth-child(even) {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      ul,
+      ol {
+        padding-left: 1.35rem;
+      }
+      li {
+        margin: 0.45rem 0;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 3rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
+        <a href="regions.html">Regions</a>
+        <a href="safety.html">Safety</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html" class="active" aria-current="page"
+          >Concurrency</a
+        >
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html">Review</a>
+      </nav>
+      <h1>Concurrency &amp; Boundaries</h1>
+      <p class="tagline">
+        How Vela achieves real OS multithreading today with Actors and Channels
+        — and why raw threads, mutexes, <code>async</code>/<code>await</code>,
+        and several common primitives are intentionally left out.
+      </p>
+      <div style="margin-top: 1.5rem">
+        <span class="badge b-blue">M:N Worker Pool</span>
+        <span class="badge b-green">Actors &amp; Channels</span>
+        <span class="badge b-amber">Intentional Omissions</span>
+        <span class="badge b-pink">Safety by Structure</span>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <h2><span class="icon">🧵</span> What Vela Supports Today</h2>
+        <p>
+          Vela supports real <strong>OS multithreading</strong> and concurrent
+          execution out of the box. Instead of exposing low-level thread handles
+          and lock primitives directly to application code, the runtime executes
+          <strong>Actors</strong> across a shared POSIX worker thread pool and
+          moves data across thread boundaries through thread-safe
+          <strong>Channels</strong>.
+        </p>
+
+        <div class="grid">
+          <div class="mini-card">
+            <h4>1. M:N Worker Thread Pool</h4>
+            <p>
+              On first actor dispatch, <code>runtime/vela_rt.h</code> lazily
+              creates a pool of detached POSIX threads
+              (<code>pthread_create</code>) sized to the machine's online cores
+              (up to 31, defaulting to 4). When <code>main()</code> exits,
+              generated C calls <code>vela__rt__sched_stop()</code> to stop
+              workers cleanly.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>2. Isolated Actors</h4>
+            <p>
+              <code>spawn MyActor(...)</code> allocates isolated state paired
+              with a 32-slot mailbox and returns an
+              <code>Actor[MyActor]</code> handle. Different actors run in
+              parallel on worker threads, while each actor drains its own
+              mailbox one step at a time.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>3. Thread-Safe Channels</h4>
+            <p>
+              <code>Chan[T]</code> (<code>chan_new&lt;T&gt;(cap)</code>) is a
+              bounded FIFO ring buffer protected by a mutex and condition
+              variables (<code>not_empty</code> / <code>not_full</code>),
+              supporting <code>dispatch</code>, <code>wait_and_receive</code>,
+              non-blocking <code>receive</code>, and <code>close</code>.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>4. Multi-Channel <code>select</code> &amp; Timeouts</h4>
+            <p>
+              Contextual
+              <code>select ... case ... otherwise ... fi</code> blocks wait
+              atomically on multiple receives (<code>case msg &lt;&lt;- ch</code
+              >), closed detection (<code>case none &lt;&lt;- ch</code>),
+              bounded sends (<code>case [own] v -&gt;&gt; ch</code>), and
+              <code>case after ms</code> timeouts without lock-inversion
+              deadlocks.
+            </p>
+          </div>
+          <div class="mini-card">
+            <h4>5. Compile-Time Boundary Safety</h4>
+            <p>
+              Linear <code>own T</code> move checking stops use-after-move and
+              shared aliasing bugs before C is emitted, and regional values
+              (<code>@r</code>) are rejected at channel and actor boundaries so
+              memory never outlives its region.
+            </p>
+          </div>
+        </div>
+
+        <p>
+          For the full mechanics of message passing and isolated actor state,
+          see <a href="channels.html">Channels</a>,
+          <a href="channel-lifecycle.html"
+            >Channel Lifecycle &amp; Explicit Closing</a
+          >, <a href="actors.html">Actors</a>, and
+          <a href="safety.html#data-races">Data Races &amp; Alters</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2>
+          <span class="icon">🚧</span> What Vela Intentionally Does
+          <em>Not</em> Have Yet
+        </h2>
+        <p>
+          Concurrency features are often judged as much by what a language
+          refuses to expose as by what it includes. Vela omits several
+          primitives found in C, Rust, or Go — either because they conflict with
+          Vela's core philosophy of <em>safety through static structure</em>, or
+          because safely supporting them requires stronger static guarantees
+          that are intentionally deferred.
+        </p>
+
+        <div class="card">
+          <h3>
+            <span>1. No Raw Thread Spawning or Shared-Memory Locks</span>
+            <span class="badge b-pink">Omitted by Design</span>
+          </h3>
+          <div class="tag-row">
+            Missing primitives: arbitrary <code>thread.spawn(...)</code>,
+            <code>Mutex[T]</code>, <code>RwLock[T]</code>, semaphores, atomics
+          </div>
+          <p>
+            You cannot launch an arbitrary task or lambda onto an unmanaged OS
+            thread that captures shared references to stack locals or heap
+            pointers, nor can you wrap mutable state in user-managed mutexes,
+            read-write locks, or atomic compare-and-swap primitives.
+          </p>
+          <p>
+            <strong>Why we didn't implement this:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong
+                >Locks trade data races for deadlocks and torn
+                invariants:</strong
+              >
+              Manual mutexes make it easy to lock in inconsistent orders
+              (deadlock), forget a lock on one code path (data race), or release
+              a lock mid-update (half-broken state). Vela prefers isolating
+              mutable state inside an <strong>Actor</strong> where concurrency
+              is impossible inside message handlers.
+            </li>
+            <li>
+              <strong
+                >Protecting closures and regions would bloat the type
+                system:</strong
+              >
+              Allowing arbitrary closures to run concurrently with shared
+              variables or pointers would require Rust-style <code>Send</code> /
+              <code>Sync</code> marker traits and cross-thread borrow lifetimes
+              on every signature and region. Keeping multithreading scoped to
+              <code>actor</code> mailboxes and <code>own T</code> transfers
+              eliminates shared aliasing without complicated lifetime
+              annotations.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >2. No <code>async</code> / <code>await</code> or Futures
+              Runtime</span
+            >
+            <span class="badge b-amber">Deferred / Unlikely</span>
+          </h3>
+          <div class="tag-row">
+            Missing primitives: <code>async task</code>, <code>await</code>,
+            <code>Future[T]</code>, stackless coroutine state machines
+          </div>
+          <p>
+            Vela tasks are ordinary synchronous functions compiled directly to
+            plain C11 functions. There is no
+            <code>async</code> keyword, no <code>Future</code> trait, and no
+            compiler transform splitting functions into resumable poll state
+            machines.
+          </p>
+          <p>
+            <strong>Why we didn't implement this:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>Avoiding "function coloring":</strong> In async/await
+              languages, calling an async helper forces the caller — and every
+              caller above it — to become <code>async</code> too, splitting
+              standard libraries and user code into two incompatible worlds.
+            </li>
+            <li>
+              <strong
+                >Keeping generated C predictable and zero-surprise:</strong
+              >
+              Async state machines introduce invisible heap allocations,
+              self-referential frame pinning problems, and cancellation traps
+              (dropping a half-awaited future mid-flight).
+            </li>
+            <li>
+              <strong>Actors already cover non-blocking coordination:</strong>
+              An actor message step runs on the runtime worker pool without
+              tying up the caller; if a caller wants a reply, it creates a small
+              <code>Chan[T]</code>, passes it inside the message, and reads it
+              back with <code>wait_and_receive()</code> or polls with
+              <code>receive()</code>. If Vela ever adds cooperative suspension
+              later, algebraic effects are a cleaner fit than colored functions.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >3. No Whole-Region Cross-Thread Transfer (<code
+                >Chan[own region]</code
+              >)</span
+            >
+            <span class="badge b-amber">Deferred (Safety Guarded)</span>
+          </h3>
+          <div class="tag-row">
+            Missing primitives: <code>dispatch(c, own work_region)</code>,
+            sending <code>@r</code> values over channels or actor messages
+          </div>
+          <p>
+            Today, only self-contained values and owned non-regional shapes
+            (<code>own T</code>) can cross channels, actor messages, or
+            <code>spawn</code> arguments. Passing a value tied to a region (like
+            <code>text@r</code> or <code>^Node@r</code>) across a thread
+            boundary is rejected at compile time.
+          </p>
+          <p>
+            <strong>Why we didn't implement this yet:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>Preventing dangling pointers across threads:</strong> In
+              Vela, a region lives on the stack of the block that opened it and
+              frees all of its allocations at <code>fi</code>. Because an actor
+              or receiving thread can easily outlive the sender's block,
+              allowing <code>@r</code> pointers across threads would cause
+              use-after-free bugs as soon as the sender leaves scope.
+            </li>
+            <li>
+              <strong
+                >True $O(1)$ region transfer requires linear region
+                ownership:</strong
+              >
+              To safely hand off a whole arena without copying, the compiler
+              must track the <code>region</code> handle itself as linearly moved
+              (<code>own r</code>) and prove that no leftover pointers into
+              <code>@r</code> remain readable in the sender. Deferring
+              <code>Chan[own region]</code> keeps memory safety airtight until
+              linear region moves are built.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span>4. No Data-Parallel Loops (<code>parallel each</code>)</span>
+            <span class="badge b-amber">Deferred</span>
+          </h3>
+          <div class="tag-row">
+            Missing primitives: fork-join loop execution across CPU cores,
+            parallel map/reduce
+          </div>
+          <p>
+            <code>each x in items</code> always executes sequentially on the
+            current thread. There is no syntax yet to automatically slice an
+            array or collection across the worker pool and wait for all
+            iterations to finish.
+          </p>
+          <p>
+            <strong>Why we didn't implement this yet:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong
+                >Safe parallel bodies need stricter isolation checks:</strong
+              >
+              If two iterations of a loop run on different threads
+              simultaneously, the compiler must prevent both iterations from
+              writing to the same captured outer local (<code>flex</code>),
+              altering the same slice element, or allocating concurrently into
+              one unsynchronized region without locks.
+            </li>
+            <li>
+              <strong>Explicit worker Actors work today:</strong> CPU-heavy
+              batches can already be split into chunks, dispatched to a small
+              pool of worker Actors over channels, and gathered back through a
+              reply channel without risking hidden races.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>
+            <span
+              >5. <code>shared flex</code> Fields Are Not
+              Thread-Synchronized</span
+            >
+            <span class="badge b-pink">Design Caveat</span>
+          </h3>
+          <div class="tag-row">
+            Implementation detail: shape <code>shared</code> fields compile to
+            plain C <code>static</code> globals
+          </div>
+          <p>
+            A <code>shared flex</code> field on a shape (such as
+            <code>Player.alive</code>) compiles to a plain C global variable
+            with no mutex or <code>_Atomic</code> wrapper.
+          </p>
+          <p>
+            <strong>Why it works this way:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong
+                >Zero-cost reactive tracking for normal program flow:</strong
+              >
+              <code>shared</code> fields were built for program-wide counters,
+              configuration, and reactive events (<code>on init</code>,
+              <code>on drop</code>, <code>on Player.alive</code>) inside
+              ordinary execution without paying atomic bus overhead on every
+              read or event trigger.
+            </li>
+            <li>
+              <strong
+                >Do not share mutable globals across concurrent Actors:</strong
+              >
+              Because C <code>static</code> variables are not protected against
+              simultaneous multi-thread writes, concurrent coordination should
+              always go through messages into a dedicated Actor that owns the
+              counter or registry state instead of mutating
+              <code>shared flex</code> fields from parallel actor handlers.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="icon">🧭</span> What to Use Instead Today</h2>
+        <p>
+          Even without those primitives, every common concurrent pattern maps
+          directly onto Actors, Channels, and
+          <code>own T</code> ownership transfers:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Common Primitive Elsewhere</th>
+              <th>Vela Pattern Today</th>
+              <th>Why It Works Safely</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Mutex&lt;State&gt;</code> / shared lock</td>
+              <td>
+                An <code>actor</code> holding <code>State</code> as private
+                fields
+              </td>
+              <td>
+                The actor processes one message step at a time, so state needs
+                zero locks and cannot deadlock on lock ordering.
+              </td>
+            </tr>
+            <tr>
+              <td><code>thread::spawn</code> + join handle</td>
+              <td>
+                <code>spawn Worker(...)</code> + reply <code>Chan[Result]</code>
+              </td>
+              <td>
+                Work runs on the M:N POSIX thread pool; the caller blocks on
+                <code>reply.wait_and_receive()</code> when it needs the answer.
+              </td>
+            </tr>
+            <tr>
+              <td><code>select</code> across N channels</td>
+              <td>
+                <code>select ... case x &lt;&lt;- ch ... otherwise ... fi</code>
+              </td>
+              <td>
+                Built-in multi-channel <code>select</code> waits atomically on
+                receives, bounded sends, channel close (<code
+                  >none &lt;&lt;- ch</code
+                >), and <code>after ms</code> timeouts.
+              </td>
+            </tr>
+            <tr>
+              <td><code>async fn</code> request/response</td>
+              <td>Actor message carrying a one-shot <code>Chan[T]</code></td>
+              <td>
+                Functions remain uncolored synchronous Vela code while work
+                executes concurrently in the background.
+              </td>
+            </tr>
+            <tr>
+              <td>Parallel batch loop</td>
+              <td>N spawned worker actors + result collector channel</td>
+              <td>
+                Each worker owns its chunk and isolated state, dispatching
+                finished items cleanly back to main.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note">
+          <strong>Summary Example:</strong> Spawning work concurrently, keeping
+          state race-free, and collecting a reply without locks or
+          <code>async</code> keywords:
+        </div>
+
+        <pre><code><span class="keyword">actor</span> Compute(factor: int)
+    <span class="keyword">on</span> Square(n: int, reply: Chan[int])
+        reply.dispatch(n * n * factor)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> worker = spawn Compute(<span class="number">2</span>)
+    <span class="keyword">fixed</span> done = chan_new&lt;int&gt;(<span class="number">1</span>)
+
+    worker.dispatch(Compute.Square(<span class="number">5</span>, done))
+    show(<span class="string">"result: "</span>, done.wait_and_receive())   <span class="comment">; result: 50</span>
+
+    worker.close()
+    done.close()
+<span class="keyword">fi</span></code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Vela Language Documentation &copy; 2026. Concurrency without
+        shared-memory locks, compiled to ISO C11.
+      </p>
+    </footer>
+  </body>
+</html>

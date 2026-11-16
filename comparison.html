@@ -193,6 +193,36 @@
       .doc-nav a[aria-current="page"] {
         color: var(--accent);
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
@@ -201,18 +231,25 @@
       <p class="tagline">
         A practical comparison across the programming-language spectrum.
       </p>
-      <nav class="doc-nav" aria-label="Vela documentation">
-        <a href="index.html">Language</a>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
         <a href="regions.html">Regions</a>
-        <a href="std.html">Library</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html" aria-current="page">Comparison</a>
-        <a href="future.html">Future</a>
-        <a href="future-2.html">Future (Kimi)</a>
         <a href="safety.html">Safety</a>
-        <a href="maywaste.html">May Waste</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
         <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html" class="active" aria-current="page"
+          >Comparison</a
+        >
+        <a href="future.html">Future</a>
         <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
         <a href="review.html">Review</a>
       </nav>
     </header>
@@ -598,10 +635,13 @@
           so freed memory can't be used or freed again. Integer overflow and
           division by zero stop the program with a message instead of being
           undefined, as they are in C, and so does an index out of range of an
-          array or slice. It is much safer than C, but its guarantees are
-          narrower than Rust's (which also rules out data races) or those of
-          GC'd languages; <a href="safety.html">Safety</a> lists what the
-          compiler checks and where it can't yet.
+          array or slice. It is much safer than C; for single-thread memory it
+          favors scoped regions over borrow-checker complexity, and for
+          concurrency it pairs share-nothing <a href="actors.html">actors</a>,
+          ownership-transferring <a href="channels.html">channels</a>, and
+          <a href="events.html">alters-checked events</a>;
+          <a href="safety.html">Safety</a> lists what the compiler checks and
+          where it can't yet.
         </p>
         <div class="table-wrap">
           <table>
@@ -880,9 +920,11 @@
           a time, and files through its <a href="std.html">library</a>; see
           <a href="index.html#limits">Current Limits</a>.) <br /><br />
           <strong>When to avoid Vela:</strong> production systems, large teams,
-          programs that need sets, rich standard libraries, or concurrency
-          support, and long-running programs whose data changes piece by piece,
-          since regions free memory in bulk (see
+          programs that need built-in hash sets, arbitrary shared-memory
+          multithreading outside actors/channels (<a href="concurrency.html"
+            >Concurrency</a
+          >), or long-running programs whose data changes piece by piece, since
+          regions free memory in bulk (see
           <a href="regions.html#limits">the workarounds</a>).
         </div>
       </section>

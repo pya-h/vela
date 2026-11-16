@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela — Safety</title>
+    <title>Vela — Safety, Data-Race &amp; Alters Guarantees</title>
     <style>
       :root {
         --bg: #0b0f19;
@@ -234,20 +234,49 @@
         border-top: 1px solid var(--border);
         background: var(--bg-2);
       }
-      .doc-nav {
+      .doc-nav,
+      nav.top-nav {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 0.75rem 1.5rem;
-        margin-top: 1.5rem;
+        gap: 0.45rem 0.9rem;
+        max-width: 1020px;
+        margin: 0 auto 1.75rem;
       }
-      .doc-nav a {
+      .doc-nav a,
+      nav.top-nav a {
         color: var(--muted);
         text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
       }
       .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
+      .doc-nav a[aria-current="page"],
+      nav.top-nav a:hover,
+      nav.top-nav a.active {
         color: var(--accent);
+        background: rgba(56, 189, 248, 0.1);
+      }
+      .hazard-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--accent-5);
+        border-radius: 0.75rem;
+        padding: 1.25rem 1.4rem;
+        margin: 1.25rem 0;
+      }
+      .hazard-card h4 {
+        margin: 0 0 0.6rem;
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
       }
       @media (max-width: 600px) {
         h1 {
@@ -257,29 +286,65 @@
           font-size: 1.6rem;
         }
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
     <header>
-      <h1>Safety</h1>
-      <p class="tagline">
-        What a compiled Vela program can't do wrong, what stops it with a
-        message when it runs, and the concerns still open.
-      </p>
-      <nav class="doc-nav" aria-label="Vela documentation">
-        <a href="index.html">Language</a>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
         <a href="regions.html">Regions</a>
+        <a href="safety.html" class="active" aria-current="page">Safety</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
         <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
         <a href="ide.html">Studio</a>
         <a href="comparison.html">Comparison</a>
         <a href="future.html">Future</a>
-        <a href="future-2.html">Future (Kimi)</a>
-        <a href="safety.html" aria-current="page">Safety</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="events.html">Events</a>
         <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
         <a href="review.html">Review</a>
       </nav>
+      <h1>Safety &amp; Race Guarantees</h1>
+      <p class="tagline">
+        What a compiled Vela program can't do wrong, how channels, actors, and
+        alters contracts eliminate data races, what traps at run time, and the
+        concerns still open.
+      </p>
     </header>
 
     <main>
@@ -673,6 +738,70 @@
                 <td>
                   Writing to a file the program didn't mean. See
                   <a href="std.html#file-regions">Regions and copies</a>.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Channel and actor payloads transfer lasting data or linear
+                  ownership (<code>own x</code>): values holding sender region
+                  memory (<code>text@r</code>, slices, regional shapes) are
+                  rejected, and moved bindings cannot be read again or moved
+                  twice (including in loops or across <code>select</code> arms).
+                </td>
+                <td class="when">
+                  <span class="badge b-checked">checked</span>
+                </td>
+                <td>
+                  Cross-thread use-after-free when the sender's region exits,
+                  and concurrent data races on shared channel/actor messages.
+                  See <a href="channels.html">Channels</a> and
+                  <a href="actors.html">Actors</a>.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Actor state is strictly encapsulated (external field access
+                  refused), and blocking <code>select</code> without
+                  <code>otherwise</code> is forbidden inside actor
+                  <code>on</code> handlers.
+                </td>
+                <td class="when">
+                  <span class="badge b-checked">checked</span>
+                </td>
+                <td>
+                  External races against actor state and worker-pool deadlock
+                  inside the M:N scheduler. See
+                  <a href="actors.html">Actors</a>.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Events declare explicit <code>alters(...)</code> contracts
+                  including transitive indirect mutations across chained events
+                  and call interceptors; unconditional event cycles are rejected
+                  (cycles require terminating <code>when</code> guards).
+                </td>
+                <td class="when">
+                  <span class="badge b-checked">checked</span>
+                </td>
+                <td>
+                  Hidden action-at-a-distance mutations and infinite trigger
+                  recursion. See <a href="events.html">Events</a>.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>&lt;&lt;- c</code> / <code>wait_and_receive(c)</code> on
+                  a closed, drained channel, and <code>select</code> when all
+                  channel arms are closed without <code>case none</code> or
+                  <code>otherwise</code>, stop the program with a message.
+                </td>
+                <td class="when">
+                  <span class="badge b-trapped">trapped</span>
+                </td>
+                <td>
+                  Deadlocking forever or reading uninitialized memory from a
+                  closed channel. See <a href="channels.html">Channels</a>.
                 </td>
               </tr>
               <tr>
@@ -1197,17 +1326,186 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
         </div>
 
         <div class="entry" id="threads">
-          <h3>Threads <span class="badge b-later">later</span></h3>
+          <h3>
+            Threads, Concurrency &amp; Data Races
+            <span class="badge b-checked">Handled</span>
+          </h3>
           <p>
-            Vela has no threads, so every change above happens at a point the
-            program's own order decides. Once two tasks can run at once, each
-            reference, pointer, and shared field is memory two threads may
-            change together, and the rule that a place is given once would have
-            to hold between threads as well as within one call. Whatever Vela
-            adds for running work at once (see
-            <a href="events.html">Events</a> for one idea) will need its own
-            answer here before it is built.
+            Concurrency in Vela is built around share-nothing isolation rather
+            than unlocked shared-memory pointers:
+            <strong>bounded channels</strong> (<a href="channels.html"
+              ><code>Chan[own T]</code></a
+            >), <strong>isolated actors</strong> (<a href="actors.html"
+              ><code>actor</code></a
+            >
+            on an M:N scheduler),
+            <strong>multi-channel <code>select</code></strong
+            >, and <strong>alters-checked events</strong> (<a href="events.html"
+              ><code>event</code></a
+            >). Pointers, references (<code>flex&amp;</code>), and regional
+            values cannot cross threads directly; full details of Vela's 4-layer
+            race defense follow below.
           </p>
+        </div>
+      </section>
+
+      <section id="data-races">
+        <h2>Data-Race &amp; Alters Safety</h2>
+        <p>
+          In systems programming, data races and unexpected mutation cascades
+          cause memory corruption, intermittent deadlocks, and silent state
+          divergence. Vela eliminates them at compile time through four
+          cooperating architectural layers &mdash;
+          <em>"safety through static structure, not defensive runtime locks"</em
+          >.
+        </p>
+
+        <h3>Layer 1: Linear Ownership Transfer (<code>own T</code>)</h3>
+        <p>
+          In Vela, cross-task communication over
+          <code>Chan[own T]</code> requires transferring ownership (either via
+          <code>dispatch(q, own p)</code> / <code>own p -&gt;&gt; q</code>, or
+          in a <code>select</code> arm):
+        </p>
+        <pre><code><span class="keyword">fixed</span> p = Packet { id: 101, payload: data }
+<span class="keyword">own</span> p -&gt;&gt; q
+<span class="comment">; 'p' is now invalidated! Any subsequent read or move of 'p' is a compile-time error.</span></code></pre>
+        <p>
+          Regional memory (<code>text@r</code>, slices, regional shapes) cannot
+          be dispatched across threads because the sender's region could close
+          before the receiver reads it.
+        </p>
+
+        <h3>Layer 2: Actor Isolation &amp; The Share-Nothing Model</h3>
+        <p>
+          An <code>actor</code> completely encapsulates its fields &mdash;
+          reading or mutating them from outside is refused at compile time, and
+          the runtime schedules each actor's incoming mailbox sequentially
+          without user-written locks.
+        </p>
+
+        <h3>Layer 3: The Alters Contract &amp; Transitive Indirect Alters</h3>
+        <p>
+          Every <code>event</code> that modifies variables or fields must
+          declare an explicit <code>alters(...)</code> contract, including
+          transitive effects across triggered events and call edges:
+        </p>
+        <pre><code><span class="keyword">alters</span>(.shield, .alive) <span class="keyword">event</span> absorb <span class="keyword">on</span> .hp <span class="keyword">when</span> .shield &gt; 0
+    .shield -= 5
+<span class="keyword">fi</span></code></pre>
+
+        <h3>Layer 4: Terminating Guarded Cycle Policy</h3>
+        <p>
+          Vela builds the directed trigger and call-edge graph at compile time:
+          <strong>unconditional cycles are rejected immediately</strong>, and
+          cyclic dependencies are accepted only when participating events are
+          guarded by terminating <code>when</code> conditions.
+        </p>
+
+        <h3>Known Concurrency &amp; Mutation Hazards</h3>
+        <div class="hazard-card">
+          <h4>
+            <span class="badge b-checked">checked</span> Cross-Task Pointer
+            Escapes
+          </h4>
+          <p>
+            Channel payloads, actor messages, and <code>spawn</code> arguments
+            are restricted to lasting values or moved <code>own</code> data.
+            Regional <code>^T@r</code> pointers and <code>text@r</code> cannot
+            cross thread boundaries (zero-copy <code>own region</code> transfer
+            remains planned for later).
+          </p>
+        </div>
+        <div class="hazard-card">
+          <h4>
+            <span class="badge b-design">by design</span> Dynamic Event
+            Attachment (<code>.listen()</code> vs <code>auto</code>)
+          </h4>
+          <p>
+            Non-shared shape events opt in per instance via
+            <code>.listen(...)</code> unless marked <code>auto</code>. The
+            compiler verifies event names passed to <code>.listen()</code> and
+            emits a deterministic bitmask filter.
+          </p>
+        </div>
+        <div class="hazard-card">
+          <h4>
+            <span class="badge b-warned">warned</span> Slice Reallocation &amp;
+            Shared Field Mutations
+          </h4>
+          <p>
+            The place-given-once rule prevents direct aliasing races; compiler
+            warnings catch slice growth invalidating local copies/views, and
+            <code>shared flex</code> writes must obey <code>alters</code> rules
+            in event hooks.
+          </p>
+        </div>
+        <div class="hazard-card">
+          <h4>
+            <span class="badge b-design">by design</span> Synchronous Hook
+            Re-Entrancy
+          </h4>
+          <p>
+            Event hooks run synchronously on the mutating thread. For heavy I/O
+            or multi-step background work, emit an actor message (<code
+              >Msg(...) -&gt;&gt; actor_handle</code
+            >) instead of blocking inside the hook.
+          </p>
+        </div>
+
+        <h3>Concurrency Best-Practices Checklist</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pattern</th>
+                <th>Recommended Approach</th>
+                <th>Anti-Pattern to Avoid</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Concurrent State</strong></td>
+                <td>
+                  Use <code>actor</code> with private fields and message
+                  handlers.
+                </td>
+                <td>Global shared mutable state behind ad-hoc locks.</td>
+              </tr>
+              <tr>
+                <td><strong>Data Handoff</strong></td>
+                <td>
+                  Transfer ownership with
+                  <code>own data -&gt;&gt; chan</code> or
+                  <code>dispatch(chan, own data)</code>.
+                </td>
+                <td>
+                  Trying to pass local regional references across threads.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Multiplexing</strong></td>
+                <td>
+                  Use
+                  <code>select ... case ... otherwise ... fi</code> (required
+                  non-blocking inside actors).
+                </td>
+                <td>Busy-polling multiple channels in tight loops.</td>
+              </tr>
+              <tr>
+                <td><strong>Reactive Hooks</strong></td>
+                <td>
+                  Use <code>event on .field</code> with explicit
+                  <code>alters(...)</code> and terminating
+                  <code>when</code> guards.
+                </td>
+                <td>
+                  Blocking I/O inside synchronous event handlers or unguarded
+                  cyclic triggers.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

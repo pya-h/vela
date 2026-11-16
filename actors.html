@@ -215,21 +215,58 @@
         color: var(--muted);
         font-size: 0.9rem;
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
     <header>
-      <nav class="top-nav">
+      <nav class="top-nav" aria-label="Vela documentation">
         <a href="index.html">Guide</a>
         <a href="regions.html">Regions</a>
         <a href="safety.html">Safety</a>
         <a href="channels.html">Channels</a>
-        <a href="actors.html" class="active">Actors</a>
+        <a href="actors.html" class="active" aria-current="page">Actors</a>
         <a href="events.html">Events</a>
-        <a href="data-races.html">Data Races</a>
-        <a href="std.html">Standard Library</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
         <a href="web.html">Web</a>
         <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html">Review</a>
       </nav>
       <h1>Actors &amp; Message Loops</h1>
       <p class="tagline">

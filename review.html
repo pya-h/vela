@@ -182,6 +182,11 @@
         background: rgba(167, 139, 250, 0.15);
         color: #c4b5fd;
       }
+      .b-handled {
+        background: rgba(52, 211, 153, 0.18);
+        color: #6ee7b7;
+        border: 1px solid rgba(52, 211, 153, 0.35);
+      }
       .note {
         background: linear-gradient(
           90deg,
@@ -235,20 +240,33 @@
         border-top: 1px solid var(--border);
         background: var(--bg-2);
       }
-      .doc-nav {
+      .doc-nav,
+      nav.top-nav {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 0.75rem 1.5rem;
-        margin-top: 1.5rem;
+        gap: 0.45rem 0.9rem;
+        max-width: 1020px;
+        margin: 0 auto 1.75rem;
       }
-      .doc-nav a {
+      .doc-nav a,
+      nav.top-nav a {
         color: var(--muted);
         text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
       }
       .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
+      .doc-nav a[aria-current="page"],
+      nav.top-nav a:hover,
+      nav.top-nav a.active {
         color: var(--accent);
+        background: rgba(56, 189, 248, 0.1);
       }
       @media (max-width: 600px) {
         h1 {
@@ -258,40 +276,86 @@
           font-size: 1.6rem;
         }
       }
+
+      /* Unified pill navigation polish */
+      nav.top-nav,
+      .doc-nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem 0.9rem;
+        max-width: 1040px;
+        margin: 0 auto 1.5rem;
+      }
+      nav.top-nav a,
+      .doc-nav a {
+        color: var(--muted, #94a3b8);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        transition:
+          color 0.15s ease,
+          background 0.15s ease;
+      }
+      nav.top-nav a:hover,
+      nav.top-nav a.active,
+      .doc-nav a:hover,
+      .doc-nav a[aria-current="page"] {
+        color: var(--accent, #38bdf8);
+        background: rgba(56, 189, 248, 0.12);
+      }
     </style>
   </head>
   <body>
     <header>
+      <nav class="top-nav" aria-label="Vela documentation">
+        <a href="index.html">Guide</a>
+        <a href="regions.html">Regions</a>
+        <a href="safety.html">Safety</a>
+        <a href="channels.html">Channels</a>
+        <a href="actors.html">Actors</a>
+        <a href="events.html">Events</a>
+        <a href="concurrency.html">Concurrency</a>
+        <a href="commitment.html">Commitments</a>
+        <a href="std.html">Library</a>
+        <a href="web.html">Web</a>
+        <a href="gui.html">GUI</a>
+        <a href="ide.html">Studio</a>
+        <a href="comparison.html">Comparison</a>
+        <a href="future.html">Future</a>
+        <a href="tricks.html">Tricks</a>
+        <a href="maywaste.html">May Waste</a>
+        <a href="review.html" class="active" aria-current="page">Review</a>
+      </nav>
       <h1>A Review</h1>
       <p class="tagline">
         GLM and Kimi read the whole project together: what is strong, what could
         be better, what to try, and what to leave alone.
       </p>
-      <nav class="doc-nav" aria-label="Vela documentation">
-        <a href="index.html">Language</a>
-        <a href="regions.html">Regions</a>
-        <a href="std.html">Library</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html">Comparison</a>
-        <a href="future.html">Future</a>
-        <a href="future-2.html">Future (Kimi)</a>
-        <a href="safety.html">Safety</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="events.html">Events</a>
-        <a href="tricks.html">Tricks</a>
-        <a href="review.html" aria-current="page">Review</a>
-      </nav>
     </header>
 
     <main>
+      <div class="note">
+        <strong>Historical Snapshot &mdash; Post-Review Progress:</strong> This
+        review was written before Vela shipped <code>kind</code> generics,
+        capturing lambdas (<code>[@r]</code>), optional arguments,
+        <code>std/collections</code> iterators, <code>std/int512</code> with
+        pattern operators, <code>std/json</code>, <code>std/web</code>,
+        <code>std/gui</code>, bounded channels with <code>select</code> /
+        <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code>, isolated
+        <code>actor</code>s on an M:N scheduler, <code>event</code>s with
+        <code>alters</code>, and the reorganized README. Items resolved since
+        then are marked <span class="badge b-handled">Handled</span> while
+        preserving the original review prose.
+      </div>
       <p class="intro">
         This page is two readers' read of Vela: the language, the compiler, the
         runtime, the library, the tests, the docs, and Vela Studio. GLM wrote
-        the first pass; Kimi revised it and added a second one. The first half
-        is GLM's voice, kept mostly as it was. The second half is Kimi's.
-        Nothing here changes the language; like
-        <a href="future-2.html">the second notebook</a>, these are voices to
-        agree with or argue against.
+        the first pass; Kimi revised it and added a second one. Both voices are
+        preserved below, and ideas consolidated with
+        <a href="future.html">Future Directions</a>.
       </p>
 
       <div class="note">
@@ -653,7 +717,9 @@ vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>) 
 
         <div class="entry">
           <h3>
-            The README opens with a wall <span class="badge b-warn">watch</span>
+            The README opens with a wall
+            <span class="badge b-handled">Handled</span>
+            <span class="badge b-warn">watch</span>
           </h3>
           <p>
             The guide pages are a model of short declarative prose, and the
@@ -977,7 +1043,7 @@ fi</pre>
             <span class="badge b-small">small</span>
           </h3>
           <p>
-            <a href="future-2.html">The second notebook</a> already proposes
+            <a href="future.html">The second notebook</a> already proposes
             <code>#line</code> directives so C compiler errors and debuggers
             point at Vela source. I would take that position and add the other
             half: a <code>vela --debug</code> that passes <code>-g</code> to the
@@ -1039,9 +1105,9 @@ fi</pre>
             <span class="badge b-small">small</span>
           </h3>
           <p>
-            <a href="future-2.html">The second notebook</a> reaches for full
-            <code>comptime</code>; before that there is a smaller stone to step
-            on. Today a macro names a value the compiler works out (<code
+            <a href="future.html#comptime">Future Directions</a> reaches for
+            full <code>comptime</code>; before that there is a smaller stone to
+            step on. Today a macro names a value the compiler works out (<code
               >#PI = 3.14159</code
             >). Letting one name a <em>type</em> &mdash;
             <code>#Vec2 = (float, float)</code>,
@@ -1079,11 +1145,18 @@ fi</pre>
             first one's job.
           </li>
           <li>
-            <strong>No concurrency before the guard build exists.</strong>
-            <a href="safety.html">Safety</a> says it exactly: every shared place
-            becomes memory two threads may change together. When concurrency
-            comes, the guard build is the harness it will need on day one, and
-            building it first means the answer is already instrumented.
+            <strong
+              >No concurrency before the guard build exists
+              <span class="badge b-handled">Handled</span>.</strong
+            >
+            Concurrency since landed with compile-time race prevention via
+            ownership-transferring <a href="channels.html">channels</a>,
+            <a href="actors.html">isolated actors</a> on an M:N scheduler,
+            <code>select</code>, and
+            <a href="events.html">alters-checked events</a> (without needing a
+            separate <code>--guard</code> build, though
+            <code>vela --guard</code> remains useful for runtime
+            slice-view/pointer-alias checks).
           </li>
           <li>
             <strong>Keep the C backend.</strong> The strict-C11,
@@ -1369,7 +1442,10 @@ fi</pre>
           past two modules.
         </p>
 
-        <h3>Kinds that take types, and closures that capture</h3>
+        <h3>
+          Kinds that take types, and closures that capture
+          <span class="badge b-handled">Handled</span>
+        </h3>
         <p>
           These are both already on the table (<a href="future.html"
             >Future Directions</a
@@ -1399,7 +1475,10 @@ fi</pre>
           captured closure is a shape with a function pointer and fields.
         </p>
 
-        <h3>Named and default arguments</h3>
+        <h3>
+          Named and default arguments
+          <span class="badge b-handled">Default args handled</span>
+        </h3>
         <p>
           Also already on the table, and the syntax practically designs itself:
           Vela already writes every parameter as
@@ -1456,7 +1535,7 @@ file.open(mode: FileMode.Write) <span class="keyword">at</span> r</pre>
 
         <h3>Shape layout control</h3>
         <p>
-          <a href="future-2.html">The second notebook</a> proposes controlled
+          <a href="future.html">The second notebook</a> proposes controlled
           shape layout, and I would add it early because it is small and
           C-shaped:
         </p>
@@ -1596,7 +1675,10 @@ cli = { git = "https://github.com/example/vela-cli", tag = "v1.2.0" }</pre>
               </tr>
               <tr>
                 <td>2</td>
-                <td>Kinds that take types; closures that capture by copy</td>
+                <td>
+                  <span class="badge b-handled">Handled</span> Kinds that take
+                  types; closures that capture by copy
+                </td>
                 <td>Kimi</td>
               </tr>
               <tr>
