@@ -6,4 +6,3 @@ job: 7:ok
 actor: 123
 closed send: false
 select send: 3
-
