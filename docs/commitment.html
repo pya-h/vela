@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Commitments, Promises &amp; Async/Await Design</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-warn: #fbbf24;
+      --accent-bad: #f87171;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 25%, rgba(56,189,248,0.16) 0%, transparent 42%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.14) 0%, transparent 42%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top-nav {
+      max-width: 980px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.35rem;
+      flex-wrap: wrap;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin: 1rem auto 0;
+      font-size: 1.18rem;
+      color: var(--muted);
+      max-width: 740px;
+    }
+    main {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 1.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h2 .icon { font-size: 1.4rem; }
+    h3 {
+      margin-top: 2.15rem;
+      color: var(--accent);
+      font-size: 1.32rem;
+    }
+    h4 {
+      margin-top: 1.5rem;
+      color: var(--accent-3);
+      font-size: 1.08rem;
+    }
+    p { margin: 1rem 0; }
+    a { color: var(--accent); }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; color: var(--fg); }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
+    .badge {
+      display: inline-block;
+      padding: 0.22rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0.15rem;
+    }
+    .b-blue { background: rgba(56,189,248,0.15); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+    .b-green { background: rgba(52,211,153,0.15); color: var(--accent-3); border: 1px solid rgba(52,211,153,0.3); }
+    .b-amber { background: rgba(251,191,36,0.15); color: var(--accent-warn); border: 1px solid rgba(251,191,36,0.3); }
+    .b-pink { background: rgba(244,114,182,0.15); color: var(--accent-4); border: 1px solid rgba(244,114,182,0.3); }
+    .b-red { background: rgba(248,113,113,0.15); color: var(--accent-bad); border: 1px solid rgba(248,113,113,0.35); }
+    .b-purple { background: rgba(167,139,250,0.15); color: var(--accent-2); border: 1px solid rgba(167,139,250,0.35); }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .warn {
+      background: rgba(251,191,36,0.08);
+      border-left: 4px solid var(--accent-warn);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .danger {
+      background: rgba(248,113,113,0.08);
+      border-left: 4px solid var(--accent-bad);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .good {
+      background: rgba(52,211,153,0.08);
+      border-left: 4px solid var(--accent-3);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.35rem 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .card h3 {
+      margin-top: 0;
+      margin-bottom: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .mini-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.15rem;
+    }
+    .mini-card h4 {
+      margin: 0 0 0.5rem;
+      font-size: 1.05rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.02);
+    }
+    ul, ol { padding-left: 1.35rem; }
+    li { margin: 0.45rem 0; }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="vela.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html" class="active" aria-current="page">Commitments</a>
+      <a href="std.html">Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html">GUI</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="review.html">Review</a>
+    </nav>
+    <h1>Commitments &amp; Async/Await</h1>
+    <p class="tagline">
+      Design analysis of Vela's await-by-default async model: colorless tasks, <code>Commitment[T]</code> vs. <code>Promise</code>,
+      safety boundaries with regions and ownership, and a safe Vela-native architecture.
+    </p>
+    <div style="margin-top: 1.5rem;">
+      <span class="badge b-amber">Design Proposal</span>
+      <span class="badge b-blue">Await by Default</span>
+      <span class="badge b-purple">Colorless Concurrency</span>
+      <span class="badge b-green">Safety Analysis</span>
+    </div>
+  </header>
+
+  <main>
+
+    <div class="warn">
+      <strong>Status Notice:</strong> This document captures and evaluates a <em>proposed</em> async/await and <code>Commitment</code> design for Vela.
+      Nothing described below as <code>Commitment</code> or async <code>=&gt;</code> continuations is implemented in the compiler yet.
+      For concurrency primitives available today, see <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>, <a href="channels.html">Channels</a>, and <a href="actors.html">Actors</a>.
+    </div>
+
+    <section>
+      <h2><span class="icon">📜</span> 1. The Proposed Commitment Model</h2>
+      <p>
+        Most mainstream languages with <code>async</code>/<code>await</code> (JavaScript, TypeScript, Python, C#, Rust) flip the ergonomic default:
+        calling an async function returns a lazy or detached <code>Promise</code>/<code>Future</code>, and the caller must explicitly write <code>await</code> at every call site to obtain the value. Forgetting <code>await</code> is a notorious source of silent bugs, dropped errors, and type mismatches.
+      </p>
+      <p>
+        Your proposed Vela model inverts that default around three core rules:
+      </p>
+
+      <div class="grid">
+        <div class="mini-card">
+          <h4>1. No <code>async</code> Function Color</h4>
+          <p>Tasks never declare an <code>async</code> modifier. Callers decide whether to wait immediately or launch concurrently.</p>
+        </div>
+        <div class="mini-card">
+          <h4>2. Await Forced by Default</h4>
+          <p>Calling a promising task blocks/suspends until completion and yields the resolved value <code>T</code> directly &mdash; impossible to forget <code>await</code>.</p>
+        </div>
+        <div class="mini-card">
+          <h4>3. Opt-In Deferral via <code>=&gt;</code></h4>
+          <p>Using <code>=&gt; { ... } { ... }</code> launches fire-and-forget / deferred execution with inline <code>then</code> and optional <code>plan B</code> error handling, binding a handle <code>y</code>.</p>
+        </div>
+      </div>
+
+      <h3>Sketch of Your Original Draft Syntax</h3>
+      <pre><code><span class="comment">; 1. Default call: awaited automatically (x has type T, not Commitment[T])</span>
+<span class="keyword">bind</span> x = callPromisingTask()
+
+<span class="comment">; 2. Deferred / fire-and-forget call with '=&gt;' (then) and optional Plan B (catch)</span>
+<span class="keyword">bind</span> y = callPromisingFunc() =&gt; {
+    <span class="comment">; Continuation executed when the commitment settles</span>
+} {
+    <span class="comment">; Optional Plan B: executed if rejected. If omitted, y holds a rejected handle.</span>
+}
+
+<span class="comment">; 3. Manual inspection of the handle y</span>
+<span class="keyword">loop</span> y.is_not_resolved_yet()
+    <span class="comment">; work while waiting</span>
+<span class="keyword">fi</span>
+<span class="keyword">fixed</span> val = y.resolved_value</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="icon">🏷️</span> 2. Naming: <code>Commitment</code> vs. <code>Promise</code> vs. <code>async/await</code></h2>
+      <p>
+        Should this concept be named <strong>Commitment</strong>, <strong>Promise</strong>, or <strong>async/await</strong>?
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Mental Model &amp; Fit with Vela</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong><code>Commitment[T]</code></strong></td>
+            <td>Signals an active, bound obligation rather than a passive callback container. Because a plain call immediately fulfills the commitment unless explicitly deferred, the name matches Vela's anti-forgetting philosophy and gives Vela its own clean vocabulary (like <code>shape</code>, <code>kind</code>, <code>task</code>, <code>region</code>).</td>
+            <td><span class="badge b-green">Best Vela Fit</span></td>
+          </tr>
+          <tr>
+            <td><strong><code>Promise[T]</code></strong></td>
+            <td>Immediately recognizable to developers from JavaScript/TypeScript, C++ (<code>std::promise</code>), and Scala. Slightly mismatched if a call without modifiers never returns a <code>Promise</code> by default.</td>
+            <td><span class="badge b-blue">Best Familiarity</span></td>
+          </tr>
+          <tr>
+            <td><strong><code>async</code> / <code>await</code></strong></td>
+            <td>Implies coloring functions with <code>async</code> and prefixing every call with <code>await</code>. Since your model removes both keywords from normal code, calling the feature <code>async/await</code> in syntax would contradict the design.</td>
+            <td><span class="badge b-amber">Misleading Term</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">
+        <strong>Recommendation:</strong> Keep <strong><code>Commitment[T]</code></strong> as the official Vela type/page name (paired with terms like <em>pending</em>, <em>fulfilled</em>, and <em>failed</em>), while cross-referencing <em>Promise / async-await</em> in the docs so newcomers map the concept instantaneously.
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🧠</span> 3. Alignment with Vela &amp; Architectural Consequences</h2>
+
+      <h3>Is It Logical and In Sync with Vela?</h3>
+      <p>
+        <strong>Yes in spirit, mixed in syntax.</strong> Two halves of your intuition fit Vela extraordinarily well:
+      </p>
+      <ul>
+        <li><strong>Making waiting the safe default:</strong> Vela refuses implicit null pointers, ignored errors (<code>T ~ E</code>), and unannotated mutation (<code>alters</code>, <code>flex&amp;</code>). Requiring opt-in syntax to launch asynchronous background work instead of opt-in <code>await</code> fits the exact same "safe by default, explicit at the sharp edge" philosophy.</li>
+        <li><strong>Avoiding function coloring:</strong> Vela's <code>task</code> system already distinguishes <em>capabilities</em> cleanly via types (<code>@r</code>, <code>T ~ E</code>) and scheduler execution without splitting every library in two (<code>sync</code> vs <code>async</code>).</li>
+      </ul>
+
+      <h3>Consequences &amp; Performance Costs of "No <code>async</code> Keyword"</h3>
+      <p>
+        Eliminating the <code>async</code> marker on task declarations is not free &mdash; in a language that compiles to strict ISO C11 without a VM, there are only two ways to implement it, each with clear runtime costs:
+      </p>
+
+      <div class="card">
+        <h3>Implementation Path A: Stackful Coroutines / M:N Scheduler Fibers</h3>
+        <span class="badge b-blue">Matches Vela's Runtime</span>
+        <p>
+          Every task can suspend on I/O or channels by parking its fiber stack on Vela's M:N scheduler thread pool (an extension of how <code>runtime/vela_rt.h</code> already multiplexes actors and blocking channel waiters).
+        </p>
+        <ul>
+          <li><strong>Pros:</strong> Truly colorless! Any regular <code>task</code> can call another <code>task</code> and block/yield transparently without AST rewriting or state-machine explosion. C11 codegen stays simple.</li>
+          <li><strong>Costs:</strong> Each concurrently deferred call needs its own stack allocation (e.g., 64 KiB+ or virtual memory / segmented stack bookkeeping) and context switch / OS thread parking when calling blocking C APIs (like synchronous <code>std/files</code> or <code>std/gui</code> X11 calls).</li>
+          <li><strong>Important nuance:</strong> Calling a plain synchronous task directly without spawning (the default awaited path!) should execute as a normal C function call at <strong>zero extra cost</strong>, only allocating a fiber/worker task when deferred.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Implementation Path B: Stackless State Machines (Compiler Transform)</h3>
+        <span class="badge b-amber">High Complexity in C11</span>
+        <p>
+          Like Rust or C#, the compiler transforms every suspendable task into a heap/struct frame + switch/case resumption machine in C11.
+        </p>
+        <ul>
+          <li><strong>Why "no <code>async</code>" hurts here:</strong> Without <code>async</code> on signatures, the compiler must either (1) infer "may suspend" across the entire call graph (breaking separate compilation, task values <code>(A) -&gt; B</code>, and clean error messages), or (2) compile <em>every</em> task in the entire program as a heap state machine, adding huge overhead to tight loops and numeric code.</li>
+        </ul>
+      </div>
+
+      <div class="good">
+        <strong>Verdict on Performance Cost:</strong> As long as the default awaited call compiles to a direct C call on the current fiber/thread, <strong>normal sequential code pays zero cost</strong>. Overhead is paid only when a call is explicitly deferred onto the scheduler (spawning a fiber/work item and allocating a result slot).
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">⚖️</span> 4. Pros &amp; Cons of the Draft Design</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Strengths (Pros)</th>
+            <th>Weaknesses (Cons)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Zero forgotten awaits:</strong> Normal calls always produce <code>T</code>, eliminating an entire bug class common in JS/Python.</td>
+            <td><strong>Keyword/syntax collisions:</strong> <code>bind</code> already means an un-reassignable mutable binding in Vela; <code>{ ... }</code> already means Plan B; <code>=&gt;</code> already starts labeled loops.</td>
+          </tr>
+          <tr>
+            <td><strong>No "function coloring" split:</strong> Standard libraries (<code>std/collections</code>, helpers) do not need duplicate sync and async APIs.</td>
+            <td><strong>Dual callback + handle confusion:</strong> Mixing <code>=&gt; { then }</code> callbacks with returning a handle <code>y</code> blurs who owns the result and when it executes.</td>
+          </tr>
+          <tr>
+            <td><strong>Structured fan-out friendly:</strong> With the right deferred handle, spawning multiple concurrent calls in parallel stays concise.</td>
+            <td><strong>Busy-loop polling trap:</strong> <code>loop y.is_not_resolved_yet()</code> burns CPU (or starves cooperative fibers) unless it yields cleanly.</td>
+          </tr>
+          <tr>
+            <td><strong>Fits Vela's <code>T ~ E</code> errors:</strong> Rejections don't need exceptions; they map directly onto Vela's existing failure channel.</td>
+            <td><strong>Unsafe as written for regions &amp; <code>flex&amp;</code>:</strong> Deferred calls that escape the current scope break region lifetime safety and aliasing guarantees (see Section 5).</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="icon">🚨</span> 5. Safety Audit: 5 Real Safety Holes in the Draft</h2>
+      <p>
+        If implemented literally as sketched, your draft introduces <strong>compile-time-breaking soundness holes</strong> against Vela's region memory model and data-race guarantees:
+      </p>
+
+      <div class="danger">
+        <h3>Hazard 1: Escaping <code>region r</code> &amp; Dangling <code>^T@r</code> Pointers</h3>
+        <p>
+          Suppose a task takes a pointer into a caller's region: <code>task load(cfg: ^Config@r, out_r: region) -&gt; text@out_r</code>.
+          When awaited by default, <code>region r</code> stays alive until <code>load</code> returns &mdash; 100% safe.
+          <strong>If launched asynchronously with <code>=&gt;</code> (fire-and-forget)</strong>, the caller continues immediately, exits the block declaring <code>region r</code>, and calls <code>vela__rt__region_free(r)</code> while the background commitment is still dereferencing <code>cfg^</code> &rarr; <strong>Use-After-Free crash</strong>!
+        </p>
+      </div>
+
+      <div class="danger">
+        <h3>Hazard 2: <code>flex&amp;</code> References Across Threads &rarr; Data Races</h3>
+        <p>
+          Vela prevents aliasing races on <code>flex&amp;</code> parameters within a single call tree. If a deferred commitment receives <code>&amp;counter</code> while the caller continues running and also reads or passes <code>&amp;counter</code>, two OS threads access the same stack/heap address simultaneously &rarr; <strong>undefined behavior &amp; data race</strong>!
+        </p>
+      </div>
+
+      <div class="danger">
+        <h3>Hazard 3: Unsafe Callback Capture in <code>=&gt; { ... }</code></h3>
+        <p>
+          If the continuation block <code>=&gt; { ... }</code> captures local <code>flex</code> variables or regional <code>@r</code> values from the enclosing scope and runs later on a worker thread:
+        </p>
+        <ul>
+          <li>Capturing local references races with the caller's stack/locals and dangles if the enclosing task returns first.</li>
+          <li>Capturing <code>@r</code> values fails once the enclosing region frees.</li>
+        </ul>
+      </div>
+
+      <div class="danger">
+        <h3>Hazard 4: Unchecked <code>y.resolved_value</code> &amp; Busy-Spin Loops</h3>
+        <p>
+          Exposing <code>y.resolved_value</code> directly on a pending handle breaks two core Vela promises:
+        </p>
+        <ul>
+          <li><strong>Reading before settlement or after rejection:</strong> Either traps at runtime or reads invalid memory &mdash; whereas Vela uses <code>maybe T</code> and <code>T ~ E</code> so invalid states are unrepresentable at compile time.</li>
+          <li><strong>CPU starvation / deadlock:</strong> <code>loop y.is_not_resolved_yet()</code> pins a scheduler worker thread at 100% CPU. In an M:N fiber runtime with fixed worker threads, spinning without yielding can even prevent the commitment itself from ever being scheduled!</li>
+        </ul>
+      </div>
+
+      <div class="danger">
+        <h3>Hazard 5: Unawaited Fire-and-Forget Error Swallowing &amp; Resource Leaks</h3>
+        <p>
+          If the optional <code>plan B</code> catch block is omitted on a true fire-and-forget task whose handle is ignored, a failing <code>T ~ E</code> result disappears silently &mdash; violating Vela's core invariant that call failures cannot be silently dropped &mdash; and any sockets/files inside that detached task may outlive program shutdown or actor lifetimes.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🛡️</span> 6. A Safer, Cleaner Vela-Native Model</h2>
+      <p>
+        We can preserve <strong>every goal you wanted</strong> &mdash; no <code>async</code> keyword on tasks, forced await by default, concise opt-in concurrency, and clean handling of success/failure &mdash; while making it <strong>100% memory-safe and data-race free</strong> by reusing the exact mechanisms Vela already proved in <a href="channels.html">Channels</a>, <a href="actors.html">Actors</a>, and <code>select</code>:
+      </p>
+
+      <h3>Rule 1: Crossing Concurrency Boundaries Follows Channel Rules</h3>
+      <p>
+        A plain awaited call can use anything (<code>^T@r</code>, <code>flex&amp;</code>, <code>region</code> parameters) because it never outlives the call site.
+        When a call is explicitly deferred as a <code>Commitment</code>, arguments must obey Vela's existing send-safety check:
+      </p>
+      <ul>
+        <li>No <code>flex&amp;</code> parameters (prevents concurrent aliasing races).</li>
+        <li>Either arguments/results contain <strong>no escaping <code>@r</code> pointers</strong> (lasting data or moved with <code>own</code>), <strong>OR</strong> the commitment is bound inside a structured concurrency scope that guarantees completion before those regions exit.</li>
+      </ul>
+
+      <h3>Rule 2: Replace <code>=&gt; { then }</code> + <code>bind</code> Overload with Explicit Deferral + Structured Join Scope</h3>
+      <p>
+        Keep <code>fixed</code> / <code>bind</code> / <code>flex</code> purely for mutability! Trigger concurrency at the call site with a clear keyword or suffix (e.g., <code>later</code> or <code>fork</code>, or a dedicated call modifier), returning a <code>Commitment[T]</code> (or <code>Commitment[T ~ E]</code>):
+      </p>
+      <pre><code><span class="comment">; Safe Model Preview: syntax brainstorm integrating with Vela's existing primitives</span>
+<span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
+    <span class="comment">; Normal HTTP call inside: awaited cleanly by default!</span>
+    <span class="keyword">fixed</span> resp = http_get("/users/{id}")?
+    <span class="keyword">&lt;-</span> parse_user(resp)?
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> load_dashboard(id: int) -&gt; Dashboard ~ HttpError
+    <span class="comment">; 1. Default: synchronous from caller's perspective (auto-awaited)</span>
+    <span class="keyword">fixed</span> config = load_config()?
+
+    <span class="comment">; 2. Explicit concurrent launch: returns Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_user = fetch_user(id) <span class="keyword">later</span>
+    <span class="keyword">fixed</span> c_orders = fetch_orders(id) <span class="keyword">later</span>
+
+    <span class="comment">; 3. Join &amp; handle errors via Vela's existing '&lt;&lt;-' and Plan B!</span>
+    <span class="keyword">fixed</span> user = (&lt;&lt;- c_user) { failure err
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err
+    }
+    <span class="keyword">fixed</span> orders = (&lt;&lt;- c_orders) { [] }
+
+    <span class="keyword">&lt;-</span> Dashboard { config: config, user: user, orders: orders }
+<span class="keyword">fi</span></code></pre>
+
+      <h3>Rule 3: Structured Concurrency Guarantees Zero Dangling Commitments</h3>
+      <p>
+        What if a caller launches <code>c_orders</code> with <code>later</code> and then returns early (for instance, because <code>c_user</code> failed)?
+        In unstructured threads/promises, <code>c_orders</code> leaks into the background.
+        In <strong>Structured Concurrency</strong>, every unconsumed <code>Commitment[T]</code> is lexically scoped to the block (or an enclosing <code>region</code> / nursery block) that created it:
+      </p>
+      <ul>
+        <li>On scope exit (normal return, <code>fail</code>, or <code>break</code>), the runtime <strong>signals cancellation and joins</strong> any unawaited commitments created in that scope before freeing its <code>region</code> frames.</li>
+        <li>True long-lived background work uses <a href="actors.html"><code>spawn Actor(...)</code></a>, whose mailbox lifetime is explicit.</li>
+      </ul>
+
+      <h3>Rule 4: Replace <code>y.resolved_value</code> &amp; Polling Loops with <code>poll()</code>, <code>&lt;&lt;-</code>, and <code>select</code></h3>
+      <p>
+        Never expose a partially valid <code>y.resolved_value</code> field or force users to write CPU-burning spin loops:
+      </p>
+      <ul>
+        <li><strong>Blocking wait:</strong> <code>&lt;&lt;- c</code> (or <code>c.wait()</code>) parks the calling task efficiently on a condition variable/waiter node with 0% CPU waste and returns <code>T</code> (or <code>T ~ E</code>, requiring Plan B / <code>?</code> / <code>match</code>).</li>
+        <li><strong>Non-blocking check:</strong> <code>c.poll()</code> returns <code>maybe T</code> (or <code>maybe (T ~ E)</code>), forcing callers to unwrap via <code>is</code> / <code>match</code> / Plan B.</li>
+        <li><strong>Multi-commitment racing &amp; timeouts:</strong> Because a <code>Commitment[T]</code> works just like a single-shot channel handle, it plugs straight into Vela's existing <a href="channels.html"><code>select</code></a>!</li>
+      </ul>
+      <pre><code><span class="comment">; Racing two commitments with a timeout using Vela's existing select + &lt;&lt;-</span>
+<span class="keyword">fixed</span> primary = query_mirror("us-east") <span class="keyword">later</span>
+<span class="keyword">fixed</span> backup = query_mirror("eu-west") <span class="keyword">later</span>
+
+<span class="keyword">fixed</span> fastest = <span class="keyword">select</span>
+<span class="keyword">case</span> data &lt;&lt;- primary = data
+<span class="keyword">case</span> data &lt;&lt;- backup = data
+<span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"mirror timeout"</span>
+<span class="keyword">fi</span></code></pre>
+    </section>
+
+    <section>
+      <h2><span class="icon">✨</span> 7. Ideas to Make Commitments Extra Cool in Vela</h2>
+      <div class="grid">
+        <div class="mini-card">
+          <h4>1. Native <code>select</code> &amp; <code>&lt;&lt;-</code> Unity</h4>
+          <p>Making <code>Commitment[T]</code> interoperate with <code>&lt;&lt;-</code> and <code>select</code> means no separate <code>Promise.all</code> / <code>Promise.race</code> runtime is needed: racing two calls with a timeout reuses syntax Vela programmers already know.</p>
+        </div>
+        <div class="mini-card">
+          <h4>2. Zero-Cost Sequential Fast Path</h4>
+          <p>Because un-annotated calls await inline, 99% of calls compile to ordinary direct C11 calls with zero scheduler allocation or fiber stack overhead.</p>
+        </div>
+        <div class="mini-card">
+          <h4>3. Cooperative Cancellation Token</h4>
+          <p>When a <code>select</code> picks the winner (or scope exits via <code>fail</code>), losing commitments automatically receive a lightweight cancellation flag (<code>cancelled()</code>), stopping wasted HTTP/DB work cleanly.</p>
+        </div>
+        <div class="mini-card">
+          <h4>4. Region Transfer Integration</h4>
+          <p>Once <code>Chan[own region]</code> lands, a deferred task can allocate inside an isolated child region and hand off the entire region pointer graph in O(1) when its commitment settles &mdash; zero deep copy.</p>
+        </div>
+      </div>
+
+      <h3>Comparison: Your Initial Sketch vs. Refined Vela Commitment Model</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Aspect</th>
+            <th>Initial Sketch</th>
+            <th>Refined Safe Vela Design</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Function coloring</td>
+            <td>None (all tasks colorless)</td>
+            <td>None (normal calls inline C; deferred calls scheduled)</td>
+          </tr>
+          <tr>
+            <td>Default call behavior</td>
+            <td>Await forced by default</td>
+            <td>Await forced by default</td>
+          </tr>
+          <tr>
+            <td>Launching concurrently</td>
+            <td><code>bind y = call() =&gt; { then } { catch }</code></td>
+            <td><code>fixed c = call() later</code> (only <code>own</code>/lasting or scoped refs)</td>
+          </tr>
+          <tr>
+            <td>Error / Rejection</td>
+            <td>Optional <code>{ catch }</code> or rejected handle</td>
+            <td>Standard Vela <code>Commitment[T ~ E]</code> + Plan B / <code>?</code> (never silently dropped)</td>
+          </tr>
+          <tr>
+            <td>Inspecting / Waiting</td>
+            <td><code>loop y.is_not_resolved_yet()</code> + <code>y.resolved_value</code></td>
+            <td><code>&lt;&lt;- c</code> (wait), <code>c.poll() -&gt; maybe T</code>, or <code>select</code> with <code>case after ms</code></td>
+          </tr>
+          <tr>
+            <td>Region &amp; Race Safety</td>
+            <td>Vulnerable to dangling <code>@r</code>, <code>flex&amp;</code> races, and callback captures</td>
+            <td>Enforced by structured scope-join + existing channel send-safety checks</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Vela — Commitment &amp; Async/Await Design Evaluation. See <a href="concurrency.html">Concurrency &amp; Design Boundaries</a> for what ships today.</p>
+  </footer>
+</body>
+</html>
+

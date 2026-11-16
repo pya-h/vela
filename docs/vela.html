@@ -132,24 +132,55 @@
       color: var(--muted);
       border-top: 1px solid var(--border);
     }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Vela<span>.</span></h1>
     <p class="tagline">A minimal, safe, fast systems language with a fresh face.</p>
-    <nav class="doc-nav" aria-label="Vela documentation">
-      <a href="vela.html" aria-current="page">Language</a>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="vela.html" class="active" aria-current="page">Guide</a>
       <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html">Commitments</a>
       <a href="std.html">Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html">GUI</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
-      <a href="future-2.html">Future (Kimi)</a>
-      <a href="safety.html">Safety</a>
-      <a href="maywaste.html">May Waste</a>
-      <a href="events.html">Events</a>
       <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="review.html">Review</a>
     </nav>
   </header>
@@ -2806,7 +2837,7 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           gives its methods no decorators or values that parameters fall back on, and its defaults hold no lambdas. A
           builtin type such as <code>int</code> follows none, since nothing writes that it does. And a pattern is no
           type of a value: a slice of different shapes that follow one, called through it as it runs, is an idea for
-          later (see <a href="future-2.html#pattern-values">Patterns as the types of values</a>).</li>
+          later (see <a href="future.html#pattern-values">Patterns as the types of values</a>).</li>
       </ul>
 
       <h3 id="macros">Macros</h3>
@@ -5523,22 +5554,26 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
 show(geometry.pi())            <span class="comment">; error: 'pi' is private to module 'geometry'</span>
 show(area(square))             <span class="comment">; error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
       <p>
-        <code>examples/shop.vela</code> is a program in three files. In the generated C, a module's names are
+        <code>examples/modules/shop.vela</code> is a program in three files. In the generated C, a module's names are
         prefixed with its path (<code>vela_shapes__1__geometry__0__area</code>), so every module's names stay apart.
       </p>
       <p id="library">
         <strong>Vela's library.</strong> A path that starts with <code>std</code> names a module of the library that
         comes with the compiler, and is included like any other: <code>include std/files {File}</code>. It is read
         from the compiler, never from the disk, so a folder of the program's own can't be named <code>std</code>, and
-        <code>std</code> is no reserved word: a variable may still be called so. It has five modules:
+        <code>std</code> is no reserved word: a variable may still be called so. It has nine built-in modules:
         <a href="std.html#collections"><code>std/collections</code></a>, <code>map</code>, <code>filter</code>,
-        <code>fold</code> and more over a slice's items;
+        <code>fold</code> and lazy iterators over a slice's items;
         <a href="std.html#files"><code>std/files</code></a>, files on the disk;
+        <a href="std.html#gui"><code>std/gui</code></a>, 2D canvas, themes, widgets, and X11 windows;
         <a href="std.html#int512"><code>std/int512</code></a>, 512-bit integers;
-        <a href="std.html#loops"><code>std/loops</code></a>, what a loop that gives a value fails with; and
+        <a href="std.html#json"><code>std/json</code></a>, strict JSON parsing and serialization;
+        <a href="std.html#loops"><code>std/loops</code></a>, what a loop that gives a value fails with;
         <a href="std.html#math"><code>std/math</code></a>, with <code>math.P</code>, <code>math.e</code>, powers,
-        trigonometry, <code>exp</code>, and <code>log</code>. What the library has, and how it is made, is in
-        <a href="std.html">Vela Library</a>.
+        trigonometry, <code>exp</code>, and <code>log</code>;
+        <a href="std.html#sync"><code>std/sync</code></a>, bounded channel helpers; and
+        <a href="std.html#web"><code>std/web</code></a>, non-blocking HTTP/1.1 servers, routers, SSE, and WebSockets.
+        What the library has, and how it is made, is in <a href="std.html">Vela Library</a>.
       </p>
       <pre><span class="keyword">include</span> std/files {File}
 
@@ -5563,6 +5598,18 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         show(fib(i))
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
+    </section>
+
+    <section id="concurrency-overview">
+      <h2>Concurrency, Actors &amp; Events</h2>
+      <p>
+        Vela ships message-passing concurrency and reactive hooks without shared-memory data races:
+      </p>
+      <ul>
+        <li><strong>Bounded Channels &amp; Linear Ownership:</strong> <code>Chan[T]</code> and <code>Chan[own T]</code> transfer values safely across tasks using <code>dispatch</code> / <code>wait_and_receive</code> / <code>receive</code> / <code>close</code> or the arrow shortcuts <code>val -&gt;&gt; ch</code> and <code>&lt;&lt;- ch</code>, plus multi-channel <code>select ... case ... otherwise ... fi</code> multiplexing. See <a href="channels.html">Channels &amp; Ownership</a>.</li>
+        <li><strong>Isolated Actors:</strong> Encapsulated <code>actor</code> declarations with private state, <code>on Msg(...)</code> handlers, <code>spawn</code>, and an M:N worker-pool scheduler. See <a href="actors.html">Actors</a> and <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>.</li>
+        <li><strong>Reactive Events:</strong> Compile-time-verified <code>event</code> hooks on field mutations (<code>on</code>), reads (<code>on read</code>), call interception (<code>before</code>/<code>after</code>), and lifecycle (<code>on init</code>, <code>on drop</code>, <code>on start</code>, <code>on end</code>) guarded by transitive <code>alters(...)</code> contracts and guarded cycle termination. See <a href="events.html">Vela Events</a> and <a href="safety.html#data-races">Safety &amp; Race Guarantees</a>.</li>
+      </ul>
     </section>
 
     <section>

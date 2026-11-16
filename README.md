@@ -2,7 +2,7 @@
 
 **A minimal, safe systems programming language that compiles to portable C11.**
 
-[Online Documentation](https://pya-h.github.io/vela/) · [Language Reference](https://pya-h.github.io/vela/) · [Regions Guide](https://pya-h.github.io/vela/regions.html) · [Channels & Ownership](https://pya-h.github.io/vela/channels.html) · [GUI & 2D Rasterizer](https://pya-h.github.io/vela/gui.html) · [Standard Library](https://pya-h.github.io/vela/std.html) · [Web Architecture](https://pya-h.github.io/vela/web.html) · [Vela Studio](https://pya-h.github.io/vela/ide.html)
+[Online Documentation](https://pya-h.github.io/vela/) · [Language Reference](https://pya-h.github.io/vela/) · [Regions Guide](https://pya-h.github.io/vela/regions.html) · [Channels & Ownership](https://pya-h.github.io/vela/channels.html) · [Actors](https://pya-h.github.io/vela/actors.html) · [Events](https://pya-h.github.io/vela/events.html) · [GUI & 2D Rasterizer](https://pya-h.github.io/vela/gui.html) · [Standard Library](https://pya-h.github.io/vela/std.html) · [Web Architecture](https://pya-h.github.io/vela/web.html) · [Vela Studio](https://pya-h.github.io/vela/ide.html)
 
 ---
 
@@ -18,7 +18,9 @@ Vela avoids the overhead of garbage collection runtimes, reference-counting cycl
 - **Deep Immutability & Predictable Places:** Names are `fixed` (deeply immutable by default), `bind` (immutable container with mutable contents), or `flex` (reassignable). Parameters pass by value or by explicit caller place (`flex& x: T` / `&x`) with compile-time aliasing protection preventing simultaneous mutable aliasing.
 - **Explicit Failure Channels:** No runtime exceptions. Fallible tasks declare typed failure channels `-> T ~ E`, propagated cleanly with `?` or caught with plan-B expressions (`val { fallback }`).
 - **Two-Mode Decorators:** Declarative startup decorators (`$get("/path")`, `$enroll`) execute before `main` to register routes and services; wrapper decorators (`$(auth)`, `$(logged)`) compose reusable middleware around tasks at call time.
-- **Batteries-Included Standard Library:** Embedded in the compiler under `std/`: file system operations (`std/files`), math (`std/math`), pipes and lazy iterator chains (`std/collections`), loop control (`std/loops`), 2D software canvas rasterization, windowing, and widgets (`std/gui`), thread-safe channels with ownership transfer (`Chan[own T]`), and a non-blocking web server with WebSockets, routing, and an event loop (`std/web`).
+- **Concurrency, Channels, Actors & `select`:** Bounded FIFO channels (`Chan[T]`, `Chan[own T]`), shorthand arrow operators (`val ->> ch`, `<<- ch`), multi-channel `select ... case ... otherwise ... fi` multiplexing with optional `after ms` timeouts, and share-nothing `actor` tasks scheduled across an M:N worker pool with compile-time linear move safety.
+- **Reactive Events & Alters Contracts:** Declarative `event` hooks (`on`, `on read`, `on init`, `on drop`, `on change`, `on start`, `on end`, `before`/`after`) verified at compile time with transitive `alters(...)` contracts, `auto`/`.listen()` control, and terminating cycle checks.
+- **Batteries-Included Standard Library:** Embedded in the compiler under `std/`: collections and lazy iterators (`std/collections`), file system (`std/files`), 2D canvas/X11 GUI (`std/gui`), 512-bit checked integers (`std/int512`), strict JSON (`std/json`), loop results (`std/loops`), math (`std/math`), sync channels (`std/sync`), and non-blocking HTTP/1.1, SSE, and WebSockets (`std/web`).
 - **Vela Studio IDE:** A self-contained WebAssembly-powered web IDE (`ide/`) with live diagnostics, syntax highlighting, completions, and integrated terminal sessions.
 
 ---
@@ -134,16 +136,19 @@ Full guides, tutorials, and architectural specifications are available online at
 
 - **[Language Reference](https://pya-h.github.io/vela/)** (`index.html`): Complete guide to grammar, tasks, shapes, kinds, expressions, loops, and generics.
 - **[Regions & Memory](https://pya-h.github.io/vela/regions.html)**: Scoped region memory, pointer safety (`^T@r`), default regions, and zero-GC lifecycle.
-- **[Standard Library](https://pya-h.github.io/vela/std.html)**: Reference for `std/web`, `std/files`, `std/collections`, `std/math`, `std/loops`, and `std/gui`.
-- **[Channels & Ownership Transfer](https://pya-h.github.io/vela/channels.html)**: Bounded channels (`Chan[T]`, `Chan[own T]`), Go-style concurrency, and race-free linear ownership transfer across threads.
+- **[Standard Library](https://pya-h.github.io/vela/std.html)**: Reference for `std/collections`, `std/files`, `std/gui`, `std/int512`, `std/json`, `std/loops`, `std/math`, `std/sync`, and `std/web`.
+- **[Channels & Ownership Transfer](https://pya-h.github.io/vela/channels.html)**: Bounded channels (`Chan[T]`, `Chan[own T]`), `<<-` / `->>` shortcuts, multi-channel `select`, and race-free linear ownership transfer across threads.
+- **[Actors & M:N Scheduler](https://pya-h.github.io/vela/actors.html)**: Encapsulated stateful `actor` declarations, mailboxes, `spawn`, and lock-free message handling.
+- **[Events & Reactive Triggers](https://pya-h.github.io/vela/events.html)**: Compile-time triggers (`on`, `on read`, `before`/`after`, lifecycle hooks), `.listen()`/`auto`, and `alters` causality checks.
+- **[Concurrency & Design Boundaries](https://pya-h.github.io/vela/concurrency.html)** and **[Commitments Design](https://pya-h.github.io/vela/commitment.html)**: Current concurrency guarantees, architectural limits, and await-by-default async design exploration.
 - **[GUI & 2D Rasterizer](https://pya-h.github.io/vela/gui.html)**: 2D software canvas rasterizer, desktop window presentation (X11), rich interactive widgets (Button, Label, TextBox, ListBox, CheckBox, ProgressBar, ImageView, MessageBox, InputBox), styling presets, and headless automated testing.
 - **[Web Architecture](https://pya-h.github.io/vela/web.html)**: Single event loop, non-blocking descriptor polling (`Poll`), persistent keep-alive, read/idle timeouts, RFC 6455 WebSockets, and middleware design.
 - **[Vela Studio IDE](https://pya-h.github.io/vela/ide.html)**: Browser-based WebAssembly development environment with live diagnostics and terminal.
 - **[Language Comparison](https://pya-h.github.io/vela/comparison.html)**: Architectural and philosophical comparison of Vela with Rust, Go, C, Zig, and Python.
-- **[Safety & Invariants](https://pya-h.github.io/vela/safety.html)**: Static verification, bounds checking, overflow protection, and runtime traps.
+- **[Safety, Data Races & Invariants](https://pya-h.github.io/vela/safety.html)**: Static verification, bounds checking, overflow protection, data-race defense layers, and runtime traps.
 - **[Project Review](https://pya-h.github.io/vela/review.html)**: Design critique, strengths, and evolution.
-- **[Future Notebook](https://pya-h.github.io/vela/future.html)** and **[Notebook 2](https://pya-h.github.io/vela/future-2.html)**: Explored language extensions and design experiments.
-- **[Events](https://pya-h.github.io/vela/events.html)**, **[Tricks](https://pya-h.github.io/vela/tricks.html)**, and **[May Waste](https://pya-h.github.io/vela/maywaste.html)**.
+- **[Future Directions](https://pya-h.github.io/vela/future.html)**: Consolidated roadmap, open design questions, and future compiler/stdlib directions.
+- **[Tricks](https://pya-h.github.io/vela/tricks.html)** and **[May Waste](https://pya-h.github.io/vela/maywaste.html)**: Type-level filtering tricks and language-surface audits.
 
 Offline documentation sources are also kept directly in the [`docs/`](docs/) directory of this repository.
 
