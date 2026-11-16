@@ -780,8 +780,8 @@ record.paused       <span class="comment">; true or false</span></code></pre>
         <span class="badge b-sugg">Suggestion</span> Each run of an event is its own block, so it gets a
         <a href="vela.html#default-region">default region</a> that is freed at its <code>fi</code>, like any
         <a href="vela.html#blocks"><code>block</code></a>. An event can't keep anything it allocates unless it stores
-        it in something that lives longer (a shared field in a static region, if Vela ever has
-        <a href="future.html#static-region">one</a>).
+        it in something that lives longer (a shared field in a static region, if Vela expands
+        <a href="future.html#global-region-extras"><code>global</code> regions</a>).
       </p>
     </section>
 
@@ -809,7 +809,7 @@ record.paused       <span class="comment">; true or false</span></code></pre>
         <div class="card">
           <h4>Kept values that update themselves</h4>
           <p>A <code>read</code> field kept up to date by a change event on the fields it depends on is a
-            <a href="future.html#methods-derived">member that doesn't recompute</a>. Nothing new is needed for it.</p>
+            <a href="future.html#methods-property">computed member</a> that doesn't recompute. Nothing new is needed for it.</p>
         </div>
         <div class="card">
           <h4>Events only in debug builds</h4>

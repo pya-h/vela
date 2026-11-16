@@ -335,7 +335,7 @@
             <td><code>close(c)</code></td>
             <td><code>c.close()</code></td>
             <td><code>nothing</code></td>
-            <td>Closes the channel. Subsequent receives drain existing items; subsequent sends fail gracefully.</td>
+            <td>Closes the channel. Subsequent receives drain existing items; subsequent sends fail gracefully. See <a href="channel-lifecycle.html">Channel Lifecycle &amp; Explicit Closing</a> for why <code>.close()</code> is explicit rather than region-tied.</td>
           </tr>
           <tr>
             <td>—</td>

@@ -1904,7 +1904,7 @@ m = Meter { label: "gate" }     <span class="comment">; ok: a whole new value, w
         <li>It lives as long as the program, which no region does, so it can't hold anything that lives in one: a
           pointer, a slice, <code>text@r</code>, a value holding one, or a <a href="std.html#files"><code>File</code></a>.
           Numbers, <code>bool</code>, text written in the program, arrays, tuples, <code>maybe</code>, kinds, and
-          shapes of those are all fine. (See <a href="future.html#static-region">a static region</a> for an idea that
+          shapes of those are all fine. (See <a href="future.html#global-region-extras"><code>global</code> region extensions</a> for an idea that
           would lift this.)</li>
         <li>A shape that takes types has no shared fields yet (see
           <a href="future.html#shared-in-generic-shapes">the idea</a>).</li>
@@ -2881,7 +2881,7 @@ fi</code></pre>
         (<code>[int#4]</code>, <code>[0#4]</code>) and of a safe index (<code>xs[#i]</code>) is always inside brackets, so
         the two never meet. A macro is a value, not a place:
         <code>P = 3.0</code> and <code>&amp;P</code> are errors. Macros that take values, as C's
-        <code>#define MAX(a, b)</code> does, are an idea for later (see <a href="future.html#macro-tasks">Macros that take values</a>).
+        <code>#define MAX(a, b)</code> does, are an idea for later (see <a href="future.html#comptime">Macros with Args &amp; <code>comptime</code></a>).
       </p>
 
       <h3 id="type-aliases">Type aliases</h3>
@@ -3507,7 +3507,7 @@ fi</code></pre>
           the same way, <code>in decorator 'route' on task 'home'</code>).</li>
         <li><strong>No region.</strong> A value living in a region (joined text, a slice, a pointer, or a value holding
           one) waits for a region that lasts as long as the program (see
-          <a href="future.html#start-values">Future Directions</a>).</li>
+          <a href="future.html#global-region-extras">Future Directions</a>).</li>
       </ul>
       <pre><code>task describe(n: int) -&gt; text
     &lt;- when sq(n) &gt; 4 "big" else "small" fi
@@ -3652,7 +3652,7 @@ fi</code></pre>
         A plain task wrapping a method reads only what any task reads of the value: no private field of another file,
         and no <code>read</code> field it could change. A method takes no startup decorator, and a method of a shape
         that takes types takes no wrappers yet, as a task taking types doesn't (see
-        <a href="future.html#decorators">Future Directions</a>).
+        <a href="future.html#generics-lambdas-extras">Future Directions</a>).
       </p>
 
       <h3 id="type-groups">Type groups</h3>
