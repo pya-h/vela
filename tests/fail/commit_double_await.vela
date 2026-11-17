@@ -1,0 +1,10 @@
+; error: 9:14: use of moved value 'c'; 'c' was moved with 'own c'
+task compute() -> int
+    <- 42
+fi
+
+task main()
+    fixed c = doing compute()
+    show(<<- c)
+    show(<<- c)
+fi

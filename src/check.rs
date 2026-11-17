@@ -79,6 +79,7 @@ struct VariantInfo {
 struct Scope {
     names: HashMap<String, VarInfo>,
     default: Option<(String, Span)>,
+    commitments: Vec<(String, Type, Span, bool)>,
 }
 
 /// Provenance for enforcing that `fixed`-owned slices, maps, and pointers are never passed to mutable sinks.
@@ -182,6 +183,8 @@ pub struct Checker {
     actors: HashMap<String, ActorDef>,
     events: HashMap<String, EventDef>,
     in_actor: Option<String>,
+    allowing_commitment_var: bool,
+    pending_doing_calls: Vec<(String, Span)>,
     patterns: HashMap<String, PatternDef>,
     task_spans: HashMap<String, Span>,
     /// Shapes/kinds that failed a pattern conformance check; skip verifying copied defaults to avoid duplicate errors.
@@ -758,6 +761,7 @@ impl Checker {
         }
         self.current_module.clear();
         self.finish_kept();
+        self.check_doing_shared(items);
         self.order_start_values(items);
         self.check_events_and_alters();
     }
@@ -2069,7 +2073,7 @@ impl Checker {
                         self.define(&param.name, param.ty.clone(), Mode::Fixed, param.span)?;
                     }
                     self.check_block(&mut handler.body)?;
-                    self.scopes.clear();
+                    self.drain_scopes();
                     self.in_actor = None;
                     self.current_module = module;
                 }
@@ -3666,6 +3670,7 @@ impl Checker {
                 }))
             }
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             other => other.clone(),
         }
@@ -4538,6 +4543,26 @@ impl Checker {
                     .map(|item| self.resolve_regions(item, span, place, inside))
                     .collect::<Result<_>>()?,
             )),
+            Type::Chan(inner) => Ok(Type::Chan(Box::new(
+                self.resolve_regions(inner, span, place, inside)?,
+            ))),
+            Type::Commitment(inner) => {
+                if place != TypePlace::Body {
+                    return err(
+                        span,
+                        "Commitment[T] is lexically scoped and cannot appear in fields, shared values, or task signatures; await it with '<<-' instead",
+                    );
+                }
+                Ok(Type::Commitment(Box::new(
+                    self.resolve_regions(inner, span, place, inside)?,
+                )))
+            }
+            Type::Actor(inner) => Ok(Type::Actor(Box::new(
+                self.resolve_regions(inner, span, place, inside)?,
+            ))),
+            Type::Own(inner) => Ok(Type::Own(Box::new(
+                self.resolve_regions(inner, span, place, inside)?,
+            ))),
             Type::Or(value, error) => Ok(Type::Or(
                 Box::new(self.resolve_regions(value, span, place, inside)?),
                 Box::new(self.resolve_regions(error, span, place, inside)?),
@@ -4637,8 +4662,38 @@ impl Checker {
                 span,
                 "several types, separated by commas, are only a task's results",
             ),
-            Type::Ptr(inner, _) => self.check_type(inner, span),
+            Type::Ptr(inner, _) => {
+                if contains_commitment(inner) {
+                    return err(span, "Commitment[T] cannot be placed inside another type");
+                }
+                self.check_type(inner, span)
+            }
+            Type::Chan(inner) | Type::Own(inner) | Type::Fail(inner) => {
+                if contains_commitment(inner) {
+                    return err(span, "Commitment[T] cannot be placed inside another type");
+                }
+                self.check_type(inner, span)
+            }
+            Type::Actor(inner) => {
+                if contains_commitment(inner) {
+                    return err(span, "Commitment[T] cannot be placed inside another type");
+                }
+                Ok(())
+            }
+            Type::Commitment(inner) => {
+                if contains_commitment(inner) {
+                    return err(span, "a Commitment cannot wrap another Commitment");
+                }
+                if **inner == Type::Nothing {
+                    Ok(())
+                } else {
+                    self.check_type(inner, span)
+                }
+            }
             Type::Map(key, value, _) => {
+                if contains_commitment(key) || contains_commitment(value) {
+                    return err(span, "Commitment[T] cannot be stored in a map");
+                }
                 if let Some(why) = key_problem(key, &|name| self.type_param(name).is_some()) {
                     return err(
                         span,
@@ -4657,29 +4712,50 @@ impl Checker {
                 self.check_type(key, span)?;
                 self.check_type(value, span)
             }
-            Type::Array(inner, _) | Type::Slice(inner, _) => match inner.as_ref() {
-                Type::Nothing => {
+            Type::Array(inner, _) | Type::Slice(inner, _) => {
+                if contains_commitment(inner) {
                     let what = if matches!(ty, Type::Array(..)) {
                         "an array"
                     } else {
                         "a slice"
                     };
-                    err(
-                        self.place(span, "nothing"),
-                        format!("{} can't hold 'nothing', which has no value", what),
-                    )
+                    return err(span, format!("{} cannot hold Commitment[T]", what));
                 }
-                _ => self.check_type(inner, span),
-            },
-            Type::Maybe(inner) => match inner.as_ref() {
-                Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
-                Type::Nothing => err(
-                    self.place(span, "nothing"),
-                    "a maybe can't hold 'nothing', which has no value",
-                ),
-                _ => self.check_type(inner, span),
-            },
+                match inner.as_ref() {
+                    Type::Nothing => {
+                        let what = if matches!(ty, Type::Array(..)) {
+                            "an array"
+                        } else {
+                            "a slice"
+                        };
+                        err(
+                            self.place(span, "nothing"),
+                            format!("{} can't hold 'nothing', which has no value", what),
+                        )
+                    }
+                    _ => self.check_type(inner, span),
+                }
+            }
+            Type::Maybe(inner) => {
+                if contains_commitment(inner) {
+                    return err(span, "Commitment[T] cannot be wrapped in 'maybe'");
+                }
+                match inner.as_ref() {
+                    Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
+                    Type::Nothing => err(
+                        self.place(span, "nothing"),
+                        "a maybe can't hold 'nothing', which has no value",
+                    ),
+                    _ => self.check_type(inner, span),
+                }
+            }
             Type::Or(value, error) => {
+                if contains_commitment(value) || contains_commitment(error) {
+                    return err(
+                        span,
+                        "Commitment[T] cannot appear inside 'T ~ E'; put errors inside Commitment[T ~ E]",
+                    );
+                }
                 // Error operator `~` does not associate/nest; flat `T ~ E` only.
                 if matches!(value.as_ref(), Type::Or(..)) || matches!(error.as_ref(), Type::Or(..))
                 {
@@ -4717,6 +4793,9 @@ impl Checker {
             }
             Type::Tuple(items) => {
                 for item in items {
+                    if contains_commitment(item) {
+                        return err(span, "a tuple cannot hold Commitment[T]");
+                    }
                     self.check_type(item, span)?;
                     if let Some(what) = self.changeable_item(item) {
                         return err(
@@ -4729,6 +4808,9 @@ impl Checker {
             }
             Type::Task(task) => {
                 for (i, param) in task.params.iter().enumerate() {
+                    if contains_commitment(param) {
+                        return err(span, "a task parameter cannot take Commitment[T]");
+                    }
                     match param {
                         _ if task.region(i).is_some() => {}
                         Type::Nothing => {
@@ -4745,6 +4827,9 @@ impl Checker {
                         }
                         _ => self.check_type(param, span)?,
                     }
+                }
+                if contains_commitment(&task.ret) {
+                    return err(span, "a task cannot return Commitment[T]");
                 }
                 match &task.ret {
                     Type::Nothing => Ok(()),
@@ -5256,7 +5341,7 @@ impl Checker {
                 self.loose_copies.insert(task.name.clone(), loose);
             }
         }
-        self.scopes.clear();
+        self.drain_scopes();
         self.current_lambda = None;
         self.current_task.clear();
         self.current_ret = None;
@@ -5314,7 +5399,126 @@ impl Checker {
     }
 
     fn pop_scope(&mut self) {
-        self.scopes.pop();
+        if let Some(scope) = self.scopes.pop() {
+            for (name, ty, span, awaited) in scope.commitments {
+                if !awaited
+                    && matches!(&ty, Type::Commitment(inner) if matches!(inner.as_ref(), Type::Or(..)))
+                {
+                    self.record(Error::at(
+                        span,
+                        format!(
+                            "fallible commitment '{}' may fail and is never awaited or checked; await it with '<<- {} {{ ... }}', poll with '.poll()', or cancel with '.cancel()'",
+                            name, name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn drain_scopes(&mut self) {
+        while !self.scopes.is_empty() {
+            self.pop_scope();
+        }
+    }
+
+    fn mark_commitment_awaited(&mut self, expr: &Expr) {
+        if let ExprKind::Var(name) = &expr.kind {
+            for scope in self.scopes.iter_mut().rev() {
+                if let Some(entry) = scope
+                    .commitments
+                    .iter_mut()
+                    .rev()
+                    .find(|(bound, _, _, _)| bound == name)
+                {
+                    entry.3 = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    fn consume_commitment(&mut self, expr: &Expr) -> Result<()> {
+        self.mark_commitment_awaited(expr);
+        let ExprKind::Var(name) = &expr.kind else {
+            return Ok(());
+        };
+        if self.is_moved(name) {
+            return err(
+                expr.span,
+                format!("commitment '{}' was already awaited or consumed", name),
+            );
+        }
+        if !self.loops.is_empty() && self.declared_outside_loop(name) {
+            return err(
+                expr.span,
+                format!(
+                    "cannot await commitment '{0}' inside a loop; '{0}' was declared outside the loop",
+                    name
+                ),
+            );
+        }
+        self.moved.insert(name.clone());
+        Ok(())
+    }
+
+    fn check_doing_shared(&mut self, items: &[Item]) {
+        if self.pending_doing_calls.is_empty() {
+            return;
+        }
+        let mut direct_shared: HashMap<String, bool> = HashMap::new();
+        let mut callees: HashMap<String, Vec<String>> = HashMap::new();
+        for item in items {
+            let Item::Task(t) = item else { continue };
+            let mut touches_mutable_shared = false;
+            let mut calls = Vec::new();
+            visit_block(&t.body, &mut |e| {
+                match &e.kind {
+                    ExprKind::Shared { shape, field } => {
+                        let mutable = self
+                            .shapes
+                            .get(shape)
+                            .and_then(|def| def.shared.iter().find(|m| m.field.name == *field))
+                            .is_some_and(SharedField::changes);
+                        if mutable {
+                            touches_mutable_shared = true;
+                        }
+                    }
+                    ExprKind::Call { name, .. } => calls.push(name.clone()),
+                    _ => {}
+                }
+                true
+            });
+            direct_shared.insert(t.name.clone(), touches_mutable_shared);
+            callees.insert(t.name.clone(), calls);
+        }
+        let pending = std::mem::take(&mut self.pending_doing_calls);
+        for (task_name, span) in pending {
+            let mut visited = HashSet::new();
+            let mut stack = vec![task_name.clone()];
+            let mut bad = false;
+            while let Some(cur) = stack.pop() {
+                if !visited.insert(cur.clone()) {
+                    continue;
+                }
+                if direct_shared.get(&cur).copied().unwrap_or(false) {
+                    bad = true;
+                    break;
+                }
+                if let Some(nexts) = callees.get(&cur) {
+                    stack.extend(nexts.iter().cloned());
+                }
+            }
+            if bad {
+                self.record(Error::at(
+                    span,
+                    format!(
+                        "cannot run '{}' with 'doing' because it accesses mutable shared state across threads",
+                        unqualified(&task_name)
+                    ),
+                ));
+            }
+        }
     }
 
     /// Hide outer value-loop around loop headers (`each` source / `start`) so headers cannot `break` into it.
@@ -6224,6 +6428,8 @@ impl Checker {
             Some(i) => self.bound_owners.swap_remove(i).1,
             None => Vec::new(),
         };
+        let track_commitment = matches!(&ty, Type::Commitment(_));
+        let com_ty = track_commitment.then(|| ty.clone());
         scope.names.insert(
             name.to_string(),
             VarInfo {
@@ -6241,6 +6447,11 @@ impl Checker {
                 bind_reads: false,
             },
         );
+        if let Some(com_ty) = com_ty {
+            scope
+                .commitments
+                .push((name.to_string(), com_ty, span, false));
+        }
         match clash {
             Some(clash) => err(span, clash),
             None => Ok(()),
@@ -7773,6 +7984,13 @@ impl Checker {
             ExprKind::Scan { .. } if matches!(e.ty, Some(Type::Or(..))) => {
                 err(e.span, ignored_error(SCAN))
             }
+            ExprKind::ChanRecv(..) if matches!(e.ty, Some(Type::Or(..))) => {
+                err(e.span, ignored_error("<<-"))
+            }
+            ExprKind::Doing(_) => err(
+                e.span,
+                "'doing' starts a task and returns its Commitment handle; keep it in a variable (e.g. 'fixed c = doing ...')",
+            ),
             ExprKind::Call { .. }
             | ExprKind::Edit { .. }
             | ExprKind::Scan { .. }
@@ -7941,6 +8159,12 @@ impl Checker {
                     ),
                 );
             }
+        }
+        if contains_commitment(&settled) {
+            return err(
+                at,
+                "a Commitment cannot be returned from a conditional expression; await it inside each branch instead",
+            );
         }
         Ok(Some(settled))
     }
@@ -9458,9 +9682,27 @@ impl Checker {
     }
 
     fn select_chan_elem(&mut self, expr: &mut Expr, op: &str, allow_actor: bool) -> Result<Type> {
-        let ty = self.check_expr(expr)?;
+        let prev = std::mem::replace(&mut self.allowing_commitment_var, true);
+        let checked = self.check_expr(expr);
+        self.allowing_commitment_var = prev;
+        let ty = checked?;
         match &ty {
             Type::Chan(inner) => Ok(inner.as_ref().clone()),
+            Type::Commitment(inner) => {
+                if op == "none <<-" {
+                    return err(
+                        expr.span,
+                        "'case none <<-' applies only to channels; a Commitment settles once and never yields 'none'",
+                    );
+                }
+                if op == "->>" {
+                    return err(
+                        expr.span,
+                        "cannot send to a Commitment; '->>' takes a channel or actor",
+                    );
+                }
+                Ok(inner.as_ref().clone())
+            }
             Type::Actor(actor_ty) if allow_actor => {
                 let actor_name = match actor_ty.as_ref() {
                     Type::Named(name, _) => name.clone(),
@@ -9519,9 +9761,25 @@ impl Checker {
     }
 
     fn check_chan_recv_shortcut(&mut self, chan: &mut Expr) -> Result<Type> {
-        let chan_ty = self.check_expr(chan)?;
+        let prev = std::mem::replace(&mut self.allowing_commitment_var, true);
+        let checked = self.check_expr(chan);
+        self.allowing_commitment_var = prev;
+        let chan_ty = checked?;
+        if let Type::Commitment(inner) = chan_ty {
+            if self.in_actor.is_some() {
+                return err(
+                    chan.span,
+                    "blocking '<<-' on a commitment cannot be used inside an actor handler; use '.poll()' or 'select' with 'otherwise'",
+                );
+            }
+            self.consume_commitment(chan)?;
+            return Ok(match *inner {
+                Type::Own(payload) => *payload,
+                other => other,
+            });
+        }
         self.chan_recv_elem_type(&chan_ty, chan.span, |got| {
-            format!("'<<-' requires a channel, got {}", got)
+            format!("'<<-' requires a channel or commitment, got {}", got)
         })
     }
 
@@ -9610,12 +9868,25 @@ impl Checker {
         let mut arm_meta: Vec<Option<Type>> = Vec::with_capacity(sel.arms.len());
         for arm in &mut sel.arms {
             match &mut arm.kind {
-                SelectArmKind::Recv { chan, .. } => {
+                SelectArmKind::Recv { name, chan, .. } => {
                     let elem_ty = self.select_chan_elem(chan, "<<-", false)?;
                     let bound_ty = match elem_ty {
                         Type::Own(payload) => *payload,
                         other => other,
                     };
+                    if matches!(chan.ty, Some(Type::Commitment(_))) {
+                        if bound_ty == Type::Nothing && name != DISCARD {
+                            return err(
+                                arm.span,
+                                format!("commitment sends nothing; write 'case {} <<- ...'", DISCARD),
+                            );
+                        }
+                        if sel.otherwise.is_none() {
+                            self.consume_commitment(chan)?;
+                        } else {
+                            self.mark_commitment_awaited(chan);
+                        }
+                    }
                     arm_meta.push(Some(bound_ty));
                 }
                 SelectArmKind::RecvNone { chan } => {
@@ -10257,7 +10528,10 @@ impl Checker {
                 None if bound.name == DISCARD => actual.clone(),
                 None => self.inferred_type(&bound.name, actual, at)?,
             };
-            if bound.name == DISCARD && matches!(ty, Type::Or(..)) {
+            if bound.name == DISCARD
+                && (matches!(ty, Type::Or(..))
+                    || matches!(&ty, Type::Commitment(inner) if matches!(inner.as_ref(), Type::Or(..))))
+            {
                 return err(at, dropped_error(&ty));
             }
             bound.ty = Some(ty.clone());
@@ -13286,6 +13560,7 @@ impl Checker {
             ExprKind::Own(inner) => self.check_own(inner, span),
             ExprKind::ChanRecv(chan) => self.check_chan_recv_shortcut(chan),
             ExprKind::ChanSend(value, target) => self.check_chan_send_shortcut(value, target),
+            ExprKind::Doing(inner) => self.check_doing(inner, span),
             ExprKind::Fail(error) => self.check_fail(error),
             ExprKind::PlanB { value, error, body } => {
                 self.check_plan_b(span, value, error.as_ref(), body)
@@ -13506,32 +13781,67 @@ impl Checker {
                 return Ok(CallSetup::Checked(Type::Bool));
             }
         }
-        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve") && !self.tasks.contains_key(name) {
+        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve" || name == "wait") && !self.tasks.contains_key(name) {
             if args.len() != 1 {
                 return err(
                     span,
-                    format!("'{}' takes 1 argument (channel), got {}", name, args.len()),
+                    format!("'{}' takes 1 argument (channel or commitment), got {}", name, args.len()),
                 );
             }
             let Some(arg0) = args.first_mut() else { unreachable!() };
-            let chan_ty = self.check_expr(arg0)?;
+            let prev = std::mem::replace(&mut self.allowing_commitment_var, true);
+            let checked = self.check_expr(arg0);
+            self.allowing_commitment_var = prev;
+            let chan_ty = checked?;
+            if let Type::Commitment(inner) = chan_ty {
+                if self.in_actor.is_some() {
+                    return err(
+                        arg0.span,
+                        "blocking '.wait()' on a commitment cannot be used inside an actor handler; use '.poll()' or 'select' with 'otherwise'",
+                    );
+                }
+                self.consume_commitment(arg0)?;
+                return Ok(CallSetup::Checked(match *inner {
+                    Type::Own(payload) => *payload,
+                    other => other,
+                }));
+            }
+            if name == "wait" {
+                return err(arg0.span, format!("'wait' requires a Commitment, got {}", chan_ty));
+            }
             let ret_ty = self.chan_recv_elem_type(&chan_ty, arg0.span, |got| {
                 format!("'{}' takes a channel as its argument, got {}", name, got)
             })?;
             return Ok(CallSetup::Checked(ret_ty));
         }
-        if (name == RECEIVE || name == "try_recv" || name == "recieve") && !self.tasks.contains_key(name) {
+        if (name == RECEIVE || name == "try_recv" || name == "recieve" || name == "poll") && !self.tasks.contains_key(name) {
             if args.len() != 1 {
                 return err(
                     span,
-                    format!("'{}' takes 1 argument (channel), got {}", name, args.len()),
+                    format!("'{}' takes 1 argument (channel or commitment), got {}", name, args.len()),
                 );
             }
             let Some(arg0) = args.first_mut() else { unreachable!() };
-            let chan_ty = self.check_expr(arg0)?;
+            let prev = std::mem::replace(&mut self.allowing_commitment_var, true);
+            let checked = self.check_expr(arg0);
+            self.allowing_commitment_var = prev;
+            let chan_ty = checked?;
             let elem_ty = match &chan_ty {
-                Type::Chan(inner) => inner.as_ref().clone(),
+                Type::Chan(inner) if name != "poll" => inner.as_ref().clone(),
+                Type::Commitment(inner) => {
+                    if **inner == Type::Nothing {
+                        return err(
+                            arg0.span,
+                            "'.poll()' requires a commitment that produces a value; await 'Commitment[nothing]' with '<<-' or '.wait()'",
+                        );
+                    }
+                    self.mark_commitment_awaited(arg0);
+                    inner.as_ref().clone()
+                }
                 Type::Unknown => Type::Unknown,
+                _ if name == "poll" => {
+                    return err(arg0.span, format!("'.poll()' takes a Commitment, got {}", chan_ty));
+                }
                 _ => return err(arg0.span, format!("'{}' takes a channel as its argument, got {}", name, chan_ty)),
             };
             let item_ty = match elem_ty {
@@ -13539,6 +13849,27 @@ impl Checker {
                 other => other,
             };
             return Ok(CallSetup::Checked(Type::Maybe(Box::new(item_ty))));
+        }
+        if name == "cancel" && !self.tasks.contains_key(name) {
+            if args.len() != 1 {
+                return err(span, format!("'cancel' takes 1 argument (commitment), got {}", args.len()));
+            }
+            let Some(arg0) = args.first_mut() else { unreachable!() };
+            let prev = std::mem::replace(&mut self.allowing_commitment_var, true);
+            let checked = self.check_expr(arg0);
+            self.allowing_commitment_var = prev;
+            let com_ty = checked?;
+            if !matches!(&com_ty, Type::Commitment(_) | Type::Unknown) {
+                return err(arg0.span, format!("'cancel' takes a Commitment, got {}", com_ty));
+            }
+            self.mark_commitment_awaited(arg0);
+            return Ok(CallSetup::Checked(Type::Nothing));
+        }
+        if name == "cancelled" && !self.tasks.contains_key(name) {
+            if !args.is_empty() {
+                return err(span, format!("'cancelled()' takes 0 arguments, got {}", args.len()));
+            }
+            return Ok(CallSetup::Checked(Type::Bool));
         }
         if name == CLOSE && !self.tasks.contains_key(name) {
             if args.len() != 1 {
@@ -13800,11 +14131,21 @@ impl Checker {
         }
         let calling = std::mem::take(&mut self.calling);
         let reaching = std::mem::take(&mut self.reaching);
+        let allowing_commitment = std::mem::take(&mut self.allowing_commitment_var);
         let length_only = std::mem::take(&mut self.reading_length);
         let info = self.lookup_or_err(name, span)?;
         let (ty, kept, mode) = (info.ty.clone(), info.kept, info.mode);
         if kept {
             self.check_kept_use(name, &ty, span)?;
+        }
+        if matches!(ty, Type::Commitment(_)) && !reaching && !allowing_commitment {
+            return err(
+                span,
+                format!(
+                    "commitment '{0}' cannot be copied or passed by value; await it with '<<- {0}', check with '{0}.poll()', cancel with '{0}.cancel()', or race in 'select'",
+                    name
+                ),
+            );
         }
         if !held_lambda(&ty) && held_value(&ty, &self.held_types) && !calling && !reaching {
             return err(
@@ -14919,6 +15260,154 @@ impl Checker {
                 both[0], both[1]
             ),
         )
+    }
+
+    fn check_doing(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
+        if self.in_actor.is_some() {
+            return err(
+                span,
+                "'doing' cannot be used inside an actor handler; call tasks concurrently from a task instead",
+            );
+        }
+        if !matches!(
+            inner.kind,
+            ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Pipe(_)
+        ) {
+            return err(
+                inner.span,
+                "'doing' starts a task call or call pipe concurrently, as in 'doing fetch(id)'",
+            );
+        }
+        let ret_ty = self.check_expr(inner)?;
+        if matches!(ret_ty, Type::Results(_)) {
+            return err(
+                inner.span,
+                "'doing' starts a task that sends at most one value; send a tuple instead",
+            );
+        }
+        if !ret_ty.unknown()
+            && (contains_commitment(&ret_ty)
+                || !fits_regions(&ret_ty, &ret_ty.without_regions()))
+        {
+            return err(
+                inner.span,
+                format!(
+                    "cannot return regional or non-transferable type {} across 'doing'; regions belong to their task",
+                    ret_ty
+                ),
+            );
+        }
+        self.validate_doing_chain(inner, span)?;
+        Ok(Type::Commitment(Box::new(ret_ty)))
+    }
+
+    fn validate_doing_chain(&mut self, expr: &Expr, doing_span: Span) -> Result<()> {
+        match &expr.kind {
+            ExprKind::Pipe(call) => {
+                if let Some(prev) = piped_value(call) {
+                    if matches!(
+                        prev.kind,
+                        ExprKind::Pipe(_) | ExprKind::Call { .. } | ExprKind::Invoke { .. }
+                    ) {
+                        self.validate_doing_chain(prev, doing_span)?;
+                    } else if let Some(ty) = &prev.ty
+                        && !fits_regions(ty, &ty.without_regions())
+                    {
+                        return err(
+                            prev.span,
+                            format!(
+                                "cannot send piped input of type '{}' to a 'doing' task across regions",
+                                ty
+                            ),
+                        );
+                    }
+                }
+                self.validate_doing_call(call, doing_span)
+            }
+            ExprKind::Call { .. } | ExprKind::Invoke { .. } => {
+                self.validate_doing_call(expr, doing_span)
+            }
+            _ => err(
+                expr.span,
+                "'doing' only launches direct task calls or call pipes concurrently",
+            ),
+        }
+    }
+
+    fn validate_doing_call(&mut self, call: &Expr, doing_span: Span) -> Result<()> {
+        let ExprKind::Call { name, args, .. } = &call.kind else {
+            return err(
+                call.span,
+                "'doing' cannot launch a closure or indirect task value in v1; call a named task instead",
+            );
+        };
+        let Some(info) = self.tasks.get(name).cloned() else {
+            if self.tasks.contains_key(name) {
+                return Ok(());
+            }
+            return err(
+                call.span,
+                format!(
+                    "cannot launch built-in '{}' directly with 'doing'; wrap it in a task",
+                    unqualified(name)
+                ),
+            );
+        };
+        if info.owner.as_ref().is_some_and(|o| o.alters) {
+            return err(
+                call.span,
+                format!(
+                    "cannot run 'alters' method '{}' with 'doing'; concurrent mutation would race with the caller",
+                    unqualified(name)
+                ),
+            );
+        }
+        for ((pname, pty), passing) in info.params.iter().zip(info.passing.iter()) {
+            if matches!(
+                passing,
+                Passing::FlexRef | Passing::FixedRef | Passing::BindRef
+            ) {
+                return err(
+                    call.span,
+                    format!(
+                        "cannot pass reference parameter '{}' to a 'doing' task; concurrent references can race",
+                        pname
+                    ),
+                );
+            }
+            if *pty == Type::Region {
+                return err(
+                    call.span,
+                    "cannot pass a caller region to a 'doing' task; regions are single-threaded",
+                );
+            }
+        }
+        for arg in args {
+            if matches!(arg.kind, ExprKind::Piped(_)) {
+                continue;
+            }
+            if let Some(arg_ty) = &arg.ty
+                && !arg_ty.unknown()
+            {
+                if contains_commitment(arg_ty) {
+                    return err(
+                        arg.span,
+                        "cannot pass Commitment[T] across 'doing'; Commitments are lexically scoped",
+                    );
+                }
+                if !fits_regions(arg_ty, &arg_ty.without_regions()) {
+                    return err(
+                        arg.span,
+                        format!(
+                            "cannot pass regional value of type {} to 'doing'; only lasting or 'own' data can cross threads",
+                            arg_ty
+                        ),
+                    );
+                }
+            }
+        }
+        self.pending_doing_calls.push((name.clone(), doing_span));
+        Ok(())
     }
 
     fn check_own(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
@@ -16854,6 +17343,12 @@ impl Checker {
         let Some((settled, at)) = result? else {
             return Ok(extracted);
         };
+        if contains_commitment(&settled) {
+            return err(
+                at,
+                "a Commitment cannot be returned from a plan B; await it inside the plan B instead",
+            );
+        }
         if let Some(region) = settled
             .regions()
             .into_iter()
@@ -17882,6 +18377,13 @@ impl Checker {
                 "len" | "cap" => Ok(Type::Int),
                 _ => err(span, format!("channel has no field '{}'; write '.len' or '.cap'", field)),
             },
+            Type::Commitment(_) => err(
+                span,
+                format!(
+                    "Commitment has no field '{}'; await it with '<<-', inspect with '.poll()', or cancel with '.cancel()'",
+                    field
+                ),
+            ),
             Type::Actor(actor_ty) => {
                 let name = match actor_ty.as_ref() {
                     Type::Named(name, _) => name.as_str(),
@@ -18537,6 +19039,31 @@ impl Checker {
                 args,
             };
             return Ok(());
+        }
+        if matches!(unwrap_own, Type::Commitment(_)) {
+            if matches!(
+                name.as_str(),
+                "poll" | "cancel" | "wait" | "wait_and_receive" | "receive"
+            ) {
+                let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+                let ExprKind::MethodCall { value, mut args, .. } = taken else {
+                    return Err(Error::internal_at(span, "a method call that is no longer one"));
+                };
+                args.insert(0, *value);
+                expr.kind = ExprKind::Call {
+                    name,
+                    types: Vec::new(),
+                    args,
+                };
+                return Ok(());
+            }
+            return err(
+                span,
+                format!(
+                    "Commitment has no method '{}'; write '.poll()', '.wait()', or '.cancel()'",
+                    name
+                ),
+            );
         }
         let ty = match ty {
             Type::Own(inner) => *inner,
@@ -22214,6 +22741,11 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
             let e_inner = match e.as_ref() { Type::Own(t) => t.as_ref(), other => other };
             fits_regions(a_inner, e_inner)
         }
+        (Type::Commitment(a), Type::Commitment(e)) => {
+            let a_inner = match a.as_ref() { Type::Own(t) => t.as_ref(), other => other };
+            let e_inner = match e.as_ref() { Type::Own(t) => t.as_ref(), other => other };
+            fits_regions(a_inner, e_inner)
+        }
         (Type::Own(a), Type::Own(e)) => fits_regions(a, e),
         (Type::Own(a), e) => fits_regions(a, e),
         (a, Type::Own(e)) => fits_regions(a, e),
@@ -22970,6 +23502,7 @@ impl Checker {
             ExprKind::Spread(inner)
             | ExprKind::Kept { value: inner, .. }
             | ExprKind::Own(inner)
+            | ExprKind::Doing(inner)
             | ExprKind::ChanRecv(inner) => {
                 self.substitute_expr(inner, given, made)
             }
@@ -23270,6 +23803,7 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         | (Type::Range(p), Type::Range(a))
         | (Type::Fail(p), Type::Fail(a))
         | (Type::Chan(p), Type::Chan(a))
+        | (Type::Commitment(p), Type::Commitment(a))
         | (Type::Own(p), Type::Own(a)) => unify_params(p, a, given),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
             unify_params(pv, av, given);
@@ -26046,6 +26580,7 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
         | ExprKind::Shortcut { value, .. }
         | ExprKind::ToText { value, .. }
         | ExprKind::ToJson { value, .. }
+        | ExprKind::Doing(value)
         | ExprKind::ChanRecv(value) => visit_expr(value, f),
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
@@ -27216,7 +27751,7 @@ fn collect_type_regions(ty: &Type, out: &mut Vec<String>) {
                 collect_type_regions(given, out);
             }
         }
-        Type::Maybe(inner) | Type::Range(inner) | Type::Chan(inner) | Type::Actor(inner)
+        Type::Maybe(inner) | Type::Range(inner) | Type::Chan(inner) | Type::Commitment(inner) | Type::Actor(inner)
         | Type::Own(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
             collect_type_regions(inner, out);
         }
@@ -27240,6 +27775,55 @@ fn collect_names_and_regions(e: &Expr, used: &mut Vec<String>) {
     if let Some(ty) = &e.ty {
         collect_type_regions(ty, used);
     }
+}
+
+fn contains_commitment(ty: &Type) -> bool {
+    match ty {
+        Type::Commitment(_) => true,
+        Type::Ptr(inner, _)
+        | Type::Range(inner)
+        | Type::Maybe(inner)
+        | Type::Chan(inner)
+        | Type::Actor(inner)
+        | Type::Own(inner)
+        | Type::Fail(inner)
+        | Type::Array(inner, _)
+        | Type::Slice(inner, _) => contains_commitment(inner),
+        Type::Map(k, v, _) | Type::Or(k, v) => {
+            contains_commitment(k) || contains_commitment(v)
+        }
+        Type::Tuple(items) | Type::Results(items) => items.iter().any(contains_commitment),
+        Type::Applied(applied) => applied.types.iter().any(contains_commitment),
+        Type::Task(task) => {
+            task.params.iter().any(contains_commitment) || contains_commitment(&task.ret)
+        }
+        Type::Closure(closure) => {
+            closure.task.params.iter().any(contains_commitment)
+                || contains_commitment(&closure.task.ret)
+        }
+        _ => false,
+    }
+}
+
+fn piped_value(call: &Expr) -> Option<&Expr> {
+    let (ExprKind::Call { args, .. }
+    | ExprKind::Invoke { args, .. }
+    | ExprKind::Construct { args, .. }) = &call.kind
+    else {
+        return None;
+    };
+    args.iter().find_map(|arg| {
+        let mut arg = arg;
+        loop {
+            match &arg.kind {
+                ExprKind::Piped(value) => return Some(value.as_ref()),
+                ExprKind::Wrap(inner)
+                | ExprKind::Widen(inner)
+                | ExprKind::Kept { value: inner, .. } => arg = inner,
+                _ => return None,
+            }
+        }
+    })
 }
 
 fn event_id(e: &EventDef) -> String {

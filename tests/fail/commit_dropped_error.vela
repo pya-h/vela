@@ -1,0 +1,9 @@
+; error: 7:11: fallible commitment 'c' may fail and is never awaited or checked; await it with '<<- c { ... }', poll with '.poll()', or cancel with '.cancel()'
+task fallible() -> int ~ text
+    <- 1
+fi
+
+task main()
+    fixed c = doing fallible()
+    show("started")
+fi

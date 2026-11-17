@@ -49,6 +49,7 @@ pub enum Type {
     Range(Box<Type>),
     Maybe(Box<Type>),
     Chan(Box<Type>),
+    Commitment(Box<Type>),
     Actor(Box<Type>),
     Own(Box<Type>),
     Or(Box<Type>, Box<Type>),
@@ -736,6 +737,11 @@ impl Type {
                 inner.write(f, outer)?;
                 write!(f, "]")
             }
+            Type::Commitment(inner) => {
+                write!(f, "Commitment[")?;
+                inner.write(f, outer)?;
+                write!(f, "]")
+            }
             Type::Actor(inner) => {
                 write!(f, "Actor[")?;
                 inner.write(f, outer)?;
@@ -865,6 +871,7 @@ impl Type {
             | Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Commitment(inner)
             | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner) => inner.unknown(),
@@ -944,6 +951,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner, f)),
             Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -1011,6 +1019,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner)),
             Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
@@ -1049,6 +1058,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner)),
             Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
@@ -1129,6 +1139,7 @@ impl Type {
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
             Type::Chan(inner) => Type::Chan(Box::new(inner.map_regions_of_names(f))),
+            Type::Commitment(inner) => Type::Commitment(Box::new(inner.map_regions_of_names(f))),
             Type::Actor(inner) => Type::Actor(Box::new(inner.map_regions_of_names(f))),
             Type::Own(inner) => Type::Own(Box::new(inner.map_regions_of_names(f))),
             Type::Or(value, error) => Type::Or(
@@ -1187,6 +1198,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner, f)),
             Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -1265,6 +1277,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Chan(inner) => Type::Chan(boxed(inner, f)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner, f)),
             Type::Actor(inner) => Type::Actor(boxed(inner, f)),
             Type::Own(inner) => Type::Own(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -1332,6 +1345,7 @@ impl Type {
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Chan(inner) => Type::Chan(boxed(inner)),
+            Type::Commitment(inner) => Type::Commitment(boxed(inner)),
             Type::Actor(inner) => Type::Actor(boxed(inner)),
             Type::Own(inner) => Type::Own(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
@@ -1371,6 +1385,7 @@ impl Type {
             | Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Commitment(inner)
             | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner)
@@ -1418,6 +1433,7 @@ impl Type {
             Type::Range(inner)
             | Type::Maybe(inner)
             | Type::Chan(inner)
+            | Type::Commitment(inner)
             | Type::Actor(inner)
             | Type::Own(inner)
             | Type::Fail(inner)
@@ -1587,6 +1603,8 @@ pub enum ExprKind {
     ChanRecv(Box<Expr>),
     /// Channel or actor send shorthand: `value ->> target`.
     ChanSend(Box<Expr>, Box<Expr>),
+    /// Concurrent call/pipe launch returning a `Commitment[T]`: `doing call(...)`.
+    Doing(Box<Expr>),
     Shared {
         shape: String,
         field: String,
@@ -2421,6 +2439,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
         Type::Chan(inner) => format!("chan__{}", type_word(inner)),
+        Type::Commitment(inner) => format!("commitment__{}", type_word(inner)),
         Type::Actor(inner) => format!("actor__{}", type_word(inner)),
         Type::Own(inner) => format!("own__{}", type_word(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_word(value), type_word(error)),

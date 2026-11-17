@@ -546,6 +546,35 @@ pub(crate) fn complete(
                 ];
                 return (with_copy(items, false), word_start, byte);
             }
+            Some(Type::Commitment(_)) => {
+                let items = vec![
+                    CompletionItem {
+                        label: "wait".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "wait() -> T".to_string(),
+                        apply: None,
+                        snippet: Some("wait()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "poll".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "poll() -> maybe T".to_string(),
+                        apply: None,
+                        snippet: Some("poll()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "cancel".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "cancel()".to_string(),
+                        apply: None,
+                        snippet: Some("cancel()".to_string()),
+                        boost: LOCAL,
+                    },
+                ];
+                return (with_copy(items, false), word_start, byte);
+            }
             Some(Type::Actor(_)) => {
                 let items = vec![
                     CompletionItem {

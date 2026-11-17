@@ -54,6 +54,7 @@ fn as_written(ty: &Type, made: &HashMap<&str, &[Type]>) -> Type {
             region: applied.region.clone(),
         })),
         Type::Chan(inner) => Type::Chan(Box::new(as_written(inner, made))),
+        Type::Commitment(inner) => Type::Commitment(Box::new(as_written(inner, made))),
         Type::Actor(inner) => Type::Actor(Box::new(as_written(inner, made))),
         Type::Own(inner) => Type::Own(Box::new(as_written(inner, made))),
         other => other.clone(),
@@ -326,7 +327,8 @@ impl Checked {
                         SelectArmKind::Recv { name, name_span, chan, .. } => {
                             self.expr(chan, kinds);
                             if name != "_"
-                                && let Some(Type::Chan(inner)) = chan.ty.as_ref()
+                                && let Some(Type::Chan(inner) | Type::Commitment(inner)) =
+                                    chan.ty.as_ref()
                             {
                                 let item_ty = match inner.as_ref() {
                                     Type::Own(p) => p.as_ref().clone(),
@@ -479,6 +481,7 @@ impl Checked {
             }
             ExprKind::Unary(_, inner)
             | ExprKind::ChanRecv(inner)
+            | ExprKind::Doing(inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
             | ExprKind::New { value: inner, .. }

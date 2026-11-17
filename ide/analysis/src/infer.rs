@@ -589,7 +589,7 @@ impl<'a> Knowledge<'a> {
             .unwrap_or(line_end)
             .checked_sub(1)?;
         match self.span_type(chan_start, chan_end, depth + 1)? {
-            Type::Chan(inner) => Some(chan_payload_type(*inner)),
+            Type::Chan(inner) | Type::Commitment(inner) => Some(chan_payload_type(*inner)),
             _ => None,
         }
     }
@@ -970,11 +970,27 @@ impl<'a> Knowledge<'a> {
             expect_operand = false;
         }
         if operand_ends.is_empty() {
+            if matches!(self.token(first), Some(Token::Ident(name)) if name == "doing")
+                && first < last
+            {
+                if let Some(ty) = self
+                    .start(first)
+                    .and_then(|s| self.checked.exprs.get(&(s.line, s.col)))
+                    .cloned()
+                {
+                    return Some(ty);
+                }
+                if let Some(ty) = self.span_type(first + 1, last, depth + 1) {
+                    return Some(Type::Commitment(Box::new(ty)));
+                }
+            }
             if self.token(first) == Some(&Token::ChanRecv) && first < last {
                 if let Some(ty) = self.start(first).and_then(|s| self.checked.exprs.get(&(s.line, s.col))).cloned() {
                     return Some(ty);
                 }
-                if let Some(Type::Chan(inner)) = self.span_type(first + 1, last, depth + 1) {
+                if let Some(Type::Chan(inner) | Type::Commitment(inner)) =
+                    self.span_type(first + 1, last, depth + 1)
+                {
                     return Some(chan_payload_type(*inner));
                 }
             }

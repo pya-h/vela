@@ -1,0 +1,286 @@
+  1 | shape Scaler
+    | keyword:shape  type:Scaler
+  2 |     factor: int
+    | field:factor  punctuation::  type-builtin:int
+  4 |     scale(n: int) -> int
+    | method:scale  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  5 |         <- n * .factor
+    | keyword:<-  parameter:n  operator:*  punctuation:.  field:factor
+  6 |     fi
+    | keyword:fi
+  7 | fi
+    | keyword:fi
+  9 | task add_ten(n: int) -> int
+    | keyword:task  task:add_ten  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- n + 10
+    | keyword:<-  parameter:n  operator:+  number:10
+ 11 | fi
+    | keyword:fi
+ 13 | task double_it(n: int) -> int
+    | keyword:task  task:double_it  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 15 | fi
+    | keyword:fi
+ 17 | task add_one(n: int) -> int
+    | keyword:task  task:add_one  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 18 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 19 | fi
+    | keyword:fi
+ 21 | task maybe_fail(ok: bool) -> int ~ text
+    | keyword:task  task:maybe_fail  punctuation:(  parameter:ok  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
+ 22 |     when not ok
+    | keyword:when  keyword:not  parameter:ok
+ 23 |         <- fail "boom"
+    | keyword:<-  keyword:fail  string:"boom"
+ 24 |     fi
+    | keyword:fi
+ 25 |     <- 42
+    | keyword:<-  number:42
+ 26 | fi
+    | keyword:fi
+ 28 | task ping(ready: Chan[int], out: Chan[text])
+    | keyword:task  task:ping  punctuation:(  parameter:ready  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:out  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)
+ 29 |     <<- ready
+    | operator:<<-  parameter:ready
+ 30 |     "pong" ->> out
+    | string:"pong"  operator:->>  parameter:out
+ 31 | fi
+    | keyword:fi
+ 33 | task gated_value(gate: Chan[int], val: int) -> int
+    | keyword:task  task:gated_value  punctuation:(  parameter:gate  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:val  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     <<- gate
+    | operator:<<-  parameter:gate
+ 35 |     <- val
+    | keyword:<-  parameter:val
+ 36 | fi
+    | keyword:fi
+ 38 | task cancellable_worker(started: Chan[int], done: Chan[text]) -> int
+    | keyword:task  task:cancellable_worker  punctuation:(  parameter:started  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:done  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)  operator:->  type-builtin:int
+ 39 |     1 ->> started
+    | number:1  operator:->>  parameter:started
+ 40 |     flex steps = 0
+    | keyword:flex  variable:steps  operator:=  number:0
+ 41 |     endless
+    | keyword:endless
+ 42 |         when cancelled()
+    | keyword:when  task:cancelled  punctuation:(  punctuation:)
+ 43 |             "cancelled" ->> done
+    | string:"cancelled"  operator:->>  parameter:done
+ 44 |             <- steps
+    | keyword:<-  variable:steps
+ 45 |         fi
+    | keyword:fi
+ 46 |         steps += 1
+    | variable:steps  operator:+=  number:1
+ 47 |         when steps == 100000000
+    | keyword:when  variable:steps  operator:==  number:100000000
+ 48 |             "finished" ->> done
+    | string:"finished"  operator:->>  parameter:done
+ 49 |             <- steps
+    | keyword:<-  variable:steps
+ 50 |         fi
+    | keyword:fi
+ 51 |     fi
+    | keyword:fi
+ 52 |     <- steps
+    | keyword:<-  variable:steps
+ 53 | fi
+    | keyword:fi
+ 55 | task slow_branch(gate: Chan[int]) -> text
+    | keyword:task  task:slow_branch  punctuation:(  parameter:gate  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)  operator:->  type-builtin:text
+ 56 |     <<- gate
+    | operator:<<-  parameter:gate
+ 57 |     <- "slow"
+    | keyword:<-  string:"slow"
+ 58 | fi
+    | keyword:fi
+ 60 | task fast_branch() -> text
+    | keyword:task  task:fast_branch  punctuation:(  punctuation:)  operator:->  type-builtin:text
+ 61 |     <- "fast"
+    | keyword:<-  string:"fast"
+ 62 | fi
+    | keyword:fi
+ 64 | task nested_outer(x: int) -> int
+    | keyword:task  task:nested_outer  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 65 |     fixed inner = doing double_it(x)
+    | keyword:fixed  variable:inner  operator:=  variable:doing  task:double_it  punctuation:(  parameter:x  punctuation:)
+ 66 |     <- (<<- inner) + 7
+    | keyword:<-  punctuation:(  operator:<<-  variable:inner  punctuation:)  operator:+  number:7
+ 67 | fi
+    | keyword:fi
+ 69 | task run_scoped_cancel(started: Chan[int], done: Chan[text]) -> text
+    | keyword:task  task:run_scoped_cancel  punctuation:(  parameter:started  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:done  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)  operator:->  type-builtin:text
+ 70 |     fixed bg = doing cancellable_worker(started, done)
+    | keyword:fixed  variable:bg  operator:=  variable:doing  task:cancellable_worker  punctuation:(  parameter:started  punctuation:,  parameter:done  punctuation:)
+ 71 |     <<- started
+    | operator:<<-  parameter:started
+ 72 |     <- "leaving"
+    | keyword:<-  string:"leaving"
+ 73 | fi
+    | keyword:fi
+ 75 | task contextual_doing(doing: int) -> int
+    | keyword:task  task:contextual_doing  punctuation:(  parameter:doing  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 76 |     <- doing + 1
+    | keyword:<-  parameter:doing  operator:+  number:1
+ 77 | fi
+    | keyword:fi
+ 79 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 80 |     ; 1. Basic doing + <<- wait
+    | comment:; 1. Basic doing + <<- wait
+ 81 |     fixed a = doing add_ten(5)
+    | keyword:fixed  variable:a  operator:=  variable:doing  task:add_ten  punctuation:(  number:5  punctuation:)
+ 82 |     show("a: ", <<- a)
+    | builtin-fn:show  punctuation:(  string:"a: "  punctuation:,  operator:<<-  variable:a  punctuation:)
+ 84 |     ; 2. Shape method doing + .wait()
+    | comment:; 2. Shape method doing + .wait()
+ 85 |     fixed s = Scaler { factor: 6 }
+    | keyword:fixed  variable:s  operator:=  type:Scaler  punctuation:{  field:factor  punctuation::  number:6  punctuation:}
+ 86 |     fixed b = doing s.scale(7)
+    | keyword:fixed  variable:b  operator:=  variable:doing  variable:s  punctuation:.  method:scale  punctuation:(  number:7  punctuation:)
+ 87 |     show("b: ", b.wait())
+    | builtin-fn:show  punctuation:(  string:"b: "  punctuation:,  variable:b  punctuation:.  field:wait  punctuation:(  punctuation:)  punctuation:)
+ 89 |     ; 3. Pipe inside doing + <<- binding tighter than |>
+    | comment:; 3. Pipe inside doing + <<- binding tighter than |>
+ 90 |     fixed piped_c = doing (3 |> add_ten() |> double_it())
+    | keyword:fixed  variable:piped_c  operator:=  task:doing  punctuation:(  number:3  operator:|>  task:add_ten  punctuation:(  punctuation:)  operator:|>  task:double_it  punctuation:(  punctuation:)  punctuation:)
+ 91 |     fixed piped_res = <<- piped_c |> add_one()
+    | keyword:fixed  variable:piped_res  operator:=  operator:<<-  variable:piped_c  operator:|>  task:add_one  punctuation:(  punctuation:)
+ 92 |     show("piped: ", piped_res)
+    | builtin-fn:show  punctuation:(  string:"piped: "  punctuation:,  variable:piped_res  punctuation:)
+ 94 |     ; 4. Parenthesis-free error handling with Plan B
+    | comment:; 4. Parenthesis-free error handling with Plan B
+ 95 |     fixed ok_c = doing maybe_fail(true)
+    | keyword:fixed  variable:ok_c  operator:=  variable:doing  task:maybe_fail  punctuation:(  keyword:true  punctuation:)
+ 96 |     fixed err_c = doing maybe_fail(false)
+    | keyword:fixed  variable:err_c  operator:=  variable:doing  task:maybe_fail  punctuation:(  keyword:false  punctuation:)
+ 97 |     fixed ok_val = <<- ok_c { failure e
+    | keyword:fixed  variable:ok_val  operator:=  operator:<<-  variable:ok_c  punctuation:{  keyword:failure  variable:e
+ 98 |         show("unexpected: ", e)
+    | builtin-fn:show  punctuation:(  string:"unexpected: "  punctuation:,  variable:e  punctuation:)
+ 99 |         0
+    | number:0
+100 |     }
+    | punctuation:}
+101 |     fixed err_val = <<- err_c { failure e
+    | keyword:fixed  variable:err_val  operator:=  operator:<<-  variable:err_c  punctuation:{  keyword:failure  variable:e
+102 |         show("caught: ", e)
+    | builtin-fn:show  punctuation:(  string:"caught: "  punctuation:,  variable:e  punctuation:)
+103 |         99
+    | number:99
+104 |     }
+    | punctuation:}
+105 |     show("ok_val: ", ok_val, " err_val: ", err_val)
+    | builtin-fn:show  punctuation:(  string:"ok_val: "  punctuation:,  variable:ok_val  punctuation:,  string:" err_val: "  punctuation:,  variable:err_val  punctuation:)
+107 |     ; 5. Commitment[nothing] with <<- and select none <<-
+    | comment:; 5. Commitment[nothing] with <<- and select none <<-
+108 |     fixed ready = chan_new<int>(1)
+    | keyword:fixed  variable:ready  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+109 |     fixed out = chan_new<text>(1)
+    | keyword:fixed  variable:out  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+110 |     fixed p1 = doing ping(ready, out)
+    | keyword:fixed  variable:p1  operator:=  variable:doing  task:ping  punctuation:(  variable:ready  punctuation:,  variable:out  punctuation:)
+111 |     1 ->> ready
+    | number:1  operator:->>  variable:ready
+112 |     <<- p1
+    | operator:<<-  variable:p1
+113 |     show("ping1: ", <<- out)
+    | builtin-fn:show  punctuation:(  string:"ping1: "  punctuation:,  operator:<<-  variable:out  punctuation:)
+115 |     fixed p2 = doing ping(ready, out)
+    | keyword:fixed  variable:p2  operator:=  variable:doing  task:ping  punctuation:(  variable:ready  punctuation:,  variable:out  punctuation:)
+116 |     1 ->> ready
+    | number:1  operator:->>  variable:ready
+117 |     select
+    | keyword:select
+118 |     case _ <<- p2
+    | keyword:case  keyword:_  operator:<<-  variable:p2
+119 |         show("ping2: ", <<- out)
+    | builtin-fn:show  punctuation:(  string:"ping2: "  punctuation:,  operator:<<-  variable:out  punctuation:)
+120 |     fi
+    | keyword:fi
+122 |     ; 6. Deterministic .poll() (none while blocked, then some after signal)
+    | comment:; 6. Deterministic .poll() (none while blocked, then some after signal)
+123 |     fixed gate = chan_new<int>(1)
+    | keyword:fixed  variable:gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+124 |     fixed polled = doing gated_value(gate, 77)
+    | keyword:fixed  variable:polled  operator:=  variable:doing  task:gated_value  punctuation:(  variable:gate  punctuation:,  number:77  punctuation:)
+125 |     when polled.poll() is none
+    | keyword:when  variable:polled  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  keyword:none
+126 |         show("poll1: none")
+    | builtin-fn:show  punctuation:(  string:"poll1: none"  punctuation:)
+127 |     else
+    | keyword:else
+128 |         show("poll1: unexpected")
+    | builtin-fn:show  punctuation:(  string:"poll1: unexpected"  punctuation:)
+129 |     fi
+    | keyword:fi
+130 |     1 ->> gate
+    | number:1  operator:->>  variable:gate
+131 |     endless
+    | keyword:endless
+132 |         when polled.poll() is { v }
+    | keyword:when  variable:polled  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  punctuation:{  variable:v  punctuation:}
+133 |             show("poll2: ", v)
+    | builtin-fn:show  punctuation:(  string:"poll2: "  punctuation:,  variable:v  punctuation:)
+134 |             break
+    | keyword:break
+135 |         fi
+    | keyword:fi
+136 |     fi
+    | keyword:fi
+138 |     ; 7. Explicit .cancel() + cancelled() inside worker
+    | comment:; 7. Explicit .cancel() + cancelled() inside worker
+139 |     fixed started1 = chan_new<int>(1)
+    | keyword:fixed  variable:started1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+140 |     fixed done1 = chan_new<text>(1)
+    | keyword:fixed  variable:done1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+141 |     fixed w1 = doing cancellable_worker(started1, done1)
+    | keyword:fixed  variable:w1  operator:=  variable:doing  task:cancellable_worker  punctuation:(  variable:started1  punctuation:,  variable:done1  punctuation:)
+142 |     <<- started1
+    | operator:<<-  variable:started1
+143 |     w1.cancel()
+    | variable:w1  punctuation:.  field:cancel  punctuation:(  punctuation:)
+144 |     <<- w1
+    | operator:<<-  variable:w1
+145 |     show("explicit_cancel: ", <<- done1)
+    | builtin-fn:show  punctuation:(  string:"explicit_cancel: "  punctuation:,  operator:<<-  variable:done1  punctuation:)
+147 |     ; 8. Structured block-exit auto-cancel + wait before caller proceeds
+    | comment:; 8. Structured block-exit auto-cancel + wait before caller proceeds
+148 |     fixed started2 = chan_new<int>(1)
+    | keyword:fixed  variable:started2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+149 |     fixed done2 = chan_new<text>(1)
+    | keyword:fixed  variable:done2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+150 |     fixed left = run_scoped_cancel(started2, done2)
+    | keyword:fixed  variable:left  operator:=  task:run_scoped_cancel  punctuation:(  variable:started2  punctuation:,  variable:done2  punctuation:)
+151 |     show("scoped: ", left, " -> ", <<- done2)
+    | builtin-fn:show  punctuation:(  string:"scoped: "  punctuation:,  variable:left  punctuation:,  string:" -> "  punctuation:,  operator:<<-  variable:done2  punctuation:)
+153 |     ; 9. select racing Commitments (winner chosen, losing arm auto-cancelled)
+    | comment:; 9. select racing Commitments (winner chosen, losing arm auto-cancelled)
+154 |     fixed slow_gate = chan_new<int>(1)
+    | keyword:fixed  variable:slow_gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+155 |     fixed c_slow = doing slow_branch(slow_gate)
+    | keyword:fixed  variable:c_slow  operator:=  variable:doing  task:slow_branch  punctuation:(  variable:slow_gate  punctuation:)
+156 |     fixed c_fast = doing fast_branch()
+    | keyword:fixed  variable:c_fast  operator:=  variable:doing  task:fast_branch  punctuation:(  punctuation:)
+157 |     fixed race_winner = select
+    | keyword:fixed  variable:race_winner  operator:=  keyword:select
+158 |     case msg <<- c_slow = msg
+    | keyword:case  variable:msg  operator:<<-  variable:c_slow  operator:=  variable:msg
+159 |     case msg <<- c_fast = msg
+    | keyword:case  variable:msg  operator:<<-  variable:c_fast  operator:=  variable:msg
+160 |     fi
+    | keyword:fi
+161 |     show("race: ", race_winner)
+    | builtin-fn:show  punctuation:(  string:"race: "  punctuation:,  variable:race_winner  punctuation:)
+162 |     1 ->> slow_gate
+    | number:1  operator:->>  variable:slow_gate
+164 |     ; 10. Nested doing + contextual identifier named `doing`
+    | comment:; 10. Nested doing + contextual identifier named `doing`
+165 |     fixed n = doing nested_outer(10)
+    | keyword:fixed  variable:n  operator:=  variable:doing  task:nested_outer  punctuation:(  number:10  punctuation:)
+166 |     show("nested: ", <<- n, " ident: ", contextual_doing(4))
+    | builtin-fn:show  punctuation:(  string:"nested: "  punctuation:,  operator:<<-  variable:n  punctuation:,  string:" ident: "  punctuation:,  task:contextual_doing  punctuation:(  number:4  punctuation:)  punctuation:)
+167 | fi
+    | keyword:fi

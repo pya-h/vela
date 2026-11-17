@@ -1,0 +1,14 @@
+; error: 12:23: cannot run 'alters' method 'Counter.bump' with 'doing'; concurrent mutation would race with the caller
+shape Counter
+    value: int
+
+    alters bump()
+        .value += 1
+    fi
+fi
+
+task main()
+    flex c = Counter { value: 0 }
+    fixed h = doing c.bump()
+    <<- h
+fi

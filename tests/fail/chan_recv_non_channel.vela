@@ -1,4 +1,4 @@
-; error: 3:19: '<<-' requires a channel, got int
+; error: 3:19: '<<-' requires a channel or commitment, got int
 task main()
     fixed x = <<- 42
     show(x)

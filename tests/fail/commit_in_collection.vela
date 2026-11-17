@@ -1,0 +1,7 @@
+; error: 2:17: a slice cannot hold Commitment[T]
+task bad(items: [Commitment[int]]@r, r: region)
+    show(items.len)
+fi
+
+task main()
+fi

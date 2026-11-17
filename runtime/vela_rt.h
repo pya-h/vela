@@ -4388,16 +4388,63 @@ typedef struct vela__rt__sched_pool {
     bool initialized;
     bool running;
     size_t num_threads;
+    size_t busy_workers;
+    size_t extra_helpers;
     pthread_t* threads;
     vela__rt__sched_task* head;
     vela__rt__sched_task* tail;
     pthread_mutex_t lock;
     pthread_cond_t work_cond;
+    pthread_cond_t helper_cond;
 } vela__rt__sched_pool;
 
 static vela__rt__sched_pool vela__rt__global_sched_pool = {
-    false, false, 0, NULL, NULL, NULL, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER
+    false, false, 0, 0, 0, NULL, NULL, NULL,
+    PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER
 };
+
+static _Thread_local int64_t vela__rt__current_commitment = 0;
+
+static inline vela__rt__sched_task* vela__rt__sched_pop_locked(void) {
+    vela__rt__sched_task* task = vela__rt__global_sched_pool.head;
+    if (task != NULL) {
+        vela__rt__global_sched_pool.head = task->next;
+        if (vela__rt__global_sched_pool.head == NULL) {
+            vela__rt__global_sched_pool.tail = NULL;
+        }
+    }
+    return task;
+}
+
+static inline bool vela__rt__sched_try_run_one(void) {
+    pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+    vela__rt__sched_task* task = vela__rt__sched_pop_locked();
+    pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+    if (task == NULL) {
+        return false;
+    }
+    task->fn(task->arg);
+    free(task);
+    return true;
+}
+
+static inline void* vela__rt__sched_helper(void* arg) {
+    (void)arg;
+    for (;;) {
+        pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+        vela__rt__sched_task* task = vela__rt__sched_pop_locked();
+        if (task == NULL) {
+            vela__rt__global_sched_pool.extra_helpers--;
+            pthread_cond_broadcast(&vela__rt__global_sched_pool.helper_cond);
+            pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+            break;
+        }
+        pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
+        task->fn(task->arg);
+        free(task);
+    }
+    return NULL;
+}
 
 static inline void* vela__rt__sched_worker(void* arg) {
     (void)arg;
@@ -4410,18 +4457,18 @@ static inline void* vela__rt__sched_worker(void* arg) {
             pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
             break;
         }
-        vela__rt__sched_task* task = vela__rt__global_sched_pool.head;
+        vela__rt__sched_task* task = vela__rt__sched_pop_locked();
         if (task != NULL) {
-            vela__rt__global_sched_pool.head = task->next;
-            if (vela__rt__global_sched_pool.head == NULL) {
-                vela__rt__global_sched_pool.tail = NULL;
-            }
+            vela__rt__global_sched_pool.busy_workers++;
         }
         pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 
         if (task != NULL) {
             task->fn(task->arg);
             free(task);
+            pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+            vela__rt__global_sched_pool.busy_workers--;
+            pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
         }
     }
     return NULL;
@@ -4467,6 +4514,18 @@ static inline void vela__rt__sched_submit(void (*fn)(void* arg), void* arg) {
         vela__rt__global_sched_pool.tail->next = task;
         vela__rt__global_sched_pool.tail = task;
     }
+    /* When every fixed pool worker is occupied (e.g. nested waiting), spawn a bounded
+       detached helper so queued child tasks cannot starve. */
+    if (vela__rt__global_sched_pool.busy_workers >= vela__rt__global_sched_pool.num_threads
+        && vela__rt__global_sched_pool.extra_helpers < 64) {
+        pthread_t helper;
+        vela__rt__global_sched_pool.extra_helpers++;
+        if (pthread_create(&helper, NULL, vela__rt__sched_helper, NULL) == 0) {
+            pthread_detach(helper);
+        } else {
+            vela__rt__global_sched_pool.extra_helpers--;
+        }
+    }
     pthread_cond_signal(&vela__rt__global_sched_pool.work_cond);
     pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
@@ -4486,6 +4545,7 @@ typedef struct vela__rt__chan {
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
     pthread_cond_t not_full;
+    pthread_cond_t done_cond;
     uint8_t* buffer;
     size_t cap;
     size_t item_size;
@@ -4493,6 +4553,9 @@ typedef struct vela__rt__chan {
     size_t head;
     size_t tail;
     bool closed;
+    bool is_commitment;
+    bool worker_done;
+    _Atomic bool cancelled;
     void (*on_message)(void* ctx);
     void* actor_ctx;
     bool scheduled;
@@ -4579,6 +4642,9 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     chan->head = 0;
     chan->tail = 0;
     chan->closed = false;
+    chan->is_commitment = false;
+    chan->worker_done = false;
+    atomic_init(&chan->cancelled, false);
     chan->on_message = NULL;
     chan->actor_ctx = NULL;
     chan->scheduled = false;
@@ -4587,6 +4653,7 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     pthread_mutex_init(&chan->lock, NULL);
     pthread_cond_init(&chan->not_empty, NULL);
     pthread_cond_init(&chan->not_full, NULL);
+    pthread_cond_init(&chan->done_cond, NULL);
 
     pthread_mutex_lock(&vela__rt__global_chan_table.lock);
     vela__rt__chan_init_table_if_needed();
@@ -4645,7 +4712,8 @@ static inline void vela__rt__chan_pop_locked(vela__rt__chan* chan, void* out_ite
     chan->count--;
     pthread_cond_signal(&chan->not_full);
     vela__rt__chan_wake_waiters_locked(chan);
-    *out_drained = chan->closed && chan->count == 0;
+    /* Commitments stay pinned until structured scope cleanup confirms worker_done. */
+    *out_drained = !chan->is_commitment && chan->closed && chan->count == 0;
 }
 
 static inline void vela__rt__chan_destroy(int64_t handle) {
@@ -4676,6 +4744,7 @@ static inline void vela__rt__chan_destroy(int64_t handle) {
     }
     pthread_cond_destroy(&chan->not_empty);
     pthread_cond_destroy(&chan->not_full);
+    pthread_cond_destroy(&chan->done_cond);
     pthread_mutex_destroy(&chan->lock);
     free(chan->buffer);
     free(chan);
@@ -5101,12 +5170,168 @@ static inline int64_t vela__rt__chan_cap(int64_t handle) {
     return cap;
 }
 
+static inline int64_t vela__rt__commit_create(int64_t item_size) {
+    int64_t handle = vela__rt__chan_new(1, item_size);
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan != NULL) {
+        chan->is_commitment = true;
+        vela__rt__chan_unpin(chan);
+    }
+    return handle;
+}
+
+static inline void vela__rt__commit_start(void (*fn)(void* arg), void* arg) {
+    vela__rt__sched_submit(fn, arg);
+}
+
+static inline void vela__rt__commit_complete(int64_t handle, const void* item) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    pthread_mutex_lock(&chan->lock);
+    if (!chan->closed && chan->count == 0 && item != NULL) {
+        memcpy(chan->buffer, item, chan->item_size);
+        chan->count = 1;
+    }
+    chan->closed = true;
+    chan->worker_done = true;
+    pthread_cond_broadcast(&chan->not_empty);
+    pthread_cond_broadcast(&chan->done_cond);
+    vela__rt__chan_wake_waiters_locked(chan);
+    pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
+}
+
+static inline void vela__rt__commit_wait(int64_t handle, void* out_item) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) {
+        vela__rt__int_trap("cannot await an invalid commitment", "<<-");
+    }
+    bool got = false;
+    pthread_mutex_lock(&chan->lock);
+    while (chan->count == 0 && !chan->closed) {
+        pthread_mutex_unlock(&chan->lock);
+        if (!vela__rt__sched_try_run_one()) {
+            pthread_mutex_lock(&chan->lock);
+            if (chan->count == 0 && !chan->closed) {
+                pthread_cond_wait(&chan->not_empty, &chan->lock);
+            }
+        } else {
+            pthread_mutex_lock(&chan->lock);
+        }
+    }
+    if (chan->count > 0) {
+        bool drained = false;
+        vela__rt__chan_pop_locked(chan, out_item, &drained);
+        got = true;
+    }
+    pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
+    if (!got) {
+        vela__rt__int_trap("commitment was already consumed", "<<-");
+    }
+}
+
+static inline bool vela__rt__commit_poll(int64_t handle, void* out_item) {
+    return vela__rt__chan_try_recv(handle, out_item);
+}
+
+static inline void vela__rt__commit_cancel(int64_t handle) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    atomic_store_explicit(&chan->cancelled, true, memory_order_seq_cst);
+    vela__rt__chan_unpin(chan);
+}
+
+static inline bool vela__rt__commit_is_cancelled(void) {
+    int64_t handle = vela__rt__current_commitment;
+    if (handle <= 0) return false;
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return false;
+    bool cancelled = atomic_load_explicit(&chan->cancelled, memory_order_seq_cst);
+    vela__rt__chan_unpin(chan);
+    return cancelled;
+}
+
+static inline void vela__rt__commit_scope_cleanup(int64_t handle) {
+    if (handle <= 0) return;
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan != NULL) {
+        atomic_store_explicit(&chan->cancelled, true, memory_order_seq_cst);
+        pthread_mutex_lock(&chan->lock);
+        while (!chan->worker_done) {
+            pthread_mutex_unlock(&chan->lock);
+            if (!vela__rt__sched_try_run_one()) {
+                pthread_mutex_lock(&chan->lock);
+                if (!chan->worker_done) {
+                    pthread_cond_wait(&chan->done_cond, &chan->lock);
+                }
+            } else {
+                pthread_mutex_lock(&chan->lock);
+            }
+        }
+        pthread_mutex_unlock(&chan->lock);
+        vela__rt__chan_unpin(chan);
+    }
+    vela__rt__chan_destroy(handle);
+}
+
+typedef struct vela__rt__commit_scope {
+    int64_t inline_handles[8];
+    int64_t* heap_handles;
+    size_t count;
+    size_t cap;
+} vela__rt__commit_scope;
+
+static inline void vela__rt__commit_scope_push(vela__rt__commit_scope* scope, int64_t handle) {
+    if (scope->count < 8 && scope->heap_handles == NULL) {
+        scope->inline_handles[scope->count++] = handle;
+        return;
+    }
+    if (scope->heap_handles == NULL) {
+        size_t new_cap = 16;
+        int64_t* arr = (int64_t*)malloc(new_cap * sizeof(int64_t));
+        if (arr == NULL) vela__rt__out_of_memory();
+        for (size_t i = 0; i < scope->count; i++) {
+            arr[i] = scope->inline_handles[i];
+        }
+        scope->heap_handles = arr;
+        scope->cap = new_cap;
+    } else if (scope->count == scope->cap) {
+        size_t new_cap = scope->cap * 2;
+        int64_t* arr = (int64_t*)realloc(scope->heap_handles, new_cap * sizeof(int64_t));
+        if (arr == NULL) vela__rt__out_of_memory();
+        scope->heap_handles = arr;
+        scope->cap = new_cap;
+    }
+    scope->heap_handles[scope->count++] = handle;
+}
+
+static inline void vela__rt__commit_scope_cleanup_all(vela__rt__commit_scope* scope) {
+    size_t n = scope->count;
+    const int64_t* items = scope->heap_handles != NULL ? scope->heap_handles : scope->inline_handles;
+    /* Signal cancellation to all pending commitments before waiting/joining so
+       siblings cancel concurrently rather than waiting one-by-one. */
+    for (size_t i = n; i > 0; i--) {
+        vela__rt__commit_cancel(items[i - 1]);
+    }
+    for (size_t i = n; i > 0; i--) {
+        vela__rt__commit_scope_cleanup(items[i - 1]);
+    }
+    free(scope->heap_handles);
+    scope->heap_handles = NULL;
+    scope->count = 0;
+    scope->cap = 0;
+}
+
 /* Stops the worker pool: running steps finish, parked workers wake and exit.
    Called at the end of main so no thread outlives the program. */
 static inline void vela__rt__sched_stop(void) {
     pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
     vela__rt__global_sched_pool.running = false;
     pthread_cond_broadcast(&vela__rt__global_sched_pool.work_cond);
+    while (vela__rt__global_sched_pool.extra_helpers > 0) {
+        pthread_cond_wait(&vela__rt__global_sched_pool.helper_cond, &vela__rt__global_sched_pool.lock);
+    }
     pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
 

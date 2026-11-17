@@ -1,0 +1,12 @@
+; error: 9:19: 'case none <<-' applies only to channels; a Commitment settles once and never yields 'none'
+task work() -> int
+    <- 10
+fi
+
+task main()
+    fixed c = doing work()
+    select
+    case none <<- c
+        show("closed")
+    fi
+fi

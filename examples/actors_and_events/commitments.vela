@@ -1,0 +1,81 @@
+; Structured concurrency with colorless `doing` and `Commitment[T]`:
+; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
+; pipeline transformations (`<<- c |> ...`), `select` racing with automatic
+; cancellation of losing arms, and deterministic `.poll()` / `.cancel()`.
+
+task fetch_score(name: text, bonus: int) -> int ~ text
+    when bonus < 0
+        <- fail "negative bonus"
+    fi
+    <- name.len + bonus
+fi
+
+task format_total(score: int) -> int
+    <- score * 10
+fi
+
+task query_replica(tag: text, gate: Chan[int]) -> text
+    <<- gate
+    <- tag
+fi
+
+task fast_replica(tag: text) -> text
+    <- tag
+fi
+
+task cooperative_job(started: Chan[int], stopped: Chan[text]) -> int
+    1 ->> started
+    flex n = 0
+    endless
+        when cancelled()
+            "stopped early" ->> stopped
+            <- n
+        fi
+        n += 1
+        when n == 100000000
+            "completed" ->> stopped
+            <- n
+        fi
+    fi
+    <- n
+fi
+
+task main()
+    ; 1. Parallel fan-out + direct wait and pipe continuation
+    fixed a = doing fetch_score("alpha", 5)
+    fixed b = doing fetch_score("beta", -1)
+
+    fixed total_a = <<- a |> format_total() { failure e
+        show("alpha err: ", e)
+        0
+    }
+    fixed total_b = <<- b { failure e
+        show("beta fallback: ", e)
+        1
+    }
+    show("scores: ", total_a, " ", total_b)
+
+    ; 2. Racing commitments in `select` auto-cancels losing commitment arms
+    fixed replica_gate = chan_new<int>(1)
+    fixed primary = doing query_replica("primary", replica_gate)
+    fixed mirror = doing fast_replica("mirror")
+
+    fixed fastest = select
+    case res <<- primary = res
+    case res <<- mirror = res
+    fi
+    show("fastest: ", fastest)
+    1 ->> replica_gate
+
+    ; 3. Non-blocking `.poll()` and explicit `.cancel()`
+    fixed started = chan_new<int>(1)
+    fixed stopped = chan_new<text>(1)
+    fixed worker = doing cooperative_job(started, stopped)
+    <<- started
+    when worker.poll() is none
+        show("worker still running")
+    fi
+    worker.cancel()
+    <<- worker
+    show("worker status: ", <<- stopped)
+fi

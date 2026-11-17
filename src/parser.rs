@@ -2346,6 +2346,15 @@ impl Parser {
             self.expect(Token::RBracket)?;
             return Ok(Type::Actor(Box::new(ty)));
         }
+        let is_commitment = name == "Commitment" || name.ends_with(".Commitment");
+        if is_commitment && self.check(Token::LBracket) {
+            self.advance();
+            self.enter()?;
+            let ty = self.parse_type_parts()?;
+            self.leave(1);
+            self.expect(Token::RBracket)?;
+            return Ok(Type::Commitment(Box::new(ty)));
+        }
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
         }
@@ -2361,6 +2370,10 @@ impl Parser {
             if is_actor {
                 let inner = types.into_iter().next().unwrap_or(Type::Unknown);
                 return Ok(Type::Actor(Box::new(inner)));
+            }
+            if is_commitment {
+                let inner = types.into_iter().next().unwrap_or(Type::Unknown);
+                return Ok(Type::Commitment(Box::new(inner)));
             }
             return Ok(Type::Applied(Box::new(Applied { name, types, region: None })));
         }
@@ -4058,7 +4071,69 @@ impl Parser {
                 return self.parse_prefixed();
             }
         }
+        if self.at_doing() {
+            let span = self.peek_span();
+            self.advance();
+            self.enter()?;
+            let inner = self.parse_postfix()?;
+            self.leave(1);
+            return Ok(Expr::new(ExprKind::Doing(Box::new(inner)), span));
+        }
         self.parse_postfix()
+    }
+
+    fn at_doing(&self) -> bool {
+        let Token::Ident(name) = self.peek() else { return false };
+        if name != "doing" {
+            return false;
+        }
+        let line = self.peek_span().line;
+        let next_line = self.spans.get(self.pos + 1).map(|s| s.line);
+        if next_line != Some(line) {
+            return false;
+        }
+        match self.tokens.get(self.pos + 1) {
+            Some(
+                Token::Ident(_)
+                    | Token::Int(_)
+                    | Token::Float(_)
+                    | Token::Char(_)
+                    | Token::Text(_)
+                    | Token::Interpolated(_)
+                    | Token::True
+                    | Token::False
+                    | Token::None
+                    | Token::LBracket,
+            ) => true,
+            Some(Token::LParen) => {
+                // Treat `doing (...)` as concurrent launch only when the group contains a call or pipe,
+                // keeping `doing(arg)` callable as an ordinary identifier if ever shadowed.
+                let mut depth = 0usize;
+                let mut has_call_or_pipe = false;
+                let mut has_top_comma = false;
+                for tok in self.tokens.get(self.pos + 1..).unwrap_or_default() {
+                    match tok {
+                        Token::LParen => {
+                            if depth >= 1 {
+                                has_call_or_pipe = true;
+                            }
+                            depth += 1;
+                        }
+                        Token::RParen => {
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        Token::Pipe(_) if depth == 1 => has_call_or_pipe = true,
+                        Token::Comma if depth == 1 => has_top_comma = true,
+                        _ => {}
+                    }
+                }
+                has_call_or_pipe && !has_top_comma
+            }
+            _ => false,
+        }
     }
 
     // Outlined from `parse_unary` to keep recursion frames small under `MAX_NESTING`.
@@ -4084,9 +4159,16 @@ impl Parser {
         }
         if self.match_token(Token::ChanRecv) {
             self.enter()?;
-            let chan = self.parse_operand()?;
+            let chan = self.parse_chan_recv_operand()?;
+            let recv = Expr::new(ExprKind::ChanRecv(Box::new(chan)), span);
+            let out = if self.check(Token::LBrace) {
+                let with_plan = self.parse_plan_b(recv)?;
+                self.parse_suffixes_with(with_plan, false, true)?
+            } else {
+                recv
+            };
             self.leave(1);
-            return Ok(Expr::new(ExprKind::ChanRecv(Box::new(chan)), span));
+            return Ok(out);
         }
         let op = if self.match_token(Token::Minus) {
             UnaryOp::Neg
@@ -4109,6 +4191,12 @@ impl Parser {
         Ok(operand)
     }
 
+    fn parse_chan_recv_operand(&mut self) -> Result<Expr> {
+        let parenthesized = self.check(Token::LParen);
+        let expr = self.parse_primary()?;
+        self.parse_suffixes_with(expr, parenthesized, false)
+    }
+
     fn parse_postfix(&mut self) -> Result<Expr> {
         let parenthesized = self.check(Token::LParen);
         let expr = self.parse_primary()?;
@@ -4116,14 +4204,23 @@ impl Parser {
     }
 
     // Outlined from `parse_postfix` to keep recursion frames small under `MAX_NESTING`.
-    fn parse_suffixes(&mut self, mut expr: Expr, parenthesized: bool) -> Result<Expr> {
+    fn parse_suffixes(&mut self, expr: Expr, parenthesized: bool) -> Result<Expr> {
+        self.parse_suffixes_with(expr, parenthesized, true)
+    }
+
+    fn parse_suffixes_with(&mut self, mut expr: Expr, parenthesized: bool, allow_plan_b: bool) -> Result<Expr> {
         if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)))) {
             expr = self.parse_join(expr)?;
         }
         let mut levels = 0;
         loop {
             match self.peek() {
-                Token::Dot | Token::LBracket | Token::Caret | Token::LBrace => {
+                Token::Dot | Token::LBracket | Token::Caret => {
+                    self.enter()?;
+                    levels += 1;
+                    expr = self.parse_suffix(expr)?;
+                }
+                Token::LBrace if allow_plan_b => {
                     self.enter()?;
                     levels += 1;
                     expr = self.parse_suffix(expr)?;

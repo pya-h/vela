@@ -103,6 +103,8 @@ pub struct Generator {
     current_task_name: Option<String>,
     current_task_owner: Option<String>,
     current_task_has_this: bool,
+    block_commitments: Vec<Option<String>>,
+    doing_helpers: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -177,6 +179,8 @@ impl Default for Generator {
             current_task_name: None,
             current_task_owner: None,
             current_task_has_this: false,
+            block_commitments: Vec::new(),
+            doing_helpers: Vec::new(),
         }
     }
 }
@@ -506,6 +510,7 @@ impl Generator {
             }
         }
 
+        let doing_mark = self.w.out.len();
         let mut has_main = false;
         for item in items {
             if let Item::Task(t) = item
@@ -516,6 +521,11 @@ impl Generator {
                 }
                 self.gen_task(t)?;
             }
+        }
+        if !self.doing_helpers.is_empty() {
+            let helpers = format!("{}\n", self.doing_helpers.join("\n"));
+            self.w.out.insert_str(doing_mark, &helpers);
+            self.doing_helpers.clear();
         }
 
         if has_main {
@@ -958,6 +968,8 @@ impl Generator {
 
         // Worker step function
         self.ret = Type::Nothing;
+        self.regions.clear();
+        self.block_commitments.clear();
         self.results.clear();
         self.pointers.clear();
         self.hidden.clear();
@@ -1080,6 +1092,7 @@ impl Generator {
         self.current_task_has_this = false;
         self.const_vars.clear();
         self.regions.clear();
+        self.block_commitments.clear();
         self.loops.clear();
         self.results.clear();
         self.block_vars.clear();
@@ -2163,6 +2176,36 @@ impl Generator {
             }
             self.w.close();
             self.w.line(&format!("#define vela__chan_try_recv__{} vela__chan_receive__{}", word, word));
+        }
+        for ty in &used.commitments {
+            let (ctype, word) = (c_type(ty), type_word(ty));
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__commit_wait__{}(vela__chan_t handle)",
+                ctype, word
+            ));
+            self.w.line(&format!("{} item;", ctype));
+            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w.line("vela__rt__commit_wait(handle, &item);");
+            self.w.line("return item;");
+            self.w.close();
+            let maybe_ty = Type::Maybe(Box::new(ty.clone()));
+            let maybe_ctype = c_type(&maybe_ty);
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__commit_poll__{}(vela__chan_t handle)",
+                maybe_ctype, word
+            ));
+            self.w.line(&format!("{} item;", ctype));
+            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w.line("bool ok = vela__rt__commit_poll(handle, &item);");
+            if is_pointer(ty) {
+                self.w.line("return ok ? item : NULL;");
+            } else {
+                self.w.line(&format!(
+                    "return ({}){{ .has = ok, .value = item }};",
+                    maybe_ctype
+                ));
+            }
+            self.w.close();
         }
     }
 
@@ -3468,6 +3511,7 @@ impl Generator {
             .map(|p| p.name.clone())
             .collect();
         self.regions.clear();
+        self.block_commitments.clear();
         self.loops.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         self.task = shown_name(&t.name);
@@ -3756,7 +3800,7 @@ impl Generator {
     }
 
     fn gen_block(&mut self, block: &[Stmt]) -> Result<()> {
-        self.enter_block();
+        self.enter_block_for(block);
         self.gen_statements(block, block)?;
         self.leave_block(block);
         Ok(())
@@ -3769,7 +3813,7 @@ impl Generator {
         if !matches!(last.kind, StmtKind::Expr(_)) && !check::gives_value(last) {
             return self.gen_block(body);
         }
-        self.enter_block();
+        self.enter_block_for(body);
         self.gen_statements(rest, body)?;
         match &last.kind {
             StmtKind::Expr(value) => {
@@ -4210,6 +4254,17 @@ impl Generator {
     }
 
     fn drop_and_free_from(&mut self, depth: usize) -> Result<()> {
+        let scopes: Vec<String> = self
+            .block_commitments
+            .iter()
+            .skip(depth)
+            .flatten()
+            .cloned()
+            .collect();
+        for cs in scopes.iter().rev() {
+            self.w
+                .line(&format!("vela__rt__commit_scope_cleanup_all(&{});", cs));
+        }
         let drop_blocks: Vec<Vec<(String, String)>> =
             self.block_vars.iter().skip(depth).cloned().collect();
         for vars in drop_blocks.iter().rev() {
@@ -4229,6 +4284,21 @@ impl Generator {
         self.regions.push(Vec::new());
         self.block_vars.push(Vec::new());
         self.block_events.push(Vec::new());
+        self.block_commitments.push(None);
+    }
+
+    fn enter_block_for(&mut self, stmts: &[Stmt]) {
+        self.enter_block();
+        if block_has_doing(stmts) {
+            let cs = self.fresh_temp("cs");
+            self.w.line(&format!(
+                "vela__rt__commit_scope {} = {{ {{0}}, NULL, 0, 8 }};",
+                cs
+            ));
+            if let Some(slot) = self.block_commitments.last_mut() {
+                *slot = Some(cs);
+            }
+        }
     }
 
     fn leave_block(&mut self, block: &[Stmt]) {
@@ -4247,6 +4317,7 @@ impl Generator {
         }
         let declared = self.regions.pop().unwrap_or_default();
         let drop_vars = self.block_vars.pop().unwrap_or_default();
+        let commit_scope = self.block_commitments.pop().flatten();
         for key in self.block_events.pop().unwrap_or_default() {
             self.active_events.remove(&key);
         }
@@ -4255,6 +4326,10 @@ impl Generator {
             Some(StmtKind::Send(_) | StmtKind::Break(..) | StmtKind::Continue(_))
         ) {
             return;
+        }
+        if let Some(cs) = commit_scope {
+            self.w
+                .line(&format!("vela__rt__commit_scope_cleanup_all(&{});", cs));
         }
         // A variable goes away where its block ends: run `on drop` while its
         // value is still whole, before the block's regions are freed.
@@ -4268,6 +4343,12 @@ impl Generator {
     }
 
     fn free_all_regions(&mut self) -> bool {
+        // Cancel and join any commitments before running `on drop` and freeing regions.
+        let scopes: Vec<String> = self.block_commitments.iter().flatten().cloned().collect();
+        for cs in scopes.iter().rev() {
+            self.w
+                .line(&format!("vela__rt__commit_scope_cleanup_all(&{});", cs));
+        }
         // `<-` leaves every block: drop the named shape variables, innermost
         // block first, before the regions that hold their data go.
         let block_vars = self.block_vars.clone();
@@ -4281,7 +4362,7 @@ impl Generator {
             self.w
                 .line(&format!("vela__rt__region_free({});", c_ident(region)));
         }
-        !all.is_empty()
+        !all.is_empty() || !scopes.is_empty()
     }
 
     fn gen_statements(&mut self, stmts: &[Stmt], scope: &[Stmt]) -> Result<()> {
@@ -4816,6 +4897,7 @@ impl Generator {
                     return Ok(());
                 }
                 if self.regions.iter().all(Vec::is_empty)
+                    && self.block_commitments.iter().all(Option::is_none)
                     && self.matching_task_hooks(false).is_empty()
                 {
                     self.w.line(&format!("return {};", expr));
@@ -5345,6 +5427,17 @@ impl Generator {
                 Type::Own(p) => p.as_ref().clone(),
                 other => other.clone(),
             }),
+            Type::Commitment(inner) => {
+                let payload = match inner.as_ref() {
+                    Type::Own(p) => p.as_ref().clone(),
+                    other => other.clone(),
+                };
+                Ok(if payload == Type::Nothing {
+                    Type::Int8
+                } else {
+                    payload
+                })
+            }
             Type::Actor(actor_ty) => {
                 let name = match actor_ty.as_ref() {
                     Type::Named(n, _) => n.clone(),
@@ -5367,6 +5460,7 @@ impl Generator {
             op: &'static str,
             item_ptr: String,
             recv_slot: Option<(String, String, Type)>,
+            is_commitment: bool,
         }
         let mut rt_entries: Vec<RtArm<'_>> = Vec::new();
         let mut has_timeout = false;
@@ -5376,7 +5470,8 @@ impl Generator {
         for arm in &sel.arms {
             match &arm.kind {
                 SelectArmKind::Recv { name, chan, .. } => {
-                    let elem_ty = Self::select_chan_elem_type(chan.ty()?)?;
+                    let chan_ty = chan.ty()?;
+                    let elem_ty = Self::select_chan_elem_type(chan_ty)?;
                     let ctype = c_type(&elem_ty);
                     let buf = self.fresh_temp("sel_recv");
                     self.w.line(&format!("{} {};", ctype, buf));
@@ -5388,9 +5483,11 @@ impl Generator {
                         op: "VELA__RT__SELECT_RECV",
                         item_ptr: format!("&{}", buf),
                         recv_slot: Some((name.clone(), buf, elem_ty)),
+                        is_commitment: matches!(chan_ty, Type::Commitment(_)),
                     });
                 }
                 SelectArmKind::RecvNone { chan } => {
+                    let chan_ty = chan.ty()?;
                     let handle = self.gen_expr(chan)?;
                     rt_entries.push(RtArm {
                         arm,
@@ -5398,6 +5495,7 @@ impl Generator {
                         op: "VELA__RT__SELECT_RECV_NONE",
                         item_ptr: "NULL".to_string(),
                         recv_slot: None,
+                        is_commitment: matches!(chan_ty, Type::Commitment(_)),
                     });
                 }
                 SelectArmKind::Send { value, chan } => {
@@ -5413,6 +5511,7 @@ impl Generator {
                         op: "VELA__RT__SELECT_SEND",
                         item_ptr: format!("&{}", buf),
                         recv_slot: None,
+                        is_commitment: false,
                     });
                 }
                 SelectArmKind::After { ms } => {
@@ -5460,6 +5559,18 @@ impl Generator {
                 has_to,
                 timeout_ms
             ));
+            if sel.otherwise.is_none() {
+                for (rt_idx, entry) in rt_entries.iter().enumerate() {
+                    if entry.is_commitment {
+                        self.w.open(&format!("if ({} != {})", winner, rt_idx));
+                        self.w.line(&format!(
+                            "vela__rt__commit_cancel({}[{}].handle);",
+                            arr, rt_idx
+                        ));
+                        self.w.close();
+                    }
+                }
+            }
         }
 
         self.w.open(&format!("switch ({})", winner));
@@ -5845,6 +5956,7 @@ impl Generator {
                 let c = self.gen_expr(chan)?;
                 self.gen_chan_wait_and_receive(chan.ty()?, &c, e.span)
             }
+            ExprKind::Doing(inner) => self.gen_doing(e, inner),
             ExprKind::ChanSend(value, chan) => {
                 let item = self.gen_expr(value)?;
                 let target = self.gen_expr(chan)?;
@@ -6561,14 +6673,20 @@ impl Generator {
             let item = self.gen_expr(arg1)?;
             return Ok(Some(self.gen_chan_dispatch(arg0.ty()?, &chan, &item, e.span)?));
         }
-        if (name == WAIT_AND_RECEIVE || name == "recv" || name == "wait_and_recieve")
+        if name == "cancelled" && args.is_empty() && matches!(e.ty(), Ok(Type::Bool)) {
+            return Ok(Some("vela__rt__commit_is_cancelled()".to_string()));
+        }
+        if (name == WAIT_AND_RECEIVE
+            || name == "wait"
+            || name == "recv"
+            || name == "wait_and_recieve")
             && let Some(arg0) = args.first()
-            && matches!(arg0.ty(), Ok(Type::Chan(_)))
+            && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Commitment(_)))
         {
             let chan = self.gen_expr(arg0)?;
             return Ok(Some(self.gen_chan_wait_and_receive(arg0.ty()?, &chan, e.span)?));
         }
-        if (name == RECEIVE || name == "try_recv" || name == "recieve")
+        if (name == RECEIVE || name == "poll" || name == "try_recv" || name == "recieve")
             && let Some(arg0) = args.first()
             && matches!(arg0.ty(), Ok(Type::Chan(_)))
         {
@@ -6581,6 +6699,27 @@ impl Generator {
                 other => other,
             };
             return Ok(Some(format!("vela__chan_receive__{}({})", type_word(payload), chan)));
+        }
+        if (name == RECEIVE || name == "poll" || name == "try_recv" || name == "recieve")
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Commitment(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            let Type::Commitment(inner) = arg0.ty()? else {
+                return Err(Error::internal_at(e.span, "poll on non-Commitment"));
+            };
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(Some(format!("vela__commit_poll__{}({})", type_word(payload), chan)));
+        }
+        if name == "cancel"
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Commitment(_)))
+        {
+            let chan = self.gen_expr(arg0)?;
+            return Ok(Some(format!("vela__rt__commit_cancel({})", chan)));
         }
         if name == CLOSE
             && let Some(arg0) = args.first()
@@ -6619,18 +6758,286 @@ impl Generator {
     }
 
     fn gen_chan_wait_and_receive(&self, chan_ty: &Type, chan: &str, span: Span) -> Result<String> {
-        let Type::Chan(inner) = chan_ty else {
-            return Err(Error::internal_at(span, "wait_and_receive on non-Chan"));
+        match chan_ty {
+            Type::Chan(inner) => {
+                let payload = match inner.as_ref() {
+                    Type::Own(p) => p.as_ref(),
+                    other => other,
+                };
+                Ok(format!(
+                    "vela__chan_wait_and_receive__{}({})",
+                    type_word(payload),
+                    chan
+                ))
+            }
+            Type::Commitment(inner) => {
+                let payload = match inner.as_ref() {
+                    Type::Own(p) => p.as_ref(),
+                    other => other,
+                };
+                if *payload == Type::Nothing {
+                    Ok(format!("vela__rt__commit_wait({}, NULL)", chan))
+                } else {
+                    Ok(format!(
+                        "vela__commit_wait__{}({})",
+                        type_word(payload),
+                        chan
+                    ))
+                }
+            }
+            _ => Err(Error::internal_at(
+                span,
+                "wait_and_receive on non-Chan/Commitment",
+            )),
+        }
+    }
+
+    fn rewrite_doing_arg(
+        &mut self,
+        arg: &Expr,
+        captured: &mut Vec<(String, Type, String)>,
+    ) -> Result<Expr> {
+        if let ExprKind::Piped(prev) = &arg.kind {
+            let rewritten = if matches!(
+                prev.kind,
+                ExprKind::Pipe(_) | ExprKind::Call { .. } | ExprKind::MethodCall { .. }
+            ) {
+                self.rewrite_doing_expr(prev, captured)?
+            } else {
+                let val = self.gen_expr(prev)?;
+                let ty = prev.ty()?.clone();
+                let tmp = self.fresh_temp("darg");
+                self.w.line(&format!("{} {} = {};", c_type(&ty), tmp, val));
+                let vname = format!("darg_{}", captured.len());
+                captured.push((vname.clone(), ty, tmp));
+                Expr {
+                    kind: ExprKind::Var(vname),
+                    ty: prev.ty.clone(),
+                    span: prev.span,
+                }
+            };
+            return Ok(Expr {
+                kind: ExprKind::Piped(Box::new(rewritten)),
+                ty: arg.ty.clone(),
+                span: arg.span,
+            });
+        }
+        let val = self.gen_expr(arg)?;
+        let ty = arg.ty()?.clone();
+        let tmp = self.fresh_temp("darg");
+        self.w.line(&format!("{} {} = {};", c_type(&ty), tmp, val));
+        let vname = format!("darg_{}", captured.len());
+        captured.push((vname.clone(), ty, tmp));
+        Ok(Expr {
+            kind: ExprKind::Var(vname),
+            ty: arg.ty.clone(),
+            span: arg.span,
+        })
+    }
+
+    fn rewrite_doing_expr(
+        &mut self,
+        expr: &Expr,
+        captured: &mut Vec<(String, Type, String)>,
+    ) -> Result<Expr> {
+        match &expr.kind {
+            ExprKind::Pipe(inner) => {
+                let rewritten = self.rewrite_doing_expr(inner, captured)?;
+                Ok(Expr {
+                    kind: ExprKind::Pipe(Box::new(rewritten)),
+                    ty: expr.ty.clone(),
+                    span: expr.span,
+                })
+            }
+            ExprKind::Call { name, types, args } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args {
+                    new_args.push(self.rewrite_doing_arg(arg, captured)?);
+                }
+                Ok(Expr {
+                    kind: ExprKind::Call {
+                        name: name.clone(),
+                        types: types.clone(),
+                        args: new_args,
+                    },
+                    ty: expr.ty.clone(),
+                    span: expr.span,
+                })
+            }
+            ExprKind::MethodCall {
+                value,
+                name,
+                dotted,
+                args,
+            } => {
+                let new_val = self.rewrite_doing_arg(value, captured)?;
+                let mut new_args = Vec::with_capacity(args.len());
+                for arg in args {
+                    new_args.push(self.rewrite_doing_arg(arg, captured)?);
+                }
+                Ok(Expr {
+                    kind: ExprKind::MethodCall {
+                        value: Box::new(new_val),
+                        name: name.clone(),
+                        dotted: dotted.clone(),
+                        args: new_args,
+                    },
+                    ty: expr.ty.clone(),
+                    span: expr.span,
+                })
+            }
+            _ => Err(Error::internal_at(
+                expr.span,
+                "unsupported expression inside 'doing'",
+            )),
+        }
+    }
+
+    #[inline(never)]
+    fn gen_doing(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
+        let payload_ty = match e.ty()? {
+            Type::Commitment(res) => match res.as_ref() {
+                Type::Own(p) => p.as_ref().clone(),
+                other => other.clone(),
+            },
+            other => {
+                return Err(Error::internal_at(
+                    e.span,
+                    format!("'doing' expected Commitment, got {}", other),
+                ));
+            }
         };
-        let payload = match inner.as_ref() {
-            Type::Own(p) => p.as_ref(),
-            other => other,
+
+        let mut captured = Vec::new();
+        let rewritten = self.rewrite_doing_expr(inner, &mut captured)?;
+
+        let id = self.temp_counter;
+        self.temp_counter += 1;
+        let ctx_ty = format!("vela__doing_ctx_{}", id);
+        let fn_name = format!("vela__doing_fn_{}", id);
+
+        let payload_c = if payload_ty == Type::Nothing {
+            "uint8_t".to_string()
+        } else {
+            c_type(&payload_ty)
         };
-        Ok(format!(
-            "vela__chan_wait_and_receive__{}({})",
-            type_word(payload),
-            chan
-        ))
+        let handle_var = self.fresh_temp("commit");
+        self.w.line(&format!(
+            "vela__chan_t {} = vela__rt__commit_create((int64_t)sizeof({}));",
+            handle_var, payload_c
+        ));
+        if let Some(Some(scope_var)) = self.block_commitments.last() {
+            self.w.line(&format!(
+                "vela__rt__commit_scope_push(&{}, {});",
+                scope_var, handle_var
+            ));
+        }
+
+        let ctx_var = self.fresh_temp("dctx");
+        self.w.line(&format!(
+            "{}* {} = ({}*)malloc(sizeof({}));",
+            ctx_ty, ctx_var, ctx_ty, ctx_ty
+        ));
+        self.w.open(&format!("if ({} == NULL)", ctx_var));
+        self.w
+            .line("vela__rt__int_trap(\"out of memory starting doing task\", \"doing\");");
+        self.w.close();
+        self.w
+            .line(&format!("{}->handle = {};", ctx_var, handle_var));
+        for (idx, (_, _, tmp)) in captured.iter().enumerate() {
+            self.w
+                .line(&format!("{}->arg_{} = {};", ctx_var, idx, tmp));
+        }
+        self.w
+            .line(&format!("vela__rt__commit_start({}, {});", fn_name, ctx_var));
+
+        let saved_w = std::mem::take(&mut self.w);
+        let saved_piped = std::mem::take(&mut self.piped);
+        let saved_ret = std::mem::replace(&mut self.ret, Type::Nothing);
+        let saved_regions = std::mem::take(&mut self.regions);
+        let saved_results = std::mem::take(&mut self.results);
+        let saved_pointers = std::mem::take(&mut self.pointers);
+        let saved_hidden = std::mem::take(&mut self.hidden);
+        let saved_loops = std::mem::take(&mut self.loops);
+        let saved_block_vars = std::mem::take(&mut self.block_vars);
+        let saved_block_events = std::mem::take(&mut self.block_events);
+        let saved_block_commitments = std::mem::take(&mut self.block_commitments);
+        let saved_renames = std::mem::take(&mut self.renames);
+        let saved_active_events = std::mem::take(&mut self.active_events);
+        let saved_const_vars = std::mem::take(&mut self.const_vars);
+        let saved_task_name = self.current_task_name.take();
+        let saved_task_owner = self.current_task_owner.take();
+        let saved_task_has_this = std::mem::replace(&mut self.current_task_has_this, false);
+
+        self.w.open("typedef struct");
+        self.w.line("vela__chan_t handle;");
+        for (idx, (_, ty, _)) in captured.iter().enumerate() {
+            self.w.line(&format!("{} arg_{};", c_type(ty), idx));
+        }
+        self.w.close_with(&format!(" {};", ctx_ty));
+        self.w.blank();
+        self.w.open(&format!("static void {}(void* __raw)", fn_name));
+        self.w
+            .line(&format!("{} __ctx = *({}*)__raw;", ctx_ty, ctx_ty));
+        self.w.line("free(__raw);");
+        self.w
+            .line("vela__chan_t __prev_commit = vela__rt__current_commitment;");
+        self.w
+            .line("vela__rt__current_commitment = __ctx.handle;");
+        if payload_ty != Type::Nothing {
+            self.w.line(&format!("{} __res;", payload_c));
+        }
+        self.w.open("");
+        self.enter_block();
+        for (idx, (vname, ty, _)) in captured.iter().enumerate() {
+            let cid = c_ident(vname);
+            self.w
+                .line(&format!("{} {} = __ctx.arg_{};", c_type(ty), cid, idx));
+            self.w.line(&format!("(void){};", cid));
+        }
+        let body_res = (|| -> Result<()> {
+            let val = self.gen_expr(&rewritten)?;
+            if payload_ty == Type::Nothing {
+                if !val.is_empty() {
+                    self.w.line(&format!("{};", val));
+                }
+            } else {
+                self.w.line(&format!("__res = {};", val));
+            }
+            Ok(())
+        })();
+        self.leave_block(&[]);
+        self.w.close();
+        self.w
+            .line("vela__rt__current_commitment = __prev_commit;");
+        if payload_ty == Type::Nothing {
+            self.w.line("uint8_t __res = 1;");
+        }
+        self.w
+            .line("vela__rt__commit_complete(__ctx.handle, &__res);");
+        self.w.close();
+
+        let helper_code = std::mem::replace(&mut self.w, saved_w).out;
+        self.piped = saved_piped;
+        self.ret = saved_ret;
+        self.regions = saved_regions;
+        self.results = saved_results;
+        self.pointers = saved_pointers;
+        self.hidden = saved_hidden;
+        self.loops = saved_loops;
+        self.block_vars = saved_block_vars;
+        self.block_events = saved_block_events;
+        self.block_commitments = saved_block_commitments;
+        self.renames = saved_renames;
+        self.active_events = saved_active_events;
+        self.const_vars = saved_const_vars;
+        self.current_task_name = saved_task_name;
+        self.current_task_owner = saved_task_owner;
+        self.current_task_has_this = saved_task_has_this;
+
+        body_res?;
+        self.doing_helpers.push(helper_code);
+        Ok(handle_var)
     }
 
     #[inline(never)]
@@ -7977,6 +8384,7 @@ impl Layout<'_> {
             | Type::None
             | Type::Region
             | Type::Chan(_)
+            | Type::Commitment(_)
             | Type::Task(_) => (8, 8),
             Type::Closure(_) => (16, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
@@ -8142,6 +8550,7 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::LoopValue(_)
         | ExprKind::Edit { .. }
         | ExprKind::Scan { .. }
+        | ExprKind::Doing(_)
         | ExprKind::Pipe(_) => true,
         ExprKind::Piped(_) => false,
         ExprKind::IntLit(_)
@@ -8236,6 +8645,7 @@ fn made_here(e: &Expr) -> bool {
             | ExprKind::StructInit { .. }
             | ExprKind::Spawn { .. }
             | ExprKind::ChanRecv(_)
+            | ExprKind::Doing(_)
     )
 }
 
@@ -8282,6 +8692,7 @@ struct UsedTypes {
     slice_append: TypeList,
     slice_prepend: TypeList,
     channels: TypeList,
+    commitments: TypeList,
 }
 
 #[derive(Default)]
@@ -8413,6 +8824,7 @@ impl UsedTypes {
             slice_append: TypeList::default(),
             slice_prepend: TypeList::default(),
             channels: TypeList::default(),
+            commitments: TypeList::default(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -8636,6 +9048,17 @@ impl UsedTypes {
                 self.add(payload);
                 self.add(&Type::Maybe(Box::new(payload.clone())));
                 note(&mut self.channels, payload);
+            }
+            Type::Commitment(inner) => {
+                let payload = match inner.as_ref() {
+                    Type::Own(p) => p.as_ref(),
+                    other => other,
+                };
+                if *payload != Type::Nothing {
+                    self.add(payload);
+                    self.add(&Type::Maybe(Box::new(payload.clone())));
+                    note(&mut self.commitments, payload);
+                }
             }
             Type::Actor(actor_ty) => {
                 let msg_type = match actor_ty.as_ref() {
@@ -8895,7 +9318,9 @@ impl UsedTypes {
             | ExprKind::RegionAfter(_)
             | ExprKind::Shared { .. }
             | ExprKind::TypeOf(_) => {}
-            ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) => self.expr(inner),
+            ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) | ExprKind::Doing(inner) => {
+                self.expr(inner)
+            }
             ExprKind::TaskValue(name) | ExprKind::Closure { lambda: name, .. } => {
                 if !self.task_values.contains(name) {
                     self.task_values.push(name.clone());
@@ -9302,6 +9727,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
         | ExprKind::ChanRecv(inner)
+        | ExprKind::Doing(inner)
         | ExprKind::Deref(inner)
         | ExprKind::Ref(inner)
         | ExprKind::Fail(inner)
@@ -9358,6 +9784,155 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
             region || expr_reads(items, name) || args.iter().any(|arg| expr_reads(arg, name))
         }
         ExprKind::Spawn { args, .. } => args.iter().any(|arg| expr_reads(arg, name)),
+    }
+}
+
+fn block_has_doing(block: &[Stmt]) -> bool {
+    block.iter().any(stmt_has_doing)
+}
+
+fn stmt_has_doing(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Expr(e) => expr_has_doing(e),
+        StmtKind::Step { target, value, .. } => expr_has_doing(target) || expr_has_doing(value),
+        StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
+            values.iter().any(expr_has_doing)
+        }
+        StmtKind::Break(_, value) => value.as_deref().is_some_and(expr_has_doing),
+        StmtKind::Region { .. } | StmtKind::Continue(_) => false,
+        StmtKind::Named(_, inner) => stmt_has_doing(inner),
+        StmtKind::Event(e) => {
+            e.cond
+                .as_ref()
+                .is_some_and(|cond| cond.parts().any(|part| expr_has_doing(&part.value)))
+                || block_has_doing(&e.body)
+        }
+        StmtKind::Turns(turns) => turns.iter().any(|b| block_has_doing(b)),
+        StmtKind::Binding { init, .. } => init.iter().any(expr_has_doing),
+        StmtKind::Assign(targets, values) => {
+            targets.iter().any(target_has_doing) || values.iter().any(expr_has_doing)
+        }
+        StmtKind::When(arms, else_b) => {
+            arms.iter()
+                .any(|arm| arm.cond.parts().any(|p| expr_has_doing(&p.value)) || block_has_doing(&arm.body))
+                || else_b.as_deref().is_some_and(block_has_doing)
+        }
+        StmtKind::Loop(cond, body, finally) => {
+            cond.parts().any(|p| expr_has_doing(&p.value))
+                || block_has_doing(body)
+                || finally.as_deref().is_some_and(block_has_doing)
+        }
+        StmtKind::Parted(parted) => {
+            block_has_doing(&parted.start)
+                || parted
+                    .cond
+                    .iter()
+                    .flat_map(Condition::parts)
+                    .any(|p| expr_has_doing(&p.value))
+                || block_has_doing(&parted.step)
+                || block_has_doing(&parted.body)
+                || parted.finally.as_deref().is_some_and(block_has_doing)
+        }
+        StmtKind::Block(b) => block_has_doing(b),
+        StmtKind::Each(_, _, range, b, finally) => {
+            expr_has_doing(range)
+                || block_has_doing(b)
+                || finally.as_deref().is_some_and(block_has_doing)
+        }
+        StmtKind::Match(subject, cases) => {
+            expr_has_doing(subject) || cases.iter().any(|c| block_has_doing(&c.body))
+        }
+        StmtKind::Select(sel) => {
+            sel.arms.iter().any(|arm| {
+                let head = match &arm.kind {
+                    SelectArmKind::Recv { chan, .. } | SelectArmKind::RecvNone { chan } => {
+                        expr_has_doing(chan)
+                    }
+                    SelectArmKind::Send { value, chan } => {
+                        expr_has_doing(value) || expr_has_doing(chan)
+                    }
+                    SelectArmKind::After { ms } => expr_has_doing(ms),
+                };
+                head || block_has_doing(&arm.body)
+            }) || sel.otherwise.as_deref().is_some_and(block_has_doing)
+        }
+    }
+}
+
+fn target_has_doing(target: &Target) -> bool {
+    match target {
+        Target::Discard(_) => false,
+        Target::Place(place) => expr_has_doing(place),
+        Target::Tuple(parts, _) => parts.iter().any(target_has_doing),
+    }
+}
+
+fn expr_has_doing(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Doing(_) => true,
+        ExprKind::Spread(inner)
+        | ExprKind::Kept { value: inner, .. }
+        | ExprKind::Field(inner, _)
+        | ExprKind::Unary(_, inner)
+        | ExprKind::ChanRecv(inner)
+        | ExprKind::Deref(inner)
+        | ExprKind::Ref(inner)
+        | ExprKind::Fail(inner)
+        | ExprKind::Own(inner)
+        | ExprKind::Wrap(inner)
+        | ExprKind::Widen(inner)
+        | ExprKind::Pipe(inner)
+        | ExprKind::Piped(inner)
+        | ExprKind::ToText { value: inner, .. }
+        | ExprKind::ToJson { value: inner, .. }
+        | ExprKind::Copy { value: inner, .. }
+        | ExprKind::Shortcut { value: inner, .. } => expr_has_doing(inner),
+        ExprKind::IntLit(_)
+        | ExprKind::FloatLit(_)
+        | ExprKind::CharLit(_)
+        | ExprKind::BoolLit(_)
+        | ExprKind::TextLit(_)
+        | ExprKind::NoneLit
+        | ExprKind::Macro { .. }
+        | ExprKind::Var(_)
+        | ExprKind::RegionAfter(_)
+        | ExprKind::Shared { .. }
+        | ExprKind::TypeOf(_)
+        | ExprKind::TaskValue(_)
+        | ExprKind::Closure { .. } => false,
+        ExprKind::Invoke { callee, args } => {
+            expr_has_doing(callee) || args.iter().any(expr_has_doing)
+        }
+        ExprKind::New { value, .. } => expr_has_doing(value),
+        ExprKind::Index(a, b)
+        | ExprKind::Lookup(a, b)
+        | ExprKind::ChanSend(a, b)
+        | ExprKind::Binary(_, a, b)
+        | ExprKind::Range(a, b)
+        | ExprKind::Repeat { value: a, count: b } => expr_has_doing(a) || expr_has_doing(b),
+        ExprKind::Call { args, .. }
+        | ExprKind::Construct { args, .. }
+        | ExprKind::Array(args)
+        | ExprKind::Tuple(args)
+        | ExprKind::Scan { args, .. }
+        | ExprKind::Join { parts: args, .. }
+        | ExprKind::Spawn { args, .. } => args.iter().any(expr_has_doing),
+        ExprKind::MethodCall { value, args, .. } => {
+            expr_has_doing(value) || args.iter().any(expr_has_doing)
+        }
+        ExprKind::StructInit { fields, .. } => fields.iter().any(|f| expr_has_doing(&f.value)),
+        ExprKind::Pairs(pairs) => pairs
+            .iter()
+            .any(|(k, v)| expr_has_doing(k) || expr_has_doing(v)),
+        ExprKind::MapOp { map, key, .. } => {
+            expr_has_doing(map) || key.as_deref().is_some_and(expr_has_doing)
+        }
+        ExprKind::PlanB { value, body, .. } => expr_has_doing(value) || block_has_doing(body),
+        ExprKind::Choice(stmt) => stmt_has_doing(stmt),
+        ExprKind::LoopValue(lv) => stmt_has_doing(&lv.stmt),
+        ExprKind::Edit { items, args, .. } => {
+            expr_has_doing(items) || args.iter().any(expr_has_doing)
+        }
     }
 }
 
@@ -9767,7 +10342,7 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_word(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_word(value), type_word(error)),
         Type::Fail(error) => c_type(error),
-        Type::Chan(_) | Type::Actor(_) => "vela__chan_t".to_string(),
+        Type::Chan(_) | Type::Commitment(_) | Type::Actor(_) => "vela__chan_t".to_string(),
         Type::Own(inner) => c_type(inner),
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => {
             format!("vela__{}", type_word(ty))

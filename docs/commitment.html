@@ -261,8 +261,7 @@
       safety boundaries with regions, syntax alternatives, and colored comparisons.
     </p>
     <div style="margin-top: 1.5rem;">
-      <span class="badge b-amber">Design Proposal</span>
-      <span class="badge b-green">Selected Direction: Enhanced Colorless Model</span>
+      <span class="badge b-green">Core Implemented: doing &amp; Commitment[T]</span>
       <span class="badge b-blue">Await by Default</span>
       <span class="badge b-purple">Safety &amp; Tradeoffs</span>
     </div>
@@ -270,10 +269,10 @@
 
   <main>
 
-    <div class="warn">
-      <strong>Status Notice:</strong> This document captures and evaluates a <em>proposed</em> async/await and <code>Commitment</code> design for Vela.
-      Nothing described below as <code>Commitment</code>, <code>doing</code>, or async continuations is implemented in the compiler yet.
-      For concurrency primitives available today, see <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>, <a href="channels.html">Channels</a>, and <a href="actors.html">Actors</a>.
+    <div class="good">
+      <strong>Implementation Status:</strong> The finalized <strong>Enhanced Colorless Commitment Model</strong> (<code>doing task(...)</code>, <code>Commitment[T]</code>, parenthesis-free <code>&lt;&lt;- c { ... }</code>, <code>.wait()</code>, <code>.poll()</code>, <code>.cancel()</code>, <code>cancelled()</code>, structured block-exit cleanup, and <code>select</code> racing with automatic losing-arm cancellation) is <strong>implemented in the compiler</strong> (see <a href="../examples/actors_and_events/commitments.vela">examples/actors_and_events/commitments.vela</a>).
+      Inline <code>=&gt;&gt;</code> continuation sugar, colored <code>async</code>/<code>Commitment[T]</code> function experiments, and historical syntax alternatives in later sections remain design reference comparisons.
+      For channels and actors, see <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>, <a href="channels.html">Channels</a>, and <a href="actors.html">Actors</a>.
     </div>
 
     <section class="card" id="selected-direction" style="border-color: rgba(52,211,153,0.45);">
@@ -288,9 +287,9 @@
         <li><strong>Colorless tasks &amp; await-by-default:</strong> Regular tasks never need an <code>async</code> keyword; plain calls run and await automatically, paying zero runtime overhead on sequential code.</li>
         <li><strong>Explicit concurrency with prefix <code>doing</code>:</strong> Writing <code>doing task_name(...)</code> launches the task concurrently and returns a single-shot <code>Commitment[T]</code> (or <code>Commitment[T ~ E]</code>) bound by structured concurrency to its lexical block ("doing a task" &mdash; in progress, not finished yet).</li>
         <li><strong>Unified waiting &amp; racing:</strong> Wait via <code>&lt;&lt;- c</code> (with Plan B error handling, including parenthesis-free <code>&lt;&lt;- c { ... }</code>), inspect non-blockingly via <code>c.poll() -&gt; maybe T</code>, or race commitments and timeouts inside existing <a href="channels.html"><code>select</code></a>.</li>
-        <li><strong>Continuations via <code>|&gt;</code> pipes (+ optional <code>=&gt;</code> / <code>.then</code>):</strong> Post-settlement transforms work seamlessly with Vela call pipes (both background <code>doing (call() |&gt; step())</code> and caller-side <code>(&lt;&lt;- c) |&gt; step()</code>).</li>
+        <li><strong>Continuations via <code>|&gt;</code> pipes (+ optional <code>=&gt;</code> / <code>.then</code>):</strong> Post-settlement transforms work seamlessly with Vela call pipes (both background <code>doing (call() |&gt; step())</code> and caller-side <code>&lt;&lt;- c |&gt; step()</code>).</li>
       </ul>
-      <pre><code><span class="keyword">fixed</span> cfg = load_config()?                              <span class="comment">; Config (awaited automatically)</span>
+      <pre><code><span class="keyword">fixed</span> cfg = load_config() { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }      <span class="comment">; Config (awaited automatically, errors propagated via Plan B)</span>
 <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                     <span class="comment">; Commitment[User ~ HttpError]</span>
 <span class="keyword">fixed</span> c_name = <span class="keyword">doing</span> (fetch_user(id) |&gt; format_name())  <span class="comment">; Commitment[text ~ HttpError] (.then via pipe)</span>
 
@@ -508,7 +507,7 @@
 
       <h3>Four Core Safety &amp; Ergonomic Rules</h3>
       <ol>
-        <li><strong>Send-boundary safety at <code>doing</code>:</strong> Normal awaited calls accept any <code>^T@r</code>, <code>flex&amp;</code>, and <code>region</code>. When launching with <code>doing</code>, arguments must pass Vela's concurrency boundary (no escaping <code>flex&amp;</code> aliases; either <code>own</code>/lasting values or strictly bounded inside an inner structured scope whose regions outlive it).</li>
+        <li><strong>Send-boundary safety at <code>doing</code>:</strong> Normal awaited calls accept any <code>^T@r</code>, <code>flex&amp;</code>, <code>alters</code>, and <code>region</code>. Because Vela's <code>vela__rt__region</code> arena is single-threaded, arguments and results crossing <code>doing</code> must pass concurrency send-safety: no <code>flex&amp;</code>/<code>fixed&amp;</code>/<code>bind&amp;</code> references, no <code>region</code> parameters, no <code>alters</code> methods or mutable <code>shared</code> state, and only lasting/<code>own</code> payloads (zero escaping <code>@r</code> values).</li>
         <li><strong>Explicit call deferral returning <code>Commitment[T]</code>:</strong> Prefixing <code>doing</code> spawns concurrent execution cleanly without overloading <code>bind</code> or <code>=&gt;</code>.</li>
         <li><strong>Structured lexical scope cleanup:</strong> Any <code>Commitment[T]</code> created in a block that exits early (<code>fail</code>, <code>&lt;-</code>, <code>break</code>) receives cooperative cancellation and is automatically joined before the block's <code>region</code> allocations are freed. (Immortal daemons use <a href="actors.html"><code>spawn Actor(...)</code></a>.)</li>
         <li><strong>Proper inspection &amp; racing:</strong> Wait with <code>&lt;&lt;- c</code> (returns <code>T</code> or <code>T ~ E</code>), check without blocking via <code>c.poll()</code> (returns <code>maybe T</code> / <code>maybe (T ~ E)</code>), or race inside <code>select ... case after ms ... fi</code>.</li>
@@ -516,13 +515,13 @@
 
       <h3>Annotated Example: Concurrent Fetch &amp; Error Propagation</h3>
       <pre><code><span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
-    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?               <span class="comment">; HttpResponse (awaited automatically)</span>
-    <span class="keyword">&lt;-</span> parse_user(resp)?
+    <span class="comment">; Normal HTTP call + pipe inside: awaited automatically with pipe error short-circuiting!</span>
+    <span class="keyword">&lt;-</span> http_get(<span class="string">"/users/{id}"</span>) |&gt; parse_user()
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> load_dashboard(id: int) -&gt; Dashboard ~ HttpError
-    <span class="comment">; 1. Default synchronous path: awaited immediately (0 fiber overhead)</span>
-    <span class="keyword">fixed</span> config = load_config()?                         <span class="comment">; Config</span>
+    <span class="comment">; 1. Default synchronous path: awaited immediately (0 worker overhead)</span>
+    <span class="keyword">fixed</span> config = load_config() { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }  <span class="comment">; Config</span>
 
     <span class="comment">; 2. Explicit concurrent launch: returns Commitment handles immediately</span>
     <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                   <span class="comment">; Commitment[User ~ HttpError]</span>
@@ -575,8 +574,8 @@
             </tr>
             <tr>
               <td><strong>Waiting &amp; Polling</strong></td>
-              <td><code>&lt;&lt;- ch</code> returns <code>maybe T</code> (<code>none</code> means closed).</td>
-              <td><code>&lt;&lt;- c</code> returns <code>T</code> (or <code>T ~ E</code>); <code>c.poll()</code> returns <code>maybe T</code>.</td>
+              <td><code>&lt;&lt;- ch</code> (<code>wait_and_receive</code>) blocks and returns <code>T</code> (trapping if closed and drained); non-blocking <code>ch.receive()</code> returns <code>maybe T</code>; <code>select</code> uses <code>case none &lt;&lt;- ch</code> on closure.</td>
+              <td><code>&lt;&lt;- c</code> returns <code>T</code> (or <code>T ~ E</code>); non-blocking <code>c.poll()</code> returns <code>maybe T</code> (or <code>maybe (T ~ E)</code>).</td>
             </tr>
             <tr>
               <td><strong>Closing &amp; Memory</strong></td>
@@ -672,7 +671,7 @@
             </tr>
             <tr>
               <td><code>try/catch</code> / <code>Result</code> rejections</td>
-              <td><code>Commitment[T ~ E]</code> + Plan B / <code>?</code> propagation</td>
+              <td><code>Commitment[T ~ E]</code> + Plan B (<code>{ failure e ... }</code>) &amp; <code>|&gt;</code> pipe propagation</td>
               <td><span class="badge b-green">100% Covered</span></td>
             </tr>
             <tr>
@@ -855,7 +854,7 @@
           <tr>
             <td><strong>Prefix <code>-ing</code> verb: <code>doing func()</code></strong> <span class="badge b-green">Selected Default</span></td>
             <td><code>fixed c = doing fetch(id)<br>fixed c2 = doing obj.save()</code></td>
-            <td>Unreserved in <code>src/lexer.rs</code>; can be contextual so existing identifiers named <code>doing</code> stay valid. Pairs directly with Vela's <code>task</code> ("doing a task" = in progress, not awaited yet), warns the reader <em>before</em> arguments, composes cleanly with <code>doing build(r) at r</code>, and avoids postfix precedence clashes with <code>{ plan b }</code>. <br><em>Other <code>-ing</code> verbs considered:</em> <code>running</code> (sounds like a status check), <code>pending</code> (describes a passive state), <code>starting</code> / <code>spawning</code> (overlaps mentally with <code>spawn Actor</code>), <code>working</code> (too vague). <code>doing</code> is the crispest opposite of awaiting.</td>
+            <td>Unreserved in <code>src/lexer.rs</code>; can be contextual so existing identifiers named <code>doing</code> stay valid. Pairs directly with Vela's <code>task</code> ("doing a task" = in progress, not awaited yet), warns the reader <em>before</em> arguments, leaves callers free to pass lasting/<code>own</code> inputs while each concurrent task uses its own thread-local default region (<code>vela__rt__region</code> is a single-threaded bump arena, so caller <code>region</code> arguments are forbidden across <code>doing</code>), and avoids postfix precedence clashes with <code>{ plan b }</code>. <br><em>Other <code>-ing</code> verbs considered:</em> <code>running</code> (sounds like a status check), <code>pending</code> (describes a passive state), <code>starting</code> / <code>spawning</code> (overlaps mentally with <code>spawn Actor</code>), <code>working</code> (too vague). <code>doing</code> is the crispest opposite of awaiting.</td>
           </tr>
           <tr>
             <td><strong>Postfix <code>later</code></strong> <span class="badge b-blue">Top Alternative</span></td>
@@ -926,9 +925,9 @@
           </tr>
           <tr>
             <td><strong><code>.then</code> on the caller</strong></td>
-            <td><code>(&lt;&lt;- c) |&gt; step()</code></td>
-            <td><code>&lt;&lt;- c |&gt; step()</code> (no parentheses, if <code>&lt;&lt;-</code> binds tighter than <code>|&gt;</code>)</td>
-            <td>Uses existing pipe rules, including one Plan B for the whole chain.</td>
+            <td><code>&lt;&lt;- c |&gt; step()</code></td>
+            <td><code>(&lt;&lt;- c) |&gt; step()</code> (optional parens)</td>
+            <td>Prefix <code>&lt;&lt;-</code> already binds tighter than <code>|&gt;</code> in <code>src/parser.rs</code>; uses existing pipe rules, including one Plan B for the whole chain.</td>
           </tr>
           <tr>
             <td><strong><code>.then</code> in the background</strong></td>
@@ -966,8 +965,7 @@
         </p>
         <pre><code><span class="comment">; Style A: 'async task' marker + await-by-default at call sites</span>
 <span class="keyword">async</span> <span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
-    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?     <span class="comment">; awaited automatically (compiler knows http_get is async)</span>
-    <span class="keyword">&lt;-</span> parse_user(resp)?
+    <span class="keyword">&lt;-</span> http_get(<span class="string">"/users/{id}"</span>) |&gt; parse_user()  <span class="comment">; awaited automatically &amp; pipe-propagated</span>
 <span class="keyword">fi</span>
 
 <span class="comment">; Style B: Return-type coloring ('-&gt; Commitment[T]') without an extra keyword</span>
@@ -976,7 +974,7 @@
 <span class="keyword">fi</span>                                           <span class="comment">; plain call still auto-awaits to [Order]; 'doing' gives the handle</span>
 
 <span class="keyword">async</span> <span class="keyword">task</span> dashboard(id: int) -&gt; Dashboard ~ HttpError
-    <span class="keyword">fixed</span> user = fetch_user(id)?              <span class="comment">; auto-awaited!</span>
+    <span class="keyword">fixed</span> user = fetch_user(id) { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }  <span class="comment">; auto-awaited with Plan B propagation</span>
     <span class="keyword">fixed</span> c_orders = <span class="keyword">doing</span> fetch_orders(id)   <span class="comment">; explicit concurrency: Commitment[[Order]]</span>
     <span class="keyword">fixed</span> orders = &lt;&lt;- c_orders               <span class="comment">; [Order]</span>
     <span class="keyword">&lt;-</span> Dashboard { user: user, orders: orders }
@@ -994,8 +992,8 @@
             Instead of first-class <code>Commitment[T]</code> values, only a lexical block allows concurrent bindings:
           </p>
           <pre style="font-size: 0.82rem; padding: 0.85rem;"><code><span class="keyword">concurrent</span>
-    <span class="keyword">fixed</span> user = fetch_user(id)?
-    <span class="keyword">fixed</span> orders = fetch_orders(id)?
+    <span class="keyword">fixed</span> user = fetch_user(id) { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }
+    <span class="keyword">fixed</span> orders = fetch_orders(id)
 <span class="keyword">fi</span>  <span class="comment">; guaranteed joined here</span></code></pre>
           <p style="margin-bottom: 0;"><strong>Verdict:</strong> Maximally simple and eliminates dangling handles altogether, but cannot express <code>select</code> racing, conditional awaiting, or storing handles in structs/slices.</p>
         </div>

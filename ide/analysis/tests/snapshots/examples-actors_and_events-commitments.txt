@@ -1,0 +1,142 @@
+  1 | ; Structured concurrency with colorless `doing` and `Commitment[T]`:
+    | comment:; Structured concurrency with colorless `doing` and `Commitment[T]`:
+  2 | ; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
+    | comment:; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
+  3 | ; pipeline transformations (`<<- c |> ...`), `select` racing with automatic
+    | comment:; pipeline transformations (`<<- c |> ...`), `select` racing with automatic
+  4 | ; cancellation of losing arms, and deterministic `.poll()` / `.cancel()`.
+    | comment:; cancellation of losing arms, and deterministic `.poll()` / `.cancel()`.
+  6 | task fetch_score(name: text, bonus: int) -> int ~ text
+    | keyword:task  task:fetch_score  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:bonus  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
+  7 |     when bonus < 0
+    | keyword:when  parameter:bonus  operator:<  number:0
+  8 |         <- fail "negative bonus"
+    | keyword:<-  keyword:fail  string:"negative bonus"
+  9 |     fi
+    | keyword:fi
+ 10 |     <- name.len + bonus
+    | keyword:<-  parameter:name  punctuation:.  field:len  operator:+  parameter:bonus
+ 11 | fi
+    | keyword:fi
+ 13 | task format_total(score: int) -> int
+    | keyword:task  task:format_total  punctuation:(  parameter:score  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- score * 10
+    | keyword:<-  parameter:score  operator:*  number:10
+ 15 | fi
+    | keyword:fi
+ 17 | task query_replica(tag: text, gate: Chan[int]) -> text
+    | keyword:task  task:query_replica  punctuation:(  parameter:tag  punctuation::  type-builtin:text  punctuation:,  parameter:gate  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:)  operator:->  type-builtin:text
+ 18 |     <<- gate
+    | operator:<<-  parameter:gate
+ 19 |     <- tag
+    | keyword:<-  parameter:tag
+ 20 | fi
+    | keyword:fi
+ 22 | task fast_replica(tag: text) -> text
+    | keyword:task  task:fast_replica  punctuation:(  parameter:tag  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 23 |     <- tag
+    | keyword:<-  parameter:tag
+ 24 | fi
+    | keyword:fi
+ 26 | task cooperative_job(started: Chan[int], stopped: Chan[text]) -> int
+    | keyword:task  task:cooperative_job  punctuation:(  parameter:started  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:stopped  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)  operator:->  type-builtin:int
+ 27 |     1 ->> started
+    | number:1  operator:->>  parameter:started
+ 28 |     flex n = 0
+    | keyword:flex  variable:n  operator:=  number:0
+ 29 |     endless
+    | keyword:endless
+ 30 |         when cancelled()
+    | keyword:when  task:cancelled  punctuation:(  punctuation:)
+ 31 |             "stopped early" ->> stopped
+    | string:"stopped early"  operator:->>  parameter:stopped
+ 32 |             <- n
+    | keyword:<-  variable:n
+ 33 |         fi
+    | keyword:fi
+ 34 |         n += 1
+    | variable:n  operator:+=  number:1
+ 35 |         when n == 100000000
+    | keyword:when  variable:n  operator:==  number:100000000
+ 36 |             "completed" ->> stopped
+    | string:"completed"  operator:->>  parameter:stopped
+ 37 |             <- n
+    | keyword:<-  variable:n
+ 38 |         fi
+    | keyword:fi
+ 39 |     fi
+    | keyword:fi
+ 40 |     <- n
+    | keyword:<-  variable:n
+ 41 | fi
+    | keyword:fi
+ 43 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 44 |     ; 1. Parallel fan-out + direct wait and pipe continuation
+    | comment:; 1. Parallel fan-out + direct wait and pipe continuation
+ 45 |     fixed a = doing fetch_score("alpha", 5)
+    | keyword:fixed  variable:a  operator:=  variable:doing  task:fetch_score  punctuation:(  string:"alpha"  punctuation:,  number:5  punctuation:)
+ 46 |     fixed b = doing fetch_score("beta", -1)
+    | keyword:fixed  variable:b  operator:=  variable:doing  task:fetch_score  punctuation:(  string:"beta"  punctuation:,  operator:-  number:1  punctuation:)
+ 48 |     fixed total_a = <<- a |> format_total() { failure e
+    | keyword:fixed  variable:total_a  operator:=  operator:<<-  variable:a  operator:|>  task:format_total  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 49 |         show("alpha err: ", e)
+    | builtin-fn:show  punctuation:(  string:"alpha err: "  punctuation:,  variable:e  punctuation:)
+ 50 |         0
+    | number:0
+ 51 |     }
+    | punctuation:}
+ 52 |     fixed total_b = <<- b { failure e
+    | keyword:fixed  variable:total_b  operator:=  operator:<<-  variable:b  punctuation:{  keyword:failure  variable:e
+ 53 |         show("beta fallback: ", e)
+    | builtin-fn:show  punctuation:(  string:"beta fallback: "  punctuation:,  variable:e  punctuation:)
+ 54 |         1
+    | number:1
+ 55 |     }
+    | punctuation:}
+ 56 |     show("scores: ", total_a, " ", total_b)
+    | builtin-fn:show  punctuation:(  string:"scores: "  punctuation:,  variable:total_a  punctuation:,  string:" "  punctuation:,  variable:total_b  punctuation:)
+ 58 |     ; 2. Racing commitments in `select` auto-cancels losing commitment arms
+    | comment:; 2. Racing commitments in `select` auto-cancels losing commitment arms
+ 59 |     fixed replica_gate = chan_new<int>(1)
+    | keyword:fixed  variable:replica_gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 60 |     fixed primary = doing query_replica("primary", replica_gate)
+    | keyword:fixed  variable:primary  operator:=  variable:doing  task:query_replica  punctuation:(  string:"primary"  punctuation:,  variable:replica_gate  punctuation:)
+ 61 |     fixed mirror = doing fast_replica("mirror")
+    | keyword:fixed  variable:mirror  operator:=  variable:doing  task:fast_replica  punctuation:(  string:"mirror"  punctuation:)
+ 63 |     fixed fastest = select
+    | keyword:fixed  variable:fastest  operator:=  keyword:select
+ 64 |     case res <<- primary = res
+    | keyword:case  variable:res  operator:<<-  variable:primary  operator:=  variable:res
+ 65 |     case res <<- mirror = res
+    | keyword:case  variable:res  operator:<<-  variable:mirror  operator:=  variable:res
+ 66 |     fi
+    | keyword:fi
+ 67 |     show("fastest: ", fastest)
+    | builtin-fn:show  punctuation:(  string:"fastest: "  punctuation:,  variable:fastest  punctuation:)
+ 68 |     1 ->> replica_gate
+    | number:1  operator:->>  variable:replica_gate
+ 70 |     ; 3. Non-blocking `.poll()` and explicit `.cancel()`
+    | comment:; 3. Non-blocking `.poll()` and explicit `.cancel()`
+ 71 |     fixed started = chan_new<int>(1)
+    | keyword:fixed  variable:started  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 72 |     fixed stopped = chan_new<text>(1)
+    | keyword:fixed  variable:stopped  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+ 73 |     fixed worker = doing cooperative_job(started, stopped)
+    | keyword:fixed  variable:worker  operator:=  variable:doing  task:cooperative_job  punctuation:(  variable:started  punctuation:,  variable:stopped  punctuation:)
+ 74 |     <<- started
+    | operator:<<-  variable:started
+ 75 |     when worker.poll() is none
+    | keyword:when  variable:worker  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  keyword:none
+ 76 |         show("worker still running")
+    | builtin-fn:show  punctuation:(  string:"worker still running"  punctuation:)
+ 77 |     fi
+    | keyword:fi
+ 78 |     worker.cancel()
+    | variable:worker  punctuation:.  field:cancel  punctuation:(  punctuation:)
+ 79 |     <<- worker
+    | operator:<<-  variable:worker
+ 80 |     show("worker status: ", <<- stopped)
+    | builtin-fn:show  punctuation:(  string:"worker status: "  punctuation:,  operator:<<-  variable:stopped  punctuation:)
+ 81 | fi
+    | keyword:fi

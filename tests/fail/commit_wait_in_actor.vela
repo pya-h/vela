@@ -1,0 +1,16 @@
+; error: 8:19: 'doing' cannot be used inside an actor handler; call tasks concurrently from a task instead
+task work() -> int
+    <- 10
+fi
+
+actor Worker()
+    on Run()
+        fixed c = doing work()
+        show(<<- c)
+    fi
+fi
+
+task main()
+    fixed w = spawn Worker()
+    Worker.Run() ->> w
+fi

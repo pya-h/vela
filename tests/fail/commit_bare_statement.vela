@@ -1,0 +1,8 @@
+; error: 7:5: 'doing' starts a task and returns its Commitment handle; keep it in a variable (e.g. 'fixed c = doing ...')
+task work() -> int
+    <- 10
+fi
+
+task main()
+    doing work()
+fi

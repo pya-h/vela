@@ -1,0 +1,13 @@
+a: 15
+b: 42
+piped: 27
+caught: boom
+ok_val: 42 err_val: 99
+ping1: pong
+ping2: pong
+poll1: none
+poll2: 77
+explicit_cancel: cancelled
+scoped: leaving -> cancelled
+race: fast
+nested: 27 ident: 5

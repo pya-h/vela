@@ -3093,6 +3093,7 @@ impl Resolver<'_> {
             | ExprKind::Ref(base)
             | ExprKind::Own(base)
             | ExprKind::ChanRecv(base)
+            | ExprKind::Doing(base)
             | ExprKind::Unary(_, base)
             | ExprKind::Fail(base)
             | ExprKind::Wrap(base)

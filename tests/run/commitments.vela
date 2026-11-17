@@ -1,0 +1,167 @@
+shape Scaler
+    factor: int
+
+    scale(n: int) -> int
+        <- n * .factor
+    fi
+fi
+
+task add_ten(n: int) -> int
+    <- n + 10
+fi
+
+task double_it(n: int) -> int
+    <- n * 2
+fi
+
+task add_one(n: int) -> int
+    <- n + 1
+fi
+
+task maybe_fail(ok: bool) -> int ~ text
+    when not ok
+        <- fail "boom"
+    fi
+    <- 42
+fi
+
+task ping(ready: Chan[int], out: Chan[text])
+    <<- ready
+    "pong" ->> out
+fi
+
+task gated_value(gate: Chan[int], val: int) -> int
+    <<- gate
+    <- val
+fi
+
+task cancellable_worker(started: Chan[int], done: Chan[text]) -> int
+    1 ->> started
+    flex steps = 0
+    endless
+        when cancelled()
+            "cancelled" ->> done
+            <- steps
+        fi
+        steps += 1
+        when steps == 100000000
+            "finished" ->> done
+            <- steps
+        fi
+    fi
+    <- steps
+fi
+
+task slow_branch(gate: Chan[int]) -> text
+    <<- gate
+    <- "slow"
+fi
+
+task fast_branch() -> text
+    <- "fast"
+fi
+
+task nested_outer(x: int) -> int
+    fixed inner = doing double_it(x)
+    <- (<<- inner) + 7
+fi
+
+task run_scoped_cancel(started: Chan[int], done: Chan[text]) -> text
+    fixed bg = doing cancellable_worker(started, done)
+    <<- started
+    <- "leaving"
+fi
+
+task contextual_doing(doing: int) -> int
+    <- doing + 1
+fi
+
+task main()
+    ; 1. Basic doing + <<- wait
+    fixed a = doing add_ten(5)
+    show("a: ", <<- a)
+
+    ; 2. Shape method doing + .wait()
+    fixed s = Scaler { factor: 6 }
+    fixed b = doing s.scale(7)
+    show("b: ", b.wait())
+
+    ; 3. Pipe inside doing + <<- binding tighter than |>
+    fixed piped_c = doing (3 |> add_ten() |> double_it())
+    fixed piped_res = <<- piped_c |> add_one()
+    show("piped: ", piped_res)
+
+    ; 4. Parenthesis-free error handling with Plan B
+    fixed ok_c = doing maybe_fail(true)
+    fixed err_c = doing maybe_fail(false)
+    fixed ok_val = <<- ok_c { failure e
+        show("unexpected: ", e)
+        0
+    }
+    fixed err_val = <<- err_c { failure e
+        show("caught: ", e)
+        99
+    }
+    show("ok_val: ", ok_val, " err_val: ", err_val)
+
+    ; 5. Commitment[nothing] with <<- and select none <<-
+    fixed ready = chan_new<int>(1)
+    fixed out = chan_new<text>(1)
+    fixed p1 = doing ping(ready, out)
+    1 ->> ready
+    <<- p1
+    show("ping1: ", <<- out)
+
+    fixed p2 = doing ping(ready, out)
+    1 ->> ready
+    select
+    case _ <<- p2
+        show("ping2: ", <<- out)
+    fi
+
+    ; 6. Deterministic .poll() (none while blocked, then some after signal)
+    fixed gate = chan_new<int>(1)
+    fixed polled = doing gated_value(gate, 77)
+    when polled.poll() is none
+        show("poll1: none")
+    else
+        show("poll1: unexpected")
+    fi
+    1 ->> gate
+    endless
+        when polled.poll() is { v }
+            show("poll2: ", v)
+            break
+        fi
+    fi
+
+    ; 7. Explicit .cancel() + cancelled() inside worker
+    fixed started1 = chan_new<int>(1)
+    fixed done1 = chan_new<text>(1)
+    fixed w1 = doing cancellable_worker(started1, done1)
+    <<- started1
+    w1.cancel()
+    <<- w1
+    show("explicit_cancel: ", <<- done1)
+
+    ; 8. Structured block-exit auto-cancel + wait before caller proceeds
+    fixed started2 = chan_new<int>(1)
+    fixed done2 = chan_new<text>(1)
+    fixed left = run_scoped_cancel(started2, done2)
+    show("scoped: ", left, " -> ", <<- done2)
+
+    ; 9. select racing Commitments (winner chosen, losing arm auto-cancelled)
+    fixed slow_gate = chan_new<int>(1)
+    fixed c_slow = doing slow_branch(slow_gate)
+    fixed c_fast = doing fast_branch()
+    fixed race_winner = select
+    case msg <<- c_slow = msg
+    case msg <<- c_fast = msg
+    fi
+    show("race: ", race_winner)
+    1 ->> slow_gate
+
+    ; 10. Nested doing + contextual identifier named `doing`
+    fixed n = doing nested_outer(10)
+    show("nested: ", <<- n, " ident: ", contextual_doing(4))
+fi

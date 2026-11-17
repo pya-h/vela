@@ -220,6 +220,16 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "case after ms",
         "Timeout arm in a 'select' block that fires if no channel operation becomes ready within ms milliseconds.",
     ),
+    (
+        "doing",
+        "doing task_call(...) -> Commitment[T]",
+        "Launches a concurrent task or pipe and returns a single-wait Commitment[T] handle bound to the enclosing block's structured scope.",
+    ),
+    (
+        "Commitment",
+        "Commitment[T]",
+        "A linear structured-concurrency handle for the eventual result of a 'doing' task. Await with '<<- c' or 'c.wait()', poll with 'c.poll()', or request cancellation with 'c.cancel()'.",
+    ),
 ];
 
 const THIS_REGION_DOC: &str = "The region the value this method is called on lives in. The method may send what the value holds there and take values in it, but can't allocate in it, since nothing gives a method the region.";
@@ -325,6 +335,22 @@ fn hover_token(
         (TokenClass::Field, None) if text == "wait_and_receive" || text == "recv" || text == "wait_and_recieve" => (
             "wait_and_receive() -> T".to_string(),
             "Blocks until an item is available in the channel and receives it, transferring ownership to the caller.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "wait" => (
+            "wait() -> T".to_string(),
+            "Consumes a Commitment[T] handle, blocking until the background task finishes and yielding its result (same as '<<- c').".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "poll" => (
+            "poll() -> maybe T".to_string(),
+            "Non-blocking check on a Commitment[T]. Returns { value } once ready and consumes the handle, or none while still running.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "cancel" => (
+            "cancel()".to_string(),
+            "Signals cancellation to a Commitment[T] without waiting for it; structured scope exit still awaits completion before returning.".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "cancelled" => (
+            "task cancelled() -> bool".to_string(),
+            "Returns true inside a 'doing' task once cancellation has been requested (via c.cancel(), a losing select arm, or block exit).".to_string(),
         ),
         (TokenClass::Field, None) if text == "receive" || text == "try_recv" || text == "recieve" => (
             "receive() -> maybe T".to_string(),

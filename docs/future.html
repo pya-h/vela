@@ -288,9 +288,9 @@
           Regions already close opened <code>File</code>s automatically on scope exit, but general non-region resources (external sockets, OS handles, locks, temporary state cleanup) have no general lexical cleanup statement.
         </p>
         <pre><code><span class="keyword">task</span> copy_log(path: text@r) -&gt; nothing ~ FileError
-    <span class="keyword">fixed</span> handle = open_raw(path)?
+    <span class="keyword">fixed</span> handle = open_raw(path) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
     <span class="keyword">defer</span> handle.release()
-    process(handle)?
+    process(handle) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
 <span class="keyword">fi</span></code></pre>
         <p>
           Paired with <strong>static leak checking</strong>, resource-returning types could require every control-flow path to pass, consume, or <code>defer</code>-release them.
@@ -436,6 +436,7 @@
         <li id="typestate"><strong>Typestate &amp; Session Types:</strong> Phantom generic state tags (e.g. <code>File&lt;Open&gt;</code> &rarr; <code>File&lt;Closed&gt;</code>) and affine single-use rules for protocol safety.</li>
         <li id="refinement"><strong>Refinement &amp; Distinct Types:</strong> Compile/runtime-checked constraints (<code>int where n &gt; 0</code>), parameterized type aliases (<code>alias BoxList&lt;T&gt;</code>), and distinct newtypes so IDs aren't mixed with raw ints.</li>
         <li id="inner-kind-variants"><strong>Flattened Inner-Kind Matching &amp; Case Guards:</strong> Matching nested errors directly (e.g. <code>InputError.NotANumber</code> without two nested <code>match</code> blocks), range cases &amp; <code>match</code> on ints/chars, and boolean guards (<code>case Circle r when r &gt; 0.0</code>).</li>
+        <li id="postfix-try"><strong>Postfix <code>?</code> Error Propagation Sugar:</strong> Early-returning the failure side of <code>T ~ E</code> (like Rust's <code>?</code>) instead of writing <code>{ failure err &lt;- fail err }</code>. Requires disambiguating expression suffixes from tuple dynamic type queries (<code>t.#5? is maybe int</code>) and planned polymorphic matching (<code>match v?</code>); today Vela uses Plan B or call pipes (<code>|&gt;</code>) instead.</li>
         <li id="ergonomics-open"><strong>Syntax &amp; Statement Cleanup:</strong> Requiring statements to end at a newline while permitting multiline expressions inside <code>( )</code> / <code>{ }</code>; rejecting multiline raw string literals; named call arguments (<code>resize(width: 2.0, height: 3.0)</code>); inclusive ranges (<code>0..=10</code>); explicit <code>round</code>/<code>floor</code>; <code>each i, v in xs</code> indexed slice loops; mid-loop typed failure exits; <code>assert(...)</code>; and single-item tuple syntax.</li>
       </ul>
     </section>

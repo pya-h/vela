@@ -1,0 +1,10 @@
+; error: 8:21: cannot pass a caller region to a 'doing' task; regions are single-threaded
+task build(r: region) -> int
+    <- 1
+fi
+
+task main()
+    region r
+    fixed c = doing build(r)
+    show(<<- c)
+fi
