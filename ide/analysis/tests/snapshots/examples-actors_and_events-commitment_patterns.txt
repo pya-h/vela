@@ -128,8 +128,8 @@
     | keyword:fixed  variable:status  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
  75 |     fixed batch = rush cancellable_batch(started, status)
     | keyword:fixed  variable:batch  operator:=  keyword:rush  task:cancellable_batch  punctuation:(  variable:started  punctuation:,  variable:status  punctuation:)
- 76 |     <<- started
-    | operator:<<-  variable:started
+ 76 |     <<- started  ; Wait for the worker to enter its loop before timing out in 'select'
+    | operator:<<-  variable:started  comment:; Wait for the worker to enter its loop before timing out in 'select'
  78 |     fixed outcome = select
     | keyword:fixed  variable:outcome  operator:=  keyword:select
  79 |         case n <<- batch = "done"

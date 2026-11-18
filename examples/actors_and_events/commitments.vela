@@ -71,7 +71,7 @@ task main()
     fixed started = chan_new<int>(1)
     fixed stopped = chan_new<text>(1)
     fixed worker = rush cooperative_job(started, stopped)
-    <<- started
+    <<- started  ; Wait for worker thread to start before polling or cancelling it
     when worker.poll() is none
         show("worker still running")
     fi

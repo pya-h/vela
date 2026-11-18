@@ -124,8 +124,8 @@
     | keyword:fixed  variable:stopped  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
  73 |     fixed worker = rush cooperative_job(started, stopped)
     | keyword:fixed  variable:worker  operator:=  keyword:rush  task:cooperative_job  punctuation:(  variable:started  punctuation:,  variable:stopped  punctuation:)
- 74 |     <<- started
-    | operator:<<-  variable:started
+ 74 |     <<- started  ; Wait for worker thread to start before polling or cancelling it
+    | operator:<<-  variable:started  comment:; Wait for worker thread to start before polling or cancelling it
  75 |     when worker.poll() is none
     | keyword:when  variable:worker  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  keyword:none
  76 |         show("worker still running")

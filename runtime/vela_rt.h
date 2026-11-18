@@ -4468,16 +4468,31 @@ static inline vela__rt__sched_task* vela__rt__sched_pop_locked(void) {
     return task;
 }
 
-static inline bool vela__rt__sched_try_run_one(void) {
-    pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
-    vela__rt__sched_task* task = vela__rt__sched_pop_locked();
-    pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
-    if (task == NULL) {
-        return false;
+static inline void* vela__rt__sched_helper(void* arg);
+
+static inline void vela__rt__sched_wake_or_spawn_locked(void) {
+    /* When every fixed pool worker is occupied (e.g. nested waiting), spawn a bounded
+       detached helper so queued child tasks execute on their own stack without deadlock. */
+    if (vela__rt__global_sched_pool.head == NULL) {
+        return;
     }
-    task->fn(task->arg);
-    free(task);
-    return true;
+    if (vela__rt__global_sched_pool.busy_workers >= vela__rt__global_sched_pool.num_threads
+        && vela__rt__global_sched_pool.extra_helpers < 128) {
+        pthread_t helper;
+        vela__rt__global_sched_pool.extra_helpers++;
+        if (pthread_create(&helper, NULL, vela__rt__sched_helper, NULL) == 0) {
+            pthread_detach(helper);
+            return;
+        }
+        vela__rt__global_sched_pool.extra_helpers--;
+    }
+    pthread_cond_signal(&vela__rt__global_sched_pool.work_cond);
+}
+
+static inline void vela__rt__sched_ensure_progress(void) {
+    pthread_mutex_lock(&vela__rt__global_sched_pool.lock);
+    vela__rt__sched_wake_or_spawn_locked();
+    pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
 
 static inline void* vela__rt__sched_helper(void* arg) {
@@ -4566,19 +4581,7 @@ static inline void vela__rt__sched_submit(void (*fn)(void* arg), void* arg) {
         vela__rt__global_sched_pool.tail->next = task;
         vela__rt__global_sched_pool.tail = task;
     }
-    /* When every fixed pool worker is occupied (e.g. nested waiting), spawn a bounded
-       detached helper so queued child tasks cannot starve. */
-    if (vela__rt__global_sched_pool.busy_workers >= vela__rt__global_sched_pool.num_threads
-        && vela__rt__global_sched_pool.extra_helpers < 64) {
-        pthread_t helper;
-        vela__rt__global_sched_pool.extra_helpers++;
-        if (pthread_create(&helper, NULL, vela__rt__sched_helper, NULL) == 0) {
-            pthread_detach(helper);
-        } else {
-            vela__rt__global_sched_pool.extra_helpers--;
-        }
-    }
-    pthread_cond_signal(&vela__rt__global_sched_pool.work_cond);
+    vela__rt__sched_wake_or_spawn_locked();
     pthread_mutex_unlock(&vela__rt__global_sched_pool.lock);
 }
 
@@ -5296,13 +5299,10 @@ static inline void vela__rt__commit_wait_into(int64_t handle, void* out_item, ve
     pthread_mutex_lock(&chan->lock);
     while (chan->count == 0 && !chan->closed) {
         pthread_mutex_unlock(&chan->lock);
-        if (!vela__rt__sched_try_run_one()) {
-            pthread_mutex_lock(&chan->lock);
-            if (chan->count == 0 && !chan->closed) {
-                pthread_cond_wait(&chan->not_empty, &chan->lock);
-            }
-        } else {
-            pthread_mutex_lock(&chan->lock);
+        vela__rt__sched_ensure_progress();
+        pthread_mutex_lock(&chan->lock);
+        if (chan->count == 0 && !chan->closed) {
+            pthread_cond_wait(&chan->not_empty, &chan->lock);
         }
     }
     if (chan->count > 0) {
@@ -5375,13 +5375,10 @@ static inline void vela__rt__commit_scope_cleanup(int64_t handle) {
         pthread_mutex_lock(&chan->lock);
         while (!chan->worker_done) {
             pthread_mutex_unlock(&chan->lock);
-            if (!vela__rt__sched_try_run_one()) {
-                pthread_mutex_lock(&chan->lock);
-                if (!chan->worker_done) {
-                    pthread_cond_wait(&chan->done_cond, &chan->lock);
-                }
-            } else {
-                pthread_mutex_lock(&chan->lock);
+            vela__rt__sched_ensure_progress();
+            pthread_mutex_lock(&chan->lock);
+            if (!chan->worker_done) {
+                pthread_cond_wait(&chan->done_cond, &chan->lock);
             }
         }
         if (!chan->region_spliced) {

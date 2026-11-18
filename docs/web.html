@@ -263,36 +263,35 @@
         <li><strong>Typed Failure Channels (<code>Response ~ WebError</code>):</strong> Route handlers declare errors explicitly using Vela's failure channel operator <code>~</code>, allowing clean error propagation with the <code>{ failure e ... }</code> pattern without hidden exceptions.</li>
         <li><strong>Kind-Based Pattern Matching:</strong> HTTP methods and error states are represented by first-class kind definitions (<code>Method</code>, <code>WebError</code>), allowing exhaustive compile-time checking.</li>
         <li><strong>Composable Decorator Middleware:</strong> Middleware layers wrap route handlers cleanly using Vela's wrapper syntax (<code>$(logging)</code>, <code>$(authenticate)</code>).</li>
+        <li><strong>Structured Concurrency (<a href="commitment.html"><code>rush</code> &amp; <code>Commitment[T]</code></a>):</strong> Offload requests across a multi-worker pool with <code>serve_concurrent</code> or fan out parallel HTTP client requests with region-spliced <code>rush Client.fetch(url, r)</code>.</li>
       </ul>
     </section>
 
     <section>
-      <h2><span class="icon">⚙️</span> 2. Concurrency Architecture &amp; Event Loop</h2>
+      <h2><span class="icon">⚙️</span> 2. Concurrency Architecture: Event Loop &amp; Commitment Worker Pool</h2>
       <p>
-        Network servers face a fundamental architectural choice when orchestrating concurrent I/O: multiplexing
-        connections onto an asynchronous event loop or distributing connections across an operating system thread pool.
+        <code>std/web</code> supports both single-threaded multiplexed I/O and commitment-backed worker-pool concurrency, letting you pick the right execution model per service while keeping the socket table thread-safe across <code>rush</code> workers:
       </p>
 
       <div class="grid">
         <div class="card">
-          <h3 style="margin-top:0;">Single Event Loop (Vela's Model)</h3>
-          <p><strong>Mechanism:</strong> Non-blocking socket descriptors multiplexed using OS primitives (<code>epoll</code> on Linux, <code>poll</code> fallback).</p>
-          <p><strong>Advantages:</strong></p>
+          <h3 style="margin-top:0;">Single Event Loop (<code>Server.serve</code>)</h3>
+          <p><strong>Mechanism:</strong> Non-blocking socket descriptors multiplexed using OS primitives (<code>epoll</code> / <code>Poll</code>).</p>
+          <p><strong>Best For:</strong> Lightweight APIs, keep-alive bursts, WebSockets, and high idle-connection fanout.</p>
           <ul>
-            <li><strong>Zero Data Races:</strong> Handlers execute in cooperative turns; no mutex contention for shared server caches or routers.</li>
-            <li><strong>Minimal Footprint:</strong> Thousands of idle connections occupy only socket file descriptors (~few hundred bytes), avoiding thread stack allocations (typically 1–8 MiB per OS thread).</li>
-            <li><strong>Region Safety:</strong> Matches Vela's deterministic region-based memory lifecycle.</li>
+            <li><strong>Zero Synchronization Overhead:</strong> Handlers execute sequentially in cooperative turns on one loop.</li>
+            <li><strong>Minimal Footprint:</strong> Idle keep-alive connections occupy only socket descriptors rather than worker threads.</li>
+            <li><strong>Persistent Keep-Alive:</strong> Supports <code>server.keep_alive(true)</code> (default) or <code>false</code> for one-shot requests.</li>
           </ul>
         </div>
 
         <div class="card">
-          <h3 style="margin-top:0;">Persistent Connections (Keep-Alive)</h3>
-          <p><strong>Mechanism:</strong> Sockets remain open across sequential requests until idle timeout or connection limit is reached.</p>
-          <p><strong>Advantages:</strong></p>
+          <h3 style="margin-top:0;">Commitment Worker Pool (<code>Server.serve_concurrent</code>)</h3>
+          <p><strong>Mechanism:</strong> Spawns <code>workers</code> concurrent <code>rush</code> worker tasks reading accepted connections from a bounded <code>Chan[int]</code>, each creating its own per-request <code>@r</code> region.</p>
+          <p><strong>Best For:</strong> CPU-heavy routes, blocking upstream API/DB calls, or slow responses that would stall a single event loop.</p>
           <ul>
-            <li><strong>Handshake Elimination:</strong> Reusing established TCP connections avoids repeated 3-way handshakes (SYN &rarr; SYN-ACK &rarr; ACK).</li>
-            <li><strong>TCP Congestion Window:</strong> Sockets maintain warmed-up congestion windows (cwnd), yielding high throughput for bursty API traffic.</li>
-            <li><strong>Dual-Mode:</strong> <code>server.keep_alive(true)</code> (default) or <code>server.keep_alive(false)</code> for one-shot checkups.</li>
+            <li><strong>Race-Free Isolation:</strong> Concurrent workers bypass mutable shared singletons (<code>ServerState</code> / <code>DefaultRouter</code>) and pass thread-safe local config.</li>
+            <li><strong>Clean Shutdown:</strong> Launch under <code>fixed srv = rush Server.new(...).serve_concurrent(...)</code> and stop cleanly via <code>srv.cancel()</code> (or a <code>stop: maybe Chan[int]</code> channel) so all workers cancel and join deterministically.</li>
           </ul>
         </div>
       </div>
@@ -501,33 +500,60 @@
         show(<span class="string">"serve terminated: "</span>, err)
     }
 <span class="keyword">fi</span></code></pre>
+
+      <h3>Concurrent Worker Pool (<code>serve_concurrent</code>)</h3>
+      <p>
+        Use <code>Server.new(addr).serve_concurrent(handler, workers, stop)</code> (or the top-level <code>serve_concurrent(...)</code> helper) when requests perform slower work or concurrent backend aggregation. When launched with <code>rush</code>, calling <code>srv.cancel()</code> cleanly drains and stops the accept loop and all workers:
+      </p>
+      <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, WebError, text_response }
+
+<span class="keyword">task</span> handle_api(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
+    &lt;- text_response(<span class="string">"hello from concurrent worker"</span>, r)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> srv = <span class="keyword">rush</span> Server.new(<span class="string">"127.0.0.1:8080"</span>).serve_concurrent(handle_api, <span class="number">4</span>)
+    <span class="comment">; ... run health checks or background orchestration ...</span>
+    srv.cancel()
+    &lt;&lt;- srv { <span class="keyword">failure</span> _ }
+<span class="keyword">fi</span></code></pre>
     </section>
 
     <section>
-      <h2><span class="icon">📡</span> 5. HTTP Client</h2>
+      <h2><span class="icon">📡</span> 5. HTTP Client &amp; Parallel Requests with Commitments</h2>
       <p>
-        <code>std/web</code> includes a high-performance HTTP client for REST queries, microservice RPC, and external API requests:
+        <code>std/web</code> includes an HTTP client (<code>Client</code>, <code>fetch</code>, <code>fetch_json</code>, <code>fetch_post</code>, and <code>fetch_with_timeout</code>) for REST queries and microservice calls. Because <code>rush</code> supports single-destination <strong>region splicing</strong>, you can launch multiple <code>rush Client.fetch(...)</code> calls in parallel, let each worker build its <code>Response@r</code> in an isolated worker region, and splice each result directly into its destination caller region on settlement:
       </p>
 
-      <pre><code><span class="keyword">include</span> std/web { Client, fetch, fetch_json }
+      <pre><code><span class="keyword">include</span> std/web { Client, fetch_with_timeout }
 
 <span class="keyword">task</span> main()
-    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">region</span> r1 <span class="keyword">default</span>
+    <span class="keyword">region</span> r2
 
-    <span class="comment">; Simple GET request</span>
-    <span class="keyword">fixed</span> resp = fetch(<span class="string">"http://httpbin.org/get"</span>, r) { <span class="keyword">failure</span> err
-        show(<span class="string">"fetch failed: "</span>, err)
+    <span class="comment">; Launch both fetches concurrently; each splices its Response directly into r1 / r2 on wait</span>
+    <span class="keyword">fixed</span> c_profile = <span class="keyword">rush</span> Client.fetch(<span class="string">"http://127.0.0.1:8080/user"</span>, r1)
+    <span class="keyword">fixed</span> c_score   = <span class="keyword">rush</span> fetch_with_timeout(<span class="string">"http://127.0.0.1:8080/score"</span>, <span class="number">2000</span>, r2)
+
+    <span class="keyword">fixed</span> profile = &lt;&lt;- c_profile { <span class="keyword">failure</span> err
+        show(<span class="string">"profile failed: "</span>, err)
         &lt;-
     }
-    show(<span class="string">"status: "</span>, resp.status)
-    show(<span class="string">"body: "</span>, resp.body())
-
-    <span class="comment">; POST JSON payload</span>
-    <span class="keyword">fixed</span> post_resp = fetch_json(<span class="string">"http://httpbin.org/post"</span>, <span class="string">"{\"name\": \"Vela\", \"active\": true}"</span>, r) { <span class="keyword">failure</span> _
+    <span class="keyword">fixed</span> score = &lt;&lt;- c_score { <span class="keyword">failure</span> err
+        show(<span class="string">"score failed: "</span>, err)
         &lt;-
     }
-    show(<span class="string">"post status: "</span>, post_resp.status)
+    show(<span class="string">"profile="</span>, profile.body_data, <span class="string">" score="</span>, score.body_data)
 <span class="keyword">fi</span></code></pre>
+
+      <div class="callout">
+        <strong>Use Cases &amp; Complete Example:</strong>
+        <ul>
+          <li><strong>API Gateway Fan-Out:</strong> Fetch user profile, permissions, and billing concurrently and combine results once both settle.</li>
+          <li><strong>Replica Racing &amp; Hedged Requests:</strong> Combine <code>rush Client.fetch(...)</code> with <code>select ... case after ms ... fi</code> so losing HTTP commitments are automatically cancelled.</li>
+          <li><strong>Full Runnable Demo:</strong> See <a href="../examples/io_and_system/web_concurrent.vela"><code>examples/io_and_system/web_concurrent.vela</code></a> (concurrent 2-worker server + parallel region-spliced client requests + <code>srv.cancel()</code> shutdown).</li>
+        </ul>
+      </div>
     </section>
 
     <section>
