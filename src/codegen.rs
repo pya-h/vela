@@ -104,6 +104,8 @@ pub struct Generator {
     current_task_owner: Option<String>,
     current_task_has_this: bool,
     block_commitments: Vec<Option<String>>,
+    commit_var_scopes: HashMap<String, String>,
+    pending_commit_scope: Option<String>,
     doing_helpers: Vec<String>,
 }
 
@@ -180,6 +182,8 @@ impl Default for Generator {
             current_task_owner: None,
             current_task_has_this: false,
             block_commitments: Vec::new(),
+            commit_var_scopes: HashMap::new(),
+            pending_commit_scope: None,
             doing_helpers: Vec::new(),
         }
     }
@@ -970,6 +974,8 @@ impl Generator {
         self.ret = Type::Nothing;
         self.regions.clear();
         self.block_commitments.clear();
+        self.commit_var_scopes.clear();
+        self.pending_commit_scope = None;
         self.results.clear();
         self.pointers.clear();
         self.hidden.clear();
@@ -1093,6 +1099,8 @@ impl Generator {
         self.const_vars.clear();
         self.regions.clear();
         self.block_commitments.clear();
+        self.commit_var_scopes.clear();
+        self.pending_commit_scope = None;
         self.loops.clear();
         self.results.clear();
         self.block_vars.clear();
@@ -2205,6 +2213,37 @@ impl Generator {
                     maybe_ctype
                 ));
             }
+            self.w.close();
+        }
+        for (payload_ty, maybe_commit_ty) in &used.maybe_commitments {
+            let (word, slot_ctype, maybe_payload_ctype) = (
+                type_word(payload_ty),
+                c_type(maybe_commit_ty),
+                c_type(&Type::Maybe(Box::new(payload_ty.clone()))),
+            );
+            self.w.open(&format!(
+                "VELA__RT__MAYBE_UNUSED static inline {} vela__maybe_commit_poll__{}({}* slot)",
+                maybe_payload_ctype, word, slot_ctype
+            ));
+            self.w.open("if (!slot->has || slot->value <= 0)");
+            if is_pointer(payload_ty) {
+                self.w.line("return NULL;");
+            } else {
+                self.w
+                    .line(&format!("{} empty = {{ 0 }};", maybe_payload_ctype));
+                self.w.line("return empty;");
+            }
+            self.w.close();
+            self.w.line(&format!(
+                "{} res = vela__commit_poll__{}(slot->value);",
+                maybe_payload_ctype, word
+            ));
+            if is_pointer(payload_ty) {
+                self.w.line("if (res != NULL) { slot->has = false; }");
+            } else {
+                self.w.line("if (res.has) { slot->has = false; }");
+            }
+            self.w.line("return res;");
             self.w.close();
         }
     }
@@ -3512,6 +3551,8 @@ impl Generator {
             .collect();
         self.regions.clear();
         self.block_commitments.clear();
+        self.commit_var_scopes.clear();
+        self.pending_commit_scope = None;
         self.loops.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         self.task = shown_name(&t.name);
@@ -4416,7 +4457,10 @@ impl Generator {
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                if matches!(e.kind, ExprKind::PlanB { .. }) && !expr.is_empty() {
+                if (matches!(e.kind, ExprKind::PlanB { .. })
+                    || matches!(e.ty.as_ref(), Some(Type::Commitment(_))))
+                    && !expr.is_empty()
+                {
                     self.w.line(&format!("(void){};", expr));
                 } else if !expr.is_empty() {
                     self.w.line(&format!("{};", expr));
@@ -4513,6 +4557,12 @@ impl Generator {
                         {
                             vars.push((bound.name.clone(), shape.clone()));
                         }
+                        if matches!(ty, Type::Maybe(m) if matches!(m.as_ref(), Type::Commitment(_)))
+                            && let Some(Some(scope_var)) = self.block_commitments.last()
+                        {
+                            self.commit_var_scopes
+                                .insert(bound.name.clone(), scope_var.clone());
+                        }
                     }
                 }
             }
@@ -4605,7 +4655,22 @@ impl Generator {
                         self.gen_mutation_trigger(lhs)?;
                     } else {
                         let l = self.gen_place(lhs)?;
-                        let r = self.gen_expr(rhs)?;
+                        let saved_scope = if let ExprKind::Var(vname) = &lhs.kind
+                            && let Some(scope_var) = self.commit_var_scopes.get(vname).cloned()
+                        {
+                            self.w.line(&format!(
+                                "if ({0}.has && {0}.value > 0) {{ vela__rt__commit_cancel({0}.value); }}",
+                                l
+                            ));
+                            Some(self.pending_commit_scope.replace(scope_var))
+                        } else {
+                            None
+                        };
+                        let r = self.gen_expr(rhs);
+                        if let Some(prev_scope) = saved_scope {
+                            self.pending_commit_scope = prev_scope;
+                        }
+                        let r = r?;
                         self.w.line(&format!("{} = {};", l, r));
                         self.gen_mutation_trigger(lhs)?;
                         // Giving a made value a name (whole assignment) runs
@@ -6714,12 +6779,51 @@ impl Generator {
             };
             return Ok(Some(format!("vela__commit_poll__{}({})", type_word(payload), chan)));
         }
+        if name == "poll"
+            && let Some(arg0) = args.first()
+            && let Ok(Type::Maybe(m)) = arg0.ty()
+            && let Type::Commitment(inner) = m.as_ref()
+        {
+            let addr = self.gen_address(arg0)?;
+            let payload = match inner.as_ref() {
+                Type::Own(p) => p.as_ref(),
+                other => other,
+            };
+            return Ok(Some(format!(
+                "vela__maybe_commit_poll__{}({})",
+                type_word(payload),
+                addr
+            )));
+        }
         if name == "cancel"
             && let Some(arg0) = args.first()
             && matches!(arg0.ty(), Ok(Type::Commitment(_)))
         {
             let chan = self.gen_expr(arg0)?;
             return Ok(Some(format!("vela__rt__commit_cancel({})", chan)));
+        }
+        if name == "cancel"
+            && let Some(arg0) = args.first()
+            && matches!(arg0.ty(), Ok(Type::Maybe(m)) if matches!(m.as_ref(), Type::Commitment(_)))
+        {
+            let addr = self.gen_address(arg0)?;
+            return Ok(Some(format!(
+                "(({0})->has && ({0})->value > 0 ? (vela__rt__commit_cancel(({0})->value), (void)0) : (void)0)",
+                addr
+            )));
+        }
+        if name == "then" && args.len() == 2 {
+            let Some((arg0, rest)) = args.split_first() else { unreachable!() };
+            let Some(arg1) = rest.first() else { unreachable!() };
+            if matches!(arg0.ty(), Ok(Type::Commitment(_))) {
+                return Ok(Some(self.gen_commit_combinator(e, arg0, arg1, false)?));
+            }
+            return Ok(Some(self.gen_invoke(e, arg1, std::slice::from_ref(arg0))?));
+        }
+        if name == "recover" && args.len() == 2 {
+            let Some((arg0, rest)) = args.split_first() else { unreachable!() };
+            let Some(arg1) = rest.first() else { unreachable!() };
+            return Ok(Some(self.gen_commit_combinator(e, arg0, arg1, true)?));
         }
         if name == CLOSE
             && let Some(arg0) = args.first()
@@ -6888,28 +6992,43 @@ impl Generator {
             }
             _ => Err(Error::internal_at(
                 expr.span,
-                "unsupported expression inside 'doing'",
+                "unsupported expression inside 'rush'",
             )),
         }
     }
 
     #[inline(never)]
     fn gen_doing(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
-        let payload_ty = match e.ty()? {
-            Type::Commitment(res) => match res.as_ref() {
-                Type::Own(p) => p.as_ref().clone(),
-                other => other.clone(),
-            },
+        let res_ty = match e.ty()? {
+            Type::Commitment(res) => res.as_ref().clone(),
             other => {
                 return Err(Error::internal_at(
                     e.span,
-                    format!("'doing' expected Commitment, got {}", other),
+                    format!("'rush' expected Commitment, got {}", other),
                 ));
             }
         };
+        let payload_ty = match &res_ty {
+            Type::Own(p) => p.as_ref().clone(),
+            other => other.clone(),
+        };
+
+        let ret_dest_region = res_ty
+            .regions()
+            .into_iter()
+            .find(|r| *r != ANY_REGION)
+            .map(str::to_string);
 
         let mut captured = Vec::new();
         let rewritten = self.rewrite_doing_expr(inner, &mut captured)?;
+
+        let needs_worker_region = ret_dest_region.is_some()
+            || captured.iter().any(|(_, ty, _)| {
+                *ty == Type::Region
+                    || (!matches!(ty, Type::Task(_) | Type::Closure(_))
+                        && !ty.regions().is_empty()
+                        && self.needs_fix(&fix_type(ty)))
+            });
 
         let id = self.temp_counter;
         self.temp_counter += 1;
@@ -6926,12 +7045,34 @@ impl Generator {
             "vela__chan_t {} = vela__rt__commit_create((int64_t)sizeof({}));",
             handle_var, payload_c
         ));
-        if let Some(Some(scope_var)) = self.block_commitments.last() {
+        if let Some(dest_r) = &ret_dest_region {
+            self.w.line(&format!(
+                "vela__rt__commit_set_target({}, {});",
+                handle_var,
+                c_ident(dest_r)
+            ));
+        }
+        let scope_var = self
+            .pending_commit_scope
+            .clone()
+            .or_else(|| self.block_commitments.last().and_then(|s| s.as_ref()).cloned());
+        if let Some(scope_var) = scope_var {
             self.w.line(&format!(
                 "vela__rt__commit_scope_push(&{}, {});",
                 scope_var, handle_var
             ));
         }
+
+        let wr_var = if needs_worker_region {
+            let wr = self.fresh_temp("wr");
+            self.w.line(&format!(
+                "vela__rt__region* {} = vela__rt__commit_worker_region_ptr({});",
+                wr, handle_var
+            ));
+            Some(wr)
+        } else {
+            None
+        };
 
         let ctx_var = self.fresh_temp("dctx");
         self.w.line(&format!(
@@ -6940,13 +7081,33 @@ impl Generator {
         ));
         self.w.open(&format!("if ({} == NULL)", ctx_var));
         self.w
-            .line("vela__rt__int_trap(\"out of memory starting doing task\", \"doing\");");
+            .line("vela__rt__int_trap(\"out of memory starting rush task\", \"rush\");");
         self.w.close();
         self.w
             .line(&format!("{}->handle = {};", ctx_var, handle_var));
-        for (idx, (_, _, tmp)) in captured.iter().enumerate() {
-            self.w
-                .line(&format!("{}->arg_{} = {};", ctx_var, idx, tmp));
+        for (idx, (_, ty, tmp)) in captured.iter().enumerate() {
+            if *ty == Type::Region {
+                let wr = wr_var.as_deref().unwrap_or("NULL");
+                self.w.line(&format!("(void){};", tmp));
+                self.w
+                    .line(&format!("{}->arg_{} = {};", ctx_var, idx, wr));
+            } else if !matches!(ty, Type::Task(_) | Type::Closure(_))
+                && !ty.regions().is_empty()
+                && self.needs_fix(&fix_type(ty))
+            {
+                let wr = wr_var.as_deref().unwrap_or("NULL");
+                self.w.line(&format!(
+                    "{}->arg_{} = {}({}, {});",
+                    ctx_var,
+                    idx,
+                    copy_helper("copied", ty),
+                    wr,
+                    tmp
+                ));
+            } else {
+                self.w
+                    .line(&format!("{}->arg_{} = {};", ctx_var, idx, tmp));
+            }
         }
         self.w
             .line(&format!("vela__rt__commit_start({}, {});", fn_name, ctx_var));
@@ -6962,6 +7123,8 @@ impl Generator {
         let saved_block_vars = std::mem::take(&mut self.block_vars);
         let saved_block_events = std::mem::take(&mut self.block_events);
         let saved_block_commitments = std::mem::take(&mut self.block_commitments);
+        let saved_commit_vars = std::mem::take(&mut self.commit_var_scopes);
+        let saved_pending_scope = self.pending_commit_scope.take();
         let saved_renames = std::mem::take(&mut self.renames);
         let saved_active_events = std::mem::take(&mut self.active_events);
         let saved_const_vars = std::mem::take(&mut self.const_vars);
@@ -7028,6 +7191,8 @@ impl Generator {
         self.block_vars = saved_block_vars;
         self.block_events = saved_block_events;
         self.block_commitments = saved_block_commitments;
+        self.commit_var_scopes = saved_commit_vars;
+        self.pending_commit_scope = saved_pending_scope;
         self.renames = saved_renames;
         self.active_events = saved_active_events;
         self.const_vars = saved_const_vars;
@@ -7036,6 +7201,269 @@ impl Generator {
         self.current_task_has_this = saved_task_has_this;
 
         body_res?;
+        self.doing_helpers.push(helper_code);
+        Ok(handle_var)
+    }
+
+    #[inline(never)]
+    fn gen_commit_combinator(
+        &mut self,
+        e: &Expr,
+        src_expr: &Expr,
+        fn_expr: &Expr,
+        is_recover: bool,
+    ) -> Result<String> {
+        let src_inner = match src_expr.ty()? {
+            Type::Commitment(inner) => inner.as_ref().clone(),
+            other => {
+                return Err(Error::internal_at(
+                    e.span,
+                    format!("expected Commitment in combinator, got {}", other),
+                ));
+            }
+        };
+        let src_payload = match &src_inner {
+            Type::Own(p) => p.as_ref().clone(),
+            other => other.clone(),
+        };
+        let out_inner = match e.ty()? {
+            Type::Commitment(inner) => inner.as_ref().clone(),
+            other => {
+                return Err(Error::internal_at(
+                    e.span,
+                    format!("expected Commitment result from combinator, got {}", other),
+                ));
+            }
+        };
+        let out_payload = match &out_inner {
+            Type::Own(p) => p.as_ref().clone(),
+            other => other.clone(),
+        };
+        let fn_ty = fn_expr.ty()?.clone();
+        let fn_task = match &fn_ty {
+            Type::Task(t) => t.as_ref().clone(),
+            Type::Closure(c) => c.task.clone(),
+            other => {
+                return Err(Error::internal_at(
+                    fn_expr.span,
+                    format!("expected task/lambda in combinator, got {}", other),
+                ));
+            }
+        };
+
+        let vals = self.gen_operands(&[src_expr, fn_expr])?;
+        let (src_h, fn_val) = match vals.as_slice() {
+            [a, b] => (a.clone(), b.clone()),
+            _ => unreachable!(),
+        };
+        let src_tmp = self.fresh_temp("csrc");
+        let fn_tmp = self.fresh_temp("cfn");
+        self.w.line(&format!("vela__chan_t {} = {};", src_tmp, src_h));
+        self.w
+            .line(&format!("{} {} = {};", c_type(&fn_ty), fn_tmp, fn_val));
+
+        let out_c = if out_payload == Type::Nothing {
+            "uint8_t".to_string()
+        } else {
+            c_type(&out_payload)
+        };
+        let handle_var = self.fresh_temp("commit");
+        self.w.line(&format!(
+            "vela__chan_t {} = vela__rt__commit_create((int64_t)sizeof({}));",
+            handle_var, out_c
+        ));
+        self.w.line(&format!(
+            "vela__rt__commit_set_upstream({}, {});",
+            handle_var, src_tmp
+        ));
+        if let Some(dest_r) = out_inner.regions().into_iter().find(|r| *r != ANY_REGION) {
+            self.w.line(&format!(
+                "vela__rt__commit_set_target({}, {});",
+                handle_var,
+                c_ident(dest_r)
+            ));
+        }
+        let scope_var = self
+            .pending_commit_scope
+            .clone()
+            .or_else(|| self.block_commitments.last().and_then(|s| s.as_ref()).cloned());
+        if let Some(scope_var) = scope_var {
+            self.w.line(&format!(
+                "vela__rt__commit_scope_push(&{}, {});",
+                scope_var, handle_var
+            ));
+        }
+
+        let id = self.temp_counter;
+        self.temp_counter += 1;
+        let ctx_ty = format!("vela__then_ctx_{}", id);
+        let fn_name = format!("vela__then_fn_{}", id);
+        let ctx_var = self.fresh_temp("tctx");
+        self.w.line(&format!(
+            "{}* {} = ({}*)malloc(sizeof({}));",
+            ctx_ty, ctx_var, ctx_ty, ctx_ty
+        ));
+        self.w.open(&format!("if ({} == NULL)", ctx_var));
+        self.w
+            .line("vela__rt__int_trap(\"out of memory starting continuation\", \"then\");");
+        self.w.close();
+        self.w
+            .line(&format!("{}->handle = {};", ctx_var, handle_var));
+        self.w
+            .line(&format!("{}->src = {};", ctx_var, src_tmp));
+        self.w.line(&format!("{}->fn = {};", ctx_var, fn_tmp));
+        self.w
+            .line(&format!("vela__rt__commit_start({}, {});", fn_name, ctx_var));
+
+        let saved_w = std::mem::take(&mut self.w);
+        self.w.open("typedef struct");
+        self.w.line("vela__chan_t handle;");
+        self.w.line("vela__chan_t src;");
+        self.w.line(&format!("{} fn;", c_type(&fn_ty)));
+        self.w.close_with(&format!(" {};", ctx_ty));
+        self.w.blank();
+
+        self.w.open(&format!("static void {}(void* __raw)", fn_name));
+        self.w
+            .line(&format!("{} __ctx = *({}*)__raw;", ctx_ty, ctx_ty));
+        self.w.line("free(__raw);");
+        self.w
+            .line("vela__chan_t __prev_commit = vela__rt__current_commitment;");
+        self.w
+            .line("vela__rt__current_commitment = __ctx.handle;");
+        self.w
+            .line("vela__rt__region* __wr = vela__rt__commit_worker_region_ptr(__ctx.handle);");
+        if src_payload == Type::Nothing {
+            self.w
+                .line("vela__rt__commit_wait_into(__ctx.src, NULL, __wr);");
+        } else {
+            let src_c = c_type(&src_payload);
+            self.w.line(&format!("{} __src_val;", src_c));
+            self.w
+                .line(&format!("memset(&__src_val, 0, sizeof({}));", src_c));
+            self.w
+                .line("vela__rt__commit_wait_into(__ctx.src, &__src_val, __wr);");
+        }
+
+        let widen_or_assign = |from: &Type, to: &Type, val: &str| -> String {
+            if from.without_regions() == to.without_regions() {
+                val.to_string()
+            } else {
+                format!("{}({})", widen_helper(from, to), val)
+            }
+        };
+
+        if !is_recover {
+            match (&src_payload, &out_payload) {
+                (Type::Or(s_val, s_err), Type::Or(o_val, o_err)) => {
+                    self.w.line(&format!("{} __res;", out_c));
+                    self.w
+                        .line(&format!("memset(&__res, 0, sizeof({}));", out_c));
+                    self.w.open("if (!__src_val.ok)");
+                    self.w.line("__res.ok = false;");
+                    self.w.line(&format!(
+                        "__res.error = {};",
+                        widen_or_assign(s_err, o_err, "__src_val.error")
+                    ));
+                    self.w.close();
+                    self.w.open("else");
+                    let call = if **s_val == Type::Nothing || fn_task.params.is_empty() {
+                        "(__ctx.fn)()".to_string()
+                    } else {
+                        "(__ctx.fn)(__src_val.value)".to_string()
+                    };
+                    if let Type::Or(_, f_err) = &fn_task.ret {
+                        self.w
+                            .line(&format!("{} __step = {};", c_type(&fn_task.ret), call));
+                        self.w.open("if (__step.ok)");
+                        self.w.line("__res.ok = true;");
+                        if **o_val != Type::Nothing {
+                            self.w.line("__res.value = __step.value;");
+                        }
+                        self.w.close();
+                        self.w.open("else");
+                        self.w.line("__res.ok = false;");
+                        self.w.line(&format!(
+                            "__res.error = {};",
+                            widen_or_assign(f_err, o_err, "__step.error")
+                        ));
+                        self.w.close();
+                    } else {
+                        if **o_val == Type::Nothing {
+                            self.w.line(&format!("{};", call));
+                            self.w.line("__res.ok = true;");
+                        } else {
+                            self.w.line(&format!("__res.value = {};", call));
+                            self.w.line("__res.ok = true;");
+                        }
+                    }
+                    self.w.close();
+                }
+                _ => {
+                    let call = if src_payload == Type::Nothing || fn_task.params.is_empty() {
+                        "(__ctx.fn)()".to_string()
+                    } else {
+                        "(__ctx.fn)(__src_val)".to_string()
+                    };
+                    if out_payload == Type::Nothing {
+                        self.w.line(&format!("{};", call));
+                        self.w.line("uint8_t __res = 1;");
+                    } else {
+                        self.w.line(&format!("{} __res = {};", out_c, call));
+                    }
+                }
+            }
+        } else {
+            let Type::Or(_, _) = &src_payload else {
+                return Err(Error::internal_at(
+                    e.span,
+                    "recover on non-fallible Commitment",
+                ));
+            };
+            let call = if fn_task.params.is_empty() {
+                "(__ctx.fn)()".to_string()
+            } else {
+                "(__ctx.fn)(__src_val.error)".to_string()
+            };
+            match &out_payload {
+                Type::Or(o_val, _) => {
+                    self.w.line(&format!("{} __res;", out_c));
+                    self.w
+                        .line(&format!("memset(&__res, 0, sizeof({}));", out_c));
+                    self.w.open("if (__src_val.ok)");
+                    self.w.line("__res.ok = true;");
+                    if **o_val != Type::Nothing {
+                        self.w.line("__res.value = __src_val.value;");
+                    }
+                    self.w.close();
+                    self.w.open("else");
+                    self.w.line(&format!("__res = {};", call));
+                    self.w.close();
+                }
+                Type::Nothing => {
+                    self.w.open("if (!__src_val.ok)");
+                    self.w.line(&format!("{};", call));
+                    self.w.close();
+                    self.w.line("uint8_t __res = 1;");
+                }
+                _ => {
+                    self.w.line(&format!("{} __res;", out_c));
+                    self.w.open("if (__src_val.ok)");
+                    self.w.line("__res = __src_val.value;");
+                    self.w.close();
+                    self.w.open("else");
+                    self.w.line(&format!("__res = {};", call));
+                    self.w.close();
+                }
+            }
+        }
+        self.w
+            .line("vela__rt__current_commitment = __prev_commit;");
+        self.w
+            .line("vela__rt__commit_complete(__ctx.handle, &__res);");
+        self.w.close();
+
+        let helper_code = std::mem::replace(&mut self.w, saved_w).out;
         self.doing_helpers.push(helper_code);
         Ok(handle_var)
     }
@@ -8610,8 +9038,14 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b) || ordered(&[a, b])
         }
-        ExprKind::Call { args, .. }
-        | ExprKind::Construct { args, .. }
+        ExprKind::Call { name, args, .. } => {
+            matches!(
+                (name.as_str(), args.first().and_then(|a| a.ty.as_ref())),
+                ("then" | "recover", Some(Type::Commitment(_)))
+            ) || args.iter().any(has_prelude)
+                || ordered(&args.iter().collect::<Vec<_>>())
+        }
+        ExprKind::Construct { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Tuple(args)
         | ExprKind::Join { parts: args, .. } => {
@@ -8693,6 +9127,7 @@ struct UsedTypes {
     slice_prepend: TypeList,
     channels: TypeList,
     commitments: TypeList,
+    maybe_commitments: Vec<(Type, Type)>,
 }
 
 #[derive(Default)]
@@ -8825,6 +9260,7 @@ impl UsedTypes {
             slice_prepend: TypeList::default(),
             channels: TypeList::default(),
             commitments: TypeList::default(),
+            maybe_commitments: Vec::new(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -9005,6 +9441,20 @@ impl UsedTypes {
             }
             Type::Maybe(inner) => {
                 self.add(inner);
+                if let Type::Commitment(c_inner) = inner.as_ref() {
+                    let payload = match c_inner.as_ref() {
+                        Type::Own(p) => p.as_ref().clone(),
+                        other => other.clone(),
+                    };
+                    if payload != Type::Nothing
+                        && !self
+                            .maybe_commitments
+                            .iter()
+                            .any(|(p, _)| type_word(p) == type_word(&payload))
+                    {
+                        self.maybe_commitments.push((payload, ty.clone()));
+                    }
+                }
                 if !is_pointer(inner) && !self.compounds.contains(ty) {
                     self.compounds.insert(ty.clone());
                 }
@@ -9318,7 +9768,35 @@ impl UsedTypes {
             | ExprKind::RegionAfter(_)
             | ExprKind::Shared { .. }
             | ExprKind::TypeOf(_) => {}
-            ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) | ExprKind::Doing(inner) => {
+            ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) => self.expr(inner),
+            ExprKind::Doing(inner) => {
+                fn collect_doing_copies(used: &mut UsedTypes, e: &Expr) {
+                    match &e.kind {
+                        ExprKind::Pipe(call) => collect_doing_copies(used, call),
+                        ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } => {
+                            if let ExprKind::MethodCall { value, .. } = &e.kind
+                                && !matches!(value.kind, ExprKind::Piped(_))
+                                && let Some(ty) = &value.ty
+                                && !matches!(ty, Type::Task(_) | Type::Closure(_) | Type::Region)
+                                && !ty.regions().is_empty()
+                            {
+                                note(&mut used.copied, ty);
+                            }
+                            for arg in args {
+                                if let ExprKind::Piped(prev) = &arg.kind {
+                                    collect_doing_copies(used, prev);
+                                } else if let Some(ty) = &arg.ty
+                                    && !matches!(ty, Type::Task(_) | Type::Closure(_) | Type::Region)
+                                    && !ty.regions().is_empty()
+                                {
+                                    note(&mut used.copied, ty);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                collect_doing_copies(self, inner);
                 self.expr(inner)
             }
             ExprKind::TaskValue(name) | ExprKind::Closure { lambda: name, .. } => {
@@ -9508,6 +9986,30 @@ impl UsedTypes {
                 if name == "show" {
                     for ty in args.iter().filter_map(|arg| arg.ty.as_ref()) {
                         self.note_write(ty);
+                    }
+                }
+                if (name == "then" || name == "recover")
+                    && let [arg0, arg1] = args.as_slice()
+                    && let (Some(Type::Commitment(out_inner)), Some(Type::Commitment(src_inner))) =
+                        (&e.ty, &arg0.ty)
+                    && let Type::Or(_, o_err) = out_inner.as_ref()
+                {
+                    if let Type::Or(_, s_err) = src_inner.as_ref()
+                        && s_err.without_regions() != o_err.without_regions()
+                    {
+                        self.widen(s_err, o_err);
+                    }
+                    if let Some(fn_ty) = &arg1.ty {
+                        let fn_ret = match fn_ty {
+                            Type::Task(t) => Some(&t.ret),
+                            Type::Closure(c) => Some(&c.task.ret),
+                            _ => None,
+                        };
+                        if let Some(Type::Or(_, f_err)) = fn_ret
+                            && f_err.without_regions() != o_err.without_regions()
+                        {
+                            self.widen(f_err, o_err);
+                        }
                     }
                 }
                 args.iter().for_each(|arg| self.expr(arg));
@@ -9808,7 +10310,13 @@ fn stmt_has_doing(stmt: &Stmt) -> bool {
                 || block_has_doing(&e.body)
         }
         StmtKind::Turns(turns) => turns.iter().any(|b| block_has_doing(b)),
-        StmtKind::Binding { init, .. } => init.iter().any(expr_has_doing),
+        StmtKind::Binding { names, init, .. } => {
+            names.iter().any(|b| {
+                b.ty.as_ref().is_some_and(|t| {
+                    matches!(t, Type::Maybe(m) if matches!(m.as_ref(), Type::Commitment(_)))
+                })
+            }) || init.iter().any(expr_has_doing)
+        }
         StmtKind::Assign(targets, values) => {
             targets.iter().any(target_has_doing) || values.iter().any(expr_has_doing)
         }
@@ -9910,8 +10418,13 @@ fn expr_has_doing(e: &Expr) -> bool {
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => expr_has_doing(a) || expr_has_doing(b),
-        ExprKind::Call { args, .. }
-        | ExprKind::Construct { args, .. }
+        ExprKind::Call { name, args, .. } => {
+            matches!(
+                (name.as_str(), args.first().and_then(|a| a.ty.as_ref())),
+                ("then" | "recover", Some(Type::Commitment(_)))
+            ) || args.iter().any(expr_has_doing)
+        }
+        ExprKind::Construct { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Tuple(args)
         | ExprKind::Scan { args, .. }

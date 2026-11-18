@@ -1,5 +1,5 @@
-  1 | ; Structured concurrency with colorless `doing` and `Commitment[T]`:
-    | comment:; Structured concurrency with colorless `doing` and `Commitment[T]`:
+  1 | ; Structured concurrency with colorless `rush` and `Commitment[T]`:
+    | comment:; Structured concurrency with colorless `rush` and `Commitment[T]`:
   2 | ; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
     | comment:; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
   3 | ; pipeline transformations (`<<- c |> ...`), `select` racing with automatic
@@ -74,10 +74,10 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  44 |     ; 1. Parallel fan-out + direct wait and pipe continuation
     | comment:; 1. Parallel fan-out + direct wait and pipe continuation
- 45 |     fixed a = doing fetch_score("alpha", 5)
-    | keyword:fixed  variable:a  operator:=  variable:doing  task:fetch_score  punctuation:(  string:"alpha"  punctuation:,  number:5  punctuation:)
- 46 |     fixed b = doing fetch_score("beta", -1)
-    | keyword:fixed  variable:b  operator:=  variable:doing  task:fetch_score  punctuation:(  string:"beta"  punctuation:,  operator:-  number:1  punctuation:)
+ 45 |     fixed a = rush fetch_score("alpha", 5)
+    | keyword:fixed  variable:a  operator:=  keyword:rush  task:fetch_score  punctuation:(  string:"alpha"  punctuation:,  number:5  punctuation:)
+ 46 |     fixed b = rush fetch_score("beta", -1)
+    | keyword:fixed  variable:b  operator:=  keyword:rush  task:fetch_score  punctuation:(  string:"beta"  punctuation:,  operator:-  number:1  punctuation:)
  48 |     fixed total_a = <<- a |> format_total() { failure e
     | keyword:fixed  variable:total_a  operator:=  operator:<<-  variable:a  operator:|>  task:format_total  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
  49 |         show("alpha err: ", e)
@@ -100,15 +100,15 @@
     | comment:; 2. Racing commitments in `select` auto-cancels losing commitment arms
  59 |     fixed replica_gate = chan_new<int>(1)
     | keyword:fixed  variable:replica_gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
- 60 |     fixed primary = doing query_replica("primary", replica_gate)
-    | keyword:fixed  variable:primary  operator:=  variable:doing  task:query_replica  punctuation:(  string:"primary"  punctuation:,  variable:replica_gate  punctuation:)
- 61 |     fixed mirror = doing fast_replica("mirror")
-    | keyword:fixed  variable:mirror  operator:=  variable:doing  task:fast_replica  punctuation:(  string:"mirror"  punctuation:)
+ 60 |     fixed primary = rush query_replica("primary", replica_gate)
+    | keyword:fixed  variable:primary  operator:=  keyword:rush  task:query_replica  punctuation:(  string:"primary"  punctuation:,  variable:replica_gate  punctuation:)
+ 61 |     fixed mirror = rush fast_replica("mirror")
+    | keyword:fixed  variable:mirror  operator:=  keyword:rush  task:fast_replica  punctuation:(  string:"mirror"  punctuation:)
  63 |     fixed fastest = select
     | keyword:fixed  variable:fastest  operator:=  keyword:select
- 64 |     case res <<- primary = res
+ 64 |         case res <<- primary = res
     | keyword:case  variable:res  operator:<<-  variable:primary  operator:=  variable:res
- 65 |     case res <<- mirror = res
+ 65 |         case res <<- mirror = res
     | keyword:case  variable:res  operator:<<-  variable:mirror  operator:=  variable:res
  66 |     fi
     | keyword:fi
@@ -122,8 +122,8 @@
     | keyword:fixed  variable:started  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
  72 |     fixed stopped = chan_new<text>(1)
     | keyword:fixed  variable:stopped  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
- 73 |     fixed worker = doing cooperative_job(started, stopped)
-    | keyword:fixed  variable:worker  operator:=  variable:doing  task:cooperative_job  punctuation:(  variable:started  punctuation:,  variable:stopped  punctuation:)
+ 73 |     fixed worker = rush cooperative_job(started, stopped)
+    | keyword:fixed  variable:worker  operator:=  keyword:rush  task:cooperative_job  punctuation:(  variable:started  punctuation:,  variable:stopped  punctuation:)
  74 |     <<- started
     | operator:<<-  variable:started
  75 |     when worker.poll() is none

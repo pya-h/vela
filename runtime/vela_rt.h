@@ -2000,6 +2000,35 @@ static inline void vela__rt__region_free(vela__rt__region* r) {
     r->newest = NULL;
 }
 
+/* Splices worker region chunks and closers into dst, or frees src when dst is NULL. */
+static inline void vela__rt__region_splice(vela__rt__region* dst, vela__rt__region* src) {
+    if (src == NULL) {
+        return;
+    }
+    if (dst == NULL) {
+        vela__rt__region_free(src);
+        return;
+    }
+    if (src->newest != NULL) {
+        vela__rt__chunk* tail = src->newest;
+        while (tail->previous != NULL) {
+            tail = tail->previous;
+        }
+        tail->previous = dst->newest;
+        dst->newest = src->newest;
+        src->newest = NULL;
+    }
+    if (src->closers != NULL) {
+        vela__rt__closer* tail = src->closers;
+        while (tail->next != NULL) {
+            tail = tail->next;
+        }
+        tail->next = dst->closers;
+        dst->closers = src->closers;
+        src->closers = NULL;
+    }
+}
+
 /* Unreachable sentinel silencing missing-return warnings in non-void C functions. */
 static inline _Noreturn void vela__rt__missing_send(const char* task) {
     fflush(stdout);
@@ -2624,22 +2653,24 @@ typedef struct vela__rt__socket_slot {
 } vela__rt__socket_slot;
 
 typedef struct vela__rt__socket_table {
-    vela__rt__socket_slot* slots;
+    vela__rt__socket_slot** slots;
     size_t count;
-    int64_t status;
+    pthread_mutex_t lock;
 } vela__rt__socket_table;
 
+static _Thread_local int64_t vela__rt__sock_last_status = VELA__RT__SOCK_OK;
+
 static inline vela__rt__socket_table* vela__rt__sockets(void) {
-    static vela__rt__socket_table table = { NULL, 0, VELA__RT__SOCK_OK };
+    static vela__rt__socket_table table = { NULL, 0, PTHREAD_MUTEX_INITIALIZER };
     return &table;
 }
 
 static inline int64_t vela__rt__web_socket_status(void) {
-    return vela__rt__sockets()->status;
+    return vela__rt__sock_last_status;
 }
 
 static inline int64_t vela__rt__sockets_done(int64_t status) {
-    vela__rt__sockets()->status = status;
+    vela__rt__sock_last_status = status;
     return status;
 }
 
@@ -2650,11 +2681,11 @@ static inline vela__rt__socket_slot* vela__rt__socket_of(int64_t handle) {
     vela__rt__socket_table* table = vela__rt__sockets();
     size_t index = (size_t)(handle & 0xffffffff);
     uint32_t generation = (uint32_t)(handle >> 32);
-    if (index >= table->count) {
-        return NULL;
-    }
-    vela__rt__socket_slot* slot = &table->slots[index];
-    return slot->fd >= 0 && slot->generation == generation ? slot : NULL;
+    pthread_mutex_lock(&table->lock);
+    vela__rt__socket_slot* slot = index < table->count ? table->slots[index] : NULL;
+    bool valid = slot != NULL && slot->fd >= 0 && slot->generation == generation;
+    pthread_mutex_unlock(&table->lock);
+    return valid ? slot : NULL;
 }
 
 static inline bool vela__rt__socket_set_nonblocking(int fd) {
@@ -2666,8 +2697,16 @@ static inline bool vela__rt__socket_set_nonblocking(int fd) {
 }
 
 static inline int64_t vela__rt__web_socket_close(int64_t handle) {
-    vela__rt__socket_slot* slot = vela__rt__socket_of(handle);
-    if (slot == NULL) {
+    if (handle < 0) {
+        return vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
+    }
+    vela__rt__socket_table* table = vela__rt__sockets();
+    size_t index = (size_t)(handle & 0xffffffff);
+    uint32_t generation = (uint32_t)(handle >> 32);
+    pthread_mutex_lock(&table->lock);
+    vela__rt__socket_slot* slot = index < table->count ? table->slots[index] : NULL;
+    if (slot == NULL || slot->fd < 0 || slot->generation != generation) {
+        pthread_mutex_unlock(&table->lock);
         return vela__rt__sockets_done(VELA__RT__SOCK_INVALID_HANDLE);
     }
     int fd = slot->fd;
@@ -2678,6 +2717,7 @@ static inline int64_t vela__rt__web_socket_close(int64_t handle) {
     slot->out_bytes = NULL;
     slot->in_len = slot->in_cap = 0;
     slot->out_start = slot->out_len = slot->out_cap = 0;
+    pthread_mutex_unlock(&table->lock);
     int res = close(fd);
     return vela__rt__sockets_done(res == 0 ? VELA__RT__SOCK_OK : VELA__RT__SOCK_FAILED);
 }
@@ -2688,29 +2728,41 @@ static inline void vela__rt__web_socket_closer_hook(int64_t handle) {
 
 static inline int64_t vela__rt__socket_alloc_slot(int fd, vela__rt__region* within) {
     vela__rt__socket_table* table = vela__rt__sockets();
+    pthread_mutex_lock(&table->lock);
     size_t index = 0;
-    while (index < table->count && table->slots[index].fd >= 0) {
+    while (index < table->count && table->slots[index]->fd >= 0) {
         index++;
     }
     if (index == table->count) {
         size_t count = table->count == 0 ? 8 : table->count * 2;
-        if (count > 0xffffffffu || count > SIZE_MAX / sizeof(vela__rt__socket_slot)) {
+        if (count > 0xffffffffu || count > SIZE_MAX / sizeof(vela__rt__socket_slot*)) {
+            pthread_mutex_unlock(&table->lock);
             vela__rt__out_of_memory();
         }
-        vela__rt__socket_slot* slots = realloc(table->slots, count * sizeof(vela__rt__socket_slot));
+        vela__rt__socket_slot** slots = realloc(table->slots, count * sizeof(vela__rt__socket_slot*));
         if (slots == NULL) {
+            pthread_mutex_unlock(&table->lock);
             vela__rt__out_of_memory();
         }
         for (size_t i = table->count; i < count; i++) {
-            slots[i] = (vela__rt__socket_slot){ .fd = -1 };
+            vela__rt__socket_slot* fresh = calloc(1, sizeof(vela__rt__socket_slot));
+            if (fresh == NULL) {
+                table->slots = slots;
+                table->count = i;
+                pthread_mutex_unlock(&table->lock);
+                vela__rt__out_of_memory();
+            }
+            fresh->fd = -1;
+            slots[i] = fresh;
         }
         table->slots = slots;
         table->count = count;
     }
-    vela__rt__socket_slot* slot = &table->slots[index];
+    vela__rt__socket_slot* slot = table->slots[index];
     slot->fd = fd;
     slot->generation++;
     int64_t handle = (int64_t)(((uint64_t)slot->generation << 32) | (uint64_t)index);
+    pthread_mutex_unlock(&table->lock);
     if (within != NULL) {
         vela__rt__closer* closer = vela__rt__region_alloc(within, sizeof(vela__rt__closer), _Alignof(vela__rt__closer));
         closer->handle = handle;
@@ -4555,7 +4607,11 @@ typedef struct vela__rt__chan {
     bool closed;
     bool is_commitment;
     bool worker_done;
+    bool region_spliced;
     _Atomic bool cancelled;
+    vela__rt__region worker_region;
+    vela__rt__region* target_region;
+    int64_t upstream_commit;
     void (*on_message)(void* ctx);
     void* actor_ctx;
     bool scheduled;
@@ -4644,7 +4700,11 @@ static inline int64_t vela__rt__chan_new(int64_t cap_in, int64_t item_size_in) {
     chan->closed = false;
     chan->is_commitment = false;
     chan->worker_done = false;
+    chan->region_spliced = false;
     atomic_init(&chan->cancelled, false);
+    chan->worker_region = (vela__rt__region)VELA__RT__REGION_EMPTY;
+    chan->target_region = NULL;
+    chan->upstream_commit = 0;
     chan->on_message = NULL;
     chan->actor_ctx = NULL;
     chan->scheduled = false;
@@ -4877,6 +4937,10 @@ static inline bool vela__rt__select_try_arm(
         case VELA__RT__SELECT_RECV:
             if (chan->count > 0) {
                 vela__rt__chan_pop_locked(chan, arm->item_ptr, out_drained);
+                if (chan->is_commitment && !chan->region_spliced) {
+                    vela__rt__region_splice(chan->target_region, &chan->worker_region);
+                    chan->region_spliced = true;
+                }
                 ready = true;
             } else if (chan->closed) {
                 *out_closed = true;
@@ -5180,6 +5244,28 @@ static inline int64_t vela__rt__commit_create(int64_t item_size) {
     return handle;
 }
 
+static inline void vela__rt__commit_set_target(int64_t handle, vela__rt__region* target) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    chan->target_region = target;
+    vela__rt__chan_unpin(chan);
+}
+
+static inline void vela__rt__commit_set_upstream(int64_t handle, int64_t upstream) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return;
+    chan->upstream_commit = upstream;
+    vela__rt__chan_unpin(chan);
+}
+
+static inline vela__rt__region* vela__rt__commit_worker_region_ptr(int64_t handle) {
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return NULL;
+    vela__rt__region* wr = &chan->worker_region;
+    vela__rt__chan_unpin(chan);
+    return wr;
+}
+
 static inline void vela__rt__commit_start(void (*fn)(void* arg), void* arg) {
     vela__rt__sched_submit(fn, arg);
 }
@@ -5201,7 +5287,7 @@ static inline void vela__rt__commit_complete(int64_t handle, const void* item) {
     vela__rt__chan_unpin(chan);
 }
 
-static inline void vela__rt__commit_wait(int64_t handle, void* out_item) {
+static inline void vela__rt__commit_wait_into(int64_t handle, void* out_item, vela__rt__region* override_dst) {
     vela__rt__chan* chan = vela__rt__chan_of(handle);
     if (chan == NULL) {
         vela__rt__int_trap("cannot await an invalid commitment", "<<-");
@@ -5222,6 +5308,11 @@ static inline void vela__rt__commit_wait(int64_t handle, void* out_item) {
     if (chan->count > 0) {
         bool drained = false;
         vela__rt__chan_pop_locked(chan, out_item, &drained);
+        if (!chan->region_spliced) {
+            vela__rt__region* dst = override_dst != NULL ? override_dst : chan->target_region;
+            vela__rt__region_splice(dst, &chan->worker_region);
+            chan->region_spliced = true;
+        }
         got = true;
     }
     pthread_mutex_unlock(&chan->lock);
@@ -5231,15 +5322,39 @@ static inline void vela__rt__commit_wait(int64_t handle, void* out_item) {
     }
 }
 
+static inline void vela__rt__commit_wait(int64_t handle, void* out_item) {
+    vela__rt__commit_wait_into(handle, out_item, NULL);
+}
+
 static inline bool vela__rt__commit_poll(int64_t handle, void* out_item) {
-    return vela__rt__chan_try_recv(handle, out_item);
+    vela__rt__chan* chan = vela__rt__chan_of(handle);
+    if (chan == NULL) return false;
+    bool got = false;
+    pthread_mutex_lock(&chan->lock);
+    if (chan->count > 0) {
+        bool drained = false;
+        vela__rt__chan_pop_locked(chan, out_item, &drained);
+        if (!chan->region_spliced) {
+            vela__rt__region_splice(chan->target_region, &chan->worker_region);
+            chan->region_spliced = true;
+        }
+        got = true;
+    }
+    pthread_mutex_unlock(&chan->lock);
+    vela__rt__chan_unpin(chan);
+    return got;
 }
 
 static inline void vela__rt__commit_cancel(int64_t handle) {
-    vela__rt__chan* chan = vela__rt__chan_of(handle);
-    if (chan == NULL) return;
-    atomic_store_explicit(&chan->cancelled, true, memory_order_seq_cst);
-    vela__rt__chan_unpin(chan);
+    int64_t cur = handle;
+    for (int depth = 0; cur > 0 && depth < 64; depth++) {
+        vela__rt__chan* chan = vela__rt__chan_of(cur);
+        if (chan == NULL) break;
+        atomic_store_explicit(&chan->cancelled, true, memory_order_seq_cst);
+        int64_t up = chan->upstream_commit;
+        vela__rt__chan_unpin(chan);
+        cur = up;
+    }
 }
 
 static inline bool vela__rt__commit_is_cancelled(void) {
@@ -5268,6 +5383,10 @@ static inline void vela__rt__commit_scope_cleanup(int64_t handle) {
             } else {
                 pthread_mutex_lock(&chan->lock);
             }
+        }
+        if (!chan->region_spliced) {
+            vela__rt__region_free(&chan->worker_region);
+            chan->region_spliced = true;
         }
         pthread_mutex_unlock(&chan->lock);
         vela__rt__chan_unpin(chan);

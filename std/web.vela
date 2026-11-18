@@ -433,6 +433,10 @@ shape Server
     serve(handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
         <- run_event_loop(.this, handler)
     fi
+
+    serve_concurrent(handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route, workers: int = 4, stop: maybe Chan[int] = none) -> nothing ~ WebError
+        <- run_concurrent_server(.this, handler, workers, stop)
+    fi
 fi
 
 shape Client
@@ -481,6 +485,10 @@ fi
 
 task fetch_json(url: text@p, body: text@p, r: region default) -> Response@r ~ WebError@r
     <- Client.fetch_json(url, body, r)
+fi
+
+task fetch_with_timeout(url: text@p, timeout_ms: int, r: region default) -> Response@r ~ WebError@r
+    <- Client.new(timeout_ms).get(url, r)
 fi
 
 shape WebSocket
@@ -1048,8 +1056,8 @@ task is_request_complete(buf: text@p) -> bool
     <- true
 fi
 
-; Answers one whole request: the response is queued on the socket, not waited for.
-priv task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
+; Answers one whole request without consulting global mutable router state, so worker pools can run under `rush`.
+priv task dispatch_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
     fixed req_parsed = parse_request(raw, r) { failure e
         fixed why = match e
         case WebError.BadRequest why = why
@@ -1062,10 +1070,6 @@ priv task process_connection_request(flex client: Socket, raw: text@r, handler: 
     when req.body_data.len > max_body
         when err_handler is {eh}
             fixed err_resp = eh(WebError.PayloadTooLarge, req, r)
-            put_response(client, err_resp, false, r)
-            <- false
-        else when DefaultRouter.error_handler is {deh}
-            fixed err_resp = deh(WebError.PayloadTooLarge, req, r)
             put_response(client, err_resp, false, r)
             <- false
         fi
@@ -1083,8 +1087,6 @@ priv task process_connection_request(flex client: Socket, raw: text@r, handler: 
     fixed resp = handler(req, r) { failure err
         fixed err_resp = when err_handler is {eh}
             eh(err, req, r)
-        else when DefaultRouter.error_handler is {deh}
-            deh(err, req, r)
         else
             match err
             case WebError.RouteNotFound where_ = status(404, r, "Not Found").header("content-type", "text/plain").set_body("404 Not Found: {where_}\n")
@@ -1111,6 +1113,16 @@ priv task process_connection_request(flex client: Socket, raw: text@r, handler: 
 
     put_response(client, resp, will_keep, r)
     <- will_keep
+fi
+
+; Answers one whole request: the response is queued on the socket, not waited for.
+priv task process_connection_request(flex client: Socket, raw: text@r, handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, keep_alive_enabled: bool, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, r: region default) -> bool
+    fixed effective_eh = when err_handler is {eh}
+        err_handler
+    else
+        DefaultRouter.error_handler
+    fi
+    <- dispatch_connection_request(client, raw, handler, max_body, keep_alive_enabled, effective_eh, r)
 fi
 
 ; Closes a connection and frees its slot; what its socket kept goes with it.
@@ -1275,6 +1287,104 @@ fi
 task serve(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route) -> nothing ~ WebError
     fixed s = Server.new(addr)
     <- s.serve(handler)
+fi
+
+priv task serve_worker(queue: Chan[int], handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r)
+    endless
+        when cancelled()
+            <-
+        fi
+        select
+            case client_handle <<- queue
+                region req_r default
+                flex client = Socket { handle: client_handle }
+                fixed raw = read_http_request(client, max_body, req_r) { failure _
+                    send_error_response(client, 400, "Bad Request", "Malformed HTTP request\n", req_r)
+                    client.close() { failure _ }
+                    continue
+                }
+                dispatch_connection_request(client, raw, handler, max_body, false, err_handler, req_r)
+                drain(client, 5000)
+                client.close() { failure _ }
+            case none <<- queue
+                <-
+            case after 25
+        fi
+    fi
+fi
+
+priv task stop_requested(stop: maybe Chan[int]) -> bool
+    when cancelled()
+        <- true
+    fi
+    when stop is {ch}
+        fixed stopped = select
+            case _ <<- ch = true
+            case none <<- ch = true
+            otherwise = false
+        fi
+        <- stopped
+    fi
+    <- false
+fi
+
+priv task serve_accept_loop(server_sock: Socket, queue: Chan[int], stop: maybe Chan[int])
+    loop not stop_requested(stop)
+        fixed ready = server_sock.poll(1, 20) { 0 }
+        when ready > 0
+            fixed client_handle = native_socket_accept_owned(server_sock.raw_handle())
+            when client_handle >= 0
+                flex sent = false
+                loop not stop_requested(stop)
+                    select
+                        case client_handle ->> queue
+                            sent = true
+                            break
+                        case after 20
+                    fi
+                fi
+                when not sent
+                    native_socket_close(client_handle)
+                fi
+            fi
+        fi
+    fi
+    queue.close()
+fi
+
+priv task spawn_worker_pool(remaining: int, queue: Chan[int], handler: (Request@r, @r) -> Response@r ~ WebError@r, max_body: int, err_handler: maybe (WebError@r, Request@r, @r) -> Response@r, server_sock: Socket, stop: maybe Chan[int])
+    when remaining <= 0
+        serve_accept_loop(server_sock, queue, stop)
+        <-
+    fi
+    fixed worker = rush serve_worker(queue, handler, max_body, err_handler)
+    spawn_worker_pool(remaining - 1, queue, handler, max_body, err_handler, server_sock, stop)
+    worker.cancel()
+    <<- worker
+fi
+
+task run_concurrent_server(server: Server@p, handler: (Request@r, @r) -> Response@r ~ WebError@r, workers: int = 4, stop: maybe Chan[int] = none) -> nothing ~ WebError
+    region srv_r default
+    fixed (host, port) = parse_addr(server.addr)
+    fixed server_sock = Socket.open(srv_r) { failure _
+        <- fail WebError.ListenFailed
+    }
+    server_sock.bind_to(host, port) { failure _
+        <- fail WebError.ListenFailed
+    }
+    server_sock.listen(128) { failure _
+        <- fail WebError.ListenFailed
+    }
+    fixed count = when workers < 1 1 else workers fi
+    fixed queue = chan_new<int>(count * 4)
+    spawn_worker_pool(count, queue, handler, server.max_body_size, server.error_handler, server_sock, stop)
+    flex s_close = server_sock
+    s_close.close() { failure _ }
+fi
+
+task serve_concurrent(addr: text@p, handler: (Request@r, @r) -> Response@r ~ WebError@r = default_route, workers: int = 4, stop: maybe Chan[int] = none) -> nothing ~ WebError
+    fixed s = Server.new(addr)
+    <- s.serve_concurrent(handler, workers, stop)
 fi
 
 task is_interactive() -> bool

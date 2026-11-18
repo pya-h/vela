@@ -25,19 +25,19 @@ task main()
     ; 1. Non-blocking bounded send via `select` (`jobs` has cap 1 and is empty)
     fixed first = TaskItem { id: 7, label: "index" }
     fixed sent_status = select
-    case own first ->> jobs = "queued #1"
-    case msg <<- control = "control:" + msg
-    otherwise = "busy"
+        case own first ->> jobs = "queued #1"
+        case msg <<- control = "control:" + msg
+        otherwise = "busy"
     fi
     show(sent_status)
 
     ; Now `jobs` is full; `otherwise` runs immediately without moving `second`
     flex second = TaskItem { id: 8, label: "extra" }
     select
-    case own second ->> jobs
-        show("unexpected enqueue")
-    otherwise
-        show("full: kept item #", second.id)
+        case own second ->> jobs
+            show("unexpected enqueue")
+        otherwise
+            show("full: kept item #", second.id)
     fi
 
     ; Forward pending job to the actor so `jobs` drains
@@ -46,34 +46,34 @@ task main()
 
     ; 2. Wait for the worker reply via blocking value-giving `select` with timeout
     fixed reply = select
-    case code <<- done = "reply={code}"
-    case after 5000 = "timed out waiting for worker"
+        case code <<- done = "reply={code}"
+        case after 5000 = "timed out waiting for worker"
     fi
     show(reply)
 
     ; 3. Timeout arm (`case after ms`) when open channels are idle
     fixed wait_status = select
-    case code <<- done = "unexpected:{code}"
-    case msg <<- control = "unexpected:" + msg
-    case after 5 = "idle timeout"
+        case code <<- done = "unexpected:{code}"
+        case msg <<- control = "unexpected:" + msg
+        case after 5 = "idle timeout"
     fi
     show("wait: ", wait_status)
 
     ; 4. Closed detection (`case none <<- ch`) skips empty open `done`
     control.close()
     select
-    case code <<- done
-        show("done: ", code)
-    case none <<- control
-        show("control closed cleanly")
+        case code <<- done
+            show("done: ", code)
+        case none <<- control
+            show("control closed cleanly")
     fi
 
     ; Once all channels are closed, `otherwise` runs immediately instead of trapping
     done.close()
     fixed final_state = select
-    case code <<- done = "code:{code}"
-    case msg <<- control = "ctrl:" + msg
-    otherwise = "all channels closed"
+        case code <<- done = "code:{code}"
+        case msg <<- control = "ctrl:" + msg
+        otherwise = "all channels closed"
     fi
     show("final: ", final_state)
 

@@ -970,9 +970,7 @@ impl<'a> Knowledge<'a> {
             expect_operand = false;
         }
         if operand_ends.is_empty() {
-            if matches!(self.token(first), Some(Token::Ident(name)) if name == "doing")
-                && first < last
-            {
+            if self.token(first) == Some(&Token::Rush) && first < last {
                 if let Some(ty) = self
                     .start(first)
                     .and_then(|s| self.checked.exprs.get(&(s.line, s.col)))

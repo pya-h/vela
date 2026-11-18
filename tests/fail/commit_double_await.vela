@@ -4,7 +4,7 @@ task compute() -> int
 fi
 
 task main()
-    fixed c = doing compute()
+    fixed c = rush compute()
     show(<<- c)
     show(<<- c)
 fi

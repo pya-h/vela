@@ -1,7 +1,7 @@
   1 | ; Commitment pipelines (`.then` via `|>`): running multi-step fallible chains
     | comment:; Commitment pipelines (`.then` via `|>`): running multi-step fallible chains
-  2 | ; inside `doing (...)`, continuing with caller `.then` transformations after
-    | comment:; inside `doing (...)`, continuing with caller `.then` transformations after
+  2 | ; inside `rush (...)`, continuing with caller `.then` transformations after
+    | comment:; inside `rush (...)`, continuing with caller `.then` transformations after
   3 | ; `<<-`, applying inline lambda combinators, and combining parallel commitments.
     | comment:; `<<-`, applying inline lambda combinators, and combining parallel commitments.
   5 | kind OrderError
@@ -76,12 +76,12 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  50 |     region r default
     | keyword:region  region:r  keyword:default
- 52 |     ; 1. Whole `.then` pipeline executing concurrently inside `doing (...)`
-    | comment:; 1. Whole `.then` pipeline executing concurrently inside `doing (...)`
- 53 |     fixed ok_quote = doing ("20" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
-    | keyword:fixed  variable:ok_quote  operator:=  task:doing  punctuation:(  string:"20"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
- 54 |     fixed fail_quote = doing ("80" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
-    | keyword:fixed  variable:fail_quote  operator:=  task:doing  punctuation:(  string:"80"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
+ 52 |     ; 1. Whole `.then` pipeline executing concurrently inside `rush (...)`
+    | comment:; 1. Whole `.then` pipeline executing concurrently inside `rush (...)`
+ 53 |     fixed ok_quote = rush ("20" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    | keyword:fixed  variable:ok_quote  operator:=  keyword:rush  punctuation:(  string:"20"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
+ 54 |     fixed fail_quote = rush ("80" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    | keyword:fixed  variable:fail_quote  operator:=  keyword:rush  punctuation:(  string:"80"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
  56 |     ; 2. Post-await `.then` continuation pipeline with region formatting on the caller
     | comment:; 2. Post-await `.then` continuation pipeline with region formatting on the caller
  57 |     fixed badge = <<- ok_quote |> apply_discount(10) |> format_badge("ok") at r { failure e
@@ -104,22 +104,22 @@
     | builtin-fn:show  punctuation:(  string:"fallback total: "  punctuation:,  variable:fallback  punctuation:)
  68 |     ; 3. Inline lambda continuation after awaiting a commitment
     | comment:; 3. Inline lambda continuation after awaiting a commitment
- 69 |     fixed base_c = doing unit_price(10, 4)
-    | keyword:fixed  variable:base_c  operator:=  variable:doing  task:unit_price  punctuation:(  number:10  punctuation:,  number:4  punctuation:)
+ 69 |     fixed base_c = rush unit_price(10, 4)
+    | keyword:fixed  variable:base_c  operator:=  keyword:rush  task:unit_price  punctuation:(  number:10  punctuation:,  number:4  punctuation:)
  70 |     fixed mapped = <<- base_c |> then_map((x: int) -> int <- x * 2 + 5 fi)
     | keyword:fixed  variable:mapped  operator:=  operator:<<-  variable:base_c  operator:|>  task:then_map  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  operator:+  number:5  keyword:fi  punctuation:)
  71 |     show("lambda mapped: ", mapped)
     | builtin-fn:show  punctuation:(  string:"lambda mapped: "  punctuation:,  variable:mapped  punctuation:)
  73 |     ; 4. Dependent waterfall (stage 1 feeds stage 2) alongside parallel shipping job
     | comment:; 4. Dependent waterfall (stage 1 feeds stage 2) alongside parallel shipping job
- 74 |     fixed tier_c = doing load_profile_tier(105)
-    | keyword:fixed  variable:tier_c  operator:=  variable:doing  task:load_profile_tier  punctuation:(  number:105  punctuation:)
- 75 |     fixed ship_c = doing compute_shipping(8)
-    | keyword:fixed  variable:ship_c  operator:=  variable:doing  task:compute_shipping  punctuation:(  number:8  punctuation:)
+ 74 |     fixed tier_c = rush load_profile_tier(105)
+    | keyword:fixed  variable:tier_c  operator:=  keyword:rush  task:load_profile_tier  punctuation:(  number:105  punctuation:)
+ 75 |     fixed ship_c = rush compute_shipping(8)
+    | keyword:fixed  variable:ship_c  operator:=  keyword:rush  task:compute_shipping  punctuation:(  number:8  punctuation:)
  76 |     fixed discount_pct = <<- tier_c
     | keyword:fixed  variable:discount_pct  operator:=  operator:<<-  variable:tier_c
- 77 |     fixed discounted_ship_c = doing apply_discount(<<- ship_c, discount_pct)
-    | keyword:fixed  variable:discounted_ship_c  operator:=  variable:doing  task:apply_discount  punctuation:(  operator:<<-  variable:ship_c  punctuation:,  variable:discount_pct  punctuation:)
+ 77 |     fixed discounted_ship_c = rush apply_discount(<<- ship_c, discount_pct)
+    | keyword:fixed  variable:discounted_ship_c  operator:=  keyword:rush  task:apply_discount  punctuation:(  operator:<<-  variable:ship_c  punctuation:,  variable:discount_pct  punctuation:)
  78 |     show("final shipping: ", <<- discounted_ship_c)
     | builtin-fn:show  punctuation:(  string:"final shipping: "  punctuation:,  operator:<<-  variable:discounted_ship_c  punctuation:)
  79 | fi

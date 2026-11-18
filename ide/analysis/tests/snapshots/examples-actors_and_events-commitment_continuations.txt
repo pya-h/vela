@@ -1,0 +1,116 @@
+  1 | ; Demonstrates Commitment continuations:
+    | comment:; Demonstrates Commitment continuations:
+  2 | ; - inline `=> (v) { ... }` and `{ failure e ... }`
+    | comment:; - inline `=> (v) { ... }` and `{ failure e ... }`
+  3 | ; - fire-and-forget `call() => { ... }` statements
+    | comment:; - fire-and-forget `call() => { ... }` statements
+  4 | ; - fluent `.then(...)` and `.recover(...)` chaining
+    | comment:; - fluent `.then(...)` and `.recover(...)` chaining
+  5 | ; - caller-side `|> then(lambda)` with both plain lambdas and `[@r]` closures
+    | comment:; - caller-side `|> then(lambda)` with both plain lambdas and `[@r]` closures
+  7 | kind ServiceError
+    | keyword:kind  type:ServiceError
+  8 |     Timeout
+    | variant:Timeout
+  9 |     Invalid(msg: text)
+    | variant:Invalid  punctuation:(  field:msg  punctuation::  type-builtin:text  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 12 | task fetch_score(user_id: int) -> int ~ ServiceError
+    | keyword:task  task:fetch_score  punctuation:(  parameter:user_id  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:ServiceError
+ 13 |     when user_id <= 0
+    | keyword:when  parameter:user_id  operator:<=  number:0
+ 14 |         <- fail Invalid("non-positive id")
+    | keyword:<-  keyword:fail  variant:Invalid  punctuation:(  string:"non-positive id"  punctuation:)
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- user_id * 10
+    | keyword:<-  parameter:user_id  operator:*  number:10
+ 17 | fi
+    | keyword:fi
+ 19 | task compute_bonus(tier: int) -> int
+    | keyword:task  task:compute_bonus  punctuation:(  parameter:tier  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 20 |     <- tier * 5 + 2
+    | keyword:<-  parameter:tier  operator:*  number:5  operator:+  number:2
+ 21 | fi
+    | keyword:fi
+ 23 | task publish_audit(event_name: text, audit_log: Chan[text])
+    | keyword:task  task:publish_audit  punctuation:(  parameter:event_name  punctuation::  type-builtin:text  punctuation:,  parameter:audit_log  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)
+ 24 |     event_name ->> audit_log
+    | parameter:event_name  operator:->>  parameter:audit_log
+ 25 | fi
+    | keyword:fi
+ 27 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 28 |     region r default
+    | keyword:region  region:r  keyword:default
+ 30 |     ; 1. Inline continuation `=> (v) { ... }` on an ordinary call (implicit `rush`)
+    | comment:; 1. Inline continuation `=> (v) { ... }` on an ordinary call (implicit `rush`)
+ 31 |     fixed boosted = compute_bonus(4) => (pts) { pts + 100 }
+    | keyword:fixed  variable:boosted  operator:=  task:compute_bonus  punctuation:(  number:4  punctuation:)  operator:=>  punctuation:(  variable:pts  punctuation:)  punctuation:{  variable:pts  operator:+  number:100  punctuation:}
+ 32 |     show("inline => map: ", <<- boosted)
+    | builtin-fn:show  punctuation:(  string:"inline => map: "  punctuation:,  operator:<<-  variable:boosted  punctuation:)
+ 34 |     ; 2. Inline continuation with fallback `{ failure e ... }`
+    | comment:; 2. Inline continuation with fallback `{ failure e ... }`
+ 35 |     fixed safe_score = fetch_score(-3) => (s) { s * 2 } { failure e
+    | keyword:fixed  variable:safe_score  operator:=  task:fetch_score  punctuation:(  operator:-  number:3  punctuation:)  operator:=>  punctuation:(  variable:s  punctuation:)  punctuation:{  variable:s  operator:*  number:2  punctuation:}  punctuation:{  keyword:failure  variable:e
+ 36 |         show("inline => recovered: ", e)
+    | builtin-fn:show  punctuation:(  string:"inline => recovered: "  punctuation:,  variable:e  punctuation:)
+ 37 |         0
+    | number:0
+ 38 |     }
+    | punctuation:}
+ 39 |     fixed safe_val = <<- safe_score
+    | keyword:fixed  variable:safe_val  operator:=  operator:<<-  variable:safe_score
+ 40 |     show("safe_score: ", safe_val)
+    | builtin-fn:show  punctuation:(  string:"safe_score: "  punctuation:,  variable:safe_val  punctuation:)
+ 42 |     ; 3. Fire-and-forget `=> { ... }` within structured lexical scope
+    | comment:; 3. Fire-and-forget `=> { ... }` within structured lexical scope
+ 43 |     fixed audit1 = chan_new<text>(1)
+    | keyword:fixed  variable:audit1  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+ 44 |     fixed audit2 = chan_new<text>(1)
+    | keyword:fixed  variable:audit2  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+ 45 |     publish_audit("checkout_started", audit1) => { }
+    | task:publish_audit  punctuation:(  string:"checkout_started"  punctuation:,  variable:audit1  punctuation:)  operator:=>  punctuation:{  punctuation:}
+ 46 |     publish_audit("payment_settled", audit2) => { }
+    | task:publish_audit  punctuation:(  string:"payment_settled"  punctuation:,  variable:audit2  punctuation:)  operator:=>  punctuation:{  punctuation:}
+ 47 |     show("audit 1: ", <<- audit1)
+    | builtin-fn:show  punctuation:(  string:"audit 1: "  punctuation:,  operator:<<-  variable:audit1  punctuation:)
+ 48 |     show("audit 2: ", <<- audit2)
+    | builtin-fn:show  punctuation:(  string:"audit 2: "  punctuation:,  operator:<<-  variable:audit2  punctuation:)
+ 50 |     ; 4. Fluent `.then(...)` and `.recover(...)` on a Commitment handle
+    | comment:; 4. Fluent `.then(...)` and `.recover(...)` on a Commitment handle
+ 51 |     fixed raw_ok = rush fetch_score(7)
+    | keyword:fixed  variable:raw_ok  operator:=  keyword:rush  task:fetch_score  punctuation:(  number:7  punctuation:)
+ 52 |     fixed formatted = raw_ok.then(s -> s + 5)
+    | keyword:fixed  variable:formatted  operator:=  variable:raw_ok  punctuation:.  field:then  punctuation:(  parameter:s  operator:->  parameter:s  operator:+  number:5  punctuation:)
+ 53 |     fixed formatted_val = <<- formatted { failure _
+    | keyword:fixed  variable:formatted_val  operator:=  operator:<<-  variable:formatted  punctuation:{  keyword:failure  keyword:_
+ 54 |         0
+    | number:0
+ 55 |     }
+    | punctuation:}
+ 56 |     show("fluent .then: ", formatted_val)
+    | builtin-fn:show  punctuation:(  string:"fluent .then: "  punctuation:,  variable:formatted_val  punctuation:)
+ 58 |     fixed raw_err = rush fetch_score(0)
+    | keyword:fixed  variable:raw_err  operator:=  keyword:rush  task:fetch_score  punctuation:(  number:0  punctuation:)
+ 59 |     fixed fallback = raw_err.recover(e -> -1)
+    | keyword:fixed  variable:fallback  operator:=  variable:raw_err  punctuation:.  field:recover  punctuation:(  parameter:e  operator:->  operator:-  number:1  punctuation:)
+ 60 |     show("fluent .recover: ", <<- fallback)
+    | builtin-fn:show  punctuation:(  string:"fluent .recover: "  punctuation:,  operator:<<-  variable:fallback  punctuation:)
+ 62 |     ; 5. Piping an awaited Commitment into `|> then(lambda)` and `[@r]` closures
+    | comment:; 5. Piping an awaited Commitment into `|> then(lambda)` and `[@r]` closures
+ 63 |     fixed multiplier = 3
+    | keyword:fixed  variable:multiplier  operator:=  number:3
+ 64 |     fixed base_c = rush compute_bonus(2)
+    | keyword:fixed  variable:base_c  operator:=  keyword:rush  task:compute_bonus  punctuation:(  number:2  punctuation:)
+ 65 |     fixed final_total = (<<- base_c)
+    | keyword:fixed  variable:final_total  operator:=  punctuation:(  operator:<<-  variable:base_c  punctuation:)
+ 66 |         |> then(n -> n + 8)
+    | operator:|>  task:then  punctuation:(  parameter:n  operator:->  parameter:n  operator:+  number:8  punctuation:)
+ 67 |         |> then([@r] n -> n * multiplier)
+    | operator:|>  task:then  punctuation:(  punctuation:[  operator:@  region:r  punctuation:]  parameter:n  operator:->  parameter:n  operator:*  variable:multiplier  punctuation:)
+ 68 |     show("pipe |> then closure: ", final_total)
+    | builtin-fn:show  punctuation:(  string:"pipe |> then closure: "  punctuation:,  variable:final_total  punctuation:)
+ 69 | fi
+    | keyword:fi

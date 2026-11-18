@@ -1,0 +1,172 @@
+  1 | ; Demonstrates responsive async work inside a `std/gui` event loop using `maybe Commitment[T]`:
+    | comment:; Demonstrates responsive async work inside a `std/gui` event loop using `maybe Commitment[T]`:
+  2 | ; - Button click starts a background `rush` task stored in `flex job: maybe Commitment[int]`
+    | comment:; - Button click starts a background `rush` task stored in `flex job: maybe Commitment[int]`
+  3 | ; - Each frame keeps animating (`Canvas.draw_spinner`) and polling (`job.poll()`) without blocking UI
+    | comment:; - Each frame keeps animating (`Canvas.draw_spinner`) and polling (`job.poll()`) without blocking UI
+  4 | ; - Window pacing via `Window.frame_delay(ms)` avoids busy spinning
+    | comment:; - Window pacing via `Window.frame_delay(ms)` avoids busy spinning
+  5 | ; - Closing the window cancels any still-running background job at scope exit
+    | comment:; - Closing the window cancels any still-running background job at scope exit
+  7 | include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar, is_interactive, sleep_ms }
+    | keyword:include  module:std  operator:/  module:gui  punctuation:{  type:Window  punctuation:,  type:Canvas  punctuation:,  type:GuiEvent  punctuation:,  type:Point  punctuation:,  type:Rect  punctuation:,  type:Color  punctuation:,  type:Style  punctuation:,  type:Button  punctuation:,  type:ProgressBar  punctuation:,  task:is_interactive  punctuation:,  task:sleep_ms  punctuation:}
+  9 | task compute_report_async(base: int) -> int
+    | keyword:task  task:compute_report_async  punctuation:(  parameter:base  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     flex i = 0
+    | keyword:flex  variable:i  operator:=  number:0
+ 11 |     flex acc = 0
+    | keyword:flex  variable:acc  operator:=  number:0
+ 12 |     loop i < 6
+    | keyword:loop  variable:i  operator:<  number:6
+ 13 |         when cancelled()
+    | keyword:when  task:cancelled  punctuation:(  punctuation:)
+ 14 |             <- -1
+    | keyword:<-  operator:-  number:1
+ 15 |         fi
+    | keyword:fi
+ 16 |         sleep_ms(5)
+    | task:sleep_ms  punctuation:(  number:5  punctuation:)
+ 17 |         acc += base + i
+    | variable:acc  operator:+=  parameter:base  operator:+  variable:i
+ 18 |         i++
+    | variable:i  operator:++
+ 19 |     fi
+    | keyword:fi
+ 20 |     <- acc
+    | keyword:<-  variable:acc
+ 21 | fi
+    | keyword:fi
+ 23 | task draw_ui(canvas: Canvas, flex& win: Window, btn_load: Button, progress: ProgressBar, status_msg: text@r, loading: bool, tick: int)
+    | keyword:task  task:draw_ui  punctuation:(  parameter:canvas  punctuation::  type:Canvas  punctuation:,  keyword:flex  keyword:&  parameter:win  punctuation::  type:Window  punctuation:,  parameter:btn_load  punctuation::  type:Button  punctuation:,  parameter:progress  punctuation::  type:ProgressBar  punctuation:,  parameter:status_msg  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:loading  punctuation::  type-builtin:bool  punctuation:,  parameter:tick  punctuation::  type-builtin:int  punctuation:)
+ 24 |     canvas.clear(Color.hex(0x0F172A))
+    | parameter:canvas  punctuation:.  method:clear  punctuation:(  type:Color  punctuation:.  method:hex  punctuation:(  number:0x0F172A  punctuation:)  punctuation:)
+ 25 |     canvas.draw_text("Async GUI Worker Demo", Point { x: 24, y: 24 }, Color.white())
+    | parameter:canvas  punctuation:.  method:draw_text  punctuation:(  string:"Async GUI Worker Demo"  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:24  punctuation:,  field:y  punctuation::  number:24  punctuation:}  punctuation:,  type:Color  punctuation:.  method:white  punctuation:(  punctuation:)  punctuation:)
+ 26 |     canvas.draw_text(status_msg, Point { x: 24, y: 54 }, Color.hex(0x38BDF8))
+    | parameter:canvas  punctuation:.  method:draw_text  punctuation:(  parameter:status_msg  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:24  punctuation:,  field:y  punctuation::  number:54  punctuation:}  punctuation:,  type:Color  punctuation:.  method:hex  punctuation:(  number:0x38BDF8  punctuation:)  punctuation:)
+ 27 |     progress.draw(canvas)
+    | parameter:progress  punctuation:.  field:draw  punctuation:(  parameter:canvas  punctuation:)
+ 28 |     btn_load.draw(canvas, Point { x: 0, y: 0 }, false)
+    | parameter:btn_load  punctuation:.  method:draw  punctuation:(  parameter:canvas  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  keyword:false  punctuation:)
+ 29 |     when loading
+    | keyword:when  parameter:loading
+ 30 |         canvas.draw_spinner(Point { x: 270, y: 145 }, 14, tick, Color.hex(0xFBBF24))
+    | parameter:canvas  punctuation:.  method:draw_spinner  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:270  punctuation:,  field:y  punctuation::  number:145  punctuation:}  punctuation:,  number:14  punctuation:,  parameter:tick  punctuation:,  type:Color  punctuation:.  method:hex  punctuation:(  number:0xFBBF24  punctuation:)  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 |     win.present()
+    | parameter:win  punctuation:.  field:present  punctuation:(  punctuation:)
+ 33 | fi
+    | keyword:fi
+ 35 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 36 |     flex win = Window.open("Async GUI Commitments", 340, 210) { failure _
+    | keyword:flex  variable:win  operator:=  type:Window  punctuation:.  method:open  punctuation:(  string:"Async GUI Commitments"  punctuation:,  number:340  punctuation:,  number:210  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 37 |         show("failed opening window")
+    | builtin-fn:show  punctuation:(  string:"failed opening window"  punctuation:)
+ 38 |         <-
+    | keyword:<-
+ 39 |     }
+    | punctuation:}
+ 41 |     fixed btn_load = Button { rect: Rect { x: 24, y: 125, width: 150, height: 38 }, label: "Load Report", style: Style.primary() }
+    | keyword:fixed  variable:btn_load  operator:=  type:Button  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:24  punctuation:,  field:y  punctuation::  number:125  punctuation:,  field:width  punctuation::  number:150  punctuation:,  field:height  punctuation::  number:38  punctuation:}  punctuation:,  field:label  punctuation::  string:"Load Report"  punctuation:,  field:style  punctuation::  type:Style  punctuation:.  method:primary  punctuation:(  punctuation:)  punctuation:}
+ 42 |     flex progress = ProgressBar { rect: Rect { x: 24, y: 85, width: 220, height: 18 }, fill_color: Color.hex(0x10B981) }
+    | keyword:flex  variable:progress  operator:=  type:ProgressBar  punctuation:{  field:rect  punctuation::  type:Rect  punctuation:{  field:x  punctuation::  number:24  punctuation:,  field:y  punctuation::  number:85  punctuation:,  field:width  punctuation::  number:220  punctuation:,  field:height  punctuation::  number:18  punctuation:}  punctuation:,  field:fill_color  punctuation::  type:Color  punctuation:.  method:hex  punctuation:(  number:0x10B981  punctuation:)  punctuation:}
+ 43 |     flex job: maybe Commitment[int] = none
+    | keyword:flex  variable:job  punctuation::  keyword:maybe  type:Commitment  punctuation:[  variable:int  punctuation:]  operator:=  keyword:none
+ 44 |     flex result_val = 0
+    | keyword:flex  variable:result_val  operator:=  number:0
+ 45 |     flex has_result = false
+    | keyword:flex  variable:has_result  operator:=  keyword:false
+ 46 |     flex tick = 0
+    | keyword:flex  variable:tick  operator:=  number:0
+ 47 |     flex headless_sent_close = false
+    | keyword:flex  variable:headless_sent_close  operator:=  keyword:false
+ 48 |     fixed canvas = win.canvas()
+    | keyword:fixed  variable:canvas  operator:=  variable:win  punctuation:.  method:canvas  punctuation:(  punctuation:)
+ 50 |     when not is_interactive()
+    | keyword:when  keyword:not  task:is_interactive  punctuation:(  punctuation:)
+ 51 |         win.push_event(1, 60, 140, 1)  ; Click "Load Report"
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:1  punctuation:,  number:60  punctuation:,  number:140  punctuation:,  number:1  punctuation:)  comment:; Click "Load Report"
+ 52 |     fi
+    | keyword:fi
+ 54 |     loop win.is_open
+    | keyword:loop  variable:win  punctuation:.  field:is_open
+ 55 |         region frame default
+    | keyword:region  region:frame  keyword:default
+ 57 |         when job.poll() is { val }
+    | keyword:when  variable:job  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  punctuation:{  variable:val  punctuation:}
+ 58 |             result_val = val
+    | variable:result_val  operator:=  variable:val
+ 59 |             has_result = true
+    | variable:has_result  operator:=  keyword:true
+ 60 |             job = none
+    | variable:job  operator:=  keyword:none
+ 61 |             progress.set_value(100)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  number:100  punctuation:)
+ 62 |             show("async job settled: ", result_val)
+    | builtin-fn:show  punctuation:(  string:"async job settled: "  punctuation:,  variable:result_val  punctuation:)
+ 63 |             when not is_interactive() and not headless_sent_close
+    | keyword:when  keyword:not  task:is_interactive  punctuation:(  punctuation:)  keyword:and  keyword:not  variable:headless_sent_close
+ 64 |                 headless_sent_close = true
+    | variable:headless_sent_close  operator:=  keyword:true
+ 65 |                 win.push_event(7)  ; CloseRequested now that result settled
+    | variable:win  punctuation:.  field:push_event  punctuation:(  number:7  punctuation:)  comment:; CloseRequested now that result settled
+ 66 |             fi
+    | keyword:fi
+ 67 |         fi
+    | keyword:fi
+ 69 |         fixed ev = win.poll_event()
+    | keyword:fixed  variable:ev  operator:=  variable:win  punctuation:.  method:poll_event  punctuation:(  punctuation:)
+ 70 |         match ev
+    | keyword:match  variable:ev
+ 71 |         case GuiEvent.MouseDown x y btn
+    | keyword:case  type:GuiEvent  punctuation:.  variant:MouseDown  variable:x  variable:y  variable:btn
+ 72 |             when btn_load.rect.contains(Point { x: x, y: y }) and not has_result
+    | keyword:when  variable:btn_load  punctuation:.  field:rect  punctuation:.  method:contains  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  variable:x  punctuation:,  field:y  punctuation::  variable:y  punctuation:}  punctuation:)  keyword:and  keyword:not  variable:has_result
+ 73 |                 show("started async job from UI")
+    | builtin-fn:show  punctuation:(  string:"started async job from UI"  punctuation:)
+ 74 |                 progress.set_value(25)
+    | variable:progress  punctuation:.  method:set_value  punctuation:(  number:25  punctuation:)
+ 75 |                 job = rush compute_report_async(10)
+    | variable:job  operator:=  keyword:rush  task:compute_report_async  punctuation:(  number:10  punctuation:)
+ 76 |             fi
+    | keyword:fi
+ 77 |         case GuiEvent.CloseRequested
+    | keyword:case  type:GuiEvent  punctuation:.  variant:CloseRequested
+ 78 |             win.close()
+    | variable:win  punctuation:.  field:close  punctuation:(  punctuation:)
+ 79 |             show("window closed cleanly")
+    | builtin-fn:show  punctuation:(  string:"window closed cleanly"  punctuation:)
+ 80 |             break
+    | keyword:break
+ 81 |         case _
+    | keyword:case  keyword:_
+ 82 |         fi
+    | keyword:fi
+ 84 |         fixed loading = when job is none false else true fi
+    | keyword:fixed  variable:loading  operator:=  keyword:when  variable:job  keyword:is  keyword:none  keyword:false  keyword:else  keyword:true  keyword:fi
+ 85 |         fixed status_msg = when has_result
+    | keyword:fixed  variable:status_msg  operator:=  keyword:when  variable:has_result
+ 86 |             "Report ready: {result_val}" at frame
+    | string:"Report ready: {  variable:result_val  string:}"  keyword:at  region:frame
+ 87 |         else when loading
+    | keyword:else  keyword:when  variable:loading
+ 88 |             "Loading in background..."
+    | string:"Loading in background..."
+ 89 |         else
+    | keyword:else
+ 90 |             "Click Load Report to start"
+    | string:"Click Load Report to start"
+ 91 |         fi
+    | keyword:fi
+ 92 |         draw_ui(canvas, &win, btn_load, progress, status_msg, loading, tick)
+    | task:draw_ui  punctuation:(  variable:canvas  punctuation:,  operator:&  variable:win  punctuation:,  variable:btn_load  punctuation:,  variable:progress  punctuation:,  variable:status_msg  punctuation:,  variable:loading  punctuation:,  variable:tick  punctuation:)
+ 93 |         tick++
+    | variable:tick  operator:++
+ 94 |         win.frame_delay(5)
+    | variable:win  punctuation:.  field:frame_delay  punctuation:(  number:5  punctuation:)
+ 95 |     fi
+    | keyword:fi
+ 96 | fi
+    | keyword:fi

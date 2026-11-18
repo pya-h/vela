@@ -1,0 +1,114 @@
+  1 | ; Demonstrates concurrent web server + parallel client fetches using Commitments (`rush`):
+    | comment:; Demonstrates concurrent web server + parallel client fetches using Commitments (`rush`):
+  2 | ; - `Server.serve_concurrent(handler, workers)` runs a background pool of `rush` workers
+    | comment:; - `Server.serve_concurrent(handler, workers)` runs a background pool of `rush` workers
+  3 | ; - Two `rush Client.fetch(...)` requests run concurrently into caller regions via region splicing
+    | comment:; - Two `rush Client.fetch(...)` requests run concurrently into caller regions via region splicing
+  4 | ; - Clean shutdown via `Server.stop()` and structured block exit of the server commitment
+    | comment:; - Clean shutdown via `Server.stop()` and structured block exit of the server commitment
+  6 | include std/web { Server, Client, Request, Response, WebError, text_response, fetch_with_timeout, sleep_ms }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Server  punctuation:,  type:Client  punctuation:,  type:Request  punctuation:,  type:Response  punctuation:,  type:WebError  punctuation:,  task:text_response  punctuation:,  task:fetch_with_timeout  punctuation:,  task:sleep_ms  punctuation:}
+  8 | task api_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    | keyword:task  task:api_handler  punctuation:(  parameter:req  punctuation::  type:Request  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Response  operator:@  region:r  operator:~  type:WebError  operator:@  region:r
+  9 |     when req.path == "/health"
+    | keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/health"
+ 10 |         <- text_response("ok", r)
+    | keyword:<-  task:text_response  punctuation:(  string:"ok"  punctuation:,  region:r  punctuation:)
+ 11 |     else when req.path == "/user"
+    | keyword:else  keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/user"
+ 12 |         <- text_response("ada", r)
+    | keyword:<-  task:text_response  punctuation:(  string:"ada"  punctuation:,  region:r  punctuation:)
+ 13 |     else when req.path == "/score"
+    | keyword:else  keyword:when  parameter:req  punctuation:.  field:path  operator:==  string:"/score"
+ 14 |         <- text_response("980", r)
+    | keyword:<-  task:text_response  punctuation:(  string:"980"  punctuation:,  region:r  punctuation:)
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- text_response("unknown", r)
+    | keyword:<-  task:text_response  punctuation:(  string:"unknown"  punctuation:,  region:r  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task wait_server_up(url: text@p, r: region default) -> bool
+    | keyword:task  task:wait_server_up  punctuation:(  parameter:url  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:bool
+ 20 |     flex attempts = 0
+    | keyword:flex  variable:attempts  operator:=  number:0
+ 21 |     loop attempts < 40
+    | keyword:loop  variable:attempts  operator:<  number:40
+ 22 |         fixed ok = Client.fetch(url, r) { failure _
+    | keyword:fixed  variable:ok  operator:=  type:Client  punctuation:.  method:fetch  punctuation:(  parameter:url  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 23 |             sleep_ms(10)
+    | task:sleep_ms  punctuation:(  number:10  punctuation:)
+ 24 |             attempts++
+    | variable:attempts  operator:++
+ 25 |             continue
+    | keyword:continue
+ 26 |         }
+    | punctuation:}
+ 27 |         when ok.status == 200
+    | keyword:when  variable:ok  punctuation:.  field:status  operator:==  number:200
+ 28 |             <- true
+    | keyword:<-  keyword:true
+ 29 |         fi
+    | keyword:fi
+ 30 |         sleep_ms(10)
+    | task:sleep_ms  punctuation:(  number:10  punctuation:)
+ 31 |         attempts++
+    | variable:attempts  operator:++
+ 32 |     fi
+    | keyword:fi
+ 33 |     <- false
+    | keyword:<-  keyword:false
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     region r default
+    | keyword:region  region:r  keyword:default
+ 38 |     region r1
+    | keyword:region  region:r1
+ 39 |     region r2
+    | keyword:region  region:r2
+ 41 |     ; Start a 2-worker concurrent HTTP server in the background
+    | comment:; Start a 2-worker concurrent HTTP server in the background
+ 42 |     fixed srv = rush Server.new("127.0.0.1:18110").serve_concurrent(api_handler, 2)
+    | keyword:fixed  variable:srv  operator:=  keyword:rush  type:Server  punctuation:.  method:new  punctuation:(  string:"127.0.0.1:18110"  punctuation:)  punctuation:.  method:serve_concurrent  punctuation:(  task:api_handler  punctuation:,  number:2  punctuation:)
+ 43 |     wait_server_up("http://127.0.0.1:18110/health", r)
+    | task:wait_server_up  punctuation:(  string:"http://127.0.0.1:18110/health"  punctuation:,  region:r  punctuation:)
+ 45 |     ; Fan out two concurrent HTTP client calls with per-call region splicing
+    | comment:; Fan out two concurrent HTTP client calls with per-call region splicing
+ 46 |     fixed c_user = rush Client.fetch("http://127.0.0.1:18110/user", r1)
+    | keyword:fixed  variable:c_user  operator:=  keyword:rush  type:Client  punctuation:.  method:fetch  punctuation:(  string:"http://127.0.0.1:18110/user"  punctuation:,  region:r1  punctuation:)
+ 47 |     fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 2000, r2)
+    | keyword:fixed  variable:c_score  operator:=  keyword:rush  task:fetch_with_timeout  punctuation:(  string:"http://127.0.0.1:18110/score"  punctuation:,  number:2000  punctuation:,  region:r2  punctuation:)
+ 49 |     fixed user_resp = <<- c_user { failure e
+    | keyword:fixed  variable:user_resp  operator:=  operator:<<-  variable:c_user  punctuation:{  keyword:failure  variable:e
+ 50 |         show("user fetch failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"user fetch failed: "  punctuation:,  variable:e  punctuation:)
+ 51 |         Response.text("err", r1)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:"err"  punctuation:,  region:r1  punctuation:)
+ 52 |     }
+    | punctuation:}
+ 53 |     fixed score_resp = <<- c_score { failure e
+    | keyword:fixed  variable:score_resp  operator:=  operator:<<-  variable:c_score  punctuation:{  keyword:failure  variable:e
+ 54 |         show("score fetch failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"score fetch failed: "  punctuation:,  variable:e  punctuation:)
+ 55 |         Response.text("err", r2)
+    | type:Response  punctuation:.  method:text  punctuation:(  string:"err"  punctuation:,  region:r2  punctuation:)
+ 56 |     }
+    | punctuation:}
+ 58 |     show("user: ", user_resp.status, " ", user_resp.body_data)
+    | builtin-fn:show  punctuation:(  string:"user: "  punctuation:,  variable:user_resp  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:user_resp  punctuation:.  field:body_data  punctuation:)
+ 59 |     show("score: ", score_resp.status, " ", score_resp.body_data)
+    | builtin-fn:show  punctuation:(  string:"score: "  punctuation:,  variable:score_resp  punctuation:.  field:status  punctuation:,  string:" "  punctuation:,  variable:score_resp  punctuation:.  field:body_data  punctuation:)
+ 61 |     srv.cancel()
+    | variable:srv  punctuation:.  field:cancel  punctuation:(  punctuation:)
+ 62 |     <<- srv { failure e
+    | operator:<<-  variable:srv  punctuation:{  keyword:failure  variable:e
+ 63 |         show("server stopped with error: ", e)
+    | builtin-fn:show  punctuation:(  string:"server stopped with error: "  punctuation:,  variable:e  punctuation:)
+ 64 |     }
+    | punctuation:}
+ 65 |     show("server cleanly stopped")
+    | builtin-fn:show  punctuation:(  string:"server cleanly stopped"  punctuation:)
+ 66 | fi
+    | keyword:fi

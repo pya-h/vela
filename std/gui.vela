@@ -129,6 +129,28 @@ shape Canvas
         native_gui_canvas_draw_text(.handle, pos.x, pos.y, msg, c.r, c.g, c.b, c.a)
     fi
 
+    draw_spinner(center: Point, radius: int, tick: int, c: Color)
+        fixed r = when radius < 4 4 else radius fi
+        fixed d = (r * 7) / 10
+        fixed active = tick % 8
+        fixed ox = [0, d, r, d, 0, -d, -r, -d]
+        fixed oy = [-r, -d, 0, d, r, d, 0, -d]
+        flex i = 0
+        loop i < 8
+            fixed inner_x = center.x + ox[i] / 2
+            fixed inner_y = center.y + oy[i] / 2
+            fixed outer_x = center.x + ox[i]
+            fixed outer_y = center.y + oy[i]
+            fixed col = when i == active
+                c
+            else
+                Color { r: c.r / 2, g: c.g / 2, b: c.b / 2, a: c.a }
+            fi
+            .draw_line(inner_x, inner_y, outer_x, outer_y, col)
+            i++
+        fi
+    fi
+
     export_ppm(r: region default) -> text@r
         <- native_gui_canvas_export_ppm(.handle, r)
     fi
@@ -206,6 +228,12 @@ shape Window
     alters present()
         when .handle >= 0
             native_gui_window_present(.handle)
+        fi
+    fi
+
+    frame_delay(ms: int = 16)
+        when ms > 0 and .is_open
+            native_gui_sleep_ms(ms)
         fi
     fi
 
@@ -722,6 +750,16 @@ task is_interactive() -> bool
     <- native_is_interactive()
 fi
 
+task time_ms() -> int
+    <- native_gui_time_ms()
+fi
+
+task sleep_ms(ms: int)
+    when ms > 0
+        native_gui_sleep_ms(ms)
+    fi
+fi
+
 priv native task native_gui_window_open(title: text@p, width: int, height: int) -> int
 priv native task native_gui_window_close(handle: int)
 priv native task native_gui_window_is_open(handle: int) -> bool
@@ -740,4 +778,6 @@ priv native task native_gui_canvas_draw_rect(handle: int, x: int, y: int, w: int
 priv native task native_gui_canvas_draw_line(handle: int, x1: int, y1: int, x2: int, y2: int, r: int, g: int, b: int, a: int)
 priv native task native_gui_canvas_draw_text(handle: int, x: int, y: int, text: text@p, r: int, g: int, b: int, a: int)
 priv native task native_gui_canvas_export_ppm(handle: int, into: region) -> text@into
+priv native task native_gui_sleep_ms(ms: int) -> int
+priv native task native_gui_time_ms() -> int
 priv native task native_is_interactive() -> bool

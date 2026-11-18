@@ -1,8 +1,8 @@
-; error: 7:5: 'doing' starts a task and returns its Commitment handle; keep it in a variable (e.g. 'fixed c = doing ...')
+; error: 7:5: 'rush' starts a task and returns its Commitment handle; keep it in a variable (e.g. 'fixed c = rush ...')
 task work() -> int
     <- 10
 fi
 
 task main()
-    doing work()
+    rush work()
 fi

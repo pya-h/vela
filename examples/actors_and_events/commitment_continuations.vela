@@ -1,0 +1,69 @@
+; Demonstrates Commitment continuations:
+; - inline `=> (v) { ... }` and `{ failure e ... }`
+; - fire-and-forget `call() => { ... }` statements
+; - fluent `.then(...)` and `.recover(...)` chaining
+; - caller-side `|> then(lambda)` with both plain lambdas and `[@r]` closures
+
+kind ServiceError
+    Timeout
+    Invalid(msg: text)
+fi
+
+task fetch_score(user_id: int) -> int ~ ServiceError
+    when user_id <= 0
+        <- fail Invalid("non-positive id")
+    fi
+    <- user_id * 10
+fi
+
+task compute_bonus(tier: int) -> int
+    <- tier * 5 + 2
+fi
+
+task publish_audit(event_name: text, audit_log: Chan[text])
+    event_name ->> audit_log
+fi
+
+task main()
+    region r default
+
+    ; 1. Inline continuation `=> (v) { ... }` on an ordinary call (implicit `rush`)
+    fixed boosted = compute_bonus(4) => (pts) { pts + 100 }
+    show("inline => map: ", <<- boosted)
+
+    ; 2. Inline continuation with fallback `{ failure e ... }`
+    fixed safe_score = fetch_score(-3) => (s) { s * 2 } { failure e
+        show("inline => recovered: ", e)
+        0
+    }
+    fixed safe_val = <<- safe_score
+    show("safe_score: ", safe_val)
+
+    ; 3. Fire-and-forget `=> { ... }` within structured lexical scope
+    fixed audit1 = chan_new<text>(1)
+    fixed audit2 = chan_new<text>(1)
+    publish_audit("checkout_started", audit1) => { }
+    publish_audit("payment_settled", audit2) => { }
+    show("audit 1: ", <<- audit1)
+    show("audit 2: ", <<- audit2)
+
+    ; 4. Fluent `.then(...)` and `.recover(...)` on a Commitment handle
+    fixed raw_ok = rush fetch_score(7)
+    fixed formatted = raw_ok.then(s -> s + 5)
+    fixed formatted_val = <<- formatted { failure _
+        0
+    }
+    show("fluent .then: ", formatted_val)
+
+    fixed raw_err = rush fetch_score(0)
+    fixed fallback = raw_err.recover(e -> -1)
+    show("fluent .recover: ", <<- fallback)
+
+    ; 5. Piping an awaited Commitment into `|> then(lambda)` and `[@r]` closures
+    fixed multiplier = 3
+    fixed base_c = rush compute_bonus(2)
+    fixed final_total = (<<- base_c)
+        |> then(n -> n + 8)
+        |> then([@r] n -> n * multiplier)
+    show("pipe |> then closure: ", final_total)
+fi

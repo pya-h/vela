@@ -4,6 +4,6 @@ task fallible() -> int ~ text
 fi
 
 task main()
-    fixed c = doing fallible()
+    fixed c = rush fallible()
     show("started")
 fi

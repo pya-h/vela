@@ -1,4 +1,4 @@
-; Structured concurrency with colorless `doing` and `Commitment[T]`:
+; Structured concurrency with colorless `rush` and `Commitment[T]`:
 ; concurrent fan-out, parenthesis-free Plan B waiting (`<<- c { ... }`),
 ; pipeline transformations (`<<- c |> ...`), `select` racing with automatic
 ; cancellation of losing arms, and deterministic `.poll()` / `.cancel()`.
@@ -42,8 +42,8 @@ fi
 
 task main()
     ; 1. Parallel fan-out + direct wait and pipe continuation
-    fixed a = doing fetch_score("alpha", 5)
-    fixed b = doing fetch_score("beta", -1)
+    fixed a = rush fetch_score("alpha", 5)
+    fixed b = rush fetch_score("beta", -1)
 
     fixed total_a = <<- a |> format_total() { failure e
         show("alpha err: ", e)
@@ -57,12 +57,12 @@ task main()
 
     ; 2. Racing commitments in `select` auto-cancels losing commitment arms
     fixed replica_gate = chan_new<int>(1)
-    fixed primary = doing query_replica("primary", replica_gate)
-    fixed mirror = doing fast_replica("mirror")
+    fixed primary = rush query_replica("primary", replica_gate)
+    fixed mirror = rush fast_replica("mirror")
 
     fixed fastest = select
-    case res <<- primary = res
-    case res <<- mirror = res
+        case res <<- primary = res
+        case res <<- mirror = res
     fi
     show("fastest: ", fastest)
     1 ->> replica_gate
@@ -70,7 +70,7 @@ task main()
     ; 3. Non-blocking `.poll()` and explicit `.cancel()`
     fixed started = chan_new<int>(1)
     fixed stopped = chan_new<text>(1)
-    fixed worker = doing cooperative_job(started, stopped)
+    fixed worker = rush cooperative_job(started, stopped)
     <<- started
     when worker.poll() is none
         show("worker still running")

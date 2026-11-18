@@ -76,15 +76,15 @@
     | keyword:fixed  variable:gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
  44 |     fixed done_ch = chan_new<text>(1)
     | keyword:fixed  variable:done_ch  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
- 45 |     fixed r_slow = doing slow_replica("eu-west", gate, done_ch)
-    | keyword:fixed  variable:r_slow  operator:=  variable:doing  task:slow_replica  punctuation:(  string:"eu-west"  punctuation:,  variable:gate  punctuation:,  variable:done_ch  punctuation:)
- 46 |     fixed r_fast = doing fast_replica("us-east")
-    | keyword:fixed  variable:r_fast  operator:=  variable:doing  task:fast_replica  punctuation:(  string:"us-east"  punctuation:)
+ 45 |     fixed r_slow = rush slow_replica("eu-west", gate, done_ch)
+    | keyword:fixed  variable:r_slow  operator:=  keyword:rush  task:slow_replica  punctuation:(  string:"eu-west"  punctuation:,  variable:gate  punctuation:,  variable:done_ch  punctuation:)
+ 46 |     fixed r_fast = rush fast_replica("us-east")
+    | keyword:fixed  variable:r_fast  operator:=  keyword:rush  task:fast_replica  punctuation:(  string:"us-east"  punctuation:)
  48 |     fixed fastest = select
     | keyword:fixed  variable:fastest  operator:=  keyword:select
- 49 |     case res <<- r_slow = res
+ 49 |         case res <<- r_slow = res
     | keyword:case  variable:res  operator:<<-  variable:r_slow  operator:=  variable:res
- 50 |     case res <<- r_fast = res
+ 50 |         case res <<- r_fast = res
     | keyword:case  variable:res  operator:<<-  variable:r_fast  operator:=  variable:res
  51 |     fi
     | keyword:fi
@@ -98,8 +98,8 @@
     | comment:; 2. Non-blocking UI-style frame polling: work ticks until commitment resolves
  57 |     fixed search_gate = chan_new<int>(1)
     | keyword:fixed  variable:search_gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
- 58 |     fixed search_job = doing indexed_search(search_gate, 7)
-    | keyword:fixed  variable:search_job  operator:=  variable:doing  task:indexed_search  punctuation:(  variable:search_gate  punctuation:,  number:7  punctuation:)
+ 58 |     fixed search_job = rush indexed_search(search_gate, 7)
+    | keyword:fixed  variable:search_job  operator:=  keyword:rush  task:indexed_search  punctuation:(  variable:search_gate  punctuation:,  number:7  punctuation:)
  60 |     when search_job.poll() is none
     | keyword:when  variable:search_job  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  keyword:none
  61 |         show("frame 1: loading...")
@@ -126,15 +126,15 @@
     | keyword:fixed  variable:started  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
  74 |     fixed status = chan_new<text>(1)
     | keyword:fixed  variable:status  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
- 75 |     fixed batch = doing cancellable_batch(started, status)
-    | keyword:fixed  variable:batch  operator:=  variable:doing  task:cancellable_batch  punctuation:(  variable:started  punctuation:,  variable:status  punctuation:)
+ 75 |     fixed batch = rush cancellable_batch(started, status)
+    | keyword:fixed  variable:batch  operator:=  keyword:rush  task:cancellable_batch  punctuation:(  variable:started  punctuation:,  variable:status  punctuation:)
  76 |     <<- started
     | operator:<<-  variable:started
  78 |     fixed outcome = select
     | keyword:fixed  variable:outcome  operator:=  keyword:select
- 79 |     case n <<- batch = "done"
+ 79 |         case n <<- batch = "done"
     | keyword:case  variable:n  operator:<<-  variable:batch  operator:=  string:"done"
- 80 |     case after 5 = "timed_out"
+ 80 |         case after 5 = "timed_out"
     | keyword:case  keyword:after  number:5  operator:=  string:"timed_out"
  81 |     fi
     | keyword:fi

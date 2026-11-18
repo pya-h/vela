@@ -1,11 +1,11 @@
-; error: 8:19: 'doing' cannot be used inside an actor handler; call tasks concurrently from a task instead
+; error: 8:19: 'rush' cannot be used inside an actor handler; call tasks concurrently from a task instead
 task work() -> int
     <- 10
 fi
 
 actor Worker()
     on Run()
-        fixed c = doing work()
+        fixed c = rush work()
         show(<<- c)
     fi
 fi

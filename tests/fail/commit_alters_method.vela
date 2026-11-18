@@ -1,4 +1,4 @@
-; error: 12:23: cannot run 'alters' method 'Counter.bump' with 'doing'; concurrent mutation would race with the caller
+; error: 12:22: cannot run 'alters' method 'Counter.bump' with 'rush'; concurrent mutation would race with the caller
 shape Counter
     value: int
 
@@ -9,6 +9,6 @@ fi
 
 task main()
     flex c = Counter { value: 0 }
-    fixed h = doing c.bump()
+    fixed h = rush c.bump()
     <<- h
 fi

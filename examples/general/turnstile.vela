@@ -27,7 +27,7 @@ task turnstile(gate: text@r, r: region) -> Turnstile@r
     fi }
 fi
 
-task rush(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
+task admit_crowd(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
     each who in crowd
         t.admit(who, log)
     fi
@@ -41,7 +41,7 @@ task main()
     fi }
     flex north = turnstile("north", r)
     north.admit("Ada", log)
-    rush(&north, log, ["Lin", "Sam", ...] at r)
+    admit_crowd(&north, log, ["Lin", "Sam", ...] at r)
     flex south = turnstile("south", r)
     south.admit("Kim", log)
     show(north.pass(), " passed north")

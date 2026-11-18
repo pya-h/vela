@@ -1,5 +1,5 @@
 ; Commitment pipelines (`.then` via `|>`): running multi-step fallible chains
-; inside `doing (...)`, continuing with caller `.then` transformations after
+; inside `rush (...)`, continuing with caller `.then` transformations after
 ; `<<-`, applying inline lambda combinators, and combining parallel commitments.
 
 kind OrderError
@@ -49,9 +49,9 @@ fi
 task main()
     region r default
 
-    ; 1. Whole `.then` pipeline executing concurrently inside `doing (...)`
-    fixed ok_quote = doing ("20" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
-    fixed fail_quote = doing ("80" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    ; 1. Whole `.then` pipeline executing concurrently inside `rush (...)`
+    fixed ok_quote = rush ("20" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    fixed fail_quote = rush ("80" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
 
     ; 2. Post-await `.then` continuation pipeline with region formatting on the caller
     fixed badge = <<- ok_quote |> apply_discount(10) |> format_badge("ok") at r { failure e
@@ -66,14 +66,14 @@ task main()
     show("fallback total: ", fallback)
 
     ; 3. Inline lambda continuation after awaiting a commitment
-    fixed base_c = doing unit_price(10, 4)
+    fixed base_c = rush unit_price(10, 4)
     fixed mapped = <<- base_c |> then_map((x: int) -> int <- x * 2 + 5 fi)
     show("lambda mapped: ", mapped)
 
     ; 4. Dependent waterfall (stage 1 feeds stage 2) alongside parallel shipping job
-    fixed tier_c = doing load_profile_tier(105)
-    fixed ship_c = doing compute_shipping(8)
+    fixed tier_c = rush load_profile_tier(105)
+    fixed ship_c = rush compute_shipping(8)
     fixed discount_pct = <<- tier_c
-    fixed discounted_ship_c = doing apply_discount(<<- ship_c, discount_pct)
+    fixed discounted_ship_c = rush apply_discount(<<- ship_c, discount_pct)
     show("final shipping: ", <<- discounted_ship_c)
 fi

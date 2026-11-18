@@ -1,0 +1,96 @@
+; Demonstrates responsive async work inside a `std/gui` event loop using `maybe Commitment[T]`:
+; - Button click starts a background `rush` task stored in `flex job: maybe Commitment[int]`
+; - Each frame keeps animating (`Canvas.draw_spinner`) and polling (`job.poll()`) without blocking UI
+; - Window pacing via `Window.frame_delay(ms)` avoids busy spinning
+; - Closing the window cancels any still-running background job at scope exit
+
+include std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar, is_interactive, sleep_ms }
+
+task compute_report_async(base: int) -> int
+    flex i = 0
+    flex acc = 0
+    loop i < 6
+        when cancelled()
+            <- -1
+        fi
+        sleep_ms(5)
+        acc += base + i
+        i++
+    fi
+    <- acc
+fi
+
+task draw_ui(canvas: Canvas, flex& win: Window, btn_load: Button, progress: ProgressBar, status_msg: text@r, loading: bool, tick: int)
+    canvas.clear(Color.hex(0x0F172A))
+    canvas.draw_text("Async GUI Worker Demo", Point { x: 24, y: 24 }, Color.white())
+    canvas.draw_text(status_msg, Point { x: 24, y: 54 }, Color.hex(0x38BDF8))
+    progress.draw(canvas)
+    btn_load.draw(canvas, Point { x: 0, y: 0 }, false)
+    when loading
+        canvas.draw_spinner(Point { x: 270, y: 145 }, 14, tick, Color.hex(0xFBBF24))
+    fi
+    win.present()
+fi
+
+task main()
+    flex win = Window.open("Async GUI Commitments", 340, 210) { failure _
+        show("failed opening window")
+        <-
+    }
+
+    fixed btn_load = Button { rect: Rect { x: 24, y: 125, width: 150, height: 38 }, label: "Load Report", style: Style.primary() }
+    flex progress = ProgressBar { rect: Rect { x: 24, y: 85, width: 220, height: 18 }, fill_color: Color.hex(0x10B981) }
+    flex job: maybe Commitment[int] = none
+    flex result_val = 0
+    flex has_result = false
+    flex tick = 0
+    flex headless_sent_close = false
+    fixed canvas = win.canvas()
+
+    when not is_interactive()
+        win.push_event(1, 60, 140, 1)  ; Click "Load Report"
+    fi
+
+    loop win.is_open
+        region frame default
+
+        when job.poll() is { val }
+            result_val = val
+            has_result = true
+            job = none
+            progress.set_value(100)
+            show("async job settled: ", result_val)
+            when not is_interactive() and not headless_sent_close
+                headless_sent_close = true
+                win.push_event(7)  ; CloseRequested now that result settled
+            fi
+        fi
+
+        fixed ev = win.poll_event()
+        match ev
+        case GuiEvent.MouseDown x y btn
+            when btn_load.rect.contains(Point { x: x, y: y }) and not has_result
+                show("started async job from UI")
+                progress.set_value(25)
+                job = rush compute_report_async(10)
+            fi
+        case GuiEvent.CloseRequested
+            win.close()
+            show("window closed cleanly")
+            break
+        case _
+        fi
+
+        fixed loading = when job is none false else true fi
+        fixed status_msg = when has_result
+            "Report ready: {result_val}" at frame
+        else when loading
+            "Loading in background..."
+        else
+            "Click Load Report to start"
+        fi
+        draw_ui(canvas, &win, btn_load, progress, status_msg, loading, tick)
+        tick++
+        win.frame_delay(5)
+    fi
+fi

@@ -42,11 +42,11 @@
     | keyword:fixed  variable:first  operator:=  type:TaskItem  punctuation:{  field:id  punctuation::  number:7  punctuation:,  field:label  punctuation::  string:"index"  punctuation:}
  27 |     fixed sent_status = select
     | keyword:fixed  variable:sent_status  operator:=  keyword:select
- 28 |     case own first ->> jobs = "queued #1"
+ 28 |         case own first ->> jobs = "queued #1"
     | keyword:case  keyword:own  variable:first  operator:->>  variable:jobs  operator:=  string:"queued #1"
- 29 |     case msg <<- control = "control:" + msg
+ 29 |         case msg <<- control = "control:" + msg
     | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"control:"  operator:+  variable:msg
- 30 |     otherwise = "busy"
+ 30 |         otherwise = "busy"
     | keyword:otherwise  operator:=  string:"busy"
  31 |     fi
     | keyword:fi
@@ -58,13 +58,13 @@
     | keyword:flex  variable:second  operator:=  type:TaskItem  punctuation:{  field:id  punctuation::  number:8  punctuation:,  field:label  punctuation::  string:"extra"  punctuation:}
  36 |     select
     | keyword:select
- 37 |     case own second ->> jobs
+ 37 |         case own second ->> jobs
     | keyword:case  keyword:own  variable:second  operator:->>  variable:jobs
- 38 |         show("unexpected enqueue")
+ 38 |             show("unexpected enqueue")
     | builtin-fn:show  punctuation:(  string:"unexpected enqueue"  punctuation:)
- 39 |     otherwise
+ 39 |         otherwise
     | keyword:otherwise
- 40 |         show("full: kept item #", second.id)
+ 40 |             show("full: kept item #", second.id)
     | builtin-fn:show  punctuation:(  string:"full: kept item #"  punctuation:,  variable:second  punctuation:.  field:id  punctuation:)
  41 |     fi
     | keyword:fi
@@ -78,9 +78,9 @@
     | comment:; 2. Wait for the worker reply via blocking value-giving `select` with timeout
  48 |     fixed reply = select
     | keyword:fixed  variable:reply  operator:=  keyword:select
- 49 |     case code <<- done = "reply={code}"
+ 49 |         case code <<- done = "reply={code}"
     | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"reply={  variable:code  string:}"
- 50 |     case after 5000 = "timed out waiting for worker"
+ 50 |         case after 5000 = "timed out waiting for worker"
     | keyword:case  keyword:after  number:5000  operator:=  string:"timed out waiting for worker"
  51 |     fi
     | keyword:fi
@@ -90,11 +90,11 @@
     | comment:; 3. Timeout arm (`case after ms`) when open channels are idle
  55 |     fixed wait_status = select
     | keyword:fixed  variable:wait_status  operator:=  keyword:select
- 56 |     case code <<- done = "unexpected:{code}"
+ 56 |         case code <<- done = "unexpected:{code}"
     | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"unexpected:{  variable:code  string:}"
- 57 |     case msg <<- control = "unexpected:" + msg
+ 57 |         case msg <<- control = "unexpected:" + msg
     | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"unexpected:"  operator:+  variable:msg
- 58 |     case after 5 = "idle timeout"
+ 58 |         case after 5 = "idle timeout"
     | keyword:case  keyword:after  number:5  operator:=  string:"idle timeout"
  59 |     fi
     | keyword:fi
@@ -106,13 +106,13 @@
     | variable:control  punctuation:.  field:close  punctuation:(  punctuation:)
  64 |     select
     | keyword:select
- 65 |     case code <<- done
+ 65 |         case code <<- done
     | keyword:case  variable:code  operator:<<-  variable:done
- 66 |         show("done: ", code)
+ 66 |             show("done: ", code)
     | builtin-fn:show  punctuation:(  string:"done: "  punctuation:,  variable:code  punctuation:)
- 67 |     case none <<- control
+ 67 |         case none <<- control
     | keyword:case  keyword:none  operator:<<-  variable:control
- 68 |         show("control closed cleanly")
+ 68 |             show("control closed cleanly")
     | builtin-fn:show  punctuation:(  string:"control closed cleanly"  punctuation:)
  69 |     fi
     | keyword:fi
@@ -122,11 +122,11 @@
     | variable:done  punctuation:.  field:close  punctuation:(  punctuation:)
  73 |     fixed final_state = select
     | keyword:fixed  variable:final_state  operator:=  keyword:select
- 74 |     case code <<- done = "code:{code}"
+ 74 |         case code <<- done = "code:{code}"
     | keyword:case  variable:code  operator:<<-  variable:done  operator:=  string:"code:{  variable:code  string:}"
- 75 |     case msg <<- control = "ctrl:" + msg
+ 75 |         case msg <<- control = "ctrl:" + msg
     | keyword:case  variable:msg  operator:<<-  variable:control  operator:=  string:"ctrl:"  operator:+  variable:msg
- 76 |     otherwise = "all channels closed"
+ 76 |         otherwise = "all channels closed"
     | keyword:otherwise  operator:=  string:"all channels closed"
  77 |     fi
     | keyword:fi

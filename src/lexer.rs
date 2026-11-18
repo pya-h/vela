@@ -53,6 +53,7 @@ pub enum Token {
     Own,
     Actor,
     Spawn,
+    Rush,
     Event,
     Ident(String),
     LParen,
@@ -150,6 +151,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("own", Token::Own),
     ("actor", Token::Actor),
     ("spawn", Token::Spawn),
+    ("rush", Token::Rush),
     ("event", Token::Event),
 ];
 

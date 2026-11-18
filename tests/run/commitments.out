@@ -11,3 +11,14 @@ explicit_cancel: cancelled
 scoped: leaving -> cancelled
 race: fast
 nested: 27 ident: 5
+arrow_map: 45
+arrow_fail: bad_input
+arrow_recover: 100
+fire_forget: bg_logged
+fluent_then: 28
+fluent_recover: 9
+pipe_lambda: 37
+slot_poll1: none
+slot_poll2: 88
+slot_reassign: cancelled
+region_splice: hello, vela!

@@ -62,38 +62,53 @@ task fast_branch() -> text
 fi
 
 task nested_outer(x: int) -> int
-    fixed inner = doing double_it(x)
+    fixed inner = rush double_it(x)
     <- (<<- inner) + 7
 fi
 
 task run_scoped_cancel(started: Chan[int], done: Chan[text]) -> text
-    fixed bg = doing cancellable_worker(started, done)
+    fixed bg = rush cancellable_worker(started, done)
     <<- started
     <- "leaving"
 fi
 
-task contextual_doing(doing: int) -> int
+task contextual_ident(doing: int) -> int
     <- doing + 1
 fi
 
+task greet_in(name: text@p, r: region default) -> text@r
+    <- "hello, {name}" at r
+fi
+
+task log_via_chan(msg: text, out: Chan[text])
+    msg ->> out
+fi
+
+task might_fail_int(fail_it: bool) -> int ~ text
+    when fail_it
+        <- fail "bad_input"
+    fi
+    <- 21
+fi
+
 task main()
-    ; 1. Basic doing + <<- wait
-    fixed a = doing add_ten(5)
+    ; 1. Basic rush + <<- wait
+    fixed a = rush add_ten(5)
     show("a: ", <<- a)
 
-    ; 2. Shape method doing + .wait()
+    ; 2. Shape method rush + .wait()
     fixed s = Scaler { factor: 6 }
-    fixed b = doing s.scale(7)
+    fixed b = rush s.scale(7)
     show("b: ", b.wait())
 
-    ; 3. Pipe inside doing + <<- binding tighter than |>
-    fixed piped_c = doing (3 |> add_ten() |> double_it())
+    ; 3. Pipe inside rush + <<- binding tighter than |>
+    fixed piped_c = rush (3 |> add_ten() |> double_it())
     fixed piped_res = <<- piped_c |> add_one()
     show("piped: ", piped_res)
 
     ; 4. Parenthesis-free error handling with Plan B
-    fixed ok_c = doing maybe_fail(true)
-    fixed err_c = doing maybe_fail(false)
+    fixed ok_c = rush maybe_fail(true)
+    fixed err_c = rush maybe_fail(false)
     fixed ok_val = <<- ok_c { failure e
         show("unexpected: ", e)
         0
@@ -104,24 +119,24 @@ task main()
     }
     show("ok_val: ", ok_val, " err_val: ", err_val)
 
-    ; 5. Commitment[nothing] with <<- and select none <<-
+    ; 5. Commitment[nothing] with <<- and select _ <<-
     fixed ready = chan_new<int>(1)
     fixed out = chan_new<text>(1)
-    fixed p1 = doing ping(ready, out)
+    fixed p1 = rush ping(ready, out)
     1 ->> ready
     <<- p1
     show("ping1: ", <<- out)
 
-    fixed p2 = doing ping(ready, out)
+    fixed p2 = rush ping(ready, out)
     1 ->> ready
     select
-    case _ <<- p2
-        show("ping2: ", <<- out)
+        case _ <<- p2
+            show("ping2: ", <<- out)
     fi
 
     ; 6. Deterministic .poll() (none while blocked, then some after signal)
     fixed gate = chan_new<int>(1)
-    fixed polled = doing gated_value(gate, 77)
+    fixed polled = rush gated_value(gate, 77)
     when polled.poll() is none
         show("poll1: none")
     else
@@ -138,7 +153,7 @@ task main()
     ; 7. Explicit .cancel() + cancelled() inside worker
     fixed started1 = chan_new<int>(1)
     fixed done1 = chan_new<text>(1)
-    fixed w1 = doing cancellable_worker(started1, done1)
+    fixed w1 = rush cancellable_worker(started1, done1)
     <<- started1
     w1.cancel()
     <<- w1
@@ -152,16 +167,79 @@ task main()
 
     ; 9. select racing Commitments (winner chosen, losing arm auto-cancelled)
     fixed slow_gate = chan_new<int>(1)
-    fixed c_slow = doing slow_branch(slow_gate)
-    fixed c_fast = doing fast_branch()
+    fixed c_slow = rush slow_branch(slow_gate)
+    fixed c_fast = rush fast_branch()
     fixed race_winner = select
-    case msg <<- c_slow = msg
-    case msg <<- c_fast = msg
+        case msg <<- c_slow = msg
+        case msg <<- c_fast = msg
     fi
     show("race: ", race_winner)
     1 ->> slow_gate
 
-    ; 10. Nested doing + contextual identifier named `doing`
-    fixed n = doing nested_outer(10)
-    show("nested: ", <<- n, " ident: ", contextual_doing(4))
+    ; 10. Nested rush
+    fixed n = rush nested_outer(10)
+    show("nested: ", <<- n, " ident: ", contextual_ident(4))
+
+    ; 11. Inline => (v) { ... } with failure fallback and fire-and-forget => { ... }
+    fixed mapped = add_ten(5) => (v) { v * 3 }
+    show("arrow_map: ", <<- mapped)
+
+    fixed recovered_arrow = might_fail_int(true) => (v) { v + 1 } { failure e
+        show("arrow_fail: ", e)
+        100
+    }
+    fixed recovered_val = <<- recovered_arrow
+    show("arrow_recover: ", recovered_val)
+
+    fixed ff_out = chan_new<text>(1)
+    log_via_chan("bg_logged", ff_out) => { }
+    show("fire_forget: ", <<- ff_out)
+
+    ; 12. Fluent .then and .recover on Commitment + |> then(lambda)
+    fixed base_c = rush add_ten(4)
+    fixed chained_c = base_c.then(n -> n * 2)
+    show("fluent_then: ", <<- chained_c)
+
+    fixed fall_c = rush might_fail_int(true)
+    fixed safe_c = fall_c.recover(err -> err.len)
+    show("fluent_recover: ", <<- safe_c)
+
+    region cr default
+    fixed scale = 3
+    fixed piped_lambda = (<<- rush add_ten(2)) |> then([@cr] v -> v * scale + 1)
+    show("pipe_lambda: ", piped_lambda)
+
+    ; 13. maybe Commitment[int] slot assigned in branch, polled, and reassigned
+    fixed slot_gate = chan_new<int>(1)
+    flex slot: maybe Commitment[int] = none
+    when true
+        slot = rush gated_value(slot_gate, 88)
+    fi
+    when slot.poll() is none
+        show("slot_poll1: none")
+    else
+        show("slot_poll1: unexpected")
+    fi
+    1 ->> slot_gate
+    endless
+        when slot.poll() is { sv }
+            show("slot_poll2: ", sv)
+            break
+        fi
+    fi
+    ; Reassigning cancels old slot safely and binds new commitment to slot scope
+    fixed cancel_started = chan_new<int>(1)
+    fixed cancel_done = chan_new<text>(1)
+    flex cslot: maybe Commitment[int] = rush cancellable_worker(cancel_started, cancel_done)
+    <<- cancel_started
+    cslot = none
+    show("slot_reassign: ", <<- cancel_done)
+
+    ; 14. Region-spliced rush task allocating into destination region
+    region msg_r
+    fixed suffix = "!"
+    fixed c_greeting = rush greet_in("vela", msg_r)
+    fixed greeting = <<- c_greeting
+    fixed combined = "{greeting}{suffix}" at msg_r
+    show("region_splice: ", combined)
 fi

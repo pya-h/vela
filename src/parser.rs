@@ -2616,7 +2616,10 @@ impl Parser {
             Token::Block => self.parse_plain_block(),
             Token::Break | Token::Continue => self.parse_jump(),
             Token::Finally => Err(Error::at(span, "'finally' belongs at the end of a loop, before 'fi'")),
-            Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
+            Token::Ident(_)
+                if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow))
+                    && !matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::LBrace)) =>
+            {
                 self.parse_named_stmt(span)
             }
             Token::Match => self.parse_match(),
@@ -4071,69 +4074,35 @@ impl Parser {
                 return self.parse_prefixed();
             }
         }
-        if self.at_doing() {
-            let span = self.peek_span();
-            self.advance();
-            self.enter()?;
-            let inner = self.parse_postfix()?;
-            self.leave(1);
-            return Ok(Expr::new(ExprKind::Doing(Box::new(inner)), span));
+        if self.check(Token::Rush) {
+            return self.parse_rush(true);
         }
         self.parse_postfix()
     }
 
-    fn at_doing(&self) -> bool {
-        let Token::Ident(name) = self.peek() else { return false };
-        if name != "doing" {
-            return false;
-        }
-        let line = self.peek_span().line;
-        let next_line = self.spans.get(self.pos + 1).map(|s| s.line);
-        if next_line != Some(line) {
-            return false;
-        }
-        match self.tokens.get(self.pos + 1) {
-            Some(
-                Token::Ident(_)
-                    | Token::Int(_)
-                    | Token::Float(_)
-                    | Token::Char(_)
-                    | Token::Text(_)
-                    | Token::Interpolated(_)
-                    | Token::True
-                    | Token::False
-                    | Token::None
-                    | Token::LBracket,
-            ) => true,
-            Some(Token::LParen) => {
-                // Treat `doing (...)` as concurrent launch only when the group contains a call or pipe,
-                // keeping `doing(arg)` callable as an ordinary identifier if ever shadowed.
-                let mut depth = 0usize;
-                let mut has_call_or_pipe = false;
-                let mut has_top_comma = false;
-                for tok in self.tokens.get(self.pos + 1..).unwrap_or_default() {
-                    match tok {
-                        Token::LParen => {
-                            if depth >= 1 {
-                                has_call_or_pipe = true;
-                            }
-                            depth += 1;
-                        }
-                        Token::RParen => {
-                            depth = depth.saturating_sub(1);
-                            if depth == 0 {
-                                break;
-                            }
-                        }
-                        Token::Pipe(_) if depth == 1 => has_call_or_pipe = true,
-                        Token::Comma if depth == 1 => has_top_comma = true,
-                        _ => {}
-                    }
+    fn parse_rush(&mut self, allow_plan_b: bool) -> Result<Expr> {
+        let span = self.peek_span();
+        self.advance();
+        self.enter()?;
+        let parenthesized = self.check(Token::LParen);
+        let expr = self.parse_primary()?;
+        let inner = self.parse_suffixes_with(expr, parenthesized, allow_plan_b)?;
+        self.leave(1);
+        fn has_doing_root(e: &Expr) -> bool {
+            match &e.kind {
+                ExprKind::Doing(_) => true,
+                ExprKind::MethodCall { value, name, .. }
+                    if matches!(name.as_str(), "then" | "recover") =>
+                {
+                    has_doing_root(value)
                 }
-                has_call_or_pipe && !has_top_comma
+                _ => false,
             }
-            _ => false,
         }
+        if has_doing_root(&inner) {
+            return Ok(inner);
+        }
+        Ok(Expr::new(ExprKind::Doing(Box::new(inner)), span))
     }
 
     // Outlined from `parse_unary` to keep recursion frames small under `MAX_NESTING`.
@@ -4192,6 +4161,9 @@ impl Parser {
     }
 
     fn parse_chan_recv_operand(&mut self) -> Result<Expr> {
+        if self.check(Token::Rush) {
+            return self.parse_rush(false);
+        }
         let parenthesized = self.check(Token::LParen);
         let expr = self.parse_primary()?;
         self.parse_suffixes_with(expr, parenthesized, false)
@@ -4224,6 +4196,13 @@ impl Parser {
                     self.enter()?;
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
+                }
+                Token::FatArrow
+                    if matches!(self.tokens.get(self.pos + 1), Some(Token::LParen | Token::LBrace)) =>
+                {
+                    self.enter()?;
+                    levels += 1;
+                    expr = self.parse_then_suffix(expr, allow_plan_b)?;
                 }
                 Token::LParen if parenthesized || calls_value(&expr) => {
                     self.enter()?;
@@ -4342,7 +4321,10 @@ impl Parser {
             Token::Match | Token::When => self.parse_choice(span),
             _ if self.at_select() => self.parse_choice(span),
             Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
-            Token::Ident(name) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => {
+            Token::Ident(name)
+                if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow))
+                    && !matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::LBrace)) =>
+            {
                 let name = (name.clone(), span);
                 self.advance();
                 self.advance();
@@ -5110,6 +5092,157 @@ impl Parser {
             ));
         }
         Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
+    }
+
+    fn parse_then_suffix(&mut self, value: Expr, allow_plan_b: bool) -> Result<Expr> {
+        let span = self.peek_span();
+        self.advance(); // consumes '=>'
+        if self.in_generic {
+            return Err(Error::at(
+                span,
+                "a '=>' continuation cannot be written inside a generic task or method yet",
+            ));
+        }
+        let binder = if self.match_token(Token::LParen) {
+            let bound = if self.check(Token::RParen) {
+                None
+            } else {
+                Some(self.parse_bound_name()?)
+            };
+            self.expect(Token::RParen)?;
+            bound
+        } else {
+            None
+        };
+        let opened = self.peek_span();
+        self.expect(Token::LBrace)?;
+        self.skip_newlines();
+        let mut body = self.parse_block_until(&[
+            Token::RBrace,
+            Token::Fi,
+            Token::Else,
+            Token::Case,
+            Token::Otherwise,
+        ])?;
+        if !self.match_token(Token::RBrace) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!(
+                    "expected '}}' to close '=>' continuation at {}:{}",
+                    opened.line, opened.col
+                ),
+            ));
+        }
+        if matches!(body.last().map(|s| &s.kind), Some(StmtKind::Expr(_)))
+            && let Some(Stmt { kind: StmtKind::Expr(last_expr), span: lspan }) = body.pop()
+        {
+            body.push(Stmt::new(StmtKind::Send(vec![last_expr]), lspan));
+        }
+        let launch = if matches!(value.kind, ExprKind::Doing(_)) {
+            value
+        } else if matches!(
+            value.kind,
+            ExprKind::Call { .. }
+                | ExprKind::MethodCall { .. }
+                | ExprKind::Pipe(_)
+                | ExprKind::Invoke { .. }
+        ) {
+            let vspan = value.span;
+            Expr::new(ExprKind::Doing(Box::new(value)), vspan)
+        } else {
+            value
+        };
+        let params = match binder {
+            Some((name, pspan)) => vec![Field {
+                name,
+                ty: Type::Unknown,
+                span: pspan,
+                ty_span: pspan,
+                private: false,
+                read: false,
+                default_region: false,
+                passing: Passing::Copy,
+                default: None,
+            }],
+            None => Vec::new(),
+        };
+        let then_fn = self.add_lambda(span, params, Type::Unknown, Vec::new(), body, None, true);
+        let mut out = Expr::new(
+            ExprKind::MethodCall {
+                value: Box::new(launch),
+                name: "then".to_string(),
+                dotted: None,
+                args: vec![then_fn],
+            },
+            span,
+        );
+        if allow_plan_b && self.check(Token::LBrace) {
+            let catch_span = self.peek_span();
+            self.advance();
+            self.skip_newlines();
+            let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
+            let err_bound =
+                if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
+                    self.advance();
+                    Some(self.parse_bound_name()?)
+                } else {
+                    None
+                };
+            let mut catch_body = self.parse_block_until(&[
+                Token::RBrace,
+                Token::Fi,
+                Token::Else,
+                Token::Case,
+                Token::Otherwise,
+            ])?;
+            if !self.match_token(Token::RBrace) {
+                return Err(Error::at(
+                    self.peek_span(),
+                    format!(
+                        "expected '}}' to close '=>' error handler at {}:{}",
+                        catch_span.line, catch_span.col
+                    ),
+                ));
+            }
+            if matches!(catch_body.last().map(|s| &s.kind), Some(StmtKind::Expr(_)))
+                && let Some(Stmt { kind: StmtKind::Expr(last_expr), span: lspan }) = catch_body.pop()
+            {
+                catch_body.push(Stmt::new(StmtKind::Send(vec![last_expr]), lspan));
+            }
+            let recover_params = match err_bound {
+                Some((name, pspan)) => vec![Field {
+                    name,
+                    ty: Type::Unknown,
+                    span: pspan,
+                    ty_span: pspan,
+                    private: false,
+                    read: false,
+                    default_region: false,
+                    passing: Passing::Copy,
+                    default: None,
+                }],
+                None => Vec::new(),
+            };
+            let recover_fn = self.add_lambda(
+                catch_span,
+                recover_params,
+                Type::Unknown,
+                Vec::new(),
+                catch_body,
+                None,
+                true,
+            );
+            out = Expr::new(
+                ExprKind::MethodCall {
+                    value: Box::new(out),
+                    name: "recover".to_string(),
+                    dotted: None,
+                    args: vec![recover_fn],
+                },
+                catch_span,
+            );
+        }
+        Ok(out)
     }
 
     fn parse_new(&mut self) -> Result<Expr> {

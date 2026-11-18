@@ -123,6 +123,8 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/gui.native_gui_canvas_draw_line", "vela__rt__gui_canvas_draw_line"),
     ("std/gui.native_gui_canvas_draw_text", "vela__rt__gui_canvas_draw_text"),
     ("std/gui.native_gui_canvas_export_ppm", "vela__rt__gui_canvas_export_ppm"),
+    ("std/gui.native_gui_sleep_ms", "vela__rt__web_sleep_ms"),
+    ("std/gui.native_gui_time_ms", "vela__rt__web_time_ms"),
     ("std/gui.native_is_interactive", "vela__rt__gui_is_interactive"),
 ];
 

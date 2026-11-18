@@ -1,10 +1,11 @@
-; error: 8:21: cannot pass a caller region to a 'doing' task; regions are single-threaded
-task build(r: region) -> int
+; error: 9:20: cannot pass multiple caller regions (r1, r2) to one 'rush' task; pass at most one destination region
+task build(r1: region, r2: region) -> int
     <- 1
 fi
 
 task main()
-    region r
-    fixed c = doing build(r)
+    region r1
+    region r2
+    fixed c = rush build(r1, r2)
     show(<<- c)
 fi

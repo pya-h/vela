@@ -1,0 +1,66 @@
+; Demonstrates concurrent web server + parallel client fetches using Commitments (`rush`):
+; - `Server.serve_concurrent(handler, workers)` runs a background pool of `rush` workers
+; - Two `rush Client.fetch(...)` requests run concurrently into caller regions via region splicing
+; - Clean shutdown via `Server.stop()` and structured block exit of the server commitment
+
+include std/web { Server, Client, Request, Response, WebError, text_response, fetch_with_timeout, sleep_ms }
+
+task api_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.path == "/health"
+        <- text_response("ok", r)
+    else when req.path == "/user"
+        <- text_response("ada", r)
+    else when req.path == "/score"
+        <- text_response("980", r)
+    fi
+    <- text_response("unknown", r)
+fi
+
+task wait_server_up(url: text@p, r: region default) -> bool
+    flex attempts = 0
+    loop attempts < 40
+        fixed ok = Client.fetch(url, r) { failure _
+            sleep_ms(10)
+            attempts++
+            continue
+        }
+        when ok.status == 200
+            <- true
+        fi
+        sleep_ms(10)
+        attempts++
+    fi
+    <- false
+fi
+
+task main()
+    region r default
+    region r1
+    region r2
+
+    ; Start a 2-worker concurrent HTTP server in the background
+    fixed srv = rush Server.new("127.0.0.1:18110").serve_concurrent(api_handler, 2)
+    wait_server_up("http://127.0.0.1:18110/health", r)
+
+    ; Fan out two concurrent HTTP client calls with per-call region splicing
+    fixed c_user = rush Client.fetch("http://127.0.0.1:18110/user", r1)
+    fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 2000, r2)
+
+    fixed user_resp = <<- c_user { failure e
+        show("user fetch failed: ", e)
+        Response.text("err", r1)
+    }
+    fixed score_resp = <<- c_score { failure e
+        show("score fetch failed: ", e)
+        Response.text("err", r2)
+    }
+
+    show("user: ", user_resp.status, " ", user_resp.body_data)
+    show("score: ", score_resp.status, " ", score_resp.body_data)
+
+    srv.cancel()
+    <<- srv { failure e
+        show("server stopped with error: ", e)
+    }
+    show("server cleanly stopped")
+fi

@@ -46,8 +46,8 @@
     | keyword:fi  punctuation:}
  28 | fi
     | keyword:fi
- 30 | task rush(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
-    | keyword:task  task:rush  punctuation:(  keyword:flex  keyword:&  parameter:t  punctuation::  type:Turnstile  operator:@  region:r  punctuation:,  keyword:bind  parameter:log  punctuation::  type:Log  operator:@  region:r  punctuation:,  parameter:crowd  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)
+ 30 | task admit_crowd(flex& t: Turnstile@r, bind log: Log@r, crowd: [text]@r)
+    | keyword:task  task:admit_crowd  punctuation:(  keyword:flex  keyword:&  parameter:t  punctuation::  type:Turnstile  operator:@  region:r  punctuation:,  keyword:bind  parameter:log  punctuation::  type:Log  operator:@  region:r  punctuation:,  parameter:crowd  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)
  31 |     each who in crowd
     | keyword:each  variable:who  keyword:in  parameter:crowd
  32 |         t.admit(who, log)
@@ -72,8 +72,8 @@
     | keyword:flex  variable:north  operator:=  task:turnstile  punctuation:(  string:"north"  punctuation:,  variable:r  punctuation:)
  43 |     north.admit("Ada", log)
     | variable:north  punctuation:.  method:admit  punctuation:(  string:"Ada"  punctuation:,  variable:log  punctuation:)
- 44 |     rush(&north, log, ["Lin", "Sam", ...] at r)
-    | task:rush  punctuation:(  operator:&  variable:north  punctuation:,  variable:log  punctuation:,  punctuation:[  string:"Lin"  punctuation:,  string:"Sam"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)
+ 44 |     admit_crowd(&north, log, ["Lin", "Sam", ...] at r)
+    | task:admit_crowd  punctuation:(  operator:&  variable:north  punctuation:,  variable:log  punctuation:,  punctuation:[  string:"Lin"  punctuation:,  string:"Sam"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:)
  45 |     flex south = turnstile("south", r)
     | keyword:flex  variable:south  operator:=  task:turnstile  punctuation:(  string:"south"  punctuation:,  variable:r  punctuation:)
  46 |     south.admit("Kim", log)
