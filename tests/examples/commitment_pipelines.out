@@ -1,0 +1,5 @@
+ok: 2970c
+caught pipe failure: OutOfStock(50)
+fallback total: 0
+lambda mapped: 85
+final shipping: 510

@@ -1,0 +1,84 @@
+; Practical commitment orchestration patterns: racing replicas in `select` with
+; automatic losing-arm cancellation, non-blocking UI/loop polling via `.poll()`,
+; and cooperative timeout + cancellation propagation.
+
+task slow_replica(tag: text, gate: Chan[int], finished: Chan[text]) -> text
+    <<- gate
+    when cancelled()
+        "cancelled" ->> finished
+        <- tag
+    fi
+    "completed" ->> finished
+    <- tag
+fi
+
+task fast_replica(tag: text) -> text
+    <- tag
+fi
+
+task indexed_search(gate: Chan[int], query_len: int) -> int
+    <<- gate
+    <- query_len * 100
+fi
+
+task cancellable_batch(started: Chan[int], status: Chan[text]) -> int
+    1 ->> started
+    flex iter = 0
+    endless
+        when cancelled()
+            "aborted_on_cancel" ->> status
+            <- iter
+        fi
+        iter += 1
+        when iter == 100000000
+            "finished_full" ->> status
+            <- iter
+        fi
+    fi
+    <- iter
+fi
+
+task main()
+    ; 1. Racing two replicas: winner settles immediately, loser gets auto-cancelled
+    fixed gate = chan_new<int>(1)
+    fixed done_ch = chan_new<text>(1)
+    fixed r_slow = doing slow_replica("eu-west", gate, done_ch)
+    fixed r_fast = doing fast_replica("us-east")
+
+    fixed fastest = select
+    case res <<- r_slow = res
+    case res <<- r_fast = res
+    fi
+    show("race winner: ", fastest)
+    1 ->> gate
+    show("loser reported: ", <<- done_ch)
+
+    ; 2. Non-blocking UI-style frame polling: work ticks until commitment resolves
+    fixed search_gate = chan_new<int>(1)
+    fixed search_job = doing indexed_search(search_gate, 7)
+
+    when search_job.poll() is none
+        show("frame 1: loading...")
+    fi
+    1 ->> search_gate
+
+    endless
+        when search_job.poll() is { score }
+            show("frame ready: score=", score)
+            break
+        fi
+    fi
+
+    ; 3. Timeout arm in `select` auto-cancels an unresponsive worker
+    fixed started = chan_new<int>(1)
+    fixed status = chan_new<text>(1)
+    fixed batch = doing cancellable_batch(started, status)
+    <<- started
+
+    fixed outcome = select
+    case n <<- batch = "done"
+    case after 5 = "timed_out"
+    fi
+    show("batch outcome: ", outcome)
+    show("worker exit reason: ", <<- status)
+fi

@@ -1,0 +1,146 @@
+  1 | ; Practical commitment orchestration patterns: racing replicas in `select` with
+    | comment:; Practical commitment orchestration patterns: racing replicas in `select` with
+  2 | ; automatic losing-arm cancellation, non-blocking UI/loop polling via `.poll()`,
+    | comment:; automatic losing-arm cancellation, non-blocking UI/loop polling via `.poll()`,
+  3 | ; and cooperative timeout + cancellation propagation.
+    | comment:; and cooperative timeout + cancellation propagation.
+  5 | task slow_replica(tag: text, gate: Chan[int], finished: Chan[text]) -> text
+    | keyword:task  task:slow_replica  punctuation:(  parameter:tag  punctuation::  type-builtin:text  punctuation:,  parameter:gate  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:finished  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)  operator:->  type-builtin:text
+  6 |     <<- gate
+    | operator:<<-  parameter:gate
+  7 |     when cancelled()
+    | keyword:when  task:cancelled  punctuation:(  punctuation:)
+  8 |         "cancelled" ->> finished
+    | string:"cancelled"  operator:->>  parameter:finished
+  9 |         <- tag
+    | keyword:<-  parameter:tag
+ 10 |     fi
+    | keyword:fi
+ 11 |     "completed" ->> finished
+    | string:"completed"  operator:->>  parameter:finished
+ 12 |     <- tag
+    | keyword:<-  parameter:tag
+ 13 | fi
+    | keyword:fi
+ 15 | task fast_replica(tag: text) -> text
+    | keyword:task  task:fast_replica  punctuation:(  parameter:tag  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 16 |     <- tag
+    | keyword:<-  parameter:tag
+ 17 | fi
+    | keyword:fi
+ 19 | task indexed_search(gate: Chan[int], query_len: int) -> int
+    | keyword:task  task:indexed_search  punctuation:(  parameter:gate  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:query_len  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 20 |     <<- gate
+    | operator:<<-  parameter:gate
+ 21 |     <- query_len * 100
+    | keyword:<-  parameter:query_len  operator:*  number:100
+ 22 | fi
+    | keyword:fi
+ 24 | task cancellable_batch(started: Chan[int], status: Chan[text]) -> int
+    | keyword:task  task:cancellable_batch  punctuation:(  parameter:started  punctuation::  type:Chan  punctuation:[  variable:int  punctuation:]  punctuation:,  parameter:status  punctuation::  type:Chan  punctuation:[  variable:text  punctuation:]  punctuation:)  operator:->  type-builtin:int
+ 25 |     1 ->> started
+    | number:1  operator:->>  parameter:started
+ 26 |     flex iter = 0
+    | keyword:flex  variable:iter  operator:=  number:0
+ 27 |     endless
+    | keyword:endless
+ 28 |         when cancelled()
+    | keyword:when  task:cancelled  punctuation:(  punctuation:)
+ 29 |             "aborted_on_cancel" ->> status
+    | string:"aborted_on_cancel"  operator:->>  parameter:status
+ 30 |             <- iter
+    | keyword:<-  variable:iter
+ 31 |         fi
+    | keyword:fi
+ 32 |         iter += 1
+    | variable:iter  operator:+=  number:1
+ 33 |         when iter == 100000000
+    | keyword:when  variable:iter  operator:==  number:100000000
+ 34 |             "finished_full" ->> status
+    | string:"finished_full"  operator:->>  parameter:status
+ 35 |             <- iter
+    | keyword:<-  variable:iter
+ 36 |         fi
+    | keyword:fi
+ 37 |     fi
+    | keyword:fi
+ 38 |     <- iter
+    | keyword:<-  variable:iter
+ 39 | fi
+    | keyword:fi
+ 41 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 42 |     ; 1. Racing two replicas: winner settles immediately, loser gets auto-cancelled
+    | comment:; 1. Racing two replicas: winner settles immediately, loser gets auto-cancelled
+ 43 |     fixed gate = chan_new<int>(1)
+    | keyword:fixed  variable:gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 44 |     fixed done_ch = chan_new<text>(1)
+    | keyword:fixed  variable:done_ch  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+ 45 |     fixed r_slow = doing slow_replica("eu-west", gate, done_ch)
+    | keyword:fixed  variable:r_slow  operator:=  variable:doing  task:slow_replica  punctuation:(  string:"eu-west"  punctuation:,  variable:gate  punctuation:,  variable:done_ch  punctuation:)
+ 46 |     fixed r_fast = doing fast_replica("us-east")
+    | keyword:fixed  variable:r_fast  operator:=  variable:doing  task:fast_replica  punctuation:(  string:"us-east"  punctuation:)
+ 48 |     fixed fastest = select
+    | keyword:fixed  variable:fastest  operator:=  keyword:select
+ 49 |     case res <<- r_slow = res
+    | keyword:case  variable:res  operator:<<-  variable:r_slow  operator:=  variable:res
+ 50 |     case res <<- r_fast = res
+    | keyword:case  variable:res  operator:<<-  variable:r_fast  operator:=  variable:res
+ 51 |     fi
+    | keyword:fi
+ 52 |     show("race winner: ", fastest)
+    | builtin-fn:show  punctuation:(  string:"race winner: "  punctuation:,  variable:fastest  punctuation:)
+ 53 |     1 ->> gate
+    | number:1  operator:->>  variable:gate
+ 54 |     show("loser reported: ", <<- done_ch)
+    | builtin-fn:show  punctuation:(  string:"loser reported: "  punctuation:,  operator:<<-  variable:done_ch  punctuation:)
+ 56 |     ; 2. Non-blocking UI-style frame polling: work ticks until commitment resolves
+    | comment:; 2. Non-blocking UI-style frame polling: work ticks until commitment resolves
+ 57 |     fixed search_gate = chan_new<int>(1)
+    | keyword:fixed  variable:search_gate  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 58 |     fixed search_job = doing indexed_search(search_gate, 7)
+    | keyword:fixed  variable:search_job  operator:=  variable:doing  task:indexed_search  punctuation:(  variable:search_gate  punctuation:,  number:7  punctuation:)
+ 60 |     when search_job.poll() is none
+    | keyword:when  variable:search_job  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  keyword:none
+ 61 |         show("frame 1: loading...")
+    | builtin-fn:show  punctuation:(  string:"frame 1: loading..."  punctuation:)
+ 62 |     fi
+    | keyword:fi
+ 63 |     1 ->> search_gate
+    | number:1  operator:->>  variable:search_gate
+ 65 |     endless
+    | keyword:endless
+ 66 |         when search_job.poll() is { score }
+    | keyword:when  variable:search_job  punctuation:.  field:poll  punctuation:(  punctuation:)  keyword:is  punctuation:{  variable:score  punctuation:}
+ 67 |             show("frame ready: score=", score)
+    | builtin-fn:show  punctuation:(  string:"frame ready: score="  punctuation:,  variable:score  punctuation:)
+ 68 |             break
+    | keyword:break
+ 69 |         fi
+    | keyword:fi
+ 70 |     fi
+    | keyword:fi
+ 72 |     ; 3. Timeout arm in `select` auto-cancels an unresponsive worker
+    | comment:; 3. Timeout arm in `select` auto-cancels an unresponsive worker
+ 73 |     fixed started = chan_new<int>(1)
+    | keyword:fixed  variable:started  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  number:1  punctuation:)
+ 74 |     fixed status = chan_new<text>(1)
+    | keyword:fixed  variable:status  operator:=  builtin-fn:chan_new  punctuation:<  type-builtin:text  punctuation:>  punctuation:(  number:1  punctuation:)
+ 75 |     fixed batch = doing cancellable_batch(started, status)
+    | keyword:fixed  variable:batch  operator:=  variable:doing  task:cancellable_batch  punctuation:(  variable:started  punctuation:,  variable:status  punctuation:)
+ 76 |     <<- started
+    | operator:<<-  variable:started
+ 78 |     fixed outcome = select
+    | keyword:fixed  variable:outcome  operator:=  keyword:select
+ 79 |     case n <<- batch = "done"
+    | keyword:case  variable:n  operator:<<-  variable:batch  operator:=  string:"done"
+ 80 |     case after 5 = "timed_out"
+    | keyword:case  keyword:after  number:5  operator:=  string:"timed_out"
+ 81 |     fi
+    | keyword:fi
+ 82 |     show("batch outcome: ", outcome)
+    | builtin-fn:show  punctuation:(  string:"batch outcome: "  punctuation:,  variable:outcome  punctuation:)
+ 83 |     show("worker exit reason: ", <<- status)
+    | builtin-fn:show  punctuation:(  string:"worker exit reason: "  punctuation:,  operator:<<-  variable:status  punctuation:)
+ 84 | fi
+    | keyword:fi

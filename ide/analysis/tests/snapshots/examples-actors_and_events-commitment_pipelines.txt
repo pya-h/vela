@@ -1,0 +1,126 @@
+  1 | ; Commitment pipelines (`.then` via `|>`): running multi-step fallible chains
+    | comment:; Commitment pipelines (`.then` via `|>`): running multi-step fallible chains
+  2 | ; inside `doing (...)`, continuing with caller `.then` transformations after
+    | comment:; inside `doing (...)`, continuing with caller `.then` transformations after
+  3 | ; `<<-`, applying inline lambda combinators, and combining parallel commitments.
+    | comment:; `<<-`, applying inline lambda combinators, and combining parallel commitments.
+  5 | kind OrderError
+    | keyword:kind  type:OrderError
+  6 |     BadQty(raw: text)
+    | variant:BadQty  punctuation:(  field:raw  punctuation::  type-builtin:text  punctuation:)
+  7 |     OutOfStock(available: int)
+    | variant:OutOfStock  punctuation:(  field:available  punctuation::  type-builtin:int  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | task parse_qty(raw: text) -> int ~ OrderError
+    | keyword:task  task:parse_qty  punctuation:(  parameter:raw  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:OrderError
+ 11 |     <- int(raw) { <- fail BadQty(raw) }
+    | keyword:<-  type-builtin:int  punctuation:(  parameter:raw  punctuation:)  punctuation:{  keyword:<-  keyword:fail  variant:BadQty  punctuation:(  parameter:raw  punctuation:)  punctuation:}
+ 12 | fi
+    | keyword:fi
+ 14 | task reserve_stock(wanted: int, available: int) -> int ~ OrderError
+    | keyword:task  task:reserve_stock  punctuation:(  parameter:wanted  punctuation::  type-builtin:int  punctuation:,  parameter:available  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:OrderError
+ 15 |     when wanted > available
+    | keyword:when  parameter:wanted  operator:>  parameter:available
+ 16 |         <- fail OutOfStock(available)
+    | keyword:<-  keyword:fail  variant:OutOfStock  punctuation:(  parameter:available  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 |     <- wanted
+    | keyword:<-  parameter:wanted
+ 19 | fi
+    | keyword:fi
+ 21 | task unit_price(cents_each: int, qty: int) -> int
+    | keyword:task  task:unit_price  punctuation:(  parameter:cents_each  punctuation::  type-builtin:int  punctuation:,  parameter:qty  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     <- qty * cents_each
+    | keyword:<-  parameter:qty  operator:*  parameter:cents_each
+ 23 | fi
+    | keyword:fi
+ 25 | task add_tax(subtotal: int) -> int
+    | keyword:task  task:add_tax  punctuation:(  parameter:subtotal  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 26 |     <- subtotal + subtotal / 10
+    | keyword:<-  parameter:subtotal  operator:+  parameter:subtotal  operator:/  number:10
+ 27 | fi
+    | keyword:fi
+ 29 | task apply_discount(total: int, pct: int) -> int
+    | keyword:task  task:apply_discount  punctuation:(  parameter:total  punctuation::  type-builtin:int  punctuation:,  parameter:pct  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 30 |     <- total - (total * pct) / 100
+    | keyword:<-  parameter:total  operator:-  punctuation:(  parameter:total  operator:*  parameter:pct  punctuation:)  operator:/  number:100
+ 31 | fi
+    | keyword:fi
+ 33 | task then_map(val: int, next: (int) -> int) -> int
+    | keyword:task  task:then_map  punctuation:(  parameter:val  punctuation::  type-builtin:int  punctuation:,  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     <- val |> next()
+    | keyword:<-  parameter:val  operator:|>  parameter:next  punctuation:(  punctuation:)
+ 35 | fi
+    | keyword:fi
+ 37 | task format_badge(cents: int, label: text@r, r: region default) -> text@r
+    | keyword:task  task:format_badge  punctuation:(  parameter:cents  punctuation::  type-builtin:int  punctuation:,  parameter:label  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 38 |     <- "{label}: {cents}c" at r
+    | keyword:<-  string:"{  parameter:label  string:}: {  parameter:cents  string:}c"  keyword:at  region:r
+ 39 | fi
+    | keyword:fi
+ 41 | task compute_shipping(weight: int) -> int
+    | keyword:task  task:compute_shipping  punctuation:(  parameter:weight  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 42 |     <- 400 + weight * 25
+    | keyword:<-  number:400  operator:+  parameter:weight  operator:*  number:25
+ 43 | fi
+    | keyword:fi
+ 45 | task load_profile_tier(user_id: int) -> int
+    | keyword:task  task:load_profile_tier  punctuation:(  parameter:user_id  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 46 |     <- when user_id >= 100 15 else 5 fi
+    | keyword:<-  keyword:when  parameter:user_id  operator:>=  number:100  number:15  keyword:else  number:5  keyword:fi
+ 47 | fi
+    | keyword:fi
+ 49 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 50 |     region r default
+    | keyword:region  region:r  keyword:default
+ 52 |     ; 1. Whole `.then` pipeline executing concurrently inside `doing (...)`
+    | comment:; 1. Whole `.then` pipeline executing concurrently inside `doing (...)`
+ 53 |     fixed ok_quote = doing ("20" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    | keyword:fixed  variable:ok_quote  operator:=  task:doing  punctuation:(  string:"20"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
+ 54 |     fixed fail_quote = doing ("80" |> parse_qty() |> reserve_stock(50) |>> unit_price(150) |> add_tax())
+    | keyword:fixed  variable:fail_quote  operator:=  task:doing  punctuation:(  string:"80"  operator:|>  task:parse_qty  punctuation:(  punctuation:)  operator:|>  task:reserve_stock  punctuation:(  number:50  punctuation:)  operator:|>>  task:unit_price  punctuation:(  number:150  punctuation:)  operator:|>  task:add_tax  punctuation:(  punctuation:)  punctuation:)
+ 56 |     ; 2. Post-await `.then` continuation pipeline with region formatting on the caller
+    | comment:; 2. Post-await `.then` continuation pipeline with region formatting on the caller
+ 57 |     fixed badge = <<- ok_quote |> apply_discount(10) |> format_badge("ok") at r { failure e
+    | keyword:fixed  variable:badge  operator:=  operator:<<-  variable:ok_quote  operator:|>  task:apply_discount  punctuation:(  number:10  punctuation:)  operator:|>  task:format_badge  punctuation:(  string:"ok"  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 58 |         "err"
+    | string:"err"
+ 59 |     }
+    | punctuation:}
+ 60 |     show(badge)
+    | builtin-fn:show  punctuation:(  variable:badge  punctuation:)
+ 62 |     fixed fallback = <<- fail_quote |> apply_discount(10) { failure e
+    | keyword:fixed  variable:fallback  operator:=  operator:<<-  variable:fail_quote  operator:|>  task:apply_discount  punctuation:(  number:10  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 63 |         show("caught pipe failure: ", e)
+    | builtin-fn:show  punctuation:(  string:"caught pipe failure: "  punctuation:,  variable:e  punctuation:)
+ 64 |         0
+    | number:0
+ 65 |     }
+    | punctuation:}
+ 66 |     show("fallback total: ", fallback)
+    | builtin-fn:show  punctuation:(  string:"fallback total: "  punctuation:,  variable:fallback  punctuation:)
+ 68 |     ; 3. Inline lambda continuation after awaiting a commitment
+    | comment:; 3. Inline lambda continuation after awaiting a commitment
+ 69 |     fixed base_c = doing unit_price(10, 4)
+    | keyword:fixed  variable:base_c  operator:=  variable:doing  task:unit_price  punctuation:(  number:10  punctuation:,  number:4  punctuation:)
+ 70 |     fixed mapped = <<- base_c |> then_map((x: int) -> int <- x * 2 + 5 fi)
+    | keyword:fixed  variable:mapped  operator:=  operator:<<-  variable:base_c  operator:|>  task:then_map  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  operator:+  number:5  keyword:fi  punctuation:)
+ 71 |     show("lambda mapped: ", mapped)
+    | builtin-fn:show  punctuation:(  string:"lambda mapped: "  punctuation:,  variable:mapped  punctuation:)
+ 73 |     ; 4. Dependent waterfall (stage 1 feeds stage 2) alongside parallel shipping job
+    | comment:; 4. Dependent waterfall (stage 1 feeds stage 2) alongside parallel shipping job
+ 74 |     fixed tier_c = doing load_profile_tier(105)
+    | keyword:fixed  variable:tier_c  operator:=  variable:doing  task:load_profile_tier  punctuation:(  number:105  punctuation:)
+ 75 |     fixed ship_c = doing compute_shipping(8)
+    | keyword:fixed  variable:ship_c  operator:=  variable:doing  task:compute_shipping  punctuation:(  number:8  punctuation:)
+ 76 |     fixed discount_pct = <<- tier_c
+    | keyword:fixed  variable:discount_pct  operator:=  operator:<<-  variable:tier_c
+ 77 |     fixed discounted_ship_c = doing apply_discount(<<- ship_c, discount_pct)
+    | keyword:fixed  variable:discounted_ship_c  operator:=  variable:doing  task:apply_discount  punctuation:(  operator:<<-  variable:ship_c  punctuation:,  variable:discount_pct  punctuation:)
+ 78 |     show("final shipping: ", <<- discounted_ship_c)
+    | builtin-fn:show  punctuation:(  string:"final shipping: "  punctuation:,  operator:<<-  variable:discounted_ship_c  punctuation:)
+ 79 | fi
+    | keyword:fi

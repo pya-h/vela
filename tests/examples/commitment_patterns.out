@@ -1,0 +1,6 @@
+race winner: us-east
+loser reported: cancelled
+frame 1: loading...
+frame ready: score=700
+batch outcome: timed_out
+worker exit reason: aborted_on_cancel
