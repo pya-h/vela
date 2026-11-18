@@ -280,8 +280,8 @@ fn hover_token(
             "A T when it succeeds, or an error E when it fails. Read it with match, is, or a plan B: x { fallback }. Only a task's own error, never a maybe or the value type again.".to_string(),
         ),
         (TokenClass::Operator, _) if text == "<<-" => (
-            "<<- ch or case msg <<- ch".to_string(),
-            "Channel receive operator: blocking shortcut for wait_and_receive(ch), or a receive arm inside a 'select' block.".to_string(),
+            "<<- ch_or_commit or case msg <<- ch_or_commit".to_string(),
+            "Await / receive operator: blocks on a Chan[T] or consumes a Commitment[T] until its result is ready (supporting Plan B '<<- c { fallback }'), or waits in a 'select' arm.".to_string(),
         ),
         (TokenClass::Operator, _) if text == "->>" => (
             "value ->> ch or case [own] value ->> ch".to_string(),
@@ -347,6 +347,22 @@ fn hover_token(
         (TokenClass::Field, None) if text == "cancel" => (
             "cancel()".to_string(),
             "Signals cancellation to a Commitment[T] without waiting for it; structured scope exit still awaits completion before returning.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "then" => (
+            "then(step) -> Commitment[U]".to_string(),
+            "Chains a follow-up step onto a Commitment[T] (or transforms a value when called via '|> then(...)') without blocking the caller.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "recover" => (
+            "recover(handler) -> Commitment[T]".to_string(),
+            "Handles the failure branch of a fallible Commitment[T ~ E] asynchronously, returning a Commitment to the recovered value or remapped error.".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "then" => (
+            "then(value_or_commit, step)".to_string(),
+            "Transforms a piped value with a task/lambda ('x |> then(step)') or chains an async continuation onto a Commitment[T].".to_string(),
+        ),
+        (TokenClass::Task, None) if text == "recover" => (
+            "recover(commit, handler) -> Commitment[T]".to_string(),
+            "Attaches a failure-recovery task or plain lambda to a fallible Commitment[T ~ E].".to_string(),
         ),
         (TokenClass::Task, None) if text == "cancelled" => (
             "task cancelled() -> bool".to_string(),

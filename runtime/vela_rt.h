@@ -5174,6 +5174,17 @@ static inline int64_t vela__rt__chan_select(
             break;
         }
 
+        bool has_commitment = false;
+        for (size_t i = 0; i < unique_count; i++) {
+            if (unique_chans[i]->is_commitment) {
+                has_commitment = true;
+                break;
+            }
+        }
+        if (has_commitment) {
+            vela__rt__sched_ensure_progress();
+        }
+
         bool timed_out = false;
         pthread_mutex_lock(&waiter.lock);
         while (!waiter.signaled) {

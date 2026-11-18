@@ -60,7 +60,7 @@ const STATEMENT_KEYWORDS: &[&str] = &[
     "fixed", "flex", "when", "loop", "endless", "each", "block", "match", "select", "region", "actor",
 ];
 const VALUE_KEYWORDS: &[&str] = &[
-    "true", "false", "none", "not", "new", "fail", "match", "when", "select", "spawn",
+    "true", "false", "none", "not", "new", "fail", "match", "when", "select", "spawn", "rush",
 ];
 
 pub(crate) fn complete(
@@ -546,8 +546,8 @@ pub(crate) fn complete(
                 ];
                 return (with_copy(items, false), word_start, byte);
             }
-            Some(Type::Commitment(_)) => {
-                let items = vec![
+            Some(Type::Commitment(inner)) => {
+                let mut items = vec![
                     CompletionItem {
                         label: "wait".to_string(),
                         kind: CompletionKind::BuiltinFn,
@@ -556,6 +556,45 @@ pub(crate) fn complete(
                         snippet: Some("wait()".to_string()),
                         boost: LOCAL,
                     },
+                    CompletionItem {
+                        label: "poll".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "poll() -> maybe T".to_string(),
+                        apply: None,
+                        snippet: Some("poll()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "cancel".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "cancel()".to_string(),
+                        apply: None,
+                        snippet: Some("cancel()".to_string()),
+                        boost: LOCAL,
+                    },
+                    CompletionItem {
+                        label: "then".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "then(step) -> Commitment[U]".to_string(),
+                        apply: None,
+                        snippet: Some("then(${step})".to_string()),
+                        boost: LOCAL,
+                    },
+                ];
+                if matches!(**inner, Type::Or(..)) {
+                    items.push(CompletionItem {
+                        label: "recover".to_string(),
+                        kind: CompletionKind::BuiltinFn,
+                        detail: "recover(handler) -> Commitment[T]".to_string(),
+                        apply: None,
+                        snippet: Some("recover(${handler})".to_string()),
+                        boost: LOCAL,
+                    });
+                }
+                return (with_copy(items, false), word_start, byte);
+            }
+            Some(Type::Maybe(inner)) if matches!(**inner, Type::Commitment(_)) => {
+                let items = vec![
                     CompletionItem {
                         label: "poll".to_string(),
                         kind: CompletionKind::BuiltinFn,

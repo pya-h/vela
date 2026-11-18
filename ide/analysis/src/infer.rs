@@ -667,7 +667,9 @@ impl<'a> Knowledge<'a> {
                 }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let base = self.expression_type(q.checked_sub(2)?, depth + 1)?;
-                    if name == "len" && matches!(base, Type::Array(..) | Type::Slice(..) | Type::Text(_)) {
+                    if (name == "len" && matches!(base, Type::Array(..) | Type::Slice(..) | Type::Text(_) | Type::Chan(_)))
+                        || (name == "cap" && matches!(base, Type::Chan(_)))
+                    {
                         return Some(Type::Int);
                     }
                     let Type::Named(shape, region) = base else { return None };
@@ -823,6 +825,34 @@ impl<'a> Knowledge<'a> {
                     && let Some(method) = self.symbol_at(p).and_then(|id| self.symbol(id)).filter(|s| s.kind == SymbolKind::Method)
                 {
                     return exact(p).or_else(|| Some(self.call_type(&method.detail, open, q, depth)));
+                }
+                if self.token_before(p) == Some(&Token::Dot)
+                    && let Some(base) = p.checked_sub(2).and_then(|b| self.expression_type(b, depth + 1))
+                {
+                    let unwrap_own = |ty: &Type| match ty {
+                        Type::Own(inner) => inner.as_ref().clone(),
+                        other => other.clone(),
+                    };
+                    let builtin_ret = match (&base, word) {
+                        (Type::Commitment(inner), "wait") => Some(unwrap_own(inner)),
+                        (Type::Commitment(inner), "poll") => Some(Type::Maybe(Box::new(unwrap_own(inner)))),
+                        (Type::Commitment(_), "cancel") => Some(Type::Nothing),
+                        (Type::Maybe(m), "poll") if matches!(&**m, Type::Commitment(_)) => {
+                            let Type::Commitment(inner) = &**m else { unreachable!() };
+                            Some(Type::Maybe(Box::new(unwrap_own(inner))))
+                        }
+                        (Type::Maybe(m), "cancel") if matches!(&**m, Type::Commitment(_)) => Some(Type::Nothing),
+                        (Type::Chan(_), "dispatch" | "send") => Some(Type::Bool),
+                        (Type::Chan(inner), "wait_and_receive" | "recv") => Some(unwrap_own(inner)),
+                        (Type::Chan(inner), "receive" | "try_recv") => Some(Type::Maybe(Box::new(unwrap_own(inner)))),
+                        (Type::Chan(_), "close") => Some(Type::Nothing),
+                        (Type::Actor(_), "dispatch" | "send") => Some(Type::Bool),
+                        (Type::Actor(_), "close") => Some(Type::Nothing),
+                        _ => None,
+                    };
+                    if let Some(ty) = builtin_ret {
+                        return exact(p).or(Some(ty));
+                    }
                 }
                 if let Some(variant) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant))
                     && self.token_before(p) == Some(&Token::Dot)
@@ -1697,25 +1727,41 @@ fn given_no_regions(ty: &Type) -> Type {
 }
 
 fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
+    enum Prefix {
+        Ptr,
+        Maybe,
+        Own,
+    }
     // Cap prefix nesting depth to match compiler limits.
     let mut text = text.trim();
-    let mut pointers = Vec::new();
+    let mut prefixes = Vec::new();
     loop {
         if let Some(inner) = text.strip_prefix('^') {
-            pointers.push(true);
+            prefixes.push(Prefix::Ptr);
             text = inner.trim_start();
         } else if let Some(inner) = text.strip_prefix("maybe ") {
-            pointers.push(false);
+            prefixes.push(Prefix::Maybe);
+            text = inner.trim_start();
+        } else if let Some(inner) = text.strip_prefix("own ") {
+            prefixes.push(Prefix::Own);
             text = inner.trim_start();
         } else {
             break;
         }
-        if pointers.len() > vela::parser::MAX_NESTING {
+        if prefixes.len() > vela::parser::MAX_NESTING {
             return None;
         }
     }
     let mut ty = match text.trim_end() {
         "region" => Type::Region,
+        chan if chan.starts_with("Chan[") && chan.ends_with(']') => {
+            let inside = chan.get("Chan[".len()..chan.len() - 1)?;
+            Type::Chan(Box::new(parse_type_within(inside, depth + 1)?))
+        }
+        commitment if commitment.starts_with("Commitment[") && commitment.ends_with(']') => {
+            let inside = commitment.get("Commitment[".len()..commitment.len() - 1)?;
+            Type::Commitment(Box::new(parse_type_within(inside, depth + 1)?))
+        }
         // Single-item parens group `maybe (int ~ text)`; two or more items form a tuple.
         parens if parens.starts_with('(') && parens.ends_with(')') => {
             let items: Vec<Type> = split_list(parens.get(1..parens.len() - 1)?).into_iter().map(|item| parse_type_within(item, depth + 1)).collect::<Option<_>>()?;
@@ -1752,8 +1798,12 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
         name if name.rsplit_once(MODULE_SEPARATOR).is_some_and(|(module, member)| is_module_path(module) && is_name(member)) => Type::named(name),
         _ => return None,
     };
-    for pointer in pointers.into_iter().rev() {
-        ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
+    for prefix in prefixes.into_iter().rev() {
+        ty = match prefix {
+            Prefix::Ptr => Type::Ptr(Box::new(ty), None),
+            Prefix::Maybe => Type::Maybe(Box::new(ty)),
+            Prefix::Own => Type::Own(Box::new(ty)),
+        };
     }
     Some(ty)
 }

@@ -6,6 +6,66 @@ shape Scaler
     fi
 fi
 
+shape BigPayload
+    a1: int
+    a2: int
+    a3: int
+    a4: int
+    a5: int
+    a6: int
+    a7: int
+    a8: int
+    a9: int
+fi
+
+kind SmallOk
+    Tiny(n: int)
+fi
+
+kind BigOk::SmallOk
+    Extra(label: text)
+fi
+
+task make_big(v: int) -> BigPayload
+    <- BigPayload { a1: v, a2: v, a3: v, a4: v, a5: v, a6: v, a7: v, a8: v, a9: v }
+fi
+
+task sum_big(b: BigPayload) -> int
+    <- b.a1 + b.a5 + b.a9
+fi
+
+task take_opt(v: maybe int) -> int
+    when v is { n }
+        <- n + 1
+    else
+        <- 0
+    fi
+fi
+
+task make_small_ok() -> SmallOk
+    <- Tiny(12)
+fi
+
+task read_big_ok(v: BigOk) -> int
+    match v
+    case Tiny n
+        <- n
+    case Extra _
+        <- -1
+    fi
+fi
+
+task fail_big_ok(flag: bool) -> BigOk ~ text
+    when flag
+        <- fail "recover_small"
+    fi
+    <- Extra("direct")
+fi
+
+task echo_local_text(s: text@r, out: region default) -> text@out
+    <- "{s}!" at out
+fi
+
 task add_ten(n: int) -> int
     <- n + 10
 fi
@@ -242,4 +302,22 @@ task main()
     fixed greeting = <<- c_greeting
     fixed combined = "{greeting}{suffix}" at msg_r
     show("region_splice: ", combined)
+
+    ; 15. Piped local text in rush + big payload >64B + widening/maybe in .then/.recover and |> then
+    fixed prefix = "o"
+    fixed local_txt = "{prefix}k" at msg_r
+    fixed c_piped_txt = rush (local_txt |> echo_local_text() at msg_r)
+    show("rush_piped_txt: ", <<- c_piped_txt)
+
+    fixed c_big = (rush make_big(3)).then(sum_big)
+    fixed p_big = make_big(4) |> then(sum_big)
+    show("big_then: ", <<- c_big, " ", p_big)
+
+    fixed c_opt = (rush add_ten(5)).then(add_one)
+    fixed p_opt = 6 |> then(take_opt)
+    show("opt_then: ", <<- c_opt, " ", p_opt)
+
+    fixed p_widen = make_small_ok() |> then(read_big_ok)
+    fixed c_rec = (rush fail_big_ok(true)).recover(_ -> BigOk.Tiny(25))
+    show("widen_then_rec: ", p_widen, " ", read_big_ok(<<- c_rec))
 fi

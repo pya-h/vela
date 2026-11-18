@@ -320,4 +320,66 @@ fi
     assert!(labels(dot).contains(&"id".to_string()));
 }
 
+#[test]
+fn commitment_completions_and_hover() {
+    let com_dot = "\
+task work() -> int ~ text
+    <- 1
+fi
+
+task main()
+    fixed c = rush work()
+    c.@@
+fi
+";
+    let offered = labels(com_dot);
+    for expected in ["wait", "poll", "cancel", "then", "recover"] {
+        assert!(offered.contains(&expected.to_string()), "expected '{expected}' on fallible Commitment, got {offered:?}");
+    }
+
+    let slot_dot = "\
+task work() -> int
+    <- 1
+fi
+
+task main()
+    flex slot: maybe Commitment[int] = rush work()
+    slot.@@
+fi
+";
+    let slot_offered = labels(slot_dot);
+    assert!(slot_offered.contains(&"poll".to_string()));
+    assert!(slot_offered.contains(&"cancel".to_string()));
+
+    let expr_kw = "\
+task work() -> int
+    <- 1
+fi
+
+task main()
+    fixed c = ru@@
+fi
+";
+    assert!(labels(expr_kw).contains(&"rush".to_string()));
+
+    let hover_src = "\
+task work() -> int ~ text
+    <- 1
+fi
+
+task main()
+    fixed c = rush work()
+    fixed d = c.then(x -> x + 1).recover(_ -> 0)
+    fixed v = <<- d
+    show(v)
+fi
+";
+    let (code_then, doc_then) = hover(hover_src, "then(");
+    assert!(code_then.contains("then") && doc_then.contains("Commitment"));
+    let (code_rec, doc_rec) = hover(hover_src, "recover(");
+    assert!(code_rec.contains("recover") && doc_rec.contains("Commitment"));
+    let (code_await, doc_await) = hover(hover_src, "<<- d");
+    assert!(code_await.contains("<<-") && doc_await.contains("Commitment"));
+}
+
 

@@ -15377,7 +15377,17 @@ impl Checker {
             ret: Type::Unknown,
         }));
         self.prepare_shortcut_lambda(arg1, &expected_fn)?;
-        let fn_ty = self.check_expr(arg1)?;
+        self.calling = matches!(arg1.kind, ExprKind::Var(_));
+        self.calling_field = matches!(arg1.kind, ExprKind::Field(..));
+        let fn_ty = self.check_expr(arg1);
+        self.calling = false;
+        self.calling_field = false;
+        let fn_ty = fn_ty?;
+        if !is_commitment
+            && (bind_lambda(&fn_ty) || (held_lambda(&fn_ty) && !matches!(arg1.kind, ExprKind::Var(_))))
+        {
+            self.check_bind_call(arg1, &fn_ty)?;
+        }
         let (task, is_closure) = match &fn_ty {
             Type::Task(t) => (t.as_ref().clone(), false),
             Type::Closure(c) => (c.task.clone(), true),
@@ -15395,18 +15405,16 @@ impl Checker {
                 "cannot pass a capturing '[...]' closure to '.then()' on a Commitment; use a plain lambda or pipe with '|> then(...)' on await",
             );
         }
-        if is_commitment {
-            for (i, t) in task.taken.iter().enumerate() {
-                if matches!(t, Taken::Place(_) | Taken::Region(_)) {
-                    return err(
-                        arg1.span,
-                        format!("'.then()' callback parameter {} cannot take a reference", i + 1),
-                    );
-                }
+        for (i, t) in task.taken.iter().enumerate() {
+            if matches!(t, Taken::Place(_) | Taken::Region(_)) {
+                return err(
+                    arg1.span,
+                    format!("'then' callback parameter {} cannot take a reference", i + 1),
+                );
             }
-            if task.params.contains(&Type::Region) {
-                return err(arg1.span, "'.then()' callback on a Commitment cannot take a caller region");
-            }
+        }
+        if task.params.contains(&Type::Region) {
+            return err(arg1.span, "'then' callback cannot take a caller region");
         }
         let max_params = if cb_in == Type::Nothing { 0 } else { 1 };
         if task.params.len() > max_params || (!is_commitment && task.params.len() != max_params) {
@@ -15416,7 +15424,11 @@ impl Checker {
             );
         }
         if let Some(p0) = task.params.first() {
-            fits_or_err(&cb_in, p0, arg1.span, Given::Sent)?;
+            if !is_commitment {
+                self.coerce(arg0, p0)?;
+            } else {
+                fits_or_err(&cb_in, p0, arg1.span, Given::Sent)?;
+            }
         }
         if contains_commitment(&task.ret) {
             return err(arg1.span, "'then' callback cannot return a Commitment");

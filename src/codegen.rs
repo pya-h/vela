@@ -7345,11 +7345,38 @@ impl Generator {
                 .line("vela__rt__commit_wait_into(__ctx.src, &__src_val, __wr);");
         }
 
-        let widen_or_assign = |from: &Type, to: &Type, val: &str| -> String {
+        fn adapt_commit_value(from: &Type, to: &Type, val: &str) -> String {
             if from.without_regions() == to.without_regions() {
-                val.to_string()
+                return val.to_string();
+            }
+            if let Type::Maybe(inner) = to
+                && !matches!(from, Type::Maybe(_))
+            {
+                let inner_val = adapt_commit_value(from, inner, val);
+                if is_pointer(inner) {
+                    return inner_val;
+                }
+                return format!("(({}){{ .has = true, .value = {} }})", c_type(to), inner_val);
+            }
+            if matches!(from, Type::Named(..)) && matches!(to, Type::Named(..)) {
+                return format!("{}({})", widen_helper(from, to), val);
+            }
+            format!("(({})({}))", c_type(to), val)
+        }
+
+        let hidden0 = self.hidden_of_type(&fn_task).first().copied().unwrap_or(false);
+        let build_cb_call = |w: &mut CWriter, src_ty: &Type, src_lval: &str| -> String {
+            let Some(p0) = (*src_ty != Type::Nothing).then(|| fn_task.params.first()).flatten() else {
+                return "(__ctx.fn)()".to_string();
+            };
+            let adapted = adapt_commit_value(src_ty, p0, src_lval);
+            if !hidden0 {
+                format!("(__ctx.fn)({})", adapted)
+            } else if src_ty.without_regions() == p0.without_regions() {
+                format!("(__ctx.fn)(&{})", src_lval)
             } else {
-                format!("{}({})", widen_helper(from, to), val)
+                w.line(&format!("{} __cb_arg = {};", c_type(p0), adapted));
+                "(__ctx.fn)(&__cb_arg)".to_string()
             }
         };
 
@@ -7363,15 +7390,11 @@ impl Generator {
                     self.w.line("__res.ok = false;");
                     self.w.line(&format!(
                         "__res.error = {};",
-                        widen_or_assign(s_err, o_err, "__src_val.error")
+                        adapt_commit_value(s_err, o_err, "__src_val.error")
                     ));
                     self.w.close();
                     self.w.open("else");
-                    let call = if **s_val == Type::Nothing || fn_task.params.is_empty() {
-                        "(__ctx.fn)()".to_string()
-                    } else {
-                        "(__ctx.fn)(__src_val.value)".to_string()
-                    };
+                    let call = build_cb_call(&mut self.w, s_val, "__src_val.value");
                     if let Type::Or(_, f_err) = &fn_task.ret {
                         self.w
                             .line(&format!("{} __step = {};", c_type(&fn_task.ret), call));
@@ -7385,26 +7408,20 @@ impl Generator {
                         self.w.line("__res.ok = false;");
                         self.w.line(&format!(
                             "__res.error = {};",
-                            widen_or_assign(f_err, o_err, "__step.error")
+                            adapt_commit_value(f_err, o_err, "__step.error")
                         ));
                         self.w.close();
+                    } else if **o_val == Type::Nothing {
+                        self.w.line(&format!("{};", call));
+                        self.w.line("__res.ok = true;");
                     } else {
-                        if **o_val == Type::Nothing {
-                            self.w.line(&format!("{};", call));
-                            self.w.line("__res.ok = true;");
-                        } else {
-                            self.w.line(&format!("__res.value = {};", call));
-                            self.w.line("__res.ok = true;");
-                        }
+                        self.w.line(&format!("__res.value = {};", call));
+                        self.w.line("__res.ok = true;");
                     }
                     self.w.close();
                 }
                 _ => {
-                    let call = if src_payload == Type::Nothing || fn_task.params.is_empty() {
-                        "(__ctx.fn)()".to_string()
-                    } else {
-                        "(__ctx.fn)(__src_val)".to_string()
-                    };
+                    let call = build_cb_call(&mut self.w, &src_payload, "__src_val");
                     if out_payload == Type::Nothing {
                         self.w.line(&format!("{};", call));
                         self.w.line("uint8_t __res = 1;");
@@ -7414,17 +7431,13 @@ impl Generator {
                 }
             }
         } else {
-            let Type::Or(_, _) = &src_payload else {
+            let Type::Or(s_val, s_err) = &src_payload else {
                 return Err(Error::internal_at(
                     e.span,
                     "recover on non-fallible Commitment",
                 ));
             };
-            let call = if fn_task.params.is_empty() {
-                "(__ctx.fn)()".to_string()
-            } else {
-                "(__ctx.fn)(__src_val.error)".to_string()
-            };
+            let call = build_cb_call(&mut self.w, s_err, "__src_val.error");
             match &out_payload {
                 Type::Or(o_val, _) => {
                     self.w.line(&format!("{} __res;", out_c));
@@ -7437,7 +7450,28 @@ impl Generator {
                     }
                     self.w.close();
                     self.w.open("else");
-                    self.w.line(&format!("__res = {};", call));
+                    if let Type::Or(r_val, _) = &fn_task.ret {
+                        if r_val.without_regions() == o_val.without_regions() {
+                            self.w.line(&format!("__res = {};", call));
+                        } else {
+                            self.w
+                                .line(&format!("{} __step = {};", c_type(&fn_task.ret), call));
+                            self.w.line("__res.ok = __step.ok;");
+                            self.w.open("if (__step.ok)");
+                            if **o_val != Type::Nothing {
+                                self.w.line(&format!(
+                                    "__res.value = {};",
+                                    adapt_commit_value(r_val, o_val, "__step.value")
+                                ));
+                            }
+                            self.w.close();
+                            self.w.open("else");
+                            self.w.line("__res.error = __step.error;");
+                            self.w.close();
+                        }
+                    } else {
+                        self.w.line(&format!("__res = {};", call));
+                    }
                     self.w.close();
                 }
                 Type::Nothing => {
@@ -7449,10 +7483,16 @@ impl Generator {
                 _ => {
                     self.w.line(&format!("{} __res;", out_c));
                     self.w.open("if (__src_val.ok)");
-                    self.w.line("__res = __src_val.value;");
+                    self.w.line(&format!(
+                        "__res = {};",
+                        adapt_commit_value(s_val, &out_payload, "__src_val.value")
+                    ));
                     self.w.close();
                     self.w.open("else");
-                    self.w.line(&format!("__res = {};", call));
+                    self.w.line(&format!(
+                        "__res = {};",
+                        adapt_commit_value(&fn_task.ret, &out_payload, &call)
+                    ));
                     self.w.close();
                 }
             }
@@ -9770,30 +9810,32 @@ impl UsedTypes {
             | ExprKind::TypeOf(_) => {}
             ExprKind::Spread(inner) | ExprKind::ChanRecv(inner) => self.expr(inner),
             ExprKind::Doing(inner) => {
+                fn note_regional(used: &mut UsedTypes, ty: Option<&Type>) {
+                    if let Some(ty) = ty
+                        && !matches!(ty, Type::Task(_) | Type::Closure(_) | Type::Region)
+                        && !ty.regions().is_empty()
+                    {
+                        note(&mut used.copied, ty);
+                    }
+                }
                 fn collect_doing_copies(used: &mut UsedTypes, e: &Expr) {
                     match &e.kind {
                         ExprKind::Pipe(call) => collect_doing_copies(used, call),
                         ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } => {
                             if let ExprKind::MethodCall { value, .. } = &e.kind
                                 && !matches!(value.kind, ExprKind::Piped(_))
-                                && let Some(ty) = &value.ty
-                                && !matches!(ty, Type::Task(_) | Type::Closure(_) | Type::Region)
-                                && !ty.regions().is_empty()
                             {
-                                note(&mut used.copied, ty);
+                                note_regional(used, value.ty.as_ref());
                             }
                             for arg in args {
                                 if let ExprKind::Piped(prev) = &arg.kind {
                                     collect_doing_copies(used, prev);
-                                } else if let Some(ty) = &arg.ty
-                                    && !matches!(ty, Type::Task(_) | Type::Closure(_) | Type::Region)
-                                    && !ty.regions().is_empty()
-                                {
-                                    note(&mut used.copied, ty);
+                                } else {
+                                    note_regional(used, arg.ty.as_ref());
                                 }
                             }
                         }
-                        _ => {}
+                        _ => note_regional(used, e.ty.as_ref()),
                     }
                 }
                 collect_doing_copies(self, inner);
@@ -9992,23 +10034,75 @@ impl UsedTypes {
                     && let [arg0, arg1] = args.as_slice()
                     && let (Some(Type::Commitment(out_inner)), Some(Type::Commitment(src_inner))) =
                         (&e.ty, &arg0.ty)
-                    && let Type::Or(_, o_err) = out_inner.as_ref()
                 {
-                    if let Type::Or(_, s_err) = src_inner.as_ref()
-                        && s_err.without_regions() != o_err.without_regions()
-                    {
-                        self.widen(s_err, o_err);
+                    fn unwrap_target(ty: &Type) -> &Type {
+                        match ty {
+                            Type::Maybe(inner) => inner.as_ref(),
+                            other => other,
+                        }
+                    }
+                    let mut note_kind_widen = |from: &Type, to: &Type| {
+                        let to_leaf = if !matches!(from, Type::Maybe(_)) {
+                            unwrap_target(to)
+                        } else {
+                            to
+                        };
+                        if matches!(from, Type::Named(..))
+                            && matches!(to_leaf, Type::Named(..))
+                            && from.without_regions() != to_leaf.without_regions()
+                        {
+                            self.widen(from, to_leaf);
+                        }
+                    };
+                    let src_payload = match src_inner.as_ref() {
+                        Type::Own(p) => p.as_ref(),
+                        other => other,
+                    };
+                    let out_payload = match out_inner.as_ref() {
+                        Type::Own(p) => p.as_ref(),
+                        other => other,
+                    };
+                    if let Type::Or(_, o_err) = out_payload {
+                        if let Type::Or(_, s_err) = src_payload {
+                            note_kind_widen(s_err, o_err);
+                        }
+                        if let Some(fn_ty) = &arg1.ty {
+                            let fn_ret = match fn_ty {
+                                Type::Task(t) => Some(&t.ret),
+                                Type::Closure(c) => Some(&c.task.ret),
+                                _ => None,
+                            };
+                            if let Some(Type::Or(_, f_err)) = fn_ret {
+                                note_kind_widen(f_err, o_err);
+                            }
+                        }
                     }
                     if let Some(fn_ty) = &arg1.ty {
-                        let fn_ret = match fn_ty {
-                            Type::Task(t) => Some(&t.ret),
-                            Type::Closure(c) => Some(&c.task.ret),
+                        let fn_task = match fn_ty {
+                            Type::Task(t) => Some(t.as_ref()),
+                            Type::Closure(c) => Some(&c.task),
                             _ => None,
                         };
-                        if let Some(Type::Or(_, f_err)) = fn_ret
-                            && f_err.without_regions() != o_err.without_regions()
-                        {
-                            self.widen(f_err, o_err);
+                        if let Some(task) = fn_task {
+                            if let Some(p0) = task.params.first() {
+                                let cb_in = match (name.as_str(), src_payload) {
+                                    ("recover", Type::Or(_, e)) => e.as_ref(),
+                                    ("then", Type::Or(v, _)) => v.as_ref(),
+                                    _ => src_payload,
+                                };
+                                note_kind_widen(cb_in, p0);
+                            }
+                            if name == "recover" {
+                                let o_val = match out_payload {
+                                    Type::Or(v, _) => v.as_ref(),
+                                    other => other,
+                                };
+                                let r_val = match &task.ret {
+                                    Type::Or(v, _) => v.as_ref(),
+                                    other => other,
+                                };
+                                note_kind_widen(r_val, o_val);
+                            }
                         }
                     }
                 }
@@ -10226,10 +10320,14 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         {
             false
         }
+        ExprKind::Doing(inner) => {
+            e.ty.as_ref().is_some_and(|ty| {
+                matches!(ty, Type::Commitment(c) if c.regions().contains(&name))
+            }) || expr_reads(inner, name)
+        }
         ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
         | ExprKind::ChanRecv(inner)
-        | ExprKind::Doing(inner)
         | ExprKind::Deref(inner)
         | ExprKind::Ref(inner)
         | ExprKind::Fail(inner)
@@ -10244,8 +10342,16 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Binary(_, a, b)
         | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => expr_reads(a, name) || expr_reads(b, name),
-        ExprKind::Call { args, .. }
-        | ExprKind::Construct { args, .. }
+        ExprKind::Call {
+            name: callee, args, ..
+        } => {
+            ((callee == "then" || callee == "recover")
+                && e.ty.as_ref().is_some_and(|ty| {
+                    matches!(ty, Type::Commitment(c) if c.regions().contains(&name))
+                }))
+                || args.iter().any(|arg| expr_reads(arg, name))
+        }
+        ExprKind::Construct { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Tuple(args) => args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::MethodCall { value, args, .. } => {

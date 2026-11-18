@@ -22,3 +22,7 @@ slot_poll1: none
 slot_poll2: 88
 slot_reassign: cancelled
 region_splice: hello, vela!
+rush_piped_txt: ok!
+big_then: 9 12
+opt_then: 16 7
+widen_then_rec: 12 25
