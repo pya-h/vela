@@ -224,8 +224,15 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
         _ => {}
     }
     let wanted = fs::read_to_string(expected).unwrap_or_default();
-    if String::from_utf8_lossy(&output.stdout) != wanted {
-        return Some(format!("{}: output differs from {} under the sanitizers", name, expected.display()));
+    let actual = String::from_utf8_lossy(&output.stdout);
+    if actual != wanted {
+        return Some(format!(
+            "{}: output differs from {} under the sanitizers\n--- expected ---\n{}--- actual ---\n{}",
+            name,
+            expected.display(),
+            wanted,
+            actual
+        ));
     }
     None
 }

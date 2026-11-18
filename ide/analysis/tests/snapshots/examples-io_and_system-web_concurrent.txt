@@ -28,42 +28,42 @@
     | keyword:<-  task:text_response  punctuation:(  string:"unknown"  punctuation:,  region:r  punctuation:)
  17 | fi
     | keyword:fi
- 19 | task wait_server_up(url: text@p, r: region default) -> bool
-    | keyword:task  task:wait_server_up  punctuation:(  parameter:url  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:bool
+ 19 | task wait_server_up(url: text@p) -> bool
+    | keyword:task  task:wait_server_up  punctuation:(  parameter:url  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)  operator:->  type-builtin:bool
  20 |     flex attempts = 0
     | keyword:flex  variable:attempts  operator:=  number:0
- 21 |     loop attempts < 40
-    | keyword:loop  variable:attempts  operator:<  number:40
- 22 |         fixed ok = Client.fetch(url, r) { failure _
-    | keyword:fixed  variable:ok  operator:=  type:Client  punctuation:.  method:fetch  punctuation:(  parameter:url  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  keyword:_
- 23 |             sleep_ms(10)
+ 21 |     loop attempts < 500
+    | keyword:loop  variable:attempts  operator:<  number:500
+ 22 |         region probe_r
+    | keyword:region  region:probe_r
+ 23 |         fixed ok = Client.fetch(url, probe_r) { failure _
+    | keyword:fixed  variable:ok  operator:=  type:Client  punctuation:.  method:fetch  punctuation:(  parameter:url  punctuation:,  region:probe_r  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 24 |             sleep_ms(10)
     | task:sleep_ms  punctuation:(  number:10  punctuation:)
- 24 |             attempts++
+ 25 |             attempts++
     | variable:attempts  operator:++
- 25 |             continue
+ 26 |             continue
     | keyword:continue
- 26 |         }
+ 27 |         }
     | punctuation:}
- 27 |         when ok.status == 200
+ 28 |         when ok.status == 200
     | keyword:when  variable:ok  punctuation:.  field:status  operator:==  number:200
- 28 |             <- true
+ 29 |             <- true
     | keyword:<-  keyword:true
- 29 |         fi
+ 30 |         fi
     | keyword:fi
- 30 |         sleep_ms(10)
+ 31 |         sleep_ms(10)
     | task:sleep_ms  punctuation:(  number:10  punctuation:)
- 31 |         attempts++
+ 32 |         attempts++
     | variable:attempts  operator:++
- 32 |     fi
+ 33 |     fi
     | keyword:fi
- 33 |     <- false
+ 34 |     <- false
     | keyword:<-  keyword:false
- 34 | fi
+ 35 | fi
     | keyword:fi
- 36 | task main()
+ 37 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 37 |     region r default
-    | keyword:region  region:r  keyword:default
  38 |     region r1
     | keyword:region  region:r1
  39 |     region r2
@@ -72,14 +72,14 @@
     | comment:; Start a 2-worker concurrent HTTP server in the background
  42 |     fixed srv = rush Server.new("127.0.0.1:18110").serve_concurrent(api_handler, 2)
     | keyword:fixed  variable:srv  operator:=  keyword:rush  type:Server  punctuation:.  method:new  punctuation:(  string:"127.0.0.1:18110"  punctuation:)  punctuation:.  method:serve_concurrent  punctuation:(  task:api_handler  punctuation:,  number:2  punctuation:)
- 43 |     wait_server_up("http://127.0.0.1:18110/health", r)
-    | task:wait_server_up  punctuation:(  string:"http://127.0.0.1:18110/health"  punctuation:,  region:r  punctuation:)
+ 43 |     wait_server_up("http://127.0.0.1:18110/health")
+    | task:wait_server_up  punctuation:(  string:"http://127.0.0.1:18110/health"  punctuation:)
  45 |     ; Fan out two concurrent HTTP client calls with per-call region splicing
     | comment:; Fan out two concurrent HTTP client calls with per-call region splicing
  46 |     fixed c_user = rush Client.fetch("http://127.0.0.1:18110/user", r1)
     | keyword:fixed  variable:c_user  operator:=  keyword:rush  type:Client  punctuation:.  method:fetch  punctuation:(  string:"http://127.0.0.1:18110/user"  punctuation:,  region:r1  punctuation:)
- 47 |     fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 2000, r2)
-    | keyword:fixed  variable:c_score  operator:=  keyword:rush  task:fetch_with_timeout  punctuation:(  string:"http://127.0.0.1:18110/score"  punctuation:,  number:2000  punctuation:,  region:r2  punctuation:)
+ 47 |     fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 5000, r2)
+    | keyword:fixed  variable:c_score  operator:=  keyword:rush  task:fetch_with_timeout  punctuation:(  string:"http://127.0.0.1:18110/score"  punctuation:,  number:5000  punctuation:,  region:r2  punctuation:)
  49 |     fixed user_resp = <<- c_user { failure e
     | keyword:fixed  variable:user_resp  operator:=  operator:<<-  variable:c_user  punctuation:{  keyword:failure  variable:e
  50 |         show("user fetch failed: ", e)

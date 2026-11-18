@@ -16,10 +16,11 @@ task api_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
     <- text_response("unknown", r)
 fi
 
-task wait_server_up(url: text@p, r: region default) -> bool
+task wait_server_up(url: text@p) -> bool
     flex attempts = 0
-    loop attempts < 40
-        fixed ok = Client.fetch(url, r) { failure _
+    loop attempts < 500
+        region probe_r
+        fixed ok = Client.fetch(url, probe_r) { failure _
             sleep_ms(10)
             attempts++
             continue
@@ -34,17 +35,16 @@ task wait_server_up(url: text@p, r: region default) -> bool
 fi
 
 task main()
-    region r default
     region r1
     region r2
 
     ; Start a 2-worker concurrent HTTP server in the background
     fixed srv = rush Server.new("127.0.0.1:18110").serve_concurrent(api_handler, 2)
-    wait_server_up("http://127.0.0.1:18110/health", r)
+    wait_server_up("http://127.0.0.1:18110/health")
 
     ; Fan out two concurrent HTTP client calls with per-call region splicing
     fixed c_user = rush Client.fetch("http://127.0.0.1:18110/user", r1)
-    fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 2000, r2)
+    fixed c_score = rush fetch_with_timeout("http://127.0.0.1:18110/score", 5000, r2)
 
     fixed user_resp = <<- c_user { failure e
         show("user fetch failed: ", e)
