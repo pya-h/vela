@@ -549,10 +549,10 @@
     fast.dispatch(<span class="number">42</span>)
     slow.close()
 
-    <span class="keyword">fixed</span> label = select
-    <span class="keyword">case</span> n &lt;&lt;- fast = <span class="string">"fast={n}"</span>
-    <span class="keyword">case</span> none &lt;&lt;- slow = <span class="string">"slow-closed"</span>
-    <span class="keyword">case</span> after <span class="number">50</span> = <span class="string">"timeout"</span>
+    <span class="keyword">fixed</span> label = <span class="keyword">select</span>
+        <span class="keyword">case</span> n &lt;&lt;- fast = <span class="string">"fast={n}"</span>
+        <span class="keyword">case</span> none &lt;&lt;- slow = <span class="string">"slow-closed"</span>
+        <span class="keyword">case</span> after <span class="number">50</span> = <span class="string">"timeout"</span>
     <span class="keyword">fi</span>
     show(label)
 <span class="keyword">fi</span></code></pre>

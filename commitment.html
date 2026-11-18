@@ -329,28 +329,42 @@
       <h1>Commitments &amp; Async/Await</h1>
       <p class="tagline">
         Design analysis of Vela's await-by-default async model: colorless tasks,
-        <code>Commitment[T]</code>, <code>doing</code> +
-        <code>&lt;&lt;-</code> + <code>select</code>, call pipes
-        (<code>|&gt;</code>) &amp; <code>.then</code> continuations, safety
-        boundaries with regions, syntax alternatives, and colored comparisons.
+        <code>Commitment[T]</code>, <code>rush</code> + <code>&lt;&lt;-</code> +
+        <code>select</code>, call pipes (<code>|&gt;</code>), inline
+        <code>=&gt;</code> &amp; <code>.then</code>/<code>.recover</code>
+        combinators, region splicing, safety boundaries, syntax alternatives,
+        and colored comparisons.
       </p>
       <div style="margin-top: 1.5rem">
-        <span class="badge b-amber">Design Proposal</span>
-        <span class="badge b-green"
-          >Selected Direction: Enhanced Colorless Model</span
-        >
+        <span class="badge b-green">Implemented: rush &amp; Commitment[T]</span>
         <span class="badge b-blue">Await by Default</span>
         <span class="badge b-purple">Safety &amp; Tradeoffs</span>
       </div>
     </header>
 
     <main>
-      <div class="warn">
-        <strong>Status Notice:</strong> This document captures and evaluates a
-        <em>proposed</em> async/await and <code>Commitment</code> design for
-        Vela. Nothing described below as <code>Commitment</code>,
-        <code>doing</code>, or async continuations is implemented in the
-        compiler yet. For concurrency primitives available today, see
+      <div class="good">
+        <strong>Implementation Status:</strong> The finalized
+        <strong>Enhanced Colorless Commitment Model</strong> (<code
+          >rush task(...)</code
+        >, <code>Commitment[T]</code>, <code>maybe Commitment[T]</code>,
+        destination <code>region</code> splicing, parenthesis-free
+        <code>&lt;&lt;- c { ... }</code>, <code>.wait()</code>,
+        <code>.poll()</code>, <code>.cancel()</code>, <code>cancelled()</code>,
+        inline <code>=&gt; [(v)] { ... } [{ failure e ... }]</code>, fluent
+        <code>.then()</code> / <code>.recover()</code>, caller
+        <code>|&gt; then(lambda)</code>, structured block-exit cleanup, and
+        <code>select</code> racing with automatic losing-arm cancellation) is
+        <strong>implemented in the compiler</strong> (see
+        <a href="../examples/actors_and_events/commitments.vela"
+          >commitments.vela</a
+        >
+        and
+        <a href="../examples/actors_and_events/commitment_continuations.vela"
+          >commitment_continuations.vela</a
+        >). Colored <code>async</code>/<code>Commitment[T]</code> function
+        experiments and historical syntax alternatives in later sections remain
+        design reference comparisons. For channels and actors, see
         <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>,
         <a href="channels.html">Channels</a>, and
         <a href="actors.html">Actors</a>.
@@ -367,9 +381,9 @@
         </h3>
         <p>
           Before diving into the step-by-step evaluation from the original draft
-          to all alternatives, the <strong>selected approach so far</strong> is
-          the <strong>Enhanced Colorless Commitment Model</strong> using the
-          prefix <strong><code>doing</code></strong> verb:
+          to all alternatives, the <strong>selected approach</strong> is the
+          <strong>Enhanced Colorless Commitment Model</strong> using the prefix
+          <strong><code>rush</code></strong> keyword:
         </p>
         <ul>
           <li>
@@ -379,44 +393,45 @@
             code.
           </li>
           <li>
-            <strong
-              >Explicit concurrency with prefix <code>doing</code>:</strong
-            >
-            Writing <code>doing task_name(...)</code> launches the task
+            <strong>Explicit concurrency with prefix <code>rush</code>:</strong>
+            Writing <code>rush task_name(...)</code> launches the task
             concurrently and returns a single-shot
             <code>Commitment[T]</code> (or <code>Commitment[T ~ E]</code>) bound
-            by structured concurrency to its lexical block ("doing a task"
-            &mdash; in progress, not finished yet).
+            by structured concurrency to its lexical block.
           </li>
           <li>
             <strong>Unified waiting &amp; racing:</strong> Wait via
             <code>&lt;&lt;- c</code> (with Plan B error handling, including
             parenthesis-free <code>&lt;&lt;- c { ... }</code>), inspect
-            non-blockingly via <code>c.poll() -&gt; maybe T</code>, or race
-            commitments and timeouts inside existing
+            non-blockingly via <code>c.poll() -&gt; maybe T</code> (including
+            <code>maybe Commitment[T]</code> slots), or race commitments and
+            timeouts inside existing
             <a href="channels.html"><code>select</code></a
             >.
           </li>
           <li>
             <strong
-              >Continuations via <code>|&gt;</code> pipes (+ optional
-              <code>=&gt;</code> / <code>.then</code>):</strong
+              >Continuations via <code>|&gt;</code> pipes, <code>=&gt;</code>,
+              and <code>.then</code>/<code>.recover</code>:</strong
             >
-            Post-settlement transforms work seamlessly with Vela call pipes
-            (both background <code>doing (call() |&gt; step())</code> and
-            caller-side <code>(&lt;&lt;- c) |&gt; step()</code>).
+            Post-settlement transforms work seamlessly with call pipes (<code
+              >rush (call() |&gt; step())</code
+            >
+            and <code>&lt;&lt;- c |&gt; then(lambda)</code>), fluent
+            <code>c.then(fn)</code> / <code>c.recover(fn)</code>, and inline
+            <code>call() =&gt; (v) { ... } [{ failure e ... }]</code>.
           </li>
         </ul>
-        <pre><code><span class="keyword">fixed</span> cfg = load_config()?                              <span class="comment">; Config (awaited automatically)</span>
-<span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                     <span class="comment">; Commitment[User ~ HttpError]</span>
-<span class="keyword">fixed</span> c_name = <span class="keyword">doing</span> (fetch_user(id) |&gt; format_name())  <span class="comment">; Commitment[text ~ HttpError] (.then via pipe)</span>
+        <pre><code><span class="keyword">fixed</span> cfg = load_config() { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }      <span class="comment">; Config (awaited automatically, errors propagated via Plan B)</span>
+<span class="keyword">fixed</span> c_user = <span class="keyword">rush</span> fetch_user(id)                     <span class="comment">; Commitment[User ~ HttpError]</span>
+<span class="keyword">fixed</span> c_name = <span class="keyword">rush</span> (fetch_user(id) |&gt; format_name())  <span class="comment">; Commitment[text ~ HttpError] (.then via pipe)</span>
 
 <span class="keyword">fixed</span> user = &lt;&lt;- c_user { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }         <span class="comment">; User (unwrapped with Plan B)</span>
 
-<span class="keyword">fixed</span> c_visits = <span class="keyword">doing</span> count_visits(id)                 <span class="comment">; Commitment[int] (cannot fail)</span>
+<span class="keyword">fixed</span> c_visits = <span class="keyword">rush</span> count_visits(id)                 <span class="comment">; Commitment[int] (cannot fail)</span>
 <span class="keyword">fixed</span> report = <span class="keyword">select</span>                                     <span class="comment">; text</span>
-<span class="keyword">case</span> n &lt;&lt;- c_visits = <span class="string">"{n} visits"</span>                       <span class="comment">; n: int</span>
-<span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"timeout"</span>                                 <span class="comment">; c_visits is cancelled &amp; joined</span>
+    <span class="keyword">case</span> n &lt;&lt;- c_visits = <span class="string">"{n} visits"</span>                   <span class="comment">; n: int</span>
+    <span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"timeout"</span>                             <span class="comment">; c_visits is cancelled &amp; joined</span>
 <span class="keyword">fi</span></code></pre>
         <p style="margin-bottom: 0">
           The rest of this page walks through how the original draft evolved
@@ -591,7 +606,7 @@
         <p>
           <strong>Important honest answer:</strong> Making tasks colorless does
           <em>not</em> magically erase the underlying implementation tradeoff
-          &mdash; even in the enhanced <code>doing</code> model, dropping
+          &mdash; even in the enhanced <code>rush</code> model, dropping
           <code>async</code> function signatures leaves two possible C11
           compilation strategies, each with specific costs:
         </p>
@@ -604,16 +619,16 @@
           <ul>
             <li>
               <strong>Sequential fast path = 0 cost:</strong> A normal call
-              (<code>fetch_user(id)</code> without <code>doing</code>) compiles
+              (<code>fetch_user(id)</code> without <code>rush</code>) compiles
               to a direct C11 function call on the current fiber/thread stack.
               Zero heap frame, zero scheduler queue push, zero context switch.
             </li>
             <li>
               <strong
-                >Deferred path (<code>doing</code>) = fiber allocation
+                >Deferred path (<code>rush</code>) = fiber allocation
                 cost:</strong
               >
-              Each concurrent <code>doing</code> launch allocates a fiber stack
+              Each concurrent <code>rush</code> launch allocates a fiber stack
               (or worker task + virtual/segmented stack) and a small
               <code>Commitment</code> cell, then runs normal C11 code inside
               that stack. Any blocking wait deeper down its call graph yields
@@ -657,12 +672,12 @@
 
         <div class="good">
           <strong>Bottom Line on Cost:</strong> Under Path A (direct C calls by
-          default + fibers spawned only at <code>doing</code> /
+          default + fibers spawned only at <code>rush</code> /
           <code>spawn</code>),
           <strong
             >dropping coloring adds zero runtime cost to normal synchronous
             code</strong
-          >, only a modest per-<code>doing</code> fiber allocation +
+          >, only a modest per-<code>rush</code> fiber allocation +
           context-switch cost when you explicitly branch concurrently, and
           negligible compile-time cost.
         </div>
@@ -840,35 +855,44 @@
         <h3>Four Core Safety &amp; Ergonomic Rules</h3>
         <ol>
           <li>
-            <strong>Send-boundary safety at <code>doing</code>:</strong> Normal
+            <strong>Send-boundary safety at <code>rush</code>:</strong> Normal
             awaited calls accept any <code>^T@r</code>, <code>flex&amp;</code>,
-            and <code>region</code>. When launching with <code>doing</code>,
-            arguments must pass Vela's concurrency boundary (no escaping
-            <code>flex&amp;</code> aliases; either <code>own</code>/lasting
-            values or strictly bounded inside an inner structured scope whose
-            regions outlive it).
+            <code>alters</code>, and arbitrary <code>region</code> arguments.
+            Across <code>rush</code>, arguments and results obey concurrency
+            safety: no <code>flex&amp;</code>/<code>fixed&amp;</code>/<code
+              >bind&amp;</code
+            >
+            references, no <code>alters</code> methods or mutable
+            <code>shared</code> state, and at most one destination caller
+            <code>region</code> (when provided, the worker allocates inside an
+            isolated worker region that splices in O(1) into the caller's region
+            on settlement or frees automatically on cancel/failure).
           </li>
           <li>
             <strong
               >Explicit call deferral returning
               <code>Commitment[T]</code>:</strong
             >
-            Prefixing <code>doing</code> spawns concurrent execution cleanly
-            without overloading <code>bind</code> or <code>=&gt;</code>.
+            Prefixing <code>rush</code> spawns concurrent execution cleanly
+            without overloading <code>bind</code>, and inline
+            <code>=&gt; [(v)] { ... } [{ failure e ... }]</code> offers concise
+            fire-and-forget and inline mapping.
           </li>
           <li>
             <strong>Structured lexical scope cleanup:</strong> Any
-            <code>Commitment[T]</code> created in a block that exits early
-            (<code>fail</code>, <code>&lt;-</code>, <code>break</code>) receives
-            cooperative cancellation and is automatically joined before the
-            block's <code>region</code> allocations are freed. (Immortal daemons
-            use <a href="actors.html"><code>spawn Actor(...)</code></a
+            <code>Commitment[T]</code> (including
+            <code>maybe Commitment[T]</code> slots) created in a block that
+            exits early (<code>fail</code>, <code>&lt;-</code>,
+            <code>break</code>) or is overwritten cancels cleanly and joins
+            before the block's <code>region</code> allocations are freed.
+            (Immortal daemons use
+            <a href="actors.html"><code>spawn Actor(...)</code></a
             >.)
           </li>
           <li>
             <strong>Proper inspection &amp; racing:</strong> Wait with
-            <code>&lt;&lt;- c</code> (returns <code>T</code> or
-            <code>T ~ E</code>), check without blocking via
+            <code>&lt;&lt;- c</code> (or <code>c.wait()</code>) returning
+            <code>T</code> or <code>T ~ E</code>, check without blocking via
             <code>c.poll()</code> (returns <code>maybe T</code> /
             <code>maybe (T ~ E)</code>), or race inside
             <code>select ... case after ms ... fi</code>.
@@ -877,17 +901,17 @@
 
         <h3>Annotated Example: Concurrent Fetch &amp; Error Propagation</h3>
         <pre><code><span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
-    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?               <span class="comment">; HttpResponse (awaited automatically)</span>
-    <span class="keyword">&lt;-</span> parse_user(resp)?
+    <span class="comment">; Normal HTTP call + pipe inside: awaited automatically with pipe error short-circuiting!</span>
+    <span class="keyword">&lt;-</span> http_get(<span class="string">"/users/{id}"</span>) |&gt; parse_user()
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> load_dashboard(id: int) -&gt; Dashboard ~ HttpError
-    <span class="comment">; 1. Default synchronous path: awaited immediately (0 fiber overhead)</span>
-    <span class="keyword">fixed</span> config = load_config()?                         <span class="comment">; Config</span>
+    <span class="comment">; 1. Default synchronous path: awaited immediately (0 worker overhead)</span>
+    <span class="keyword">fixed</span> config = load_config() { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }  <span class="comment">; Config</span>
 
     <span class="comment">; 2. Explicit concurrent launch: returns Commitment handles immediately</span>
-    <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(id)                   <span class="comment">; Commitment[User ~ HttpError]</span>
-    <span class="keyword">fixed</span> c_orders = <span class="keyword">doing</span> fetch_orders(id)               <span class="comment">; Commitment[[Order]]</span>
+    <span class="keyword">fixed</span> c_user = <span class="keyword">rush</span> fetch_user(id)                   <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_orders = <span class="keyword">rush</span> fetch_orders(id)               <span class="comment">; Commitment[[Order]]</span>
 
     <span class="comment">; 3. Join &amp; handle errors via '&lt;&lt;-' and Plan B</span>
     <span class="keyword">fixed</span> user = &lt;&lt;- c_user { <span class="keyword">failure</span> err                 <span class="comment">; User (unwrapped after Plan B handles HttpError)</span>
@@ -902,13 +926,13 @@
           Annotated Example: Racing Commitments with Timeout via
           <code>select</code>
         </h3>
-        <pre><code><span class="keyword">fixed</span> primary = <span class="keyword">doing</span> query_mirror(<span class="string">"us-east"</span>)             <span class="comment">; Commitment[text]</span>
-<span class="keyword">fixed</span> backup = <span class="keyword">doing</span> query_mirror(<span class="string">"eu-west"</span>)              <span class="comment">; Commitment[text]</span>
+        <pre><code><span class="keyword">fixed</span> primary = <span class="keyword">rush</span> query_mirror(<span class="string">"us-east"</span>)             <span class="comment">; Commitment[text]</span>
+<span class="keyword">fixed</span> backup = <span class="keyword">rush</span> query_mirror(<span class="string">"eu-west"</span>)              <span class="comment">; Commitment[text]</span>
 
 <span class="keyword">fixed</span> fastest = <span class="keyword">select</span>                                    <span class="comment">; text</span>
-<span class="keyword">case</span> data &lt;&lt;- primary = data                              <span class="comment">; data: text (losing commitment auto-cancels)</span>
-<span class="keyword">case</span> data &lt;&lt;- backup = data                               <span class="comment">; data: text</span>
-<span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"mirror timeout"</span>
+    <span class="keyword">case</span> data &lt;&lt;- primary = data                          <span class="comment">; data: text (losing commitment auto-cancels)</span>
+    <span class="keyword">case</span> data &lt;&lt;- backup = data                           <span class="comment">; data: text</span>
+    <span class="keyword">case</span> after <span class="number">250</span> = <span class="string">"mirror timeout"</span>
 <span class="keyword">fi</span></code></pre>
       </section>
 
@@ -921,7 +945,7 @@
         <div class="card">
           <h3>
             <span
-              >Q1. Does <code>doing func()</code> become a <code>Chan[T]</code>,
+              >Q1. Does <code>rush func()</code> become a <code>Chan[T]</code>,
               or stay a <code>Commitment[T]</code>?</span
             >
             <span class="badge b-blue">Runtime Design</span>
@@ -954,15 +978,17 @@
               <tr>
                 <td><strong>Waiting &amp; Polling</strong></td>
                 <td>
-                  <code>&lt;&lt;- ch</code> returns <code>maybe T</code> (<code
-                    >none</code
-                  >
-                  means closed).
+                  <code>&lt;&lt;- ch</code> (<code>wait_and_receive</code>)
+                  blocks and returns <code>T</code> (trapping if closed and
+                  drained); non-blocking <code>ch.receive()</code> returns
+                  <code>maybe T</code>; <code>select</code> uses
+                  <code>case none &lt;&lt;- ch</code> on closure.
                 </td>
                 <td>
                   <code>&lt;&lt;- c</code> returns <code>T</code> (or
-                  <code>T ~ E</code>); <code>c.poll()</code> returns
-                  <code>maybe T</code>.
+                  <code>T ~ E</code>); non-blocking
+                  <code>c.poll()</code> returns <code>maybe T</code> (or
+                  <code>maybe (T ~ E)</code>).
                 </td>
               </tr>
               <tr>
@@ -1001,16 +1027,16 @@
             <span class="badge b-purple">Expression Semantics</span>
           </h3>
           <p>Consider your two snippets:</p>
-          <pre><code><span class="comment">; Snippet A (without 'doing')</span>
+          <pre><code><span class="comment">; Snippet A (without 'rush')</span>
 <span class="keyword">fixed</span> r1 = (&lt;&lt;- task_call()) { ... }
 
-<span class="comment">; Snippet B (explicit 'doing' inside '&lt;&lt;-')</span>
-<span class="keyword">fixed</span> r2 = (&lt;&lt;- (<span class="keyword">doing</span> task_call())) { ... }</code></pre>
+<span class="comment">; Snippet B (explicit 'rush' inside '&lt;&lt;-')</span>
+<span class="keyword">fixed</span> r2 = (&lt;&lt;- (<span class="keyword">rush</span> task_call())) { ... }</code></pre>
           <ul>
             <li>
               <strong>Why Snippet A doesn't work as fire-and-forget:</strong>
               <code>&lt;&lt;-</code> means <em>await the result right here</em>,
-              and <code>task_call()</code> without <code>doing</code> already
+              and <code>task_call()</code> without <code>rush</code> already
               awaits and returns <code>T</code> (not a commitment). So
               <code>&lt;&lt;- task_call()</code> wouldn't defer anything; it is
               simply a redundant type error unless
@@ -1033,17 +1059,20 @@
               its value, so "the result dispatches into the variable when it
               arrives" still means the variable's type is
               <code>Commitment[T]</code>. Keeping launch on
-              <code>doing</code> and waiting on <code>&lt;&lt;-</code> avoids
-              all three problems.
+              <code>rush</code> and waiting on <code>&lt;&lt;-</code> avoids all
+              three problems.
             </li>
             <li>
               <strong
                 >Snippet B works anywhere in expressions, with one
                 nuance:</strong
               >
-              <code>(&lt;&lt;- (doing task_call())) { ... }</code> is valid in
-              any sub-expression (e.g., inside arguments, arrays, math),
-              <em>except</em> launching <code>doing</code> and immediately
+              <code
+                >(&lt;&lt;- (<span class="keyword">rush</span> task_call())) {
+                ... }</code
+              >
+              is valid in any sub-expression (e.g., inside arguments, arrays,
+              math), <em>except</em> launching <code>rush</code> and immediately
               wrapping it in <code>&lt;&lt;-</code> waits on that very same line
               &mdash; giving no overlap unless another commitment was already
               running!
@@ -1057,12 +1086,12 @@
             </li>
           </ul>
           <pre><code><span class="comment">; Launch concurrently, then resolve inside one composite expression</span>
-<span class="keyword">fixed</span> c_a = <span class="keyword">doing</span> fetch_price(<span class="string">"ETH"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
-<span class="keyword">fixed</span> c_b = <span class="keyword">doing</span> fetch_price(<span class="string">"BTC"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
+<span class="keyword">fixed</span> c_a = <span class="keyword">rush</span> fetch_price(<span class="string">"ETH"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
+<span class="keyword">fixed</span> c_b = <span class="keyword">rush</span> fetch_price(<span class="string">"BTC"</span>)          <span class="comment">; Commitment[float ~ ApiError]</span>
 <span class="keyword">fixed</span> total = ((&lt;&lt;- c_a) { <span class="number">0.0</span> }) + ((&lt;&lt;- c_b) { <span class="number">0.0</span> })   <span class="comment">; float</span>
 
 <span class="comment">; Or pass launched Commitments straight into a multi-arg gather helper:</span>
-<span class="keyword">fixed</span> pair = await_both(<span class="keyword">doing</span> fetch_price(<span class="string">"ETH"</span>), <span class="keyword">doing</span> fetch_price(<span class="string">"BTC"</span>))</code></pre>
+<span class="keyword">fixed</span> pair = await_both(<span class="keyword">rush</span> fetch_price(<span class="string">"ETH"</span>), <span class="keyword">rush</span> fetch_price(<span class="string">"BTC"</span>))</code></pre>
         </div>
 
         <div class="card">
@@ -1144,7 +1173,7 @@
               <tr>
                 <td>Background task + join later</td>
                 <td>
-                  <code>fixed c = doing fetch()</code> ...
+                  <code>fixed c = rush fetch()</code> ...
                   <code>&lt;&lt;- c</code>
                 </td>
                 <td><span class="badge b-green">100% Covered</span></td>
@@ -1152,7 +1181,7 @@
               <tr>
                 <td><code>Promise.all([a, b])</code> (fixed arity)</td>
                 <td>
-                  Launch N <code>doing</code> handles, await all via
+                  Launch N <code>rush</code> handles, await all via
                   <code>&lt;&lt;-</code>
                 </td>
                 <td><span class="badge b-green">Covered</span></td>
@@ -1172,8 +1201,9 @@
               <tr>
                 <td><code>try/catch</code> / <code>Result</code> rejections</td>
                 <td>
-                  <code>Commitment[T ~ E]</code> + Plan B /
-                  <code>?</code> propagation
+                  <code>Commitment[T ~ E]</code> + Plan B (<code
+                    >{ failure e ... }</code
+                  >) &amp; <code>|&gt;</code> pipe propagation
                 </td>
                 <td><span class="badge b-green">100% Covered</span></td>
               </tr>
@@ -1233,15 +1263,14 @@
           Call Pipes (<code>|&gt;</code>)
         </h2>
         <p>
-          With <code>doing</code> and <code>&lt;&lt;-</code> alone, error
+          With <code>rush</code> and <code>&lt;&lt;-</code> alone, error
           handling (<code>catch</code> / Plan B) is effortless, whereas chained
           post-settlement transformations (<strong><code>.then()</code></strong
           >) need a clear story. Let's analyze combining your
           <code>=&gt;</code> fire-and-forget style, Vela's native
           <strong>Call Pipes (<code>|&gt;</code>)</strong>, and
-          <strong>lambdas/closures</strong>. (Snippets below write
-          <code>&lt;&lt;- c { ... }</code> without outer parentheses, which
-          assumes the parser change from Q3.)
+          <strong>lambdas/closures</strong> (all now implemented alongside
+          <code>&lt;&lt;- c { ... }</code>).
         </p>
 
         <h3>
@@ -1249,9 +1278,10 @@
           with <code>&lt;&lt;-</code>
         </h3>
         <p>
-          Allowing <code>func() =&gt; { ... } { ... }</code> to return a
-          <code>Commitment</code> handle that can still be awaited later with
-          <code>&lt;&lt;- x</code>:
+          Allowing <code>func() =&gt; (v) { ... } { ... }</code> (and
+          fire-and-forget <code>func() =&gt; { ... }</code> statements) to
+          return a <code>Commitment</code> handle that can still be awaited
+          later with <code>&lt;&lt;- x</code>:
         </p>
         <pre><code><span class="comment">; Combined style with explicit value binder + Plan B</span>
 <span class="keyword">fixed</span> x = fetch_user(id) =&gt; (u) {
@@ -1288,8 +1318,8 @@
                 denotes module aliases (<code>include x =&gt; y</code>),
                 <code>alias Name =&gt; Type</code>, and labeled loops/blocks
                 (<code>outer =&gt; loop ... fi</code>). After a closing call
-                <code>)</code> it is technically unambiguous to parse, though
-                two unrelated constructs share one symbol.
+                <code>)</code> it is unambiguous to parse, though two unrelated
+                constructs share one symbol.
               </li>
               <li>
                 <em>Dual meaning of <code>{ ... }</code>:</em> Elsewhere in
@@ -1306,8 +1336,8 @@
                 <em>Async capture rule:</em> Because <code>{ A }</code> runs
                 inside the background commitment before <code>&lt;&lt;-</code>,
                 any variables it reads from outside must follow safe capture
-                rules (immutable copies/<code>[@r]</code> inside structured
-                scope, no dangling stack <code>flex&amp;</code>).
+                rules (immutable copies inside structured scope, no dangling
+                stack <code>flex&amp;</code>).
               </li>
             </ul>
           </li>
@@ -1341,7 +1371,7 @@
             </p>
             <pre
               style="margin-bottom: 0"
-            ><code><span class="keyword">fixed</span> x = <span class="keyword">doing</span> fetch_raw(url)    <span class="comment">; Commitment[text ~ HttpError]</span>
+            ><code><span class="keyword">fixed</span> x = <span class="keyword">rush</span> fetch_raw(url)     <span class="comment">; Commitment[text ~ HttpError]</span>
 <span class="comment">; ... do other work ...</span>
 <span class="keyword">fixed</span> y = (&lt;&lt;- x)
     |&gt; parse_user() at r          <span class="comment">; runs only if fetch_raw succeeded</span>
@@ -1353,7 +1383,7 @@
           <div class="card" style="margin: 0">
             <h4>
               Mode B2: Background Piped Commitment (<code
-                >doing (call |&gt; ...)</code
+                >rush (call |&gt; ...)</code
               >)
             </h4>
             <p>
@@ -1364,7 +1394,7 @@
             </p>
             <pre
               style="margin-bottom: 0"
-            ><code><span class="keyword">fixed</span> c = <span class="keyword">doing</span> (
+            ><code><span class="keyword">fixed</span> c = <span class="keyword">rush</span> (
     fetch_raw(url)
     |&gt; parse_user()
     |&gt; save_cache()
@@ -1382,25 +1412,21 @@
           <code>.then</code> Chains
         </h3>
         <p>
-          In Vela today (<code>src/parser.rs</code>), <code>|&gt;</code> expects
-          a <em>call</em> after it (not a bare un-called lambda literal like
-          <code>val |&gt; (x -&gt; x + 1)</code>), while functions in
-          <code>std/collections</code> take one-line lambdas or
-          <code>[@r]</code> closures as arguments (e.g.,
-          <code
-            >nums |&gt; filter(n -&gt; n &gt; 2) |&gt; map(n -&gt; n * 10)</code
-          >). Supporting inline transforms with closures works cleanly through
-          either a tiny combinator (<code>then(lambda)</code>) or optional
-          direct lambda-pipe sugar:
+          With builtin polymorphic <code>then(lambda)</code> and
+          <code>Commitment.then</code> /
+          <code>Commitment.recover</code> implemented, you can pipe awaited
+          commitments into both plain lambdas and <code>[@r]</code> closures on
+          the caller thread, OR chain non-capturing lambdas on the background
+          worker:
         </p>
         <pre><code><span class="keyword">task</span> process_profile(r: region, prefix: text@r, user_id: int) -&gt; text@r ~ HttpError
     <span class="comment">; Launch concurrent work first</span>
-    <span class="keyword">fixed</span> c_user = <span class="keyword">doing</span> fetch_user(user_id)              <span class="comment">; Commitment[User ~ HttpError]</span>
-    <span class="keyword">fixed</span> c_prefs = <span class="keyword">doing</span> fetch_prefs(user_id)            <span class="comment">; Commitment[Prefs ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_user = <span class="keyword">rush</span> fetch_user(user_id)               <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="keyword">fixed</span> c_prefs = <span class="keyword">rush</span> fetch_prefs(user_id)             <span class="comment">; Commitment[Prefs ~ HttpError]</span>
 
     <span class="keyword">fixed</span> prefs = (&lt;&lt;- c_prefs) { Prefs.defaults() }      <span class="comment">; Prefs (fallback on failure)</span>
 
-    <span class="comment">; Pattern 1 (pipe style via a higher-order helper 'then(value, f)' + kept closures [@r]):</span>
+    <span class="comment">; Pattern 1 (pipe style via builtin 'then(value, f)' + kept closures [@r]):</span>
     <span class="comment">; '|&gt;' passes the value as then's first argument; each [@r] lambda safely reads 'prefix' and 'prefs'.</span>
     <span class="keyword">fixed</span> label = (&lt;&lt;- c_user)                           <span class="comment">; User ~ HttpError flows into the pipe</span>
         |&gt; then([@r] u -&gt; u.full_name)                    <span class="comment">; runs only on success: text</span>
@@ -1408,8 +1434,8 @@
             <span class="string">"{prefix}: Anonymous ({err})"</span>                  <span class="comment">; one Plan B for the whole chain</span>
         }                                                 <span class="comment">; label: text@r</span>
 
-    <span class="comment">; Pattern 2 (if Commitment also gets .then/.recover methods for background chaining):</span>
-    <span class="keyword">fixed</span> c_raw = <span class="keyword">doing</span> fetch_user(user_id)                                   <span class="comment">; Commitment[User ~ HttpError]</span>
+    <span class="comment">; Pattern 2 (.then/.recover methods on Commitment for background chaining):</span>
+    <span class="keyword">fixed</span> c_raw = <span class="keyword">rush</span> fetch_user(user_id)                                    <span class="comment">; Commitment[User ~ HttpError]</span>
     <span class="keyword">fixed</span> c_name = c_raw.then((u: User) -&gt; text &lt;- u.full_name <span class="keyword">fi</span>)            <span class="comment">; Commitment[text ~ HttpError]</span>
     <span class="keyword">fixed</span> c_badge = c_name.recover((err: HttpError) -&gt; text &lt;- <span class="string">"Guest"</span> <span class="keyword">fi</span>)   <span class="comment">; Commitment[text] (error handled in bg)</span>
     <span class="comment">; plain lambdas capture nothing, so they are always safe to run on a worker thread</span>
@@ -1426,7 +1452,7 @@
           <thead>
             <tr>
               <th>Dimension</th>
-              <th>Call Pipes (<code>|&gt;</code> + <code>doing</code>)</th>
+              <th>Call Pipes (<code>|&gt;</code> + <code>rush</code>)</th>
               <th>
                 Method Combinators (<code>.then()</code>) /
                 <code>=&gt; (v) { ... }</code>
@@ -1461,7 +1487,7 @@
             <tr>
               <td><strong>Background vs. foreground</strong></td>
               <td>
-                Crystal clear by syntax: <code>doing (f() |&gt; g())</code> runs
+                Crystal clear by syntax: <code>rush (f() |&gt; g())</code> runs
                 in background; <code>(&lt;&lt;- c) |&gt; g()</code> runs on
                 caller.
               </td>
@@ -1471,16 +1497,12 @@
               </td>
             </tr>
             <tr>
-              <td><strong>Can Vela allow both?</strong></td>
+              <td><strong>Both Supported Together</strong></td>
               <td colspan="2">
-                <strong
-                  >Yes &mdash; and they complement each other cleanly!</strong
-                >
-                Call pipes handle linear transform pipelines without inventing
-                new operators; adding <code>.then(fn)</code> /
-                <code>.recover(fn)</code> methods on
-                <code>Commitment[T]</code> (or lightweight
-                <code>=&gt; (v) { ... }</code> if desired) covers JS-style
+                <strong>Yes &mdash; Vela now implements both!</strong> Call
+                pipes handle linear transform pipelines seamlessly;
+                <code>c.then(fn)</code> / <code>c.recover(fn)</code> and
+                <code>f() =&gt; (v) { ... } [{ failure e ... }]</code> cover
                 fluent background callbacks while keeping capture rules
                 statically checked.
               </td>
@@ -1509,33 +1531,27 @@
           <tbody>
             <tr>
               <td>
-                <strong
-                  >Prefix <code>-ing</code> verb:
-                  <code>doing func()</code></strong
-                >
+                <strong>Prefix keyword: <code>rush func()</code></strong>
                 <span class="badge b-green">Selected Default</span>
               </td>
               <td>
                 <code
-                  >fixed c = doing fetch(id)<br />fixed c2 = doing
+                  >fixed c = rush fetch(id)<br />fixed c2 = rush
                   obj.save()</code
                 >
               </td>
               <td>
-                Unreserved in <code>src/lexer.rs</code>; can be contextual so
-                existing identifiers named <code>doing</code> stay valid. Pairs
-                directly with Vela's <code>task</code> ("doing a task" = in
-                progress, not awaited yet), warns the reader
-                <em>before</em> arguments, composes cleanly with
-                <code>doing build(r) at r</code>, and avoids postfix precedence
-                clashes with <code>{ plan b }</code>. <br /><em
-                  >Other <code>-ing</code> verbs considered:</em
+                Reserved keyword (<code>Token::Rush</code> in
+                <code>src/lexer.rs</code>). Crisp, punchy opposite of awaiting;
+                warns the reader <em>before</em> arguments, supports passing at
+                most one destination caller <code>region</code> with O(1) region
+                splicing on settlement, and avoids postfix precedence clashes
+                with <code>{ plan b }</code>. <br /><em
+                  >Earlier candidates considered:</em
                 >
-                <code>running</code> (sounds like a status check),
-                <code>pending</code> (describes a passive state),
-                <code>starting</code> / <code>spawning</code> (overlaps mentally
-                with <code>spawn Actor</code>), <code>working</code> (too
-                vague). <code>doing</code> is the crispest opposite of awaiting.
+                <code>doing</code> (initial prototype name, later upgraded to
+                <code>rush</code>), <code>running</code>, <code>pending</code>,
+                <code>starting</code>, <code>working</code>.
               </td>
             </tr>
             <tr>
@@ -1726,29 +1742,30 @@
               <td>
                 <strong><code>.then</code> on the caller</strong>
               </td>
-              <td><code>(&lt;&lt;- c) |&gt; step()</code></td>
+              <td><code>&lt;&lt;- c |&gt; step()</code></td>
+              <td><code>(&lt;&lt;- c) |&gt; step()</code> (optional parens)</td>
               <td>
-                <code>&lt;&lt;- c |&gt; step()</code> (no parentheses, if
-                <code>&lt;&lt;-</code> binds tighter than <code>|&gt;</code>)
-              </td>
-              <td>
-                Uses existing pipe rules, including one Plan B for the whole
-                chain.
+                Prefix <code>&lt;&lt;-</code> already binds tighter than
+                <code>|&gt;</code> in <code>src/parser.rs</code>; uses existing
+                pipe rules, including one Plan B for the whole chain.
               </td>
             </tr>
             <tr>
               <td>
                 <strong><code>.then</code> in the background</strong>
               </td>
-              <td><code>doing (f() |&gt; step())</code></td>
               <td>
-                <code>(f() |&gt; step()) later</code>,
-                <code>f() =&gt; (v) { ... }</code>,
-                <code>f() =&gt; { it ... }</code>, <code>c.then(fn)</code>
+                <code>rush (f() |&gt; step())</code>,
+                <code>f() =&gt; (v) { ... }</code>, <code>c.then(fn)</code>
               </td>
               <td>
-                An implicit <code>it</code> saves naming the value but adds a
-                magic name; an explicit <code>(v)</code> binder is clearer.
+                <code>(f() |&gt; step()) later</code>,
+                <code>f() =&gt; { it ... }</code>
+              </td>
+              <td>
+                All three selected forms (pipe inside <code>rush</code>, inline
+                <code>=&gt;</code>, and fluent <code>.then(fn)</code>) are
+                implemented with static isolation checks.
               </td>
             </tr>
             <tr>
@@ -1816,18 +1833,17 @@
           </p>
           <pre><code><span class="comment">; Style A: 'async task' marker + await-by-default at call sites</span>
 <span class="keyword">async</span> <span class="keyword">task</span> fetch_user(id: int) -&gt; User ~ HttpError
-    <span class="keyword">fixed</span> resp = http_get(<span class="string">"/users/{id}"</span>)?     <span class="comment">; awaited automatically (compiler knows http_get is async)</span>
-    <span class="keyword">&lt;-</span> parse_user(resp)?
+    <span class="keyword">&lt;-</span> http_get(<span class="string">"/users/{id}"</span>) |&gt; parse_user()  <span class="comment">; awaited automatically &amp; pipe-propagated</span>
 <span class="keyword">fi</span>
 
 <span class="comment">; Style B: Return-type coloring ('-&gt; Commitment[T]') without an extra keyword</span>
 <span class="keyword">task</span> fetch_orders(id: int) -&gt; Commitment[[Order]]
     <span class="keyword">&lt;-</span> db_query(<span class="string">"orders"</span>, id)                 <span class="comment">; body sends [Order]; the signature marks the task as suspendable</span>
-<span class="keyword">fi</span>                                           <span class="comment">; plain call still auto-awaits to [Order]; 'doing' gives the handle</span>
+<span class="keyword">fi</span>                                           <span class="comment">; plain call still auto-awaits to [Order]; 'rush' gives the handle</span>
 
 <span class="keyword">async</span> <span class="keyword">task</span> dashboard(id: int) -&gt; Dashboard ~ HttpError
-    <span class="keyword">fixed</span> user = fetch_user(id)?              <span class="comment">; auto-awaited!</span>
-    <span class="keyword">fixed</span> c_orders = <span class="keyword">doing</span> fetch_orders(id)   <span class="comment">; explicit concurrency: Commitment[[Order]]</span>
+    <span class="keyword">fixed</span> user = fetch_user(id) { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }  <span class="comment">; auto-awaited with Plan B propagation</span>
+    <span class="keyword">fixed</span> c_orders = <span class="keyword">rush</span> fetch_orders(id)   <span class="comment">; explicit concurrency: Commitment[[Order]]</span>
     <span class="keyword">fixed</span> orders = &lt;&lt;- c_orders               <span class="comment">; [Order]</span>
     <span class="keyword">&lt;-</span> Dashboard { user: user, orders: orders }
 <span class="keyword">fi</span></code></pre>
@@ -1868,8 +1884,8 @@
             <pre
               style="font-size: 0.82rem; padding: 0.85rem"
             ><code><span class="keyword">concurrent</span>
-    <span class="keyword">fixed</span> user = fetch_user(id)?
-    <span class="keyword">fixed</span> orders = fetch_orders(id)?
+    <span class="keyword">fixed</span> user = fetch_user(id) { <span class="keyword">failure</span> e <span class="keyword">&lt;-</span> <span class="keyword">fail</span> e }
+    <span class="keyword">fixed</span> orders = fetch_orders(id)
 <span class="keyword">fi</span>  <span class="comment">; guaranteed joined here</span></code></pre>
             <p style="margin-bottom: 0">
               <strong>Verdict:</strong> Maximally simple and eliminates dangling
@@ -1938,12 +1954,14 @@
               <td>None (colorless)</td>
               <td>Auto-awaited (0 overhead fast path)</td>
               <td>
-                <code>doing call()</code> + <code>&lt;&lt;-</code> +
-                <code>select</code> + <code>|&gt;</code> pipes (+ optional
-                <code>.then</code>)
+                <code>rush call()</code> + <code>&lt;&lt;-</code> +
+                <code>select</code> + <code>|&gt;</code> pipes +
+                <code>=&gt;</code> / <code>.then</code>
               </td>
-              <td>Direct C call normally; M:N fiber per <code>doing</code></td>
-              <td>Send-boundary checks + structured scope cancel/join</td>
+              <td>Direct C call normally; M:N worker per <code>rush</code></td>
+              <td>
+                Send-boundary checks + region splicing + structured cancel/join
+              </td>
               <td><span class="badge b-green">Best Overall</span></td>
             </tr>
             <tr>
@@ -1975,7 +1993,7 @@
               <td><code>async task</code> or <code>Commitment[T]</code></td>
               <td>Auto-awaited inside <code>async</code></td>
               <td>
-                <code>doing call()</code> + <code>&lt;&lt;-</code> /
+                <code>rush call()</code> + <code>&lt;&lt;-</code> /
                 <code>select</code>
               </td>
               <td>Stackless C11 state machines (no hidden fiber stack)</td>
@@ -2047,19 +2065,19 @@
         </table>
 
         <div class="good">
-          <strong>Summary Recommendation:</strong> Keep the
+          <strong>Summary:</strong> The
           <strong>Enhanced Colorless Commitment Model</strong> (<code
-            >doing call()</code
+            >rush call()</code
           >
           + <code>Commitment[T ~ E]</code> + <code>&lt;&lt;-</code> +
           <code>select</code> + structured scope join +
-          <code>|&gt;</code> pipes, plus parenthesis-free
-          <code>&lt;&lt;- c { failure e ... }</code> and optional
-          <code>.then()</code>/<code>=&gt; (v) { ... }</code> sugar) as Vela's
-          target design. It preserves the zero-cost sequential fast path, avoids
-          function coloring, integrates directly with channels and
-          <code>select</code>, and satisfies Vela's region and data-race
-          guarantees cleanly.
+          <code>|&gt;</code> pipes, parenthesis-free
+          <code>&lt;&lt;- c { failure e ... }</code>, <code>.then()</code> /
+          <code>.recover()</code>, <code>=&gt; (v) { ... }</code>,
+          <code>maybe Commitment[T]</code>, and region splicing) preserves the
+          zero-cost sequential fast path, avoids function coloring, integrates
+          directly with channels and <code>select</code>, and satisfies Vela's
+          region and data-race guarantees cleanly.
         </div>
       </section>
     </main>

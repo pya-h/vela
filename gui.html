@@ -533,6 +533,103 @@
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
 
+      <h2>
+        <span class="icon">⚡</span> Non-Blocking Async Work &amp; Frame Pacing
+        with Commitments
+      </h2>
+      <p>
+        Desktop interfaces must keep polling window events and redrawing
+        smoothly even while loading files, running computations, or fetching
+        remote APIs with <a href="web.html"><code>std/web</code></a
+        >. Instead of blocking inside <code>case GuiEvent.MouseDown</code>,
+        store an optional
+        <a href="commitment.html"><code>Commitment[T]</code></a> slot outside
+        the loop and poll it non-blockingly on each frame:
+      </p>
+      <ul>
+        <li>
+          <strong
+            ><code>flex job: maybe Commitment[T] = none</code> Slots:</strong
+          >
+          Declare a mutable optional commitment handle above the loop, start
+          background tasks inside event arms (<code
+            >job = rush fetch_data()</code
+          >), poll without stalling rendering (<code
+            >when job.poll() is { val }</code
+          >), check slot status with <code>when job is none</code>, and cancel
+          manually via <code>job.cancel()</code>. Reassigning
+          <code>job = ...</code> or exiting the enclosing block automatically
+          cancels any older in-flight task cleanly.
+        </li>
+        <li>
+          <strong
+            >Frame Pacing (<code>win.frame_delay(ms)</code>,
+            <code>sleep_ms(ms)</code>, <code>time_ms()</code>):</strong
+          >
+          Avoid busy spinning while polling background jobs and measure smooth
+          frame intervals.
+        </li>
+        <li>
+          <strong
+            >Built-in Spinner Widget Rendering (<code
+              >canvas.draw_spinner(center, radius, tick, color)</code
+            >):</strong
+          >
+          Draw an animated 8-spoke loading indicator alongside
+          <code>ProgressBar</code> and dynamic status text while waiting for a
+          settlement.
+        </li>
+      </ul>
+
+      <div class="callout tip">
+        <h4>Common Desktop Async Use Cases</h4>
+        <ul>
+          <li>
+            <strong>Responsive API / File Actions:</strong> Launch
+            <code>rush Client.fetch(url, app_r)</code> when clicking "Refresh"
+            so animations continue and closing the window auto-cancels the
+            request.
+          </li>
+          <li>
+            <strong>Debounced Live Search:</strong> Reassigning
+            <code>search_job = rush search_index(query)</code> automatically
+            cancels the previous in-flight search job.
+          </li>
+          <li>
+            <strong>Smooth Progress &amp; Cancel Buttons:</strong> Pair
+            <code>job.cancel()</code> + <code>cancelled()</code> loops with
+            <code>ProgressBar</code> and <code>canvas.draw_spinner(...)</code>.
+          </li>
+        </ul>
+      </div>
+
+      <pre><code><span class="keyword">include</span> std/gui { Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar, is_interactive, sleep_ms }
+
+<span class="keyword">task</span> compute_report_async(base: int) -&gt; int
+    <span class="keyword">flex</span> i = <span class="number">0</span>
+    <span class="keyword">flex</span> acc = <span class="number">0</span>
+    <span class="keyword">loop</span> i &lt; <span class="number">6</span>
+        <span class="keyword">when</span> cancelled() &lt;- -<span class="number">1</span> <span class="keyword">fi</span>
+        sleep_ms(<span class="number">5</span>)
+        acc += base + i
+        i++
+    <span class="keyword">fi</span>
+    &lt;- acc
+<span class="keyword">fi</span>
+
+<span class="comment">; Inside the main event loop:</span>
+<span class="comment">;   flex job: maybe Commitment[int] = none</span>
+<span class="comment">;   when job.poll() is { val } ... job = none ... fi</span>
+<span class="comment">;   case GuiEvent.MouseDown x y btn -&gt; job = rush compute_report_async(10)</span>
+<span class="comment">;   when loading -&gt; canvas.draw_spinner(Point { x: 270, y: 145 }, 14, tick, Color.hex(0xFBBF24)) fi</span>
+<span class="comment">;   win.frame_delay(5)</span></code></pre>
+      <p>
+        See the full runnable example at
+        <a href="../examples/io_and_system/gui_async.vela"
+          ><code>examples/io_and_system/gui_async.vela</code></a
+        >.
+      </p>
+
       <h2><span class="icon">🤖</span> Headless Automated Testing</h2>
       <div class="callout tip">
         <h4>Deterministic GUI Testing Without an X Server</h4>

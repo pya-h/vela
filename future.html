@@ -328,10 +328,11 @@
         This consolidated notebook combines Vela's active future ideas (merging
         the original Future Directions and Kimi Edition notebooks). Core systems
         that have already landed (regions, actors, bounded channels,
-        <code>select</code>, events, generic kinds, capturing lambdas,
-        iterators, <code>Int512</code>, <code>region global</code>,
-        <code>std/web</code>, and <code>std/gui</code>) are summarized briefly
-        with links to their live docs &mdash; while
+        <code>select</code>, commitments &amp; <code>rush</code>, events,
+        generic kinds, capturing lambdas, iterators, <code>Int512</code>,
+        <code>region global</code>, <code>std/web</code>, and
+        <code>std/gui</code>) are summarized briefly with links to their live
+        docs &mdash; while
         <strong
           >all remaining unshipped follow-ups, sub-ideas, and open
           decisions</strong
@@ -409,6 +410,20 @@
                 </td>
               </tr>
               <tr>
+                <td><strong>Commitments &amp; Structured Async</strong></td>
+                <td>
+                  <code>Commitment[T]</code>, <code>rush</code>,
+                  <code>=&gt;</code>, <code>.then()</code> /
+                  <code>.recover()</code>, <code>maybe Commitment[T]</code>,
+                  region splicing, concurrent <code>std/web</code> &amp; GUI
+                  frames
+                </td>
+                <td>
+                  <a href="commitment.html">Commitments</a>,
+                  <a href="web.html">Web</a>, <a href="gui.html">GUI</a>
+                </td>
+              </tr>
+              <tr>
                 <td><strong>Events &amp; Alters</strong></td>
                 <td>
                   Watch, read, call (<code>before</code>/<code>after</code>),
@@ -474,9 +489,9 @@
             cleanup statement.
           </p>
           <pre><code><span class="keyword">task</span> copy_log(path: text@r) -&gt; nothing ~ FileError
-    <span class="keyword">fixed</span> handle = open_raw(path)?
+    <span class="keyword">fixed</span> handle = open_raw(path) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
     <span class="keyword">defer</span> handle.release()
-    process(handle)?
+    process(handle) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
 <span class="keyword">fi</span></code></pre>
           <p>
             Paired with <strong>static leak checking</strong>,
@@ -598,15 +613,17 @@
           </div>
           <div class="card">
             <h3>
-              Commitments &amp; Await-by-Default
-              <span class="badge b-idea">Idea</span>
+              Commitment Extensions <span class="badge b-idea">Idea</span>
             </h3>
             <p>
-              Colorless async tasks where calls await by default, opt-in
-              concurrent handles (<code>Commitment[T]</code>) integrate with
-              <code>&lt;&lt;-</code>, <code>select</code>, and Plan B
-              <code>T ~ E</code>, and structured scopes auto-join before regions
-              free. Full analysis in <a href="commitment.html">Commitments</a>.
+              <code>Commitment[T]</code>, <code>rush</code>,
+              <code>.then()</code>/<code>.recover()</code>, and structured
+              auto-cancellation have landed (<a href="commitment.html"
+                >Commitments</a
+              >). Remaining extensions &mdash; collection combinators, actor
+              <code>ask</code>, deadlines, and non-blocking I/O &mdash; are
+              detailed in
+              <a href="#unlocked-concurrency">Unlocked Next Steps</a> below.
             </p>
           </div>
           <div class="card">
@@ -901,6 +918,16 @@
               >case Circle r when r &gt; 0.0</code
             >).
           </li>
+          <li id="postfix-try">
+            <strong>Postfix <code>?</code> Error Propagation Sugar:</strong>
+            Early-returning the failure side of <code>T ~ E</code> (like Rust's
+            <code>?</code>) instead of writing
+            <code>{ failure err &lt;- fail err }</code>. Requires disambiguating
+            expression suffixes from tuple dynamic type queries (<code
+              >t.#5? is maybe int</code
+            >) and planned polymorphic matching (<code>match v?</code>); today
+            Vela uses Plan B or call pipes (<code>|&gt;</code>) instead.
+          </li>
           <li id="ergonomics-open">
             <strong>Syntax &amp; Statement Cleanup:</strong> Requiring
             statements to end at a newline while permitting multiline
@@ -987,6 +1014,112 @@
               <li>Bare-metal / minimal-runtime embedded target</li>
               <li>Long-term self-hosting compiler once syntax stabilizes</li>
             </ul>
+          </div>
+        </div>
+      </section>
+      <section id="unlocked-concurrency">
+        <h2>
+          <span aria-hidden="true">🚀</span> Unlocked by Recent Features
+          (Commitments, Actors, Channels &amp; Events)
+        </h2>
+        <p>
+          Now that <code>Commitment[T]</code>, <code>rush</code>, M:N scheduled
+          actors, bounded <code>Chan[own T]</code>, <code>select</code>, region
+          splicing, and guarded reactive events are live in Vela, several
+          higher-level capabilities fit the language naturally without inventing
+          unrelated machinery:
+        </p>
+        <div class="cards">
+          <div class="card" id="actor-ask">
+            <h3>
+              Actor Request&ndash;Reply (<code>ask</code> &rarr;
+              <code>Commitment[R]</code>) <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              Allowing an <code>actor</code> handler to declare a return value
+              (<code>on Fetch(id: int) -&gt; text</code>) and calling it with
+              <code>rush a.Fetch(1)</code> to yield a
+              <code>Commitment[text]</code>. Under the hood the caller allocates
+              a single-shot reply handle, so callers get type-safe
+              <code>&lt;&lt;-</code>, <code>select</code> timeouts, and
+              <code>.then()</code>/<code>.recover()</code> chains on actor state
+              without manually wiring reply channels.
+            </p>
+          </div>
+          <div class="card" id="commit-collections">
+            <h3>
+              Dynamic Fan-Out &amp; Collection Combinators
+              <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              <code>select</code> currently handles a fixed set of arms known at
+              compile time. With linear <code>Commitment[T]</code> + region
+              splicing in place, runtime helpers such as
+              <code>await_all(cs)</code>, <code>await_any(cs)</code> (cancelling
+              losers automatically), and parallel
+              <code>each item in xs rush ...</code> fan-out can process
+              variable-length slices (e.g. batching
+              <code>Client.fetch</code> requests or tile rendering) while
+              splicing all worker regions into a single caller region.
+            </p>
+          </div>
+          <div class="card" id="deadline-scopes">
+            <h3>
+              Hierarchical Deadlines &amp; Structured Timeouts
+              <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              Propagating a deadline through
+              <code>vela__rt__current_commitment</code> alongside cancellation
+              (<code>cancelled()</code> / <code>remaining_ms()</code>) lets a
+              parent timeout automatically cap inner <code>rush</code> tasks,
+              <code>select case after ms</code> arms, and
+              <code>std/web</code> request handlers without plumbing timeout
+              parameters through every helper.
+            </p>
+          </div>
+          <div class="card" id="async-reactor">
+            <h3>
+              Non-Blocking OS Event Reactor
+              (<code>epoll</code>/<code>kqueue</code>)
+              <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              Currently, blocking socket/file I/O inside <code>rush</code> (such
+              as <code>std/web</code> <code>serve_concurrent</code> or
+              <code>Client.fetch</code>) occupies a pool worker or helper thread
+              until completion. Integrating a non-blocking OS I/O poller into
+              the M:N scheduler lets paused tasks yield their OS thread and
+              resume only when descriptors become readable/writable.
+            </p>
+          </div>
+          <div class="card" id="chan-streams">
+            <h3>
+              Channel Iteration &amp; Concurrent Pipelines
+              <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              Connecting lazy iterators, channels, and commitments:
+              <code>each msg in ch</code> draining a
+              <code>Chan[T]</code> cleanly until close, bounded worker pools fed
+              by a shared channel and emitting per-item commitments, and
+              reactive <code>event</code> hooks safely pushing immutable
+              notifications into actor mailboxes.
+            </p>
+          </div>
+          <div class="card" id="indirect-rush">
+            <h3>
+              Indirect &amp; Value-Isolated <code>rush</code> Tasks
+              <span class="badge b-idea">Idea</span>
+            </h3>
+            <p>
+              Extending <code>rush</code> beyond direct named tasks to support
+              plain stateless lambdas and deep-copied immutable closures (<code
+                >[fixed @r]</code
+              >), while preserving the invariant that no mutable caller
+              reference or <code>alters</code> method can cross into concurrent
+              execution.
+            </p>
           </div>
         </div>
       </section>
