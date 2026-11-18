@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Hand-formatted across compiler/IDE crates; omit rustfmt check unless the repo adopts cargo fmt.
+      - name: check
+        run: cargo check --workspace --all-targets
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: no unwrap or panic bypass outside tests
+        run: |
+          found=$(find src ide -type f -name '*.rs' -path '*/src/*' -exec awk '/^#!?\[cfg\(test\)\]/{exit} /\.(unwrap|expect)\(\)|allow\(clippy::(unwrap_used|expect_used|indexing_slicing|panic)\)/{print FILENAME":"FNR": "$0}' {} \;)
+          if [ -n "$found" ]; then echo "$found"; exit 1; fi
+      - name: compiler has no external dependencies
+        run: |
+          deps=$(cargo tree -p vela --depth 1 | tail -n +2)
+          if [ -n "$deps" ]; then echo "unexpected dependencies in vela:"; echo "$deps"; exit 1; fi
+      - name: test
+        run: cargo test --workspace --all-targets
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: check (wasm)
+        run: cargo check -p vela-analysis-wasm --target wasm32-unknown-unknown
+      - name: clippy (wasm)
+        run: cargo clippy -p vela-analysis-wasm --target wasm32-unknown-unknown -- -D warnings
