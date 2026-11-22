@@ -12,3 +12,6 @@ a.out
 /ide/web/dist
 /ide/web/test-results
 /ide/web/playwright-report
+# VS Code extension: build artifacts and local packages
+/editors/vscode/node_modules
+/editors/vscode/*.vsix

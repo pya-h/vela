@@ -22,8 +22,7 @@ const TOKEN_TYPES = [
 
 const TOKEN_MODIFIERS = ['declaration', 'readonly', 'defaultLibrary'];
 
-let client = null;
-let fallbackServer = null;
+let lspClient = null;
 
 function isVelaDriverBinary(binPath) {
     const base = path.basename(binPath).toLowerCase();
@@ -105,9 +104,8 @@ function resolveCompilerExecutable() {
 }
 
 class StdioLspClient {
-    constructor(command, args) {
-        this.command = command;
-        this.args = args;
+    constructor(outputChannel) {
+        this.output = outputChannel;
         this.proc = null;
         this.ready = false;
         this.requestId = 1;
@@ -118,23 +116,39 @@ class StdioLspClient {
         this.onDidChangeSemanticTokens = this.onDidChangeSemanticTokensEmitter.event;
     }
 
+    trace(direction, message) {
+        const level = vscode.workspace.getConfiguration('vela').get('trace.server') || 'off';
+        if (level === 'off') return;
+        const label = message.method || `response#${message.id}`;
+        if (level === 'verbose') {
+            this.output.appendLine(`[${direction}] ${label}: ${JSON.stringify(message)}`);
+        } else {
+            this.output.appendLine(`[${direction}] ${label}`);
+        }
+    }
+
     async start() {
+        const { command, args } = resolveServerExecutable();
         this.ready = false;
         try {
-            this.proc = cp.spawn(this.command, this.args, {
-                stdio: ['pipe', 'pipe', 'inherit']
+            this.proc = cp.spawn(command, args, {
+                stdio: ['pipe', 'pipe', 'pipe']
             });
         } catch (err) {
             vscode.window.showErrorMessage(
-                `Failed to launch Vela LSP (${this.command}): ${err.message}`
+                `Failed to launch Vela LSP (${command}): ${err.message}`
             );
             return;
         }
 
+        this.proc.stderr.on('data', (chunk) => {
+            this.output.append(chunk.toString('utf8'));
+        });
+
         this.proc.on('error', (err) => {
             this.ready = false;
             vscode.window.showErrorMessage(
-                `Vela LSP error (${this.command}): ${err.message}. Install via 'cargo install --path ide/lsp'.`
+                `Vela LSP error (${command}): ${err.message}. Install via 'cargo install --path ide/lsp'.`
             );
         });
 
@@ -201,13 +215,17 @@ class StdioLspClient {
             }
             const id = this.requestId++;
             this.pending.set(id, { resolve, reject });
-            this.send({ jsonrpc: '2.0', id, method, params });
+            const msg = { jsonrpc: '2.0', id, method, params };
+            this.trace('client -> server', msg);
+            this.send(msg);
         });
     }
 
     sendNotification(method, params) {
         if (!this.proc || !this.proc.stdin.writable) return;
-        this.send({ jsonrpc: '2.0', method, params });
+        const msg = { jsonrpc: '2.0', method, params };
+        this.trace('client -> server', msg);
+        this.send(msg);
     }
 
     send(msg) {
@@ -239,9 +257,10 @@ class StdioLspClient {
 
             try {
                 const message = JSON.parse(bodyBuf.toString('utf8'));
+                this.trace('server -> client', message);
                 this.dispatch(message);
             } catch (err) {
-                console.error('Invalid JSON from LSP:', err);
+                this.output.appendLine(`Invalid JSON from LSP: ${err}`);
             }
         }
     }
@@ -282,226 +301,202 @@ class StdioLspClient {
 }
 
 async function activate(context) {
-    const { command, args } = resolveServerExecutable();
+    const output = vscode.window.createOutputChannel('Vela Language Server');
+    context.subscriptions.push(output);
 
-    let useLanguageClient = false;
-    try {
-        const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
-        const serverOptions = {
-            run: { command, args, transport: TransportKind.stdio },
-            debug: { command, args, transport: TransportKind.stdio }
-        };
-        const clientOptions = {
-            documentSelector: [{ scheme: 'file', language: 'vela' }],
-            synchronize: {
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.vela')
+    lspClient = new StdioLspClient(output);
+    await lspClient.start();
+
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument((doc) => lspClient.syncDocument(doc))
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            if (!lspClient.ready || e.document.languageId !== 'vela') return;
+            lspClient.sendNotification('textDocument/didChange', {
+                textDocument: {
+                    uri: e.document.uri.toString(),
+                    version: e.document.version
+                },
+                contentChanges: [{ text: e.document.getText() }]
+            });
+            lspClient.onDidChangeSemanticTokensEmitter.fire();
+        })
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument((doc) => {
+            if (!lspClient.ready || doc.languageId !== 'vela') return;
+            lspClient.sendNotification('textDocument/didSave', {
+                textDocument: { uri: doc.uri.toString() }
+            });
+        })
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument((doc) => {
+            if (!lspClient.ready || doc.languageId !== 'vela') return;
+            lspClient.sendNotification('textDocument/didClose', {
+                textDocument: { uri: doc.uri.toString() }
+            });
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider('vela', {
+            async provideCompletionItems(doc, pos) {
+                if (!lspClient.ready) return [];
+                try {
+                    const items = await lspClient.sendRequest('textDocument/completion', {
+                        textDocument: { uri: doc.uri.toString() },
+                        position: { line: pos.line, character: pos.character }
+                    });
+                    return (items || []).map((it) => {
+                        // LSP CompletionItemKind is 1-based; VS Code's JS enum is 0-based.
+                        const vsKind = typeof it.kind === 'number' && it.kind > 0 ? it.kind - 1 : undefined;
+                        const item = new vscode.CompletionItem(it.label, vsKind);
+                        if (it.detail) item.detail = it.detail;
+                        if (it.filterText) item.filterText = it.filterText;
+                        if (it.textEdit && it.textEdit.range) {
+                            item.range = new vscode.Range(
+                                it.textEdit.range.start.line,
+                                it.textEdit.range.start.character,
+                                it.textEdit.range.end.line,
+                                it.textEdit.range.end.character
+                            );
+                            item.insertText = it.insertTextFormat === 2
+                                ? new vscode.SnippetString(it.textEdit.newText)
+                                : it.textEdit.newText;
+                        } else if (it.insertText) {
+                            item.insertText = it.insertTextFormat === 2
+                                ? new vscode.SnippetString(it.insertText)
+                                : it.insertText;
+                        }
+                        return item;
+                    });
+                } catch (_) {
+                    return [];
+                }
             }
-        };
-        client = new LanguageClient('vela', 'Vela Language Server', serverOptions, clientOptions);
-        await client.start();
-        useLanguageClient = true;
-    } catch (e) {
-        useLanguageClient = false;
-    }
+        }, '.', '@', '<', '>', ':', '/')
+    );
 
-    if (!useLanguageClient) {
-        fallbackServer = new StdioLspClient(command, args);
-        await fallbackServer.start();
-
-        context.subscriptions.push(
-            vscode.workspace.onDidOpenTextDocument((doc) => fallbackServer.syncDocument(doc))
-        );
-        context.subscriptions.push(
-            vscode.workspace.onDidChangeTextDocument((e) => {
-                if (!fallbackServer.ready || e.document.languageId !== 'vela') return;
-                fallbackServer.sendNotification('textDocument/didChange', {
-                    textDocument: {
-                        uri: e.document.uri.toString(),
-                        version: e.document.version
-                    },
-                    contentChanges: [{ text: e.document.getText() }]
-                });
-                fallbackServer.onDidChangeSemanticTokensEmitter.fire();
-            })
-        );
-        context.subscriptions.push(
-            vscode.workspace.onDidSaveTextDocument((doc) => {
-                if (!fallbackServer.ready || doc.languageId !== 'vela') return;
-                fallbackServer.sendNotification('textDocument/didSave', {
-                    textDocument: { uri: doc.uri.toString() }
-                });
-            })
-        );
-        context.subscriptions.push(
-            vscode.workspace.onDidCloseTextDocument((doc) => {
-                if (!fallbackServer.ready || doc.languageId !== 'vela') return;
-                fallbackServer.sendNotification('textDocument/didClose', {
-                    textDocument: { uri: doc.uri.toString() }
-                });
-            })
-        );
-
-        context.subscriptions.push(
-            vscode.languages.registerCompletionItemProvider('vela', {
-                async provideCompletionItems(doc, pos) {
-                    if (!fallbackServer.ready) return [];
-                    try {
-                        const items = await fallbackServer.sendRequest('textDocument/completion', {
-                            textDocument: { uri: doc.uri.toString() },
-                            position: { line: pos.line, character: pos.character }
-                        });
-                        return (items || []).map((it) => {
-                            // LSP CompletionItemKind is 1-based; VS Code's JS enum is 0-based.
-                            const vsKind = typeof it.kind === 'number' && it.kind > 0 ? it.kind - 1 : undefined;
-                            const item = new vscode.CompletionItem(it.label, vsKind);
-                            if (it.detail) item.detail = it.detail;
-                            if (it.filterText) item.filterText = it.filterText;
-                            if (it.textEdit && it.textEdit.range) {
-                                item.range = new vscode.Range(
-                                    it.textEdit.range.start.line,
-                                    it.textEdit.range.start.character,
-                                    it.textEdit.range.end.line,
-                                    it.textEdit.range.end.character
-                                );
-                                item.insertText = it.insertTextFormat === 2
-                                    ? new vscode.SnippetString(it.textEdit.newText)
-                                    : it.textEdit.newText;
-                            } else if (it.insertText) {
-                                item.insertText = it.insertTextFormat === 2
-                                    ? new vscode.SnippetString(it.insertText)
-                                    : it.insertText;
-                            }
-                            return item;
-                        });
-                    } catch (_) {
-                        return [];
-                    }
+    context.subscriptions.push(
+        vscode.languages.registerHoverProvider('vela', {
+            async provideHover(doc, pos) {
+                if (!lspClient.ready) return null;
+                try {
+                    const res = await lspClient.sendRequest('textDocument/hover', {
+                        textDocument: { uri: doc.uri.toString() },
+                        position: { line: pos.line, character: pos.character }
+                    });
+                    if (!res || !res.contents) return null;
+                    const md = new vscode.MarkdownString(res.contents.value);
+                    const range = res.range
+                        ? new vscode.Range(
+                            res.range.start.line,
+                            res.range.start.character,
+                            res.range.end.line,
+                            res.range.end.character
+                        )
+                        : undefined;
+                    return new vscode.Hover(md, range);
+                } catch (_) {
+                    return null;
                 }
-            }, '.', '@', '<', '>', ':', '/')
-        );
+            }
+        })
+    );
 
-        context.subscriptions.push(
-            vscode.languages.registerHoverProvider('vela', {
-                async provideHover(doc, pos) {
-                    if (!fallbackServer.ready) return null;
-                    try {
-                        const res = await fallbackServer.sendRequest('textDocument/hover', {
-                            textDocument: { uri: doc.uri.toString() },
-                            position: { line: pos.line, character: pos.character }
-                        });
-                        if (!res || !res.contents) return null;
-                        const md = new vscode.MarkdownString(res.contents.value);
-                        const range = res.range
-                            ? new vscode.Range(
-                                res.range.start.line,
-                                res.range.start.character,
-                                res.range.end.line,
-                                res.range.end.character
-                            )
-                            : undefined;
-                        return new vscode.Hover(md, range);
-                    } catch (_) {
-                        return null;
-                    }
+    context.subscriptions.push(
+        vscode.languages.registerDefinitionProvider('vela', {
+            async provideDefinition(doc, pos) {
+                if (!lspClient.ready) return null;
+                try {
+                    const res = await lspClient.sendRequest('textDocument/definition', {
+                        textDocument: { uri: doc.uri.toString() },
+                        position: { line: pos.line, character: pos.character }
+                    });
+                    if (!res || !res.uri) return null;
+                    return new vscode.Location(
+                        vscode.Uri.parse(res.uri),
+                        new vscode.Range(
+                            res.range.start.line,
+                            res.range.start.character,
+                            res.range.end.line,
+                            res.range.end.character
+                        )
+                    );
+                } catch (_) {
+                    return null;
                 }
-            })
-        );
+            }
+        })
+    );
 
-        context.subscriptions.push(
-            vscode.languages.registerDefinitionProvider('vela', {
-                async provideDefinition(doc, pos) {
-                    if (!fallbackServer.ready) return null;
-                    try {
-                        const res = await fallbackServer.sendRequest('textDocument/definition', {
-                            textDocument: { uri: doc.uri.toString() },
-                            position: { line: pos.line, character: pos.character }
-                        });
-                        if (!res || !res.uri) return null;
-                        return new vscode.Location(
-                            vscode.Uri.parse(res.uri),
+    context.subscriptions.push(
+        vscode.languages.registerDocumentSymbolProvider('vela', {
+            async provideDocumentSymbols(doc) {
+                if (!lspClient.ready) return [];
+                try {
+                    const symbols = await lspClient.sendRequest('textDocument/documentSymbol', {
+                        textDocument: { uri: doc.uri.toString() }
+                    });
+                    const mapSymbol = (s) => {
+                        // LSP SymbolKind is 1-based; VS Code's JS enum is 0-based.
+                        const vsKind = typeof s.kind === 'number' && s.kind > 0 ? s.kind - 1 : 0;
+                        const sym = new vscode.DocumentSymbol(
+                            s.name,
+                            s.detail || '',
+                            vsKind,
                             new vscode.Range(
-                                res.range.start.line,
-                                res.range.start.character,
-                                res.range.end.line,
-                                res.range.end.character
+                                s.range.start.line,
+                                s.range.start.character,
+                                s.range.end.line,
+                                s.range.end.character
+                            ),
+                            new vscode.Range(
+                                s.selectionRange.start.line,
+                                s.selectionRange.start.character,
+                                s.selectionRange.end.line,
+                                s.selectionRange.end.character
                             )
                         );
-                    } catch (_) {
-                        return null;
-                    }
+                        if (s.children) {
+                            sym.children = s.children.map(mapSymbol);
+                        }
+                        return sym;
+                    };
+                    return (symbols || []).map(mapSymbol);
+                } catch (_) {
+                    return [];
                 }
-            })
-        );
+            }
+        })
+    );
 
-        context.subscriptions.push(
-            vscode.languages.registerDocumentSymbolProvider('vela', {
-                async provideDocumentSymbols(doc) {
-                    if (!fallbackServer.ready) return [];
-                    try {
-                        const symbols = await fallbackServer.sendRequest('textDocument/documentSymbol', {
-                            textDocument: { uri: doc.uri.toString() }
-                        });
-                        const mapSymbol = (s) => {
-                            // LSP SymbolKind is 1-based; VS Code's JS enum is 0-based.
-                            const vsKind = typeof s.kind === 'number' && s.kind > 0 ? s.kind - 1 : 0;
-                            const sym = new vscode.DocumentSymbol(
-                                s.name,
-                                s.detail || '',
-                                vsKind,
-                                new vscode.Range(
-                                    s.range.start.line,
-                                    s.range.start.character,
-                                    s.range.end.line,
-                                    s.range.end.character
-                                ),
-                                new vscode.Range(
-                                    s.selectionRange.start.line,
-                                    s.selectionRange.start.character,
-                                    s.selectionRange.end.line,
-                                    s.selectionRange.end.character
-                                )
-                            );
-                            if (s.children) {
-                                sym.children = s.children.map(mapSymbol);
-                            }
-                            return sym;
-                        };
-                        return (symbols || []).map(mapSymbol);
-                    } catch (_) {
-                        return [];
-                    }
+    const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
+    context.subscriptions.push(
+        vscode.languages.registerDocumentSemanticTokensProvider('vela', {
+            onDidChangeSemanticTokens: lspClient.onDidChangeSemanticTokens,
+            async provideDocumentSemanticTokens(doc) {
+                if (!lspClient.ready) return null;
+                try {
+                    const res = await lspClient.sendRequest('textDocument/semanticTokens/full', {
+                        textDocument: { uri: doc.uri.toString() }
+                    });
+                    if (!res || !Array.isArray(res.data)) return null;
+                    return new vscode.SemanticTokens(new Uint32Array(res.data));
+                } catch (_) {
+                    return null;
                 }
-            })
-        );
-
-        const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
-        context.subscriptions.push(
-            vscode.languages.registerDocumentSemanticTokensProvider('vela', {
-                onDidChangeSemanticTokens: fallbackServer.onDidChangeSemanticTokens,
-                async provideDocumentSemanticTokens(doc) {
-                    if (!fallbackServer.ready) return null;
-                    try {
-                        const res = await fallbackServer.sendRequest('textDocument/semanticTokens/full', {
-                            textDocument: { uri: doc.uri.toString() }
-                        });
-                        if (!res || !Array.isArray(res.data)) return null;
-                        return new vscode.SemanticTokens(new Uint32Array(res.data));
-                    } catch (_) {
-                        return null;
-                    }
-                }
-            }, legend)
-        );
-    }
+            }
+        }, legend)
+    );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('vela.restartServer', async () => {
-            if (client) {
-                await client.stop();
-                await client.start();
-            } else if (fallbackServer) {
-                fallbackServer.stop();
-                await fallbackServer.start();
+            if (lspClient) {
+                lspClient.stop();
+                await lspClient.start();
             }
             vscode.window.showInformationMessage('Vela Language Server restarted.');
         })
@@ -540,12 +535,9 @@ async function activate(context) {
     );
 }
 
-async function deactivate() {
-    if (client) {
-        await client.stop();
-    }
-    if (fallbackServer) {
-        fallbackServer.stop();
+function deactivate() {
+    if (lspClient) {
+        lspClient.stop();
     }
 }
 

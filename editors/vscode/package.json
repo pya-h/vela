@@ -4,6 +4,11 @@
   "description": "Rich language support for Vela (syntax highlighting, diagnostics, completions, and hovers)",
   "version": "0.1.0",
   "publisher": "pya-h",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pya-h/vela.git"
+  },
   "engines": {
     "vscode": "^1.88.0"
   },
@@ -67,9 +72,6 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "npx @vscode/vsce package"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
