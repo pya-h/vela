@@ -162,37 +162,111 @@ Offline documentation sources are also kept directly in the [`docs/`](docs/) dir
 
 ---
 
-## Build and Run
+## Build and Run: Command-Line Compiler (`vela`)
 
-### Building the Compiler
+Vela includes a standalone command-line compiler driver (`vela`) that compiles Vela source files and multi-file projects into native executables, behaving just like `gcc` or `g++`.
 
+### 1. Building and Installing the Compiler
+
+#### Option A: Build the release binary locally
 ```sh
 cargo build --release
 ```
+The optimized binary will be created at `./target/release/vela`.
 
-### Compiling and Running a Program
-
+#### Option B: Install globally to `$PATH` (Recommended)
+To run `vela` from any terminal or directory on your system:
 ```sh
-# Compile and run an example
-./target/release/vela examples/basics/hello.vela -o hello
+cargo install --path .
+```
+This places `vela` into `~/.cargo/bin/vela`. Ensure `~/.cargo/bin` is in your `PATH` environment variable.
+
+> [!TIP]
+> **Updating to Future Versions**:
+> Whenever you pull new changes or update the compiler codebase, you can reinstall and overwrite the existing binary by running:
+> ```sh
+> cargo install --path . --force
+> ```
+> To remove the binary at any time, run `cargo uninstall vela`.
+
+---
+
+### 2. Compiling and Running Programs (Like `gcc` / `g++`)
+
+#### Default Compilation (Outputs `a.out`)
+Just like running `gcc main.c`:
+```sh
+vela examples/basics/hello.vela
+./a.out
+```
+
+#### Specify Output Binary with `-o`
+Just like running `gcc main.c -o myapp`:
+```sh
+vela examples/basics/hello.vela -o hello
 ./hello
-
-# Inspect generated C11 code
-./target/release/vela examples/basics/hello.vela --emit-c
 ```
 
-### Compiler CLI Flags
+#### Syntax and Type Checking (`--check`)
+Quickly verify syntax, types, and region lifetimes without generating C code or invoking the C compiler:
+```sh
+vela program.vela --check
+```
+
+#### Inspect Generated C11 Code (`--emit-c`)
+Output clean, standard ISO C11 code to stdout or to a file:
+```sh
+vela program.vela --emit-c
+vela program.vela --emit-c -o generated.c
+```
+
+#### Fast Compilation During Development (`--quick`)
+Build using the host C compiler with `-O0` to skip heavy optimization passes for faster turnaround:
+```sh
+vela program.vela -o dev_build --quick
+```
+
+#### Custom C Compiler and Flags
+By default, Vela invokes the host `cc` compiler. You can customize the compiler binary and optimization flags:
+```sh
+# Via CLI flag:
+vela program.vela -o myapp --cc "gcc -O3"
+
+# Or via environment variable:
+CC="clang -O3 -march=native" vela program.vela -o myapp
+```
+
+---
+
+### 3. Compiler CLI Reference
 
 ```
-vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]
+vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--cc <cmd>] [--]
+vela --help | --version
 ```
 
-- `-o <path>`: Names the generated executable (`a.out` by default).
-- `--emit-c`: Outputs the generated ISO C11 code to stdout or to `-o`.
-- `--check`: Verifies syntax and type correctness without generating C or invoking the C compiler.
-- `--quick`: Builds with `-O0` for faster compilation times during development.
-- `--no-notices`: Suppresses runtime informational notices on stderr.
-- `--repeat-warnings`: Shows every repeated warning occurrence across tasks and files.
+| Option | Description |
+|---|---|
+| `<input.vela>` | Source file to compile (automatically resolves all `include` modules). |
+| `-o <path>` | Sets output binary executable path (`a.out` by default). |
+| `--emit-c` | Emits generated ISO C11 code instead of compiling an executable. |
+| `--check` | Runs front-end checks (parser, type checker, regions) without code generation. |
+| `--quick` | Compiles C code with `-O0` for fast compilation cycles. |
+| `--no-notices` | Suppresses informational diagnostics on stderr. |
+| `--repeat-warnings` | Displays repeated warning occurrences across tasks and files. |
+| `--cc <cmd>` | Specifies custom C compiler command and flags (defaults to `$CC` or `cc`). |
+| `--help` | Displays usage summary. |
+| `--version` | Displays compiler version. |
+
+---
+
+### 4. Compilation Pipeline Under the Hood
+
+When you execute `vela input.vela -o app`:
+1. **Frontend**: The parser and resolver process the entry point and transitively load all `include` modules and standard library components from `std/`.
+2. **Analysis**: Static type checking, region lifetime verification, place mutability checks, linear ownership enforcement, and event alters-causality checks are performed.
+3. **C11 Code Generator**: The validated AST is lowered into portable, dependency-free ISO C11 code.
+4. **Native Backend**: Vela invokes the host C compiler (`cc`/`gcc`/`clang`) linked against the embedded minimal runtime header (`runtime/vela_rt.h`), producing a fast, self-contained native binary.
 
 ---
 
