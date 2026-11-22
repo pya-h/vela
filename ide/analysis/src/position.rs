@@ -123,6 +123,24 @@ impl<'a> LineIndex<'a> {
         self.utf16_of(range.start)..self.utf16_of(range.end)
     }
 
+    pub fn line_col_utf16(&self, utf16: usize) -> (usize, usize) {
+        let line = self
+            .starts_utf16
+            .partition_point(|&start| start <= utf16)
+            .saturating_sub(1);
+        let start = self.starts_utf16.get(line).copied().unwrap_or(0);
+        (line, utf16.saturating_sub(start))
+    }
+
+    pub fn offset_of_line_col_utf16(&self, line: usize, col: usize) -> usize {
+        let start = self
+            .starts_utf16
+            .get(line)
+            .copied()
+            .unwrap_or_else(|| self.starts_utf16.last().copied().unwrap_or(0));
+        start.saturating_add(col)
+    }
+
     pub(crate) fn cursor(&self) -> Utf16Cursor<'_, 'a> {
         Utf16Cursor {
             index: self,
@@ -233,5 +251,20 @@ mod tests {
         }
         // An offset before the last one starts over.
         assert_eq!(cursor.utf16_of(2), index.utf16_of(2));
+    }
+
+    #[test]
+    fn converts_utf16_line_col_round_trip() {
+        let source = "hello\nworld\n123";
+        let index = LineIndex::new(source);
+        assert_eq!(index.line_col_utf16(0), (0, 0));
+        assert_eq!(index.line_col_utf16(5), (0, 5));
+        assert_eq!(index.line_col_utf16(6), (1, 0));
+        assert_eq!(index.line_col_utf16(11), (1, 5));
+        assert_eq!(index.line_col_utf16(12), (2, 0));
+
+        assert_eq!(index.offset_of_line_col_utf16(0, 0), 0);
+        assert_eq!(index.offset_of_line_col_utf16(1, 2), 8);
+        assert_eq!(index.offset_of_line_col_utf16(2, 3), 15);
     }
 }

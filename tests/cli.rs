@@ -44,6 +44,13 @@ fn no_arguments_prints_usage() {
 }
 
 #[test]
+fn lsp_command_is_recognized() {
+    let out = vela(&["lsp"]);
+    let err = stderr(&out);
+    assert!(out.status.success() || err.contains("vela-lsp"));
+}
+
+#[test]
 fn help_prints_usage_and_succeeds() {
     let out = vela(&["--help"]);
     assert!(out.status.success());

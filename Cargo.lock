@@ -1062,6 +1062,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vela-lsp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "vela",
+ "vela-analysis",
+]
+
+[[package]]
 name = "vela-studio"
 version = "0.1.0"
 dependencies = [

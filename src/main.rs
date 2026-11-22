@@ -6,12 +6,13 @@ use std::process;
 
 use vela::driver;
 
-const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]\n       vela --help | --version";
+const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]\n       vela lsp\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
 enum Action {
     Help,
     Version,
+    Lsp,
     Run(Options),
 }
 
@@ -28,6 +29,13 @@ struct Options {
 fn main() {
     let opts = match parse_args(env::args().skip(1)) {
         Ok(Action::Run(opts)) => opts,
+        Ok(Action::Lsp) => {
+            if let Err(msg) = run_lsp() {
+                eprintln!("{}", msg);
+                process::exit(1);
+            }
+            return;
+        }
         Ok(action) => {
             let text = if matches!(action, Action::Version) {
                 VERSION
@@ -71,6 +79,9 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
                     return Err("only one input file is allowed".to_string());
                 }
                 input = Some(arg);
+            }
+            "lsp" if input.is_none() && output.is_none() && !emit_c && !check && !quick => {
+                return Ok(Action::Lsp);
             }
             "-h" | "--help" => return Ok(Action::Help),
             "--version" => version = true,
@@ -205,5 +216,30 @@ fn write_stdout(text: &str) -> Result<(), String> {
             Err(format!("error: cannot write output: {}", e))
         }
         _ => Ok(()),
+    }
+}
+
+fn run_lsp() -> Result<(), String> {
+    let current_exe = env::current_exe().ok();
+    let sibling_lsp = current_exe
+        .as_ref()
+        .and_then(|p| p.parent())
+        .map(|dir| dir.join("vela-lsp"));
+    let exe = if let Some(ref sibling) = sibling_lsp
+        && sibling.is_file()
+    {
+        sibling.clone()
+    } else {
+        std::path::PathBuf::from("vela-lsp")
+    };
+
+    let status = process::Command::new(&exe)
+        .status()
+        .map_err(|_| "error: 'vela-lsp' not found. Build or install it with:\n    cargo install --path ide/lsp".to_string())?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        process::exit(status.code().unwrap_or(1));
     }
 }

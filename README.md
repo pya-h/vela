@@ -285,7 +285,20 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ---
 
-## Vela Studio (IDE)
+## IDE & Editor Support
+
+### Visual Studio Code Extension
+Vela provides a native VS Code extension under [`editors/vscode/`](editors/vscode/) with syntax highlighting, smart indentation, live diagnostics, autocompletion, type hovers, and symbol navigation powered by the native `vela-lsp` daemon:
+
+```sh
+# 1. Install the native LSP daemon
+cargo install --path ide/lsp --force
+
+# 2. Link the extension into VS Code
+ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/vela
+```
+
+### Vela Studio (Browser IDE)
 
 Vela Studio provides a browser-based IDE powered by the compiler's analysis engine compiled to WebAssembly:
 
@@ -315,7 +328,8 @@ See [docs/ide.html](https://pya-h.github.io/vela/ide.html) for shortcuts, live d
 | `examples/` | Example Vela programs demonstrating features and paradigms |
 | `tests/` | Comprehensive test suite: `tests/run/` (execution tests), `tests/fail/` (typecheck rejections), and `tests/runtime/` (C11 sanitizers) |
 | `docs/` | Documentation source files, reference guides, and design specifications |
-| `ide/` | Vela Studio crates: `analysis` (LSP engine), `wasm` (browser bridge), `server` (backend daemon), and `web` (frontend) |
+| `editors/` | Editor extensions, including the official Visual Studio Code extension (`editors/vscode/`) |
+| `ide/` | Tooling and IDE crates: `analysis` (engine), `lsp` (`vela-lsp` daemon), `wasm`, `server`, and `web` |
 
 ---
 

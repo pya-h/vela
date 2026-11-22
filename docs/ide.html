@@ -794,6 +794,27 @@ npm --prefix ide/web test              <span class="comment"># unit tests</span>
 npm --prefix ide/web run typecheck
 npm --prefix ide/web run e2e           <span class="comment"># Chromium against a real server; set CHROMIUM if it isn't /usr/bin/chromium</span></pre>
     </section>
+
+    <section>
+      <h2 id="vscode">Visual Studio Code &amp; Native LSP</h2>
+      <p>
+        For desktop editing in Visual Studio Code, Neovim, Helix, or any editor supporting the
+        <strong>Language Server Protocol (LSP)</strong>, the repository provides a native daemon
+        (<code>ide/lsp</code>, <code>vela-lsp</code>) and an official extension bundle (<code>editors/vscode</code>).
+      </p>
+      <p>Install the native LSP server:</p>
+      <pre>cargo install --path ide/lsp --force</pre>
+      <p>Or invoke it via the compiler CLI:</p>
+      <pre>vela lsp</pre>
+      <p>
+        Install the VS Code extension by linking <code>editors/vscode</code> into your local VS Code extensions folder:
+      </p>
+      <pre>ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/vela</pre>
+      <p>
+        The extension includes TextMate syntax highlighting, smart block indentation, real-time error squiggles,
+        contextual autocompletions, type hovers, cross-file go-to-definition, and symbol outlines.
+      </p>
+    </section>
   </main>
 
   <footer>

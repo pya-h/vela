@@ -1,0 +1,79 @@
+{
+  "name": "vela",
+  "displayName": "Vela",
+  "description": "Rich language support for Vela (syntax highlighting, diagnostics, completions, and hovers)",
+  "version": "0.1.0",
+  "publisher": "pya-h",
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:vela"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "vela",
+        "aliases": [
+          "Vela",
+          "vela"
+        ],
+        "extensions": [
+          ".vela"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vela",
+        "scopeName": "source.vela",
+        "path": "./syntaxes/vela.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vela.restartServer",
+        "title": "Vela: Restart Language Server"
+      },
+      {
+        "command": "vela.showEmittedC",
+        "title": "Vela: Show Emitted C11 Code"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Vela",
+      "properties": {
+        "vela.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the vela-lsp or vela executable. If empty, the extension searches PATH and standard cargo bin directories."
+        },
+        "vela.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the Vela language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.88.0",
+    "typescript": "^5.0.0"
+  }
+}
