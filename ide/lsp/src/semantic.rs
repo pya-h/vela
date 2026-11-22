@@ -1,19 +1,19 @@
 use vela_analysis::{LineIndex, Token, TokenClass};
 
 pub const TOKEN_TYPES: &[&str] = &[
-    "keyword",      // 0
-    "type",         // 1
-    "function",     // 2
-    "method",       // 3
-    "parameter",    // 4
-    "variable",     // 5
-    "property",     // 6
-    "number",       // 7
-    "string",       // 8
-    "comment",      // 9
-    "operator",     // 10
-    "namespace",    // 11
-    "enumMember",   // 12
+    "keyword",    // 0
+    "type",       // 1
+    "function",   // 2
+    "method",     // 3
+    "parameter",  // 4
+    "variable",   // 5
+    "property",   // 6
+    "number",     // 7
+    "string",     // 8
+    "comment",    // 9
+    "operator",   // 10
+    "namespace",  // 11
+    "enumMember", // 12
 ];
 
 pub const TOKEN_MODIFIERS: &[&str] = &[
@@ -43,47 +43,74 @@ pub fn class_to_type(class: TokenClass) -> Option<u32> {
 
 pub fn class_to_modifiers(class: TokenClass) -> u32 {
     match class {
-        TokenClass::TypeBuiltin | TokenClass::BuiltinFn => 1 << 2, // defaultLibrary
+        TokenClass::TypeBuiltin | TokenClass::BuiltinFn => 1 << 2,
         _ => 0,
     }
 }
 
 pub fn encode_tokens(tokens: &[Token], index: &LineIndex<'_>) -> Vec<u32> {
-    let mut prev_line = 0;
-    let mut prev_col = 0;
-    let mut data = Vec::with_capacity(tokens.len() * 5);
+    let mut sorted: Vec<&Token> = tokens
+        .iter()
+        .filter(|t| t.to > t.from && class_to_type(t.class).is_some())
+        .collect();
+    sorted.sort_by_key(|t| (t.from, t.to));
 
-    for token in tokens {
+    let mut prev_line = 0usize;
+    let mut prev_col = 0usize;
+    let mut data = Vec::with_capacity(sorted.len() * 5);
+
+    for token in sorted {
         let Some(type_idx) = class_to_type(token.class) else {
             continue;
         };
-        let (line, col) = index.line_col_utf16(token.from);
-        let length = token.to.saturating_sub(token.from);
-        if length == 0 {
-            continue;
-        }
-
-        let delta_line = line.saturating_sub(prev_line);
-        let delta_col = if delta_line == 0 {
-            col.saturating_sub(prev_col)
-        } else {
-            col
-        };
-
+        let (start_line, start_col) = index.line_col_utf16(token.from);
+        let (end_line, end_col) = index.line_col_utf16(token.to);
         let modifiers = class_to_modifiers(token.class);
 
-        let Ok(delta_line) = u32::try_from(delta_line) else { continue };
-        let Ok(delta_col) = u32::try_from(delta_col) else { continue };
-        let Ok(length) = u32::try_from(length) else { continue };
+        // LSP semantic tokens without multilineTokenSupport must stay on one line.
+        for line in start_line..=end_line {
+            let line_range = index.line_utf16_range(line);
+            let col = if line == start_line { start_col } else { 0 };
+            let line_end_col = line_range.end.saturating_sub(line_range.start);
+            let col_end = if line == end_line {
+                end_col.min(line_end_col)
+            } else {
+                line_end_col
+            };
+            let length = col_end.saturating_sub(col);
+            if length == 0 {
+                continue;
+            }
+            if line < prev_line || (line == prev_line && col < prev_col) {
+                continue;
+            }
 
-        data.push(delta_line);
-        data.push(delta_col);
-        data.push(length);
-        data.push(type_idx);
-        data.push(modifiers);
+            let delta_line = line.saturating_sub(prev_line);
+            let delta_col = if delta_line == 0 {
+                col.saturating_sub(prev_col)
+            } else {
+                col
+            };
 
-        prev_line = line;
-        prev_col = col;
+            let Ok(dl) = u32::try_from(delta_line) else {
+                continue;
+            };
+            let Ok(dc) = u32::try_from(delta_col) else {
+                continue;
+            };
+            let Ok(len) = u32::try_from(length) else {
+                continue;
+            };
+
+            data.push(dl);
+            data.push(dc);
+            data.push(len);
+            data.push(type_idx);
+            data.push(modifiers);
+
+            prev_line = line;
+            prev_col = col;
+        }
     }
 
     data

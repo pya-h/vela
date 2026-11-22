@@ -22,8 +22,14 @@
     ["'", "'"]
   ],
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(task|shape|kind|actor|event|when|else|loop|endless|each|block|match|case|select|otherwise)\\b.*$",
+    "increaseIndentPattern": "^\\s*(?:(?:priv\\s+)?(?:task|shape|kind|actor|event|pattern)|when|else|loop|endless|each|block|match|select|otherwise|on\\b|case\\b(?![^=]*=(?!=))).*$",
     "decreaseIndentPattern": "^\\s*(fi|else|otherwise|case)\\b.*$"
+  },
+  "folding": {
+    "markers": {
+      "start": "^\\s*(?:priv\\s+)?(?:task|shape|kind|actor|event|pattern|when|loop|endless|each|block|match|select|on)\\b",
+      "end": "^\\s*fi\\b"
+    }
   },
   "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\#\\%\\^\\&\\*\\(\\)\\-\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\?\\s]+)"
 }

@@ -17,7 +17,7 @@ fn main() -> io::Result<()> {
             if method == "exit" {
                 break;
             }
-            if let Some(diagnostics) = server.handle_notification(method, msg.params) {
+            for diagnostics in server.handle_notification(method, msg.params) {
                 let value = serde_json::to_value(&diagnostics)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
                 transport.write_notification("textDocument/publishDiagnostics", value)?;

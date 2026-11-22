@@ -78,6 +78,13 @@ pub struct MarkupContent {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TextEdit {
+    pub range: Range,
+    pub new_text: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CompletionItem {
     pub label: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -87,9 +94,13 @@ pub struct CompletionItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation: Option<MarkupContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub insert_text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub insert_text_format: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_edit: Option<TextEdit>,
 }
 
 #[derive(Debug, Serialize)]

@@ -133,12 +133,22 @@ impl<'a> LineIndex<'a> {
     }
 
     pub fn offset_of_line_col_utf16(&self, line: usize, col: usize) -> usize {
-        let start = self
+        let range = self.line_utf16_range(line);
+        range.start.saturating_add(col).min(range.end)
+    }
+
+    pub fn line_utf16_range(&self, line: usize) -> Range<usize> {
+        let Some(&start) = self.starts_utf16.get(line) else {
+            let end = self.utf16_of(self.source.len());
+            return end..end;
+        };
+        let end = self
             .starts_utf16
-            .get(line)
+            .get(line + 1)
             .copied()
-            .unwrap_or_else(|| self.starts_utf16.last().copied().unwrap_or(0));
-        start.saturating_add(col)
+            .map(|next| next.saturating_sub(1))
+            .unwrap_or_else(|| self.utf16_of(self.source.len()));
+        start..end.max(start)
     }
 
     pub(crate) fn cursor(&self) -> Utf16Cursor<'_, 'a> {

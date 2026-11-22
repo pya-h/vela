@@ -5,9 +5,14 @@
     clippy::panic
 )]
 
+use std::io::{BufReader, Cursor};
+
 use serde_json::json;
 use vela_lsp::protocol::Id;
-use vela_lsp::Server;
+use vela_lsp::semantic::encode_tokens;
+use vela_lsp::server::convert_codemirror_snippet;
+use vela_lsp::{Server, Transport};
+use vela_analysis::{LineIndex, Token, TokenClass};
 
 #[test]
 fn server_initializes_with_expected_capabilities() {
@@ -37,7 +42,7 @@ fn diagnostics_reported_on_open_and_change() {
     let uri = "file:///test.vela";
 
     // Open valid document: no diagnostics
-    let notif = server.handle_notification(
+    let notifs = server.handle_notification(
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -47,13 +52,13 @@ fn diagnostics_reported_on_open_and_change() {
             }
         })),
     );
-    assert!(notif.is_some());
-    let diags = notif.unwrap();
+    assert_eq!(notifs.len(), 1);
+    let diags = &notifs[0];
     assert_eq!(diags.uri, uri);
     assert_eq!(diags.diagnostics.len(), 0);
 
     // Edit with error: reports diagnostic
-    let notif = server.handle_notification(
+    let notifs = server.handle_notification(
         "textDocument/didChange",
         Some(json!({
             "textDocument": {
@@ -65,10 +70,21 @@ fn diagnostics_reported_on_open_and_change() {
             }]
         })),
     );
-    assert!(notif.is_some());
-    let diags = notif.unwrap();
+    assert_eq!(notifs.len(), 1);
+    let diags = &notifs[0];
     assert!(!diags.diagnostics.is_empty());
     assert!(diags.diagnostics[0].message.contains("unknown_variable"));
+
+    // Close document: clears diagnostics
+    let closed = server.handle_notification(
+        "textDocument/didClose",
+        Some(json!({
+            "textDocument": { "uri": uri }
+        })),
+    );
+    assert_eq!(closed.len(), 1);
+    assert_eq!(closed[0].uri, uri);
+    assert!(closed[0].diagnostics.is_empty());
 }
 
 #[test]
@@ -231,4 +247,170 @@ fn semantic_tokens_returns_delta_encoded_stream() {
     assert!(!data.is_empty());
     // In LSP semantic tokens, data length is always a multiple of 5
     assert_eq!(data.len() % 5, 0);
+}
+
+#[test]
+fn converts_codemirror_snippets_to_lsp() {
+    assert_eq!(
+        convert_codemirror_snippet("task ${name}(${})\n\t${}\nfi"),
+        "task ${1:name}($2)\n\t$0\nfi"
+    );
+    assert_eq!(
+        convert_codemirror_snippet("when ${value} is {${name}}\n\t${}\nfi"),
+        "when ${1:value} is {${2:name}}\n\t$0\nfi"
+    );
+    assert_eq!(convert_codemirror_snippet("x: ${}"), "x: $0");
+    assert_eq!(
+        convert_codemirror_snippet("added(${value}) at ${r}"),
+        "added(${1:value}) at ${2:r}"
+    );
+}
+
+#[test]
+fn pointer_completions_include_text_edit_over_dot() {
+    let mut server = Server::new();
+    let uri = "file:///ptr.vela";
+
+    server.handle_notification(
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "version": 1,
+                "text": "shape Point\n    x: int\nfi\n\ntask main()\n    region r\n    fixed p = new Point(Point { x: 1 }) at r\n    show(p.)\nfi\n"
+            }
+        })),
+    );
+
+    let response = server.handle_request(
+        Id::Number(7),
+        "textDocument/completion",
+        Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 7, "character": 11 }
+        })),
+    );
+    let items = response.result.unwrap();
+    let arr = items.as_array().unwrap();
+    let x_item = arr.iter().find(|it| it.get("label").unwrap() == "x").unwrap();
+    assert_eq!(x_item.get("filterText").unwrap(), ".x");
+    let edit = x_item.get("textEdit").unwrap();
+    assert_eq!(edit.get("newText").unwrap(), "^.x");
+    assert_eq!(edit["range"]["start"]["character"], 10);
+    assert_eq!(edit["range"]["end"]["character"], 11);
+}
+
+#[test]
+fn cross_file_modules_work_in_memory_and_from_disk() {
+    let mut server = Server::new();
+    let main_uri = "file:///my%20app/main.vela";
+    let helper_uri = "file:///my%20app/sub/helper.vela";
+
+    // Open helper in memory first (even with spaces in directory path)
+    server.handle_notification(
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": helper_uri,
+                "version": 1,
+                "text": "task greet() -> int\n    <- 7\nfi\n"
+            }
+        })),
+    );
+
+    // Open main referencing sub/helper
+    let open_main = server.handle_notification(
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": main_uri,
+                "version": 1,
+                "text": "include sub/helper\n\ntask main()\n    show(helper.greet())\nfi\n"
+            }
+        })),
+    );
+    assert_eq!(open_main[0].diagnostics.len(), 0);
+
+    // Go-to-definition from main jumps into open helper URI
+    let def = server.handle_request(
+        Id::Number(8),
+        "textDocument/definition",
+        Some(json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": 3, "character": 17 }
+        })),
+    );
+    let loc = def.result.unwrap();
+    assert_eq!(loc["uri"], helper_uri);
+    assert_eq!(loc["range"]["start"]["line"], 0);
+
+    // Editing helper in memory to remove `greet` refreshes diagnostics in main!
+    let updates = server.handle_notification(
+        "textDocument/didChange",
+        Some(json!({
+            "textDocument": { "uri": helper_uri, "version": 2 },
+            "contentChanges": [{ "text": "task other() -> int\n    <- 1\nfi\n" }]
+        })),
+    );
+    let main_update = updates.iter().find(|u| u.uri == main_uri).unwrap();
+    assert!(!main_update.diagnostics.is_empty());
+}
+
+#[test]
+fn real_disk_modules_resolve_without_double_extension() {
+    let dir = std::env::temp_dir().join(format!("vela_lsp_test_{}", std::process::id()));
+    let sub = dir.join("shop");
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join("cart.vela"), "task total() -> int\n    <- 10\nfi\n").unwrap();
+    let main_path = dir.join("shop.vela");
+
+    let mut server = Server::new();
+    let main_uri = format!("file://{}", main_path.to_string_lossy().replace('\\', "/"));
+    let updates = server.handle_notification(
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": main_uri,
+                "version": 1,
+                "text": "include shop/cart\n\ntask main()\n    show(cart.total())\nfi\n"
+            }
+        })),
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(updates[0].diagnostics.len(), 0);
+}
+
+#[test]
+fn multiline_tokens_split_across_lines_for_lsp() {
+    let source = "ab\ncd";
+    let index = LineIndex::new(source);
+    let tokens = vec![Token {
+        from: 0,
+        to: 5,
+        class: TokenClass::String,
+    }];
+    let encoded = encode_tokens(&tokens, &index);
+    // Line 0: deltaLine=0, deltaStart=0, len=2; Line 1: deltaLine=1, deltaStart=0, len=2
+    assert_eq!(encoded, vec![0, 0, 2, 8, 0, 1, 0, 2, 8, 0]);
+}
+
+#[test]
+fn transport_handles_framed_messages_and_case_insensitive_headers() {
+    let body = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
+    let wire = format!("content-length: {}\r\n\r\n{}", body.len(), body);
+    let reader = BufReader::new(Cursor::new(wire.into_bytes()));
+    let mut out = Vec::new();
+    let mut transport = Transport::new(reader, &mut out);
+
+    let msg = transport.read_message().unwrap().unwrap();
+    assert_eq!(msg.method.as_deref(), Some("initialize"));
+    assert_eq!(msg.id, Some(Id::Number(1)));
+
+    let mut server = Server::new();
+    let resp = server.handle_request(msg.id.unwrap(), "initialize", msg.params);
+    transport.write_response(&resp).unwrap();
+    let written = String::from_utf8(out).unwrap();
+    assert!(written.starts_with("Content-Length: "));
+    assert!(written.contains("vela-lsp"));
 }

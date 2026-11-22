@@ -4,47 +4,122 @@ const fs = require('fs');
 const os = require('os');
 const cp = require('child_process');
 
+const TOKEN_TYPES = [
+    'keyword',
+    'type',
+    'function',
+    'method',
+    'parameter',
+    'variable',
+    'property',
+    'number',
+    'string',
+    'comment',
+    'operator',
+    'namespace',
+    'enumMember'
+];
+
+const TOKEN_MODIFIERS = ['declaration', 'readonly', 'defaultLibrary'];
+
 let client = null;
 let fallbackServer = null;
+
+function isVelaDriverBinary(binPath) {
+    const base = path.basename(binPath).toLowerCase();
+    return base === 'vela' || base === 'vela.exe';
+}
+
+function findInPath(binName) {
+    const pathEnv = process.env.PATH || '';
+    const dirs = pathEnv.split(path.delimiter).filter(Boolean);
+    const exts = process.platform === 'win32' ? ['', '.exe'] : [''];
+    for (const dir of dirs) {
+        for (const ext of exts) {
+            const candidate = path.join(dir, binName + ext);
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
 
 function resolveServerExecutable() {
     const config = vscode.workspace.getConfiguration('vela');
     const custom = config.get('serverPath');
     if (custom && custom.trim().length > 0) {
         const trimmed = custom.trim();
-        if (trimmed.endsWith('vela')) {
-            return { command: trimmed, args: ['lsp'] };
-        }
-        return { command: trimmed, args: [] };
+        return isVelaDriverBinary(trimmed)
+            ? { command: trimmed, args: ['lsp'] }
+            : { command: trimmed, args: [] };
     }
 
     const home = os.homedir();
-    const cargoLsp = path.join(home, '.cargo', 'bin', 'vela-lsp');
+    const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+    const cargoLsp = path.join(home, '.cargo', 'bin', 'vela-lsp' + exeSuffix);
     if (fs.existsSync(cargoLsp)) {
         return { command: cargoLsp, args: [] };
     }
 
-    const cargoVela = path.join(home, '.cargo', 'bin', 'vela');
+    const pathLsp = findInPath('vela-lsp');
+    if (pathLsp) {
+        return { command: pathLsp, args: [] };
+    }
+
+    const cargoVela = path.join(home, '.cargo', 'bin', 'vela' + exeSuffix);
     if (fs.existsSync(cargoVela)) {
         return { command: cargoVela, args: ['lsp'] };
+    }
+
+    const pathVela = findInPath('vela');
+    if (pathVela) {
+        return { command: pathVela, args: ['lsp'] };
     }
 
     return { command: 'vela-lsp', args: [] };
 }
 
-// Fallback JSON-RPC stdio bridge when vscode-languageclient is not bundled
+function resolveCompilerExecutable() {
+    const config = vscode.workspace.getConfiguration('vela');
+    const custom = config.get('serverPath');
+    if (custom && custom.trim().length > 0) {
+        const trimmed = custom.trim();
+        if (isVelaDriverBinary(trimmed)) {
+            return trimmed;
+        }
+        const sibling = path.join(path.dirname(trimmed), process.platform === 'win32' ? 'vela.exe' : 'vela');
+        if (fs.existsSync(sibling)) {
+            return sibling;
+        }
+    }
+
+    const home = os.homedir();
+    const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+    const cargoVela = path.join(home, '.cargo', 'bin', 'vela' + exeSuffix);
+    if (fs.existsSync(cargoVela)) {
+        return cargoVela;
+    }
+
+    return 'vela';
+}
+
 class StdioLspClient {
     constructor(command, args) {
         this.command = command;
         this.args = args;
         this.proc = null;
+        this.ready = false;
         this.requestId = 1;
         this.pending = new Map();
         this.buffer = Buffer.alloc(0);
         this.diagnosticCollection = vscode.languages.createDiagnosticCollection('vela');
+        this.onDidChangeSemanticTokensEmitter = new vscode.EventEmitter();
+        this.onDidChangeSemanticTokens = this.onDidChangeSemanticTokensEmitter.event;
     }
 
-    start() {
+    async start() {
+        this.ready = false;
         try {
             this.proc = cp.spawn(this.command, this.args, {
                 stdio: ['pipe', 'pipe', 'inherit']
@@ -57,25 +132,66 @@ class StdioLspClient {
         }
 
         this.proc.on('error', (err) => {
+            this.ready = false;
             vscode.window.showErrorMessage(
                 `Vela LSP error (${this.command}): ${err.message}. Install via 'cargo install --path ide/lsp'.`
             );
         });
 
+        this.proc.on('exit', () => {
+            this.ready = false;
+            for (const { reject } of this.pending.values()) {
+                reject(new Error('LSP server exited'));
+            }
+            this.pending.clear();
+        });
+
         this.proc.stdout.on('data', (chunk) => this.handleData(chunk));
 
-        this.sendRequest('initialize', {
-            rootUri: vscode.workspace.workspaceFolders?.[0]?.uri.toString() || null,
-            capabilities: {}
-        });
+        try {
+            await this.sendRequest('initialize', {
+                rootUri: vscode.workspace.workspaceFolders?.[0]?.uri.toString() || null,
+                capabilities: {}
+            });
+            this.ready = true;
+            this.sendNotification('initialized', {});
+            this.syncOpenDocuments();
+            this.onDidChangeSemanticTokensEmitter.fire();
+        } catch (err) {
+            vscode.window.showErrorMessage(
+                `Vela LSP initialization failed: ${err.message || err}`
+            );
+        }
     }
 
     stop() {
+        this.ready = false;
         if (this.proc) {
+            this.sendNotification('exit', {});
             this.proc.kill();
             this.proc = null;
         }
+        for (const { reject } of this.pending.values()) {
+            reject(new Error('LSP client stopped'));
+        }
+        this.pending.clear();
         this.diagnosticCollection.clear();
+    }
+
+    syncDocument(doc) {
+        if (!this.ready || doc.languageId !== 'vela') return;
+        this.sendNotification('textDocument/didOpen', {
+            textDocument: {
+                uri: doc.uri.toString(),
+                languageId: 'vela',
+                version: doc.version,
+                text: doc.getText()
+            }
+        });
+    }
+
+    syncOpenDocuments() {
+        vscode.workspace.textDocuments.forEach((doc) => this.syncDocument(doc));
     }
 
     sendRequest(method, params) {
@@ -157,7 +273,9 @@ class StdioLspClient {
             const severity = d.severity === 2
                 ? vscode.DiagnosticSeverity.Warning
                 : vscode.DiagnosticSeverity.Error;
-            return new vscode.Diagnostic(range, d.message, severity);
+            const diag = new vscode.Diagnostic(range, d.message, severity);
+            diag.source = 'vela';
+            return diag;
         });
         this.diagnosticCollection.set(uri, diags);
     }
@@ -179,34 +297,23 @@ async function activate(context) {
                 fileEvents: vscode.workspace.createFileSystemWatcher('**/*.vela')
             }
         };
-        client = new LanguageClient('velaLsp', 'Vela Language Server', serverOptions, clientOptions);
+        client = new LanguageClient('vela', 'Vela Language Server', serverOptions, clientOptions);
         await client.start();
         useLanguageClient = true;
     } catch (e) {
-        // Fallback to embedded StdioLspClient
         useLanguageClient = false;
     }
 
     if (!useLanguageClient) {
         fallbackServer = new StdioLspClient(command, args);
-        fallbackServer.start();
+        await fallbackServer.start();
 
-        const syncDoc = (doc) => {
-            if (doc.languageId !== 'vela') return;
-            fallbackServer.sendNotification('textDocument/didOpen', {
-                textDocument: {
-                    uri: doc.uri.toString(),
-                    version: doc.version,
-                    text: doc.getText()
-                }
-            });
-        };
-
-        vscode.workspace.textDocuments.forEach(syncDoc);
-        context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(syncDoc));
+        context.subscriptions.push(
+            vscode.workspace.onDidOpenTextDocument((doc) => fallbackServer.syncDocument(doc))
+        );
         context.subscriptions.push(
             vscode.workspace.onDidChangeTextDocument((e) => {
-                if (e.document.languageId !== 'vela') return;
+                if (!fallbackServer.ready || e.document.languageId !== 'vela') return;
                 fallbackServer.sendNotification('textDocument/didChange', {
                     textDocument: {
                         uri: e.document.uri.toString(),
@@ -214,30 +321,52 @@ async function activate(context) {
                     },
                     contentChanges: [{ text: e.document.getText() }]
                 });
+                fallbackServer.onDidChangeSemanticTokensEmitter.fire();
+            })
+        );
+        context.subscriptions.push(
+            vscode.workspace.onDidSaveTextDocument((doc) => {
+                if (!fallbackServer.ready || doc.languageId !== 'vela') return;
+                fallbackServer.sendNotification('textDocument/didSave', {
+                    textDocument: { uri: doc.uri.toString() }
+                });
             })
         );
         context.subscriptions.push(
             vscode.workspace.onDidCloseTextDocument((doc) => {
-                if (doc.languageId !== 'vela') return;
+                if (!fallbackServer.ready || doc.languageId !== 'vela') return;
                 fallbackServer.sendNotification('textDocument/didClose', {
                     textDocument: { uri: doc.uri.toString() }
                 });
             })
         );
 
-        // Completion Provider
         context.subscriptions.push(
             vscode.languages.registerCompletionItemProvider('vela', {
                 async provideCompletionItems(doc, pos) {
+                    if (!fallbackServer.ready) return [];
                     try {
                         const items = await fallbackServer.sendRequest('textDocument/completion', {
                             textDocument: { uri: doc.uri.toString() },
                             position: { line: pos.line, character: pos.character }
                         });
                         return (items || []).map((it) => {
-                            const item = new vscode.CompletionItem(it.label, it.kind);
+                            // LSP CompletionItemKind is 1-based; VS Code's JS enum is 0-based.
+                            const vsKind = typeof it.kind === 'number' && it.kind > 0 ? it.kind - 1 : undefined;
+                            const item = new vscode.CompletionItem(it.label, vsKind);
                             if (it.detail) item.detail = it.detail;
-                            if (it.insertText) {
+                            if (it.filterText) item.filterText = it.filterText;
+                            if (it.textEdit && it.textEdit.range) {
+                                item.range = new vscode.Range(
+                                    it.textEdit.range.start.line,
+                                    it.textEdit.range.start.character,
+                                    it.textEdit.range.end.line,
+                                    it.textEdit.range.end.character
+                                );
+                                item.insertText = it.insertTextFormat === 2
+                                    ? new vscode.SnippetString(it.textEdit.newText)
+                                    : it.textEdit.newText;
+                            } else if (it.insertText) {
                                 item.insertText = it.insertTextFormat === 2
                                     ? new vscode.SnippetString(it.insertText)
                                     : it.insertText;
@@ -248,13 +377,13 @@ async function activate(context) {
                         return [];
                     }
                 }
-            }, '.', '@', '<', '>', ':')
+            }, '.', '@', '<', '>', ':', '/')
         );
 
-        // Hover Provider
         context.subscriptions.push(
             vscode.languages.registerHoverProvider('vela', {
                 async provideHover(doc, pos) {
+                    if (!fallbackServer.ready) return null;
                     try {
                         const res = await fallbackServer.sendRequest('textDocument/hover', {
                             textDocument: { uri: doc.uri.toString() },
@@ -262,7 +391,15 @@ async function activate(context) {
                         });
                         if (!res || !res.contents) return null;
                         const md = new vscode.MarkdownString(res.contents.value);
-                        return new vscode.Hover(md);
+                        const range = res.range
+                            ? new vscode.Range(
+                                res.range.start.line,
+                                res.range.start.character,
+                                res.range.end.line,
+                                res.range.end.character
+                            )
+                            : undefined;
+                        return new vscode.Hover(md, range);
                     } catch (_) {
                         return null;
                     }
@@ -270,10 +407,10 @@ async function activate(context) {
             })
         );
 
-        // Definition Provider
         context.subscriptions.push(
             vscode.languages.registerDefinitionProvider('vela', {
                 async provideDefinition(doc, pos) {
+                    if (!fallbackServer.ready) return null;
                     try {
                         const res = await fallbackServer.sendRequest('textDocument/definition', {
                             textDocument: { uri: doc.uri.toString() },
@@ -296,19 +433,21 @@ async function activate(context) {
             })
         );
 
-        // Document Symbol Provider
         context.subscriptions.push(
             vscode.languages.registerDocumentSymbolProvider('vela', {
                 async provideDocumentSymbols(doc) {
+                    if (!fallbackServer.ready) return [];
                     try {
                         const symbols = await fallbackServer.sendRequest('textDocument/documentSymbol', {
                             textDocument: { uri: doc.uri.toString() }
                         });
                         const mapSymbol = (s) => {
+                            // LSP SymbolKind is 1-based; VS Code's JS enum is 0-based.
+                            const vsKind = typeof s.kind === 'number' && s.kind > 0 ? s.kind - 1 : 0;
                             const sym = new vscode.DocumentSymbol(
                                 s.name,
                                 s.detail || '',
-                                s.kind,
+                                vsKind,
                                 new vscode.Range(
                                     s.range.start.line,
                                     s.range.start.character,
@@ -334,9 +473,27 @@ async function activate(context) {
                 }
             })
         );
+
+        const legend = new vscode.SemanticTokensLegend(TOKEN_TYPES, TOKEN_MODIFIERS);
+        context.subscriptions.push(
+            vscode.languages.registerDocumentSemanticTokensProvider('vela', {
+                onDidChangeSemanticTokens: fallbackServer.onDidChangeSemanticTokens,
+                async provideDocumentSemanticTokens(doc) {
+                    if (!fallbackServer.ready) return null;
+                    try {
+                        const res = await fallbackServer.sendRequest('textDocument/semanticTokens/full', {
+                            textDocument: { uri: doc.uri.toString() }
+                        });
+                        if (!res || !Array.isArray(res.data)) return null;
+                        return new vscode.SemanticTokens(new Uint32Array(res.data));
+                    } catch (_) {
+                        return null;
+                    }
+                }
+            }, legend)
+        );
     }
 
-    // Commands
     context.subscriptions.push(
         vscode.commands.registerCommand('vela.restartServer', async () => {
             if (client) {
@@ -344,7 +501,7 @@ async function activate(context) {
                 await client.start();
             } else if (fallbackServer) {
                 fallbackServer.stop();
-                fallbackServer.start();
+                await fallbackServer.start();
             }
             vscode.window.showInformationMessage('Vela Language Server restarted.');
         })
@@ -358,11 +515,16 @@ async function activate(context) {
                 return;
             }
 
+            if (editor.document.isUntitled) {
+                vscode.window.showWarningMessage('Please save the Vela file before emitting C11.');
+                return;
+            }
+            if (editor.document.isDirty) {
+                await editor.document.save();
+            }
+
             const docPath = editor.document.uri.fsPath;
-            const home = os.homedir();
-            const velaBin = fs.existsSync(path.join(home, '.cargo', 'bin', 'vela'))
-                ? path.join(home, '.cargo', 'bin', 'vela')
-                : 'vela';
+            const velaBin = resolveCompilerExecutable();
 
             cp.execFile(velaBin, [docPath, '--emit-c'], (error, stdout, stderr) => {
                 if (error) {

@@ -80,8 +80,12 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
                 }
                 input = Some(arg);
             }
-            "lsp" if input.is_none() && output.is_none() && !emit_c && !check && !quick => {
-                return Ok(Action::Lsp);
+            "lsp" if input.is_none() && output.is_none() && !emit_c && !check && !quick && !version && !no_notices && !repeat_warnings => {
+                return match args.next().as_deref() {
+                    None => Ok(Action::Lsp),
+                    Some("-h" | "--help") => Ok(Action::Help),
+                    Some(extra) => Err(format!("unknown lsp option '{}'", extra)),
+                };
             }
             "-h" | "--help" => return Ok(Action::Help),
             "--version" => version = true,

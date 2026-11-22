@@ -48,6 +48,14 @@ fn lsp_command_is_recognized() {
     let out = vela(&["lsp"]);
     let err = stderr(&out);
     assert!(out.status.success() || err.contains("vela-lsp"));
+
+    let help = vela(&["lsp", "--help"]);
+    assert!(help.status.success());
+    assert!(String::from_utf8_lossy(&help.stdout).starts_with("usage: vela"));
+
+    let bad = vela(&["lsp", "--unknown"]);
+    assert_eq!(bad.status.code(), Some(2));
+    assert!(stderr(&bad).contains("unknown lsp option"));
 }
 
 #[test]

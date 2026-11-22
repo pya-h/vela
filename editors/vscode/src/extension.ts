@@ -12,28 +12,81 @@ import {
 
 let client: LanguageClient | undefined;
 
+function isVelaDriverBinary(binPath: string): boolean {
+    const base = path.basename(binPath).toLowerCase();
+    return base === 'vela' || base === 'vela.exe';
+}
+
+function findInPath(binName: string): string | null {
+    const pathEnv = process.env.PATH || '';
+    const dirs = pathEnv.split(path.delimiter).filter(Boolean);
+    const exts = process.platform === 'win32' ? ['', '.exe'] : [''];
+    for (const dir of dirs) {
+        for (const ext of exts) {
+            const candidate = path.join(dir, binName + ext);
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
+
 function resolveServerExecutable(): { command: string; args: string[] } {
     const config = vscode.workspace.getConfiguration('vela');
     const custom = config.get<string>('serverPath')?.trim();
     if (custom && custom.length > 0) {
-        if (custom.endsWith('vela')) {
-            return { command: custom, args: ['lsp'] };
-        }
-        return { command: custom, args: [] };
+        return isVelaDriverBinary(custom)
+            ? { command: custom, args: ['lsp'] }
+            : { command: custom, args: [] };
     }
 
     const home = os.homedir();
-    const cargoLsp = path.join(home, '.cargo', 'bin', 'vela-lsp');
+    const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+    const cargoLsp = path.join(home, '.cargo', 'bin', 'vela-lsp' + exeSuffix);
     if (fs.existsSync(cargoLsp)) {
         return { command: cargoLsp, args: [] };
     }
 
-    const cargoVela = path.join(home, '.cargo', 'bin', 'vela');
+    const pathLsp = findInPath('vela-lsp');
+    if (pathLsp) {
+        return { command: pathLsp, args: [] };
+    }
+
+    const cargoVela = path.join(home, '.cargo', 'bin', 'vela' + exeSuffix);
     if (fs.existsSync(cargoVela)) {
         return { command: cargoVela, args: ['lsp'] };
     }
 
+    const pathVela = findInPath('vela');
+    if (pathVela) {
+        return { command: pathVela, args: ['lsp'] };
+    }
+
     return { command: 'vela-lsp', args: [] };
+}
+
+function resolveCompilerExecutable(): string {
+    const config = vscode.workspace.getConfiguration('vela');
+    const custom = config.get<string>('serverPath')?.trim();
+    if (custom && custom.length > 0) {
+        if (isVelaDriverBinary(custom)) {
+            return custom;
+        }
+        const sibling = path.join(path.dirname(custom), process.platform === 'win32' ? 'vela.exe' : 'vela');
+        if (fs.existsSync(sibling)) {
+            return sibling;
+        }
+    }
+
+    const home = os.homedir();
+    const exeSuffix = process.platform === 'win32' ? '.exe' : '';
+    const cargoVela = path.join(home, '.cargo', 'bin', 'vela' + exeSuffix);
+    if (fs.existsSync(cargoVela)) {
+        return cargoVela;
+    }
+
+    return 'vela';
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -52,9 +105,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     };
 
     try {
-        client = new LanguageClient('velaLsp', 'Vela Language Server', serverOptions, clientOptions);
+        client = new LanguageClient('vela', 'Vela Language Server', serverOptions, clientOptions);
         await client.start();
-    } catch (err) {
+    } catch (_) {
         vscode.window.showErrorMessage(
             `Failed to start Vela Language Server (${command}). Ensure vela-lsp is installed via 'cargo install --path ide/lsp'.`
         );
@@ -78,11 +131,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 return;
             }
 
+            if (editor.document.isUntitled) {
+                vscode.window.showWarningMessage('Please save the Vela file before emitting C11.');
+                return;
+            }
+            if (editor.document.isDirty) {
+                await editor.document.save();
+            }
+
             const docPath = editor.document.uri.fsPath;
-            const home = os.homedir();
-            const velaBin = fs.existsSync(path.join(home, '.cargo', 'bin', 'vela'))
-                ? path.join(home, '.cargo', 'bin', 'vela')
-                : 'vela';
+            const velaBin = resolveCompilerExecutable();
 
             cp.execFile(velaBin, [docPath, '--emit-c'], (error, stdout, stderr) => {
                 if (error) {

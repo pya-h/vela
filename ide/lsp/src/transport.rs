@@ -30,9 +30,10 @@ impl<R: BufRead, W: Write> Transport<R, W> {
                 break;
             }
 
-            if let Some(rest) = trimmed.strip_prefix("Content-Length:") {
-                let len_str = rest.trim();
-                let Ok(len) = len_str.parse::<usize>() else {
+            if let Some((name, value)) = trimmed.split_once(':')
+                && name.trim().eq_ignore_ascii_case("content-length")
+            {
+                let Ok(len) = value.trim().parse::<usize>() else {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         "invalid Content-Length header",
