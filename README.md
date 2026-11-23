@@ -2,7 +2,7 @@
 
 **A minimal, safe systems programming language that compiles to portable C11.**
 
-[Online Documentation](https://pya-h.github.io/vela/) · [Language Reference](https://pya-h.github.io/vela/) · [Regions Guide](https://pya-h.github.io/vela/regions.html) · [Channels & Ownership](https://pya-h.github.io/vela/channels.html) · [Actors](https://pya-h.github.io/vela/actors.html) · [Events](https://pya-h.github.io/vela/events.html) · [GUI & 2D Rasterizer](https://pya-h.github.io/vela/gui.html) · [Standard Library](https://pya-h.github.io/vela/std.html) · [Web Architecture](https://pya-h.github.io/vela/web.html) · [Vela Studio](https://pya-h.github.io/vela/ide.html)
+[Online Documentation](https://pya-h.github.io/vela/) · [Language Reference](https://pya-h.github.io/vela/) · [Regions Guide](https://pya-h.github.io/vela/regions.html) · [Channels & Ownership](https://pya-h.github.io/vela/channels.html) · [Actors](https://pya-h.github.io/vela/actors.html) · [Events](https://pya-h.github.io/vela/events.html) · [Commitments](https://pya-h.github.io/vela/commitment.html) · [GUI & 2D Rasterizer](https://pya-h.github.io/vela/gui.html) · [Standard Library](https://pya-h.github.io/vela/std.html) · [Web Architecture](https://pya-h.github.io/vela/web.html) · [Benchmarks](https://pya-h.github.io/vela/benchmarks.html) · [Vela Studio](https://pya-h.github.io/vela/ide.html)
 
 ---
 
@@ -145,6 +145,7 @@ Full guides, tutorials, and architectural specifications are available online at
 - **[Web Architecture](https://pya-h.github.io/vela/web.html)**: Single event loop, non-blocking descriptor polling (`Poll`), persistent keep-alive, read/idle timeouts, RFC 6455 WebSockets, and middleware design.
 - **[Vela Studio IDE](https://pya-h.github.io/vela/ide.html)**: Browser-based WebAssembly development environment with live diagnostics and terminal.
 - **[Language Comparison](https://pya-h.github.io/vela/comparison.html)**: Architectural and philosophical comparison of Vela with Rust, Go, C, Zig, and Python.
+- **[Benchmarks & Engineering Roadmap](https://pya-h.github.io/vela/benchmarks.html)**: Cross-language performance benchmarks against C, Rust, Go, and Zig across 9 workloads, root-cause forensics, and an interactive optimization simulator.
 - **[Safety, Data Races & Invariants](https://pya-h.github.io/vela/safety.html)**: Static verification, bounds checking, overflow protection, data-race defense layers, and runtime traps.
 - **[Project Review](https://pya-h.github.io/vela/review.html)**: Design critique, strengths, and evolution.
 - **[Future Directions](https://pya-h.github.io/vela/future.html)**: Consolidated roadmap, open design questions, and future compiler/stdlib directions.

@@ -204,32 +204,81 @@
       color: var(--muted);
       font-size: 0.9rem;
     }
-
-    /* Unified pill navigation polish */
+    /* === Vela Docs Unified Polish & Motion === */
+    html { scroll-behavior: smooth; }
     nav.top-nav, .doc-nav {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.45rem 0.9rem;
-      max-width: 1040px;
-      margin: 0 auto 1.5rem;
+      gap: 0.4rem 0.7rem;
+      max-width: 1120px;
+      margin: 0 auto 1.65rem;
+      padding: 0.55rem 0.85rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.75);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
     }
     nav.top-nav a, .doc-nav a {
       color: var(--muted, #94a3b8);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       font-weight: 500;
-      padding: 0.25rem 0.65rem;
+      padding: 0.28rem 0.68rem;
       border-radius: 999px;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
     nav.top-nav a:hover,
     nav.top-nav a.active,
     .doc-nav a:hover,
     .doc-nav a[aria-current="page"] {
       color: var(--accent, #38bdf8);
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.14);
+      transform: translateY(-1px);
     }
+    .card, .mini-card, .entry, .option, .hazard-card, .idea {
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .card:hover, .mini-card:hover, .entry:hover, .option:hover, .hazard-card:hover, .idea:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.32);
+    }
+    .table-wrap {
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+    tr { transition: background 0.12s ease; }
+    @keyframes velaFadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    main section { animation: velaFadeUp 0.4s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      main section, .card, .mini-card, .entry, .option, .hazard-card, .idea, nav.top-nav a {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+    }
+    #vela-scroll-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--accent-3, #34d399), var(--accent, #38bdf8));
+      z-index: 9999; pointer-events: none; transition: width 0.08s linear;
+    }
+    #vela-back-top {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 0.45rem 0.85rem; border-radius: 999px;
+      border: 1px solid var(--border, #334155);
+      background: rgba(17, 24, 39, 0.88);
+      color: var(--fg, #f8fafc); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      backdrop-filter: blur(8px); transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #vela-back-top.visible { opacity: 1; pointer-events: auto; }
+    #vela-back-top:hover { transform: translateY(-2px); border-color: var(--accent, #38bdf8); color: var(--accent, #38bdf8); }
+
   </style>
 </head>
 <body>
@@ -240,6 +289,7 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html">Channels</a>
+      <a href="channel-lifecycle.html">Lifecycle</a>
       <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
       <a href="concurrency.html">Concurrency</a>
@@ -249,6 +299,7 @@
       <a href="gui.html">GUI</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
+      <a href="benchmarks.html">Benchmarks</a>
       <a href="future.html">Future</a>
       <a href="tricks.html">Tricks</a>
       <a href="maywaste.html">May Waste</a>
@@ -1095,5 +1146,24 @@
   <footer>
     <p>Vela — Commitment &amp; Async/Await Design Evaluation. See <a href="concurrency.html">Concurrency &amp; Design Boundaries</a> and <a href="channel-lifecycle.html">Channel Lifecycle</a> for current concurrency semantics.</p>
   </footer>
+
+  <div id="vela-scroll-bar" aria-hidden="true"></div>
+  <button id="vela-back-top" type="button" aria-label="Back to top">&uarr; Top</button>
+  <script>
+    (function () {
+      const bar = document.getElementById('vela-scroll-bar');
+      const btn = document.getElementById('vela-back-top');
+      if (!bar || !btn) return;
+      function updateScroll() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0) + '%';
+        btn.classList.toggle('visible', window.scrollY > 360);
+      }
+      window.addEventListener('scroll', updateScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      updateScroll();
+    })();
+  </script>
 </body>
 </html>

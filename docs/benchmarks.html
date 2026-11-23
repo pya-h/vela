@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vela — Benchmark Analysis, Root Causes &amp; Optimization Simulator</title>
+  <title>Vela — Benchmarks, Forensics &amp; Interactive Optimization Simulator</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -26,6 +26,7 @@
       --vela-color: #10b981;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -34,38 +35,44 @@
       line-height: 1.65;
     }
     header {
-      padding: 4.5rem 1.25rem 3.5rem;
+      padding: 4rem 1.25rem 3.5rem;
       text-align: center;
       border-bottom: 1px solid var(--border);
       background:
-        radial-gradient(circle at 18% 28%, rgba(16,185,129,0.14) 0%, transparent 42%),
-        radial-gradient(circle at 82% 72%, rgba(56,189,248,0.14) 0%, transparent 42%),
+        radial-gradient(circle at 18% 28%, rgba(16,185,129,0.16) 0%, transparent 42%),
+        radial-gradient(circle at 82% 72%, rgba(56,189,248,0.16) 0%, transparent 42%),
         var(--bg-2);
     }
     nav.top-nav {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.45rem 0.9rem;
-      max-width: 1080px;
+      gap: 0.45rem 0.75rem;
+      max-width: 1120px;
       margin: 0 auto 1.75rem;
+      padding: 0.55rem 0.9rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.75);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
     }
     nav.top-nav a {
       color: var(--muted);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.87rem;
       font-weight: 500;
-      padding: 0.25rem 0.65rem;
+      padding: 0.28rem 0.68rem;
       border-radius: 999px;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
     nav.top-nav a:hover, nav.top-nav a.active {
       color: var(--accent);
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.14);
+      transform: translateY(-1px);
     }
     h1 {
       margin: 0;
-      font-size: clamp(2.1rem, 4.5vw, 3.3rem);
+      font-size: clamp(2.1rem, 4.5vw, 3.35rem);
       font-weight: 800;
       letter-spacing: -0.03em;
       background: linear-gradient(135deg, var(--accent-3), var(--accent));
@@ -76,7 +83,7 @@
       margin: 1rem auto 0;
       font-size: 1.12rem;
       color: var(--muted);
-      max-width: 780px;
+      max-width: 820px;
     }
     .meta-pills {
       display: flex;
@@ -89,7 +96,7 @@
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      padding: 0.3rem 0.8rem;
+      padding: 0.3rem 0.85rem;
       border-radius: 999px;
       font-size: 0.78rem;
       font-weight: 700;
@@ -101,49 +108,67 @@
     .pill.blue { color: var(--accent); border-color: rgba(56,189,248,0.4); background: rgba(56,189,248,0.1); }
 
     main {
-      max-width: 1120px;
+      max-width: 1180px;
       margin: 0 auto;
       padding: 2rem 1.25rem 5rem;
     }
     .toc-strip {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.6rem;
+      gap: 0.5rem 0.75rem;
       justify-content: center;
-      padding: 0.9rem 1rem;
-      background: var(--card-bg);
+      padding: 0.85rem 1rem;
+      background: rgba(21, 28, 44, 0.85);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       margin-bottom: 2.5rem;
+      backdrop-filter: blur(8px);
     }
     .toc-strip a {
       color: var(--muted);
       text-decoration: none;
       font-size: 0.85rem;
       font-weight: 600;
-      padding: 0.25rem 0.65rem;
-      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      border-radius: 8px;
+      transition: color 0.15s ease, background 0.15s ease;
     }
-    .toc-strip a:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
+    .toc-strip a:hover { color: var(--fg); background: rgba(56,189,248,0.12); }
 
+    /* Block heading with inline pill badge so inline <code> never splits into flex columns */
     h2 {
-      margin-top: 3.75rem;
-      font-size: 1.8rem;
-      display: flex;
-      align-items: center;
-      gap: 0.65rem;
+      margin-top: 4rem;
+      font-size: 1.75rem;
+      line-height: 1.3;
       color: var(--fg);
       border-bottom: 1px solid var(--border);
-      padding-bottom: 0.5rem;
+      padding-bottom: 0.55rem;
+    }
+    .sec-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.85rem;
+      height: 1.85rem;
+      padding: 0 0.45rem;
+      border-radius: 8px;
+      background: rgba(56,189,248,0.14);
+      border: 1px solid rgba(56,189,248,0.35);
+      color: var(--accent);
+      font-size: 0.92rem;
+      font-weight: 800;
+      margin-right: 0.5rem;
+      vertical-align: middle;
     }
     h3 {
-      margin-top: 2rem;
+      margin-top: 2.15rem;
       font-size: 1.22rem;
       color: var(--accent);
     }
     p, li { color: #e2e8f0; }
     ul, ol { padding-left: 1.4rem; }
-    li { margin-bottom: 0.45rem; }
+    li { margin-bottom: 0.48rem; }
+    a { color: var(--accent); }
 
     code {
       font-family: "SF Mono", Monaco, "Cascadia Code", ui-monospace, monospace;
@@ -156,7 +181,7 @@
     pre {
       background: #0d1322;
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 1rem 1.15rem;
       overflow-x: auto;
       font-family: "SF Mono", Monaco, "Cascadia Code", ui-monospace, monospace;
@@ -166,34 +191,169 @@
     }
     pre code { background: none; padding: 0; color: inherit; }
 
-    /* Summary Cards */
+    /* Summary KPI Cards */
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 1rem;
       margin: 1.5rem 0 2rem;
     }
+    @media (max-width: 980px) { .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .kpi-row { grid-template-columns: 1fr; } }
+
     .kpi-card {
-      background: var(--card-bg);
+      background: linear-gradient(165deg, rgba(255,255,255,0.03), transparent), var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 1.15rem 1.25rem;
       position: relative;
       overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease;
     }
+    .kpi-card:hover { transform: translateY(-2px); border-color: rgba(56,189,248,0.45); }
     .kpi-card::before {
       content: "";
       position: absolute;
       left: 0; top: 0; bottom: 0; width: 4px;
       background: var(--bar-c, var(--accent-3));
     }
-    .kpi-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-    .kpi-val { font-size: 1.45rem; font-weight: 800; margin: 0.3rem 0 0.2rem; }
+    .kpi-label { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .kpi-val { font-size: 1.38rem; font-weight: 800; margin: 0.3rem 0 0.25rem; line-height: 1.25; }
     .kpi-sub { font-size: 0.82rem; color: var(--muted); }
+
+    /* Explorer & Radar Row */
+    .explorer-shell {
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 1.25rem;
+      margin: 1.75rem 0 2.25rem;
+      align-items: stretch;
+    }
+    @media (max-width: 960px) { .explorer-shell { grid-template-columns: 1fr; } }
+
+    .radar-panel, .bars-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+    .radar-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-title-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .panel-title { font-size: 1rem; font-weight: 700; color: var(--fg); }
+    .panel-sub { font-size: 0.8rem; color: var(--muted); }
+
+    .metric-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .tab-pill {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.32rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-pill:hover { color: var(--fg); border-color: #475569; }
+    .tab-pill.active {
+      color: #0b0f19;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .explorer-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.85rem;
+      margin-top: 0.85rem;
+    }
+    @media (max-width: 1120px) { .explorer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { .explorer-grid { grid-template-columns: 1fr; } }
+
+    .mini-bench {
+      background: rgba(11, 15, 25, 0.6);
+      border: 1px solid rgba(51,65,85,0.8);
+      border-radius: 10px;
+      padding: 0.75rem 0.85rem;
+    }
+    .mini-bench-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.4rem;
+      margin-bottom: 0.45rem;
+    }
+    .mini-bench-name { font-size: 0.83rem; font-weight: 700; color: var(--fg); }
+    .mini-bench-win { font-size: 0.71rem; font-weight: 700; color: var(--accent-3); }
+    .mini-bar-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 58px;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.25rem;
+      font-size: 0.73rem;
+    }
+    .mini-bar-row:last-child { margin-bottom: 0; }
+    .mini-lang { font-weight: 700; color: var(--muted); }
+    .mini-lang.is-vela { color: var(--accent-3); }
+    .mini-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .mini-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mini-num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.72rem; }
+    .mini-num.is-vela { color: var(--fg); font-weight: 700; }
+
+    .radar-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem;
+      margin-top: 0.75rem;
+    }
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.22rem 0.55rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--fg);
+      cursor: pointer;
+      transition: opacity 0.15s ease, border-color 0.15s ease;
+    }
+    .legend-chip.off { opacity: 0.38; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
     .split-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1.25rem;
       margin: 1.5rem 0;
     }
@@ -202,12 +362,12 @@
     .panel {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.35rem;
+      border-radius: 14px;
+      padding: 1.35rem 1.45rem;
     }
     .panel.pros { border-top: 3px solid var(--accent-3); }
     .panel.cons { border-top: 3px solid var(--danger); }
-    .panel h3 { margin-top: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .panel h3 { margin-top: 0; }
     .panel.pros h3 { color: var(--accent-3); }
     .panel.cons h3 { color: var(--danger); }
 
@@ -215,7 +375,7 @@
       overflow-x: auto;
       margin: 1.25rem 0 2rem;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       background: var(--card-bg);
     }
     table {
@@ -231,7 +391,7 @@
       white-space: nowrap;
     }
     th {
-      background: rgba(56,189,248,0.07);
+      background: rgba(56,189,248,0.08);
       color: var(--accent);
       font-size: 0.74rem;
       font-weight: 700;
@@ -239,30 +399,31 @@
       letter-spacing: 0.05em;
     }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255,255,255,0.025); }
+    tr:hover td { background: rgba(255,255,255,0.03); }
     .win { color: var(--accent-3); font-weight: 700; }
     .mid { color: var(--warn); font-weight: 600; }
     .lag { color: var(--danger); font-weight: 700; }
 
     .badge-tag {
       display: inline-block;
-      padding: 0.14rem 0.5rem;
-      border-radius: 4px;
-      font-size: 0.72rem;
+      padding: 0.16rem 0.52rem;
+      border-radius: 999px;
+      font-size: 0.71rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+      white-space: nowrap;
     }
-    .tag-win { background: rgba(16,185,129,0.16); color: #34d399; }
-    .tag-warn { background: rgba(251,191,36,0.16); color: #fbbf24; }
-    .tag-lag { background: rgba(248,113,113,0.16); color: #f87171; }
-    .tag-info { background: rgba(56,189,248,0.16); color: #38bdf8; }
+    .tag-win { background: rgba(16,185,129,0.16); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+    .tag-warn { background: rgba(251,191,36,0.16); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+    .tag-lag { background: rgba(248,113,113,0.16); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+    .tag-info { background: rgba(56,189,248,0.16); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
 
     .callout {
       background: rgba(56,189,248,0.08);
       border: 1px solid rgba(56,189,248,0.28);
       border-left: 4px solid var(--accent);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 1rem 1.25rem;
       margin: 1.25rem 0;
     }
@@ -277,31 +438,81 @@
       border-left-color: var(--warn);
     }
 
-    /* Root cause accordion/cards */
+    /* Root cause forensics + pipeline diagrams */
     .cause-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 1.35rem 1.5rem;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.35rem;
     }
     .cause-head {
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
+      gap: 0.6rem;
+      margin-bottom: 0.85rem;
     }
     .cause-title { font-size: 1.15rem; font-weight: 700; color: var(--fg); }
 
-    /* Improvement cards */
+    .pipe-diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      margin: 1rem 0;
+      padding: 0.9rem 1rem;
+      background: rgba(11,15,25,0.65);
+      border: 1px solid rgba(51,65,85,0.75);
+      border-radius: 10px;
+    }
+    .pipe-lane {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+    }
+    .pipe-tag {
+      min-width: 96px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.7rem;
+    }
+    .pipe-tag.bad { color: var(--danger); }
+    .pipe-tag.good { color: var(--accent-3); }
+    .pipe-node {
+      padding: 0.25rem 0.55rem;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-weight: 600;
+    }
+    .pipe-node.hot {
+      background: rgba(248,113,113,0.14);
+      border-color: rgba(248,113,113,0.4);
+      color: #fca5a5;
+    }
+    .pipe-node.opt {
+      background: rgba(16,185,129,0.14);
+      border-color: rgba(16,185,129,0.4);
+      color: #6ee7b7;
+    }
+    .pipe-arrow { color: var(--muted); font-weight: 700; }
+
+    /* Balanced Improvement Grids (no orphan full-width cards!) */
     .imp-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
       gap: 1.1rem;
-      margin: 1.25rem 0 2rem;
+      margin: 1.15rem 0 2.2rem;
     }
+    .imp-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .imp-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 1020px) { .imp-grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .imp-grid.cols-2, .imp-grid.cols-3 { grid-template-columns: 1fr; } }
+
     .imp-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -310,34 +521,39 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      transition: transform 0.18s ease, border-color 0.18s ease;
     }
+    .imp-card:hover { transform: translateY(-2px); border-color: rgba(56,189,248,0.45); }
     .imp-top {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       gap: 0.6rem;
-      margin-bottom: 0.6rem;
+      margin-bottom: 0.55rem;
     }
     .imp-id {
       font-family: ui-monospace, monospace;
-      font-size: 0.75rem;
+      font-size: 0.76rem;
       font-weight: 800;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
+      padding: 0.18rem 0.52rem;
+      border-radius: 6px;
       background: rgba(167,139,250,0.18);
       color: var(--accent-2);
+      border: 1px solid rgba(167,139,250,0.35);
     }
-    .imp-name { font-weight: 700; font-size: 1.03rem; color: var(--fg); margin: 0.25rem 0; }
-    .imp-desc { font-size: 0.88rem; color: var(--muted); margin: 0.4rem 0 0.85rem; }
+    .imp-name { font-weight: 700; font-size: 1.02rem; color: var(--fg); margin: 0.25rem 0; line-height: 1.35; }
+    .imp-desc { font-size: 0.88rem; color: var(--muted); margin: 0.45rem 0 0.85rem; }
     .imp-meta {
-      border-top: 1px solid rgba(51,65,85,0.6);
+      border-top: 1px solid rgba(51,65,85,0.65);
       padding-top: 0.65rem;
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       display: flex;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: 0.4rem;
+      color: var(--muted);
     }
+    .imp-meta strong { color: var(--accent-3); }
 
     /* Interactive Simulator */
     .sim-shell {
@@ -346,13 +562,13 @@
       border-radius: 16px;
       padding: 1.5rem;
       margin-top: 1.5rem;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+      box-shadow: 0 22px 55px rgba(0,0,0,0.4);
     }
     .preset-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.6rem;
-      margin-bottom: 1.5rem;
+      gap: 0.65rem 1rem;
+      margin-bottom: 1.25rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid var(--border);
       align-items: center;
@@ -362,49 +578,76 @@
     .sim-btn {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      color: var(--fg);
-      padding: 0.45rem 0.85rem;
+      color: var(--muted);
+      padding: 0.46rem 0.9rem;
       border-radius: 8px;
       font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s ease;
     }
-    .sim-btn:hover { border-color: var(--accent); background: rgba(56,189,248,0.1); }
-    .sim-btn.primary { border-color: var(--accent-3); background: rgba(16,185,129,0.16); color: #34d399; }
+    .sim-btn:hover { border-color: var(--accent); color: var(--fg); background: rgba(56,189,248,0.1); }
+    .sim-btn.active {
+      border-color: var(--accent-3);
+      background: rgba(16,185,129,0.18);
+      color: #34d399;
+      box-shadow: 0 0 0 1px rgba(16,185,129,0.25);
+    }
+
+    /* Full-width 5-card KPI row ABOVE sim-layout */
+    .sim-summary-bar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.35rem;
+    }
+    @media (max-width: 1000px) { .sim-summary-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 620px) { .sim-summary-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+    .sim-stat {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 0.95rem;
+    }
+    .sim-stat-k { font-size: 0.71rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
+    .sim-stat-v { font-size: 1.25rem; font-weight: 800; color: var(--accent-3); margin-top: 0.2rem; }
+    .sim-stat-d { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
 
     .sim-layout {
       display: grid;
-      grid-template-columns: 380px 1fr;
-      gap: 1.5rem;
+      grid-template-columns: 350px 1fr;
+      gap: 1.35rem;
       align-items: start;
     }
-    @media (max-width: 960px) { .sim-layout { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) { .sim-layout { grid-template-columns: 1fr; } }
 
     .opt-list {
       display: flex;
       flex-direction: column;
-      gap: 0.55rem;
-      max-height: 760px;
-      overflow-y: auto;
-      padding-right: 0.35rem;
+      gap: 0.5rem;
+      position: sticky;
+      top: 1rem;
     }
+    @media (max-width: 980px) { .opt-list { position: static; } }
+
     .opt-group-label {
-      font-size: 0.72rem;
+      font-size: 0.71rem;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: var(--accent);
-      margin: 0.65rem 0 0.15rem;
+      margin: 0.65rem 0 0.1rem;
     }
+    .opt-group-label:first-child { margin-top: 0; }
     .opt-item {
       display: flex;
       align-items: flex-start;
-      gap: 0.65rem;
+      gap: 0.6rem;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 0.7rem 0.8rem;
+      padding: 0.65rem 0.78rem;
       cursor: pointer;
       transition: border-color 0.15s ease, background 0.15s ease;
       user-select: none;
@@ -412,102 +655,156 @@
     .opt-item:hover { border-color: #475569; }
     .opt-item.active {
       border-color: var(--accent-3);
-      background: rgba(16,185,129,0.08);
+      background: rgba(16,185,129,0.1);
     }
     .opt-item input[type="checkbox"] {
-      margin-top: 0.22rem;
+      margin-top: 0.2rem;
       accent-color: var(--vela-color);
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
       cursor: pointer;
       flex-shrink: 0;
     }
-    .opt-title { font-size: 0.86rem; font-weight: 700; color: var(--fg); line-height: 1.3; }
-    .opt-sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+    .opt-title { font-size: 0.84rem; font-weight: 700; color: var(--fg); line-height: 1.3; }
+    .opt-sub { font-size: 0.74rem; color: var(--muted); margin-top: 0.18rem; line-height: 1.35; }
 
     .sim-results-panel {
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      min-width: 0;
     }
-    .sim-summary-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 0.75rem;
-    }
-    .sim-stat {
+
+    .sim-top-viz {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      padding: 1rem 1.15rem;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 1.15rem;
+      align-items: center;
     }
-    .sim-stat-k { font-size: 0.72rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-    .sim-stat-v { font-size: 1.25rem; font-weight: 800; color: var(--accent-3); margin-top: 0.2rem; }
-    .sim-stat-d { font-size: 0.76rem; color: var(--muted); }
+    @media (max-width: 720px) { .sim-top-viz { grid-template-columns: 1fr; } }
+
+    .sim-charts-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    /* 2-column chart grid showing all 9 benchmarks neatly */
+    .sim-charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.85rem;
+    }
+    @media (max-width: 760px) { .sim-charts-grid { grid-template-columns: 1fr; } }
 
     .sim-bench-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 0.9rem 1rem;
+      border-radius: 12px;
+      padding: 0.85rem 0.95rem;
+      min-width: 0;
     }
+    .sim-bench-card.is-leader { border-color: rgba(16,185,129,0.45); }
     .sim-bench-head {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-bottom: 0.55rem;
+      align-items: flex-start;
+      gap: 0.45rem;
+      margin-bottom: 0.6rem;
     }
-    .sim-bench-title { font-weight: 700; font-size: 0.95rem; }
-    .sim-bench-delta { font-size: 0.8rem; font-weight: 700; }
+    .sim-bench-title { font-weight: 700; font-size: 0.88rem; color: var(--fg); line-height: 1.3; }
+    .sim-bench-delta { font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
 
     .sim-bars { display: flex; flex-direction: column; gap: 0.42rem; }
     .sim-bar-row {
       display: grid;
-      grid-template-columns: 118px 1fr 122px;
+      grid-template-columns: 96px 1fr 78px;
       align-items: center;
-      gap: 0.65rem;
-      font-size: 0.79rem;
+      gap: 0.5rem;
+      font-size: 0.75rem;
     }
-    .sim-track {
-      height: 22px;
-      background: rgba(255,255,255,0.04);
-      border-radius: 5px;
+    .sim-bar-label {
+      white-space: nowrap;
       overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.05);
+      text-overflow: ellipsis;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .sim-bar-label.is-vela { color: #34d399; font-weight: 800; }
+    .sim-track {
+      height: 14px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .sim-ghost {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      background: rgba(16,185,129,0.22);
+      border-right: 2px dashed rgba(52,211,153,0.75);
+      border-radius: 999px;
+      pointer-events: none;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .sim-fill {
       height: 100%;
-      border-radius: 4px;
+      border-radius: 999px;
       transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      display: flex;
-      align-items: center;
-      padding: 0 0.5rem;
-      color: #fff;
-      font-weight: 700;
-      font-size: 0.72rem;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-      white-space: nowrap;
+      position: relative;
+      z-index: 1;
     }
-    .sim-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--muted); }
+    .sim-val {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 0.74rem;
+    }
     .sim-val strong { color: var(--fg); }
 
-    /* Roadmap phases */
+    /* Roadmap & Innovations */
+    .innov-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1.25rem 0 2rem;
+    }
+    @media (max-width: 760px) { .innov-grid { grid-template-columns: 1fr; } }
+
+    .innov-card {
+      background: linear-gradient(150deg, rgba(56,189,248,0.05), transparent), var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.15rem 1.25rem;
+    }
+    .innov-card h4 { margin: 0 0 0.45rem; font-size: 1.02rem; color: var(--accent); }
+    .innov-card p { margin: 0; font-size: 0.88rem; color: var(--muted); }
+
     .phase-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.15rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.1rem;
       margin-top: 1.25rem;
     }
+    @media (max-width: 920px) { .phase-grid { grid-template-columns: 1fr; } }
     .phase-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
+      border-top: 3px solid var(--accent);
       border-radius: 12px;
       padding: 1.25rem;
     }
-    .phase-num { font-size: 0.75rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
-    .phase-card h4 { margin: 0.35rem 0 0.65rem; font-size: 1.1rem; color: var(--fg); }
+    .phase-num { font-size: 0.74rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+    .phase-card h4 { margin: 0.35rem 0 0.65rem; font-size: 1.08rem; color: var(--fg); }
 
     footer {
       text-align: center;
@@ -516,6 +813,31 @@
       color: var(--muted);
       font-size: 0.88rem;
     }
+
+    @keyframes velaFadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    main section { animation: velaFadeUp 0.4s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      main section, .kpi-card, .imp-card, .sim-fill, .mini-fill { animation: none !important; transition: none !important; }
+    }
+    #vela-scroll-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--accent-3), var(--accent));
+      z-index: 9999; pointer-events: none; transition: width 0.08s linear;
+    }
+    #vela-back-top {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 0.45rem 0.8rem; border-radius: 999px;
+      border: 1px solid var(--border); background: rgba(17,24,39,0.88);
+      color: var(--fg); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      backdrop-filter: blur(8px); transition: opacity 0.2s ease, transform 0.15s ease;
+    }
+    #vela-back-top.visible { opacity: 1; pointer-events: auto; }
+    #vela-back-top:hover { transform: translateY(-2px); border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -526,6 +848,7 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html">Channels</a>
+      <a href="channel-lifecycle.html">Lifecycle</a>
       <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
       <a href="concurrency.html">Concurrency</a>
@@ -543,7 +866,7 @@
     </nav>
     <h1>Vela Benchmarks &amp; Engineering Roadmap</h1>
     <p class="tagline">
-      An honest, code-verified deep dive into how Vela compares against C, Rust, Go, and Zig across 9 real workloads — why Vela dominates memory lifecycles, why channels &amp; tight SIMD loops lag today, and an interactive simulator of the path forward.
+      A code-verified analysis comparing Vela against C, Rust, Go, and Zig across all 9 workloads &mdash; exploring where zero-GC regions win, why channels and tight vector loops lag today, and how targeted compiler and runtime improvements close the gap.
     </p>
     <div class="meta-pills">
       <span class="pill green">Verified via --emit-c &amp; runtime/vela_rt.h</span>
@@ -553,42 +876,72 @@
   </header>
 
   <main>
-    <div class="toc-strip">
+    <nav class="toc-strip" aria-label="On this page">
       <a href="#summary">1. Executive Summary</a>
-      <a href="#pros-cons">2. Pros &amp; Weak Points</a>
+      <a href="#pros-cons">2. Power Points &amp; Weak Points</a>
       <a href="#root-causes">3. Root-Cause Forensics</a>
       <a href="#improvements">4. Optimization Catalog</a>
       <a href="#simulator">5. Interactive Impact Simulator</a>
-      <a href="#strategy">6. Safety, Ideas &amp; Strategic Route</a>
-    </div>
+      <a href="#strategy">6. Innovations &amp; Strategic Route</a>
+    </nav>
 
     <!-- 1. EXECUTIVE SUMMARY -->
     <section id="summary">
-      <h2><span>1.</span> Executive Summary from Vela's Perspective</h2>
+      <h2><span class="sec-num">1</span>Executive Summary from Vela's Perspective</h2>
       <p>
-        Vela compiles readable, region-checked source code to standard C11 and builds with <code>gcc -O3 -march=native -s</code>. Because it carries <strong>no garbage collector</strong> and <strong>no heavy language runtime</strong>, its performance profile already looks much closer to C, Rust, and Zig than to managed languages — with two sharp architectural exceptions revealed by the 9-workload suite in <a href="../benchmarks/RESULTS.html" style="color:var(--accent);">benchmarks/RESULTS.html</a>.
+        Vela compiles readable, region-checked source code to standard ISO C11 built with <code>gcc -O3 -march=native -s</code>. Carrying <strong>zero garbage collector</strong> and <strong>zero heavy VM runtime</strong>, Vela already rivals C, Rust, and Zig in scalar math, memory-lifecycle reclamation, small binary sizes, and HTTP throughput per megabyte &mdash; while exhibiting two clear, fixable performance bottlenecks documented in <a href="../benchmarks/RESULTS.html">benchmarks/RESULTS.html</a>.
       </p>
 
       <div class="kpi-row">
         <div class="kpi-card" style="--bar-c: var(--vela-color);">
           <div class="kpi-label">Region Memory Speed</div>
           <div class="kpi-val" style="color:var(--accent-3);">93.6 ms (8.59x vs Go)</div>
-          <div class="kpi-sub">Binary Trees winner across all 5 languages (7.7 MB Peak RSS)</div>
+          <div class="kpi-sub">Binary Trees #1 across all 5 languages (7.7 MB Peak RSS)</div>
         </div>
         <div class="kpi-card" style="--bar-c: var(--accent);">
           <div class="kpi-label">HTTP Server Efficiency</div>
           <div class="kpi-val" style="color:var(--accent);">37,450 req/s</div>
-          <div class="kpi-sub">+29% faster than Go <code>net/http</code> using 6.6x less RAM (2.2 MB)</div>
+          <div class="kpi-sub">+29% faster than Go <code>net/http</code> in 2.2 MB RAM vs 14.6 MB</div>
         </div>
         <div class="kpi-card" style="--bar-c: var(--danger);">
-          <div class="kpi-label">Biggest Weakness: Channels</div>
+          <div class="kpi-label">Top Bottleneck: Channels</div>
           <div class="kpi-val" style="color:var(--danger);">482.4 ms (16.5x vs Go)</div>
           <div class="kpi-sub">OS pthread condvar + global handle mutex on 100k token hops</div>
         </div>
         <div class="kpi-card" style="--bar-c: var(--warn);">
-          <div class="kpi-label">Biggest Quick Win: Loops</div>
-          <div class="kpi-val" style="color:var(--warn);">~4.8x Gap in N-Body / Matmul</div>
-          <div class="kpi-sub"><code>pow(x, 0.5)</code> + inner-loop trap branches block AVX2 SIMD</div>
+          <div class="kpi-label">Top Quick Win: Loops</div>
+          <div class="kpi-val" style="color:var(--warn);">~4.8x N-Body &amp; Matmul</div>
+          <div class="kpi-sub"><code>pow(x, 0.5)</code> &amp; inner trap checks block hardware <code>sqrt</code>/AVX2</div>
+        </div>
+      </div>
+
+      <!-- Interactive Multi-Metric Explorer + SVG Radar -->
+      <div class="explorer-shell">
+        <div class="radar-panel">
+          <div class="panel-title-row" style="margin-bottom:0.35rem;">
+            <div>
+              <div class="panel-title">8-Dimension Profile Radar</div>
+              <div class="panel-sub">Outer edge = 100% fastest / smallest in category</div>
+            </div>
+          </div>
+          <svg id="exec-radar" viewBox="0 0 340 310" width="100%" style="max-width:340px;" aria-label="8-axis language profile radar"></svg>
+          <div class="radar-legend" id="exec-radar-legend"></div>
+        </div>
+
+        <div class="bars-panel">
+          <div class="panel-title-row">
+            <div>
+              <div class="panel-title">9-Workload Interactive Comparison</div>
+              <div class="panel-sub" id="exec-metric-desc">Shorter bar or highlighted badge marks faster execution (RPS higher for Web Server)</div>
+            </div>
+            <div class="metric-tabs" id="exec-metric-tabs">
+              <button class="tab-pill active" onclick="setExecMetric('speed')">Speed</button>
+              <button class="tab-pill" onclick="setExecMetric('rss')">Peak RSS</button>
+              <button class="tab-pill" onclick="setExecMetric('size')">Binary Size</button>
+              <button class="tab-pill" onclick="setExecMetric('compile')">Compile Time</button>
+            </div>
+          </div>
+          <div class="explorer-grid" id="exec-grid"></div>
         </div>
       </div>
 
@@ -641,13 +994,13 @@
               <td><strong>07 Web Server</strong></td>
               <td>Concurrent HTTP/1.1 JSON</td>
               <td class="mid">37,450 req/s (2.2 MB)</td>
-              <td>Zig (43,923 req/s) / Rust (43,484)</td>
+              <td>Zig (43,923) / Rust (43,484) / C (43,058)</td>
               <td>29,017 req/s (14.6 MB)</td>
               <td><span class="badge-tag tag-warn">1.17x (#4, Beats Go)</span></td>
             </tr>
             <tr>
               <td><strong>04 Quicksort</strong></td>
-              <td>Contiguous 2.5M <code>i64</code> Slice</td>
+              <td>Contiguous 2.5M <code>int</code> Slice</td>
               <td class="mid">200.1 ms (20.7 MB)</td>
               <td>Rust (139.8 ms) / C (157.4 ms)</td>
               <td>170.9 ms (21.7 MB)</td>
@@ -657,7 +1010,7 @@
               <td><strong>08 N-Body Orbit</strong></td>
               <td>Double Vector Physics (5M)</td>
               <td class="lag">677.9 ms (2.2 MB)</td>
-              <td>Rust (141.5 ms) / C (161.4 ms)</td>
+              <td>Rust (141.5 ms) / Zig (159.5) / C (161.4)</td>
               <td>285.6 ms (2.1 MB)</td>
               <td><span class="badge-tag tag-lag">4.79x Fixable Gap</span></td>
             </tr>
@@ -684,27 +1037,27 @@
 
     <!-- 2. PROS & CONS -->
     <section id="pros-cons">
-      <h2><span>2.</span> Vela's Power Points vs. Weak Points</h2>
+      <h2><span class="sec-num">2</span>Vela's Power Points vs. Weak Points</h2>
       <div class="split-grid">
         <div class="panel pros">
           <h3>Power Points (Where Vela Shines)</h3>
           <ul>
-            <li><strong>Zero-Pause Bulk Region Reclamation:</strong> On allocation-heavy workloads (<code>02_binary_trees</code>), Vela beats Go's GC by <strong>8.59x</strong> and even beats manual C <code>malloc`/`free</code> by <strong>2.84x</strong> and Rust <code>Box</code> RAII by <strong>2.98x</strong>, while using the lowest Peak RSS (<code>7.7 MB</code>).</li>
-            <li><strong>Register-Tight Scalar Compute:</strong> When operating on local <code>float</code> / <code>int</code> variables without slice indexing inside the innermost loop (<code>01_mandelbrot</code>), Vela achieves <strong>175.2 ms</strong> — edging out C, Rust, Go, and Zig alike.</li>
-            <li><strong>Competitive Flat Buffers &amp; Maps:</strong> In <code>05_prime_sieve</code> (120.6 ms) and <code>06_hashmap</code> (82.3 ms), Vela matches C/Zig memory footprints and beats Rust's default SipHash-1-3 map and Go's map in raw lookup throughput.</li>
-            <li><strong>Tiny Binaries &amp; Rapid Builds:</strong> Stripped batch binaries weigh <strong>14–30 KB</strong> (up to 100x smaller than Go's 1.5 MB and 15–20x smaller than Rust's 332 KB), and full compiles finish in <strong>137–210 ms</strong> (vs <code>rustc</code>'s 1.7–2.0 s).</li>
-            <li><strong>Lean Standard-Library Web Server:</strong> Full <code>std/web</code> with HTTP parsing, routing, and per-request region cleanup reaches <strong>37,450 req/s</strong> at just <strong>2.2 MB RSS</strong> (vs Go's 29,017 req/s at 14.6 MB).</li>
+            <li><strong>Zero-Pause Bulk Region Reclamation:</strong> On allocation-heavy workloads (<code>02_binary_trees</code>), Vela beats Go's GC by <strong>8.59x</strong>, manual C <code>malloc</code>/<code>free</code> by <strong>2.84x</strong>, and Rust <code>Box</code> RAII by <strong>2.98x</strong>, while recording the lowest Peak RSS (<code>7.7 MB</code>).</li>
+            <li><strong>Register-Tight Scalar Compute:</strong> When operating on local <code>float</code> / <code>int</code> variables without slice indexing inside the innermost loop (<code>01_mandelbrot</code>), Vela achieves <strong>175.2 ms</strong> &mdash; edging out C, Rust, Go, and Zig alike.</li>
+            <li><strong>Competitive Flat Buffers &amp; Maps:</strong> In <code>05_prime_sieve</code> (<code>120.6 ms</code>) and <code>06_hashmap</code> (<code>82.3 ms</code>), Vela matches C/Zig memory footprints on byte arrays and outperforms Rust's SipHash-1-3 map and Go's map on 5M integer lookups.</li>
+            <li><strong>Tiny Binaries &amp; Rapid Builds:</strong> Stripped batch executables weigh <strong>14.1–30.2 KB</strong> (50–100x smaller than Go's 1.52 MB and 15–23x smaller than Rust's 331–395 KB), and full builds finish in <strong>137–210 ms</strong> (vs <code>rustc</code> at 1.65–1.98 s).</li>
+            <li><strong>Lean Standard-Library Web Server:</strong> Full <code>std/web</code> with HTTP parsing, routing, and per-request region cleanup hits <strong>37,450 req/s</strong> at just <strong>2.2 MB RSS</strong> (vs Go 29,017 req/s at 14.6 MB).</li>
           </ul>
         </div>
 
         <div class="panel cons">
           <h3>Weak Points (Where Vela Lags Today)</h3>
           <ul>
-            <li><strong>Channel Latency &amp; OS-Thread Contention (<code>03_concurrency</code>):</strong> At <code>482.4 ms</code> vs Go's <code>29.2 ms</code>, Vela pays OS kernel futex context switches and global table mutex locking on every single message pass.</li>
-            <li><strong>Blocking SIMD Auto-Vectorization (<code>09_matmul</code>, <code>04_quicksort</code>):</strong> Even though Vela emits C compiled with GCC <code>-O3 -march=native</code>, runtime bounds-check and integer-overflow trap branches sit inside inner loops, preventing AVX2 vectorization (720 ms vs C's 148 ms).</li>
-            <li><strong>Missing <code>sqrt</code> Lowering (<code>08_nbody</code>):</strong> Writing <code>dist2 ** 0.5</code> currently emits <code>pow(dist2, 0.5)</code> instead of hardware <code>sqrt(dist2)</code>, paying a ~4.2x library-call tax across 50M calls (678 ms vs Rust's 141.5 ms).</li>
-            <li><strong>Web Server Single-Acceptor Handoff (<code>07_web_server</code>):</strong> All incoming sockets in <code>serve_concurrent</code> pass through a single <code>poll(1, 20)</code> loop into a bounded <code>Chan[int]</code> with blocking request reads/drains, capping throughput ~15% below direct C/Rust/Zig socket servers and limiting high-concurrency C10K scaling.</li>
-            <li><strong>Hash Map Memory Density (<code>06_hashmap</code>):</strong> Vela's map uses <code>16.1 MB</code> RSS vs Rust/Go/Zig's <code>8.3–8.7 MB</code> due to larger bucket/node structures rather than compact SwissTable control-byte arrays.</li>
+            <li><strong>Channel Latency &amp; OS-Thread Contention (<code>03_concurrency</code>):</strong> At <code>482.4 ms</code> vs Go's <code>29.2 ms</code>, Vela pays OS kernel <code>futex()</code> context switches and global table mutex locking on every single message pass.</li>
+            <li><strong>Blocked SIMD Auto-Vectorization (<code>09_matmul</code>, <code>04_quicksort</code>):</strong> Even though GCC runs with <code>-O3 -march=native</code>, per-iteration bounds-check and integer-overflow trap branches sit inside inner loops, preventing AVX2 vectorization (720.1 ms vs C's 148.1 ms).</li>
+            <li><strong>Missing <code>sqrt</code> Lowering (<code>08_nbody</code>):</strong> Writing <code>dist2 ** 0.5</code> emits software <code>pow(dist2, 0.5)</code> instead of hardware <code>sqrt(dist2)</code>, paying a ~500 ms library-call penalty across 50M inner-pair iterations (677.9 ms vs Rust 141.5 ms).</li>
+            <li><strong>Single-Acceptor Funnel in <code>serve_concurrent</code> (<code>07_web_server</code>):</strong> All incoming sockets route through a single <code>poll(1, 20)</code> acceptor loop into a bounded <code>Chan[int]</code> with blocking reads/drains, trailing Zig/Rust/C (~43–44k req/s) and limiting high-connection C10K concurrency.</li>
+            <li><strong>Hash Map Memory Density (<code>06_hashmap</code>):</strong> Vela's map uses <code>16.1 MB</code> Peak RSS vs Rust/Go/Zig at <code>8.3–8.7 MB</code> due to larger bucket/order entries instead of dense power-of-two open-addressing control bytes.</li>
           </ul>
         </div>
       </div>
@@ -712,37 +1065,61 @@
 
     <!-- 3. ROOT-CAUSE FORENSICS -->
     <section id="root-causes">
-      <h2><span>3.</span> Root-Cause Forensics (Verified Against Source &amp; <code>--emit-c</code>)</h2>
+      <h2><span class="sec-num">3</span>Root-Cause Forensics (Verified Against Source &amp; <code>--emit-c</code>)</h2>
       <p>
-        Every explanation below comes directly from inspecting Vela's C runtime (<a href="../runtime/vela_rt.h" style="color:var(--accent);">runtime/vela_rt.h</a>), web standard library (<a href="../std/web.vela" style="color:var(--accent);">std/web.vela</a>), and actual compiler output via <code>vela --emit-c</code>.
+        Every finding below is grounded directly in Vela's C runtime (<a href="../runtime/vela_rt.h">runtime/vela_rt.h</a>), web standard library (<a href="../std/web.vela">std/web.vela</a>), and generated C11 inspected via <code>./target/release/vela --emit-c</code>.
       </p>
 
       <div class="cause-card">
         <div class="cause-head">
-          <span class="cause-title">Why Vela Crushes <code>02_binary_trees</code> (93.6 ms vs 803.7 ms Go)</span>
+          <span class="cause-title">Why Vela Leads <code>02_binary_trees</code> (93.6 ms vs 803.7 ms Go, 265.7 ms C)</span>
           <span class="badge-tag tag-win">Architecture Advantage</span>
         </div>
         <p>
-          In <code>tree.vela</code>, each pass creates a short-lived lexical region (<code>region pass</code>). Building the binary tree calls <code>vela__rt__region_alloc()</code>, which performs a fast pointer bump inside a pre-allocated slab page — far cheaper than <code>glibc malloc()</code> bin searches. At the end of the loop iteration, <code>vela__rt__region_free(pass)</code> discards or recycles the entire slab list in <em>O(chunks)</em> without walking the tree nodes.
+          In <code>tree.vela</code>, each iteration opens a lexical region (<code>region pass</code>). Building the depth-16 tree invokes <code>vela__rt__region_alloc()</code>, bumping a pointer inside pre-allocated 4 KB–1 MB slab chunks. Exiting the loop pass frees the chunk list in <em>O(chunks)</em> via <code>vela__rt__region_free()</code> without walking millions of individual pointers.
         </p>
         <ul>
-          <li><strong>Why Go loses (803.7 ms, 17.8 MB):</strong> Every node allocates on a traced heap, triggers write barriers, and forces the multi-threaded mark-sweep GC to traverse millions of live pointers repeatedly (burning <code>1.930s</code> of CPU user+sys time vs Vela's <code>0.110s</code>).</li>
-          <li><strong>Why C &amp; Rust lose (265.7 ms &amp; 279.3 ms):</strong> Without a custom arena, C's <code>free()</code> and Rust's recursive <code>Drop</code> must traverse every single node pointer individually to return blocks to the general allocator.</li>
+          <li><strong>Why Go lags (803.7 ms, 17.8 MB):</strong> Every node allocates on a traced heap, activates GC write barriers, and forces concurrent mark-sweep cycles (<code>1.930s</code> CPU user+sys vs Vela's <code>0.110s</code>).</li>
+          <li><strong>Why un-arenad C &amp; Rust lag (265.7 ms &amp; 279.3 ms):</strong> Individual <code>free()</code> / recursive <code>Drop</code> calls must walk every node pointer back to general allocator bins.</li>
         </ul>
       </div>
 
       <div class="cause-card">
         <div class="cause-head">
           <span class="cause-title">Why <code>03_concurrency</code> Takes 482.4 ms vs Go's 29.2 ms</span>
-          <span class="badge-tag tag-lag">Critical Bottleneck</span>
+          <span class="badge-tag tag-lag">Critical Runtime Bottleneck</span>
         </div>
         <p>
-          Inspecting <code>runtime/vela_rt.h</code> (lines 4430–4905) reveals why Vela matches C/Rust/Zig OS-thread timings (427–573 ms) rather than Go (29 ms):
+          Inspecting <code>runtime/vela_rt.h</code> shows why Vela tracks OS-thread timings (C 573 ms, Rust <code>mpsc</code> 427 ms, Zig 437 ms) instead of Go's 29 ms:
         </p>
+        <div class="pipe-diagram">
+          <div class="pipe-lane">
+            <span class="pipe-tag bad">Current Path</span>
+            <span class="pipe-node hot">Global chan_table.lock</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">seq_cst ops++</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">chan-&gt;lock</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">pthread_cond_wait (kernel futex ~4.5&micro;s)</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">seq_cst ops--</span>
+          </div>
+          <div class="pipe-lane">
+            <span class="pipe-tag good">C1&ndash;C4 Goal</span>
+            <span class="pipe-node opt">Lock-free tagged slot (acquire/release)</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Direct sudog handoff</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">User-space M:N fiber swap (~20 ns)</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">LIFO next-run slot</span>
+          </div>
+        </div>
         <ol>
-          <li><strong>OS Pthreads, Not User-Space Coroutines:</strong> Although the runtime section is named <code>M:N Task Scheduler &amp; Worker Pool</code>, tasks run synchronously on OS worker threads (plus up to 128 detached helper <code>pthread</code>s). When <code>vela__rt__chan_recv</code> or <code>chan_send</code> blocks, it calls <code>pthread_cond_wait()</code>, putting the entire OS kernel thread to sleep via Linux <code>futex()</code> (~4–5 &micro;s kernel context switch per token pass).</li>
-          <li><strong>Double-Lock + <code>seq_cst</code> Pinning on Every Message:</strong> Every single <code>vela__rt__chan_send</code> and <code>vela__rt__chan_recv</code> calls <code>vela__rt__chan_of(handle)</code>, which locks a <strong>process-wide global mutex</strong> (<code>vela__rt__global_chan_table.lock</code>), executes an <code>atomic_fetch_add_explicit(..., memory_order_seq_cst)</code> full barrier on <code>chan-&gt;ops</code>, unlocks the global lock, acquires <code>chan-&gt;lock</code>, copies the item and signals a condition variable, unlocks <code>chan-&gt;lock</code>, and finally executes another <code>seq_cst</code> decrement in <code>vela__rt__chan_unpin</code>.</li>
-          <li><strong>Per-Task <code>malloc`/`free</code>:</strong> <code>vela__rt__sched_submit</code> allocates a heap <code>vela__rt__sched_task</code> node for each spawned task under the global scheduler lock.</li>
+          <li><strong>OS Pthreads Instead of User-Space Coroutines:</strong> Tasks execute synchronously on worker <code>pthread</code>s (plus detached helper threads). Blocked <code>chan_recv</code> / <code>chan_send</code> calls <code>pthread_cond_wait()</code>, parking the OS kernel thread via Linux <code>futex()</code>.</li>
+          <li><strong>Global Mutex + Double <code>seq_cst</code> Barrier per Hop:</strong> Every message pass locks <code>vela__rt__global_chan_table.lock</code>, bumps <code>chan-&gt;ops</code> with <code>memory_order_seq_cst</code>, locks <code>chan-&gt;lock</code>, copies and signals, and decrements <code>ops</code> with another full fence.</li>
+          <li><strong>Per-Spawn <code>malloc</code>/<code>free</code>:</strong> <code>vela__rt__sched_submit</code> allocates a heap task node on every spawn under the global scheduler lock.</li>
         </ol>
 <pre><code>// Actual hot path on EVERY send/recv in runtime/vela_rt.h:
 vela__rt__chan* chan = vela__rt__chan_of(handle); // 1. Acquires GLOBAL chan_table.lock + seq_cst++
@@ -756,295 +1133,303 @@ vela__rt__chan_unpin(chan);                       // 4. seq_cst-- memory barrier
 
       <div class="cause-card">
         <div class="cause-head">
-          <span class="cause-title">Why <code>08_nbody</code> (677.9 ms) &amp; <code>09_matmul</code> (720.1 ms) Are ~4.8x Slower Than C/Rust</span>
-          <span class="badge-tag tag-lag">Codegen / Compiler Optimization Gap</span>
+          <span class="cause-title">Why <code>08_nbody</code> (677.9 ms) &amp; <code>09_matmul</code> (720.1 ms) Trail C/Rust by ~4.8x</span>
+          <span class="badge-tag tag-lag">Codegen / Vectorization Gap</span>
         </div>
-        <p>
-          Running <code>./target/release/vela --emit-c</code> immediately exposed two concrete codegen reasons inside GCC's inner loops:
-        </p>
+        <div class="pipe-diagram">
+          <div class="pipe-lane">
+            <span class="pipe-tag bad">Current C11</span>
+            <span class="pipe-node hot">pow(dist2, 0.5) libm call</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">vela__rt__add(in_off, j) trap</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">vela__rt__index bounds trap</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">Aliased slice ptrs (Scalar Only)</span>
+          </div>
+          <div class="pipe-lane">
+            <span class="pipe-tag good">L1&ndash;L3 Goal</span>
+            <span class="pipe-node opt">Hardware sqrtsd (1 instr)</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Pre-loop range guard hoisted</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Unchecked inner loop + __restrict</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">4-wide AVX2 FMA (vfmadd231pd)</span>
+          </div>
+        </div>
         <ul>
-          <li><strong>1. <code>dist2 ** 0.5</code> Emits Software <code>pow()</code> Instead of <code>sqrt()</code>:</strong> In <code>nbody.vela</code>, computing Euclidean distance emitted <code>double dist = (pow((double)dist2, (double)(0.5)));</code>. Without <code>-ffast-math</code>, GCC cannot lower general <code>pow(x, 0.5)</code> to the 1-instruction hardware <code>sqrtsd</code> due to IEEE-754 signed-zero/Inf corner rules. Calling <code>libm pow()</code> 50 million times adds ~500 ms by itself.</li>
-          <li><strong>2. Inner-Loop Overflow &amp; Bounds Traps Block AVX2 SIMD:</strong> In <code>matmul.vela</code>'s 1-billion-iteration <code>j</code> loop, every read and write emits checked arithmetic and index helpers:</li>
+          <li><strong><code>dist2 ** 0.5</code> Emits Software <code>pow()</code>:</strong> In <code>src/codegen.rs</code>, float exponentiation lowers to <code>pow((double)dist2, (double)0.5)</code>. Without <code>-ffast-math</code>, GCC cannot convert general <code>pow()</code> into hardware <code>sqrt()</code>, adding ~500 ms across 50 million iterations.</li>
+          <li><strong>Inner-Loop Trap Branches Block AVX2 SIMD:</strong> In <code>matmul.vela</code>'s 1-billion-op inner loop, every element runs checked <code>vela__rt__add</code> and <code>vela__rt__index</code> (potential <code>abort()</code> exits), and slices lack <code>__restrict</code>. GCC refuses SIMD vectorization when every iteration has trapping control flow and potential pointer aliasing. Similarly, <code>nbody</code>'s compound <code>b[i].vx -= ...</code> triggers two bounds checks on <code>i</code> per line.</li>
         </ul>
-<pre><code>// Actual emitted C inside matmul's innermost loop (runs 1,000,000,000 times):
+<pre><code>// Actual emitted C inside matmul's innermost loop (1,000,000,000 iterations):
 double* vela__place__23 = &amp;(*vela__at__slice__float(
     c, (vela__rt__add(in_offset, j, "25:29 in task 'matmul'")), "25:18 in task 'matmul'"));
 *vela__place__23 = ((*vela__place__23) + (a_val * (*vela__at__slice__float(
     b, (vela__rt__add(kn_offset, j, "25:57 in task 'matmul'")), "25:46 in task 'matmul'"))));</code></pre>
-        <p>
-          Every FMA executes 2 <code>vela__rt__add_overflows</code> checks, 2 <code>vela__rt__index</code> bounds traps (<code>fprintf</code> + <code>abort()</code>), and aliases <code>c.items</code> against <code>b.items</code> (no <code>__restrict</code>). GCC cannot vectorize a loop containing potential trapping exits on every element, turning a 4-wide AVX2 vectorized multiply-add (~148 ms in C) into scalar trap-checked code (~720 ms). Likewise, <code>nbody</code>'s <code>b[i].vx -= ...</code> calls <code>vela__rt__index(i, 5)</code> twice per statement (write address + value read), and <code>04_quicksort</code>'s swap executes 4 bounds checks.
-        </p>
       </div>
 
       <div class="cause-card">
         <div class="cause-head">
-          <span class="cause-title">Why <code>07_web_server</code> Hits 37,450 req/s vs C/Rust/Zig ~43–44k req/s (and C10K Limits)</span>
+          <span class="cause-title">Why <code>07_web_server</code> Hits 37,450 req/s (Beats Go, ~15% Behind Zig/Rust/C)</span>
           <span class="badge-tag tag-warn">Stdlib Networking Architecture</span>
         </div>
+        <div class="pipe-diagram">
+          <div class="pipe-lane">
+            <span class="pipe-tag bad">Current Stdlib</span>
+            <span class="pipe-node hot">1 Acceptor poll(1, 20)</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">Chan[int] + select wakeup</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">Blocking read + string concat</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node hot">keep_alive: false + drain(5s)</span>
+          </div>
+          <div class="pipe-lane">
+            <span class="pipe-tag good">W1&ndash;W3 Goal</span>
+            <span class="pipe-node opt">N SO_REUSEPORT listeners</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Per-worker epoll/io_uring reactor</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Zero-copy header views + Keep-Alive</span>
+            <span class="pipe-arrow">&rarr;</span>
+            <span class="pipe-node opt">Single writev() flush</span>
+          </div>
+        </div>
         <p>
-          Inspecting <code>std/web.vela</code> (<code>run_concurrent_server</code>, lines 1292–1383) explains both why Vela already beats Go (29k req/s, 14.6 MB RSS vs Vela's 37.4k req/s, 2.2 MB RSS) and where the remaining ~15% throughput + scalability bottlenecks lie:
+          In <code>std/web.vela</code> (<code>run_concurrent_server</code>), one central <code>serve_accept_loop</code> wakes via <code>poll(1, 20)</code>, accepts every socket, and dispatches FDs over <code>Chan[int]</code> into 4 blocking workers with <code>keep_alive_enabled: false</code> and synchronous <code>drain()</code>. Removing that cross-thread channel funnel and combining per-worker <code>SO_REUSEPORT</code> with non-blocking <code>Poll</code>/<code>epoll</code> unlocks both higher peak RPS and 50,000+ concurrent keep-alive sockets in tiny RAM.
         </p>
-        <ul>
-          <li><strong>Single-Acceptor Funnel Through <code>Chan[int]</code>:</strong> A single task (<code>serve_accept_loop</code>) polls the listening socket (<code>server_sock.poll(1, 20)</code>), calls <code>accept</code>, and forwards each client FD through a bounded channel (<code>chan_new&lt;int&gt;(count * 4)</code>) using a <code>select</code> timeout loop. Every single HTTP request incurs cross-thread channel locking + condvar signaling before a worker wakes up.</li>
-          <li><strong>Blocking Worker Per Active Connection:</strong> Each worker uses blocking <code>read_http_request</code> (which builds header/body strings via <code>"{chunk}{more}"</code> concatenation on partial reads), runs <code>dispatch_connection_request(..., keep_alive_enabled: false, ...)</code>, and calls synchronous <code>drain(client, 5000)</code> before closing. Under 2,000 localhost requests, the 4 threads stay busy; under 10,000+ slow or keep-alive WAN clients, 4 OS worker threads cannot multiplex idle sockets simultaneously.</li>
-          <li><em>Note:</em> Notice <code>std/web.vela</code> already includes a single-threaded <code>Poll</code>-based <code>run_event_loop</code> (<code>serve()</code>), while multi-core <code>serve_concurrent()</code> does not yet combine <code>SO_REUSEPORT</code> with per-worker <code>epoll</code>/<code>Poll</code> event loops!</li>
-        </ul>
       </div>
     </section>
 
     <!-- 4. OPTIMIZATION CATALOG -->
     <section id="improvements">
-      <h2><span>4.</span> Engineering Improvements Catalog (Focus on Concurrency, Web &amp; Loops)</h2>
+      <h2><span class="sec-num">4</span>Engineering Optimization Catalog (Concurrency, Web, Loops &amp; Memory)</h2>
       <p>
-        Below is every high-impact engineering change across Vela's runtime, standard library, and C codegen—prioritizing <strong>Concurrency &amp; Channels</strong> and <strong>Web Servers</strong>, alongside fast compiler wins that fix N-Body/Matmul and strengthen Vela's region/map advantages.
+        Twelve targeted improvements across Vela's C runtime, <code>std/web</code>, and compiler codegen. Every card preserves Vela's region isolation and safety checks without unsafe global toggles.
       </p>
 
       <h3>Track A: Concurrency &amp; Channels (Closing the 16.5x Gap vs. Go)</h3>
-      <div class="imp-grid">
+      <div class="imp-grid cols-2">
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">C1</span><span class="badge-tag tag-info">Runtime / Medium Effort</span></div>
-            <div class="imp-name">Eliminate Global <code>chan_table.lock</code> via Lock-Free Epoch/Tagged Slots</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Store channel pointers in a flat lock-free array indexed by handle bits with atomic generation/refcount packed in an <code>_Atomic uint64_t</code> (acquire/release, not <code>seq_cst</code>). Removes the process-wide <code>vela__rt__global_chan_table.lock</code> acquisition on every single send/recv/select.
-            </p>
+            <div class="imp-top"><span class="imp-id">C1</span><span class="badge-tag tag-info">Runtime &bull; Medium</span></div>
+            <div class="imp-name">Lock-Free Channel Slot Table (Remove Global Mutex)</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Store channel pointers in a flat cache-aligned table indexed by handle bits with atomic generation/refcounts (<code>memory_order_acquire</code>/<code>release</code> instead of <code>seq_cst</code>). Removes the process-wide <code>global_chan_table.lock</code> bottleneck on every send/recv/select.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>-20% to -30%</strong> channel latency</span>
-            <span>Safety: Identical generation checks</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>-20% to -30%</strong> latency</span><span>Zero ABA safety change</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">C2</span><span class="badge-tag tag-info">Runtime / Medium Effort</span></div>
-            <div class="imp-name">Lock-Free Ring Buffer + Adaptive Spin-Wait Before <code>futex</code></div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Replace <code>pthread_mutex_t</code> + 3 <code>pthread_cond_t</code> per channel with an atomic Vyukov bounded ring buffer and brief CPU <code>_mm_pause()</code> spinning (~64–128 spins) before falling back to a single <code>futex</code> sleep word. Prevents expensive kernel context switches on fast ping-pong hops.
-            </p>
+            <div class="imp-top"><span class="imp-id">C2</span><span class="badge-tag tag-info">Runtime &bull; Medium</span></div>
+            <div class="imp-name">Vyukov Bounded Ring Buffer + Adaptive Spin Before <code>futex</code></div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Replace per-channel <code>pthread_mutex_t</code> + 3 condition variables with an atomic slot-sequence ring buffer and brief <code>_mm_pause()</code> spinning (~64&ndash;128 cycles) before falling back to a single <code>futex</code> wake word.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>2.5x–3.5x faster</strong> Token Ring</span>
-            <span>Drops ~482 ms &rarr; ~135 ms</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>2.5x&ndash;3.5x faster</strong> Token Ring</span><span>482 ms &rarr; ~135 ms</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">C3</span><span class="badge-tag tag-lag">Runtime / Major Architecture</span></div>
-            <div class="imp-name">True User-Space M:N Fibers + Work-Stealing Deques</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Execute <code>rush</code> tasks on lightweight user-space stacks (4–8 KB initial stack, x86-64/ARM64 assembly swap or <code>minicoro</code>-style fiber switch in ~15–25 ns) scheduled across Chase-Lev per-core work-stealing deques with slab-pooled task structs (no <code>malloc</code> per spawn). Blocked <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code> parks the fiber in user space instead of calling <code>pthread_cond_wait</code>.
-            </p>
+            <div class="imp-top"><span class="imp-id">C3</span><span class="badge-tag tag-lag">Runtime &bull; Major Milestone</span></div>
+            <div class="imp-name">True M:N User-Space Fibers + Work-Stealing Deques</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Run <code>rush</code> tasks and actors on lightweight fibers (4&ndash;8 KB stacks swapped in ~20 ns) scheduled over Chase-Lev per-core deques with slab-pooled task descriptors (no <code>malloc</code> per spawn). Blocked channel ops yield in user space instead of sleeping an OS thread.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>10x–15x faster</strong> Token Ring</span>
-            <span>Reaches <strong>~30–40 ms</strong> (Go territory)</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>10x&ndash;15x faster</strong> Token Ring</span><span>Reaches <strong>~28&ndash;38 ms</strong> (Go tier)</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">C4</span><span class="badge-tag tag-info">Runtime / Incremental</span></div>
-            <div class="imp-name">Direct Sender-to-Receiver <code>sudog</code> Handoff &amp; Batching</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> When a receiver fiber is already parked waiting on an empty channel, the sender copies the item directly into the receiver's stack slot and resumes it immediately on the current worker (LIFO next-slot), bypassing ring buffer writes and wakeup queue contention.
-            </p>
+            <div class="imp-top"><span class="imp-id">C4</span><span class="badge-tag tag-info">Runtime &bull; Incremental</span></div>
+            <div class="imp-name">Direct Sender-to-Receiver <code>sudog</code> Stack Handoff</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> When a waiting receiver fiber is already parked on an empty channel, the sender writes the payload directly into the waiter's destination slot and schedules it LIFO on the current core's run-next slot, skipping ring writes and deque steals.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>+20%</strong> extra channel throughput</span>
-            <span>Ideal for cap=1 / unbuffered sync</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>+20%&ndash;25%</strong> throughput</span><span>Ideal for unbuffered / cap=1 ping-pong</span></div>
         </div>
       </div>
 
       <h3>Track B: Web Servers &amp; <code>std/web</code> (Passing C/Rust/Zig &amp; Unlocking C10K)</h3>
-      <div class="imp-grid">
+      <div class="imp-grid cols-3">
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">W1</span><span class="badge-tag tag-win">std/web / High ROI</span></div>
-            <div class="imp-name"><code>SO_REUSEPORT</code> Per-Worker Listeners (Remove Channel Handoff)</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Let each of the 4+ <code>serve_concurrent</code> workers bind/accept on its own <code>SO_REUSEPORT</code> socket FD. Eliminates the single <code>serve_accept_loop</code> 20ms poll bottleneck and removes the <code>Chan[int]</code> + <code>select</code> hop for every single TCP connection.
-            </p>
+            <div class="imp-top"><span class="imp-id">W1</span><span class="badge-tag tag-win">std/web &bull; High ROI</span></div>
+            <div class="imp-name"><code>SO_REUSEPORT</code> Per-Worker Listeners</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Let each <code>serve_concurrent</code> worker bind and accept on its own kernel-load-balanced listening socket, deleting the central 20 ms <code>poll()</code> loop and <code>Chan[int]</code> handoff per TCP connection.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>+15% to +22% RPS</strong></span>
-            <span>~37.4k &rarr; <strong>~44.5k+ req/s</strong>, lower P95</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>+15%&ndash;22% RPS</strong></span><span>~37.4k &rarr; <strong>~44.5k+ req/s</strong></span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">W2</span><span class="badge-tag tag-info">std/web + RT / High Scale</span></div>
-            <div class="imp-name">Multi-Core <code>epoll</code> / <code>io_uring</code> Event Reactor Per Worker</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Combine <code>SO_REUSEPORT</code> with per-worker edge-triggered <code>epoll</code> (or <code>io_uring</code>) integrated with user-space fibers or non-blocking state machines. Replaces blocking <code>read_chunk_blocking</code> + <code>drain</code> so 4 threads can hold 50,000 concurrent keep-alive sockets at minimal RAM.
-            </p>
+            <div class="imp-top"><span class="imp-id">W2</span><span class="badge-tag tag-info">std/web + RT &bull; C10K</span></div>
+            <div class="imp-name">Per-Worker <code>epoll</code> / <code>io_uring</code> Fiber Reactor</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Multiplex non-blocking read/write events per worker thread (reusing <code>std/web</code>'s existing <code>Poll</code> architecture across N cores) instead of tying one OS thread to blocking reads and synchronous socket drains.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>10x C10K scale</strong>, +18–30% RPS</span>
-            <span>Zero thread explosion on slow clients</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>10x C10K scale</strong></span><span>+18%&ndash;30% under high concurrency</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">W3</span><span class="badge-tag tag-win">std/web / Quick Win</span></div>
-            <div class="imp-name">Zero-Copy HTTP Header Views, Keep-Alive &amp; <code>writev()</code> Serialization</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Turn on HTTP/1.1 <code>keep_alive_enabled</code> in <code>serve_concurrent</code>, slice request targets in place without string re-concatenation, cache static header lines, and emit response status + headers + body in one <code>writev()</code> syscall instead of <code>native_socket_queue</code> + string builder loops.
-            </p>
+            <div class="imp-top"><span class="imp-id">W3</span><span class="badge-tag tag-win">std/web &bull; Quick Win</span></div>
+            <div class="imp-name">Zero-Copy Parser Views, Keep-Alive &amp; <code>writev()</code></div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Enable HTTP/1.1 keep-alive inside <code>serve_concurrent</code>, slice request paths/headers in place without string concatenation copies, pre-format common headers, and flush response status + headers + body in one <code>writev()</code> syscall.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>+12%–25%</strong> close / <strong>3x+</strong> keep-alive</span>
-            <span>-35% per-request region churn</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>+14%</strong> close / <strong>3x+</strong> keep-alive</span><span>-35% request region bytes</span></div>
         </div>
       </div>
 
-      <h3>Track C: Compiler Loop Codegen &amp; Numerical Math (Fixing N-Body &amp; Matmul)</h3>
-      <div class="imp-grid">
+      <h3>Track C: Compiler Loop Codegen &amp; Math (Fixing N-Body &amp; Matmul)</h3>
+      <div class="imp-grid cols-3">
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">L1</span><span class="badge-tag tag-win">Codegen / 1-Hour Fix</span></div>
-            <div class="imp-name">Lower <code>x ** 0.5</code> to Hardware <code>sqrt(x)</code> + Add <code>std/math.sqrt</code></div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Detect literal exponent <code>0.5</code> in <code>src/codegen.rs</code> (<code>BinaryOp::Pow</code> on float) and emit C <code>sqrt((double)x)</code>, compiling directly to a single x86-64 <code>sqrtsd</code> instruction instead of a <code>libm pow()</code> function call.
-            </p>
+            <div class="imp-top"><span class="imp-id">L1</span><span class="badge-tag tag-win">Codegen &bull; Quick Win</span></div>
+            <div class="imp-name">Lower <code>x ** 0.5</code> to <code>sqrt(x)</code> + <code>std/math.sqrt</code></div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Detect literal exponent <code>0.5</code> on float power in <code>src/codegen.rs</code> and emit C <code>sqrt((double)x)</code> &rarr; single x86-64 <code>sqrtsd</code> hardware instruction instead of calling <code>libm pow()</code> 50M times.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>~3.5x–4.0x faster</strong> N-Body</span>
-            <span>678 ms &rarr; <strong>~185 ms</strong></span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>~3.3x&ndash;4.0x faster</strong> N-Body</span><span>678 ms &rarr; ~195 ms</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">L2</span><span class="badge-tag tag-win">Compiler / High Impact</span></div>
-            <div class="imp-name">Loop Range Induction Check Hoisting (Slice Bounds &amp; Overflow)</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> For bounded loops (<code>each i in 0..n</code>, <code>each j in 0..n</code>), prove <code>0 &le; i &lt; n</code> and emit a single pre-loop guard (<code>if (end &gt; arr.len) trap()</code> and <code>i + off</code> range check) instead of per-element <code>vela__rt__index</code> &amp; <code>vela__rt__add</code> traps. Immediately unlocks GCC AVX2 SIMD auto-vectorization!
-            </p>
+            <div class="imp-top"><span class="imp-id">L2</span><span class="badge-tag tag-win">Compiler &bull; High Impact</span></div>
+            <div class="imp-name">Loop-Header Range &amp; Bounds Check Hoisting</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> For bounded <code>each i in 0..n</code> loops, verify induction range limits once in the pre-header (trapping upfront if out of bounds) and omit per-element inner traps. Immediately unlocks GCC AVX2 vectorization!</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>3.5x–4.5x</strong> Matmul, <strong>+25%</strong> Qsort</span>
-            <span>720 ms &rarr; <strong>~165 ms</strong> (100% safe!)</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>3.5x&ndash;4.5x</strong> Matmul, +25% Qsort</span><span>720 ms &rarr; ~165 ms (100% safe!)</span></div>
         </div>
 
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">L3</span><span class="badge-tag tag-win">Codegen / Quick Win</span></div>
-            <div class="imp-name">Single-Check Compound Assignment (<code>+=</code>) &amp; <code>__restrict</code> Slice Buffers</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Evaluate <code>b[i].vx -= val</code> by indexing <code>b[i]</code> once into a local pointer rather than bounds-checking for read and write separately, and mark disjoint region-backed slice inputs <code>__restrict</code> so GCC keeps inner accumulators in vector registers.
-            </p>
+            <div class="imp-top"><span class="imp-id">L3</span><span class="badge-tag tag-win">Codegen &bull; Quick Win</span></div>
+            <div class="imp-name">Single-Check <code>+=</code> &amp; <code>__restrict</code> Slice Pointers</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Cache <code>&amp;b[i]</code> once during compound updates instead of bounds-checking both read and write, emit <code>__restrict</code> on disjoint slice buffers, and tag cold trap branches <code>__builtin_expect(..., 0)</code>.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>+15%–25%</strong> N-Body, Matmul &amp; Qsort</span>
-            <span>Unlocks full GCC register/FMA unrolling</span>
-          </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>+15%&ndash;25%</strong> N-Body/Matmul</span><span>Enables register FMA unrolling</span></div>
         </div>
       </div>
 
-      <h3>Track D: Memory, Regions &amp; Hash Map (Boosting Existing Power Points)</h3>
-      <div class="imp-grid">
+      <h3>Track D: Memory, Regions &amp; Hash Maps (Boosting Existing Strengths)</h3>
+      <div class="imp-grid cols-2">
         <div class="imp-card">
           <div>
-            <div class="imp-top"><span class="imp-id">M1</span><span class="badge-tag tag-info">Runtime / Medium Effort</span></div>
-            <div class="imp-name">Power-of-Two SwissTable Map + Stack-First Small Region Slab</div>
-            <p class="imp-desc">
-              <strong>How &amp; Why:</strong> Switch <code>vela__rt__map</code> from modulo bucket nodes to cache-dense open addressing with SIMD/bitmask control bytes (power-of-two capacity <code>hash &amp; (cap - 1)</code>), and back lexical <code>region</code> variables with a 4 KB inline stack slab before calling <code>malloc</code> for larger pages.
-            </p>
+            <div class="imp-top"><span class="imp-id">M1</span><span class="badge-tag tag-info">Runtime &bull; Medium</span></div>
+            <div class="imp-name">Power-of-Two SwissTable Control-Byte Map</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Replace modulo node tables in <code>vela__rt__map</code> with dense open-addressing metadata control bytes (<code>hash &amp; (cap - 1)</code> masking + cache-line 16-slot group probing) so 200k integer keys pack into half the memory.</p>
           </div>
-          <div class="imp-meta">
-            <span>Est. Impact: <strong>+18%</strong> HashMap, <strong>-45% Map RSS</strong></span>
-            <span>Also cuts <code>Binary Trees</code> &amp; <code>Web</code> alloc cost</span>
+          <div class="imp-meta"><span>Est. Impact: <strong>+18%</strong> HashMap speed</span><span><strong>-45% Peak RSS</strong> (16.1 &rarr; ~8.8 MB)</span></div>
+        </div>
+
+        <div class="imp-card">
+          <div>
+            <div class="imp-top"><span class="imp-id">M2</span><span class="badge-tag tag-win">Runtime &bull; Quick Win</span></div>
+            <div class="imp-name">4 KB Stack-First Region Slab &amp; Chunk Cache</div>
+            <p class="imp-desc"><strong>How &amp; Why:</strong> Embed a tiny inline starter buffer inside stack-allocated <code>vela__rt__region</code> handles and recycle freed slab chunks in a thread-local freelist, avoiding repeated <code>malloc</code>/<code>free</code> syscalls in per-pass and per-request regions.</p>
           </div>
+          <div class="imp-meta"><span>Est. Impact: <strong>+8%&ndash;12%</strong> Binary Trees</span><span>Faster <code>std/web</code> request turnaround</span></div>
         </div>
       </div>
     </section>
 
     <!-- 5. INTERACTIVE SIMULATOR -->
     <section id="simulator">
-      <h2><span>5.</span> Interactive Optimization Impact Simulator</h2>
+      <h2><span class="sec-num">5</span>Interactive Optimization Impact Simulator</h2>
       <p>
-        Select any combination of proposed engineering fixes below to simulate their projected impact on Vela's benchmark metrics against our measured C, Rust, Go, and Zig baselines.
+        Toggle any combination of the 12 improvements below to watch projected runtimes, HTTP RPS, Peak RSS, and Vela's 8-axis radar polygon update live against our measured C, Rust, Go, and Zig baselines.
       </p>
       <div class="callout warn">
-        <strong>Modeling Transparency:</strong> Baseline numbers (0 optimizations checked) are exact 5-run measurements from <code>benchmarks/RESULTS.md</code>. Selecting improvements applies engineering projections modeled from each optimization's eliminated bottleneck (e.g., removing <code>pow()</code>, hoisting bounds traps for AVX2, or swapping kernel futex switches for user-space fiber swaps).
+        <strong>Modeling Transparency:</strong> Baseline values (0 boxes selected) are exact 5-run measurements from <code>benchmarks/RESULTS.md</code>. Selecting fixes computes engineering projections based on eliminating each verified bottleneck (for instance, replacing <code>pow()</code>, hoisting inner traps for AVX2, or switching kernel futex waits for user-space fiber swaps).
       </div>
 
       <div class="sim-shell">
         <div class="preset-bar">
-          <div style="font-weight:700; font-size:0.9rem; color:var(--fg);">Quick Presets:</div>
-          <div class="preset-btns">
-            <button class="sim-btn" onclick="applyPreset([])">Current Baseline</button>
-            <button class="sim-btn" onclick="applyPreset(['L1','L2','L3'])">Phase 1: Quick Codegen Wins</button>
-            <button class="sim-btn" onclick="applyPreset(['L1','L2','L3','W1','W3','C1','C2','M1'])">Phase 2: Lock-Free + Reuseport + Maps</button>
-            <button class="sim-btn primary" onclick="applyPreset(['C1','C2','C3','C4','W1','W2','W3','L1','L2','L3','M1'])">Phase 3: Full Ideal Architecture</button>
-          </div>
+          <div style="font-weight:700; font-size:0.9rem; color:var(--fg);">Simulation Presets:</div>
+          <div class="preset-btns" id="preset-btns"></div>
         </div>
+
+        <!-- Full-width 5-KPI bar cleanly above the 2-pane simulator -->
+        <div class="sim-summary-bar" id="sim-kpis"></div>
 
         <div class="sim-layout">
           <div class="opt-list" id="sim-controls"></div>
           <div class="sim-results-panel">
-            <div class="sim-summary-bar" id="sim-kpis"></div>
-            <div id="sim-charts"></div>
+            <div class="sim-top-viz">
+              <svg id="sim-radar" viewBox="0 0 280 250" width="100%" style="max-width:280px; margin:0 auto;" aria-label="Projected vs Current Vela Radar"></svg>
+              <div>
+                <div class="sim-charts-toolbar" style="margin-bottom:0.5rem;">
+                  <div style="font-weight:700; font-size:0.98rem; color:var(--fg);">Projected Multi-Workload Balance</div>
+                </div>
+                <p style="font-size:0.84rem; color:var(--muted); margin:0 0 0.75rem;">
+                  Solid green shows <strong>Projected Vela</strong>; dashed outline traces <strong>Current Vela</strong>. Notice how Phase 1 fixes scalar/vector loops while Phase 3 expands the Concurrency axis into Go's outer ring.
+                </p>
+                <div class="metric-tabs" id="sim-scale-tabs">
+                  <button class="tab-pill active" onclick="setSimScale('score')">Normalized Speed Score (100% = Best)</button>
+                  <button class="tab-pill" onclick="setSimScale('raw')">Raw Workload Relative Bar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sim-charts-grid" id="sim-charts"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 6. EXTRA IDEAS & STRATEGIC ROUTE -->
+    <!-- 6. INNOVATIONS & STRATEGIC ROUTE -->
     <section id="strategy">
-      <h2><span>6.</span> Safety Synergy, Extra Ideas &amp; Vela's Strategic Route</h2>
-
+      <h2><span class="sec-num">6</span>Architectural Innovations &amp; Strategic Route</h2>
       <div class="callout green">
-        <strong>Vela's Core Superpower: Zero-Cost Memory Isolation Meets Readable Systems Code</strong><br>
-        Do <em>not</em> trade Vela's safety for speed by turning off bounds/overflow checks globally or adding a garbage collector. As <code>02_binary_trees</code> proves, lexical regions already beat C <code>malloc</code> and Rust <code>Box</code>. The right route is <strong>eliminating redundant checks at compile time via range/region proofs</strong> while upgrading the concurrency &amp; networking runtime underneath the unchanged surface syntax.
+        <strong>Vela's Core Principle: Keep Safety Zero-Cost at Compile Time</strong><br>
+        Never chase benchmark numbers by disabling bounds/overflow traps globally or introducing tracing GC. As <code>02_binary_trees</code> proves, lexical regions already defeat Go GC and un-arenad C/Rust by wide margins. The right path combines <strong>compile-time proof hoisting</strong> with a <strong>modern user-space fiber &amp; epoll runtime</strong> under the unchanged Vela surface language.
       </div>
 
-      <h3>Why Vela's Design Fits M:N Fibers Better Than Almost Any Language</h3>
-      <ul>
-        <li><strong>Deterministic Fiber Memory Splicing:</strong> In Go, any variable captured by a goroutine can escape to the global GC heap. In Rust, <code>async</code> futures struggle with self-referential lifetimes and <code>'static + Send</code> bounds. In Vela, every <code>rush</code> worker already owns an isolated <code>worker_region</code> that splices cleanly into the caller's region on join! Pairing <strong>per-task regions with user-space fibers</strong> means fibers execute with zero GC scanning and zero lifetime gymnastics.</li>
-        <li><strong>Compiler-Driven Safety Hoisting ("Pay Zero for Proved Invariants"):</strong> Keep <code>vela__rt__index</code> and integer overflow traps enabled as the semantic contract, while teaching the compiler's checker/codegen to hoist proofs to loop headers (<code>each i in 0..arr.len</code> &rarr; 0 inner checks). You keep 100% memory &amp; integer safety while unlocking C/Rust AVX2 speeds.</li>
-        <li><strong>Compile-to-C Pragmatic Hints:</strong> Emit <code>__builtin_expect(..., 0)</code> (<code>unlikely</code>) on every remaining cold runtime trap, emit <code>__restrict</code> on disjoint slice buffers, and preserve a fast C compilation path (avoiding LLVM bloat so compile times stay ~150–250 ms).</li>
-        <li><strong>Benchmark Suite &amp; Hardware Counter Integration:</strong> Add optional Linux <code>perf stat</code> capture (<code>cycles</code>, <code>instructions</code>, <code>L1-dcache-load-misses</code>, <code>context-switches</code>) and a multi-connection C10K keep-alive stress profile to <code>benchmarks/run.py</code> so every compiler or runtime PR verifies both raw throughput and IPC/cache efficiency.</li>
-      </ul>
+      <div class="innov-grid">
+        <div class="innov-card">
+          <h4>1. Interval &amp; Induction Proof Hoisting (Zero-Cost Safety)</h4>
+          <p>Teach <code>src/check.rs</code> &rarr; <code>src/codegen.rs</code> to emit one pre-loop guard (<code>if (end &gt; arr.len) trap()</code> and <code>i + off</code> range check) for bounded <code>each</code> loops. Preserves 100% panic safety while stripping every branch out of inner loops so GCC auto-vectorizes to AVX2.</p>
+        </div>
+        <div class="innov-card">
+          <h4>2. Region-Backed Fiber Stacks (<code>rush</code> + Regions Synergy)</h4>
+          <p>Unlike Go (GC-scanned heap escapes) or Rust (self-referential <code>Pin&lt;Future&gt;</code> futures), every Vela <code>rush</code> worker already owns an isolated region that splices in <em>O(1)</em> into the caller's region! Allocating each fiber's 4 KB stack from a slab pool turns M:N concurrency into zero-GC green threads.</p>
+        </div>
+        <div class="innov-card">
+          <h4>3. Zero-Copy <code>Chan[own region]</code> Arena Handoff</h4>
+          <p>Pair linear move checks with region slab lists: transfer ownership of an entire parsed HTTP payload or AST tree across threads over a channel by moving one <code>vela__rt__region</code> chunk head pointer in <em>O(1)</em>, invalidating sender bindings at compile time.</p>
+        </div>
+        <div class="innov-card">
+          <h4>4. Cold-Trap Branch Hints &amp; Interned Diagnostic Sites</h4>
+          <p>Wrap remaining runtime trap checks in <code>__builtin_expect(..., 0)</code>, annotate disjoint region slices with <code>__restrict</code>, and replace inline per-site literal strings with an interned site index table &mdash; keeping executables tiny and instruction caches hot.</p>
+        </div>
+      </div>
 
-      <h3>Recommended 3-Phase Route Forward</h3>
+      <h3>Recommended 3-Phase Engineering Roadmap</h3>
       <div class="phase-grid">
         <div class="phase-card">
-          <div class="phase-num">Phase 1 &bull; Immediate (Days–2 Weeks)</div>
-          <h4>Erase Loop &amp; Accept Bottlenecks</h4>
+          <div class="phase-num">Phase 1 &bull; Immediate (1&ndash;2 Weeks)</div>
+          <h4>Fix Vector Loops &amp; Accept Path</h4>
           <ul>
-            <li>Lower <code>** 0.5</code> to <code>sqrt()</code> (<code>L1</code>)</li>
-            <li>Hoist loop-header bounds/overflow checks &amp; single-index <code>+=</code> + <code>__restrict</code> (<code>L2</code>, <code>L3</code>)</li>
-            <li>Use <code>SO_REUSEPORT</code> per-worker listeners + keep-alive in <code>std/web</code> (<code>W1</code>, <code>W3</code>)</li>
-            <li><strong>Outcome:</strong> Matches C/Rust on N-Body &amp; Matmul, reaches ~45k+ req/s on Web Server.</li>
+            <li>Lower <code>** 0.5</code> to hardware <code>sqrt()</code> (<code>L1</code>)</li>
+            <li>Loop-header bounds/overflow hoisting + <code>+=</code> single-check &amp; <code>__restrict</code> (<code>L2</code>, <code>L3</code>)</li>
+            <li><code>SO_REUSEPORT</code> listeners + zero-copy Keep-Alive / <code>writev()</code> (<code>W1</code>, <code>W3</code>)</li>
+            <li><strong>Result:</strong> Matches C/Rust on N-Body &amp; Matmul, hits ~50k req/s HTTP.</li>
           </ul>
         </div>
-
         <div class="phase-card">
-          <div class="phase-num">Phase 2 &bull; Medium Term (3–6 Weeks)</div>
-          <h4>Lock-Free Channels &amp; Cache Maps</h4>
+          <div class="phase-num">Phase 2 &bull; Medium Term (3&ndash;6 Weeks)</div>
+          <h4>Lock-Free Channels &amp; Compact Maps</h4>
           <ul>
-            <li>Replace global <code>chan_table.lock</code> with atomic slot refcounts (<code>C1</code>)</li>
-            <li>Atomic bounded ring buffer + adaptive spin before futex (<code>C2</code>)</li>
-            <li>SwissTable open-addressing map + stack-slab small regions (<code>M1</code>)</li>
-            <li><strong>Outcome:</strong> ~3–4x faster channels, ~45% lower HashMap RSS, faster web request parsing.</li>
+            <li>Lock-free atomic channel table replacing global mutex (<code>C1</code>)</li>
+            <li>Vyukov atomic ring buffer + adaptive spin before futex (<code>C2</code>)</li>
+            <li>SwissTable open-addressing map + stack-first region slab (<code>M1</code>, <code>M2</code>)</li>
+            <li><strong>Result:</strong> ~3&ndash;4x faster channels, -45% HashMap RSS, faster Binary Trees.</li>
           </ul>
         </div>
-
         <div class="phase-card">
           <div class="phase-num">Phase 3 &bull; Architectural Milestone</div>
-          <h4>True M:N Fiber + Epoll/io_uring Runtime</h4>
+          <h4>Full M:N Fibers &amp; Epoll/io_uring Reactor</h4>
           <ul>
-            <li>Work-stealing user-space fibers replacing OS-thread blocking on channels (<code>C3</code>, <code>C4</code>)</li>
-            <li>Per-worker <code>epoll</code>/<code>io_uring</code> reactor driving fiber sockets (<code>W2</code>)</li>
-            <li><strong>Outcome:</strong> Go-tier concurrency (~30ms Token Ring) + C/Rust-tier compute + O(1) region safety in 20–160 KB binaries.</li>
+            <li>Work-stealing user-space fibers + direct <code>sudog</code> handoff (<code>C3</code>, <code>C4</code>)</li>
+            <li>Per-worker <code>epoll</code>/<code>io_uring</code> reactor integrated with fibers (<code>W2</code>)</li>
+            <li><strong>Result:</strong> Go-tier concurrency (~30 ms Token Ring), C/Rust compute, C10K web scale, and 20&ndash;160 KB binaries.</li>
           </ul>
         </div>
       </div>
@@ -1055,42 +1440,263 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
     Vela Performance Engineering Reference &bull; Grounded in <code>runtime/vela_rt.h</code>, <code>std/web.vela</code>, <code>--emit-c</code>, and <code>benchmarks/RESULTS.md</code>.
   </footer>
 
+  <div id="vela-scroll-bar" aria-hidden="true"></div>
+  <button id="vela-back-top" type="button" aria-label="Back to top">&uarr; Top</button>
+
   <script>
-    const OPTS = [
-      { id: 'L1', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L1: Lower ** 0.5 to hardware sqrt()', sub: 'Fixes software libm pow() call inside N-Body' },
-      { id: 'L2', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L2: Loop-Header Bounds & Overflow Hoisting', sub: 'Unlocks GCC AVX2 SIMD auto-vectorization in Matmul/Qsort' },
-      { id: 'L3', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L3: Single-Check += & __restrict Slice Pointers', sub: 'Halves array indexing in N-Body updates & aids aliasing' },
-
-      { id: 'C1', group: 'Track A: Concurrency & Channels', name: 'C1: Lock-Free Channel Handle Table (No Global Mutex)', sub: 'Replaces global chan_table.lock + seq_cst with acquire/release' },
-      { id: 'C2', group: 'Track A: Concurrency & Channels', name: 'C2: Atomic Ring Buffer + Adaptive Spin-Wait', sub: 'Spins briefly before kernel futex() on active multi-core handoff' },
-      { id: 'C3', group: 'Track A: Concurrency & Channels', name: 'C3: True M:N User-Space Fibers + Work-Stealing', sub: '20ns user-space fiber swaps instead of pthread_cond_wait()' },
-      { id: 'C4', group: 'Track A: Concurrency & Channels', name: 'C4: Direct sudog Stack Handoff & LIFO Next-Slot', sub: 'Skips ring copy & scheduler queue when receiver is waiting' },
-
-      { id: 'W1', group: 'Track B: Web Servers & std/web', name: 'W1: SO_REUSEPORT Per-Worker Listeners', sub: 'Removes single 20ms poll acceptor & Chan[int] hop per connection' },
-      { id: 'W2', group: 'Track B: Web Servers & std/web', name: 'W2: Multi-Worker epoll / io_uring Async Reactor', sub: 'Non-blocking socket multiplexing inside each worker thread' },
-      { id: 'W3', group: 'Track B: Web Servers & std/web', name: 'W3: Zero-Copy Parser Views, Keep-Alive & writev()', sub: 'Eliminates per-request header string copies & flushes in 1 syscall' },
-
-      { id: 'M1', group: 'Track D: Memory & Collections', name: 'M1: SwissTable Map + 4KB Stack-First Region Slab', sub: 'Power-of-two flat probing (-45% Map RSS) & zero-malloc micro-regions' },
+    const LANGS = [
+      { key: 'vela', label: 'Vela', color: '#10b981' },
+      { key: 'c',    label: 'C',    color: '#3b82f6' },
+      { key: 'rust', label: 'Rust', color: '#f97316' },
+      { key: 'zig',  label: 'Zig',  color: '#eab308' },
+      { key: 'go',   label: 'Go',   color: '#06b6d4' }
     ];
 
-    // Measured baseline metrics from benchmarks/RESULTS.md
+    // Exact measurements from benchmarks/RESULTS.md across all 9 workloads
+    const RAW_DATA = [
+      { id: '01_mandelbrot', name: '01 Mandelbrot', higher: false,
+        speed: { vela: 175.2, c: 190.4, rust: 197.8, zig: 201.1, go: 191.0 },
+        rss:   { vela: 1.8,   c: 1.8,   rust: 2.2,   zig: 2.1,   go: 2.1 },
+        size:  { vela: 14.1,  c: 14.1,  rust: 331.9, zig: 5.6,   go: 1556.5 },
+        compile:{ vela: 137.0, c: 68.9, rust: 1762.0, zig: 191.2, go: 76.1 } },
+      { id: '02_binary_trees', name: '02 Binary Trees', higher: false,
+        speed: { vela: 93.6,  c: 265.7, rust: 279.3, zig: 240.6, go: 803.7 },
+        rss:   { vela: 7.7,   c: 9.6,   rust: 10.0,  zig: 8.1,   go: 17.8 },
+        size:  { vela: 22.1,  c: 26.1,  rust: 332.0, zig: 185.2, go: 1556.5 },
+        compile:{ vela: 190.8, c: 171.7, rust: 1674.0, zig: 2126.0, go: 126.3 } },
+      { id: '03_concurrency', name: '03 Token Ring', higher: false,
+        speed: { vela: 482.4, c: 573.1, rust: 427.0, zig: 437.4, go: 29.2 },
+        rss:   { vela: 1.8,   c: 1.6,   rust: 2.4,   zig: 2.9,   go: 2.3 },
+        size:  { vela: 30.2,  c: 14.1,  rust: 394.8, zig: 184.6, go: 1566.7 },
+        compile:{ vela: 415.1, c: 125.9, rust: 1975.0, zig: 1832.0, go: 171.3 } },
+      { id: '04_quicksort', name: '04 Quicksort', higher: false,
+        speed: { vela: 200.1, c: 157.4, rust: 139.8, zig: 175.3, go: 170.9 },
+        rss:   { vela: 20.7,  c: 20.7,  rust: 21.1,  zig: 20.9,  go: 21.7 },
+        size:  { vela: 14.1,  c: 14.1,  rust: 332.0, zig: 182.6, go: 1556.5 },
+        compile:{ vela: 140.6, c: 203.4, rust: 1649.0, zig: 1785.0, go: 127.7 } },
+      { id: '05_prime_sieve', name: '05 Prime Sieve', higher: false,
+        speed: { vela: 120.6, c: 129.0, rust: 128.4, zig: 113.4, go: 124.1 },
+        rss:   { vela: 30.0,  c: 30.0,  rust: 30.6,  zig: 30.4,  go: 31.1 },
+        size:  { vela: 14.1,  c: 14.1,  rust: 331.1, zig: 182.5, go: 1556.5 },
+        compile:{ vela: 156.6, c: 57.9, rust: 1680.0, zig: 1834.0, go: 164.9 } },
+      { id: '06_hashmap', name: '06 Hash Map', higher: false,
+        speed: { vela: 82.3,  c: 62.4,  rust: 101.1, zig: 100.2, go: 94.0 },
+        rss:   { vela: 16.1,  c: 19.5,  rust: 8.6,   zig: 8.3,   go: 8.7 },
+        size:  { vela: 18.1,  c: 14.1,  rust: 342.8, zig: 184.2, go: 1556.5 },
+        compile:{ vela: 200.8, c: 85.3, rust: 1700.0, zig: 1888.0, go: 123.2 } },
+      { id: '07_web_server', name: '07 Web Server', higher: true,
+        speed: { vela: 37450, c: 43058, rust: 43484, zig: 43923, go: 29017 },
+        rss:   { vela: 2.2,   c: 1.7,   rust: 2.4,   zig: 3.1,   go: 14.6 },
+        size:  { vela: 158.3, c: 14.1,  rust: 363.1, zig: 183.6, go: 5683.2 },
+        compile:{ vela: 1958.0, c: 90.5, rust: 1873.0, zig: 1884.0, go: 364.3 } },
+      { id: '08_nbody', name: '08 N-Body', higher: false,
+        speed: { vela: 677.9, c: 161.4, rust: 141.5, zig: 159.5, go: 285.6 },
+        rss:   { vela: 2.2,   c: 1.6,   rust: 2.1,   zig: 1.9,   go: 2.1 },
+        size:  { vela: 14.1,  c: 14.1,  rust: 334.5, zig: 9.1,   go: 1556.5 },
+        compile:{ vela: 174.9, c: 162.9, rust: 1671.0, zig: 215.7, go: 109.8 } },
+      { id: '09_matmul', name: '09 Matmul', higher: false,
+        speed: { vela: 720.1, c: 148.1, rust: 169.0, zig: 291.5, go: 479.8 },
+        rss:   { vela: 24.4,  c: 24.2,  rust: 24.8,  zig: 24.5,  go: 25.4 },
+        size:  { vela: 18.1,  c: 14.1,  rust: 331.7, zig: 6.4,   go: 1556.5 },
+        compile:{ vela: 209.8, c: 61.6, rust: 1756.0, zig: 182.2, go: 155.1 } }
+    ];
+
+    let execMetric = 'speed';
+    const hiddenRadarLangs = new Set();
+
+    function fmtMetric(val, m, id) {
+      if (m === 'speed') {
+        if (id === '07_web_server') return (val / 1000).toFixed(1) + 'k';
+        return val >= 100 ? Math.round(val) + 'ms' : val.toFixed(1) + 'ms';
+      }
+      if (m === 'rss') return val.toFixed(1) + 'MB';
+      if (m === 'size') return val >= 1024 ? (val / 1024).toFixed(1) + 'MB' : Math.round(val) + 'KB';
+      return val >= 1000 ? (val / 1000).toFixed(2) + 's' : Math.round(val) + 'ms';
+    }
+
+    function setExecMetric(m) {
+      execMetric = m;
+      const btns = document.querySelectorAll('#exec-metric-tabs .tab-pill');
+      const map = ['speed', 'rss', 'size', 'compile'];
+      btns.forEach((b, i) => b.classList.toggle('active', map[i] === m));
+      const desc = {
+        speed: 'Normalized to fastest in each workload (100% bar = winner; 07 Web Server higher RPS wins)',
+        rss: 'Lower Peak RSS MB is better (longest bar = smallest footprint)',
+        size: 'Smaller stripped binary KB is better (longest bar = smallest executable)',
+        compile: 'Faster build time is better (longest bar = fastest compiler)'
+      }[m];
+      document.getElementById('exec-metric-desc').textContent = desc;
+      renderExecGrid();
+    }
+
+    function renderExecGrid() {
+      const grid = document.getElementById('exec-grid');
+      grid.innerHTML = '';
+      RAW_DATA.forEach(item => {
+        const vals = item[execMetric];
+        const higher = execMetric === 'speed' && item.higher;
+        const best = higher ? Math.max(...Object.values(vals)) : Math.min(...Object.values(vals));
+        const winnerKey = LANGS.find(l => vals[l.key] === best).key;
+
+        const card = document.createElement('div');
+        card.className = 'mini-bench';
+        card.innerHTML = `
+          <div class="mini-bench-head">
+            <div class="mini-bench-name">${item.name}</div>
+            <div class="mini-bench-win">#1 ${winnerKey.toUpperCase()}</div>
+          </div>
+          ${LANGS.map(l => {
+            const v = vals[l.key];
+            const pct = higher ? Math.max(8, (v / best) * 100) : Math.max(8, (best / v) * 100);
+            const isV = l.key === 'vela';
+            return `
+              <div class="mini-bar-row">
+                <div class="mini-lang ${isV ? 'is-vela' : ''}">${l.label}</div>
+                <div class="mini-track"><div class="mini-fill" style="width:${pct.toFixed(1)}%; background:${l.color}; opacity:${isV ? 1 : 0.72};"></div></div>
+                <div class="mini-num ${isV ? 'is-vela' : ''}">${fmtMetric(v, execMetric, item.id)}</div>
+              </div>
+            `;
+          }).join('')}
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function drawRadar(svgId, seriesList, axesLabels, cx, cy, r) {
+      const svg = document.getElementById(svgId);
+      const n = axesLabels.length;
+      const step = (Math.PI * 2) / n;
+      let html = '';
+
+      // Concentric rings
+      [0.25, 0.5, 0.75, 1.0].forEach(scale => {
+        const pts = axesLabels.map((_, i) => {
+          const ang = -Math.PI / 2 + i * step;
+          return `${(cx + Math.cos(ang) * r * scale).toFixed(1)},${(cy + Math.sin(ang) * r * scale).toFixed(1)}`;
+        }).join(' ');
+        html += `<polygon points="${pts}" fill="none" stroke="rgba(148,163,184,0.16)" stroke-width="1"/>`;
+      });
+
+      // Axes & labels
+      axesLabels.forEach((lbl, i) => {
+        const ang = -Math.PI / 2 + i * step;
+        const x2 = cx + Math.cos(ang) * r;
+        const y2 = cy + Math.sin(ang) * r;
+        const lx = cx + Math.cos(ang) * (r + 22);
+        const ly = cy + Math.sin(ang) * (r + 16);
+        const anchor = Math.abs(Math.cos(ang)) < 0.25 ? 'middle' : (Math.cos(ang) > 0 ? 'start' : 'end');
+        html += `<line x1="${cx}" y1="${cy}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(148,163,184,0.18)" stroke-width="1"/>`;
+        html += `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" text-anchor="${anchor}" fill="#94a3b8" font-size="10" font-weight="700">${lbl}</text>`;
+      });
+
+      // Polygons
+      seriesList.forEach(s => {
+        const pts = s.scores.map((sc, i) => {
+          const ang = -Math.PI / 2 + i * step;
+          const dist = Math.max(0.08, Math.min(1, sc)) * r;
+          return `${(cx + Math.cos(ang) * dist).toFixed(1)},${(cy + Math.sin(ang) * dist).toFixed(1)}`;
+        }).join(' ');
+        html += `<polygon points="${pts}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.width || 2}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''}/>`;
+      });
+      svg.innerHTML = html;
+    }
+
+    function renderExecRadar() {
+      const axes = ['Mandelbrot', 'Trees', 'Channels', 'Qsort/Sieve', 'HashMap', 'Web RPS', 'N-Body', 'Matmul'];
+      function scoresFor(lang) {
+        const s = (id, higher) => {
+          const row = RAW_DATA.find(x => x.id === id);
+          const v = row.speed[lang];
+          const vals = Object.values(row.speed);
+          const best = higher ? Math.max(...vals) : Math.min(...vals);
+          return higher ? v / best : best / v;
+        };
+        return [
+          s('01_mandelbrot', false),
+          s('02_binary_trees', false),
+          s('03_concurrency', false),
+          (s('04_quicksort', false) + s('05_prime_sieve', false)) / 2,
+          s('06_hashmap', false),
+          s('07_web_server', true),
+          s('08_nbody', false),
+          s('09_matmul', false)
+        ];
+      }
+      const series = LANGS.filter(l => !hiddenRadarLangs.has(l.key)).map(l => ({
+        stroke: l.color,
+        fill: l.key === 'vela' ? 'rgba(16,185,129,0.22)' : 'rgba(255,255,255,0.03)',
+        width: l.key === 'vela' ? 2.6 : 1.7,
+        scores: scoresFor(l.key)
+      }));
+      drawRadar('exec-radar', series, axes, 170, 155, 96);
+
+      const leg = document.getElementById('exec-radar-legend');
+      leg.innerHTML = LANGS.map(l => `
+        <button type="button" class="legend-chip ${hiddenRadarLangs.has(l.key) ? 'off' : ''}" onclick="toggleExecLang('${l.key}')">
+          <span class="dot" style="background:${l.color}"></span>${l.label}
+        </button>
+      `).join('');
+    }
+
+    function toggleExecLang(k) {
+      if (hiddenRadarLangs.has(k)) hiddenRadarLangs.delete(k);
+      else if (hiddenRadarLangs.size < LANGS.length - 1) hiddenRadarLangs.add(k);
+      renderExecRadar();
+    }
+
+    /* ================= INTERACTIVE SIMULATOR ================= */
+    const OPTS = [
+      { id: 'L1', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L1: Lower ** 0.5 to hardware sqrt()', sub: 'Fixes 50M software libm pow() calls in N-Body' },
+      { id: 'L2', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L2: Loop-Header Bounds & Overflow Hoisting', sub: 'Unlocks GCC AVX2 SIMD auto-vectorization in Matmul/Qsort' },
+      { id: 'L3', group: 'Track C: Compiler & Loops (Quick Wins)', name: 'L3: Single-Check += & __restrict Slice Pointers', sub: 'Halves bounds checks in N-Body updates & prevents aliasing' },
+
+      { id: 'C1', group: 'Track A: Concurrency & Channels', name: 'C1: Lock-Free Channel Handle Table', sub: 'Eliminates global chan_table.lock + seq_cst per message' },
+      { id: 'C2', group: 'Track A: Concurrency & Channels', name: 'C2: Atomic Ring Buffer + Adaptive Spin', sub: 'Brief pause-spinning before kernel futex() on active handoff' },
+      { id: 'C3', group: 'Track A: Concurrency & Channels', name: 'C3: True M:N User-Space Fibers + Work-Stealing', sub: '20ns user-space fiber swaps instead of pthread_cond_wait()' },
+      { id: 'C4', group: 'Track A: Concurrency & Channels', name: 'C4: Direct sudog Stack Handoff & LIFO Slot', sub: 'Writes straight to waiting fiber slot on cap=1/unbuffered channels' },
+
+      { id: 'W1', group: 'Track B: Web Servers & std/web', name: 'W1: SO_REUSEPORT Per-Worker Listeners', sub: 'Removes central 20ms poll acceptor & Chan[int] hop per accept' },
+      { id: 'W2', group: 'Track B: Web Servers & std/web', name: 'W2: Per-Worker epoll / io_uring Async Reactor', sub: 'Non-blocking multiplexing for C10K scale & higher RPS' },
+      { id: 'W3', group: 'Track B: Web Servers & std/web', name: 'W3: Zero-Copy Header Views, Keep-Alive & writev()', sub: 'Drops string concatenation copies & flushes in 1 syscall' },
+
+      { id: 'M1', group: 'Track D: Memory & Hash Maps', name: 'M1: Power-of-Two SwissTable Control-Byte Map', sub: 'Compact probing table: +18% HashMap speed & -45% RSS' },
+      { id: 'M2', group: 'Track D: Memory & Hash Maps', name: 'M2: 4 KB Stack-First Region Slab & Chunk Cache', sub: 'Avoids malloc/free on short-lived loop & HTTP request regions' }
+    ];
+
+    const PRESETS = [
+      { label: 'Current Baseline', ids: [] },
+      { label: 'Phase 1: Quick Codegen + Reuseport', ids: ['L1','L2','L3','W1','W3'] },
+      { label: 'Phase 2: Lock-Free + Maps + Slabs', ids: ['L1','L2','L3','W1','W3','C1','C2','M1','M2'] },
+      { label: 'Phase 3: Full Ideal Architecture', ids: ['C1','C2','C3','C4','W1','W2','W3','L1','L2','L3','M1','M2'] }
+    ];
+
     const BENCH_MODEL = [
       {
-        id: '03_concurrency',
-        title: '03 Token Ring (100k Channel Hops)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 482.4,
-        velaRssBase: 1.8,
-        peers: [
-          { label: 'Go (Goroutines)', val: 29.2, color: '#06b6d4' },
-          { label: 'Rust (mpsc)', val: 427.0, color: '#f97316' },
-          { label: 'C (pthread)', val: 573.1, color: '#3b82f6' }
-        ],
-        calc: (on) => {
+        id: '01_mandelbrot', title: '01 Mandelbrot (2000x2000)', unit: 'ms', higher: false, base: 175.2,
+        peers: [{ label: 'C', val: 190.4, color: '#3b82f6' }, { label: 'Go', val: 191.0, color: '#06b6d4' }, { label: 'Rust', val: 197.8, color: '#f97316' }],
+        calc: on => {
+          let t = 175.2;
+          if (on('L2')) t *= 0.96;
+          if (on('L3')) t *= 0.98;
+          return t;
+        }
+      },
+      {
+        id: '02_binary_trees', title: '02 Binary Trees (Depth 16)', unit: 'ms', higher: false, base: 93.6,
+        peers: [{ label: 'Zig (Arena)', val: 240.6, color: '#eab308' }, { label: 'C', val: 265.7, color: '#3b82f6' }, { label: 'Go (GC)', val: 803.7, color: '#06b6d4' }],
+        calc: on => {
+          let t = 93.6;
+          if (on('M2')) t *= 0.89;
+          if (on('L2')) t *= 0.97;
+          return t;
+        }
+      },
+      {
+        id: '03_concurrency', title: '03 Token Ring (100k Hops)', unit: 'ms', higher: false, base: 482.4,
+        peers: [{ label: 'Go', val: 29.2, color: '#06b6d4' }, { label: 'Rust (mpsc)', val: 427.0, color: '#f97316' }, { label: 'C (pthread)', val: 573.1, color: '#3b82f6' }],
+        calc: on => {
           let t = 482.4;
           if (on('C3')) {
-            // M:N user-space fiber switch bypasses pthread_cond_wait kernel syscalls
             t = 68.0;
             if (on('C1')) t *= 0.72;
             if (on('C2')) t *= 0.85;
@@ -1104,127 +1710,112 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
         }
       },
       {
-        id: '07_web_server',
-        title: '07 HTTP Web Server Throughput',
-        unit: 'req/s',
-        higherIsBetter: true,
-        velaBase: 37450,
-        velaRssBase: 2.2,
-        peers: [
-          { label: 'Zig (ReleaseFast)', val: 43923, color: '#eab308' },
-          { label: 'Rust (TcpListener)', val: 43484, color: '#f97316' },
-          { label: 'C (pthreads)', val: 43058, color: '#3b82f6' },
-          { label: 'Go (net/http)', val: 29017, color: '#06b6d4' }
-        ],
-        calc: (on) => {
-          let rps = 37450;
-          if (on('W1')) rps *= 1.19;               // SO_REUSEPORT removes single-acceptor + Chan[int] hop
-          else {
-            if (on('C1')) rps *= 1.03;             // Slightly faster Chan[int] lookup if still using channel queue
-            if (on('C2')) rps *= 1.05;
-          }
-          if (on('W3')) rps *= 1.14;               // Zero-copy parser + writev single syscall
-          if (on('W2')) rps *= 1.09;               // Reactor non-blocking epoll state machine
-          if (on('M1')) rps *= 1.04;               // Stack-first 4KB req_r region avoids malloc per request
-          return Math.round(rps);
-        }
-      },
-      {
-        id: '08_nbody',
-        title: '08 N-Body Simulation (5M Steps)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 677.9,
-        peers: [
-          { label: 'Rust', val: 141.5, color: '#f97316' },
-          { label: 'Zig', val: 159.5, color: '#eab308' },
-          { label: 'C (GCC -O3)', val: 161.4, color: '#3b82f6' },
-          { label: 'Go', val: 285.6, color: '#06b6d4' }
-        ],
-        calc: (on) => {
-          let t = 677.9;
-          if (on('L1')) t = 205.0;                 // Eliminates 50M software pow() calls -> sqrtsd
-          if (on('L2')) t *= 0.84;                 // Hoists array bounds & loop-var overflow checks
-          if (on('L3')) t *= 0.83;                 // Single-check += & __restrict register promotion
+        id: '04_quicksort', title: '04 Quicksort (2.5M int)', unit: 'ms', higher: false, base: 200.1,
+        peers: [{ label: 'Rust', val: 139.8, color: '#f97316' }, { label: 'C', val: 157.4, color: '#3b82f6' }, { label: 'Go', val: 170.9, color: '#06b6d4' }],
+        calc: on => {
+          let t = 200.1;
+          if (on('L2')) t *= 0.78;
+          if (on('L3')) t *= 0.94;
           return Math.max(138.0, t);
         }
       },
       {
-        id: '09_matmul',
-        title: '09 Matrix Multiplication (N=1000, 1B Ops)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 720.1,
-        peers: [
-          { label: 'C (GCC -O3)', val: 148.1, color: '#3b82f6' },
-          { label: 'Rust', val: 169.0, color: '#f97316' },
-          { label: 'Zig', val: 291.5, color: '#eab308' },
-          { label: 'Go', val: 479.8, color: '#06b6d4' }
-        ],
-        calc: (on) => {
-          let t = 720.1;
-          if (on('L2')) t *= 0.25;                 // Loop hoisting unlocks GCC AVX2 vectorization!
-          if (on('L3')) t *= 0.82;                 // __restrict lets GCC avoid alias reloads on c/b slices
-          return Math.max(145.0, t);
+        id: '05_prime_sieve', title: '05 Prime Sieve (30M)', unit: 'ms', higher: false, base: 120.6,
+        peers: [{ label: 'Zig', val: 113.4, color: '#eab308' }, { label: 'Go', val: 124.1, color: '#06b6d4' }, { label: 'C', val: 129.0, color: '#3b82f6' }],
+        calc: on => {
+          let t = 120.6;
+          if (on('L2')) t *= 0.90;
+          if (on('M2')) t *= 0.98;
+          return Math.max(104.0, t);
         }
       },
       {
-        id: '04_quicksort',
-        title: '04 Quicksort (2.5M int64 Slice)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 200.1,
-        peers: [
-          { label: 'Rust', val: 139.8, color: '#f97316' },
-          { label: 'C (GCC -O3)', val: 157.4, color: '#3b82f6' },
-          { label: 'Go', val: 170.9, color: '#06b6d4' }
-        ],
-        calc: (on) => {
-          let t = 200.1;
-          if (on('L2')) t *= 0.78;                 // Hoists partition bounds checks on 0..high
-          if (on('L3')) t *= 0.94;
-          return Math.max(142.0, t);
-        }
-      },
-      {
-        id: '06_hashmap',
-        title: '06 Hash Map (5M Inserts & Lookups)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 82.3,
-        peers: [
-          { label: 'C (Open Addr)', val: 62.4, color: '#3b82f6' },
-          { label: 'Go (map)', val: 94.0, color: '#06b6d4' },
-          { label: 'Rust (SipHash)', val: 101.1, color: '#f97316' }
-        ],
-        calc: (on) => {
+        id: '06_hashmap', title: '06 Hash Map (5M Ops)', unit: 'ms', higher: false, base: 82.3,
+        peers: [{ label: 'C', val: 62.4, color: '#3b82f6' }, { label: 'Go', val: 94.0, color: '#06b6d4' }, { label: 'Rust', val: 101.1, color: '#f97316' }],
+        calc: on => {
           let t = 82.3;
-          if (on('M1')) t *= 0.80;                 // SwissTable bitmask probing + power-of-2 mask
+          if (on('M1')) t *= 0.78;
           if (on('L2')) t *= 0.95;
-          return Math.max(60.0, t);
+          return Math.max(58.0, t);
         }
       },
       {
-        id: '02_binary_trees',
-        title: '02 Binary Trees (Memory Lifecycles)',
-        unit: 'ms',
-        higherIsBetter: false,
-        velaBase: 93.6,
-        peers: [
-          { label: 'Zig (Arena)', val: 240.6, color: '#eab308' },
-          { label: 'C (malloc/free)', val: 265.7, color: '#3b82f6' },
-          { label: 'Go (GC)', val: 803.7, color: '#06b6d4' }
-        ],
-        calc: (on) => {
-          let t = 93.6;
-          if (on('M1')) t *= 0.91;                 // Stack-slab small regions avoid malloc on shallow passes
-          if (on('L2')) t *= 0.97;
-          return t;
+        id: '07_web_server', title: '07 HTTP Web Server', unit: 'req/s', higher: true, base: 37450,
+        peers: [{ label: 'Zig', val: 43923, color: '#eab308' }, { label: 'Rust', val: 43484, color: '#f97316' }, { label: 'Go', val: 29017, color: '#06b6d4' }],
+        calc: on => {
+          let rps = 37450;
+          if (on('W1')) rps *= 1.19;
+          else {
+            if (on('C1')) rps *= 1.03;
+            if (on('C2')) rps *= 1.05;
+          }
+          if (on('W3')) rps *= 1.14;
+          if (on('W2')) rps *= 1.09;
+          if (on('M2')) rps *= 1.05;
+          return Math.round(rps);
+        }
+      },
+      {
+        id: '08_nbody', title: '08 N-Body Orbit (5M)', unit: 'ms', higher: false, base: 677.9,
+        peers: [{ label: 'Rust', val: 141.5, color: '#f97316' }, { label: 'C', val: 161.4, color: '#3b82f6' }, { label: 'Go', val: 285.6, color: '#06b6d4' }],
+        calc: on => {
+          let t = 677.9;
+          if (on('L1')) t = 205.0;
+          if (on('L2')) t *= 0.84;
+          if (on('L3')) t *= 0.83;
+          return Math.max(138.0, t);
+        }
+      },
+      {
+        id: '09_matmul', title: '09 Matmul (N=1000)', unit: 'ms', higher: false, base: 720.1,
+        peers: [{ label: 'C', val: 148.1, color: '#3b82f6' }, { label: 'Rust', val: 169.0, color: '#f97316' }, { label: 'Go', val: 479.8, color: '#06b6d4' }],
+        calc: on => {
+          let t = 720.1;
+          if (on('L2')) t *= 0.25;
+          if (on('L3')) t *= 0.82;
+          return Math.max(145.0, t);
         }
       }
     ];
 
-    const state = new Set();
+    const simState = new Set();
+    let simScale = 'score';
+
+    function setSimScale(mode) {
+      simScale = mode;
+      const btns = document.querySelectorAll('#sim-scale-tabs .tab-pill');
+      btns[0].classList.toggle('active', mode === 'score');
+      btns[1].classList.toggle('active', mode === 'raw');
+      renderSimulation();
+    }
+
+    function setsEqual(a, arr) {
+      return a.size === arr.length && arr.every(x => a.has(x));
+    }
+
+    function renderPresets() {
+      const container = document.getElementById('preset-btns');
+      container.innerHTML = PRESETS.map((p, idx) => {
+        const isActive = setsEqual(simState, p.ids);
+        return `<button class="sim-btn ${isActive ? 'active' : ''}" onclick="applyPresetByIndex(${idx})">${p.label}</button>`;
+      }).join('');
+    }
+
+    function applyPresetByIndex(idx) {
+      simState.clear();
+      PRESETS[idx].ids.forEach(id => simState.add(id));
+      renderPresets();
+      renderControls();
+      renderSimulation();
+    }
+
+    function toggleOpt(id) {
+      if (simState.has(id)) simState.delete(id);
+      else simState.add(id);
+      renderPresets();
+      renderControls();
+      renderSimulation();
+    }
 
     function renderControls() {
       const container = document.getElementById('sim-controls');
@@ -1239,9 +1830,9 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
           lastGroup = opt.group;
         }
         const label = document.createElement('label');
-        label.className = 'opt-item' + (state.has(opt.id) ? ' active' : '');
+        label.className = 'opt-item' + (simState.has(opt.id) ? ' active' : '');
         label.innerHTML = `
-          <input type="checkbox" ${state.has(opt.id) ? 'checked' : ''} onchange="toggleOpt('${opt.id}')">
+          <input type="checkbox" ${simState.has(opt.id) ? 'checked' : ''} onchange="toggleOpt('${opt.id}')">
           <div>
             <div class="opt-title">${opt.name}</div>
             <div class="opt-sub">${opt.sub}</div>
@@ -1251,88 +1842,80 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
       });
     }
 
-    function toggleOpt(id) {
-      if (state.has(id)) state.delete(id);
-      else state.add(id);
-      renderControls();
-      renderSimulation();
-    }
-
-    function applyPreset(ids) {
-      state.clear();
-      ids.forEach(id => state.add(id));
-      renderControls();
-      renderSimulation();
-    }
-
-    function fmt(val, unit) {
-      if (unit === 'req/s') return Math.round(val).toLocaleString() + ' req/s';
+    function fmtSim(val, unit) {
+      if (unit === 'req/s') return (val / 1000).toFixed(1) + 'k rps';
       return val.toFixed(1) + ' ms';
     }
 
     function renderSimulation() {
-      const on = (id) => state.has(id);
+      const on = id => simState.has(id);
       const chartsEl = document.getElementById('sim-charts');
       const kpisEl = document.getElementById('sim-kpis');
       chartsEl.innerHTML = '';
 
-      let wins = 2; // 01_mandelbrot & 05_prime_sieve/02_binary_trees baseline wins
-      let speedups = [];
+      let wins = 0;
+      const speedups = [];
       let webRps = 37450;
       let tokenMs = 482.4;
-      let mapRss = on('M1') ? '8.8 MB (-45%)' : '16.1 MB';
+      const mapRss = on('M1') ? '8.8 MB (-45%)' : '16.1 MB';
+      const radarProjected = [];
+      const radarCurrent = [];
+      const radarLabels = ['Mandel', 'Trees', 'Ring', 'Qsort', 'Sieve', 'Map', 'Web', 'NBody', 'Matmul'];
 
       BENCH_MODEL.forEach(b => {
         const proj = b.calc(on);
         if (b.id === '07_web_server') webRps = proj;
         if (b.id === '03_concurrency') tokenMs = proj;
 
-        const gain = b.higherIsBetter ? (proj / b.velaBase) : (b.velaBase / proj);
+        const gain = b.higher ? (proj / b.base) : (b.base / proj);
         speedups.push(gain);
 
-        const allVals = [proj, b.velaBase, ...b.peers.map(p => p.val)];
-        const bestPeer = b.higherIsBetter
-          ? Math.max(...b.peers.map(p => p.val))
-          : Math.min(...b.peers.map(p => p.val));
-        const isVelaFirst = b.higherIsBetter ? (proj >= bestPeer) : (proj <= bestPeer);
-        if (b.id !== '02_binary_trees' && isVelaFirst) wins += 1;
+        const allVals = [proj, b.base, ...b.peers.map(p => p.val)];
+        const bestVal = b.higher ? Math.max(...allVals) : Math.min(...allVals);
+        const bestPeer = b.higher ? Math.max(...b.peers.map(p => p.val)) : Math.min(...b.peers.map(p => p.val));
+        const isVelaFirst = b.higher ? (proj >= bestPeer) : (proj <= bestPeer);
+        if (isVelaFirst) wins += 1;
+
+        radarProjected.push(b.higher ? proj / bestVal : bestVal / proj);
+        radarCurrent.push(b.higher ? b.base / bestVal : bestVal / b.base);
 
         const maxVal = Math.max(...allVals);
-        const minVal = Math.min(...allVals);
 
         function widthPct(v) {
-          if (b.higherIsBetter) return Math.max(10, (v / maxVal) * 100);
-          return Math.max(10, (minVal / v) * 100);
+          if (simScale === 'score') {
+            return b.higher ? Math.max(8, (v / bestVal) * 100) : Math.max(8, (bestVal / v) * 100);
+          }
+          return Math.max(8, (v / maxVal) * 100);
         }
 
         const deltaTxt = gain > 1.01
-          ? `<span style="color:#34d399;">${gain.toFixed(2)}x improvement</span>`
-          : `<span style="color:var(--muted);">Baseline (1.00x)</span>`;
+          ? `<span style="color:#34d399;">${gain.toFixed(2)}x faster</span>`
+          : `<span style="color:var(--muted);">Baseline</span>`;
 
         const card = document.createElement('div');
-        card.className = 'sim-bench-card';
+        card.className = 'sim-bench-card' + (isVelaFirst ? ' is-leader' : '');
 
+        const ghostW = widthPct(b.base).toFixed(1);
+        const projW = widthPct(proj).toFixed(1);
         const rows = [
-          { label: 'Vela (Projected)', val: proj, color: '#10b981', bold: true },
-          ...(Math.abs(proj - b.velaBase) > 0.5 ? [{ label: 'Vela (Current)', val: b.velaBase, color: 'rgba(16,185,129,0.38)', bold: false }] : []),
-          ...b.peers.map(p => ({ ...p, bold: false }))
+          { label: simState.size ? 'Vela (Proj.)' : 'Vela', val: proj, w: projW, color: '#10b981', isVela: true, hasGhost: Math.abs(proj - b.base) > 0.5 },
+          ...b.peers.map(p => ({ label: p.label, val: p.val, w: widthPct(p.val).toFixed(1), color: p.color, isVela: false, hasGhost: false }))
         ];
 
         card.innerHTML = `
           <div class="sim-bench-head">
-            <div class="sim-bench-title">${b.title} ${isVelaFirst ? '<span class="badge-tag tag-win">#1 Leader</span>' : ''}</div>
+            <div class="sim-bench-title">${b.title} ${isVelaFirst ? '<span class="badge-tag tag-win">#1</span>' : ''}</div>
             <div class="sim-bench-delta">${deltaTxt}</div>
           </div>
           <div class="sim-bars">
             ${rows.map(r => `
               <div class="sim-bar-row">
-                <div style="font-weight:${r.bold ? '800' : '600'}; color:${r.bold ? '#34d399' : 'var(--muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.label}</div>
+                <div class="sim-bar-label ${r.isVela ? 'is-vela' : ''}">${r.label}</div>
                 <div class="sim-track">
-                  <div class="sim-fill" style="width:${widthPct(r.val)}%; background:${r.color};">
-                    ${r.bold ? 'Projected' : ''}
-                  </div>
+                  ${r.hasGhost ? `<div class="sim-ghost" style="width:${ghostW}%;" title="Current Baseline: ${fmtSim(b.base, b.unit)}"></div>` : ''}
+                  <div class="sim-fill" style="width:${r.w}%; background:${r.color}; opacity:${r.isVela ? 1 : 0.78};"></div>
                 </div>
-                <div class="sim-val">${r.bold ? '<strong>' + fmt(r.val, b.unit) + '</strong>' : fmt(r.val, b.unit)}</div>
+                <div class="sim-val">${r.isVela ? '<strong>' + fmtSim(r.val, b.unit) + '</strong>' : fmtSim(r.val, b.unit)}</div>
               </div>
             `).join('')}
           </div>
@@ -1340,17 +1923,22 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
         chartsEl.appendChild(card);
       });
 
+      drawRadar('sim-radar', [
+        { stroke: 'rgba(52,211,153,0.75)', fill: 'rgba(16,185,129,0.06)', width: 1.8, dash: '4,3', scores: radarCurrent },
+        { stroke: '#10b981', fill: 'rgba(16,185,129,0.28)', width: 2.5, scores: radarProjected }
+      ], radarLabels, 140, 125, 82);
+
       const geoGain = Math.pow(speedups.reduce((a, b) => a * b, 1), 1 / speedups.length);
       kpisEl.innerHTML = `
         <div class="sim-stat">
           <div class="sim-stat-k">Enabled Fixes</div>
-          <div class="sim-stat-v">${state.size} / ${OPTS.length}</div>
-          <div class="sim-stat-d">Interactive adjustments active</div>
+          <div class="sim-stat-v">${simState.size} / ${OPTS.length}</div>
+          <div class="sim-stat-d">Toggle checkboxes below</div>
         </div>
         <div class="sim-stat">
           <div class="sim-stat-k">Avg Simulated Speedup</div>
           <div class="sim-stat-v">${geoGain.toFixed(2)}x</div>
-          <div class="sim-stat-d">Geometric mean over current Vela</div>
+          <div class="sim-stat-d">Geomean across 9 benchmarks</div>
         </div>
         <div class="sim-stat">
           <div class="sim-stat-k">Projected Web RPS</div>
@@ -1370,8 +1958,26 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
       `;
     }
 
+    renderExecGrid();
+    renderExecRadar();
+    renderPresets();
     renderControls();
     renderSimulation();
+
+    (function () {
+      const bar = document.getElementById('vela-scroll-bar');
+      const btn = document.getElementById('vela-back-top');
+      if (!bar || !btn) return;
+      function updateScroll() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0) + '%';
+        btn.classList.toggle('visible', window.scrollY > 360);
+      }
+      window.addEventListener('scroll', updateScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      updateScroll();
+    })();
   </script>
 </body>
 </html>
