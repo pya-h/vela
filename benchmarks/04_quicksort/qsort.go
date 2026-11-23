@@ -20,7 +20,7 @@ func quicksort(items []int64, low, high int) {
 }
 
 func main() {
-	n := 1000000
+	n := 2500000
 	arr := make([]int64, n)
 	seed := int64(123456789)
 	for idx := 0; idx < n; idx++ {

@@ -17,5 +17,5 @@ fn count_primes(limit: usize) -> usize {
 }
 
 fn main() {
-    println!("primes count: {}", count_primes(10000000));
+    println!("primes count: {}", count_primes(30000000));
 }

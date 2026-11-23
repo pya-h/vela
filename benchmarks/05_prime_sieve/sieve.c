@@ -27,6 +27,6 @@ static int64_t count_primes(int64_t limit) {
 }
 
 int main(void) {
-    printf("primes count: %ld\n", (long)count_primes(10000000));
+    printf("primes count: %ld\n", (long)count_primes(30000000));
     return 0;
 }

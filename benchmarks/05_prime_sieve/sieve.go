@@ -24,5 +24,5 @@ func countPrimes(limit int) int {
 }
 
 func main() {
-	fmt.Printf("primes count: %d\n", countPrimes(10000000))
+	fmt.Printf("primes count: %d\n", countPrimes(30000000))
 }

@@ -25,6 +25,6 @@ fn countPrimes(limit: usize) !usize {
 }
 
 pub fn main() !void {
-    const count = try countPrimes(10000000);
+    const count = try countPrimes(30000000);
     _ = printf("primes count: %zu\n", count);
 }

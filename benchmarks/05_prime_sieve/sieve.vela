@@ -26,5 +26,5 @@ task count_primes(limit: int) -> int
 fi
 
 task main()
-    show("primes count: ", count_primes(10000000))
+    show("primes count: ", count_primes(30000000))
 fi

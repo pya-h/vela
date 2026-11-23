@@ -19,7 +19,7 @@ fi
 
 task main()
     region r default
-    fixed n = 1000000
+    fixed n = 2500000
     flex arr = new [int]([0#n]) at r
     flex seed = 123456789
     each idx in 0..n

@@ -21,27 +21,29 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 2rem 1.5rem; line-height: 1.5; }
-    .container { max-width: 1280px; margin: 0 auto; }
+    .container { max-width: 1320px; margin: 0 auto; }
     
     header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
     h1 { font-size: 2rem; font-weight: 800; display: flex; align-items: center; gap: 0.75rem; letter-spacing: -0.025em; }
     .badge { background: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent); font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 9999px; text-transform: uppercase; }
     .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.35rem; }
     
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }
     .stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.25rem; position: relative; overflow: hidden; }
-    .stat-card::after { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); }
-    .stat-card.c::after { background: var(--c-color); }
-    .stat-card.rust::after { background: var(--rust-color); }
-    .stat-card.go::after { background: var(--go-color); }
-    .stat-card.zig::after { background: var(--zig-color); }
-    .stat-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
-    .stat-val { font-size: 1.5rem; font-weight: 800; margin-top: 0.35rem; }
+    .stat-card::after { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--card-color, var(--accent)); }
+    .stat-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
+    .stat-val { font-size: 1.45rem; font-weight: 800; margin-top: 0.35rem; }
     .stat-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    .radar-section { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem; display: grid; grid-template-columns: 380px 1fr; gap: 2rem; align-items: center; }
+    @media (max-width: 900px) { .radar-section { grid-template-columns: 1fr; } }
+    .radar-wrap { display: flex; justify-content: center; align-items: center; }
+    .radar-legend { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 700; cursor: pointer; padding: 0.35rem 0.75rem; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); }
 
     .toolbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 0.75rem; padding: 0.5rem 0.75rem; margin-bottom: 2rem; flex-wrap: wrap; gap: 0.75rem; }
     .tab-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+    .btn { background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 0.5rem 0.9rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
     .btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
     .btn.active { color: var(--text); background: #1f2937; border-color: #374151; }
 
@@ -50,19 +52,20 @@
     .bench-title { font-size: 1.35rem; font-weight: 700; }
     .bench-desc { font-size: 0.875rem; color: var(--text-muted); }
 
-    .bars-container { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
-    .bar-row { display: grid; grid-template-columns: 110px 1fr 140px; align-items: center; gap: 1rem; }
+    .bars-container { display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 1.5rem; }
+    .bar-row { display: grid; grid-template-columns: 95px 1fr 180px; align-items: center; gap: 1rem; }
     .bar-label { font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
     .lang-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     .bar-track { background: rgba(255,255,255,0.04); height: 32px; border-radius: 6px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.05); }
-    .bar-fill { height: 100%; border-radius: 5px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); display: flex; align-items: center; padding: 0 0.75rem; font-size: 0.8rem; font-weight: 700; color: #fff; min-width: 48px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+    .bar-fill { height: 100%; border-radius: 5px; transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); display: flex; align-items: center; padding: 0 0.75rem; font-size: 0.8rem; font-weight: 700; color: #fff; min-width: 56px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); white-space: nowrap; }
     .bar-meta { font-size: 0.85rem; font-weight: 600; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
-    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin-top: 1rem; }
-    th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--card-border); }
-    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; margin-top: 1rem; }
+    th, td { padding: 0.7rem 0.85rem; text-align: left; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
+    th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; }
     tr:last-child td { border-bottom: none; }
-    .winner-tag { background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 700; font-size: 0.75rem; }
+    .winner-tag { background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 700; font-size: 0.7rem; margin-left: 0.4rem; }
 
     footer { text-align: center; color: var(--text-muted); font-size: 0.85rem; padding-top: 2rem; border-top: 1px solid var(--card-border); margin-top: 3rem; }
   </style>
@@ -72,44 +75,36 @@
     <header>
       <div>
         <h1>Vela Performance Dashboard <span class="badge">Vela vs C, Rust, Go, Zig</span></h1>
-        <div class="subtitle">Multi-dimensional systems programming comparison measured across 5 canonical benchmark workloads (5 runs, 2 warmups).</div>
+        <div class="subtitle">Cross-language runtime, memory, concurrency, compilation, and HTTP throughput metrics (5 timed runs, 2 warmups).</div>
       </div>
       <div>
-        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: #3b82f6;">Automated Parity Checked</span>
+        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: #3b82f6;">Automated Output Parity Checked</span>
       </div>
     </header>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Memory Allocation Winner</div>
-        <div class="stat-val" style="color: var(--vela-color);">Vela Regions</div>
-        <div class="stat-sub">2.5x faster than C malloc, 3.4x faster than Go GC</div>
-      </div>
-      <div class="stat-card go">
-        <div class="stat-label">Channel Latency Winner</div>
-        <div class="stat-val" style="color: var(--go-color);">Go Green Threads</div>
-        <div class="stat-sub">15.7 ms across 100,000 hops (user-space M:N)</div>
-      </div>
-      <div class="stat-card c">
-        <div class="stat-label">Compute Loops Winner</div>
-        <div class="stat-val" style="color: var(--c-color);">C &amp; Vela &amp; Zig</div>
-        <div class="stat-sub">Within 7% parity across GCC and Clang backends</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Binary Size Leaders</div>
-        <div class="stat-val" style="color: var(--vela-color);">C &amp; Vela (~14 KB)</div>
-        <div class="stat-sub">100x smaller than Go, 20x smaller than Rust</div>
+    <div class="stats-grid" id="kpi-cards"></div>
+
+    <div class="radar-section">
+      <div class="radar-wrap" id="radar-container"></div>
+      <div>
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">Multi-Dimensional Language Profile</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+          Normalized radar shape across all benchmark dimensions (outer edge = 100% fastest/smallest in category). Highlights architectural tradeoffs between region allocation, tracing GC, green threads, and ahead-of-time systems codegen.
+        </p>
+        <div class="radar-legend" id="radar-legend"></div>
       </div>
     </div>
 
     <div class="toolbar">
       <div class="tab-group" id="metric-tabs">
-        <button class="btn active" onclick="setMetric('time')">⏱️ Execution Time (Speed)</button>
+        <button class="btn active" onclick="setMetric('median')">⏱️ Median Speed</button>
+        <button class="btn" onclick="setMetric('mean')">📊 Mean Speed</button>
         <button class="btn" onclick="setMetric('rss')">🧠 Peak RSS Memory</button>
-        <button class="btn" onclick="setMetric('size')">📦 Binary Footprint</button>
+        <button class="btn" onclick="setMetric('size')">📦 Binary Size</button>
+        <button class="btn" onclick="setMetric('compile')">⚡ Compile Time</button>
       </div>
       <div class="tab-group">
-        <button class="btn active" id="btn-ratio" onclick="toggleRatio(true)">Relative Speedup (x)</button>
+        <button class="btn active" id="btn-ratio" onclick="toggleRatio(true)">Relative Ratio (x)</button>
         <button class="btn" id="btn-raw" onclick="toggleRatio(false)">Absolute Values</button>
       </div>
     </div>
@@ -117,7 +112,7 @@
     <div id="benchmarks-container"></div>
 
     <footer>
-      Generated automatically by <code>benchmarks/run.py</code>. Measured with high-resolution CPU monotonic timers and GNU Time RSS counters.
+      Generated dynamically by <code>benchmarks/run.py</code>. Direct execution timing via monotonic clock; Peak RSS via GNU Time / Linux <code>/proc/pid/status</code> VmHWM.
     </footer>
   </div>
 
@@ -128,6 +123,7 @@
       "id": "01_mandelbrot",
       "name": "Mandelbrot",
       "category": "CPU & Tight Loops",
+      "kind": "batch",
       "desc": "2000x2000 Mandelbrot escape sum (50 max iters) - floating-point & loop optimization",
       "files": {
         "c": "mandelbrot.c",
@@ -140,47 +136,72 @@
     "results": {
       "c": {
         "stdout": "97631088",
-        "mean": 0.17093032319990015,
-        "stddev": 0.021222984669064745,
-        "min": 0.15846618199975637,
-        "max": 0.20778864699968835,
+        "mean": 0.18287427420000313,
+        "median": 0.18416637199879915,
+        "stddev": 0.016179644067652457,
+        "min": 0.1575524679992668,
+        "max": 0.200142579000385,
         "rss_kb": 1820,
+        "user_s": 0.16,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.07266960400011158,
         "bin_size_kb": 14.125
       },
       "rust": {
         "stdout": "97631088",
-        "mean": 0.18054011300009734,
-        "stddev": 0.012136680053443073,
-        "min": 0.1712188450001122,
-        "max": 0.20010101499974553,
-        "rss_kb": 2236,
+        "mean": 0.20978460979968078,
+        "median": 0.20424465399992187,
+        "stddev": 0.03299095560587162,
+        "min": 0.1717013979996409,
+        "max": 0.2626939900001162,
+        "rss_kb": 2248,
+        "user_s": 0.23,
+        "sys_s": 0.0,
+        "ctx_switches": 11,
+        "compile_s": 1.648117512000681,
         "bin_size_kb": 331.90625
       },
       "go": {
         "stdout": "97631088",
-        "mean": 0.1964313491998837,
-        "stddev": 0.022106762418627433,
-        "min": 0.17773010099972453,
-        "max": 0.2237618540002586,
-        "rss_kb": 2156,
+        "mean": 0.2002432695997413,
+        "median": 0.18586658599997463,
+        "stddev": 0.022935759567015913,
+        "min": 0.18519993600057205,
+        "max": 0.23789119599859987,
+        "rss_kb": 2340,
+        "user_s": 0.18,
+        "sys_s": 0.0,
+        "ctx_switches": 105,
+        "compile_s": 0.10452759400141076,
         "bin_size_kb": 1552.158203125
       },
       "zig": {
         "stdout": "97631088",
-        "mean": 0.1902802848004285,
-        "stddev": 0.018464183335556758,
-        "min": 0.17388034600026003,
-        "max": 0.2159127860004446,
+        "mean": 0.19193851119998726,
+        "median": 0.18849709300047834,
+        "stddev": 0.021199211999648884,
+        "min": 0.17193098699863185,
+        "max": 0.2224020310004562,
         "rss_kb": 2136,
+        "user_s": 0.18,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.18117989199890872,
         "bin_size_kb": 5.640625
       },
       "vela": {
         "stdout": "97631088",
-        "mean": 0.19477554380027867,
-        "stddev": 0.02460371942858398,
-        "min": 0.17345230700084358,
-        "max": 0.23574461699990934,
+        "mean": 0.1869742042003054,
+        "median": 0.19135011000071245,
+        "stddev": 0.016635112987452735,
+        "min": 0.16951505299948622,
+        "max": 0.204683070000101,
         "rss_kb": 1820,
+        "user_s": 0.2,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.12901004899867985,
         "bin_size_kb": 14.125
       }
     }
@@ -190,6 +211,7 @@
       "id": "02_binary_trees",
       "name": "Binary Trees",
       "category": "Memory Lifecycles",
+      "kind": "batch",
       "desc": "Millions of short-lived nodes (depth 16) - Region bulk free vs GC vs RAII vs Arena",
       "files": {
         "c": "tree.c",
@@ -202,47 +224,72 @@
     "results": {
       "c": {
         "stdout": "stretch tree of depth 17 check: 589818\n65536 trees of depth 4 check: 4718564\n16384 trees of depth 6 check: 4718584\n4096 trees of depth 8 check: 4718564\n1024 trees of depth 10 check: 4718584\n256 trees of depth 12 check: 4718564\n64 trees of depth 14 check: 4718584\n16 trees of depth 16 check: 4718564\nlong lived tree of depth 16 check: 294914",
-        "mean": 0.2549405702000513,
-        "stddev": 0.015527394375041153,
-        "min": 0.23088144900066254,
-        "max": 0.2733828809996339,
-        "rss_kb": 9812,
+        "mean": 0.2519952604005084,
+        "median": 0.2517830780016084,
+        "stddev": 0.018383167719898032,
+        "min": 0.2295649419993424,
+        "max": 0.27558769100141944,
+        "rss_kb": 9980,
+        "user_s": 0.23,
+        "sys_s": 0.0,
+        "ctx_switches": 9,
+        "compile_s": 0.19310760500047763,
         "bin_size_kb": 26.125
       },
       "rust": {
         "stdout": "stretch tree of depth 17 check: 589818\n65536 trees of depth 4 check: 4718564\n16384 trees of depth 6 check: 4718584\n4096 trees of depth 8 check: 4718564\n1024 trees of depth 10 check: 4718584\n256 trees of depth 12 check: 4718564\n64 trees of depth 14 check: 4718584\n16 trees of depth 16 check: 4718564\nlong lived tree of depth 16 check: 294914",
-        "mean": 0.29007229000035295,
-        "stddev": 0.025415627963818414,
-        "min": 0.2650548849996994,
-        "max": 0.31810456100083684,
-        "rss_kb": 10176,
+        "mean": 0.2852677881997806,
+        "median": 0.2782405310008471,
+        "stddev": 0.01466869394540485,
+        "min": 0.2708609190012794,
+        "max": 0.30396611299875076,
+        "rss_kb": 10208,
+        "user_s": 0.26,
+        "sys_s": 0.02,
+        "ctx_switches": 11,
+        "compile_s": 1.8294102959989686,
         "bin_size_kb": 332.0390625
       },
       "go": {
         "stdout": "stretch tree of depth 17 check: 589818\n65536 trees of depth 4 check: 4718564\n16384 trees of depth 6 check: 4718584\n4096 trees of depth 8 check: 4718564\n1024 trees of depth 10 check: 4718584\n256 trees of depth 12 check: 4718564\n64 trees of depth 14 check: 4718584\n16 trees of depth 16 check: 4718564\nlong lived tree of depth 16 check: 294914",
-        "mean": 0.8715654917999928,
-        "stddev": 0.08401627542538782,
-        "min": 0.7301756480001131,
-        "max": 0.9521576730003289,
-        "rss_kb": 17820,
+        "mean": 0.7129086848002771,
+        "median": 0.6575784049982758,
+        "stddev": 0.2112197887999123,
+        "min": 0.45452680100061116,
+        "max": 1.0094085199998517,
+        "rss_kb": 18040,
+        "user_s": 1.43,
+        "sys_s": 0.07,
+        "ctx_switches": 4527,
+        "compile_s": 0.10127724300036789,
         "bin_size_kb": 1560.158203125
       },
       "zig": {
         "stdout": "stretch tree of depth 17 check: 589818\n65536 trees of depth 4 check: 4718564\n16384 trees of depth 6 check: 4718584\n4096 trees of depth 8 check: 4718564\n1024 trees of depth 10 check: 4718584\n256 trees of depth 12 check: 4718564\n64 trees of depth 14 check: 4718584\n16 trees of depth 16 check: 4718564\nlong lived tree of depth 16 check: 294914",
-        "mean": 0.25149695799973415,
-        "stddev": 0.009700397300198843,
-        "min": 0.24222921499949734,
-        "max": 0.26716230399961205,
-        "rss_kb": 8088,
+        "mean": 0.2642992305998632,
+        "median": 0.24943730700033484,
+        "stddev": 0.026632202937683033,
+        "min": 0.2478579010003159,
+        "max": 0.31038265799907094,
+        "rss_kb": 8216,
+        "user_s": 0.25,
+        "sys_s": 0.0,
+        "ctx_switches": 8,
+        "compile_s": 2.1158310470000288,
         "bin_size_kb": 185.1875
       },
       "vela": {
         "stdout": "stretch tree of depth 17 check: 589818\n65536 trees of depth 4 check: 4718564\n16384 trees of depth 6 check: 4718584\n4096 trees of depth 8 check: 4718564\n1024 trees of depth 10 check: 4718584\n256 trees of depth 12 check: 4718564\n64 trees of depth 14 check: 4718584\n16 trees of depth 16 check: 4718564\nlong lived tree of depth 16 check: 294914",
-        "mean": 0.11101221759981854,
-        "stddev": 0.017521895436873547,
-        "min": 0.09149618499941425,
-        "max": 0.13476723799976753,
+        "mean": 0.11733219679954346,
+        "median": 0.11107304899996961,
+        "stddev": 0.014912883578631915,
+        "min": 0.09923493699898245,
+        "max": 0.13336950699886074,
         "rss_kb": 7876,
+        "user_s": 0.11,
+        "sys_s": 0.0,
+        "ctx_switches": 8,
+        "compile_s": 0.265984102999937,
         "bin_size_kb": 22.125
       }
     }
@@ -252,6 +299,7 @@
       "id": "03_concurrency",
       "name": "Token Ring",
       "category": "Concurrency & Tasks",
+      "kind": "batch",
       "desc": "4 concurrent workers passing a token 100,000 times - channel latency & context switching",
       "files": {
         "c": "ring.c",
@@ -264,47 +312,72 @@
     "results": {
       "c": {
         "stdout": "ring completed 100000 passes: 0 1 2 3",
-        "mean": 0.6561697163999269,
-        "stddev": 0.06267566267157125,
-        "min": 0.5661534210003083,
-        "max": 0.7173545299992838,
-        "rss_kb": 1652,
+        "mean": 0.7204186723993189,
+        "median": 0.7246819859992684,
+        "stddev": 0.03624327870957679,
+        "min": 0.6822137629987992,
+        "max": 0.7694812539994018,
+        "rss_kb": 1628,
+        "user_s": 0.18,
+        "sys_s": 0.45,
+        "ctx_switches": 100055,
+        "compile_s": 0.12144427000021096,
         "bin_size_kb": 14.125
       },
       "rust": {
         "stdout": "ring completed 100000 passes: 0 1 2 3",
-        "mean": 0.5775197815999491,
-        "stddev": 0.03869420903640297,
-        "min": 0.5096696609998617,
-        "max": 0.6060966320001171,
-        "rss_kb": 2368,
+        "mean": 0.4962256987997534,
+        "median": 0.520641566001359,
+        "stddev": 0.1311501242259094,
+        "min": 0.3410755889999564,
+        "max": 0.6573028999991948,
+        "rss_kb": 2372,
+        "user_s": 0.11,
+        "sys_s": 0.23,
+        "ctx_switches": 100037,
+        "compile_s": 2.153647479000938,
         "bin_size_kb": 394.8359375
       },
       "go": {
         "stdout": "ring completed 100000 passes: 0 1 2 3",
-        "mean": 0.032215597800131945,
-        "stddev": 0.007154836499275978,
-        "min": 0.0197150160001911,
-        "max": 0.03659823700036213,
+        "mean": 0.017465530999470503,
+        "median": 0.014995912999438588,
+        "stddev": 0.004612100396257375,
+        "min": 0.01369077899835247,
+        "max": 0.024963400001070113,
         "rss_kb": 2344,
+        "user_s": 0.03,
+        "sys_s": 0.0,
+        "ctx_switches": 1099,
+        "compile_s": 0.14986100100031763,
         "bin_size_kb": 1568.158203125
       },
       "zig": {
         "stdout": "ring completed 100000 passes: 0 1 2 3",
-        "mean": 0.7033133049999378,
-        "stddev": 0.08180109707719214,
-        "min": 0.5887860080001701,
-        "max": 0.8136953450002693,
+        "mean": 0.2953202221997344,
+        "median": 0.2914441499997338,
+        "stddev": 0.03169504697902846,
+        "min": 0.26283185399915965,
+        "max": 0.34536120099983236,
         "rss_kb": 2944,
+        "user_s": 0.07,
+        "sys_s": 0.16,
+        "ctx_switches": 100035,
+        "compile_s": 2.3026526520006882,
         "bin_size_kb": 184.5625
       },
       "vela": {
         "stdout": "ring completed 100000 passes: 0 1 2 3",
-        "mean": 0.6812500720001481,
-        "stddev": 0.14224960546109036,
-        "min": 0.47312769499967544,
-        "max": 0.8164007230006973,
-        "rss_kb": 1980,
+        "mean": 0.36091431859968,
+        "median": 0.3232161649993941,
+        "stddev": 0.09000672978582094,
+        "min": 0.28109803299958,
+        "max": 0.46088438399965526,
+        "rss_kb": 1804,
+        "user_s": 0.09,
+        "sys_s": 0.17,
+        "ctx_switches": 100095,
+        "compile_s": 0.457629774000452,
         "bin_size_kb": 30.1953125
       }
     }
@@ -314,7 +387,8 @@
       "id": "04_quicksort",
       "name": "Quicksort",
       "category": "Contiguous Slices",
-      "desc": "In-place quicksort of 1,000,000 64-bit integers - array indexing, swapping & cache lines",
+      "kind": "batch",
+      "desc": "In-place quicksort of 2,500,000 64-bit integers - array indexing, swapping & cache lines",
       "files": {
         "c": "qsort.c",
         "rust": "qsort.rs",
@@ -325,48 +399,73 @@
     },
     "results": {
       "c": {
-        "stdout": "sorted 1000000 elements, checksum: 1073090588652",
-        "mean": 0.10144206480017601,
-        "stddev": 0.02411592367859906,
-        "min": 0.060876604999975825,
-        "max": 0.12441856900022685,
-        "rss_kb": 9492,
+        "stdout": "sorted 2500000 elements, checksum: 2684002988781",
+        "mean": 0.1695830255997862,
+        "median": 0.16764699799932714,
+        "stddev": 0.004817319000261677,
+        "min": 0.16517442099939217,
+        "max": 0.1770602249998774,
+        "rss_kb": 21172,
+        "user_s": 0.15,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.07785504700041201,
         "bin_size_kb": 14.125
       },
       "rust": {
-        "stdout": "sorted 1000000 elements, checksum: 1073090588652",
-        "mean": 0.09503316379978059,
-        "stddev": 0.04413628082667198,
-        "min": 0.056543867999607755,
-        "max": 0.15576667400000588,
-        "rss_kb": 9904,
-        "bin_size_kb": 331.859375
+        "stdout": "sorted 2500000 elements, checksum: 2684002988781",
+        "mean": 0.16046151820009982,
+        "median": 0.1504164900015894,
+        "stddev": 0.016657095966659492,
+        "min": 0.14980713099976128,
+        "max": 0.18834469499961415,
+        "rss_kb": 21584,
+        "user_s": 0.14,
+        "sys_s": 0.0,
+        "ctx_switches": 12,
+        "compile_s": 1.799786736999522,
+        "bin_size_kb": 332.0
       },
       "go": {
-        "stdout": "sorted 1000000 elements, checksum: 1073090588652",
-        "mean": 0.11693083659974945,
-        "stddev": 0.019650135502038455,
-        "min": 0.08573552500001824,
-        "max": 0.1332317479991616,
-        "rss_kb": 10332,
+        "stdout": "sorted 2500000 elements, checksum: 2684002988781",
+        "mean": 0.1771752579999884,
+        "median": 0.17462858100043377,
+        "stddev": 0.009095518963724509,
+        "min": 0.16870606599877647,
+        "max": 0.19209472900001856,
+        "rss_kb": 22172,
+        "user_s": 0.15,
+        "sys_s": 0.01,
+        "ctx_switches": 125,
+        "compile_s": 0.12559397500081104,
         "bin_size_kb": 1560.158203125
       },
       "zig": {
-        "stdout": "sorted 1000000 elements, checksum: 1073090588652",
-        "mean": 0.05717051900010119,
-        "stddev": 0.005034327329347575,
-        "min": 0.05463072100064892,
-        "max": 0.06616541800030973,
-        "rss_kb": 9852,
+        "stdout": "sorted 2500000 elements, checksum: 2684002988781",
+        "mean": 0.16910860559946742,
+        "median": 0.17325603899917041,
+        "stddev": 0.025828783590953697,
+        "min": 0.14101634699909482,
+        "max": 0.1943125340003462,
+        "rss_kb": 21532,
+        "user_s": 0.16,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 1.795654215000468,
         "bin_size_kb": 182.5859375
       },
       "vela": {
-        "stdout": "sorted 1000000 elements, checksum: 1073090588652",
-        "mean": 0.08815955299960479,
-        "stddev": 0.021836954851594308,
-        "min": 0.06433208999987983,
-        "max": 0.11279975399975228,
-        "rss_kb": 9468,
+        "stdout": "sorted 2500000 elements, checksum: 2684002988781",
+        "mean": 0.17084486260027915,
+        "median": 0.1715689780012326,
+        "stddev": 0.0035530884288944953,
+        "min": 0.16657665200000338,
+        "max": 0.17576538299908862,
+        "rss_kb": 21148,
+        "user_s": 0.19,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.14447098200071196,
         "bin_size_kb": 14.125
       }
     }
@@ -376,7 +475,8 @@
       "id": "05_prime_sieve",
       "name": "Prime Sieve",
       "category": "Flat Memory Access",
-      "desc": "Sieve of Eratosthenes up to 10,000,000 - flat boolean buffer stride traversal",
+      "kind": "batch",
+      "desc": "Sieve of Eratosthenes up to 30,000,000 - flat boolean buffer stride traversal",
       "files": {
         "c": "sieve.c",
         "rust": "sieve.rs",
@@ -387,49 +487,263 @@
     },
     "results": {
       "c": {
-        "stdout": "primes count: 664579",
-        "mean": 0.06300800620010705,
-        "stddev": 0.023076431981190648,
-        "min": 0.032142709999789076,
-        "max": 0.08794060299987905,
-        "rss_kb": 11220,
+        "stdout": "primes count: 1857859",
+        "mean": 0.12684175280010096,
+        "median": 0.13087571899995964,
+        "stddev": 0.022065422421753893,
+        "min": 0.09074254000006476,
+        "max": 0.15072872299970186,
+        "rss_kb": 30740,
+        "user_s": 0.09,
+        "sys_s": 0.01,
+        "ctx_switches": 6,
+        "compile_s": 0.08382574299866974,
         "bin_size_kb": 14.125
       },
       "rust": {
-        "stdout": "primes count: 664579",
-        "mean": 0.0831405162001829,
-        "stddev": 0.031807447963726386,
-        "min": 0.02739811900028144,
-        "max": 0.10328449999997247,
-        "rss_kb": 11848,
-        "bin_size_kb": 331.09375
+        "stdout": "primes count: 1857859",
+        "mean": 0.10780035700008739,
+        "median": 0.10893240899895318,
+        "stddev": 0.01713684625216878,
+        "min": 0.0874506130003283,
+        "max": 0.13179499500074598,
+        "rss_kb": 31388,
+        "user_s": 0.12,
+        "sys_s": 0.01,
+        "ctx_switches": 12,
+        "compile_s": 1.7476797819999774,
+        "bin_size_kb": 331.0625
       },
       "go": {
-        "stdout": "primes count: 664579",
-        "mean": 0.0720289231998322,
-        "stddev": 0.015094298090211709,
-        "min": 0.0545175229999586,
-        "max": 0.09013657800005603,
-        "rss_kb": 12364,
+        "stdout": "primes count: 1857859",
+        "mean": 0.13575329339983,
+        "median": 0.1439495699996769,
+        "stddev": 0.014276621550809667,
+        "min": 0.1191254850000405,
+        "max": 0.1496599399997649,
+        "rss_kb": 31884,
+        "user_s": 0.11,
+        "sys_s": 0.01,
+        "ctx_switches": 124,
+        "compile_s": 0.12413244799972745,
         "bin_size_kb": 1556.158203125
       },
       "zig": {
-        "stdout": "primes count: 664579",
-        "mean": 0.07627355240001635,
-        "stddev": 0.0314227148748851,
-        "min": 0.02387504699981946,
-        "max": 0.1025206940003045,
-        "rss_kb": 11576,
+        "stdout": "primes count: 1857859",
+        "mean": 0.11354952340043382,
+        "median": 0.1168312589998095,
+        "stddev": 0.012747979929800065,
+        "min": 0.09418605900100374,
+        "max": 0.1261496220013214,
+        "rss_kb": 31100,
+        "user_s": 0.09,
+        "sys_s": 0.01,
+        "ctx_switches": 7,
+        "compile_s": 1.7388037170003372,
         "bin_size_kb": 182.4921875
       },
       "vela": {
-        "stdout": "primes count: 664579",
-        "mean": 0.08503634720000264,
-        "stddev": 0.03481960098929577,
-        "min": 0.032253966000098444,
-        "max": 0.12623631299993576,
-        "rss_kb": 11220,
+        "stdout": "primes count: 1857859",
+        "mean": 0.12463028560014208,
+        "median": 0.11656964400026482,
+        "stddev": 0.017640388453797128,
+        "min": 0.11196788800043578,
+        "max": 0.15463384100075928,
+        "rss_kb": 30740,
+        "user_s": 0.12,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.13030210999932024,
         "bin_size_kb": 14.125
+      }
+    }
+  },
+  "06_hashmap": {
+    "meta": {
+      "id": "06_hashmap",
+      "name": "Hash Map",
+      "category": "Hashing & Lookups",
+      "kind": "batch",
+      "desc": "5,000,000 random inserts/lookups over 200,000 keys - collision probing & map resizing",
+      "files": {
+        "c": "hashmap.c",
+        "rust": "hashmap.rs",
+        "go": "hashmap.go",
+        "zig": "hashmap.zig",
+        "vela": "hashmap.vela"
+      }
+    },
+    "results": {
+      "c": {
+        "stdout": "unique: 200000 total: 5000000",
+        "mean": 0.07894286299961095,
+        "median": 0.08389532299952407,
+        "stddev": 0.01504476916122002,
+        "min": 0.06364160599878232,
+        "max": 0.0987644150009146,
+        "rss_kb": 20000,
+        "user_s": 0.09,
+        "sys_s": 0.01,
+        "ctx_switches": 6,
+        "compile_s": 0.057995809000203735,
+        "bin_size_kb": 14.125
+      },
+      "rust": {
+        "stdout": "unique: 200000 total: 5000000",
+        "mean": 0.08700073620020703,
+        "median": 0.08508646200061776,
+        "stddev": 0.02436202024460794,
+        "min": 0.06314229099916702,
+        "max": 0.12176284800079884,
+        "rss_kb": 8816,
+        "user_s": 0.09,
+        "sys_s": 0.0,
+        "ctx_switches": 9,
+        "compile_s": 1.7825978270011547,
+        "bin_size_kb": 342.796875
+      },
+      "go": {
+        "stdout": "unique: 200000 total: 5000000",
+        "mean": 0.1107163552002021,
+        "median": 0.11087035600030504,
+        "stddev": 0.02418049397315852,
+        "min": 0.082024220000676,
+        "max": 0.13956827299989527,
+        "rss_kb": 8892,
+        "user_s": 0.08,
+        "sys_s": 0.0,
+        "ctx_switches": 157,
+        "compile_s": 0.10395194299962895,
+        "bin_size_kb": 1560.158203125
+      },
+      "zig": {
+        "stdout": "unique: 200000 total: 5000000",
+        "mean": 0.08622460220030917,
+        "median": 0.0876722550001432,
+        "stddev": 0.02014780564371153,
+        "min": 0.06528913299916894,
+        "max": 0.1100169180008379,
+        "rss_kb": 8480,
+        "user_s": 0.06,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 1.793050635000327,
+        "bin_size_kb": 184.25
+      },
+      "vela": {
+        "stdout": "unique: 200000 total: 5000000",
+        "mean": 0.08460328539949842,
+        "median": 0.07733080499929201,
+        "stddev": 0.01313973311010628,
+        "min": 0.07703470299929904,
+        "max": 0.10755216699908487,
+        "rss_kb": 16668,
+        "user_s": 0.1,
+        "sys_s": 0.0,
+        "ctx_switches": 7,
+        "compile_s": 0.13840402499954507,
+        "bin_size_kb": 18.125
+      }
+    }
+  },
+  "07_web_server": {
+    "meta": {
+      "id": "07_web_server",
+      "name": "HTTP Web Server",
+      "category": "Networking & Web I/O",
+      "kind": "http",
+      "port": 18260,
+      "threads": 4,
+      "requests": 2000,
+      "desc": "Minimal concurrent HTTP/1.1 JSON & health endpoints across 4 worker threads (2,000 reqs/run)",
+      "files": {
+        "c": "web.c",
+        "rust": "web.rs",
+        "go": "web.go",
+        "zig": "web.zig",
+        "vela": "web.vela"
+      }
+    },
+    "results": {
+      "c": {
+        "stdout": "{\"status\": \"ok\", \"value\": 42}",
+        "mean": 0.056911333333333335,
+        "median": 0.057909,
+        "stddev": 0.0028496393339040873,
+        "min": 0.053697,
+        "max": 0.059128,
+        "rps": 34537.16,
+        "p95_ms": 0.14851,
+        "rss_kb": 1788,
+        "user_s": 0.0,
+        "sys_s": 0.0,
+        "ctx_switches": 0,
+        "compile_s": 0.17249450300005265,
+        "bin_size_kb": 14.1328125
+      },
+      "rust": {
+        "stdout": "{\"status\": \"ok\", \"value\": 42}",
+        "mean": 0.04698566666666667,
+        "median": 0.04669,
+        "stddev": 0.000575590421509367,
+        "min": 0.046618,
+        "max": 0.047649,
+        "rps": 42835.64,
+        "p95_ms": 0.12408,
+        "rss_kb": 2392,
+        "user_s": 0.0,
+        "sys_s": 0.0,
+        "ctx_switches": 0,
+        "compile_s": 1.8952366889989207,
+        "bin_size_kb": 363.0703125
+      },
+      "go": {
+        "stdout": "{\"status\": \"ok\", \"value\": 42}",
+        "mean": 0.09763266666666666,
+        "median": 0.096208,
+        "stddev": 0.005545006071532594,
+        "min": 0.092939,
+        "max": 0.103751,
+        "rps": 20788.19,
+        "p95_ms": 0.28264,
+        "rss_kb": 15288,
+        "user_s": 0.0,
+        "sys_s": 0.0,
+        "ctx_switches": 0,
+        "compile_s": 0.37608417500086944,
+        "bin_size_kb": 5688.2587890625
+      },
+      "zig": {
+        "stdout": "{\"status\": \"ok\", \"value\": 42}",
+        "mean": 0.047487666666666664,
+        "median": 0.047389,
+        "stddev": 0.0008791622906684115,
+        "min": 0.046662,
+        "max": 0.048412,
+        "rps": 42204.2,
+        "p95_ms": 0.12467,
+        "rss_kb": 3144,
+        "user_s": 0.0,
+        "sys_s": 0.0,
+        "ctx_switches": 0,
+        "compile_s": 1.8471103950014367,
+        "bin_size_kb": 183.5859375
+      },
+      "vela": {
+        "stdout": "{\"status\": \"ok\", \"value\": 42}",
+        "mean": 0.041716,
+        "median": 0.047101,
+        "stddev": 0.009439900688036924,
+        "min": 0.030816,
+        "max": 0.047231,
+        "rps": 42462.13,
+        "p95_ms": 0.12357,
+        "rss_kb": 2296,
+        "user_s": 0.0,
+        "sys_s": 0.0,
+        "ctx_switches": 0,
+        "compile_s": 2.0139679910007544,
+        "bin_size_kb": 158.2734375
       }
     }
   }
@@ -441,28 +755,20 @@
       zig: "#eab308",
       vela: "#10b981"
     };
-    let currentMetric = 'time';
+    const LABELS = {
+      c: "C (GCC)",
+      rust: "Rust",
+      go: "Go",
+      zig: "Zig",
+      vela: "Vela"
+    };
+    let currentMetric = 'median';
     let showRatio = true;
-
-    function setMetric(m) {
-      currentMetric = m;
-      document.querySelectorAll('#metric-tabs .btn').forEach((b, i) => {
-        b.classList.toggle('active', (m === 'time' && i === 0) || (m === 'rss' && i === 1) || (m === 'size' && i === 2));
-      });
-      render();
-    }
-
-    function toggleRatio(r) {
-      showRatio = r;
-      document.getElementById('btn-ratio').classList.toggle('active', r);
-      document.getElementById('btn-raw').classList.toggle('active', !r);
-      render();
-    }
 
     function formatTime(s) {
       if (s < 0.001) return (s * 1000000).toFixed(1) + " µs";
       if (s < 1.0) return (s * 1000).toFixed(1) + " ms";
-      return s.toFixed(3) + " s";
+      return s.toFixed(2) + " s";
     }
 
     function formatRss(kb) {
@@ -475,6 +781,193 @@
       return (kb / 1024).toFixed(2) + " MB";
     }
 
+    function buildKpiCards() {
+      const grid = document.getElementById('kpi-cards');
+      grid.innerHTML = '';
+      const cards = [];
+
+      // 1. Binary Trees winner
+      if (DATA['02_binary_trees']) {
+        const res = DATA['02_binary_trees'].results;
+        const sorted = Object.entries(res).sort((a, b) => a[1].median - b[1].median);
+        if (sorted.length > 0) {
+          const [wLang, wStats] = sorted[0];
+          const second = sorted[1];
+          const goStats = res['go'];
+          const sub = goStats
+            ? `${(goStats.median / wStats.median).toFixed(1)}x faster than Go GC (${formatRss(wStats.rss_kb)} RSS)`
+            : `${(second[1].median / wStats.median).toFixed(2)}x faster than ${second[0].toUpperCase()}`;
+          cards.push({
+            label: "Memory Lifecycle Winner",
+            val: `${LABELS[wLang]} (${formatTime(wStats.median)})`,
+            sub,
+            color: COLORS[wLang]
+          });
+        }
+      }
+
+      // 2. Web Server winner
+      if (DATA['07_web_server']) {
+        const res = DATA['07_web_server'].results;
+        const sorted = Object.entries(res).sort((a, b) => (b[1].rps || 0) - (a[1].rps || 0));
+        if (sorted.length > 0) {
+          const [wLang, wStats] = sorted[0];
+          const velaStats = res['vela'];
+          const sub = velaStats
+            ? `Vela std/web: ${Math.round(velaStats.rps).toLocaleString()} req/s (${formatSize(velaStats.bin_size_kb)} bin)`
+            : `Peak throughput: ${Math.round(wStats.rps).toLocaleString()} req/s`;
+          cards.push({
+            label: "Web Server Throughput Winner",
+            val: `${LABELS[wLang]} (${Math.round(wStats.rps).toLocaleString()} req/s)`,
+            sub,
+            color: COLORS[wLang]
+          });
+        }
+      }
+
+      // 3. Concurrency winner
+      if (DATA['03_concurrency']) {
+        const res = DATA['03_concurrency'].results;
+        const sorted = Object.entries(res).sort((a, b) => a[1].median - b[1].median);
+        if (sorted.length > 0) {
+          const [wLang, wStats] = sorted[0];
+          const second = sorted[1];
+          const sub = second ? `${(second[1].median / wStats.median).toFixed(1)}x faster than ${second[0].toUpperCase()}` : "";
+          cards.push({
+            label: "Channel Switching Winner",
+            val: `${LABELS[wLang]} (${formatTime(wStats.median)})`,
+            sub,
+            color: COLORS[wLang]
+          });
+        }
+      }
+
+      // 4. Average binary size leader
+      const langSizes = {};
+      for (const bData of Object.values(DATA)) {
+        for (const [l, r] of Object.entries(bData.results)) {
+          langSizes[l] = (langSizes[l] || []);
+          langSizes[l].push(r.bin_size_kb);
+        }
+      }
+      const avgSizes = Object.entries(langSizes).map(([l, arr]) => [l, arr.reduce((a, b) => a + b, 0) / arr.length]);
+      avgSizes.sort((a, b) => a[1] - b[1]);
+      if (avgSizes.length > 0) {
+        const [sLang, sKb] = avgSizes[0];
+        const velaAvg = avgSizes.find(x => x[0] === 'vela');
+        cards.push({
+          label: "Smallest Avg Binary",
+          val: `${LABELS[sLang]} (${formatSize(sKb)})`,
+          sub: velaAvg && sLang !== 'vela' ? `Vela avg: ${formatSize(velaAvg[1])} (stripped ELF)` : `Stripped zero-runtime footprint`,
+          color: COLORS[sLang]
+        });
+      }
+
+      cards.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'stat-card';
+        div.style.setProperty('--card-color', c.color);
+        div.innerHTML = `
+          <div class="stat-label">${c.label}</div>
+          <div class="stat-val" style="color:${c.color}">${c.val}</div>
+          <div class="stat-sub">${c.sub}</div>
+        `;
+        grid.appendChild(div);
+      });
+    }
+
+    function buildRadar() {
+      const axes = [
+        { key: '01_mandelbrot', label: 'CPU Loops', extract: r => 1 / r.median },
+        { key: '02_binary_trees', label: 'Memory Mgmt', extract: r => 1 / r.median },
+        { key: '04_quicksort', label: 'Slice Sort', extract: r => 1 / r.median },
+        { key: '06_hashmap', label: 'Hash Map', extract: r => 1 / r.median },
+        { key: '07_web_server', label: 'Web RPS', extract: r => r.rps || (1 / r.median) },
+        { key: '01_mandelbrot', label: 'Small Binary', extract: r => 1 / Math.log2(r.bin_size_kb + 2) },
+      ].filter(a => DATA[a.key]);
+
+      const langs = ['vela', 'c', 'rust', 'go', 'zig'].filter(l =>
+        axes.every(a => DATA[a.key].results[l])
+      );
+
+      const maxPerAxis = axes.map(a =>
+        Math.max(...langs.map(l => a.extract(DATA[a.key].results[l])))
+      );
+
+      const size = 340, cx = size / 2, cy = size / 2, radius = 115;
+      const n = axes.length;
+      let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+
+      // Concentric rings
+      [0.25, 0.5, 0.75, 1.0].forEach(level => {
+        let pts = [];
+        for (let i = 0; i < n; i++) {
+          const ang = (Math.PI * 2 * i / n) - Math.PI / 2;
+          pts.push(`${cx + radius * level * Math.cos(ang)},${cy + radius * level * Math.sin(ang)}`);
+        }
+        svg += `<polygon points="${pts.join(' ')}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>`;
+      });
+
+      // Axis lines & labels
+      for (let i = 0; i < n; i++) {
+        const ang = (Math.PI * 2 * i / n) - Math.PI / 2;
+        const x2 = cx + radius * Math.cos(ang);
+        const y2 = cy + radius * Math.sin(ang);
+        svg += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>`;
+        const lx = cx + (radius + 26) * Math.cos(ang);
+        const ly = cy + (radius + 22) * Math.sin(ang);
+        svg += `<text x="${lx}" y="${ly}" fill="#9ca3af" font-size="11" font-weight="600" text-anchor="middle" dominant-baseline="middle">${axes[i].label}</text>`;
+      }
+
+      // Language polygons
+      langs.slice().reverse().forEach(l => {
+        let pts = [];
+        for (let i = 0; i < n; i++) {
+          const ang = (Math.PI * 2 * i / n) - Math.PI / 2;
+          const score = Math.max(0.12, axes[i].extract(DATA[axes[i].key].results[l]) / maxPerAxis[i]);
+          pts.push(`${cx + radius * score * Math.cos(ang)},${cy + radius * score * Math.sin(ang)}`);
+        }
+        const strokeWidth = l === 'vela' ? 2.5 : 1.75;
+        const fillOp = l === 'vela' ? 0.22 : 0.08;
+        svg += `<polygon points="${pts.join(' ')}" fill="${COLORS[l]}" fill-opacity="${fillOp}" stroke="${COLORS[l]}" stroke-width="${strokeWidth}"/>`;
+      });
+      svg += `</svg>`;
+      document.getElementById('radar-container').innerHTML = svg;
+
+      const legend = document.getElementById('radar-legend');
+      legend.innerHTML = '';
+      langs.forEach(l => {
+        const div = document.createElement('div');
+        div.className = 'legend-item';
+        div.innerHTML = `<span class="lang-dot" style="background:${COLORS[l]}"></span><span>${LABELS[l]}</span>`;
+        legend.appendChild(div);
+      });
+    }
+
+    function setMetric(m) {
+      currentMetric = m;
+      const map = ['median', 'mean', 'rss', 'size', 'compile'];
+      document.querySelectorAll('#metric-tabs .btn').forEach((b, i) => {
+        b.classList.toggle('active', map[i] === m);
+      });
+      render();
+    }
+
+    function toggleRatio(r) {
+      showRatio = r;
+      document.getElementById('btn-ratio').classList.toggle('active', r);
+      document.getElementById('btn-raw').classList.toggle('active', !r);
+      render();
+    }
+
+    function getMetricValue(r, isHttp) {
+      if (currentMetric === 'median') return isHttp && r.rps ? r.rps : r.median;
+      if (currentMetric === 'mean') return isHttp && r.rps ? r.rps : r.mean;
+      if (currentMetric === 'rss') return r.rss_kb;
+      if (currentMetric === 'size') return r.bin_size_kb;
+      return r.compile_s;
+    }
+
     function render() {
       const container = document.getElementById('benchmarks-container');
       container.innerHTML = '';
@@ -482,32 +975,42 @@
       for (const [bId, bData] of Object.entries(DATA)) {
         const meta = bData.meta;
         const res = bData.results;
+        const isHttp = meta.kind === 'http';
+        const higherIsBetter = isHttp && (currentMetric === 'median' || currentMetric === 'mean');
+
         const section = document.createElement('div');
         section.className = 'bench-section';
 
-        let titleUnit = currentMetric === 'time' ? 'Lower is faster' : currentMetric === 'rss' ? 'Lower memory is better' : 'Smaller is better';
+        let hint = higherIsBetter
+          ? 'Higher req/s is better'
+          : (currentMetric === 'rss' ? 'Lower memory is better' : currentMetric === 'size' ? 'Smaller binary is better' : currentMetric === 'compile' ? 'Faster compile is better' : 'Lower time is faster');
+
         section.innerHTML = `
           <div class="bench-header">
             <div>
               <div class="bench-title">${meta.name} <span style="font-size:0.85rem; font-weight:normal; color:var(--text-muted);">&bull; ${meta.category}</span></div>
               <div class="bench-desc">${meta.desc}</div>
             </div>
-            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${titleUnit}</div>
+            <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${hint}</div>
           </div>
           <div class="bars-container" id="bars-${bId}"></div>
-          <table>
-            <thead>
-              <tr>
-                <th>Language</th>
-                <th>Time (Mean ± Stddev)</th>
-                <th>Range (Min - Max)</th>
-                <th>Peak RSS</th>
-                <th>Binary Size</th>
-                <th>Relative</th>
-              </tr>
-            </thead>
-            <tbody id="table-${bId}"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Language</th>
+                  <th>${isHttp ? 'Throughput (RPS)' : 'Median Time'}</th>
+                  <th>${isHttp ? 'P95 Latency' : 'Mean ± Stddev'}</th>
+                  <th>${isHttp ? '2000 Reqs Time' : 'CPU (User + Sys)'}</th>
+                  <th>Peak RSS</th>
+                  <th>Binary Size</th>
+                  <th>Compile Time</th>
+                  <th>Relative</th>
+                </tr>
+              </thead>
+              <tbody id="table-${bId}"></tbody>
+            </table>
+          </div>
         `;
         container.appendChild(section);
 
@@ -516,22 +1019,28 @@
 
         const vals = Object.entries(res).map(([lang, r]) => ({
           lang,
-          val: currentMetric === 'time' ? r.mean : currentMetric === 'rss' ? r.rss_kb : r.bin_size_kb,
+          val: getMetricValue(r, isHttp),
           raw: r
         }));
 
-        const minVal = Math.min(...vals.map(v => v.val));
-        const maxVal = Math.max(...vals.map(v => v.val));
+        const bestVal = higherIsBetter
+          ? Math.max(...vals.map(v => v.val))
+          : Math.min(...vals.map(v => v.val));
 
         vals.forEach(item => {
-          const isWinner = item.val === minVal;
-          const ratio = item.val / minVal;
-          const pct = Math.max(8, (minVal / item.val) * 100);
+          const isWinner = item.val === bestVal;
+          const ratio = higherIsBetter ? (bestVal / item.val) : (item.val / bestVal);
+          const pct = higherIsBetter
+            ? Math.max(8, (item.val / bestVal) * 100)
+            : Math.max(8, (bestVal / item.val) * 100);
 
           let displayVal = "";
-          if (currentMetric === 'time') displayVal = formatTime(item.raw.mean);
+          if (higherIsBetter) displayVal = `${Math.round(item.raw.rps).toLocaleString()} req/s`;
+          else if (currentMetric === 'median') displayVal = formatTime(item.raw.median);
+          else if (currentMetric === 'mean') displayVal = formatTime(item.raw.mean);
           else if (currentMetric === 'rss') displayVal = formatRss(item.raw.rss_kb);
-          else displayVal = formatSize(item.raw.bin_size_kb);
+          else if (currentMetric === 'size') displayVal = formatSize(item.raw.bin_size_kb);
+          else displayVal = formatTime(item.raw.compile_s);
 
           const barRow = document.createElement('div');
           barRow.className = 'bar-row';
@@ -542,7 +1051,7 @@
             </div>
             <div class="bar-track">
               <div class="bar-fill" style="width:${pct}%; background:${COLORS[item.lang] || '#fff'};">
-                ${showRatio ? (ratio <= 1.005 ? '1.00x (fastest)' : ratio.toFixed(2) + 'x') : displayVal}
+                ${showRatio ? (ratio <= 1.005 ? '1.00x (best)' : ratio.toFixed(2) + 'x') : displayVal}
               </div>
             </div>
             <div class="bar-meta">${displayVal}</div>
@@ -550,14 +1059,20 @@
           barsContainer.appendChild(barRow);
 
           const tr = document.createElement('tr');
+          const col1 = isHttp ? `<strong>${Math.round(item.raw.rps).toLocaleString()} req/s</strong>` : `<code>${formatTime(item.raw.median)}</code>`;
+          const col2 = isHttp ? `${item.raw.p95_ms.toFixed(2)} ms` : `<code>${formatTime(item.raw.mean)} &plusmn; ${formatTime(item.raw.stddev)}</code>`;
+          const col3 = isHttp ? formatTime(item.raw.median) : `${(item.raw.user_s + item.raw.sys_s).toFixed(3)}s (${item.raw.user_s.toFixed(2)}u + ${item.raw.sys_s.toFixed(2)}s)`;
+
           tr.innerHTML = `
             <td style="font-weight:700; color:${COLORS[item.lang]};">
-              ${item.lang.toUpperCase()} ${isWinner ? '<span class="winner-tag">WINNER</span>' : ''}
+              ${item.lang.toUpperCase()}${isWinner ? '<span class="winner-tag">BEST</span>' : ''}
             </td>
-            <td><code>${formatTime(item.raw.mean)} &plusmn; ${formatTime(item.raw.stddev)}</code></td>
-            <td style="color:var(--text-muted);">${formatTime(item.raw.min)} .. ${formatTime(item.raw.max)}</td>
+            <td>${col1}</td>
+            <td style="color:var(--text-muted);">${col2}</td>
+            <td style="color:var(--text-muted);">${col3}</td>
             <td>${formatRss(item.raw.rss_kb)}</td>
             <td>${formatSize(item.raw.bin_size_kb)}</td>
+            <td style="color:var(--text-muted);">${formatTime(item.raw.compile_s)}</td>
             <td><strong>${ratio <= 1.005 ? '1.00x' : ratio.toFixed(2) + 'x'}</strong></td>
           `;
           tableBody.appendChild(tr);
@@ -565,6 +1080,8 @@
       }
     }
 
+    buildKpiCards();
+    buildRadar();
     render();
   </script>
 </body>

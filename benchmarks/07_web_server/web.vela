@@ -1,0 +1,16 @@
+include std/web { Server, Request, Response, WebError, text_response }
+
+task api_handler(req: Request@r, r: region default) -> Response@r ~ WebError@r
+    when req.path == "/health"
+        <- text_response("ok", r)
+    else when req.path == "/json"
+        <- Response.json("\{\"status\":\"ok\",\"value\":42\}", r)
+    fi
+    <- text_response("not found", r)
+fi
+
+task main()
+    Server.new("127.0.0.1:18260").serve_concurrent(api_handler, 4) { failure e
+        show("server error: ", e)
+    }
+fi

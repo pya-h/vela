@@ -24,7 +24,7 @@ static void quicksort(int64_t *items, int64_t low, int64_t high) {
 }
 
 int main(void) {
-    int64_t n = 1000000;
+    int64_t n = 2500000;
     int64_t *arr = (int64_t*)malloc((size_t)n * sizeof(int64_t));
     int64_t seed = 123456789;
     for (int64_t idx = 0; idx < n; idx++) {

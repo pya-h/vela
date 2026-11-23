@@ -16,7 +16,7 @@ fn quicksort(items: &mut [i64], low: isize, high: isize) {
 }
 
 fn main() {
-    let n = 1000000;
+    let n = 2500000;
     let mut arr = vec![0i64; n];
     let mut seed: i64 = 123456789;
     for idx in 0..n {

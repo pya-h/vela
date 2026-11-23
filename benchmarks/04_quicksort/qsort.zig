@@ -29,7 +29,7 @@ fn quicksort(items: []i64, low: isize, high: isize) void {
 
 pub fn main() !void {
     const alloc = std.heap.c_allocator;
-    const n: usize = 1000000;
+    const n: usize = 2500000;
     const arr = try alloc.alloc(i64, n);
     defer alloc.free(arr);
 
